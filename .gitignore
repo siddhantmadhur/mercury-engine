@@ -1,4 +1,4 @@
 build/
 .cache/
-bin/
+sokol-shdc
 *.shader.hh

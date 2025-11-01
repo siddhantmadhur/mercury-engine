@@ -31,21 +31,41 @@ void engine_init() {
     sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
     float vertices[] = {
-        -0.5f, -0.5f,  0.0f, // bottom left
-         0.5f, -0.5f,  0.0f, // bottom right
-         0.0f,  0.5f,  0.0f, // top
+         0.5f,  0.5f, 0.0f, // top right
+         0.5f, -0.5f, 0.0f, // bottom right
+        -0.5f, -0.5f, 0.0f, // bottom left
+        -0.5f,  0.5f, 0.0f, // top left
     };
 
     state.bind.vertex_buffers[0] = sg_make_buffer((sg_buffer_desc){
         .size = sizeof(vertices),
         .data = SG_RANGE(vertices),
-        .label = "triangle-vertices"
+        .label = "quad-vertices"
     });
+
+    uint16_t indices[] = {
+        0, 1, 3,
+        1, 2, 3
+    };
+
+    auto index_buffer_bind = (sg_buffer_desc){
+        .size = sizeof(indices),
+        .data = SG_RANGE(indices),
+        .label = "quad-indices",
+    };
+
+    index_buffer_bind.usage.index_buffer = true;
+    state.bind.index_buffer = sg_make_buffer(index_buffer_bind);
+
+    
 
     sg_pipeline_desc pip_desc = (sg_pipeline_desc){
         .shader = shd,
         .label = "triangle-pipeline",
     };
+
+    pip_desc.index_type = SG_INDEXTYPE_UINT16;
+
     pip_desc.layout.attrs[ATTR_simple_position].format = SG_VERTEXFORMAT_FLOAT3;
     state.pip = sg_make_pipeline(pip_desc);
 
@@ -73,7 +93,7 @@ void engine_frame() {
 
     sg_apply_pipeline(state.pip);
     sg_apply_bindings(state.bind);
-    sg_draw(0, 3, 1);
+    sg_draw(0, 6, 1);
 
     simgui_render();
     sg_end_pass();
