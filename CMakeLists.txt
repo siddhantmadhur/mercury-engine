@@ -5,7 +5,12 @@ include_directories("third_party")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(mercury src/main.cc)
+
+set(SOURCES
+    src/main.cc
+    lib/assets/images.cc
+)
+add_executable(mercury ${SOURCES})
 
 include_directories("lib")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)

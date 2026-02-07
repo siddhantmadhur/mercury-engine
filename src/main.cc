@@ -1,6 +1,15 @@
 #include <iostream>
 
+<<<<<<< PATCH SET (c0f66e1e4caaab0eeb38e590f56b04bba560837a Load images)
+
+#include <assets/images.hh> 
 #include "variables.hh"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+=======
+#include "variables.hh"
+>>>>>>> BASE      (bb4bc9fb0f887a71c00f550ab828b637e4466b04 added fps)
 
 #define SOKOL_IMPL
 #define SOKOL_GLCORE
@@ -24,7 +33,16 @@ static struct {
     sg_bindings bind;
 } state;
 
+typedef struct vertext_t {
+    float x, y, z;
+    int16_t u, v;
+} vertex_t;
+
 void engine_init() {
+    
+    Image wall_texture = Image("wall.jpg");
+
+
     sg_setup((sg_desc){
         .logger = {
             .func = slog_func,
@@ -34,13 +52,24 @@ void engine_init() {
 
     stm_setup();
 
+<<<<<<< PATCH SET (c0f66e1e4caaab0eeb38e590f56b04bba560837a Load images)
+
+    state.bind.views[VIEW_tex] = sg_alloc_view();
+    state.bind.samplers[SMP_smp] = sg_make_sampler((sg_sampler_desc){
+        .min_filter = SG_FILTER_LINEAR,
+        .mag_filter = SG_FILTER_LINEAR,
+        .label = "jpg-sampler",
+    });
+=======
+>>>>>>> BASE      (bb4bc9fb0f887a71c00f550ab828b637e4466b04 added fps)
     sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
-    float vertices[] = {
-         0.5f,  0.5f, 0.0f, // top right
-         0.5f, -0.5f, 0.0f, // bottom right
-        -0.5f, -0.5f, 0.0f, // bottom left
-        -0.5f,  0.5f, 0.0f, // top left
+    #define SHORT_MAX 32767
+    const vertex_t vertices[] = {
+        { 0.5f,  0.5f, 0.0f,         0,         0}, // top right
+        { 0.5f, -0.5f, 0.0f, SHORT_MAX,         0}, // bottom right
+        {-0.5f, -0.5f, 0.0f, SHORT_MAX, SHORT_MAX}, // bottom left
+        {-0.5f,  0.5f, 0.0f,         0, SHORT_MAX}, // top left
     };
 
     state.bind.vertex_buffers[0] = sg_make_buffer((sg_buffer_desc){
@@ -73,6 +102,8 @@ void engine_init() {
     pip_desc.index_type = SG_INDEXTYPE_UINT16;
 
     pip_desc.layout.attrs[ATTR_simple_position].format = SG_VERTEXFORMAT_FLOAT3;
+    pip_desc.layout.attrs[ATTR_simple_texcoord0].format = SG_VERTEXFORMAT_SHORT2N;
+
     state.pip = sg_make_pipeline(pip_desc);
 
 
@@ -83,6 +114,25 @@ void engine_init() {
     state.pass_action = (sg_pass_action){
         .colors = { { .load_action = SG_LOADACTION_CLEAR, .clear_value={0.2f, 0.3f, 0.3f, 1.0f}}}
     };
+
+
+    auto img_desc = (sg_image_desc) {
+        .width = wall_texture.x,
+        .height = wall_texture.y,
+        .pixel_format = SG_PIXELFORMAT_RGBA8,
+        .label = "jpg-image"
+    };
+    img_desc.data.subimage[0][0] = {
+        .ptr = wall_texture.raw_data,
+        .size = (size_t) wall_texture.x * wall_texture.y * 4,
+    };
+    sg_image img = sg_make_image(img_desc);
+
+    sg_init_view(state.bind.views[VIEW_tex], (sg_view_desc){
+        .texture = { .image = img },
+        .label = "jpg-texture-view",
+    });
+
 }
 
 void LoadMainMenuBar() {

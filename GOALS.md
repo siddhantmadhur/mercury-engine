@@ -1,0 +1,7 @@
+- [X] Triangle
+- [X] Square
+- [ ] Textured Square
+- [ ] 1 Textured Cube
+- [ ] Multiple Textured Cubes
+- [ ] Multiple Cubes With Different Textures 
+- [ ] Load Model

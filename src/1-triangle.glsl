@@ -1,18 +1,27 @@
 @vs vs
 in vec4 position;
+in vec2 texcoord0;
+
+out vec2 uv;
 
 void main() {
     gl_Position = vec4(position.x, position.y, position.z, 1.0);
+    uv = texcoord0;
 }
 
 @end
 
 @fs fs
+layout(binding=0) uniform texture2D tex;
+layout(binding=0) uniform sampler smp;
+
+in vec2 uv;
 out vec4 FragColor;
 
 void main() {
-    FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+    FragColor = texture(sampler2D(tex, smp), uv); 
 }
+
 @end
 
 @program simple vs fs
