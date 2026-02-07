@@ -1,11 +1,14 @@
 #include <iostream>
 
+#include "variables.hh"
+
 #define SOKOL_IMPL
 #define SOKOL_GLCORE
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_glue.h>
 #include <sokol/sokol_log.h>
+#include <sokol/sokol_time.h>
 
 #include <imgui/imgui.h>
 #include <sokol/util/sokol_imgui.h>
@@ -13,6 +16,7 @@
 #include "1-triangle.shader.hh"
 
 //#include <engine/engine.cc>
+
 
 static struct {
     sg_pipeline pip;
@@ -27,6 +31,8 @@ void engine_init() {
         },
         .environment = sglue_environment(),
     });
+
+    stm_setup();
 
     sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
@@ -78,13 +84,48 @@ void engine_init() {
         .colors = { { .load_action = SG_LOADACTION_CLEAR, .clear_value={0.2f, 0.3f, 0.3f, 1.0f}}}
     };
 }
+
+void LoadMainMenuBar() {
+#if DEBUG
+    if (ImGui::BeginMainMenuBar())
+    {
+      if (ImGui::BeginMenu("File"))
+      {
+        if (ImGui::MenuItem("Exit", "Esc"))
+        {
+          sapp_quit();
+        }
+        ImGui::EndMenu();
+      }
+    ImGui::EndMainMenuBar();
+    }
+#endif
+}
+
+uint64_t frame_time = 0;
+double delta_t = 1;
 void engine_frame() {
 
     const int width = sapp_width();
     const int height = sapp_height();
     simgui_new_frame({ width, height, sapp_frame_duration(), sapp_dpi_scale() });
 
-    ImGui::ShowDemoWindow();
+    //ImGui::ShowDemoWindow();
+    LoadMainMenuBar();
+
+
+    ;
+    delta_t = stm_ms(stm_laptime(&frame_time));
+   
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus ;
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+    if (ImGui::Begin("Status", nullptr, flags))
+    {
+        ImGui::Text("Frametime: %.2fms", delta_t);
+        ImGui::SameLine();
+        ImGui::End();
+    }
 
     sg_begin_pass((sg_pass){
         .action = state.pass_action,
