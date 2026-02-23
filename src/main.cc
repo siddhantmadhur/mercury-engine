@@ -1,7 +1,9 @@
 #include <iostream>
 
+#include <glm/glm.hpp>
 
 #include <assets/images.hh> 
+#include "glm/gtc/type_ptr.hpp"
 #include "variables.hh"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -22,6 +24,8 @@
 
 //#include <engine/engine.cc>
 
+#include <gameobjects/camera.hh>
+#include <gameobjects/cube.hh>
 
 static struct {
     sg_pipeline pip;
@@ -39,6 +43,8 @@ void engine_init() {
     Image wall_texture = Image("wall.jpg");
 
 
+    auto cam = GameObject::Camera();
+
     sg_setup((sg_desc){
         .logger = {
             .func = slog_func,
@@ -47,7 +53,6 @@ void engine_init() {
     });
 
     stm_setup();
-
 
     state.bind.views[VIEW_tex] = sg_alloc_view();
     state.bind.samplers[SMP_smp] = sg_make_sampler((sg_sampler_desc){

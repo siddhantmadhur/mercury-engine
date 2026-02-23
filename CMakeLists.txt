@@ -1,16 +1,24 @@
 cmake_minimum_required(VERSION 3.8)
 
+
 project(MercuryEngine)
 include_directories("third_party")
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(LIB_SRC
+    lib/assets/images.cc
+    lib/gameobjects/camera.cc
+)
 
 set(SOURCES
     src/main.cc
-    lib/assets/images.cc
 )
-add_executable(mercury ${SOURCES})
+add_executable(mercury ${SOURCES} ${LIB_SRC})
+
 
 include_directories("lib")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)
@@ -38,7 +46,15 @@ add_library(imgui STATIC
 
 target_include_directories(imgui INTERFACE imgui)
 
-target_link_libraries(mercury imgui)
+
+add_subdirectory(third_party/glm)
+
+
+include_directories("third_party/glm")
+
+target_link_libraries(mercury imgui glm::glm)
+
+
 # MacOS libraries
 #target_link_libraries(mercury "-framework Cocoa")
 #target_link_libraries(mercury "-framework Metal")
