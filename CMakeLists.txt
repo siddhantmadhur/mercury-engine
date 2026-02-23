@@ -15,7 +15,7 @@ set(LIB_SRC
 )
 
 set(SOURCES
-    src/main.cc
+    src/main.mm
 )
 add_executable(mercury ${SOURCES} ${LIB_SRC})
 
@@ -23,15 +23,21 @@ add_executable(mercury ${SOURCES} ${LIB_SRC})
 include_directories("lib")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)
 
-
-# Linux libraries
-target_link_libraries(mercury "-lX11")
-target_link_libraries(mercury "-lXi")
-target_link_libraries(mercury "-lXcursor")
-target_link_libraries(mercury "-lGL")
-target_link_libraries(mercury "-ldl")
-target_link_libraries(mercury "-lpthread")
-
+if (APPLE)
+# MacOS libraries
+  target_link_libraries(mercury "-framework Cocoa")
+  target_link_libraries(mercury "-framework Metal")
+  target_link_libraries(mercury "-framework MetalKit")
+  target_link_libraries(mercury "-framework QuartzCore")
+  target_link_libraries(mercury "-framework OpenGL")
+else()
+  target_link_libraries(mercury "-lX11")
+  target_link_libraries(mercury "-lXi")
+  target_link_libraries(mercury "-lXcursor")
+  target_link_libraries(mercury "-lGL")
+  target_link_libraries(mercury "-ldl")
+  target_link_libraries(mercury "-lpthread")
+endif()
 
 # link imgui
 
@@ -55,10 +61,5 @@ include_directories("third_party/glm")
 target_link_libraries(mercury imgui glm::glm)
 
 
-# MacOS libraries
-#target_link_libraries(mercury "-framework Cocoa")
-#target_link_libraries(mercury "-framework Metal")
-#target_link_libraries(mercury "-framework MetalKit")
-#target_link_libraries(mercury "-framework QuartzCore")
 
 
