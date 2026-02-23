@@ -1,15 +1,11 @@
 #include <iostream>
 
-<<<<<<< PATCH SET (c0f66e1e4caaab0eeb38e590f56b04bba560837a Load images)
 
 #include <assets/images.hh> 
 #include "variables.hh"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
-=======
-#include "variables.hh"
->>>>>>> BASE      (bb4bc9fb0f887a71c00f550ab828b637e4466b04 added fps)
 
 #define SOKOL_IMPL
 #define SOKOL_GLCORE
@@ -52,7 +48,6 @@ void engine_init() {
 
     stm_setup();
 
-<<<<<<< PATCH SET (c0f66e1e4caaab0eeb38e590f56b04bba560837a Load images)
 
     state.bind.views[VIEW_tex] = sg_alloc_view();
     state.bind.samplers[SMP_smp] = sg_make_sampler((sg_sampler_desc){
@@ -60,8 +55,6 @@ void engine_init() {
         .mag_filter = SG_FILTER_LINEAR,
         .label = "jpg-sampler",
     });
-=======
->>>>>>> BASE      (bb4bc9fb0f887a71c00f550ab828b637e4466b04 added fps)
     sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
     #define SHORT_MAX 32767
