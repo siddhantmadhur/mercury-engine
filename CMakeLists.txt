@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.8)
 
 project(MercuryEngine)
 include_directories("third_party")
+include_directories("shaders")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -12,10 +13,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(LIB_SRC
     lib/assets/images.cc
     lib/gameobjects/camera.cc
+    lib/engine/engine.cc
 )
 
 set(SOURCES
-    src/main.mm
+    src/main.cc
 )
 add_executable(mercury ${SOURCES} ${LIB_SRC})
 

@@ -1,3 +1,3 @@
 #!/bin/bash
 
-./bin/sokol-shdc -i src/1-triangle.glsl -o src/1-triangle.shader.hh --slang glsl410:metal_macos
+find shaders -type f -name "*.glsl" -exec bin/sokol-shdc -i {} -o {}.hh --slang glsl410:metal_macos ';'
