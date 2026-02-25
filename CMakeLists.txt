@@ -10,11 +10,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(LIB_SRC
-    lib/assets/images.cc
-    lib/gameobjects/camera.cc
-    lib/engine/engine.cc
-)
+file(GLOB_RECURSE LIB_SRC "lib/*.cc")
+
+#message(STATUS "SOURCES: ${LIB_SRC}")
+#set(LIB_SRC
+#    lib/assets/images.cc
+#    lib/gameobjects/camera.cc
+#    lib/engine/engine.cc
+#)
 
 set(SOURCES
     src/main.cc

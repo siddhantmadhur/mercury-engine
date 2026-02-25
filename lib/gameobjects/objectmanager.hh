@@ -4,10 +4,6 @@
 #include <gameobjects/gameobject.hh>
 
 #include <cstdint>
-typedef struct vertext_t {
-    float x, y, z;
-    int16_t u, v;
-} vertex_t;
 
 class ObjectManager {
 public:
@@ -22,5 +18,4 @@ private:
     uint16_t max_size;
     uint16_t length;
 };
-
 #endif

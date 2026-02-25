@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <engine/scene.hh>
+#include <gameobjects/objectmanager.hh>
 
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_gfx.h>
@@ -12,27 +13,23 @@
 //#include <engine/engine.cc>
 
 
-
-typedef struct vertext_t {
-    float x, y, z;
-    int16_t u, v;
-} vertex_t;
     
 class Mercury
 {
 public:
     Mercury();
+    void SetScene(Scene* scene);
     void sokol_init();
     void sokol_frame_cb();
     void sokol_cleanup();
     void sokol_event(const sapp_event* event);
 
+
 private:
     uint64_t frame_time;
     double delta_t;
-    sg_pipeline pip;
-    sg_pass_action pass_action;
-    sg_bindings bind;
+    Scene *currentScene;
+
 };
 
 #endif

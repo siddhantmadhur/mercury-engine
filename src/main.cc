@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "engine/scene.hh"
 #include "variables.hh"
 #include <engine/engine.hh>
 
@@ -31,7 +32,14 @@ void sokol_event(const sapp_event* event) {
 };
 
 sapp_desc sokol_main(int argc, char *argv[]) {
+
+
     engine = new Mercury();    
+
+
+    Scene *demoScene = new Scene();
+
+    engine->SetScene(demoScene);
 
     return (sapp_desc){
         .init_cb = sokol_init,
