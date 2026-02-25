@@ -13,11 +13,12 @@ public:
     Scene();
     ~Scene();
     void Init();
-    void Add(GameObject& obj);
+    void AddObject(GameObject& obj);
     void Render(float width, float height);
-    //virtual void OnStart(); // runs at scene creation
-    //virtual void OnUpdate(); // runs once every frame
+    virtual void OnStart() =0; // runs at scene creation
+    virtual void OnUpdate() =0; // runs once every frame
 private:
+    std::vector<GameObject> objects;
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;
     uint16_t current_id;
@@ -25,6 +26,7 @@ private:
     sg_pass_action pass_action;
     sg_bindings bind;
     Camera playerCamera;
+    uint16_t* raw_indices;
 };
 
 #endif

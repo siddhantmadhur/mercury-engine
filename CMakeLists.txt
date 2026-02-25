@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-file(GLOB_RECURSE LIB_SRC "lib/*.cc")
+file(GLOB_RECURSE ENGINE_SRC "lib/*.cc")
 
 #message(STATUS "SOURCES: ${LIB_SRC}")
 #set(LIB_SRC
@@ -19,10 +19,14 @@ file(GLOB_RECURSE LIB_SRC "lib/*.cc")
 #    lib/engine/engine.cc
 #)
 
-set(SOURCES
-    src/main.cc
-)
-add_executable(mercury ${SOURCES} ${LIB_SRC})
+file(GLOB_RECURSE GAME_SRC "src/*.cc")
+
+#set(SOURCES
+#    src/main.cc
+#    src/scenes/demo_scene.cc
+#)
+
+add_executable(mercury ${ENGINE_SRC} ${GAME_SRC} )
 
 
 include_directories("lib")

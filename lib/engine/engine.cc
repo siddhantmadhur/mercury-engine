@@ -70,7 +70,9 @@ void Mercury::sokol_init() {
 
 
     currentScene->Init(); // runs only for the initial default scene; every other scene needs to call this themselves
-    // Do scene init here
+
+
+    currentScene->OnStart();
 };
 
 
@@ -96,8 +98,7 @@ void Mercury::sokol_frame_cb() {
         ImGui::End();
     }
 
-
-
+    currentScene->OnUpdate();
 
     if (currentScene) {
         currentScene->Render(width, height);

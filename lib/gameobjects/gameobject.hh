@@ -15,9 +15,11 @@ public:
     ~GameObject();
     void setId(uint16_t);
     std::vector<vertex_t> getVertices(); 
+    std::vector<uint16_t> getIndices(); 
+    std::vector<vertex_t> vertices;
+    std::vector<uint16_t> indices;
 private:
     uint16_t id;
-    std::vector<vertex_t> vertices;
 };
 
 #endif

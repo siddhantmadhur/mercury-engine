@@ -30,6 +30,7 @@ out vec4 FragColor;
 
 void main() {
     FragColor = texture(sampler2D(tex, smp), uv); 
+    //FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 }
 
 @end
