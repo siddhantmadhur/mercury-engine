@@ -15,3 +15,17 @@ Camera::~Camera() {
 glm::mat4 Camera::getViewProjection() {
     return proj * view;
 }
+
+void Camera::setView(glm::mat4 view) {
+    this->view = view;
+}
+void Camera::setProj(glm::mat4 proj) {
+    this->proj = proj;
+}
+void Camera::setPosition(glm::vec3 pos) {
+    this->cameraPosition = pos;
+}
+
+glm::vec3 Camera::getPosition() {
+    return this->cameraPosition;
+}

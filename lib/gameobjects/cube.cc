@@ -1,37 +1,38 @@
 #include "cube.hh"
 
-Shapes::Cube::Cube() {
+
+Shapes::Cube::Cube(float scale) {
     #define SHORT_MAX 32767
     const vertex_t raw_vertices[24] = {
-        { -1.0f, -1.0f, -1.0f,      0,     0 },
-        {  1.0f, -1.0f, -1.0f,  SHORT_MAX,     0 },
-        {  1.0f,  1.0f, -1.0f,  SHORT_MAX, SHORT_MAX },
-        { -1.0f,  1.0f, -1.0f,      0, SHORT_MAX },
+        { -scale, -scale, -scale,      0,     0 },
+        {  scale, -scale, -scale,  SHORT_MAX,     0 },
+        {  scale,  scale, -scale,  SHORT_MAX, SHORT_MAX },
+        { -scale,  scale, -scale,      0, SHORT_MAX },
 
-        { -1.0f, -1.0f,  1.0f,      0,     0 },
-        {  1.0f, -1.0f,  1.0f,  SHORT_MAX,     0 },
-        {  1.0f,  1.0f,  1.0f,  SHORT_MAX, SHORT_MAX },
-        { -1.0f,  1.0f,  1.0f,      0, SHORT_MAX },
+        { -scale, -scale,  scale,      0,     0 },
+        {  scale, -scale,  scale,  SHORT_MAX,     0 },
+        {  scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
+        { -scale,  scale,  scale,      0, SHORT_MAX },
 
-        { -1.0f, -1.0f, -1.0f,      0,     0 },
-        { -1.0f,  1.0f, -1.0f,  SHORT_MAX,     0 },
-        { -1.0f,  1.0f,  1.0f,  SHORT_MAX, SHORT_MAX },
-        { -1.0f, -1.0f,  1.0f,      0, SHORT_MAX },
+        { -scale, -scale, -scale,      0,     0 },
+        { -scale,  scale, -scale,  SHORT_MAX,     0 },
+        { -scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
+        { -scale, -scale,  scale,      0, SHORT_MAX },
 
-        {  1.0f, -1.0f, -1.0f,      0,     0 },
-        {  1.0f,  1.0f, -1.0f,  SHORT_MAX,     0 },
-        {  1.0f,  1.0f,  1.0f,  SHORT_MAX, SHORT_MAX },
-        {  1.0f, -1.0f,  1.0f,      0, SHORT_MAX },
+        {  scale, -scale, -scale,      0,     0 },
+        {  scale,  scale, -scale,  SHORT_MAX,     0 },
+        {  scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
+        {  scale, -scale,  scale,      0, SHORT_MAX },
 
-        { -1.0f, -1.0f, -1.0f,      0,     0 },
-        { -1.0f, -1.0f,  1.0f,  SHORT_MAX,     0 },
-        {  1.0f, -1.0f,  1.0f,  SHORT_MAX, SHORT_MAX },
-        {  1.0f, -1.0f, -1.0f,      0, SHORT_MAX },
+        { -scale, -scale, -scale,      0,     0 },
+        { -scale, -scale,  scale,  SHORT_MAX,     0 },
+        {  scale, -scale,  scale,  SHORT_MAX, SHORT_MAX },
+        {  scale, -scale, -scale,      0, SHORT_MAX },
 
-        { -1.0f,  1.0f, -1.0f,      0,     0 },
-        { -1.0f,  1.0f,  1.0f,  SHORT_MAX,     0 },
-        {  1.0f,  1.0f,  1.0f,  SHORT_MAX, SHORT_MAX },
-        {  1.0f,  1.0f, -1.0f,      0, SHORT_MAX },
+        { -scale,  scale, -scale,      0,     0 },
+        { -scale,  scale,  scale,  SHORT_MAX,     0 },
+        {  scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
+        {  scale,  scale, -scale,      0, SHORT_MAX },
 
     };
 

@@ -24,7 +24,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
-
 #include <iostream>
 using namespace std;
 
@@ -87,6 +86,7 @@ void Mercury::sokol_frame_cb() {
     LoadMainMenuBar();
 
     delta_t = stm_ms(stm_laptime(&frame_time));
+    currentScene->SetDelta(delta_t);
    
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus ;
     ImGuiIO& io = ImGui::GetIO();
@@ -118,10 +118,6 @@ void Mercury::sokol_cleanup() {
 
 void Mercury::sokol_event(const sapp_event *event) {
     simgui_handle_event(event);
-    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
-        if (event->key_code == SAPP_KEYCODE_ESCAPE) {
-            sapp_quit();
-        }
-    }
+    currentScene->OnEvent(event);
 }
 

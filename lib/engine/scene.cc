@@ -8,7 +8,6 @@
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_glue.h>
 #include <sokol/sokol_time.h>
-#include <sokol/sokol_time.h>
 #include <generic_texture.glsl.hh>
 
 #include <engine/scene.hh>
@@ -118,7 +117,9 @@ void Scene::Init() {
 }
 
 
-
+void Scene::SetDelta(float delta_t) {
+    this->delta_t = delta_t;
+}
 
 
 void Scene::Render(float width, float height) {
@@ -126,7 +127,6 @@ void Scene::Render(float width, float height) {
    
     vs_params_t params;
     params.mvp = playerCamera.getViewProjection();
-
 
 
     size_t vertex_size = vertices.size() * sizeof(vertex_t);
@@ -162,8 +162,6 @@ void Scene::AddObject(GameObject& obj) {
     auto obj_vertex = obj.vertices;
     auto obj_indices = obj.indices;
 
-
-
     int prev_size = vertices.size();
     for (int i = 0; i < obj_indices.size(); i++) {
         
@@ -173,17 +171,14 @@ void Scene::AddObject(GameObject& obj) {
 
     vertices.insert(vertices.end(), obj_vertex.begin(), obj_vertex.end());
 
-
-    cout << "Current size " << indices.size() << endl;
-
-    //index_buffer_bind.usage.dynamic_update = true;
-    ///sg_init_buffer(bind.index_buffer, index_buffer_bind);
-
-
-// todo for myself tomorrow: move all the init code from engine class to scene class 
-
-    
-    std::cout << "Created New Object!" << std::endl;
     obj.setId(current_id);
     current_id += 1;
+}
+
+void Scene::SetPlayerCamera(Camera& cam) {
+    this->playerCamera = cam;
+}
+
+Camera& Scene::GetPlayerCamera() {
+    return this->playerCamera;
 }

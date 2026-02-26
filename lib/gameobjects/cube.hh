@@ -5,7 +5,7 @@
 namespace Shapes {
 class Cube : public GameObject {
 public:
-    Cube();
+    Cube(float scale=1.0f);
 };
 
 }

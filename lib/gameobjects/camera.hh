@@ -8,9 +8,13 @@ public:
     Camera(float aspect_ratio);
     ~Camera();
     glm::mat4 getViewProjection();
-    glm::vec3 cameraPosition;
+    void setView(glm::mat4);
+    void setProj(glm::mat4);
+    void setPosition(glm::vec3);
+    glm::vec3 getPosition();
 private:
     glm::mat4 view;
     glm::mat4 proj;
+    glm::vec3 cameraPosition;
 };
 #endif

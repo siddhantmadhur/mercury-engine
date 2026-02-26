@@ -7,6 +7,7 @@ class DemoScene : public Scene {
 public:
     void OnStart() override;
     void OnUpdate() override;
+    void OnEvent(const sapp_event* event) override;
 private:
 };
 
