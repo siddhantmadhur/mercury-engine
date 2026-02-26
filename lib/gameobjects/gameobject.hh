@@ -11,8 +11,6 @@ typedef struct vertex_t {
 
 class GameObject {
 public:
-    GameObject();
-    ~GameObject();
     void setId(uint16_t);
     std::vector<vertex_t> getVertices(); 
     std::vector<uint16_t> getIndices(); 

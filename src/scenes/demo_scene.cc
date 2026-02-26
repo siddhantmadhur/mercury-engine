@@ -1,22 +1,20 @@
-#include "demo_scene.hh"
-#include "gameobjects/gameobject.hh"
 #include <iostream>
+#include <gameobjects/cube.hh> 
+#include "demo_scene.hh"
 using namespace std;
 
 void DemoScene::OnStart() {
-    cout << "DEMO SCENE START: " << endl;
 
-    GameObject obj = GameObject();
+    Shapes::Cube obj = Shapes::Cube();
     AddObject(obj);
 
-
-    GameObject secondObj = GameObject();
+    Shapes::Cube secondObj = Shapes::Cube();
     for (int i = 0; i < secondObj.vertices.size(); i++) {
         secondObj.vertices[i].x += 2; 
     }
     AddObject(secondObj);
     
-    GameObject thirdObj = GameObject();
+    Shapes::Cube thirdObj = Shapes::Cube();
     for (int i = 0; i < thirdObj.vertices.size(); i++) {
         thirdObj.vertices[i].x -= 2; 
     }
@@ -24,5 +22,7 @@ void DemoScene::OnStart() {
 }
 
 void DemoScene::OnUpdate() {
-    
+        
 }
+
+

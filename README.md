@@ -1,3 +1,5 @@
-# CityEngine
+# Mercury Engine
 
-Simple Engine for 2D Isometric Games
+## LICENSE
+
+[GNU GPLv3](/LICENSE)

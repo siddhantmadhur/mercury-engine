@@ -1,3 +1,10 @@
+/**
+    MERCURY : SCENE MANAGEMENT
+
+    
+**/
+
+
 #ifndef MERCURY_SCENE_IMPL_HH
 #define MERCURY_SCENE_IMPL_HH
 

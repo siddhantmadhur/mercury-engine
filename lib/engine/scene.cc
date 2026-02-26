@@ -1,3 +1,5 @@
+
+
 #include "assets/images.hh"
 #include "gameobjects/camera.hh"
 #include "glm/ext/matrix_clip_space.hpp"
@@ -14,37 +16,29 @@
 #include <iostream>
 using namespace std;
 
-#define INIT_VERTEX_SIZE 100
+#define INIT_VERTICES 256
+#define INIT_INDICES ((INIT_VERTICES)/2)*3
+#define COLOR_ONLY 1
 
 #define MAX_VERTICES 5120
 #define MAX_INDICES ((MAX_VERTICES)/2)*3
 
-Scene::Scene() {
-    vertices.reserve(MAX_VERTICES);
-
-    /**
-    raw_indices = new uint16_t[MAX_INDICES];
-    for (int i = 0; i < MAX_INDICES; i++) {
-        raw_indices[i + 0] = ((i / 3) * 2) + 0 ;
-        raw_indices[i + 1] = ((i / 3) * 2) + 1 ;
-        raw_indices[i + 2] = ((i / 3) * 2) + 2 ;
-        i += 3;
-    }
-
-    **/
-
+Scene::Scene() : playerCamera(16.0/9.0) {
+    vertices.reserve(INIT_VERTICES);
+    indices.reserve(INIT_INDICES);
 }
 
 Scene::~Scene() {
-    //delete raw_indices;
+    sg_dealloc_buffer(bind.vertex_buffers[0]);
+    sg_dealloc_buffer(bind.index_buffer);
+    sg_dealloc_view(bind.views[VIEW_tex]);
+    sg_dealloc_sampler(bind.samplers[SMP_smp]);
 }
 
-#define COLOR_ONLY 1
 
-void Scene::Init() { // run after sokol_init
+void Scene::Init() {
     Image wall_texture = Image("wall.jpg");
 
-    auto cam = Camera();
  
     #if COLOR_ONLY
     bind.views[VIEW_tex] = sg_alloc_view();
@@ -60,8 +54,6 @@ void Scene::Init() { // run after sokol_init
 #endif
     sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
-// create obj here somewhere
-
     size_t vertex_size = MAX_VERTICES * sizeof(vertex_t);
     bind.vertex_buffers[0] = sg_make_buffer((sg_buffer_desc){
         .size = vertex_size,
@@ -76,18 +68,9 @@ void Scene::Init() { // run after sokol_init
             .index_buffer = true, 
             .dynamic_update = true 
         },
-        /**
-        .data = sg_range {
-            .ptr = raw_indices,
-            .size = sizeof(uint16_t) * MAX_INDICES,
-        },
-        **/
         .label = "quad-indices",
     });
 
-    //bind.index_buffer = sg_alloc_buffer();
-    //bind.vertex_buffers[0] = sg_alloc_buffer();
-    
     sg_pipeline_desc pip_desc = (sg_pipeline_desc){
         .shader = shd,
         .depth = {
@@ -139,19 +122,10 @@ void Scene::Init() { // run after sokol_init
 
 
 void Scene::Render(float width, float height) {
-    glm::vec3 position = glm::vec3(0, 0, -5);
-    glm::vec3 front = glm::vec3(0, 0, -1);
-    glm::vec3 up = glm::vec3(0, 1, 0);
 
-    int pitch = 0;
-    int yaw = 90;
-
-    glm::mat4 Proj = glm::perspective<float>(glm::radians(60.0f), (float) ((float)width / height), 0.1f, 10.0f);
-   // glm::mat4 View = glm::lookAt(position, position + front, up);
-    glm::mat4 View = glm::lookAt(glm::vec3(0.0f, 3.5f, 7.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
    
     vs_params_t params;
-    params.mvp = Proj * View;
+    params.mvp = playerCamera.getViewProjection();
 
 
 
