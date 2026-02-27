@@ -1,38 +1,43 @@
 #include "cube.hh"
 
+#define WHITE 1.0f, 0.0f, 0.0f, 1.0f
 
-Shapes::Cube::Cube(float scale) {
-    #define SHORT_MAX 32767
+Shapes::Cube::Cube(float scale, bool use_texture) {
+     #define SHORT_MAX 32767
+    // #define SHORT_MAX 5
+    auto use_texture_f = (use_texture ? 1.0f : 0.0f);
+
+
     const vertex_t raw_vertices[24] = {
-        { -scale, -scale, -scale,      0,     0 },
-        {  scale, -scale, -scale,  SHORT_MAX,     0 },
-        {  scale,  scale, -scale,  SHORT_MAX, SHORT_MAX },
-        { -scale,  scale, -scale,      0, SHORT_MAX },
+        { -scale, -scale, -scale,           0,          0, WHITE, use_texture_f },
+        {  scale, -scale, -scale,   SHORT_MAX,          0, WHITE, use_texture_f },
+        {  scale,  scale, -scale,   SHORT_MAX,  SHORT_MAX, WHITE, use_texture_f },
+        { -scale,  scale, -scale,           0,  SHORT_MAX, WHITE, use_texture_f },
 
-        { -scale, -scale,  scale,      0,     0 },
-        {  scale, -scale,  scale,  SHORT_MAX,     0 },
-        {  scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
-        { -scale,  scale,  scale,      0, SHORT_MAX },
+        { -scale, -scale,  scale,           0,          0, WHITE, use_texture_f },
+        {  scale, -scale,  scale,   SHORT_MAX,          0, WHITE, use_texture_f },
+        {  scale,  scale,  scale,   SHORT_MAX,  SHORT_MAX, WHITE, use_texture_f },
+        { -scale,  scale,  scale,           0,  SHORT_MAX, WHITE, use_texture_f },
 
-        { -scale, -scale, -scale,      0,     0 },
-        { -scale,  scale, -scale,  SHORT_MAX,     0 },
-        { -scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
-        { -scale, -scale,  scale,      0, SHORT_MAX },
+        { -scale, -scale, -scale,           0,          0, WHITE, use_texture_f },
+        { -scale,  scale, -scale,   SHORT_MAX,          0, WHITE, use_texture_f },
+        { -scale,  scale,  scale,   SHORT_MAX,  SHORT_MAX, WHITE, use_texture_f },
+        { -scale, -scale,  scale,           0,  SHORT_MAX, WHITE, use_texture_f },
 
-        {  scale, -scale, -scale,      0,     0 },
-        {  scale,  scale, -scale,  SHORT_MAX,     0 },
-        {  scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
-        {  scale, -scale,  scale,      0, SHORT_MAX },
+        {  scale, -scale, -scale,           0,          0, WHITE, use_texture_f },
+        {  scale,  scale, -scale,   SHORT_MAX,          0, WHITE, use_texture_f },
+        {  scale,  scale,  scale,   SHORT_MAX,  SHORT_MAX, WHITE, use_texture_f },
+        {  scale, -scale,  scale,           0,  SHORT_MAX, WHITE, use_texture_f },
 
-        { -scale, -scale, -scale,      0,     0 },
-        { -scale, -scale,  scale,  SHORT_MAX,     0 },
-        {  scale, -scale,  scale,  SHORT_MAX, SHORT_MAX },
-        {  scale, -scale, -scale,      0, SHORT_MAX },
+        { -scale, -scale, -scale,           0,          0, WHITE, use_texture_f },
+        { -scale, -scale,  scale,   SHORT_MAX,          0, WHITE, use_texture_f },
+        {  scale, -scale,  scale,   SHORT_MAX,  SHORT_MAX, WHITE, use_texture_f },
+        {  scale, -scale, -scale,           0,  SHORT_MAX, WHITE, use_texture_f },
 
-        { -scale,  scale, -scale,      0,     0 },
-        { -scale,  scale,  scale,  SHORT_MAX,     0 },
-        {  scale,  scale,  scale,  SHORT_MAX, SHORT_MAX },
-        {  scale,  scale, -scale,      0, SHORT_MAX },
+        { -scale,  scale, -scale,           0,          0, WHITE, use_texture_f },
+        { -scale,  scale,  scale,   SHORT_MAX,          0, WHITE, use_texture_f },
+        {  scale,  scale,  scale,   SHORT_MAX,  SHORT_MAX, WHITE, use_texture_f },
+        {  scale,  scale, -scale,           0,  SHORT_MAX, WHITE, use_texture_f },
 
     };
 

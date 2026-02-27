@@ -86,6 +86,8 @@ void Scene::Init() {
 
     pip_desc.layout.attrs[ATTR_simple_position].format = SG_VERTEXFORMAT_FLOAT3;
     pip_desc.layout.attrs[ATTR_simple_texcoord0].format = SG_VERTEXFORMAT_SHORT2N;
+    pip_desc.layout.attrs[ATTR_simple_color0].format = SG_VERTEXFORMAT_FLOAT4;
+    pip_desc.layout.attrs[ATTR_simple_use_texture0].format = SG_VERTEXFORMAT_FLOAT;
 
     pip = sg_make_pipeline(pip_desc);
 

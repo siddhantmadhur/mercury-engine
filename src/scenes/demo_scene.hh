@@ -9,6 +9,7 @@ public:
     void OnUpdate() override;
     void OnEvent(const sapp_event* event) override;
 private:
+    glm::vec3 direction;
 };
 
 #endif
