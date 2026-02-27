@@ -23,8 +23,8 @@ using namespace std;
 #define MAX_INDICES ((MAX_VERTICES)/2)*3
 
 Scene::Scene() : playerCamera(16.0/9.0) {
-    vertices.reserve(INIT_VERTICES);
-    indices.reserve(INIT_INDICES);
+    //vertices.reserve(INIT_VERTICES);
+    //indices.reserve(INIT_INDICES);
 }
 
 Scene::~Scene() {
@@ -93,7 +93,7 @@ void Scene::Init() {
 
 
     pass_action = (sg_pass_action){
-        .colors = { { .load_action = SG_LOADACTION_CLEAR, .clear_value={0.2f, 0.3f, 0.3f, 1.0f}}}
+        .colors = { { .load_action = SG_LOADACTION_CLEAR, .clear_value={bgColor.x, bgColor.y, bgColor.z, bgColor.a}}}
     };
 
 
@@ -131,17 +131,39 @@ void Scene::Render(float width, float height) {
     params.mvp = playerCamera.getViewProjection();
 
 
+    for (int i = 0; i < objects.size(); i++) {
+        indices.clear();
+        vertices.clear();
+        GameObject& obj = objects[i];
+        auto obj_vertex = obj.vertices;
+        auto obj_indices = obj.indices;
+
+        int prev_size = vertices.size();
+        for (int i = 0; i < obj_indices.size(); i++) {
+            obj_indices[i] += prev_size;
+        }
+
+        indices.insert(indices.end(), obj_indices.begin(), obj_indices.end());
+        vertices.insert(vertices.end(), obj_vertex.begin(), obj_vertex.end());
+    }
+
+
     size_t vertex_size = vertices.size() * sizeof(vertex_t);
-    sg_update_buffer(bind.vertex_buffers[0], (sg_range){
-        .ptr = vertices.data(),
-        .size = vertex_size,
-    });
-   
+    if (vertex_size > 0) {
+        sg_update_buffer(bind.vertex_buffers[0], (sg_range){
+            .ptr = vertices.data(),
+            .size = vertex_size,
+        });
+    }
+  
+
     size_t indices_size = indices.size() * sizeof(uint16_t);
-    sg_update_buffer(bind.index_buffer, (sg_range){
-        .ptr = indices.data(),
-        .size = indices_size,
-    });
+    if (indices_size > 0) {
+        sg_update_buffer(bind.index_buffer, (sg_range){
+            .ptr = indices.data(),
+            .size = indices_size,
+        });
+    }
 
 
     sg_begin_pass((sg_pass){
@@ -161,19 +183,8 @@ void Scene::Render(float width, float height) {
 }
 
 void Scene::AddObject(GameObject& obj) {
-    auto obj_vertex = obj.vertices;
-    auto obj_indices = obj.indices;
-
-    int prev_size = vertices.size();
-    for (int i = 0; i < obj_indices.size(); i++) {
-        
-        obj_indices[i] += prev_size;
-    }
-    indices.insert(indices.end(), obj_indices.begin(), obj_indices.end());
-
-    vertices.insert(vertices.end(), obj_vertex.begin(), obj_vertex.end());
-
     obj.setId(current_id);
+    objects.push_back(obj);
     current_id += 1;
 }
 
@@ -183,4 +194,11 @@ void Scene::SetPlayerCamera(Camera& cam) {
 
 Camera& Scene::GetPlayerCamera() {
     return this->playerCamera;
+}
+
+void Scene::SetBgColor(glm::vec4 newColor) {
+    bgColor = newColor;
+    pass_action = (sg_pass_action){
+        .colors = { { .load_action = SG_LOADACTION_CLEAR, .clear_value={bgColor.x, bgColor.y, bgColor.z, bgColor.a}}}
+    };
 }

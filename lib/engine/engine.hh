@@ -4,7 +4,6 @@
 
 #include <cstdint>
 #include <engine/scene.hh>
-#include <gameobjects/objectmanager.hh>
 
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_gfx.h>

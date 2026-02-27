@@ -14,6 +14,7 @@ typedef struct vertex_t {
 
 class GameObject {
 public:
+    GameObject();
     void setId(uint16_t);
     void SetColor(glm::vec4);
     void UseTexture(bool);
@@ -21,6 +22,8 @@ public:
     std::vector<uint16_t> getIndices(); 
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;
+    bool isTexture();
+    void Move(glm::vec3 position);
 private:
     uint16_t id;
     glm::vec4 color;

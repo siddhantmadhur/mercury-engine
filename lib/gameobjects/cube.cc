@@ -5,7 +5,7 @@
 Shapes::Cube::Cube(float scale, bool use_texture) {
      #define SHORT_MAX 32767
     // #define SHORT_MAX 5
-    auto use_texture_f = (use_texture ? 1.0f : 0.0f);
+    float use_texture_f = (use_texture ? 1.0f : 0.0f);
 
 
     const vertex_t raw_vertices[24] = {

@@ -19,7 +19,7 @@ file(GLOB_RECURSE ENGINE_SRC "lib/*.cc")
 #    lib/engine/engine.cc
 #)
 
-file(GLOB_RECURSE GAME_SRC "src/*.cc")
+file(GLOB_RECURSE GAME_SRC "20-games-challenge/pong/*.cc")
 
 #set(SOURCES
 #    src/main.cc

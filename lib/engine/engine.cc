@@ -1,4 +1,3 @@
-#include <gameobjects/objectmanager.hh>
 #include <gameobjects/gameobject.hh>
 #include <gameobjects/camera.hh>
 #include <engine/engine.hh>

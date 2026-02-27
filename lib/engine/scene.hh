@@ -29,6 +29,7 @@ public:
     void SetPlayerCamera(Camera& cam);
     Camera& GetPlayerCamera();
     void SetDelta(float delta_t);
+    void SetBgColor(glm::vec4);
     float delta_t;
 private:
     std::vector<GameObject> objects;
@@ -40,6 +41,7 @@ private:
     sg_bindings bind;
     Camera playerCamera;
     uint16_t* raw_indices;
+    glm::vec4 bgColor = glm::vec4(0.2f, 0.3f, 0.3f, 1.0f);
 };
 
 #endif
