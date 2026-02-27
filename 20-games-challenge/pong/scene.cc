@@ -10,9 +10,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+// MAKE THIS A PART OF THE SCENE
+float width = 1280.0f;
+float height = 720.0f;
+
 void PongScene::OnStart() {
-    float width = 1280.0f;
-    float height = 720.0f;
     
     { // configure 2d camera
         Camera playerCam = Camera(16.0/9.0);
@@ -39,9 +41,9 @@ void PongScene::OnStart() {
 
     { // configure paddles here
         glm::vec2 offset_from_origin = glm::vec2(width / 2.0f, height / 2.0f) * (1/ZOOM);
-        Shapes::Quad *player = new Shapes::Quad(glm::vec2(2.0f, 8.0f), glm::vec2(-offset_from_origin.x + 10, 0.0f), glm::vec4(1.0f));
+        Shapes::Quad *player = new Shapes::Quad(glm::vec2(2.0f, 8.0f), glm::vec2((-offset_from_origin.x) + 16, 0.0f), glm::vec4(1.0f));
         //Shapes::Quad player = Shapes::Quad();
-        player->UseTexture(true);
+        player->UseTexture(false);
 
         AddObject(*player);
 
@@ -50,32 +52,41 @@ void PongScene::OnStart() {
 }
 
 void PongScene::OnUpdate() {
-    #define SPEED 200
+    #define SPEED 0.3f
     if (this->player != NULL) {
-        //std::cout << "player exists" << std::endl;
         this->player->Move(glm::vec3(direction.x * delta_t * SPEED, direction.y * delta_t * SPEED, 0.0f));
+        glm::vec3 position = this->player->GetPosition();
+        #define MAX_CEIL 70 
+        if (position.y > MAX_CEIL) {
+            position.y = MAX_CEIL;
+        }
+        if (position.y < -MAX_CEIL) {
+            position.y = -MAX_CEIL;
+        }
+        this->player->SetPosition(position);
+        //std::cout << "update value: (" << position.x << ", " << position.y << ")" << std::endl;
     }
 }
 
 void PongScene::OnEvent(const sapp_event* event) {
-    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
+    if (event->type == SAPP_EVENTTYPE_KEY_DOWN && event->key_repeat == false) {
         if (event->key_code == SAPP_KEYCODE_ESCAPE) {
             sapp_quit();
         }
 
         if (event->key_code == SAPP_KEYCODE_W) {
-            direction.x -= 1.0f;
+            direction.y += 1.0f;
         }
         if (event->key_code == SAPP_KEYCODE_S) {
-            direction.x += 1.0f;
+            direction.y -= 1.0f;
         }
     }
     if (event->type == SAPP_EVENTTYPE_KEY_UP) {
         if (event->key_code == SAPP_KEYCODE_W) {
-            direction.x += 1.0f;
+            direction.y -= 1.0f;
         } 
         if (event->key_code == SAPP_KEYCODE_S) {
-            direction.x -= 1.0f;
+            direction.y += 1.0f;
         }
     }
 

@@ -12,8 +12,11 @@ Camera::~Camera() {
     std::cout << "Deleting camera!" << std::endl;
 }
 
-glm::mat4 Camera::getViewProjection() {
-    return proj * view;
+glm::mat4 Camera::getProjection() {
+    return proj;
+}
+glm::mat4 Camera::getView() {
+    return view;
 }
 
 void Camera::setView(glm::mat4 view) {

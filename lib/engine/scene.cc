@@ -87,7 +87,6 @@ void Scene::Init() {
     pip_desc.layout.attrs[ATTR_simple_position].format = SG_VERTEXFORMAT_FLOAT3;
     pip_desc.layout.attrs[ATTR_simple_texcoord0].format = SG_VERTEXFORMAT_SHORT2N;
     pip_desc.layout.attrs[ATTR_simple_color0].format = SG_VERTEXFORMAT_FLOAT4;
-    pip_desc.layout.attrs[ATTR_simple_use_texture0].format = SG_VERTEXFORMAT_FLOAT;
 
     pip = sg_make_pipeline(pip_desc);
 
@@ -127,25 +126,9 @@ void Scene::SetDelta(float delta_t) {
 void Scene::Render(float width, float height) {
 
    
-    vs_params_t params;
-    params.mvp = playerCamera.getViewProjection();
-
-
-    for (int i = 0; i < objects.size(); i++) {
-        indices.clear();
-        vertices.clear();
-        GameObject& obj = objects[i];
-        auto obj_vertex = obj.vertices;
-        auto obj_indices = obj.indices;
-
-        int prev_size = vertices.size();
-        for (int i = 0; i < obj_indices.size(); i++) {
-            obj_indices[i] += prev_size;
-        }
-
-        indices.insert(indices.end(), obj_indices.begin(), obj_indices.end());
-        vertices.insert(vertices.end(), obj_vertex.begin(), obj_vertex.end());
-    }
+    cam_params_t params;
+    params.view = playerCamera.getView();
+    params.projection = playerCamera.getProjection();
 
 
     size_t vertex_size = vertices.size() * sizeof(vertex_t);
@@ -173,19 +156,37 @@ void Scene::Render(float width, float height) {
 
     sg_apply_pipeline(pip);
     
-    sg_apply_uniforms(UB_vs_params, SG_RANGE(params));
+    sg_apply_uniforms(UB_cam_params, SG_RANGE(params));
     
     sg_apply_bindings(bind);
 
     //cout << "Rendering " << indices.size() << " indices!" << endl;
 
-    sg_draw(0, indices.size(), 1);
+    //sg_draw(0, indices.size(), 1);
+    // TODO: FOR TOMORROW: MAKE POSITION A BINDABLE VALUE AND SET IT FOR EACH OBJECT BEFORE RENDERING
+    // TODO: RIGHT NOW FOR SOME REASON ITS NOT FKING DETERMINISTIC, MOVE DATA FROM VERTEX DATA TO BINDABLE
+    for (int i = 0; i < objects.size(); i++) {
+        GameObject* obj = objects[i];
+        obj->Draw();
+    }
 }
 
 void Scene::AddObject(GameObject& obj) {
+    auto obj_vertex = obj.vertices;
+    auto obj_indices = obj.indices;
+
+    int prev_size = vertices.size();
+    for (int i = 0; i < obj_indices.size(); i++) {
+        
+        obj_indices[i] += prev_size;
+    }
+    indices.insert(indices.end(), obj_indices.begin(), obj_indices.end());
+
+    vertices.insert(vertices.end(), obj_vertex.begin(), obj_vertex.end());
+
     obj.setId(current_id);
-    objects.push_back(obj);
-    current_id += 1;
+    objects.push_back(&obj);
+    current_id += obj_indices.size();
 }
 
 void Scene::SetPlayerCamera(Camera& cam) {

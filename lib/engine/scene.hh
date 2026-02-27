@@ -32,16 +32,17 @@ public:
     void SetBgColor(glm::vec4);
     float delta_t;
 private:
-    std::vector<GameObject> objects;
+    std::vector<GameObject*> objects;
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;
-    uint16_t current_id;
+    uint16_t current_id = 0;
     sg_pipeline pip;
     sg_pass_action pass_action;
     sg_bindings bind;
     Camera playerCamera;
     uint16_t* raw_indices;
     glm::vec4 bgColor = glm::vec4(0.2f, 0.3f, 0.3f, 1.0f);
+    uint16_t lastIndex;
 };
 
 #endif

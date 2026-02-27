@@ -5,21 +5,26 @@
 
 
 @vs vs
-layout(binding=0) uniform vs_params {
-    mat4 mvp;
+layout(binding=0) uniform cam_params {
+    mat4 view;
+    mat4 projection;
+};
+
+layout(binding=1) uniform model_params {
+    mat4 model;
+    float use_texture0;
 };
 
 in vec3 position;
 in vec2 texcoord0;
 in vec4 color0;
-in float use_texture0;
 
 out vec2 uv;
 out vec4 color;
-out float use_texture; 
+out float use_texture;
 
 void main() {
-    gl_Position = mvp * vec4(position, 1);
+    gl_Position = projection * view * model * vec4(position, 1);
     uv = texcoord0;
     color = color0;
     use_texture = use_texture0;
