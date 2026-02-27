@@ -17,6 +17,11 @@ float height = 720.0f;
 void PongScene::OnStart() {
     
     { // configure 2d camera
+
+
+        // TODO: add createOrtho and createPerspective in the engine (maybe to scene?) itself to reduce this code as well
+
+
         Camera playerCam = Camera(16.0/9.0);
         glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
         playerCam.setPosition(pos);

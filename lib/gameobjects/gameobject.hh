@@ -13,6 +13,8 @@ typedef struct vertex_t {
     float r, g, b, a;
 } vertex_t;
 
+
+// TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
 class GameObject {
 public:
     void setId(uint16_t);
