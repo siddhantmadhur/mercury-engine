@@ -17,7 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/glm.hpp>
 
-#include <generic_texture.glsl.hh>
+#include <shaders/generic_texture.glsl.hh>
 #include <stdexcept>
 
 #define STB_IMAGE_IMPLEMENTATION

@@ -4,7 +4,7 @@
 #include <sokol/sokol_gfx.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <generic_texture.glsl.hh>
+#include <shaders/generic_texture.glsl.hh>
 
 std::vector<vertex_t> GameObject::getVertices() {
     return this->vertices; 

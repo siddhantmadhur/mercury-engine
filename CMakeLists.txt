@@ -55,12 +55,13 @@ add_subdirectory(third_party/glm)
 
 include_directories("third_party/glm")
 
+target_link_libraries(pequod imgui glm::glm)
 
 # CREATE NEW BINARIES USING THIS
 
 file(GLOB_RECURSE PONG_SRC "20-games-challenge/pong/*.cc")
 add_executable(pong ${PONG_SRC})
-target_link_libraries(pong pequod imgui glm::glm)
+target_link_libraries(pong pequod)
 
 
 

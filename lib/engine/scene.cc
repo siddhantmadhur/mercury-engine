@@ -8,7 +8,7 @@
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_glue.h>
 #include <sokol/sokol_time.h>
-#include <generic_texture.glsl.hh>
+#include <shaders/generic_texture.glsl.hh>
 
 #include <engine/scene.hh>
 

@@ -5,7 +5,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <sokol/sokol_gfx.h>
-#include <generic_texture.glsl.hh>
+#include <shaders/generic_texture.glsl.hh>
 
 typedef struct vertex_t {
     float x, y, z;
