@@ -34,6 +34,13 @@ Scene::~Scene() {
     sg_dealloc_sampler(bind.samplers[SMP_smp]);
 }
 
+void Scene::handleKeys(const sapp_event* event) {
+    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
+        keys_pressed[event->key_code] = true;
+    } else if (event->type == SAPP_EVENTTYPE_KEY_UP) {
+        keys_pressed[event->key_code] = false;
+    }
+}
 
 void Scene::Init() {
     Image wall_texture = Image("wall.jpg");
@@ -202,4 +209,12 @@ void Scene::SetBgColor(glm::vec4 newColor) {
     pass_action = (sg_pass_action){
         .colors = { { .load_action = SG_LOADACTION_CLEAR, .clear_value={bgColor.x, bgColor.y, bgColor.z, bgColor.a}}}
     };
+}
+
+bool Scene::IsKeyPressed(sapp_keycode key) {
+    if (keys_pressed.contains(key)) {
+        return keys_pressed[key];
+    } else {
+        return false;
+    }
 }

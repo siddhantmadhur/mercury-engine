@@ -32,7 +32,7 @@ public:
     void SetPosition(glm::vec3);
 private:
     glm::vec4 color;
-    bool use_texture;
+    bool use_texture = false;
     glm::vec3 position = glm::vec3(0.0f);
 
 };

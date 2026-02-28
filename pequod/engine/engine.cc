@@ -111,12 +111,16 @@ void PequodEngine::sokol_frame_cb() {
 }
 
 void PequodEngine::sokol_cleanup() {
+    if (currentScene) {
+        currentScene->OnEnd();
+    }
     simgui_shutdown();
     sg_shutdown();
 }
 
 void PequodEngine::sokol_event(const sapp_event *event) {
     simgui_handle_event(event);
+    currentScene->handleKeys(event);
     currentScene->OnEvent(event);
 }
 

@@ -10,10 +10,10 @@ Shapes::Quad::Quad(glm::vec2 size, glm::vec2 position, glm::vec4 color) {
 
 
     vertex_t raw_vertices[4] = {
-        { (size.x), (size.y), 0.0f,           0,          0, WHITE },
-        {  (size.x),-(size.y), 0.0f,   SHORT_MAX,          0, WHITE },
-        {  -size.x,  -size.y, 0.0f,   SHORT_MAX,  SHORT_MAX, WHITE },
-        { -size.x,  size.y, 0.0f,           0,  SHORT_MAX, WHITE },
+        {   size.x,  size.y, 0.0f,         0,         0, WHITE },
+        {   size.x, -size.y, 0.0f, SHORT_MAX,         0, WHITE },
+        {  -size.x, -size.y, 0.0f, SHORT_MAX, SHORT_MAX, WHITE },
+        {  -size.x,  size.y, 0.0f,         0, SHORT_MAX, WHITE },
     };
 
     vertices = std::vector<vertex_t>(std::begin(raw_vertices), std::end(raw_vertices));

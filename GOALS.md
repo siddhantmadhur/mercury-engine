@@ -12,7 +12,7 @@ the challenge.
 
 ## Progress
 
-- [ ]  1. Pong
+- [X]  1. Pong
 - [ ]  2. Breakout
 - [ ]  3. Jetpack Joyride
 - [ ]  4. Space Invaders
