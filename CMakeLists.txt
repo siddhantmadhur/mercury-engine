@@ -12,12 +12,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "" FORCE)
 
-file(GLOB_RECURSE ENGINE_SRC "lib/*.cc")
+file(GLOB_RECURSE ENGINE_SRC "pequod/*.cc")
 
 add_library(pequod ${ENGINE_SRC})
 
 
-include_directories("lib")
+include_directories("pequod")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)
 
 if (APPLE)

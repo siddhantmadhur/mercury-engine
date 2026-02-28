@@ -15,7 +15,7 @@
 #include <sokol/util/sokol_imgui.h>
 
 
-Mercury* engine = NULL;
+PequodEngine* engine = NULL;
 
 void sokol_init() {
     engine->sokol_init();
@@ -33,7 +33,7 @@ void sokol_event(const sapp_event* event) {
 sapp_desc sokol_main(int argc, char *argv[]) {
 
 
-    engine = new Mercury();    
+    engine = new PequodEngine();    
 
 
     //Scene *demoScene = new Scene();
@@ -49,7 +49,7 @@ sapp_desc sokol_main(int argc, char *argv[]) {
         .event_cb = sokol_event,
         .width = 1280,
         .height = 720,
-        .window_title = "Mercury Engine",
+        .window_title = "Pong Demo - Pequod",
         .logger = {
             .func = slog_func,
         },

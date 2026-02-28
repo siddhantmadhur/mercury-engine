@@ -43,16 +43,16 @@ void LoadMainMenuBar() {
 #endif
 }
 
-Mercury::Mercury() {
+PequodEngine::PequodEngine() {
     frame_time = 1;
     delta_t = 0;
 }
 
-void Mercury::SetScene(Scene* scene) {
+void PequodEngine::SetScene(Scene* scene) {
     currentScene = scene;
 }
 
-void Mercury::sokol_init() {
+void PequodEngine::sokol_init() {
     sg_setup((sg_desc){
         .logger = {
             .func = slog_func,
@@ -75,7 +75,7 @@ void Mercury::sokol_init() {
 
 
 
-void Mercury::sokol_frame_cb() {
+void PequodEngine::sokol_frame_cb() {
 
     const int width = sapp_width();
     const int height = sapp_height();
@@ -110,12 +110,12 @@ void Mercury::sokol_frame_cb() {
     sg_commit();
 }
 
-void Mercury::sokol_cleanup() {
+void PequodEngine::sokol_cleanup() {
     simgui_shutdown();
     sg_shutdown();
 }
 
-void Mercury::sokol_event(const sapp_event *event) {
+void PequodEngine::sokol_event(const sapp_event *event) {
     simgui_handle_event(event);
     currentScene->OnEvent(event);
 }

@@ -26,4 +26,10 @@ Shapes::Quad::Quad(glm::vec2 size, glm::vec2 position, glm::vec4 color) {
     };
 
     indices = std::vector<uint16_t>(std::begin(raw_indices), std::end(raw_indices));
+
+    this->size = size;
+}
+
+glm::vec2 Shapes::Quad::GetSize() {
+  return this->size;
 }

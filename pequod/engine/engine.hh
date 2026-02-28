@@ -13,10 +13,10 @@
 
 
     
-class Mercury
+class PequodEngine
 {
 public:
-    Mercury();
+    PequodEngine();
     void SetScene(Scene* scene);
     void sokol_init();
     void sokol_frame_cb();
