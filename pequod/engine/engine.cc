@@ -19,6 +19,8 @@
 
 #include <shaders/generic_texture.glsl.hh>
 #include <stdexcept>
+#include <thread>
+#include <unistd.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
@@ -27,7 +29,6 @@
 using namespace std;
 
 void LoadMainMenuBar() {
-#if 1
     if (ImGui::BeginMainMenuBar())
     {
       if (ImGui::BeginMenu("File"))
@@ -40,13 +41,43 @@ void LoadMainMenuBar() {
       }
     ImGui::EndMainMenuBar();
     }
-#endif
 }
 
 PequodEngine::PequodEngine() {
+}
+
+
+void run_every_tick(void* args) {
+    PequodEngine* engine = (PequodEngine*) args;
+    for (;;) { // this loop runs every 5 milliseconds;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50)); 
+        std::cout << engine->getTicks() / 20 << " Second (" << engine->getTicks() << ")!" << std::endl;
+        engine->ticks += 1;
+    }
+}
+
+void run_on_tick(void* args) {
+    PequodEngine* engine = (PequodEngine*) args;
+    for (;;) { // this loop runs every 5 milliseconds;
+        //std::this_thread::sleep_for(std::chrono::milliseconds(50)); 
+        //std::cout << engine->getTicks() / 20 << " Second (" << engine->getTicks() << ")!" << std::endl;
+        //engine->ticks += 1;
+    }
+}
+
+uint64_t PequodEngine::getTicks() {
+    return this->ticks;
+}
+
+void PequodEngine::startUp() {
     frame_time = 1;
     delta_t = 0;
+    ticks = 0;
+
+    // Create new thread for ticks here
+    //ticks_thread = std::thread(run_every_tick, (void*)this);     
 }
+
 
 void PequodEngine::SetScene(Scene* scene) {
     currentScene = scene;
@@ -77,24 +108,41 @@ void PequodEngine::sokol_init() {
 
 void PequodEngine::sokol_frame_cb() {
 
+
     const int width = sapp_width();
     const int height = sapp_height();
     simgui_new_frame({ width, height, sapp_frame_duration(), sapp_dpi_scale() });
 
     //ImGui::ShowDemoWindow();
-    LoadMainMenuBar();
+    if (show_debug_stats) {
+        LoadMainMenuBar();
+    }
 
     delta_t = stm_ms(stm_laptime(&frame_time));
     currentScene->SetDelta(delta_t);
-   
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus ;
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
-    if (ImGui::Begin("Status", nullptr, flags))
-    {
-        ImGui::Text("Frametime: %.2fms", delta_t);
-        ImGui::SameLine();
-        ImGui::End();
+    total_t += delta_t;
+
+    ticks = int(total_t / 50);
+
+
+
+    if (ticks % 20 == 0) {
+        fps = 1000.0 / delta_t;
+    }
+
+    if (show_debug_stats) {
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus ;
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+        if (ImGui::Begin("Status", NULL, flags))
+        {
+            ImGui::Text("FPS: %d", fps);
+            ImGui::SameLine();
+            ImGui::Text("Frametime: %.2fms", delta_t);
+            ImGui::SameLine();
+            ImGui::Text("tps: %.2f", std::ceil(ticks / (total_t / 1000)));
+            ImGui::End();
+        }
     }
 
     currentScene->OnUpdate();
@@ -110,6 +158,10 @@ void PequodEngine::sokol_frame_cb() {
     sg_commit();
 }
 
+bool PequodEngine::isShowDebugStats() {
+    return this->show_debug_stats;
+}
+
 void PequodEngine::sokol_cleanup() {
     if (currentScene) {
         currentScene->OnEnd();
@@ -122,5 +174,11 @@ void PequodEngine::sokol_event(const sapp_event *event) {
     simgui_handle_event(event);
     currentScene->handleKeys(event);
     currentScene->OnEvent(event);
+    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
+        if (event->key_code == SAPP_KEYCODE_F1) {
+            std::cout << "Toggling debug stats!" << std::endl;
+            show_debug_stats = !show_debug_stats;
+        }
+    }
 }
 

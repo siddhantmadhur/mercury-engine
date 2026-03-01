@@ -177,7 +177,7 @@ void PongScene::OnUpdate() {
     }
 
     {
-        #define SPEED 0.15
+        #define SPEED 0.15f
 
         if (this->enemy != NULL) {
             #define COLLISION_SIZE 100.0f

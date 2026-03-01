@@ -2,6 +2,7 @@
 
 #define SHORT_MAX 32767
 #define WHITE 1.0f, 1.0f, 1.0f, 1.0f
+#define SPREAD_COLOR(c) c.x, c.y, c.z, c.a
 
 Shapes::Quad::Quad(glm::vec2 size, glm::vec2 position, glm::vec4 color) {
 
@@ -10,10 +11,10 @@ Shapes::Quad::Quad(glm::vec2 size, glm::vec2 position, glm::vec4 color) {
 
 
     vertex_t raw_vertices[4] = {
-        {   size.x,  size.y, 0.0f,         0,         0, WHITE },
-        {   size.x, -size.y, 0.0f, SHORT_MAX,         0, WHITE },
-        {  -size.x, -size.y, 0.0f, SHORT_MAX, SHORT_MAX, WHITE },
-        {  -size.x,  size.y, 0.0f,         0, SHORT_MAX, WHITE },
+        {   size.x,  size.y, 0.0f,         0,         0, SPREAD_COLOR(color) },
+        {   size.x, -size.y, 0.0f, SHORT_MAX,         0, SPREAD_COLOR(color) },
+        {  -size.x, -size.y, 0.0f, SHORT_MAX, SHORT_MAX, SPREAD_COLOR(color) },
+        {  -size.x,  size.y, 0.0f,         0, SHORT_MAX, SPREAD_COLOR(color) },
     };
 
     vertices = std::vector<vertex_t>(std::begin(raw_vertices), std::end(raw_vertices));
