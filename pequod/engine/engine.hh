@@ -24,16 +24,16 @@ public:
     void sokol_cleanup();
     void sokol_event(const sapp_event* event);
     uint64_t getTicks();
-    uint64_t ticks;
     std::condition_variable ticks_cv;
     bool isShowDebugStats();
 private:
+    uint64_t ticks;
+    uint64_t last_tick;
     uint64_t frame_time;
     double delta_t;
     uint8_t fps;
     double total_t;
     Scene *currentScene;
-    std::thread ticks_thread;
     bool show_debug_stats = false;
 };
 

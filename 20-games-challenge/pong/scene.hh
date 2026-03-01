@@ -10,6 +10,7 @@ public:
     void OnUpdate() override;
     void OnEvent(const sapp_event *event) override;
     void OnEnd() override;
+    void OnTick() override;
     Shapes::Quad* player = NULL;
     Shapes::Quad* enemy = NULL;
     Shapes::Quad* ball = NULL;
@@ -17,7 +18,6 @@ public:
     int playerPoints = 0;
     int enemyPoints = 0;
     float enemyDx = 0.0f;
-    int ticks = 0;
 private:
     glm::vec2 direction;
 };

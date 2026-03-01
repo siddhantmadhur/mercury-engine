@@ -77,7 +77,7 @@ void PongScene::OnStart() {
         //Shapes::Quad player = Shapes::Quad();
         player->UseTexture(false);
 
-        AddObject(*player);
+        AddObject(player);
 
         this->player = player;
     }
@@ -88,7 +88,7 @@ void PongScene::OnStart() {
         //Shapes::Quad player = Shapes::Quad();
         enemy->UseTexture(false);
 
-        AddObject(*enemy);
+        AddObject(enemy);
 
         this->enemy = enemy;
     }
@@ -100,7 +100,7 @@ void PongScene::OnStart() {
         //Shapes::Quad player = Shapes::Quad();
         ball->UseTexture(false);
 
-        AddObject(*ball);
+        AddObject(ball);
 
         this->ball = ball;
 
@@ -139,6 +139,7 @@ bool doCollide(Shapes::Quad* A, Shapes::Quad* B) { // (still object, moving obje
     return (collisionX && collisionY);
 }
 
+void PongScene::OnTick() {}
 
 void PongScene::OnUpdate() {
 #define enemyPos enemy->GetPosition()
@@ -299,7 +300,6 @@ void PongScene::OnUpdate() {
         ImGui::End();
     }
 
-    ticks += 1;
 }
 
 void PongScene::OnEvent(const sapp_event* event) {

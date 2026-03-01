@@ -17,6 +17,7 @@ typedef struct vertex_t {
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
 class GameObject {
 public:
+    ~GameObject();
     void setId(uint16_t);
     void SetColor(glm::vec4);
     void UseTexture(bool);
@@ -34,7 +35,6 @@ private:
     glm::vec4 color;
     bool use_texture = false;
     glm::vec3 position = glm::vec3(0.0f);
-
 };
 
 #endif

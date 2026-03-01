@@ -19,14 +19,15 @@
 class Scene {
 public:
     Scene();
-    ~Scene();
+    void Deinit();
     void Init();
-    void AddObject(GameObject& obj);
+    void AddObject(GameObject* obj);
     void Render(float width, float height);
     virtual void OnStart() =0; // runs at scene creation
     virtual void OnUpdate() =0; // runs once every frame
     virtual void OnEvent(const sapp_event* event) =0; // runs once every frame
     virtual void OnEnd() =0; // runs when scene is closing
+    virtual void OnTick() =0; // runs every tick (rn is 20 per second) 
     void SetPlayerCamera(Camera& cam);
     Camera& GetPlayerCamera();
     void SetDelta(float delta_t);
@@ -34,10 +35,10 @@ public:
     bool IsKeyPressed(sapp_keycode key);
     void handleKeys(const sapp_event*event);
     float delta_t;
-private:
-    std::vector<GameObject*> objects;
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;
+private:
+    std::vector<GameObject*> objects;
     uint16_t current_id = 0;
     sg_pipeline pip;
     sg_pass_action pass_action;

@@ -47,24 +47,6 @@ PequodEngine::PequodEngine() {
 }
 
 
-void run_every_tick(void* args) {
-    PequodEngine* engine = (PequodEngine*) args;
-    for (;;) { // this loop runs every 5 milliseconds;
-        std::this_thread::sleep_for(std::chrono::milliseconds(50)); 
-        std::cout << engine->getTicks() / 20 << " Second (" << engine->getTicks() << ")!" << std::endl;
-        engine->ticks += 1;
-    }
-}
-
-void run_on_tick(void* args) {
-    PequodEngine* engine = (PequodEngine*) args;
-    for (;;) { // this loop runs every 5 milliseconds;
-        //std::this_thread::sleep_for(std::chrono::milliseconds(50)); 
-        //std::cout << engine->getTicks() / 20 << " Second (" << engine->getTicks() << ")!" << std::endl;
-        //engine->ticks += 1;
-    }
-}
-
 uint64_t PequodEngine::getTicks() {
     return this->ticks;
 }
@@ -124,7 +106,10 @@ void PequodEngine::sokol_frame_cb() {
 
     ticks = int(total_t / 50);
 
-
+    if (last_tick < ticks) {
+        currentScene->OnTick();
+        last_tick = ticks;
+    }
 
     if (ticks % 20 == 0) {
         fps = 1000.0 / delta_t;
@@ -154,7 +139,9 @@ void PequodEngine::sokol_frame_cb() {
     }
 
     simgui_render();
+   
     sg_end_pass();
+    
     sg_commit();
 }
 
@@ -165,6 +152,7 @@ bool PequodEngine::isShowDebugStats() {
 void PequodEngine::sokol_cleanup() {
     if (currentScene) {
         currentScene->OnEnd();
+        currentScene->Deinit();
     }
     simgui_shutdown();
     sg_shutdown();
