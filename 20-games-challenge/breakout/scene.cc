@@ -20,8 +20,129 @@
 #define playerPos player->GetPosition()
 #define playerSize player->GetSize()
 
+bool doCollide(Shapes::Quad* A, glm::vec2 posB, glm::vec2 sizeB) { // (still object, moving object)
+    glm::vec2 sizeA = A->GetSize();
+    glm::vec2 posA = A->GetPosition();
+    posA.x -= sizeA.x / 2.0f;
+    posA.y -= sizeA.y / 2.0f;
+
+    bool collisionX = posA.x + sizeA.x >= posB.x && posB.x + sizeB.x >= posA.x;
+    bool collisionY = posA.y + sizeA.y >= posB.y && posB.y + sizeB.y >= posA.y;
+
+    return (collisionX && collisionY);
+}
+
+bool doCollide(Shapes::Quad* A, Shapes::Quad* B) { // (still object, moving object)
+    glm::vec2 sizeA = A->GetSize();
+    glm::vec2 posA = A->GetPosition();
+    posA.x -= sizeA.x / 2.0f;
+    posA.y -= sizeA.y / 2.0f;
+
+    glm::vec2 sizeB = B->GetSize();
+    glm::vec2 posB = B->GetPosition();
+    posB.x -= sizeB.x / 2.0f;
+    posB.y -= sizeB.y / 2.0f;
+
+    bool collisionX = posA.x + sizeA.x >= posB.x && posB.x + sizeB.x >= posA.x;
+    bool collisionY = posA.y + sizeA.y >= posB.y && posB.y + sizeB.y >= posA.y;
+
+    return (collisionX && collisionY);
+}
+
 void BreakoutScene::OnTick() {
 
+    { // MOVEMNT
+        
+        if ((!game_started) && IsKeyPressed(SAPP_KEYCODE_UP)) {
+            float deg = 30 + (rand() % 120);
+            ball_dx = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
+            game_started = true;
+        }
+
+        float direction = 0;
+        if (IsKeyPressed(SAPP_KEYCODE_LEFT)) {
+            direction -= 1.0f;
+        }
+        if (IsKeyPressed(SAPP_KEYCODE_RIGHT)) {
+            direction += 1.0f;
+        }
+
+        if (IsKeyPressed(SAPP_KEYCODE_LEFT_SHIFT) || IsKeyPressed(SAPP_KEYCODE_RIGHT_SHIFT)) {
+            direction = direction / 4.0f;
+        }
+        if (IsKeyPressed(SAPP_KEYCODE_RIGHT_CONTROL)) {
+            direction = direction * 2.0f;
+        }
+
+        #define PLAYER_SPEED 8.00f
+
+        if (player) {
+            player->Move(glm::vec3(direction *  PLAYER_SPEED, 0.0f, 0.0f));
+            if (direction < 0) { // going left
+                glm::vec3 pos = playerPos;
+                pos.x = glm::max(playerSize.x + 2, pos.x);
+                player->SetPosition(pos);
+            }
+            if (direction > 0) { // going left
+                glm::vec3 pos = playerPos;
+                pos.x = glm::min((width / 2.0f) - playerSize.x - 2, pos.x);
+                player->SetPosition(pos);
+            }
+        }
+
+
+        #define BALL_SPEED 6.0f
+        if (game_started) {
+            ball->Move(glm::vec3(ball_dx.x, ball_dx.y, 0.0f) *  BALL_SPEED);
+        } else {
+            ball->SetPosition(glm::vec3(playerPos.x, playerPos.y + playerSize.y, 0.0f));
+        }
+
+    }
+
+
+    auto ballPos = ball->GetPosition();
+    if (ballPos.x < 0 || ballPos.x > width_s) {
+        ball_dx.x *= -1;
+    }
+    if (ballPos.y > height_s) {
+        ball_dx.y *= -1;
+    }
+    if (ballPos.y < 0) {
+        game_started = 0;
+    }
+
+    if (doCollide(ball, player)) {
+        ball_dx.y *= -1;
+    }
+    for (int i = 0; i < bricks.size(); i++) {
+        if (!bricks[i]->disable && doCollide(ball, bricks[i])) {
+            bricks[i]->disable = true;
+            /**
+            glm::vec2 diff = bricks[i]->GetPosition() - ball->GetPosition();
+            diff = glm::normalize(diff); 
+            diff *= -1;
+            if (diff.y < diff.x) {
+                ball_dx.y *= -1;
+            }
+            **/
+            auto A_half = ball->GetSize() / 2.0f;
+            auto B_half = player->GetSize() / 2.0f;
+
+            auto overlapX = (A_half.x + B_half.x) - glm::abs(ball->GetPosition().x - bricks[i]->GetPosition().x);
+            auto overlapY = (A_half.y + B_half.y) - glm::abs(ball->GetPosition().y - bricks[i]->GetPosition().y);
+            //ball->Move(glm::vec3(overlapX, overlapY, 0.0f) * -1.0f);
+
+            if (ball_dx.x < ball_dx.y) {
+                ball_dx.y *= -1;
+            } else {
+                ball_dx.x *= -1;
+            }
+
+            //std::cout << "Collide with [" << i << "]"  << " @ (" << diff.x << ", " << diff.y << ")"  << std::endl; 
+            std::cout << "Collide with [" << i << "]"  << " @ (" << overlapX << ", " << overlapY << ")"  << std::endl; 
+        }
+    }
 }
 
 void BreakoutScene::OnStart() {
@@ -59,7 +180,7 @@ void BreakoutScene::OnStart() {
 
     { // ball
         ball_dx = glm::vec2(0.0f);
-        ball = new Shapes::Quad(glm::vec2(3.0f), glm::vec2(playerPos.x, playerPos.y + playerSize.y), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+        ball = new Shapes::Quad(glm::vec2(3.0f), glm::vec2(playerPos.x, playerPos.y + playerSize.y), glm::vec4(1.0f));
         AddObject(ball);
     }
 
@@ -69,14 +190,14 @@ void BreakoutScene::OnStart() {
         glm::vec2 brick_size = glm::vec2(width_s / 10, 4.0f);
         glm::vec2 offset = glm::vec2(padding_around + (brick_size.x), height_s - brick_size.y - 20);
 
-        for (int j = 0; j < 6; j++) {
+        for (int j = 0; j < 8; j++) {
             offset.x = padding_around + (brick_size.x);
             for (int i = 0; i < 8; i++) {
-                Shapes::Quad* cur = new Shapes::Quad(brick_size, offset, glm::vec4(1.0 / j, 1.0 / i, 0.8f, 1.0f));
+                Shapes::Quad* cur = new Shapes::Quad(brick_size, offset, glm::vec4(1.0 / (8.0/j), 0.1f, 0.8f, 1.0f));
                 AddObject(cur);
                 offset.x += brick_size.x;
                 offset.x += 2;
-                //bricks.push_back(brick);
+                bricks.push_back(cur);
             }
             offset.y -= brick_size.y ;
             offset.y -= 2;
@@ -90,50 +211,6 @@ void BreakoutScene::OnStart() {
 
 void BreakoutScene::OnUpdate() {
 
-    if ((!game_started) && IsKeyPressed(SAPP_KEYCODE_UP)) {
-        float deg = 30 + (rand() % 120);
-        ball_dx = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
-        game_started = true;
-    }
-
-    float direction = 0;
-    if (IsKeyPressed(SAPP_KEYCODE_LEFT)) {
-        direction -= 1.0f;
-    }
-    if (IsKeyPressed(SAPP_KEYCODE_RIGHT)) {
-        direction += 1.0f;
-    }
-
-    if (IsKeyPressed(SAPP_KEYCODE_LEFT_SHIFT) || IsKeyPressed(SAPP_KEYCODE_RIGHT_SHIFT)) {
-        direction = direction / 4.0f;
-    }
-    if (IsKeyPressed(SAPP_KEYCODE_RIGHT_CONTROL)) {
-        direction = direction * 2.0f;
-    }
-
-    #define PLAYER_SPEED 0.48f
-
-    if (player) {
-        player->Move(glm::vec3(direction * delta_t * PLAYER_SPEED, 0.0f, 0.0f));
-        if (direction < 0) { // going left
-            glm::vec3 pos = playerPos;
-            pos.x = glm::max(playerSize.x + 2, pos.x);
-            player->SetPosition(pos);
-        }
-        if (direction > 0) { // going left
-            glm::vec3 pos = playerPos;
-            pos.x = glm::min((width / 2.0f) - playerSize.x - 2, pos.x);
-            player->SetPosition(pos);
-        }
-    }
-
-
-    #define BALL_SPEED 0.2f
-    if (game_started) {
-        ball->Move(glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * delta_t * BALL_SPEED);
-    } else {
-        ball->SetPosition(glm::vec3(playerPos.x, playerPos.y + playerSize.y, 0.0f));
-    }
 
     ImGui::Begin("pos", NULL, 0);
     

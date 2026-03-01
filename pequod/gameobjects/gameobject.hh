@@ -31,10 +31,13 @@ public:
     void Draw();
     glm::vec3 GetPosition();
     void SetPosition(glm::vec3);
+    bool disable = false;
+    glm::vec3 raw_position;
 private:
     glm::vec4 color;
     bool use_texture = false;
     glm::vec3 position = glm::vec3(0.0f);
+
 };
 
 #endif

@@ -11,7 +11,7 @@ public:
 private:
     Shapes::Quad* player = NULL;
     Shapes::Quad* ball = NULL;
-    //std::vector<Shapes::Quad*> bricks;
+    std::vector<Shapes::Quad*> bricks;
     bool game_started = false;
     glm::vec2 ball_dx;
 };

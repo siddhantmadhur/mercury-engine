@@ -8,7 +8,7 @@
 
 
 GameObject::~GameObject() {
-    std::cout << "destroying gameobject" << std::endl;
+    //std::cout << "destroying gameobject" << std::endl;
 }
 std::vector<vertex_t> GameObject::getVertices() {
     return this->vertices; 
@@ -56,14 +56,16 @@ glm::vec3 GameObject::GetPosition() {
     return this->position;
 }
 void GameObject::Draw() {
+    if (!disable) {
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(position.x, position.y, position.z));
 
-    glm::mat4 model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(position.x, position.y, position.z));
+        model_params_t new_params;
+        new_params.model = model; 
+        new_params.use_texture0 = this->use_texture ? 1.0f : 0.0f; 
 
-    model_params_t new_params;
-    new_params.model = model; 
-    new_params.use_texture0 = this->use_texture ? 1.0f : 0.0f; 
+        sg_apply_uniforms(UB_model_params, SG_RANGE(new_params));
+        sg_draw(id, indices.size(), 1);
+    }
 
-    sg_apply_uniforms(UB_model_params, SG_RANGE(new_params));
-    sg_draw(id, indices.size(), 1);
 }
