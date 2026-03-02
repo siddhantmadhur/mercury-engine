@@ -2,7 +2,7 @@
 
 A low-level engine for games that require more control over system resources such as in the simulation genre
 
-![Demo of Pong running via the Pequod Engine](https://static.reocelot.com/gif/pong_demo.gif)
+![Demo of Breakout running on the Pequod Engine](https://static.reocelot.com/gif/breakout_demo.gif)
 
 ## Roadmap
 

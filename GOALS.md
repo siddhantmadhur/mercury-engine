@@ -12,8 +12,8 @@ the challenge.
 
 ## Progress
 
-- [X]  1. Pong
-- [ ]  2. Breakout
+- [X]  1. Pong [Feb 28 2026]
+- [X]  2. Breakout [Mar 1 2026]
 - [ ]  3. Jetpack Joyride
 - [ ]  4. Space Invaders
 - [ ]  5. Frogger

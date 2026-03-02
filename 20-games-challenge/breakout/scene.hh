@@ -14,4 +14,6 @@ private:
     std::vector<Shapes::Quad*> bricks;
     bool game_started = false;
     glm::vec2 ball_dx;
+    float ball_speed = 3.0f;
+    float player_speed = 6.0f;
 };

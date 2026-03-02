@@ -104,7 +104,7 @@ void PequodEngine::sokol_frame_cb() {
     currentScene->SetDelta(delta_t);
     total_t += delta_t;
 
-    ticks = int(total_t / 50);
+    ticks = int(total_t / 20); // 20 
 
     if (last_tick < ticks) {
         currentScene->OnTick();

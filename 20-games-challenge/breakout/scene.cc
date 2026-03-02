@@ -74,10 +74,9 @@ void BreakoutScene::OnTick() {
             direction = direction * 2.0f;
         }
 
-        #define PLAYER_SPEED 8.00f
 
         if (player) {
-            player->Move(glm::vec3(direction *  PLAYER_SPEED, 0.0f, 0.0f));
+            player->Move(glm::vec3(direction *  player_speed, 0.0f, 0.0f));
             if (direction < 0) { // going left
                 glm::vec3 pos = playerPos;
                 pos.x = glm::max(playerSize.x + 2, pos.x);
@@ -90,10 +89,8 @@ void BreakoutScene::OnTick() {
             }
         }
 
-
-        #define BALL_SPEED 6.0f
         if (game_started) {
-            ball->Move(glm::vec3(ball_dx.x, ball_dx.y, 0.0f) *  BALL_SPEED);
+            ball->Move(glm::vec3(ball_dx.x, ball_dx.y, 0.0f) *  ball_speed);
         } else {
             ball->SetPosition(glm::vec3(playerPos.x, playerPos.y + playerSize.y, 0.0f));
         }
@@ -215,6 +212,10 @@ void BreakoutScene::OnUpdate() {
     ImGui::Begin("pos", NULL, 0);
     
     ImGui::Text("player: (%.2f, %.2f)", playerPos.x, width);
+    ImGui::Text("ball: (%.2f, %.2f)", ball->GetPosition().x, ball->GetPosition().y);
+
+    ImGui::SliderFloat("Player Sp.", &player_speed, 0.0f, 20.0f);
+    ImGui::SliderFloat("Ball Sp.", &ball_speed, 0.0f, 20.0f);
 
     ImGui::End();
 
