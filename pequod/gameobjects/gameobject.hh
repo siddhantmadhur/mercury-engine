@@ -1,43 +1,20 @@
-#ifndef MERCURY_GAMEOBJECT_IMPL_HH
-#define MERCURY_GAMEOBJECT_IMPL_HH
+#ifndef PEQUOD_GAMEOBJECT_IMPL_HH_
+#define PEQUOD_GAMEOBJECT_IMPL_HH_
 
-#include <cstdint>
+#include "ecs/ecs.hh"
+#include "ecs/mesh.hh"
+#include <ecs/position.hh>
 #include <vector>
-#include <glm/glm.hpp>
-#include <sokol/sokol_gfx.h>
-#include <shaders/generic_texture.glsl.hh>
 
-typedef struct vertex_t {
-    float x, y, z;
-    int16_t u, v;
-    float r, g, b, a;
-} vertex_t;
-
-
-// TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
 class GameObject {
 public:
-    ~GameObject();
-    void setId(uint16_t);
-    void SetColor(glm::vec4);
-    void UseTexture(bool);
-    std::vector<vertex_t> getVertices(); 
-    std::vector<uint16_t> getIndices(); 
-    std::vector<vertex_t> vertices;
-    std::vector<uint16_t> indices;
-    bool isTexture();
-    void Move(glm::vec3 position);
-    uint16_t id; // indices id for rendering
-    void Draw();
-    glm::vec3 GetPosition();
-    void SetPosition(glm::vec3);
-    bool disable = false;
-    glm::vec3 raw_position;
-private:
-    glm::vec4 color;
-    bool use_texture = false;
-    glm::vec3 position = glm::vec3(0.0f);
-
+    GameObject();
+    void NewECS(ECS& ecs);
+    glm::vec3 size;
+    Position* position = NULL;
+    Mesh* mesh = NULL;
+protected:
 };
+
 
 #endif

@@ -22,17 +22,20 @@ using namespace std;
 #define MAX_VERTICES 5120
 #define MAX_INDICES ((MAX_VERTICES)/2)*3
 
-Scene::Scene() : playerCamera(16.0/9.0) {
-    vertices = std::vector<vertex_t>();
-    indices = std::vector<uint16_t>();
-    vertices.reserve(INIT_VERTICES);
-    indices.reserve(INIT_INDICES);
+Scene::Scene() : playerCamera(1.0f) {
+    //vertices = std::vector<vertex_t>();
+    //indices = std::vector<uint16_t>();
+    //vertices.reserve(INIT_VERTICES);
+    //indices.reserve(INIT_INDICES);
+    this->ecs = ECS();
 }
 
 void Scene::Deinit() {
+    /**
     for (int i = 0; i < objects.size(); i++) {
         delete objects[i];
     }
+        **/
     sg_destroy_buffer(bind.vertex_buffers[0]);
     sg_destroy_buffer(bind.index_buffer);
     sg_destroy_view(bind.views[VIEW_tex]);
@@ -139,23 +142,7 @@ void Scene::Render(float width, float height) {
     params.projection = playerCamera.getProjection();
 
 
-    size_t vertex_size = vertices.size() * sizeof(vertex_t);
-    if (vertices.size() > 0) {
-        sg_update_buffer(bind.vertex_buffers[0], (sg_range){
-            .ptr = vertices.data(),
-            .size = vertex_size,
-        });
-    }
-  
-
-    size_t indices_size = indices.size() * sizeof(uint16_t);
-    if (indices.size() > 0) {
-        sg_update_buffer(bind.index_buffer, (sg_range){
-            .ptr = indices.data(),
-            .size = indices_size,
-        });
-    }
-
+    ecs.setupRender(bind);
 
     sg_begin_pass((sg_pass){
         .action = pass_action,
@@ -170,35 +157,9 @@ void Scene::Render(float width, float height) {
 
     //cout << "Rendering " << indices.size() << " indices!" << endl;
 
-    //sg_draw(0, indices.size(), 1);
-    // TODO: FOR TOMORROW: MAKE POSITION A BINDABLE VALUE AND SET IT FOR EACH OBJECT BEFORE RENDERING
-    // TODO: RIGHT NOW FOR SOME REASON ITS NOT FKING DETERMINISTIC, MOVE DATA FROM VERTEX DATA TO BINDABLE
-    for (int i = 0; i < objects.size(); i++) {
-        GameObject* obj = objects[i];
-        obj->Draw();
-
-    }
-
+    ecs.render(playerCamera);
 }
 
-void Scene::AddObject(GameObject* obj) {
-    auto obj_vertex = obj->vertices;
-    auto obj_indices = obj->indices;
-    
-    obj->setId(current_id);
-    current_id += obj_indices.size();
-    objects.insert(objects.end(), obj);
-
-    int prev_size = vertices.size();
-
-    for (int i = 0; i < obj_indices.size(); i++) {
-        obj_indices[i] += prev_size;
-    }
-
-    vertices.insert(vertices.end(), obj_vertex.begin(), obj_vertex.end());
-    indices.insert(indices.end(), obj_indices.begin(), obj_indices.end());
-
-}
 
 void Scene::SetPlayerCamera(Camera& cam) {
     this->playerCamera = cam;

@@ -13,6 +13,7 @@ public:
     void setProj(glm::mat4);
     void setPosition(glm::vec3);
     glm::vec3 getPosition();
+    void configure2D(float width, float height, float zoom);
 private:
     glm::mat4 view;
     glm::mat4 proj;

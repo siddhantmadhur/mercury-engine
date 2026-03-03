@@ -1,7 +1,7 @@
 #include "cube.hh"
 
 #define WHITE 1.0f, 0.0f, 0.0f, 1.0f
-
+/**
 Shapes::Cube::Cube(float scale, bool use_texture) {
      #define SHORT_MAX 32767
     // #define SHORT_MAX 5
@@ -54,3 +54,4 @@ Shapes::Cube::Cube(float scale, bool use_texture) {
 
     this->indices = std::vector<uint16_t>(std::begin(raw_indices), std::end(raw_indices));
 }
+**/

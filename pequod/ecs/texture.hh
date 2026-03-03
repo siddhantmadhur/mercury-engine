@@ -3,7 +3,6 @@
 
 
 
-namespace Pequod {
 
 // Possible extensions: 
 // - Sprite
@@ -14,6 +13,5 @@ public:
     ~Texture();
 private:
 };
-}
 
 #endif

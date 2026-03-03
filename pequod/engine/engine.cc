@@ -1,4 +1,4 @@
-#include <gameobjects/gameobject.hh>
+#include "ecs/ecs.hh"
 #include <gameobjects/camera.hh>
 #include <engine/engine.hh>
 
@@ -44,6 +44,7 @@ void LoadMainMenuBar() {
 }
 
 PequodEngine::PequodEngine() {
+    //this->ecs = ECS();
 }
 
 
@@ -80,6 +81,7 @@ void PequodEngine::sokol_init() {
     simgui_setup(&simgui_desc);
 
 
+
     currentScene->Init(); // runs only for the initial default scene; every other scene needs to call this themselves
 
 
@@ -104,7 +106,7 @@ void PequodEngine::sokol_frame_cb() {
     currentScene->SetDelta(delta_t);
     total_t += delta_t;
 
-    ticks = int(total_t / 20); // 20 
+    ticks = int(total_t / 50); // 20 
 
     if (last_tick < ticks) {
         currentScene->OnTick();
@@ -150,11 +152,13 @@ bool PequodEngine::isShowDebugStats() {
 }
 
 void PequodEngine::sokol_cleanup() {
+    if (show_debug_stats) {
+        simgui_shutdown();
+    }
     if (currentScene) {
         currentScene->OnEnd();
         currentScene->Deinit();
     }
-    simgui_shutdown();
     sg_shutdown();
 }
 

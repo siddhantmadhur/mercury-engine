@@ -4,8 +4,6 @@
 #include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
-#include <sokol/sokol_gfx.h>
-#include <shaders/generic_texture.glsl.hh>
 
 typedef struct vertex_t {
     float x, y, z;
@@ -15,15 +13,15 @@ typedef struct vertex_t {
 
 
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
-namespace Pequod {
 class Mesh {
 public:
-    Mesh();
+    Mesh(std::vector<vertex_t>, std::vector<uint16_t>);
     ~Mesh();
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;
+    uint32_t vertices_id = 0;   // the id to get this in the ECS vertex vector
+    uint32_t indices_id = 0;    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
 private:
 };
-}
 
 #endif
