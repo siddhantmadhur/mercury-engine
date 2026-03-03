@@ -2,6 +2,7 @@
 
 #include "scene.hh"
 #include <engine/engine.hh>
+#include <ecs/ecs.hh>
 
 #define SOKOL_IMPL
 #define SOKOL_GLCORE

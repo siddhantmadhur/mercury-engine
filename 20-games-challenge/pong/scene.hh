@@ -3,6 +3,7 @@
 
 #include <engine/scene.hh>
 #include <gameobjects/quad.hh>
+#include <ecs/entity.hh>
 
 class PongScene : public Scene {
 public:
@@ -11,15 +12,14 @@ public:
     void OnEvent(const sapp_event *event) override;
     void OnEnd() override;
     void OnTick() override;
-    Shapes::Quad* player = NULL;
-    Shapes::Quad* enemy = NULL;
-    Shapes::Quad* ball = NULL;
-    glm::vec2 ballVector;
+    
+    entity_id player = 0;
+    entity_id enemy  = 1;
+    entity_id ball   = 2;
+
+private:
     int playerPoints = 0;
     int enemyPoints = 0;
-    float enemyDx = 0.0f;
-private:
-    glm::vec2 direction;
 };
 
 

@@ -25,6 +25,7 @@ void SpaceInvaders::OnStart() {
         SetPlayerCamera(cam);
     }
 
+    
     {
         entity_id player = ecs.createEntity();        
         //ecs.addMesh(player, )

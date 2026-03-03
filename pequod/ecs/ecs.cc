@@ -7,30 +7,55 @@
 
 ECS::ECS () {
     current_id = 0;
+    vertices = std::vector<vertex_t>();
+    indices = std::vector<uint16_t>();
 }
+
 ECS::~ECS () {
     
 }
 
 entity_id ECS::createEntity() {
-    return current_id++; 
+    entity_id new_id = current_id;
+    current_id += 1;
+    return new_id; 
 }
 
 void ECS::addMesh(entity_id id, Mesh* mesh) {
-    if (mesh == nullptr) {
+   
+    if (meshes.contains(id)) {
+        std::cout << "Mesh already added" << std::endl;
         return;
     }
+
+    meshes[id] = mesh;
+
     mesh->indices_id = indices.size();
     mesh->vertices_id = vertices.size();
 
+    size_t prev_size = vertices.size();
+    if (prev_size > 0) {
+        for (int i = 0; i < mesh->indices.size(); i++) {
+            mesh->indices[i] += prev_size; 
+        }
+    }
+    
+   // std::cout << "i: " << mesh->indices[i] << std::endl;
     this->vertices.insert(vertices.end(), mesh->vertices.begin(), mesh->vertices.end());
     this->indices.insert(indices.end(), mesh->indices.begin(), mesh->indices.end());
-    
-    meshes[id] = mesh;
 }
 
 
 void ECS::addPosition(entity_id id, Position* position) {
+    if (position == nullptr) {
+        std::cout << "Position is null" << std::endl;
+        return;
+    }
+    if (positions.contains(id)) {
+        std::cout << "Position already added" << std::endl;
+        return;
+    }
+
     this->positions[id] = position;
 }
 
@@ -67,16 +92,16 @@ void ECS::setupRender(sg_bindings& bind) {
 }
 
 void ECS::render(Camera& cam) {
-
-
     for (int i = 0; i < current_id; i++) {
         Mesh* mesh = meshes[i];
         Position* position = positions[i];
         if (mesh == nullptr || position == nullptr) {
+            std::cout << "null" << std::endl;
             continue;
         }
 
         glm::vec3 pos = positions[i]->raw_position;
+        //std::cout << "ID: " << i << std::endl;
         //std::cout << mesh->indices_id << ", " << mesh->indices.size() << std::endl;
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, pos);

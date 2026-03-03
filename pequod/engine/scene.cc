@@ -1,6 +1,7 @@
 
 
 #include "assets/images.hh"
+#include "ecs/ecs.hh"
 #include "gameobjects/camera.hh"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
@@ -27,7 +28,6 @@ Scene::Scene() : playerCamera(1.0f) {
     //indices = std::vector<uint16_t>();
     //vertices.reserve(INIT_VERTICES);
     //indices.reserve(INIT_INDICES);
-    this->ecs = ECS();
 }
 
 void Scene::Deinit() {

@@ -1,10 +1,14 @@
 #include <gameobjects/quad.hh>
+#include <iostream>
 
 #define SHORT_MAX 32767
 #define WHITE(c) 1.0f, 1.0f, 1.0f, 1.0f
 #define SPREAD_COLOR(c) c.x, c.y, c.z, c.a
 
-Quad::Quad(glm::vec2 position, glm::vec2 size, glm::vec4 color) {
+
+Quad::Quad(glm::vec2 position, glm::vec2 init_size, glm::vec4 color) {
+
+    this->size = glm::vec3(init_size.x, init_size.y, 0.0f);
 
     // #define SHORT_MAX 5
     vertex_t raw_vertices[4] = {
@@ -23,8 +27,9 @@ Quad::Quad(glm::vec2 position, glm::vec2 size, glm::vec4 color) {
 
     std::vector<uint16_t> indices = std::vector<uint16_t>(std::begin(raw_indices), std::end(raw_indices));
 
-    this->size = size;
+
     this->position = new Position(glm::vec3(position.x, position.y, 0));
     this->mesh = new Mesh(vertices, indices);
 }
+
 

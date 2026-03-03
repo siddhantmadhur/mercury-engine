@@ -137,7 +137,7 @@ void BreakoutScene::OnTick() {
             }
 
             //std::cout << "Collide with [" << i << "]"  << " @ (" << diff.x << ", " << diff.y << ")"  << std::endl; 
-            std::cout << "Collide with [" << i << "]"  << " @ (" << overlapX << ", " << overlapY << ")"  << std::endl; 
+            //std::cout << "Collide with [" << i << "]"  << " @ (" << overlapX << ", " << overlapY << ")"  << std::endl; 
         }
     }
 }

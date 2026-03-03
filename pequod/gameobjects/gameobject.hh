@@ -8,8 +8,7 @@
 
 class GameObject {
 public:
-    GameObject();
-    void NewECS(ECS& ecs);
+    ~GameObject();
     glm::vec3 size;
     Position* position = NULL;
     Mesh* mesh = NULL;

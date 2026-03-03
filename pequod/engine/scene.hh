@@ -33,7 +33,7 @@ public:
     bool IsKeyPressed(sapp_keycode key);
     void handleKeys(const sapp_event*event);
     float delta_t;
-    ECS ecs;
+    ECS ecs = ECS();
 private:
     sg_pipeline pip;
     sg_pass_action pass_action;

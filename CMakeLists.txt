@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "" FORCE)
+#set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "" FORCE)
 
 file(GLOB_RECURSE ENGINE_SRC "pequod/*.cc")
 
@@ -59,9 +59,9 @@ target_link_libraries(pequod imgui glm::glm)
 
 # CREATE NEW BINARIES USING THIS
 
-#file(GLOB_RECURSE PONG_SRC "20-games-challenge/pong/*.cc")
-#add_executable(pong ${PONG_SRC})
-#target_link_libraries(pong pequod)
+file(GLOB_RECURSE PONG_SRC "20-games-challenge/pong/*.cc")
+add_executable(pong ${PONG_SRC})
+target_link_libraries(pong pequod)
 
 #file(GLOB_RECURSE BREAKOUT_SRC "20-games-challenge/breakout/*.cc")
 #add_executable(breakout ${BREAKOUT_SRC})
