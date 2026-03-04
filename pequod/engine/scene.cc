@@ -157,7 +157,7 @@ void Scene::Render(float width, float height) {
 
     //cout << "Rendering " << indices.size() << " indices!" << endl;
 
-    ecs.render(playerCamera);
+    ecs.render(playerCamera, delta_t);
 }
 
 

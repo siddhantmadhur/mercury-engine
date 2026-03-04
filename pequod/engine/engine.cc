@@ -54,6 +54,7 @@ uint64_t PequodEngine::getTicks() {
 
 void PequodEngine::startUp() {
     frame_time = 1;
+    tick_frame_time = 1;
     delta_t = 0;
     ticks = 0;
 
@@ -109,7 +110,9 @@ void PequodEngine::sokol_frame_cb() {
     ticks = int(total_t / 50); // 20 
 
     if (last_tick < ticks) {
-        currentScene->OnTick();
+        tick_t = stm_ms(stm_laptime(&tick_frame_time));
+        currentScene->OnTick(tick_t);
+        currentScene->tick = ticks;
         last_tick = ticks;
     }
 

@@ -28,9 +28,9 @@ class Position {
 public:
     Position(glm::vec3 position = glm::vec3(0.0f));
     glm::vec3 raw_position; // actual position of object interpolated per frame to smooth animation out
+    glm::vec3 position; // update this per tick
     
 private:
-    glm::vec3 position; // update this per tick
     //glm::vec3 future_position; // position needed to be updated to next frame/tick 
 };
 

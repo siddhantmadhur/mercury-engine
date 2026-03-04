@@ -33,8 +33,10 @@ public:
     Mesh* getMesh(entity_id);
     Position* getPosition(entity_id);
 
+    bool doesCollide(entity_id, entity_id);
+
     void setupRender(sg_bindings& bind);
-    void render(Camera& cam);
+    void render(Camera& cam, float delta_t);
 
     void processOnTick(float delta_t);
     void processOnFrame(float delta_t);

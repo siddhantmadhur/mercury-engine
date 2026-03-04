@@ -11,12 +11,15 @@ public:
     void OnUpdate() override;
     void OnEvent(const sapp_event *event) override;
     void OnEnd() override;
-    void OnTick() override;
-    
+    void OnTick(float tick_t) override;
+
+    void ResetRound();
+
     entity_id player = 0;
     entity_id enemy  = 1;
     entity_id ball   = 2;
 
+    glm::vec2 ballVelocity = glm::vec2(0.0f);
 private:
     int playerPoints = 0;
     int enemyPoints = 0;

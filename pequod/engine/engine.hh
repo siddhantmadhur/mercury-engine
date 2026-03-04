@@ -30,6 +30,8 @@ private:
     uint64_t ticks;
     uint64_t last_tick;
     uint64_t frame_time;
+    uint64_t tick_frame_time;
+    double tick_t;
     double delta_t;
     uint8_t fps;
     double total_t;

@@ -8,7 +8,7 @@ public:
     void OnStart() override;
     void OnEnd() override;
     void OnUpdate() override;
-    void OnTick() override;
+    void OnTick(float tick_t) override;
     void OnEvent(const sapp_event* event) override;
     //void OnEnd() override;
 };

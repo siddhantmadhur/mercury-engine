@@ -29,7 +29,7 @@ Quad::Quad(glm::vec2 position, glm::vec2 init_size, glm::vec4 color) {
 
 
     this->position = new Position(glm::vec3(position.x, position.y, 0));
-    this->mesh = new Mesh(vertices, indices);
+    this->mesh = new Mesh(vertices, indices, glm::vec3(init_size.x, init_size.y, 0.1f));
 }
 
 

@@ -25,16 +25,17 @@ public:
     virtual void OnUpdate() =0; // runs once every frame
     virtual void OnEvent(const sapp_event* event) =0; // runs once every frame
     virtual void OnEnd() =0; // runs when scene is closing
-    virtual void OnTick() =0; // runs every tick (rn is 20 per second) 
+    virtual void OnTick(float tick_t) =0; // runs every tick (rn is 20 per second) 
     void SetPlayerCamera(Camera& cam);
     Camera& GetPlayerCamera();
     void SetDelta(float delta_t);
     void SetBgColor(glm::vec4);
     bool IsKeyPressed(sapp_keycode key);
     void handleKeys(const sapp_event*event);
-    float delta_t;
+    float delta_t; // time difference per frame
+    float tick_t;  // time difference per tick
+    uint64_t tick;
     ECS ecs = ECS();
-private:
     sg_pipeline pip;
     sg_pass_action pass_action;
     sg_bindings bind;

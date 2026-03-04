@@ -91,16 +91,22 @@ void ECS::setupRender(sg_bindings& bind) {
     }     
 }
 
-void ECS::render(Camera& cam) {
+void ECS::render(Camera& cam, float delta_t) {
     for (int i = 0; i < current_id; i++) {
         Mesh* mesh = meshes[i];
         Position* position = positions[i];
+
         if (mesh == nullptr || position == nullptr) {
             std::cout << "null" << std::endl;
             continue;
         }
 
-        glm::vec3 pos = positions[i]->raw_position;
+
+        glm::vec3 diff = position->raw_position - position->position;
+        positions[i]->position += diff;
+        glm::vec3 pos = positions[i]->position;
+
+
         //std::cout << "ID: " << i << std::endl;
         //std::cout << mesh->indices_id << ", " << mesh->indices.size() << std::endl;
         glm::mat4 model = glm::mat4(1.0f);
@@ -115,3 +121,19 @@ void ECS::render(Camera& cam) {
 
 
 
+bool ECS::doesCollide(entity_id A, entity_id B) {
+
+    glm::vec2 sizeA = meshes[A]->scale;
+    glm::vec2 posA = positions[A]->position;
+    posA.x -= sizeA.x / 2.0f;
+    posA.y -= sizeA.y / 2.0f;
+    glm::vec2 sizeB = meshes[B]->scale;
+    glm::vec2 posB = positions[B]->position;
+    posB.x -= sizeB.x / 2.0f;
+    posB.y -= sizeB.y / 2.0f;
+
+    bool collisionX = posA.x + sizeA.x >= posB.x && posB.x + sizeB.x >= posA.x;
+    bool collisionY = posA.y + sizeA.y >= posB.y && posB.y + sizeB.y >= posA.y;
+
+    return (collisionX && collisionY);
+}

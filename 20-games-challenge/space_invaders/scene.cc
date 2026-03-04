@@ -51,7 +51,7 @@ void SpaceInvaders::OnEvent(const sapp_event* event) {
     }
 }
 
-void SpaceInvaders::OnTick() {}
+void SpaceInvaders::OnTick(float tick_t) {}
 
 void SpaceInvaders::OnUpdate() {
     ImGui::Begin("SpaceInvaders", NULL, 0);

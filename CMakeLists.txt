@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.30)
 
 
 project(PequodEngine)
@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-#set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "" FORCE)
+set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "" FORCE)
 
 file(GLOB_RECURSE ENGINE_SRC "pequod/*.cc")
 
