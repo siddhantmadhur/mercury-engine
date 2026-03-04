@@ -1,7 +1,7 @@
 #include "ecs/ecs.hh"
 #include <gameobjects/camera.hh>
 #include <engine/engine.hh>
-
+#include <debugger/debugger.hh>
 #include <assets/images.hh> 
 
 #include <sokol/sokol_gfx.h>
@@ -155,13 +155,11 @@ bool PequodEngine::isShowDebugStats() {
 }
 
 void PequodEngine::sokol_cleanup() {
-    if (show_debug_stats) {
-        simgui_shutdown();
-    }
     if (currentScene) {
         currentScene->OnEnd();
         currentScene->Deinit();
     }
+    simgui_shutdown();
     sg_shutdown();
 }
 
@@ -171,7 +169,7 @@ void PequodEngine::sokol_event(const sapp_event *event) {
     currentScene->OnEvent(event);
     if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
         if (event->key_code == SAPP_KEYCODE_F1) {
-            std::cout << "Toggling debug stats!" << std::endl;
+            PDebug::info("toggling debug stats");
             show_debug_stats = !show_debug_stats;
         }
     }

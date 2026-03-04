@@ -3,9 +3,11 @@
 #include "engine/scene.hh"
 #include "gameobjects/camera.hh"
 #include "gameobjects/quad.hh"
+#include <format>
 #include <iostream>
 #include <imgui/imgui.h>
 #include <glm/glm.hpp>
+#include <debugger/debugger.hh>
 
 #define ZOOM 8.0f
     
@@ -15,7 +17,7 @@
 void PongScene::ResetRound() {
     float deg = rand() % 60;
     deg -= 30;
-    std::cout << "Using degree: " << deg << std::endl;
+    PDebug::info(std::format("Ball Initial Degree: {}", deg));
     ballVelocity = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
     ballVelocity.x *= -1;
 
@@ -150,6 +152,7 @@ void PongScene::OnUpdate() {
     if (ecs.doesCollide(player, ball) && ballVelocity.x < 0) {
         ballVelocity.x *= -1;
         ballPos.x = pos->raw_position.x + (ecs.getMesh(player)->scale.x); 
+        PDebug::log("Collide!!");
     }
     
     auto &ePos = ecs.getPosition(enemy)->raw_position;

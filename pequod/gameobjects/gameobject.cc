@@ -1,10 +1,10 @@
 #include "ecs/ecs.hh"
 #include <gameobjects/gameobject.hh>
 #include <iostream>
-
+#include <debugger/debugger.hh>
 
 GameObject::~GameObject() {
-    std::cout << "releasing game object" << std::endl;
+    PDebug::log("releasing game object...");
 }
 /**
 GameObject::GameObject() {

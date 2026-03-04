@@ -1,6 +1,7 @@
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include <gameobjects/camera.hh>
+#include <debugger/debugger.hh>
 #include <iostream>
 
 Camera::Camera(float aspect_ratio) {
@@ -9,7 +10,7 @@ Camera::Camera(float aspect_ratio) {
 }
 
 Camera::~Camera() {
-    std::cout << "Deleting camera!" << std::endl;
+    PDebug::log("deleting camera...");
 }
 
 glm::mat4 Camera::getProjection() {

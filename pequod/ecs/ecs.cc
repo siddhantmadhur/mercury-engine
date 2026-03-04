@@ -97,7 +97,6 @@ void ECS::render(Camera& cam, float delta_t) {
         Position* position = positions[i];
 
         if (mesh == nullptr || position == nullptr) {
-            std::cout << "null" << std::endl;
             continue;
         }
 
