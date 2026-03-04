@@ -12,10 +12,10 @@ Quad::Quad(glm::vec2 position, glm::vec2 init_size, glm::vec4 color) {
 
     // #define SHORT_MAX 5
     vertex_t raw_vertices[4] = {
-        {   size.x / 2.0f,  size.y / 2.0f, 0.0f,         0,         0, SPREAD_COLOR(color) }, // top right
-        {   size.x / 2.0f, -size.y / 2.0f, 0.0f, SHORT_MAX,         0, SPREAD_COLOR(color) }, // bottom right
-        {  -size.x / 2.0f, -size.y / 2.0f, 0.0f, SHORT_MAX, SHORT_MAX, SPREAD_COLOR(color) }, // bottom left
-        {  -size.x / 2.0f,  size.y / 2.0f, 0.0f,         0, SHORT_MAX, SPREAD_COLOR(color) }, // top left
+        {   1.0f,  1.0f, 0.0f,         0,         0, SPREAD_COLOR(color) }, // top right
+        {   1.0f, -1.0f, 0.0f, SHORT_MAX,         0, SPREAD_COLOR(color) }, // bottom right
+        {  -1.0f, -1.0f, 0.0f, SHORT_MAX, SHORT_MAX, SPREAD_COLOR(color) }, // bottom left
+        {  -1.0f,  1.0f, 0.0f,         0, SHORT_MAX, SPREAD_COLOR(color) }, // top left
     };
 
     std::vector<vertex_t> vertices = std::vector<vertex_t>(std::begin(raw_vertices), std::end(raw_vertices));

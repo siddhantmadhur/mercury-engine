@@ -148,14 +148,12 @@ void PongScene::OnUpdate() {
     ballPos += glm::vec3(ballVelocity.x, ballVelocity.y, 0.0f) * delta_t * 0.05f;
 
     if (ecs.doesCollide(player, ball) && ballVelocity.x < 0) {
-        std::cout << "Ball colliding" << std::endl;
         ballVelocity.x *= -1;
         ballPos.x = pos->raw_position.x + (ecs.getMesh(player)->scale.x); 
     }
     
     auto &ePos = ecs.getPosition(enemy)->raw_position;
     if (ecs.doesCollide(enemy, ball) && ballVelocity.x > 0) {
-        std::cout << "Ball colliding" << std::endl;
         ballVelocity.x *= -1;
         ballPos.x = ePos.x - (ecs.getMesh(ball)->scale.x / 2.0f); 
     }

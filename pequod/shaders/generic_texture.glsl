@@ -12,6 +12,7 @@ layout(binding=0) uniform cam_params {
 
 layout(binding=1) uniform model_params {
     mat4 model;
+    vec3 scale;
     float use_texture0;
 };
 
@@ -24,7 +25,7 @@ out vec4 color;
 out float use_texture;
 
 void main() {
-    gl_Position = projection * view * model * vec4(position, 1);
+    gl_Position = projection * view * model * vec4(position * (scale * 0.5), 1);
     uv = texcoord0;
     color = color0;
     use_texture = use_texture0;

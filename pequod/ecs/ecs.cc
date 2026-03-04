@@ -114,6 +114,7 @@ void ECS::render(Camera& cam, float delta_t) {
         model_params_t new_params;
         new_params.model = model; 
         new_params.use_texture0 = false ? 1.0f : 0.0f; 
+        new_params.scale = mesh->scale;
         sg_apply_uniforms(UB_model_params, SG_RANGE(new_params));
         sg_draw(mesh->indices_id, mesh->indices.size(), 1);
     }
