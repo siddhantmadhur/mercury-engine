@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
 
-
 project(PequodEngine)
 include_directories("third_party")
 include_directories("shaders")
@@ -53,7 +52,21 @@ add_subdirectory(third_party/glm)
 
 include_directories("third_party/glm")
 
-target_link_libraries(pequod imgui glm::glm)
+
+# JOLT PHYSICS
+
+file(GLOB_RECURSE JOLT_SOURCE "third_party/JoltPhysics/Jolt/*.cpp")
+
+
+add_library(joltphysics STATIC ${JOLT_SOURCE})
+
+include_directories("third_party/JoltPhysics")
+
+
+# END OF JOLT PHYSICS
+
+target_link_libraries(pequod imgui glm::glm joltphysics)
+
 
 # CREATE NEW BINARIES USING THIS
 
