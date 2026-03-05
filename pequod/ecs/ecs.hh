@@ -25,6 +25,7 @@
 #include <Jolt/Core/Memory.h>
 #include "Jolt/Physics/Body/BodyID.h"
 #include "Jolt/Physics/Collision/CollideShape.h"
+#include "Jolt/Physics/Body/MotionType.h"
 
 #include "Jolt/Core/Factory.h"
 #include "Jolt/Core/JobSystemThreadPool.h"
@@ -51,12 +52,6 @@ using JPH::ContactListener;
 using JPH::ValidateResult;
 using JPH::Body;
 
-namespace Layers
-{
-	static constexpr ObjectLayer NON_MOVING = 0;
-	static constexpr ObjectLayer MOVING = 1;
-	static constexpr ObjectLayer NUM_LAYERS = 2;
-};
 
 class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter
 {
@@ -128,33 +123,6 @@ public:
 	}
 };
 
-class MyContactListener : public ContactListener
-{
-public:
-	virtual ValidateResult	OnContactValidate(const Body &inBody1, const Body &inBody2, JPH::RVec3Arg inBaseOffset, const JPH::CollideShapeResult &inCollisionResult) override
-	{
-        std::cout << "Contact validate callback" << std::endl;
-
-		// Allows you to ignore a contact before it is created (using layers to not make objects collide is cheaper!)
-		return ValidateResult::AcceptAllContactsForThisBodyPair;
-	}
-
-	virtual void			OnContactAdded(const Body &inBody1, const Body &inBody2, const JPH::ContactManifold &inManifold, JPH::ContactSettings &ioSettings) override
-	{
-        std::cout << "A contact was added" << std::endl;
-	}
-
-	virtual void			OnContactPersisted(const Body &inBody1, const Body &inBody2, const JPH::ContactManifold &inManifold, JPH::ContactSettings &ioSettings) override
-	{
-        std::cout << "A contact was persisted" << std::endl;
-	}
-
-	virtual void			OnContactRemoved(const JPH::SubShapeIDPair &inSubShapePair) override
-	{
-        std::cout << "A contact was removed" << std::endl;
-	}
-};
-
 class MyBodyActivationListener : public JPH::BodyActivationListener
 {
 public:
@@ -168,23 +136,29 @@ public:
         PDebug::info("Body deactivated");
 	}
 };
+    
 
 class ECS {
 public:
     ECS();
     ~ECS();
     void initializeJolt(); // run this once  
+    void simulatePhysics();
     entity_id createEntity(); // use to create new entities that are part of the engine  
 
     void addMesh(entity_id, Mesh*);
     void addPosition(entity_id, Position*);
-
+    
     Mesh* getMesh(entity_id);
     Position* getPosition(entity_id);
-    RigidBody::RigidBody* getRigidBody(entity_id);
-    JPH::BodyID* getJoltId(entity_id);
 
-    bool doesCollide(entity_id, entity_id); // deprecated: need to remove this soon
+    void addRigidBody(entity_id, RigidBody*);
+    RigidBody* getRigidBody(entity_id);
+    void setVelocity(entity_id, glm::vec3);
+
+    void SetMotionType(entity_id, JPH::EMotionType);
+
+    JPH::BodyID* getJoltId(entity_id);
 
     void setupRender(sg_bindings& bind);
     void render(Camera& cam, float delta_t);
@@ -194,6 +168,9 @@ public:
     JPH::TempAllocatorImpl *temp_allocator; // 10MB
     JPH::JobSystemThreadPool *job_system;
     JPH::PhysicsSystem physics_system;
+
+    std::unordered_map<JPH::BodyID, entity_id> jolt_bodies;
+    std::unordered_map<entity_id, RigidBody*> rigid_bodies;
 protected:
     std::unordered_map<entity_id, Mesh*> meshes;
     std::unordered_map<entity_id, Position*> positions;
@@ -204,7 +181,7 @@ protected:
     ObjectVsBroadPhaseLayerFilterImpl object_vs_broadphase_layer_filter;
     ObjectLayerPairFilterImpl object_vs_object_layer_filter;
     MyBodyActivationListener body_activation_listener;
-    MyContactListener contact_listener;
+
 
 private:
     entity_id current_id;

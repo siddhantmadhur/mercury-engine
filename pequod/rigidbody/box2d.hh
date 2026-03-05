@@ -10,16 +10,14 @@
 #include <rigidbody/rigidbody.hh>
 
 
-namespace RigidBody {
-
 class Box2D : public RigidBody {
 public:
     Box2D(glm::vec2 position, glm::vec2 size); // position is center of mass
-    JPH::BodyCreationSettings getCreationSettings();
-    void AddForce(glm::vec2);
-    void SetVelocity(glm::vec2);
+    virtual void OnCollisionEnter(entity_id) =0;
+    virtual void OnCollision(entity_id) =0;
+    virtual void OnCollisionLeave(entity_id) =0;
+
 protected:
 };
 
-}
 #endif

@@ -113,20 +113,33 @@ void PequodEngine::sokol_frame_cb() {
     currentScene->SetDelta(delta_t);
     total_t += delta_t;
 
-    ticks = int(total_t / 50); // 20 
+
+    ticks = int(total_t / (1000.0/60.0)); // 20 
+
+    bool run_tick = false;
+    
+    currentScene->OnUpdate();
 
     if (last_tick < ticks) {
         tick_t = stm_ms(stm_laptime(&tick_frame_time));
+
         currentScene->OnTick(tick_t);
+
+
         currentScene->tick = ticks;
         last_tick = ticks;
+        run_tick = true;
     }
+    
 
-    if (ticks % 20 == 0) {
-        fps = 1000.0 / delta_t;
+    if (run_tick) {
+        currentScene->simulatePhysics();
     }
 
     if (show_debug_stats) {
+        if (ticks % 20 == 0) {
+            fps = 1000.0 / delta_t;
+        }
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus ;
         ImGuiIO& io = ImGui::GetIO();
         ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
@@ -140,8 +153,6 @@ void PequodEngine::sokol_frame_cb() {
             ImGui::End();
         }
     }
-
-    currentScene->OnUpdate();
 
     if (currentScene) {
         currentScene->Render(width, height);
