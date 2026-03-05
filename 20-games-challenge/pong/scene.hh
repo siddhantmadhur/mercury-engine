@@ -22,6 +22,7 @@ public:
     entity_id ball   = 2;
 
     JPH::BodyID player_id;
+    JPH::BodyID ball_id;
 
     glm::vec2 ballVelocity = glm::vec2(0.0f);
 

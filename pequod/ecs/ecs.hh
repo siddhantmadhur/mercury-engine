@@ -39,6 +39,7 @@
 
 #include "rigidbody/rigidbody.hh"
 
+#include <debugger/debugger.hh>
 
 using JPH::ObjectLayer;
 using JPH::ObjectLayerPairFilter;
@@ -116,6 +117,7 @@ public:
 		switch (inLayer1)
 		{
 		case Layers::NON_MOVING:
+            PDebug::info("Non moving!");
 			return inLayer2 == BroadPhaseLayers::MOVING;
 		case Layers::MOVING:
 			return true;
@@ -158,12 +160,12 @@ class MyBodyActivationListener : public JPH::BodyActivationListener
 public:
 	virtual void		OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
 	{
-        std::cout << "A body got activated" << std::endl;
+        PDebug::info("Body activated");
 	}
 
 	virtual void		OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
 	{
-        std::cout << "A body went to sleep" << std::endl;
+        PDebug::info("Body deactivated");
 	}
 };
 
