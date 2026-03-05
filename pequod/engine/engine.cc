@@ -1,11 +1,7 @@
 #include <Jolt/Jolt.h>
-#include <Jolt/Core/Memory.h>
 
-#include "Jolt/Core/Factory.h"
-#include "Jolt/Core/JobSystemThreadPool.h"
-#include "Jolt/Core/TempAllocator.h"
-#include "Jolt/Physics/PhysicsSettings.h"
-#include "Jolt/RegisterTypes.h"
+
+#include "Jolt/Physics/PhysicsSystem.h"
 #include "ecs/ecs.hh"
 #include <gameobjects/camera.hh>
 #include <engine/engine.hh>
@@ -35,7 +31,6 @@
 
 #include <iostream>
 using namespace std;
-using namespace JPH;
 
 void LoadMainMenuBar() {
     if (ImGui::BeginMainMenuBar())
@@ -71,19 +66,6 @@ void PequodEngine::startUp() {
     //ticks_thread = std::thread(run_every_tick, (void*)this);     
 }
 
-void PequodEngine::initializeJolt() {
-    // Initialize Jolt
-
-    RegisterDefaultAllocator();
-
-    Factory::sInstance = new Factory();
-
-    RegisterTypes();
-
-    TempAllocatorImpl temp_allocator(10 * 1024 * 1024); // 10MB
-
-    JobSystemThreadPool job_system(cMaxPhysicsJobs, cMaxPhysicsBarriers, thread::hardware_concurrency() - 1);
-}
 
 void PequodEngine::SetScene(Scene* scene) {
     currentScene = scene;

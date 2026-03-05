@@ -1,8 +1,10 @@
+
 #include "ecs/position.hh"
 #include "engine/scene.hh"
 #include "glm/ext/matrix_transform.hpp"
 #include <ecs/ecs.hh>
 #include <iostream>
+#include <debugger/debugger.hh>
 
 
 ECS::ECS () {
@@ -13,6 +15,38 @@ ECS::ECS () {
 
 ECS::~ECS () {
     
+}
+
+void ECS::initializeJolt() {
+    // Initialize Jolt
+
+    JPH::RegisterDefaultAllocator();
+
+    JPH::Factory::sInstance = new JPH::Factory();
+
+    JPH::RegisterTypes();
+
+    temp_allocator = new JPH::TempAllocatorImpl (10 * 1024 * 1024); // 10MB
+
+    job_system = new JPH::JobSystemThreadPool (JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, JPH::thread::hardware_concurrency() - 1);
+
+    const uint cMaxBodies = 1024;
+
+    const uint cNumBodyMutexes = 0;
+
+    const uint cMaxBodyPairs = 1024;
+
+    const uint cMaxContactConstraints = 1024;
+
+    physics_system.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, broad_phase_layer_interface, object_vs_broadphase_layer_filter, object_vs_object_layer_filter);
+
+    physics_system.SetBodyActivationListener(&body_activation_listener);
+    
+    physics_system.SetContactListener(&contact_listener);
+
+    PDebug::info("initialized jolt physics system");
+
+
 }
 
 entity_id ECS::createEntity() {

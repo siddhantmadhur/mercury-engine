@@ -51,6 +51,8 @@ void Scene::handleKeys(const sapp_event* event) {
 }
 
 void Scene::Init() {
+
+
     Image wall_texture = Image("assets/wall.jpg");
 
  
@@ -126,6 +128,7 @@ void Scene::Init() {
         .label = "jpg-texture-view",
     });
 
+    ecs.initializeJolt();
 }
 
 

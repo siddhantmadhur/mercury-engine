@@ -17,7 +17,6 @@ class PequodEngine
 {
 public:
     PequodEngine();
-    void initializeJolt(); // run this in the main thread
     void startUp();
     void SetScene(Scene* scene);
     void sokol_init();

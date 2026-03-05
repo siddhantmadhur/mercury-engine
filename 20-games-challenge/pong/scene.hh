@@ -1,6 +1,8 @@
 #ifndef PONG_SCENE_HH_
 #define PONG_SCENE_HH_
 
+#include <Jolt/Jolt.h>
+#include "Jolt/Physics/Body/BodyID.h"
 #include <engine/scene.hh>
 #include <gameobjects/quad.hh>
 #include <ecs/entity.hh>
@@ -19,7 +21,11 @@ public:
     entity_id enemy  = 1;
     entity_id ball   = 2;
 
+    JPH::BodyID player_id;
+
     glm::vec2 ballVelocity = glm::vec2(0.0f);
+
+
 private:
     int playerPoints = 0;
     int enemyPoints = 0;

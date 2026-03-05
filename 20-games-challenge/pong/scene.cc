@@ -1,18 +1,28 @@
 #include "scene.hh"
+#include "Jolt/Math/Quat.h"
+#include "Jolt/Math/Real.h"
+#include "Jolt/Math/Vec3.h"
+#include "Jolt/Physics/Body/BodyCreationSettings.h"
+#include "Jolt/Physics/Body/MotionType.h"
+#include "Jolt/Physics/Collision/Shape/BoxShape.h"
+#include "Jolt/Physics/EActivation.h"
 #include "ecs/entity.hh"
 #include "engine/scene.hh"
 #include "gameobjects/camera.hh"
 #include "gameobjects/quad.hh"
+#include "glm/fwd.hpp"
 #include <format>
 #include <iostream>
 #include <imgui/imgui.h>
 #include <glm/glm.hpp>
 #include <debugger/debugger.hh>
 
+
 #define ZOOM 8.0f
     
 #define heights (sapp_heightf() * (1 / ZOOM))
 #define widths (sapp_widthf() * (1 / ZOOM))
+
 
 void PongScene::ResetRound() {
     float deg = rand() % 60;
@@ -54,12 +64,34 @@ void PongScene::OnStart() {
         SetPlayerCamera(cam);
     }
 
+    auto &body_interface = ecs.physics_system.GetBodyInterface();
+
     { // create player
         player = ecs.createEntity();        
+
         glm::vec2 pos = glm::vec2(8, heights / 2.0f);
         Quad *quad = new Quad(pos, glm::vec2(2.0f, 10.0f));
+
         ecs.addPosition(player, quad->position);
         ecs.addMesh(player, quad->mesh);
+
+        glm::vec3 size = glm::vec3(2.0f, 10.0f, 0.0f);
+
+        JPH::BoxShapeSettings player_shape_settings(JPH::Vec3(size.x, size.y, 0.1f));
+        player_shape_settings.SetEmbedded();
+
+        JPH::ShapeSettings::ShapeResult player_shape_result = player_shape_settings.Create();
+        JPH::ShapeRefC player_shape = player_shape_result.Get();
+
+        JPH::BodyCreationSettings player_settings(player_shape, JPH::RVec3(pos.x, pos.y, 0.0f), JPH::Quat::sIdentity(), JPH::EMotionType::Kinematic, Layers::MOVING);
+
+        JPH::Body* player_body = body_interface.CreateBody(player_settings);
+        if (player_body == NULL) {
+            PDebug::error("Player body is NULL");
+        }
+
+        player_id = player_body->GetID();
+        body_interface.AddBody(player_id, JPH::EActivation::Activate);
     } 
 
     { // create enemy
@@ -102,6 +134,7 @@ void PongScene::OnEvent(const sapp_event* event) {
     
 #define SPEED 0.4f
 
+
 void PongScene::OnTick(float tick_t) {
 
     if (tick % 8 == 0) {
@@ -123,9 +156,7 @@ void PongScene::OnTick(float tick_t) {
     } else {
         ePos.y += (diff / glm::abs(diff))*0.05f;
     }
-}
-
-void PongScene::OnUpdate() {
+    
     float direction = 0.0f;
     if (IsKeyPressed(SAPP_KEYCODE_W)) {
         direction += 1.0f;
@@ -134,28 +165,25 @@ void PongScene::OnUpdate() {
         direction -= 1.0f;
     }
 
-    Position* pos = ecs.getPosition(player);
-    pos->raw_position.y += direction * SPEED * 0.2 * delta_t ;
+    //Position* pos = ecs.getPosition(player);
+    //pos->raw_position.y += direction * SPEED * 4.0f;
 
-    auto &rPos = pos->raw_position;
-    auto &rMesh = ecs.getMesh(player)->scale;
+    auto& body_interface = ecs.physics_system.GetBodyInterface();
 
-    rPos.y = glm::max(rPos.y, rMesh.y / 2.0f); 
-    rPos.y = glm::min(rPos.y, heights - (rMesh.y / 2.0f)); 
+    body_interface.SetLinearVelocity(player_id, JPH::Vec3(0.0f, direction * 0.8, 0.0f));
+
+    //auto &rMesh = ecs.getMesh(player)->scale;
+
+    //rPos.y = glm::max(rPos.y, rMesh.y / 2.0f); 
+    //rPos.y = glm::min(rPos.y, heights - (rMesh.y / 2.0f)); 
 
     //if (doCollide(pos->raw_position, ))
 
     auto& ballPos = ecs.getPosition(ball)->raw_position;
     auto& bMesh = ecs.getMesh(ball)->scale;
-    ballPos += glm::vec3(ballVelocity.x, ballVelocity.y, 0.0f) * delta_t * 0.05f;
+    ballPos += glm::vec3(ballVelocity.x, ballVelocity.y, 0.0f) * 0.05f;
 
-    if (ecs.doesCollide(player, ball) && ballVelocity.x < 0) {
-        ballVelocity.x *= -1;
-        ballPos.x = pos->raw_position.x + (ecs.getMesh(player)->scale.x); 
-        PDebug::log("Collide!!");
-    }
     
-    auto &ePos = ecs.getPosition(enemy)->raw_position;
     if (ecs.doesCollide(enemy, ball) && ballVelocity.x > 0) {
         ballVelocity.x *= -1;
         ballPos.x = ePos.x - (ecs.getMesh(ball)->scale.x / 2.0f); 
@@ -174,17 +202,30 @@ void PongScene::OnUpdate() {
     if (ballPos.x < 0 || ballPos.x > widths) {
         ResetRound();
     }
+    
+    ecs.physics_system.Update(delta_t, 1, ecs.temp_allocator, ecs.job_system);
+
+}
+
+void PongScene::OnUpdate() {
  
     
 
+    auto& body_interface = ecs.physics_system.GetBodyInterface();
+    auto pos = body_interface.GetPosition(player_id);
 
-    ImGui::Begin("PongScene", NULL, 0);
-    
-    ImGui::Text("Resolution: (%d, %d)", sapp_width(), sapp_height());
+    auto* vPos = ecs.getPosition(player);
+    vPos->raw_position = glm::vec3(pos.GetX(), pos.GetY(), 0.0f);
 
-    if (pos) {
-        ImGui::Text("Player: (%.2f, %.2f)", pos->raw_position.x, pos->raw_position.y);
+
+    {
+        ImGui::Begin("PongScene", NULL, 0);
+        
+        ImGui::Text("Resolution: (%d, %d)", sapp_width(), sapp_height());
+
+        //Position* pos = ecs.getPosition(player);
+        ImGui::Text("Player: (%.2f, %.2f)", pos.GetX(), pos.GetY());
+
+        ImGui::End();
     }
-
-    ImGui::End();
 }
