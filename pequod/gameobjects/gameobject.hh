@@ -12,6 +12,7 @@ public:
     glm::vec3 size;
     Position* position = NULL;
     Mesh* mesh = NULL;
+    RigidBody* rigid_body = NULL;
 protected:
 };
 

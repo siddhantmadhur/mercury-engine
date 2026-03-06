@@ -37,7 +37,6 @@ public:
     {
         PDebug::info("contact was added");
         if (jolt_bodies.contains(inBody1.GetID()) && jolt_bodies.contains(inBody2.GetID())) {
-            PDebug::log(std::format("recognized id: {}", jolt_bodies[inBody1.GetID()]));
             entity_id self = jolt_bodies[inBody1.GetID()];
             entity_id other = jolt_bodies[inBody2.GetID()];
             RigidBody* self_body = rigid_bodies[self];
@@ -51,15 +50,13 @@ public:
                 other_body->OnCollision(self);
             }
         } else {
-            PDebug::log("could not recognize id");
+            PDebug::info("could not recognize id");
         }
     }
 
     virtual void OnContactPersisted(const Body &inBody1, const Body &inBody2, const JPH::ContactManifold &inManifold, JPH::ContactSettings &ioSettings) override
     {
-        PDebug::info("contact was persisted");
         if (jolt_bodies.contains(inBody1.GetID()) && jolt_bodies.contains(inBody2.GetID())) {
-            PDebug::log(std::format("recognized id: {}", jolt_bodies[inBody1.GetID()]));
             entity_id self = jolt_bodies[inBody1.GetID()];
             entity_id other = jolt_bodies[inBody2.GetID()];
             RigidBody* self_body = rigid_bodies[self];
@@ -71,14 +68,13 @@ public:
                 other_body->OnCollision(self);
             }
         } else {
-            PDebug::log("could not recognize id");
+            PDebug::info("could not recognize id");
         }
     }
 
     virtual void OnContactRemoved(const JPH::SubShapeIDPair &inSubShapePair) override
     {
         PDebug::info("contact was removed");
-        
         if (jolt_bodies.contains(inSubShapePair.GetBody1ID()) && jolt_bodies.contains(inSubShapePair.GetBody2ID())) {
             entity_id self = jolt_bodies[inSubShapePair.GetBody1ID()];
             entity_id other = jolt_bodies[inSubShapePair.GetBody2ID()];
@@ -116,6 +112,14 @@ void ECS::setVelocity(entity_id id, glm::vec3 vel) {
     body_interface.SetLinearVelocity(body_id, JPH::Vec3(vel.x, vel.y, vel.z));
 }
 
+void ECS::SetPosition(entity_id id, glm::vec3 pos) {
+    RigidBody* body = rigid_bodies[id];
+    JPH::BodyID body_id = body->jolt_id;
+    
+    auto& body_interface = physics_system.GetBodyInterface();
+    body_interface.SetPosition(body_id, JPH::Vec3(pos.x, pos.y, pos.z), JPH::EActivation::Activate);
+}
+
 void ECS::simulatePhysics() { // call every 60hz
     float cHz = 1.0f / 60.0f;
     physics_system.Update(cHz, 1, temp_allocator, job_system);
@@ -125,7 +129,7 @@ void ECS::simulatePhysics() { // call every 60hz
     for (const auto& pair : jolt_bodies) {
         JPH::BodyID body_id = pair.first;
         entity_id id = pair.second;
-        auto phys_position = body_interface.GetPosition(body_id);
+        auto phys_position = body_interface.GetCenterOfMassPosition(body_id);
         glm::vec3 & position = positions[id]->position;
         position.x = phys_position.GetX();
         position.y = phys_position.GetY();
@@ -289,11 +293,17 @@ void ECS::render(Camera& cam, float delta_t) {
             continue;
         }
 
-
         glm::vec3 diff = position->position - position->raw_position;
-        //positions[i]->raw_position = positions[i]->position;
-        //PDebug::log(std::format("POSITION: {}, {}", diff.x, diff.y));
-        position->raw_position += diff / delta_t;
+
+        if (delta_t > 0) {
+            //positions[i]->raw_position = positions[i]->position;
+            //PDebug::log(std::format("POSITION: {}, {}", diff.x, diff.y));
+            position->raw_position += diff / delta_t;
+        } else {
+            position->raw_position += diff;
+        
+        }
+
         glm::vec3 pos = position->raw_position;
 
 

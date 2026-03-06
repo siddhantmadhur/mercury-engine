@@ -2,6 +2,9 @@
 #include "engine/scene.hh"
 #include "glm/common.hpp"
 #include "glm/trigonometric.hpp"
+#include "rigidbody/box2d.hh"
+#include "rigidbody/rigidbody.hh"
+#include <format>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <gameobjects/gameobject.hh>
@@ -9,54 +12,127 @@
 #include <imgui/imgui.h>
 #include <iostream>
 
-#define ZOOM 2.0f
-#define SCALE (1.0f/ZOOM) 
-#define width 1280 * SCALE
-#define height 720 * SCALE
+#define ZOOM 4.0f
+    
+#define height_s (sapp_heightf() * (1.0f / ZOOM))
+#define width_s (sapp_widthf() * (1.0f / ZOOM))
 
-#define width_s width * SCALE
-#define height_s height * SCALE
+#define playerPos ecs.getPosition(player)->position 
+#define playerSize ecs.getMesh(player)->scale
 
-#define playerPos player->GetPosition()
-#define playerSize player->GetSize()
+class BallRigidBody : public Box2D {
+public:
+    BallRigidBody(glm::vec3 pos, glm::vec3 size) : Box2D(pos, size) { PDebug::log("initialized ball rigidbody"); }
+    void OnCollisionEnter(entity_id) override { collide_with_ball = true; };
+    void OnCollision(entity_id id) override { collided_entity = id; };
+    void OnCollisionLeave(entity_id) override { collide_with_ball = false; };
+    bool collide_with_ball = false;
+    entity_id collided_entity = -1;
+};
+class PlayerRigidBody : public Box2D {
+public:
+    PlayerRigidBody(glm::vec3 pos, glm::vec3 size) : Box2D(pos, size) { PDebug::log("initialized player rigidbody"); }
+    void OnCollisionEnter(entity_id) override {};
+    void OnCollision(entity_id) override {};
+    void OnCollisionLeave(entity_id) override {};
+};
 
-bool doCollide(Shapes::Quad* A, glm::vec2 posB, glm::vec2 sizeB) { // (still object, moving object)
-    glm::vec2 sizeA = A->GetSize();
-    glm::vec2 posA = A->GetPosition();
-    posA.x -= sizeA.x / 2.0f;
-    posA.y -= sizeA.y / 2.0f;
+class BrickRigidBody : public Box2D {
+public:
+    BrickRigidBody(glm::vec2 pos, glm::vec2 size) : Box2D(pos, size) { PDebug::log("initialized wall rigidbody"); }
+    void OnCollisionEnter(entity_id) override { };
+    void OnCollision(entity_id) override {};
+    void OnCollisionLeave(entity_id) override { };
 
-    bool collisionX = posA.x + sizeA.x >= posB.x && posB.x + sizeB.x >= posA.x;
-    bool collisionY = posA.y + sizeA.y >= posB.y && posB.y + sizeB.y >= posA.y;
+};
 
-    return (collisionX && collisionY);
+void BreakoutScene::OnStart() {
+
+    srand(time(NULL));
+
+    ImGui::LoadIniSettingsFromDisk("breakout_scene.ini");
+
+    SetBgColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+
+    { // CAMERA
+
+        // TODO: add createOrtho and createPerspective in the engine (maybe to scene?) itself to reduce this code as well
+        Camera playerCam = Camera(width_s / height_s);
+        playerCam.configure2D(sapp_widthf(), sapp_heightf(), ZOOM);
+        SetPlayerCamera(playerCam);
+    }
+
+    { // PLAYER
+        player = ecs.createEntity();
+        glm::vec3 pos = glm::vec3(width_s / 2.0f, 16, 0.0f);
+        glm::vec3 size = glm::vec3(24.0f, 3.0f, 1.0f);
+        Quad *quad = new Quad(pos, size, glm::vec4(1.0f));
+        ecs.addPosition(player, quad->position);
+        ecs.addMesh(player, quad->mesh);
+        
+        PlayerRigidBody* rigid_body = new PlayerRigidBody(pos, size);
+        ecs.addRigidBody(player, rigid_body);
+    }
+
+    { // ball
+        ball_dx = glm::vec2(0.0f);
+
+        ball = ecs.createEntity();
+        glm::vec3 size = glm::vec3(4.0f, 4.0f, 1.0f);
+        glm::vec3 pos = glm::vec3(playerPos.x, playerPos.y + playerSize.y, 0.0f);
+        Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
+        ecs.addPosition(ball, quad->position);
+        ecs.addMesh(ball, quad->mesh);
+        
+        BallRigidBody* rigid_body = new BallRigidBody(pos, size);
+        ecs.addRigidBody(ball, rigid_body);
+        ecs.SetMotionType(ball, JPH::EMotionType::Dynamic);
+    }
+
+    { // BRICKS 
+        float padding_around = 8.0f;
+        float total_width = width_s - (padding_around * 2)  - (20);
+        glm::vec2 brick_size = glm::vec2(width_s / 10, 4.0f);
+        glm::vec2 offset = glm::vec2(padding_around + (brick_size.x), height_s - brick_size.y - 20);
+
+        for (int j = 0; j < 8; j++) {
+            offset.x = padding_around + (brick_size.x);
+            for (int i = 0; i < 8; i++) {
+                auto brick_id = ecs.createEntity();
+                bricks.push_back(brick_id);
+                Quad* quad = new Quad(offset, brick_size, glm::vec4(1.0 / (8.0/j), 0.1f, 0.8f, 1.0f));
+                ecs.addPosition(brick_id, quad->position);
+                ecs.addMesh(brick_id, quad->mesh);
+               
+                BrickRigidBody* rigid_body = new BrickRigidBody(offset, brick_size);
+
+                ecs.addRigidBody(brick_id, rigid_body);
+                ecs.SetMotionType(brick_id, JPH::EMotionType::Static);
+
+
+                offset.x += brick_size.x;
+                offset.x += 2;
+            }
+            offset.y -= brick_size.y ;
+            offset.y -= 2;
+        }
+    }
+   
 }
 
-bool doCollide(Shapes::Quad* A, Shapes::Quad* B) { // (still object, moving object)
-    glm::vec2 sizeA = A->GetSize();
-    glm::vec2 posA = A->GetPosition();
-    posA.x -= sizeA.x / 2.0f;
-    posA.y -= sizeA.y / 2.0f;
+#define CONSTANT_VELOCITY false
 
-    glm::vec2 sizeB = B->GetSize();
-    glm::vec2 posB = B->GetPosition();
-    posB.x -= sizeB.x / 2.0f;
-    posB.y -= sizeB.y / 2.0f;
-
-    bool collisionX = posA.x + sizeA.x >= posB.x && posB.x + sizeB.x >= posA.x;
-    bool collisionY = posA.y + sizeA.y >= posB.y && posB.y + sizeB.y >= posA.y;
-
-    return (collisionX && collisionY);
-}
-
-void BreakoutScene::OnTick() {
+void BreakoutScene::OnTick(float tick_t) {
 
     { // MOVEMNT
-        
+
         if ((!game_started) && IsKeyPressed(SAPP_KEYCODE_UP)) {
             float deg = 30 + (rand() % 120);
             ball_dx = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
             game_started = true;
+#if !CONSTANT_VELOCITY
+            ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
+#endif
         }
 
         float direction = 0;
@@ -74,7 +150,23 @@ void BreakoutScene::OnTick() {
             direction = direction * 2.0f;
         }
 
+        ecs.setVelocity(player, glm::vec3(direction * player_speed * tick_t, 0.0f, 0.0f));
 
+
+        if (playerPos.x - (playerSize.x / 2.0f) < 0) {
+            glm::vec3 newPos = playerPos;
+            newPos.x = playerSize.x / 2.0f;
+            ecs.setVelocity(player, glm::vec3(0.0f));
+            ecs.SetPosition(player, newPos);
+        } 
+        if (playerPos.x + (playerSize.x / 2.0f) > width_s) {
+            glm::vec3 newPos = playerPos;
+            newPos.x = width_s - (playerSize.x / 2.0f);
+            ecs.setVelocity(player, glm::vec3(0.0f));
+            ecs.SetPosition(player, newPos);
+        } 
+        
+        /**
         if (player) {
             player->Move(glm::vec3(direction *  player_speed, 0.0f, 0.0f));
             if (direction < 0) { // going left
@@ -94,10 +186,41 @@ void BreakoutScene::OnTick() {
         } else {
             ball->SetPosition(glm::vec3(playerPos.x, playerPos.y + playerSize.y, 0.0f));
         }
+        **/
+    
+        if (!game_started) {
+            //ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed);
+            glm::vec3 newPos = playerPos;
+            newPos.y += playerSize.y;
+            glm::vec3 & ballPos = ecs.getPosition(ball)->raw_position;
+            ecs.SetPosition(ball, newPos);
+        } else {
+#if CONSTANT_VELOCITY
+            ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
+#endif
+        }
 
     }
 
 
+    if (game_started ) {
+        BallRigidBody* rigid_body = dynamic_cast<BallRigidBody*>(ecs.getRigidBody(ball));
+        if (rigid_body->collide_with_ball && !already_collided) {
+            already_collided = true;
+            if (rigid_body->collided_entity == player) {
+
+            } else {
+                PDebug::log("Collided with brick");
+                ball_dx.y *= -1;
+                ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
+            }
+        } else {
+            already_collided = false;
+        }
+
+    }
+
+    /**
     auto ballPos = ball->GetPosition();
     if (ballPos.x < 0 || ballPos.x > width_s) {
         ball_dx.x *= -1;
@@ -115,14 +238,7 @@ void BreakoutScene::OnTick() {
     for (int i = 0; i < bricks.size(); i++) {
         if (!bricks[i]->disable && doCollide(ball, bricks[i])) {
             bricks[i]->disable = true;
-            /**
-            glm::vec2 diff = bricks[i]->GetPosition() - ball->GetPosition();
-            diff = glm::normalize(diff); 
-            diff *= -1;
-            if (diff.y < diff.x) {
-                ball_dx.y *= -1;
-            }
-            **/
+            
             auto A_half = ball->GetSize() / 2.0f;
             auto B_half = player->GetSize() / 2.0f;
 
@@ -140,69 +256,9 @@ void BreakoutScene::OnTick() {
             //std::cout << "Collide with [" << i << "]"  << " @ (" << overlapX << ", " << overlapY << ")"  << std::endl; 
         }
     }
+**/ 
 }
 
-void BreakoutScene::OnStart() {
-
-    srand(time(NULL));
-
-    ImGui::LoadIniSettingsFromDisk("breakout_scene.ini");
-
-    SetBgColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
-    { // CAMERA
-
-        // TODO: add createOrtho and createPerspective in the engine (maybe to scene?) itself to reduce this code as well
-        Camera playerCam = Camera(16.0/9.0);
-        glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
-        playerCam.setPosition(pos);
-        
-        glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(-pos.x, pos.y, 0.0f));
-        float zoom = ZOOM;
-        view = glm::scale(view, glm::vec3(zoom, zoom, 1.0f));
-
-        glm::mat4 proj = glm::ortho<float>(0, width, 0, height, -1.0f, 1.0f);
-
-        playerCam.setProj(proj);
-        playerCam.setView(view);
-
-        SetPlayerCamera(playerCam);
-    }
-
-
-    { // PLAYER
-        this->player = new Shapes::Quad(glm::vec2(24.0f, 3.0f), glm::vec2(width_s / 2.0f, 16), glm::vec4(1.0f));
-        AddObject(player);
-    }
-
-    { // ball
-        ball_dx = glm::vec2(0.0f);
-        ball = new Shapes::Quad(glm::vec2(3.0f), glm::vec2(playerPos.x, playerPos.y + playerSize.y), glm::vec4(1.0f));
-        AddObject(ball);
-    }
-
-    { // BRICKS 
-        float padding_around = 8.0f;
-        float total_width = width_s - (padding_around * 2)  - (20);
-        glm::vec2 brick_size = glm::vec2(width_s / 10, 4.0f);
-        glm::vec2 offset = glm::vec2(padding_around + (brick_size.x), height_s - brick_size.y - 20);
-
-        for (int j = 0; j < 8; j++) {
-            offset.x = padding_around + (brick_size.x);
-            for (int i = 0; i < 8; i++) {
-                Shapes::Quad* cur = new Shapes::Quad(brick_size, offset, glm::vec4(1.0 / (8.0/j), 0.1f, 0.8f, 1.0f));
-                AddObject(cur);
-                offset.x += brick_size.x;
-                offset.x += 2;
-                bricks.push_back(cur);
-            }
-            offset.y -= brick_size.y ;
-            offset.y -= 2;
-        }
-    }
-    
-
-}
 
 
 
@@ -210,12 +266,13 @@ void BreakoutScene::OnUpdate() {
 
 
     ImGui::Begin("pos", NULL, 0);
-    
-    ImGui::Text("player: (%.2f, %.2f)", playerPos.x, width);
-    ImGui::Text("ball: (%.2f, %.2f)", ball->GetPosition().x, ball->GetPosition().y);
+   
+    glm::vec3 ballPos = ecs.getPosition(ball)->raw_position;
+    ImGui::Text("player: (%.2f, %.2f, %.2f)", ballPos.x, ballPos.y, ballPos.z);
+    //ImGui::Text("ball: (%.2f, %.2f)", ball->GetPosition().x, ball->GetPosition().y);
 
-    ImGui::SliderFloat("Player Sp.", &player_speed, 0.0f, 20.0f);
-    ImGui::SliderFloat("Ball Sp.", &ball_speed, 0.0f, 20.0f);
+    ImGui::SliderFloat("Player Sp.", &player_speed, 0.0f, 100.0f);
+    ImGui::SliderFloat("Ball Sp.", &ball_speed, 0.0f, 100.0f);
 
     ImGui::End();
 

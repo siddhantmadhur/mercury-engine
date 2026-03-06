@@ -6,14 +6,18 @@ public:
     void OnStart() override;
     void OnEnd() override;
     void OnUpdate() override;
-    void OnTick() override;
+    void OnTick(float) override;
     void OnEvent(const sapp_event* event) override;
+
+    void ChangeDirection(float x, float y);
 private:
-    Shapes::Quad* player = NULL;
-    Shapes::Quad* ball = NULL;
-    std::vector<Shapes::Quad*> bricks;
+    entity_id player;
+    entity_id ball;
+    std::vector<entity_id> bricks;
+
     bool game_started = false;
     glm::vec2 ball_dx;
-    float ball_speed = 3.0f;
-    float player_speed = 6.0f;
+    float ball_speed = 14.0f;
+    float player_speed = 48.0f;
+    bool already_collided = false;
 };

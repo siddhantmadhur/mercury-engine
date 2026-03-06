@@ -76,6 +76,7 @@ void PongScene::ResetRound() {
 
     RigidBody* ball_body = ecs.getRigidBody(ball);
     glm::vec3 pos = glm::vec3(widths / 2.0f, heights / 2.0f, 0.0f);
+    ecs.getPosition(ball)->raw_position = pos;
     body_interface.SetPosition(ball_body->jolt_id, JPH::Vec3(pos.x, pos.y, pos.z), JPH::EActivation::Activate);
     #define MAX_ANGLE 0.80f
     

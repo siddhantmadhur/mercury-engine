@@ -126,15 +126,8 @@ public:
 class MyBodyActivationListener : public JPH::BodyActivationListener
 {
 public:
-	virtual void		OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
-	{
-        PDebug::info("Body activated");
-	}
-
-	virtual void		OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
-	{
-        PDebug::info("Body deactivated");
-	}
+	virtual void OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {}
+	virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {}
 };
     
 
@@ -155,6 +148,7 @@ public:
     void addRigidBody(entity_id, RigidBody*);
     RigidBody* getRigidBody(entity_id);
     void setVelocity(entity_id, glm::vec3);
+    void SetPosition(entity_id, glm::vec3);
 
     void SetMotionType(entity_id, JPH::EMotionType);
 
