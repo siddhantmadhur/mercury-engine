@@ -17,7 +17,6 @@ private:
 
     bool game_started = false;
     glm::vec2 ball_dx;
-    float ball_speed = 14.0f;
+    float ball_speed = 10.0f;
     float player_speed = 48.0f;
-    bool already_collided = false;
 };

@@ -3,6 +3,7 @@
 
 #include "Jolt/Physics/PhysicsSystem.h"
 #include "ecs/ecs.hh"
+#include <format>
 #include <gameobjects/camera.hh>
 #include <engine/engine.hh>
 #include <debugger/debugger.hh>
@@ -133,7 +134,9 @@ void PequodEngine::sokol_frame_cb() {
     
 
     if (run_tick) {
-        currentScene->simulatePhysics();
+        if (tick_t > 0 && delta_t > 0) {
+            currentScene->simulatePhysics(std::round(tick_t / delta_t));
+        }
     }
 
     if (show_debug_stats) {

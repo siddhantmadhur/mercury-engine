@@ -112,6 +112,39 @@ void ECS::setVelocity(entity_id id, glm::vec3 vel) {
     body_interface.SetLinearVelocity(body_id, JPH::Vec3(vel.x, vel.y, vel.z));
 }
 
+glm::vec3 ECS::GetVelocity(entity_id id) {
+    RigidBody* body = rigid_bodies[id];
+    JPH::BodyID body_id = body->jolt_id;
+    
+    auto& body_interface = physics_system.GetBodyInterface();
+    JPH::Vec3 vel = body_interface.GetLinearVelocity(body_id);
+    return glm::vec3(vel.GetX(), vel.GetY(), vel.GetZ());
+}
+
+void ECS::Disable(entity_id id) {
+    
+    Mesh* mesh = getMesh(id);
+    if (mesh) {
+        meshes.erase(id);
+    }
+    
+    auto* pos = getPosition(id);
+    if (pos) {
+        positions.erase(id);
+    }
+    
+    RigidBody* body = getRigidBody(id);
+    if (body) {
+        auto& body_interface = physics_system.GetBodyInterface();
+        body_interface.RemoveBody(body->jolt_id);  
+        body_interface.DestroyBody(body->jolt_id);
+        jolt_bodies.erase(body->jolt_id);
+        rigid_bodies[id] = NULL;
+
+    }
+
+}
+
 void ECS::SetPosition(entity_id id, glm::vec3 pos) {
     RigidBody* body = rigid_bodies[id];
     JPH::BodyID body_id = body->jolt_id;
@@ -120,9 +153,9 @@ void ECS::SetPosition(entity_id id, glm::vec3 pos) {
     body_interface.SetPosition(body_id, JPH::Vec3(pos.x, pos.y, pos.z), JPH::EActivation::Activate);
 }
 
-void ECS::simulatePhysics() { // call every 60hz
+void ECS::simulatePhysics(int steps) { // call every 60hz
     float cHz = 1.0f / 60.0f;
-    physics_system.Update(cHz, 1, temp_allocator, job_system);
+    physics_system.Update(cHz, steps, temp_allocator, job_system);
 
     auto& body_interface = physics_system.GetBodyInterface();
 
@@ -143,6 +176,7 @@ void ECS::addRigidBody(entity_id id, RigidBody* rigid_body) {
     auto& body_interface = physics_system.GetBodyInterface();
     
     auto creation_settings = rigid_body->getBodyCreationSettings();
+    creation_settings.mAllowedDOFs = rigid_body->allowed_dofs;
 
 
     JPH::Body* body = body_interface.CreateBody(creation_settings);
@@ -284,6 +318,22 @@ void ECS::SetMotionType(entity_id id, JPH::EMotionType motion_type) {
     body_interface.SetMotionType(body_id, motion_type, JPH::EActivation::Activate);
 }
 
+void ECS::SetRestitution(entity_id id, float restitution) {
+    auto* rigid_body = rigid_bodies[id];
+    JPH::BodyID body_id =  rigid_body->jolt_id;
+    auto & body_interface = physics_system.GetBodyInterface();
+    body_interface.SetRestitution(body_id, restitution);
+}
+
+void ECS::SetFriction(entity_id id, float friction) {
+    auto* rigid_body = rigid_bodies[id];
+    JPH::BodyID body_id =  rigid_body->jolt_id;
+    auto & body_interface = physics_system.GetBodyInterface();
+    body_interface.SetFriction(body_id, friction);
+}
+
+
+
 void ECS::render(Camera& cam, float delta_t) {
     for (int i = 0; i < current_id; i++) {
         Mesh* mesh = meshes[i];
@@ -300,10 +350,11 @@ void ECS::render(Camera& cam, float delta_t) {
             //PDebug::log(std::format("POSITION: {}, {}", diff.x, diff.y));
             position->raw_position += diff / delta_t;
         } else {
-            position->raw_position += diff;
-        
+            //position->raw_position += diff;
+            position->raw_position = position->position;
         }
 
+        //position->raw_position = position->position;
         glm::vec3 pos = position->raw_position;
 
 

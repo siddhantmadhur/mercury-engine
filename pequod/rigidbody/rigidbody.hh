@@ -13,6 +13,7 @@
 #define PEQUOD_RIGIDBODY_IMPL_HH_
 
 #include <Jolt/Jolt.h>
+#include "Jolt/Physics/Body/AllowedDOFs.h"
 #include "Jolt/Physics/Body/BodyCreationSettings.h"
 #include "Jolt/Physics/Body/MotionType.h"
 #include "ecs/entity.hh"
@@ -26,6 +27,13 @@ namespace Layers
 	static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
 };
 
+
+enum CollisionStatus {
+	JUST_ACTIVE = 0,
+	ACTIVE = 0,
+	INACTIVE = 0,
+};
+
 class RigidBody {
 public:
     virtual void OnCollisionEnter(entity_id) =0;
@@ -35,6 +43,7 @@ public:
     JPH::BodyCreationSettings getBodyCreationSettings();
     entity_id id;
     JPH::BodyID jolt_id;
+    JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::Plane2D;
     JPH::Body* body;
 protected:     
     JPH::BodyCreationSettings creationSettings;

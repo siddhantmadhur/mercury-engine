@@ -1,6 +1,8 @@
 #include "scene.hh"
+#include "Jolt/Physics/Body/AllowedDOFs.h"
 #include "engine/scene.hh"
 #include "glm/common.hpp"
+#include "glm/geometric.hpp"
 #include "glm/trigonometric.hpp"
 #include "rigidbody/box2d.hh"
 #include "rigidbody/rigidbody.hh"
@@ -37,10 +39,26 @@ public:
     void OnCollisionLeave(entity_id) override {};
 };
 
+
+static std::vector<entity_id> bricks_to_remove;
+
+
+
+class WallRigidBody : public Box2D {
+public:
+    WallRigidBody(glm::vec2 pos, glm::vec2 size) : Box2D(pos, size) { PDebug::log("initialized wall rigidbody"); }
+    void OnCollisionEnter(entity_id) override {};
+    void OnCollision(entity_id) override {};
+    void OnCollisionLeave(entity_id) override { };
+
+};
 class BrickRigidBody : public Box2D {
 public:
-    BrickRigidBody(glm::vec2 pos, glm::vec2 size) : Box2D(pos, size) { PDebug::log("initialized wall rigidbody"); }
-    void OnCollisionEnter(entity_id) override { };
+    BrickRigidBody(glm::vec2 pos, glm::vec2 size) : Box2D(pos, size) { PDebug::log("initialized brick rigidbody"); }
+    void OnCollisionEnter(entity_id) override {
+        PDebug::log(std::format("Brick ID: {}", this->id));
+        bricks_to_remove.push_back(id);
+    };
     void OnCollision(entity_id) override {};
     void OnCollisionLeave(entity_id) override { };
 
@@ -62,6 +80,51 @@ void BreakoutScene::OnStart() {
         SetPlayerCamera(playerCam);
     }
 
+    { // left wall
+        entity_id wall = ecs.createEntity();
+        glm::vec2 size = glm::vec2(10.0f, height_s);
+        glm::vec2 pos = glm::vec2(-size.x / 2.0f, size.y / 2.0f);
+
+        Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
+        ecs.addPosition(wall, quad->position);
+        ecs.addMesh(wall, quad->mesh);
+
+        WallRigidBody* rigid_body = new WallRigidBody(pos, size);
+        ecs.addRigidBody(wall, rigid_body);
+        ecs.SetRestitution(wall, 0.0f);
+        ecs.SetMotionType(wall, JPH::EMotionType::Static);
+    }
+
+    { // right wall
+        entity_id wall = ecs.createEntity();
+        glm::vec2 size = glm::vec2(10.0f, height_s);
+        glm::vec2 pos = glm::vec2(width_s + (size.x / 2.0f), size.y / 2.0f);
+
+        Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
+        ecs.addPosition(wall, quad->position);
+        ecs.addMesh(wall, quad->mesh);
+
+        WallRigidBody* rigid_body = new WallRigidBody(pos, size);
+        ecs.addRigidBody(wall, rigid_body);
+        ecs.SetRestitution(wall, 0.0f);
+        ecs.SetMotionType(wall, JPH::EMotionType::Static);
+    }
+    
+    { // upper wall
+        entity_id wall = ecs.createEntity();
+        glm::vec2 size = glm::vec2(width_s, 10.0f);
+        glm::vec2 pos = glm::vec2(width_s / 2.0f, height_s + (size.y / 2.0f));
+
+        Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
+        ecs.addPosition(wall, quad->position);
+        ecs.addMesh(wall, quad->mesh);
+
+        WallRigidBody* rigid_body = new WallRigidBody(pos, size);
+        ecs.addRigidBody(wall, rigid_body);
+        ecs.SetRestitution(wall, 0.0f);
+        ecs.SetMotionType(wall, JPH::EMotionType::Static);
+    }
+
     { // PLAYER
         player = ecs.createEntity();
         glm::vec3 pos = glm::vec3(width_s / 2.0f, 16, 0.0f);
@@ -71,7 +134,10 @@ void BreakoutScene::OnStart() {
         ecs.addMesh(player, quad->mesh);
         
         PlayerRigidBody* rigid_body = new PlayerRigidBody(pos, size);
+        rigid_body->allowed_dofs = JPH::EAllowedDOFs::TranslationX;
+
         ecs.addRigidBody(player, rigid_body);
+        ecs.SetMotionType(player, JPH::EMotionType::Dynamic);
     }
 
     { // ball
@@ -86,6 +152,8 @@ void BreakoutScene::OnStart() {
         
         BallRigidBody* rigid_body = new BallRigidBody(pos, size);
         ecs.addRigidBody(ball, rigid_body);
+        ecs.SetFriction(ball, 0.0f);
+        ecs.SetRestitution(ball, 1.0f);
         ecs.SetMotionType(ball, JPH::EMotionType::Dynamic);
     }
 
@@ -126,6 +194,15 @@ void BreakoutScene::OnTick(float tick_t) {
 
     { // MOVEMNT
 
+        while (bricks_to_remove.size() > 0) {
+            entity_id brick_id = bricks_to_remove.back();
+            
+            ecs.Disable(brick_id);
+
+            bricks_to_remove.pop_back();
+
+        }
+
         if ((!game_started) && IsKeyPressed(SAPP_KEYCODE_UP)) {
             float deg = 30 + (rand() % 120);
             ball_dx = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
@@ -133,6 +210,15 @@ void BreakoutScene::OnTick(float tick_t) {
 #if !CONSTANT_VELOCITY
             ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
 #endif
+        }
+
+        if (game_started) {
+            glm::vec3 & pos = ecs.getPosition(ball)->raw_position;
+            if (pos.y < 0) {
+                game_started = false;
+                pos = playerPos;
+                pos.y += playerSize.y / 2.0f;
+            }
         }
 
         float direction = 0;
@@ -152,6 +238,7 @@ void BreakoutScene::OnTick(float tick_t) {
 
         ecs.setVelocity(player, glm::vec3(direction * player_speed * tick_t, 0.0f, 0.0f));
 
+        /**
 
         if (playerPos.x - (playerSize.x / 2.0f) < 0) {
             glm::vec3 newPos = playerPos;
@@ -165,6 +252,7 @@ void BreakoutScene::OnTick(float tick_t) {
             ecs.setVelocity(player, glm::vec3(0.0f));
             ecs.SetPosition(player, newPos);
         } 
+        **/
         
         /**
         if (player) {
@@ -196,29 +284,18 @@ void BreakoutScene::OnTick(float tick_t) {
             ecs.SetPosition(ball, newPos);
         } else {
 #if CONSTANT_VELOCITY
+
             ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
+#else
+            glm::vec3 ball_velocity = ecs.GetVelocity(ball);
+            ball_velocity = glm::normalize(ball_velocity);
+            ecs.setVelocity(ball, ball_velocity * ball_speed * tick_t);
 #endif
         }
 
     }
 
 
-    if (game_started ) {
-        BallRigidBody* rigid_body = dynamic_cast<BallRigidBody*>(ecs.getRigidBody(ball));
-        if (rigid_body->collide_with_ball && !already_collided) {
-            already_collided = true;
-            if (rigid_body->collided_entity == player) {
-
-            } else {
-                PDebug::log("Collided with brick");
-                ball_dx.y *= -1;
-                ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
-            }
-        } else {
-            already_collided = false;
-        }
-
-    }
 
     /**
     auto ballPos = ball->GetPosition();

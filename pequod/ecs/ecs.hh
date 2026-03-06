@@ -136,7 +136,7 @@ public:
     ECS();
     ~ECS();
     void initializeJolt(); // run this once  
-    void simulatePhysics();
+    void simulatePhysics(int steps);
     entity_id createEntity(); // use to create new entities that are part of the engine  
 
     void addMesh(entity_id, Mesh*);
@@ -148,9 +148,14 @@ public:
     void addRigidBody(entity_id, RigidBody*);
     RigidBody* getRigidBody(entity_id);
     void setVelocity(entity_id, glm::vec3);
+    glm::vec3 GetVelocity(entity_id);
     void SetPosition(entity_id, glm::vec3);
+    void SetRestitution(entity_id, float);
+    void SetFriction(entity_id, float);
 
     void SetMotionType(entity_id, JPH::EMotionType);
+
+    void Disable(entity_id);
 
     JPH::BodyID* getJoltId(entity_id);
 

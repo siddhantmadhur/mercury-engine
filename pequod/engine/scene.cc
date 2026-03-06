@@ -30,8 +30,8 @@ Scene::Scene() : playerCamera(1.0f) {
     //indices.reserve(INIT_INDICES);
 }
 
-void Scene::simulatePhysics() {
-    ecs.simulatePhysics();
+void Scene::simulatePhysics(int steps) {
+    ecs.simulatePhysics(steps);
 }
 
 void Scene::Deinit() {
