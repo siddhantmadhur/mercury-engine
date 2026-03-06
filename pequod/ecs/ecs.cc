@@ -159,6 +159,10 @@ void ECS::addRigidBody(entity_id id, RigidBody* rigid_body) {
     rigid_body->jolt_id = body_id;
 }
 
+RigidBody* ECS::getRigidBody(entity_id id) {
+    return rigid_bodies[id];
+}
+
 void ECS::initializeJolt() {
     // Initialize Jolt
 

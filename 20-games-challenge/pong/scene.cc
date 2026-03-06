@@ -31,13 +31,21 @@ class PlayerPaddle : public Box2D {
 public:
     PlayerPaddle(glm::vec2 position, glm::vec2 size) : Box2D(position, size) {}
     void OnCollisionEnter(entity_id) {
-        //PDebug::log("paddle collides");
     }
     void OnCollision(entity_id) {
-        //PDebug::log("paddle still colliding");
     }
     void OnCollisionLeave(entity_id) {
-        //PDebug::log("paddle not colliding");
+    }
+};
+
+class HorizontalBound : public Box2D {
+public:
+    HorizontalBound(glm::vec2 position, glm::vec2 size) : Box2D(position, size) {}
+    void OnCollisionEnter(entity_id) {
+    }
+    void OnCollision(entity_id) {
+    }
+    void OnCollisionLeave(entity_id) {
     }
 };
 class BallRigidBody : public Box2D {
@@ -47,32 +55,36 @@ public:
         ball_velocity.x *= -1;
     }
     void OnCollision(entity_id) {
-        PDebug::log("ball still colliding");
     }
     void OnCollisionLeave(entity_id) {
-        PDebug::log("ball not colliding");
     }
     glm::vec2 & ball_velocity;
 
 };
 
 void PongScene::ResetRound() {
+    PDebug::log("Round finished");
     float deg = rand() % 60;
     deg -= 30;
     PDebug::info(std::format("Ball Initial Degree: {}", deg));
-    //ballVelocity = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
-    ballVelocity = glm::vec2(-0.2f, 0.0f);
+    ballVelocity = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
+    ballVelocity.x *= -1;
+    //ballVelocity = glm::vec2(-0.2f, 0.0f);
+
 
     auto& body_interface = ecs.physics_system.GetBodyInterface();
 
-    //auto& pos = ecs.getPosition(ball)->raw_position;
-    //pos = glm::vec3(widths / 2.0f, heights / 2.0f, 0.0f);
-    //vector = glm::normalize(vector);
+    RigidBody* ball_body = ecs.getRigidBody(ball);
+    glm::vec3 pos = glm::vec3(widths / 2.0f, heights / 2.0f, 0.0f);
+    body_interface.SetPosition(ball_body->jolt_id, JPH::Vec3(pos.x, pos.y, pos.z), JPH::EActivation::Activate);
     #define MAX_ANGLE 0.80f
     
 }
 
 void PongScene::OnStart() {
+
+    srand(time(NULL));
+
     ImGui::LoadIniSettingsFromDisk("space_invaders_imgui.ini");
    
     SetBgColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -134,6 +146,7 @@ void PongScene::OnStart() {
         
     } 
 
+
     {
         //ballVelocity = glm::vec2(-0.4f, 0.8f);
         ResetRound();
@@ -159,6 +172,26 @@ void PongScene::OnTick(float tick_t) {
     auto& body_interface = ecs.physics_system.GetBodyInterface();
     //auto& collision_group = body_interface.GetCollisionGroup(player_id);
 
+    glm::vec3& bPos = ecs.getPosition(ball)->position;
+    glm::vec3& bSize = ecs.getMesh(ball)->scale;
+
+    if (bPos.y + (bSize.y / 2.0f) > heights && ballVelocity.y > 0) {
+        ballVelocity.y *= -1;
+    }
+    if (bPos.y - (bSize.y / 2.0f) < 0.0f && ballVelocity.y < 0) {
+        ballVelocity.y *= -1;
+    }
+
+
+    if (bPos.x + (bSize.x / 2.0f) > widths) {
+        playerPoints += 1;
+        ResetRound();
+    }
+    if (bPos.x - (bSize.x / 2.0f) < 0.0f) {
+        enemyPoints += 1;
+        ResetRound();
+    }
+
 }
 
 void PongScene::OnUpdate() {
@@ -173,20 +206,18 @@ void PongScene::OnUpdate() {
 
     auto& body_interface = ecs.physics_system.GetBodyInterface();
 
-    #define CALC_SPEED 30.0f * delta_t 
+    #define CALC_SPEED 15.0f * delta_t 
 
-    ecs.setVelocity(player, glm::vec3(0.0f, direction * 0.8 * CALC_SPEED, 0.0f));
+    ecs.setVelocity(player, glm::vec3(0.0f, direction * CALC_SPEED * 1.05f, 0.0f));
 
     ecs.setVelocity(ball, glm::vec3(ballVelocity.x * CALC_SPEED, ballVelocity.y * CALC_SPEED, 0.0f));
-
-    
-
-
 
 
     {
         ImGui::Begin("PongScene", NULL, 0);
-        
+
+        ImGui::Text("Player Points: %d -- Enemy Points: %d", playerPoints, enemyPoints);
+
         ImGui::Text("Resolution: (%d, %d)", sapp_width(), sapp_height());
 
         Position* pos = ecs.getPosition(player);
