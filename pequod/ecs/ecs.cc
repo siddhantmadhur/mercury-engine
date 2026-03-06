@@ -290,9 +290,11 @@ void ECS::render(Camera& cam, float delta_t) {
         }
 
 
-        //glm::vec3 diff = position->raw_position - position->position;
-        //positions[i]->raw_position += diff ;
-        glm::vec3 pos = positions[i]->position;
+        glm::vec3 diff = position->position - position->raw_position;
+        //positions[i]->raw_position = positions[i]->position;
+        //PDebug::log(std::format("POSITION: {}, {}", diff.x, diff.y));
+        position->raw_position += diff / delta_t;
+        glm::vec3 pos = position->raw_position;
 
 
         //std::cout << "ID: " << i << std::endl;
