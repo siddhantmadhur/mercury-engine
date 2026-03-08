@@ -31,6 +31,7 @@ else()
   target_link_libraries(pequod "-lGL")
   target_link_libraries(pequod "-ldl")
   target_link_libraries(pequod "-lpthread")
+  target_link_libraries(pequod "-lSDL3")
 endif()
 
 # link imgui
@@ -68,6 +69,9 @@ include_directories("third_party/JoltPhysics")
 target_link_libraries(pequod imgui glm::glm joltphysics)
 
 
+file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc")
+add_executable(pequod_editor ${EDITOR_SOURCE})
+target_link_libraries(pequod_editor pequod)
 # CREATE NEW BINARIES USING THIS
 
 file(GLOB_RECURSE PONG_SRC "20-games-challenge/pong/*.cc")

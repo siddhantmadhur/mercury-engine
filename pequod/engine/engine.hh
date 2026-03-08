@@ -36,7 +36,7 @@ private:
     uint8_t fps;
     double total_t;
     Scene *currentScene;
-    bool show_debug_stats = false;
+    bool show_debug_stats = true;
 };
 
 #endif

@@ -21,6 +21,7 @@ public:
     void Deinit();
     void Init();
     void Render(float width, float height);
+    void AddSpriteMap(std::string);
     void simulatePhysics(int);
     virtual void OnStart() =0; // runs at scene creation
     virtual void OnUpdate() =0; // runs once every frame
