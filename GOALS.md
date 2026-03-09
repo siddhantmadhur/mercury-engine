@@ -1,4 +1,4 @@
-# 15 Games Challenge
+# 14 Games Challenge
 
 To ensure this game engine is "complete" and feasible for a variety of games one 
 of the goals I had in mind was to make sure you can do the 20 games challenge 
@@ -14,19 +14,18 @@ the challenge.
 
 - [X]  1. Pong [Feb 28 2026]
 - [X]  2. Breakout [Mar 1 2026]
-- [ ]  3. Jetpack Joyride
-- [ ]  4. Space Invaders
-- [ ]  5. Frogger
-- [ ]  6. Indy 500
+- [ ]  3. Space Invaders
+- [ ]  4. Frogger
+- [ ]  5. Jetpack Joyride
+- [ ]  6. Angry Birds 
 - [ ]  7. Tetris
 - [ ]  8. Pac Man
-- [ ]  9. Conway's Game of Life
-- [ ] 10. 2D side scrolling platformer from 1989
-- [ ] 11. Crash Bandicoot
-- [ ] 12. Minecraft
-- [ ] 13. Super Monkey Ball
-- [ ] 14. Dune II
-- [ ] 15. Roller Coaster Tycoon
+- [ ]  9. Generic 2D Platformer
+- [ ] 10. Crash Bandicoot
+- [ ] 11. Minecraft
+- [ ] 12. Super Monkey Ball
+- [ ] 13. Dune II
+- [ ] 14. Roller Coaster Tycoon
 
 
 
