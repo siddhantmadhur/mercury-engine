@@ -3,8 +3,10 @@
 #include "scene.hh"
 #include <engine/engine.hh>
 
+#define VK_USE_PLATFORM_XLIB_KHR
+
 #define SOKOL_IMPL
-#define SOKOL_GLCORE
+#define SOKOL_VULKAN
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_glue.h>

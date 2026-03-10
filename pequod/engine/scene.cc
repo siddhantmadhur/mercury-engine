@@ -121,7 +121,7 @@ void Scene::Init() {
         .pixel_format = SG_PIXELFORMAT_RGBA8,
         .label = "jpg-image"
     };
-    img_desc.data.subimage[0][0] = {
+    img_desc.data.mip_levels[0] = {
         .ptr = wall_texture.raw_data,
         .size = (size_t) wall_texture.x * wall_texture.y * 4,
     };
