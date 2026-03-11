@@ -68,7 +68,14 @@ include_directories("third_party/JoltPhysics")
 
 # END OF JOLT PHYSICS
 
-target_link_libraries(pequod imgui glm::glm joltphysics)
+# TinyXML2
+
+add_subdirectory(third_party/tinyxml2)
+include_directories("third_party/tinyxml2")
+
+# End of TinyXML2
+
+target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2)
 
 
 file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc")
