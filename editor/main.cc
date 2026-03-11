@@ -1,4 +1,4 @@
-#include "editor.h"
+#include <editor_windows/editor_main.hh>
 
 #include <iostream>
 
@@ -15,7 +15,7 @@
 #include <imgui/imgui.h>
 #include <sokol/util/sokol_imgui.h>
 
-#include "editor_project.h"
+#include <editor_windows/editor_project.hh>
 
 static Pequod::ProjectSelectionScene selection_scene;
 static Pequod::Editor pequod_editor_main(selection_scene);
@@ -37,6 +37,7 @@ void sokol_event(const sapp_event* event) {
 sapp_desc sokol_main(int argc, char *argv[]) {
 
     PDebug::info("pequod editor: starting");
+
     selection_scene.InitializeScene();
     pequod_editor_main.InitializeEditor();
 

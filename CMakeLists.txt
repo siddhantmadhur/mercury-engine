@@ -15,6 +15,7 @@ add_library(pequod ${ENGINE_SRC})
 
 
 include_directories("pequod")
+include_directories("editor")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)
 
 if (APPLE)
@@ -70,9 +71,9 @@ include_directories("third_party/JoltPhysics")
 target_link_libraries(pequod imgui glm::glm joltphysics)
 
 
-#file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc")
-#add_executable(pequod_editor ${EDITOR_SOURCE})
-#target_link_libraries(pequod_editor pequod)
+file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc")
+add_executable(pequod_editor ${EDITOR_SOURCE})
+target_link_libraries(pequod_editor pequod)
 # CREATE NEW BINARIES USING THIS
 
 file(GLOB_RECURSE PONG_SRC "20-games-challenge/pong/*.cc")

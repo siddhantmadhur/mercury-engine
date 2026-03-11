@@ -1,7 +1,7 @@
 #ifndef PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 #define PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 
-#include "editor_scene.h"
+#include "editor_scene.hh"
 
 namespace Pequod {
 class ProjectSelectionScene : public EditorScene {

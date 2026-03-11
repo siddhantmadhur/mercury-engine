@@ -21,7 +21,9 @@ public:
     * These functions are meant for the engine to interface with scenes directly.
     **/
     void InitializeScene();
-    void OnEventRaw(const sapp_event* event);     
+    void OnEventInternal(const sapp_event* event);     
+    void OnFrameInternal();
+
 };
 }
 

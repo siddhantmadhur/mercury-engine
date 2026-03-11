@@ -1,5 +1,5 @@
 /**
-* editor.h
+* editor_main.hh
 * 
 * This file manages the main editor instance. It will allow the user
 * to create and manage scenes, assets, handle files and link properties
@@ -15,7 +15,8 @@
 #ifndef PEQUOD_EDITOR_MAIN_IMPL_HH_
 #define PEQUOD_EDITOR_MAIN_IMPL_HH_
 
-#include "editor_scene.h"
+#include "editor_scene.hh"
+#include <sokol/sokol_gfx.h>
 
 namespace Pequod {
 
@@ -38,8 +39,15 @@ public:
     void sokol_cleanup();
     void sokol_event(const sapp_event* event);
 
+
 private:
     EditorScene &currentScene;
+    
+    /**
+    * These are variables only required by sokol calls; goal is to phase them 
+    * out for a custom impl
+    **/
+    sg_pass_action pass_action;
 };
 
 };
