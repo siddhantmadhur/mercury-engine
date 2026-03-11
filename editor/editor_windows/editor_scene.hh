@@ -2,11 +2,14 @@
 #define EDITOR_SCENE_IMPL_HH_
 
 #include <sokol/sokol_app.h>
+#include <unordered_map>
+#include <vector>
 
 namespace Pequod {
 class EditorScene {
 public:
     EditorScene(); 
+    bool IsKeyPressed(sapp_keycode);
 
     /**
     * Extend these functions to create functionality in scenes
@@ -26,6 +29,8 @@ public:
     void OnFrameInternal();
     void OnDestroyInternal();
 
+private:
+    std::unordered_map<sapp_keycode, bool> pressed_keys;
 };
 }
 

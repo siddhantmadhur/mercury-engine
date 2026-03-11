@@ -23,33 +23,39 @@ void ProjectSelectionScene::OnInitialLoad() {
     }
     this->show_new_project_window = true;
 
-    {
-        //imgui_configuration_path = std::format("{}/pequod/imgui_settings.ini", home_dir);
-        //PDebug::log(std::format("Loading imgui configuration file from: {}", imgui_configuration_path));
-        //ImGui::LoadIniSettingsFromDisk(imgui_configuration_path.c_str());
-    }
 }
 
-void ProjectSelectionScene::OnEventUpdate(const sapp_event* event) {
-    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
-        if (event->key_code == SAPP_KEYCODE_ESCAPE) {
-            sapp_quit();
-        }
-    }
+void ProjectSelectionScene::OnEventUpdate(const sapp_event* event) {}
+
+void ProjectSelectionScene::QuitProgram() {
+    sapp_quit();
 }
+void ProjectSelectionScene::CreateNewProject() {
+    show_new_project_window = true;
+}
+
 
 void ProjectSelectionScene::OnFrameUpdate() {
+    if (IsKeyPressed(SAPP_KEYCODE_LEFT_CONTROL) || IsKeyPressed(SAPP_KEYCODE_RIGHT_CONTROL)) {
+        if (IsKeyPressed(SAPP_KEYCODE_N)) {
+            CreateNewProject();
+        }
+        if (IsKeyPressed(SAPP_KEYCODE_Q)) {
+            QuitProgram();
+        }
+    }
+
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("New Project")) {
-                show_new_project_window = !show_new_project_window;
+            if (ImGui::MenuItem("New Project", "Ctrl+N")) {
+                CreateNewProject();
             }
-            if (ImGui::MenuItem("Open Project")) {
+            if (ImGui::MenuItem("Open Project", "Ctrl+O")) {
                 show_new_project_window = !show_new_project_window;
             }
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
-            if (ImGui::MenuItem("Quit", "Esc")) {
-                sapp_quit();
+            if (ImGui::MenuItem("Quit", "Ctrl+Q")) {
+                QuitProgram();
             }
             ImGui::EndMenu();
         }
@@ -73,7 +79,8 @@ void ProjectSelectionScene::OnFrameUpdate() {
     }
 }
 
-void ProjectSelectionScene::OnTickUpdate() {}
+void ProjectSelectionScene::OnTickUpdate() {
+}
 
 void ProjectSelectionScene::OnDestroy() {
     //PDebug::info(std::format("Saving imgui settings to: {}", imgui_configuration_path));

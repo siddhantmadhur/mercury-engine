@@ -122,6 +122,7 @@ void sokol_init() {
         io.IniFilename = ui_settings_path.c_str();
     } 
 };
+
 void sokol_frame_cb() {
     pequod_editor_main.sokol_frame_cb();
 };
@@ -129,6 +130,7 @@ void sokol_cleanup() {
     PDebug::info("pequod editor: closing");
     pequod_editor_main.sokol_cleanup();
 };
+
 void sokol_event(const sapp_event* event) {
     pequod_editor_main.sokol_event(event);
 };

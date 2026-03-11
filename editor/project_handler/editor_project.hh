@@ -18,7 +18,12 @@ public:
     void OnFrameUpdate() override;
     void OnTickUpdate() override;
     void OnDestroy() override;
+    
+    void CreateNewProject();
+    void QuitProgram();
+
 private:
+
    
     bool show_new_project_window = false;
     char* new_project_name;
