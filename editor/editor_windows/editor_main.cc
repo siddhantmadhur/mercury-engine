@@ -72,6 +72,8 @@ void Editor::sokol_frame_cb() {
 }
 
 void Editor::sokol_cleanup() {
+    currentScene.OnDestroyInternal();
+
     simgui_shutdown();
     sg_shutdown();
 }
