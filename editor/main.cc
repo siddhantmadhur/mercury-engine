@@ -33,6 +33,7 @@ void sokol_init() {
 
     {
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
         ImGuiStyle* style = &ImGui::GetStyle();
         ImVec4* colors = style->Colors;
 
@@ -150,6 +151,9 @@ sapp_desc sokol_main(int argc, char *argv[]) {
         .width = 1920,
         .height = 1080,
         .window_title = "Pequod Editor [v0.0.1]",
+        .icon = {
+            .sokol_default = true,
+        },
         .logger = {
             .func = slog_func,
         },

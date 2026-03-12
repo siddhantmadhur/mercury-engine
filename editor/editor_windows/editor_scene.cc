@@ -1,5 +1,7 @@
 #include "editor_scene.hh"
 
+#include <sokol/sokol_time.h>
+
 
 namespace Pequod {
 
@@ -23,6 +25,19 @@ void EditorScene::OnEventInternal(const sapp_event* event) {
     OnEventUpdate(event);
 }
 void EditorScene::OnFrameInternal() {
+
+
+    delta_t = stm_ms(stm_laptime(&frame_time));
+    total_run_time += delta_t;
+
+
+    uint64_t ticks = int(total_run_time / (1000.0/60.0)); // 60 ticks per second
+
+    if (ticks > current_tick) {
+        current_tick = ticks;
+        OnTickUpdate();
+    }
+
     OnFrameUpdate();
 }
 

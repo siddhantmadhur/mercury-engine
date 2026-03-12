@@ -12,17 +12,28 @@
 #define PEQUOD_PROJECT_HANDLER_IMPL_HH_
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
+#include <vector>
+
+namespace fs = std::filesystem;
 
 namespace Pequod {
 
-class Project {
+class ProjectHandler {
 
 public:
-    Project();
-    void Load(std::string path);
-    void Create(std::string name, std::string directory_path);
+    ProjectHandler(fs::path);
+
+    ~ProjectHandler();
+    void Load(fs::path proj_directory);
+    void Create(std::string name);
     void Save();
+    std::vector<fs::path> GetProjects(); 
+    void ReloadProjects(); 
+
+    bool has_loaded_project = false;
+    fs::path project_path;
 
 private:
     // semantic versioning: (major).(minor).(patch)
@@ -30,9 +41,10 @@ private:
     uint16_t project_version_minor;
     uint16_t project_version_patch;
 
-
     std::string project_name;
-    std::string directory_path;
+    fs::path directory_path;
+
+    std::vector<fs::path> projects_list;
 
 };
 

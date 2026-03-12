@@ -88,10 +88,7 @@ void PequodEngine::sokol_init() {
     simgui_desc.logger.func = slog_func;
     simgui_setup(&simgui_desc);
 
-
-
     currentScene->Init(); // runs only for the initial default scene; every other scene needs to call this themselves
-
 
     currentScene->OnStart();
 };

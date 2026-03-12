@@ -4,6 +4,7 @@
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_glue.h>
 #include <sokol/sokol_log.h>
+#include <sokol/sokol_time.h>
 #include <sokol/util/sokol_imgui.h>
 
 
@@ -29,6 +30,8 @@ void Editor::sokol_init() {
         },
         .environment = sglue_environment(),
     };
+
+    stm_setup();
 
     float gray = 73.0f / 255.0f;
     pass_action.colors[0] = {

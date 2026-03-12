@@ -8,6 +8,8 @@
 #define PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 
 #include <editor_windows/editor_scene.hh>
+#include <memory>
+#include <project_handler/project_handler.hh>
 #include <string>
 
 namespace Pequod {
@@ -20,12 +22,16 @@ public:
     void OnDestroy() override;
     
     void CreateNewProject();
+    void OpenNewProjectWin();
+    void OpenPrevProjectWin();
     void QuitProgram();
 
 private:
 
+    std::unique_ptr<ProjectHandler> current_project_handler;
    
     bool show_new_project_window = false;
+    bool open_prev_project_window = false;
     char* new_project_name;
     char* project_directory;
     

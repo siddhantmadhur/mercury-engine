@@ -1,6 +1,7 @@
 #ifndef EDITOR_SCENE_IMPL_HH_
 #define EDITOR_SCENE_IMPL_HH_
 
+#include <cstdint>
 #include <sokol/sokol_app.h>
 #include <unordered_map>
 #include <vector>
@@ -29,8 +30,15 @@ public:
     void OnFrameInternal();
     void OnDestroyInternal();
 
+protected:
+    uint64_t current_tick;
+
 private:
     std::unordered_map<sapp_keycode, bool> pressed_keys;
+    float total_run_time=0.0f;
+    uint64_t frame_time = 1;
+    float tick_frame_time = 1;
+    float delta_t = 0;
 };
 }
 
