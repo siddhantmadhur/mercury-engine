@@ -33,6 +33,7 @@ void ProjectSelectionScene::OnInitialLoad() {
         current_project_handler->ReloadProjects();
         auto proj = current_project_handler->GetProjects();
         current_project_handler->Load(proj[0]);
+        OpenProject();
 
 #endif
     }
@@ -45,7 +46,7 @@ void ProjectSelectionScene::OnEventUpdate(const sapp_event* event) {}
 void ProjectSelectionScene::QuitProgram() {
     sapp_quit();
 }
-void ProjectSelectionScene::CreateNewProject() {
+void ProjectSelectionScene::CreateProject() {
     if (current_project_handler) {
         current_project_handler->Save();
     }
@@ -56,13 +57,18 @@ void ProjectSelectionScene::CreateNewProject() {
     show_new_project_window = false;
 }
 
-void ProjectSelectionScene::OpenNewProjectWin() {
+void ProjectSelectionScene::ToggleNewProjectWin() {
     show_new_project_window = true;
 }
 
-void ProjectSelectionScene::OpenPrevProjectWin() {
+void ProjectSelectionScene::ToggleOpenProjectWin() {
     open_prev_project_window = true;
+}
+
+void ProjectSelectionScene::OpenProject() {
     current_project_handler->ReloadProjects();
+    explorer.SetRootDirectory(current_project_handler->project_path);
+    explorer.Initialize();
 }
 
 
@@ -71,10 +77,10 @@ void ProjectSelectionScene::OnFrameUpdate() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New Project", "Ctrl+N")) {
-                OpenNewProjectWin();
+                ToggleNewProjectWin();
             }
             if (ImGui::MenuItem("Open Project", "Ctrl+O")) {
-                OpenPrevProjectWin();
+                ToggleOpenProjectWin();
             }
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
             if (ImGui::MenuItem("Quit", "Ctrl+Q")) {
@@ -84,6 +90,15 @@ void ProjectSelectionScene::OnFrameUpdate() {
 
             ImGui::EndMenu();
         }
+
+        if (ImGui::BeginMenu("Windows")) {
+            if (ImGui::MenuItem("FileExplorer", "", explorer.IsShown())) {
+                explorer.Toggle();
+            }
+
+            ImGui::EndMenu();
+        }
+
         ImGui::EndMainMenuBar();
     }
 
@@ -98,7 +113,7 @@ void ProjectSelectionScene::OnFrameUpdate() {
             ImGui::InputText("Project Name", new_project_name, STR_LEN, ImGuiInputTextFlags_CharsNoBlank, nullptr, nullptr);
             ImGui::InputText("Directory", project_directory, STR_LEN, ImGuiInputTextFlags_CharsNoBlank, nullptr, nullptr);
             if (ImGui::Button("Create")) {
-                CreateNewProject();
+                CreateProject();
             } 
             ImGui::End();
         }
@@ -147,13 +162,15 @@ void ProjectSelectionScene::OnFrameUpdate() {
 
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport()->ID);
 
-        if (ImGui::Begin("File Explorer")) {
-            ImGui::End();
-        }
+        explorer.Draw();
+
         if (ImGui::Begin("Project Tree")) {
             ImGui::End();
         }
         if (ImGui::Begin("Object Properties")) {
+            ImGui::End();
+        }
+        if (ImGui::Begin("Game Preview")) {
             ImGui::End();
         }
         
@@ -164,13 +181,11 @@ void ProjectSelectionScene::OnFrameUpdate() {
 void ProjectSelectionScene::OnTickUpdate() {
     if (IsKeyPressed(SAPP_KEYCODE_LEFT_CONTROL) || IsKeyPressed(SAPP_KEYCODE_RIGHT_CONTROL)) {
         if (IsKeyPressed(SAPP_KEYCODE_N)) {
-            OpenNewProjectWin();
-        }
-        if (IsKeyPressed(SAPP_KEYCODE_Q)) {
+            ToggleNewProjectWin();
+        } else if (IsKeyPressed(SAPP_KEYCODE_Q)) {
             QuitProgram();
-        }
-        if (IsKeyPressed(SAPP_KEYCODE_O)) {
-            OpenPrevProjectWin();
+        } else if (IsKeyPressed(SAPP_KEYCODE_O)) {
+            ToggleOpenProjectWin();
         }
     }
 }

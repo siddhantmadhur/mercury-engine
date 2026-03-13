@@ -1,12 +1,14 @@
 /**
 * editor_project.hh
 *
-* This handles selecting a project and loading it for the next scene
+* The main engine editor scene which handles calling other functions to form the 
+* basis of the application via its windows. 
 *
 **/
 #ifndef PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 #define PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 
+#include "panel/file_explorer.hh"
 #include <editor_windows/editor_scene.hh>
 #include <memory>
 #include <project_handler/project_handler.hh>
@@ -20,13 +22,14 @@ public:
     void OnFrameUpdate() override;
     void OnTickUpdate() override;
     void OnDestroy() override;
-    
-    void CreateNewProject();
-    void OpenNewProjectWin();
-    void OpenPrevProjectWin();
-    void QuitProgram();
 
 private:
+    void CreateProject(); // Creates new project files
+    void OpenProject(); // Opens project files
+
+    void ToggleNewProjectWin(); // Toggles the wizard window to create a project
+    void ToggleOpenProjectWin(); // Toggles the wizard window to open a project
+    void QuitProgram();
 
     std::unique_ptr<ProjectHandler> current_project_handler;
    
@@ -36,7 +39,9 @@ private:
     char* project_directory;
     
     std::string imgui_configuration_path;
+
+    FileExplorer explorer;
 };
-}
+} // namespace Pequod
 
 #endif

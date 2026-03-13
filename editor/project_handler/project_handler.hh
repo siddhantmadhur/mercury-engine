@@ -1,9 +1,9 @@
 /**
 * project_handler.hh
 *
-* this file is responsible for creating and parsing *project* information
+* This file is responsible for creating and parsing *project* information
 * 
-* that information pertains to what version a project was made on, what
+* That information pertains to what version a project was made on, what
 * scene it includes etc.
 *
 **/

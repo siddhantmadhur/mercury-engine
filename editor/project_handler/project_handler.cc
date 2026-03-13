@@ -34,7 +34,7 @@ void ProjectHandler::Save() {}
 void ProjectHandler::ReloadProjects() {
     projects_list.clear();
     for (const auto& file : fs::directory_iterator(directory_path)) {
-        PDebug::info(std::format("PATH: {}", file.path().string()));
+        //PDebug::info(std::format("PATH: {}", file.path().string()));
         if (file.path().string().ends_with(".pdproj")) {
             projects_list.push_back(file.path());
         }

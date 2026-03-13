@@ -24,12 +24,15 @@ class Editor {
 public:
     Editor(EditorScene& init_scene); 
 
+    //@{
     /**
     * These functions are to manage the main editor instance
     **/
     void InitializeEditor();
     void SetScene(EditorScene& scene);
+    //@}
 
+    //@{
     /**
     * These sokol_* functions are only to be used inside of sokol functions with 
     * no extension
@@ -38,16 +41,19 @@ public:
     void sokol_frame_cb();
     void sokol_cleanup();
     void sokol_event(const sapp_event* event);
+    // @}
 
 
 private:
     EditorScene &currentScene;
-    
+   
+    //@{
     /**
     * These are variables only required by sokol calls; goal is to phase them 
     * out for a custom impl
     **/
     sg_pass_action pass_action;
+    //@}
 };
 
 };
