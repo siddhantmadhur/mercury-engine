@@ -12,6 +12,11 @@ void EditorScene::OnDestroyInternal() {
 }
 
 void EditorScene::InitializeScene() {
+
+    //game_scene = new BreakoutScene();
+    //game_scene->Init();
+    //game_scene->OnStart();
+
     this->OnInitialLoad();
 }
 void EditorScene::OnEventInternal(const sapp_event* event) {
@@ -40,6 +45,7 @@ void EditorScene::OnFrameInternal() {
 
     OnFrameUpdate();
 }
+
 
 bool EditorScene::IsKeyPressed(sapp_keycode keycode) {
     if (this->pressed_keys.contains(keycode)) {

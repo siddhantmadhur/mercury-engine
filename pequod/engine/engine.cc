@@ -100,12 +100,7 @@ void PequodEngine::sokol_frame_cb() {
 
     const int width = sapp_width();
     const int height = sapp_height();
-    simgui_new_frame({ width, height, sapp_frame_duration(), sapp_dpi_scale() });
 
-    //ImGui::ShowDemoWindow();
-    if (show_debug_stats) {
-        LoadMainMenuBar();
-    }
 
     delta_t = stm_ms(stm_laptime(&frame_time));
     currentScene->SetDelta(delta_t);
@@ -136,35 +131,16 @@ void PequodEngine::sokol_frame_cb() {
         }
     }
 
-    if (show_debug_stats) {
-        if (ticks % 20 == 0) {
-            fps = 1000.0 / delta_t;
-        }
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus ;
-        ImGuiIO& io = ImGui::GetIO();
-        ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
-        if (ImGui::Begin("Status", NULL, flags))
-        {
-            ImGui::Text("FPS: %d", fps);
-            ImGui::SameLine();
-            ImGui::Text("Frametime: %.2fms", delta_t);
-            ImGui::SameLine();
-            ImGui::Text("tps: %.2f", std::ceil(ticks / (total_t / 1000)));
-            ImGui::End();
-        }
-    }
-
     if (currentScene) {
         currentScene->Render(width, height);
     } else {
         throw std::invalid_argument("current scene not provided");
     }
 
-    simgui_render();
    
-    sg_end_pass();
+    //sg_end_pass();
     
-    sg_commit();
+    //sg_commit();
 }
 
 bool PequodEngine::isShowDebugStats() {
@@ -176,8 +152,8 @@ void PequodEngine::sokol_cleanup() {
         currentScene->OnEnd();
         currentScene->Deinit();
     }
-    simgui_shutdown();
-    sg_shutdown();
+    //simgui_shutdown();
+    //sg_shutdown();
 }
 
 void PequodEngine::sokol_event(const sapp_event *event) {

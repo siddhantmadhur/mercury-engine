@@ -46,11 +46,7 @@ in float use_texture;
 out vec4 FragColor;
 
 void main() {
-    if (use_texture > 0.5) {
-        FragColor = texture(sampler2D(tex, smp), uv) * color;
-    } else {
-        FragColor = color;
-    }
+    FragColor = color;
 }
 
 @end

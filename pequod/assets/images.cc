@@ -6,8 +6,8 @@ Image::Image(std::string pathname) {
     raw_data = stbi_load(
         pathname.c_str(), &x, &y, &channels, 4)  ;
     if (raw_data) {
-        PDebug::info("loaded image...");
+        PDebug::info("Loaded image...");
     } else {
-        PDebug::error("could not load image...");
+        PDebug::error("Could not load image...");
     }
 }

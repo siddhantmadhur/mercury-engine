@@ -35,10 +35,43 @@ void ProjectSelectionScene::OnInitialLoad() {
         current_project_handler->Load(proj[0]);
         OpenProject();
 
+
+        game_preview.Show();
+
 #endif
     }
 
 
+}
+
+static void imgui_callback(const ImDrawList* dl, const ImDrawCmd* cmd) {
+    Scene** scene_ptr = (Scene**) cmd->UserCallbackData;
+    if (scene_ptr) {
+        PDebug::warn("Callback ptr is none.");
+        Scene *cur_scene = *scene_ptr;
+        if (!cur_scene) {
+            return;
+        }
+
+        const int cx = (int) cmd->ClipRect.x;
+        const int cy = (int) cmd->ClipRect.y;
+        const int cw = (int) (cmd->ClipRect.z - cmd->ClipRect.x);
+        const int ch = (int) (cmd->ClipRect.w - cmd->ClipRect.y);
+        sg_apply_scissor_rect(cx, cy, cw, ch, true);
+        //sg_apply_viewport(cx, cy, cw, cw * (16.0f / 9.0f), true);
+
+        cur_scene->Render(cw, ch);
+
+    }
+
+ 
+}
+
+void ProjectSelectionScene::RenderScenePreview(Scene** scene) {
+    ImGui::Begin("GamePreview");
+    auto *dl = ImGui::GetWindowDrawList();
+    dl->AddCallback(imgui_callback, scene);
+    ImGui::End();
 }
 
 void ProjectSelectionScene::OnEventUpdate(const sapp_event* event) {}
@@ -94,6 +127,9 @@ void ProjectSelectionScene::OnFrameUpdate() {
         if (ImGui::BeginMenu("Windows")) {
             if (ImGui::MenuItem("FileExplorer", "", explorer.IsShown())) {
                 explorer.Toggle();
+            }
+            if (ImGui::MenuItem("GamePreview", "", game_preview.IsShown())) {
+                game_preview.Toggle();
             }
 
             ImGui::EndMenu();
@@ -151,8 +187,6 @@ void ProjectSelectionScene::OnFrameUpdate() {
 
             ImGui::End();
         }
-
-
     }
 
 
@@ -163,14 +197,26 @@ void ProjectSelectionScene::OnFrameUpdate() {
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport()->ID);
 
         explorer.Draw();
-
-        if (ImGui::Begin("Project Tree")) {
+        //game_preview.Draw();
+            
+        {
+            ImGui::Begin("Nodes");
             ImGui::End();
         }
-        if (ImGui::Begin("Object Properties")) {
+        {
+            ImGui::Begin("ObjectProperties");
             ImGui::End();
         }
-        if (ImGui::Begin("Game Preview")) {
+        {
+            ImGui::Begin("TilesetEditor");
+            ImGui::End();
+        }
+        {
+            ImGui::Begin("Audio");
+            ImGui::End();
+        }
+        {
+            ImGui::Begin("Console");
             ImGui::End();
         }
         

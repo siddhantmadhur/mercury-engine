@@ -2,9 +2,12 @@
 
 #include "assets/images.hh"
 #include "ecs/ecs.hh"
+#include "ecs/entity.hh"
 #include "gameobjects/camera.hh"
+#include "gameobjects/quad.hh"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/ext/vector_float4.hpp"
 #include <sokol/sokol_log.h>
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_glue.h>
@@ -42,8 +45,8 @@ void Scene::Deinit() {
         **/
     sg_destroy_buffer(bind.vertex_buffers[0]);
     sg_destroy_buffer(bind.index_buffer);
-    sg_destroy_view(bind.views[VIEW_tex]);
-    sg_destroy_sampler(bind.samplers[SMP_smp]);
+    //sg_destroy_view(bind.views[VIEW_tex]);
+    //sg_destroy_sampler(bind.samplers[SMP_smp]);
 }
 
 void Scene::handleKeys(const sapp_event* event) {
@@ -60,15 +63,17 @@ void Scene::Init() {
     Image wall_texture = Image("assets/wall.jpg");
 
  
-    bind.views[VIEW_tex] = sg_alloc_view();
+    //bind.views[VIEW_tex] = sg_alloc_view();
 
-    //state.bind.images[IMG_tex] = sg_alloc_image();
+    //bind.images[IMG_tex] = sg_alloc_image();
 
+    /**
     bind.samplers[SMP_smp] = sg_make_sampler((sg_sampler_desc){
         .min_filter = SG_FILTER_LINEAR,
         .mag_filter = SG_FILTER_LINEAR,
         .label = "jpg-sampler",
     });
+    **/
 
     sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
@@ -125,12 +130,15 @@ void Scene::Init() {
         .ptr = wall_texture.raw_data,
         .size = (size_t) wall_texture.x * wall_texture.y * 4,
     };
+   
+    /**
     sg_image img = sg_make_image(img_desc);
 
     sg_init_view(bind.views[VIEW_tex], (sg_view_desc){
         .texture = { .image = img },
         .label = "jpg-texture-view",
     });
+    **/
 
     ecs.initializeJolt();
 }
@@ -151,14 +159,17 @@ void Scene::Render(float width, float height) {
 
     ecs.setupRender(bind);
 
+    /**
     sg_begin_pass((sg_pass){
         .action = pass_action,
         .swapchain = sglue_swapchain(),
     });
+    **/
 
     sg_apply_pipeline(pip);
     
     sg_apply_bindings(bind);
+
 
     sg_apply_uniforms(UB_cam_params, SG_RANGE(params));
 

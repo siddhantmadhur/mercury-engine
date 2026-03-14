@@ -1,5 +1,6 @@
 #include "editor_main.hh"
 #include "imgui/imgui.h"
+#include "panel/game_preview.hh"
 
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_glue.h>
@@ -24,14 +25,20 @@ void Editor::SetScene(EditorScene& scene) {
 }
 
 void Editor::sokol_init() {
-    sg_desc desc = (sg_desc) {
+
+    sg_setup((sg_desc){
         .logger = {
             .func = slog_func,
         },
         .environment = sglue_environment(),
-    };
+    });
 
     stm_setup();
+    
+    simgui_desc_t simgui_desc = { };
+    simgui_desc.logger.func = slog_func;
+    simgui_setup(&simgui_desc);
+
 
     float gray = 73.0f / 255.0f;
     pass_action.colors[0] = {
@@ -39,15 +46,11 @@ void Editor::sokol_init() {
         .clear_value = { gray, gray, gray, 1.0f },
     };
 
-    sg_setup(&desc);
+    game_scene = new BreakoutScene();
+    game_scene->Init();
+    game_scene->OnStart();
 
-    simgui_desc_t simgui_desc = {
-        .logger = {
-            .func = slog_func,
-        }
-    };
-
-    simgui_setup(&simgui_desc);
+    currentScene.InitializeScene();
 
 }
 
@@ -56,17 +59,18 @@ void Editor::sokol_frame_cb() {
     const int height = sapp_height();
 
 
-    sg_begin_pass((sg_pass){
-        .action = pass_action,
-        .swapchain = sglue_swapchain(),
-    });
 
     simgui_new_frame({ width, height, sapp_frame_duration(), sapp_dpi_scale() });
 
     { 
         currentScene.OnFrameInternal();
+        currentScene.RenderScenePreview((Scene**) &game_scene);
     }
     
+    sg_begin_pass((sg_pass){
+        .action = game_scene->pass_action,
+        .swapchain = sglue_swapchain(),
+    });
     simgui_render();
 
     sg_end_pass();

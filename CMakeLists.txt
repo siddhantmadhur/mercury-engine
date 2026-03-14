@@ -88,9 +88,9 @@ target_link_libraries(pequod_editor pequod)
 #add_executable(pong ${PONG_SRC})
 #target_link_libraries(pong pequod)
 
-#file(GLOB_RECURSE BREAKOUT_SRC "20-games-challenge/breakout/*.cc")
-#add_executable(breakout ${BREAKOUT_SRC})
-#target_link_libraries(breakout pequod)
+file(GLOB_RECURSE BREAKOUT_SRC "20-games-challenge/breakout/*.cc")
+add_executable(breakout ${BREAKOUT_SRC})
+target_link_libraries(breakout pequod)
 
 #file(GLOB_RECURSE SPACE_INVADERS_SRC "20-games-challenge/space_invaders/*.cc")
 #add_executable(spaceinvaders ${SPACE_INVADERS_SRC})

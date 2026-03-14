@@ -1,6 +1,8 @@
 #ifndef EDITOR_SCENE_IMPL_HH_
 #define EDITOR_SCENE_IMPL_HH_
 
+#include "engine/scene.hh"
+#include "panel/game_preview.hh"
 #include <cstdint>
 #include <sokol/sokol_app.h>
 #include <unordered_map>
@@ -29,6 +31,9 @@ public:
     void OnEventInternal(const sapp_event* event);     
     void OnFrameInternal();
     void OnDestroyInternal();
+    virtual void RenderScenePreview(Scene** scene) =0;
+    
+    //BreakoutScene *game_scene;
 
 protected:
     uint64_t current_tick;

@@ -8,7 +8,9 @@
 #ifndef PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 #define PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 
+#include "engine/scene.hh"
 #include "panel/file_explorer.hh"
+#include "panel/game_preview.hh"
 #include <editor_windows/editor_scene.hh>
 #include <memory>
 #include <project_handler/project_handler.hh>
@@ -22,6 +24,8 @@ public:
     void OnFrameUpdate() override;
     void OnTickUpdate() override;
     void OnDestroy() override;
+    void RenderScenePreview(Scene** scene) override;
+
 
 private:
     void CreateProject(); // Creates new project files
@@ -41,6 +45,9 @@ private:
     std::string imgui_configuration_path;
 
     FileExplorer explorer;
+    GamePreview game_preview;
+
+
 };
 } // namespace Pequod
 
