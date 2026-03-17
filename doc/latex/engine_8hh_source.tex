@@ -1,0 +1,48 @@
+\doxysection{engine.\+hh}
+\hypertarget{engine_8hh_source}{}\label{engine_8hh_source}\index{pequod/engine/engine.hh@{pequod/engine/engine.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ MERCURY\_ENGINE\_IMPL\_HH}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ MERCURY\_ENGINE\_IMPL\_HH}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ }
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <condition\_variable>}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <cstdint>}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <engine/scene.hh>}}
+\DoxyCodeLine{00008\ }
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <sokol/sokol\_app.h>}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <sokol/sokol\_gfx.h>}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ <thread>}}
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00013\ }
+\DoxyCodeLine{00014\ \textcolor{comment}{//\#include\ <engine/engine.cc>}}
+\DoxyCodeLine{00015\ }
+\DoxyCodeLine{00016\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classPequodEngine}{PequodEngine}}}
+\DoxyCodeLine{00017\ \{}
+\DoxyCodeLine{00018\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00019\ \ \ \ \ \mbox{\hyperlink{classPequodEngine}{PequodEngine}}();}
+\DoxyCodeLine{00020\ \ \ \ \ \textcolor{keywordtype}{void}\ startUp();}
+\DoxyCodeLine{00021\ \ \ \ \ \textcolor{keywordtype}{void}\ SetScene(\mbox{\hyperlink{classScene}{Scene}}*\ scene);}
+\DoxyCodeLine{00022\ \ \ \ \ \textcolor{keywordtype}{void}\ sokol\_init();}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{keywordtype}{void}\ sokol\_frame\_cb();}
+\DoxyCodeLine{00024\ \ \ \ \ \textcolor{keywordtype}{void}\ sokol\_cleanup();}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keywordtype}{void}\ sokol\_event(\textcolor{keyword}{const}\ sapp\_event*\ event);}
+\DoxyCodeLine{00026\ \ \ \ \ uint64\_t\ getTicks();}
+\DoxyCodeLine{00027\ \ \ \ \ std::condition\_variable\ ticks\_cv;}
+\DoxyCodeLine{00028\ \ \ \ \ \textcolor{keywordtype}{bool}\ isShowDebugStats();}
+\DoxyCodeLine{00029\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00030\ \ \ \ \ uint64\_t\ ticks;}
+\DoxyCodeLine{00031\ \ \ \ \ uint64\_t\ last\_tick;}
+\DoxyCodeLine{00032\ \ \ \ \ uint64\_t\ frame\_time;}
+\DoxyCodeLine{00033\ \ \ \ \ uint64\_t\ tick\_frame\_time;}
+\DoxyCodeLine{00034\ \ \ \ \ \textcolor{keywordtype}{double}\ tick\_t;}
+\DoxyCodeLine{00035\ \ \ \ \ \textcolor{keywordtype}{double}\ delta\_t;}
+\DoxyCodeLine{00036\ \ \ \ \ uint8\_t\ fps;}
+\DoxyCodeLine{00037\ \ \ \ \ \textcolor{keywordtype}{double}\ total\_t;}
+\DoxyCodeLine{00038\ \ \ \ \ \mbox{\hyperlink{classScene}{Scene}}\ *currentScene;}
+\DoxyCodeLine{00039\ \ \ \ \ \textcolor{keywordtype}{bool}\ show\_debug\_stats\ =\ \textcolor{keyword}{true};}
+\DoxyCodeLine{00040\ \};}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

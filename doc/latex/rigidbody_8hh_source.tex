@@ -1,0 +1,50 @@
+\doxysection{rigidbody.\+hh}
+\hypertarget{rigidbody_8hh_source}{}\label{rigidbody_8hh_source}\index{pequod/rigidbody/rigidbody.hh@{pequod/rigidbody/rigidbody.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#ifndef\ PEQUOD\_RIGIDBODY\_IMPL\_HH\_}}
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#define\ PEQUOD\_RIGIDBODY\_IMPL\_HH\_}}
+\DoxyCodeLine{00014\ }
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ <Jolt/Jolt.h>}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ "{}Jolt/Physics/Body/AllowedDOFs.h"{}}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ "{}Jolt/Physics/Body/BodyCreationSettings.h"{}}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#include\ "{}Jolt/Physics/Body/MotionType.h"{}}}
+\DoxyCodeLine{00019\ \textcolor{preprocessor}{\#include\ "{}ecs/entity.hh"{}}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#include\ "{}glm/fwd.hpp"{}}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{keyword}{namespace\ }\mbox{\hyperlink{namespaceLayers}{Layers}}}
+\DoxyCodeLine{00024\ \{}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ JPH::ObjectLayer\ NON\_MOVING\ =\ 0;}
+\DoxyCodeLine{00026\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ JPH::ObjectLayer\ MOVING\ =\ 1;}
+\DoxyCodeLine{00027\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keyword}{constexpr}\ JPH::ObjectLayer\ NUM\_LAYERS\ =\ 2;}
+\DoxyCodeLine{00028\ \};}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ }
+\DoxyCodeLine{00031\ \textcolor{keyword}{enum}\ CollisionStatus\ \{}
+\DoxyCodeLine{00032\ \ \ \ \ JUST\_ACTIVE\ =\ 0,}
+\DoxyCodeLine{00033\ \ \ \ \ ACTIVE\ =\ 0,}
+\DoxyCodeLine{00034\ \ \ \ \ INACTIVE\ =\ 0,}
+\DoxyCodeLine{00035\ \};}
+\DoxyCodeLine{00036\ }
+\DoxyCodeLine{00037\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classRigidBody}{RigidBody}}\ \{}
+\DoxyCodeLine{00038\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00039\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnCollisionEnter(entity\_id)\ =0;}
+\DoxyCodeLine{00040\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnCollision(entity\_id)\ =0;}
+\DoxyCodeLine{00041\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnCollisionLeave(entity\_id)\ =0;}
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00043\ \ \ \ \ JPH::BodyCreationSettings\ getBodyCreationSettings();}
+\DoxyCodeLine{00044\ \ \ \ \ entity\_id\ id;}
+\DoxyCodeLine{00045\ \ \ \ \ JPH::BodyID\ jolt\_id;}
+\DoxyCodeLine{00046\ \ \ \ \ JPH::EAllowedDOFs\ allowed\_dofs\ =\ JPH::EAllowedDOFs::Plane2D;}
+\DoxyCodeLine{00047\ \ \ \ \ JPH::Body*\ body;}
+\DoxyCodeLine{00048\ \textcolor{keyword}{protected}:\ \ \ \ \ }
+\DoxyCodeLine{00049\ \ \ \ \ JPH::BodyCreationSettings\ creationSettings;}
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \};}
+\DoxyCodeLine{00052\ }
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

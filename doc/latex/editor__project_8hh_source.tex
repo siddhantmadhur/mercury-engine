@@ -1,0 +1,54 @@
+\doxysection{editor\+\_\+project.\+hh}
+\hypertarget{editor__project_8hh_source}{}\label{editor__project_8hh_source}\index{editor/project\_handler/editor\_project.hh@{editor/project\_handler/editor\_project.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#ifndef\ PEQUOD\_EDITOR\_PROJECT\_SCENE\_IMPL\_HH\_}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#define\ PEQUOD\_EDITOR\_PROJECT\_SCENE\_IMPL\_HH\_}}
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ "{}engine/scene.hh"{}}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#include\ "{}panel/file\_explorer.hh"{}}}
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#include\ "{}panel/game\_preview.hh"{}}}
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#include\ <editor\_windows/editor\_scene.hh>}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ <memory>}}
+\DoxyCodeLine{00016\ \textcolor{preprocessor}{\#include\ <project\_handler/project\_handler.hh>}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#include\ <string>}}
+\DoxyCodeLine{00018\ }
+\DoxyCodeLine{00019\ \textcolor{keyword}{namespace\ }\mbox{\hyperlink{namespacePequod}{Pequod}}\ \{}
+\DoxyCodeLine{00020\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classPequod_1_1ProjectSelectionScene}{ProjectSelectionScene}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{classPequod_1_1EditorScene}{EditorScene}}\ \{}
+\DoxyCodeLine{00021\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00022\ \ \ \ \ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPequod_1_1ProjectSelectionScene_a32228ea3d762e3a87dcc445fa58bef4d}{OnInitialLoad}}()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{keywordtype}{void}\ OnEventUpdate(\textcolor{keyword}{const}\ sapp\_event*\ event)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00024\ \ \ \ \ \textcolor{keywordtype}{void}\ OnFrameUpdate()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keywordtype}{void}\ OnTickUpdate()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00026\ \ \ \ \ \textcolor{keywordtype}{void}\ OnDestroy()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00027\ \ \ \ \ \textcolor{keywordtype}{void}\ RenderScenePreview(\mbox{\hyperlink{classScene}{Scene}}**\ scene)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00031\ \ \ \ \ \textcolor{keywordtype}{void}\ CreateProject();\ \textcolor{comment}{//\ Creates\ new\ project\ files}}
+\DoxyCodeLine{00032\ \ \ \ \ \textcolor{keywordtype}{void}\ OpenProject();\ \textcolor{comment}{//\ Opens\ project\ files}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \ \ \ \ \textcolor{keywordtype}{void}\ ToggleNewProjectWin();\ \textcolor{comment}{//\ Toggles\ the\ wizard\ window\ to\ create\ a\ project}}
+\DoxyCodeLine{00035\ \ \ \ \ \textcolor{keywordtype}{void}\ ToggleOpenProjectWin();\ \textcolor{comment}{//\ Toggles\ the\ wizard\ window\ to\ open\ a\ project}}
+\DoxyCodeLine{00036\ \ \ \ \ \textcolor{keywordtype}{void}\ QuitProgram();}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \ \ \ \ std::unique\_ptr<ProjectHandler>\ current\_project\_handler;}
+\DoxyCodeLine{00039\ \ \ \ }
+\DoxyCodeLine{00040\ \ \ \ \ \textcolor{keywordtype}{bool}\ show\_new\_project\_window\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00041\ \ \ \ \ \textcolor{keywordtype}{bool}\ open\_prev\_project\_window\ =\ \textcolor{keyword}{false};}
+\DoxyCodeLine{00042\ \ \ \ \ \textcolor{keywordtype}{char}*\ new\_project\_name;}
+\DoxyCodeLine{00043\ \ \ \ \ \textcolor{keywordtype}{char}*\ project\_directory;}
+\DoxyCodeLine{00044\ \ \ \ \ }
+\DoxyCodeLine{00045\ \ \ \ \ std::string\ imgui\_configuration\_path;}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \ \ \ \ \mbox{\hyperlink{classPequod_1_1FileExplorer}{FileExplorer}}\ explorer;}
+\DoxyCodeLine{00048\ \ \ \ \ \mbox{\hyperlink{classPequod_1_1GamePreview}{GamePreview}}\ game\_preview;}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ }
+\DoxyCodeLine{00051\ \};}
+\DoxyCodeLine{00052\ \}\ \textcolor{comment}{//\ namespace\ Pequod}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

@@ -1,0 +1,36 @@
+\doxysection{Position Class Reference}
+\hypertarget{classPosition}{}\label{classPosition}\index{Position@{Position}}
+
+
+{\ttfamily \#include $<$position.\+hh$>$}
+
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{classPosition_a7105ad9eb5ad7406e4513cceb08b164c}\label{classPosition_a7105ad9eb5ad7406e4513cceb08b164c} 
+{\bfseries Position} (glm\+::vec3 position=glm\+::vec3(0.\+0f))
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{classPosition_ae5de349e98071de8c537753ef7986299}\label{classPosition_ae5de349e98071de8c537753ef7986299} 
+glm\+::vec3 {\bfseries raw\+\_\+position}
+\item 
+\Hypertarget{classPosition_a3ff70abe13fd81eb0434132289ad4c80}\label{classPosition_a3ff70abe13fd81eb0434132289ad4c80} 
+glm\+::vec3 {\bfseries position}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\doxylink{position_8hh_source}{position.\+hh}
+
+A physics based component for the \doxylink{classECS}{ECS} The way it is supposed to work is that there is a raw\+\_\+position that is set per tick
+
+The issue with that is that since theres only 20 ticks in a second, the game effectively looks like 20fps if you render the position
+
+So the position value is interpolated to play between those ticks and thus looks smooth 
+
+The documentation for this class was generated from the following files\+:\begin{DoxyCompactItemize}
+\item 
+pequod/ecs/position.\+hh\item 
+pequod/ecs/position.\+cc\end{DoxyCompactItemize}

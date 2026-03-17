@@ -1,0 +1,27 @@
+\doxysection{box2d.\+hh}
+\hypertarget{box2d_8hh_source}{}\label{box2d_8hh_source}\index{pequod/rigidbody/box2d.hh@{pequod/rigidbody/box2d.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#ifndef\ PEQUOD\_RIGIDBODY\_BOX2D\_IMPL\_HH\_}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#define\ PEQUOD\_RIGIDBODY\_BOX2D\_IMPL\_HH\_}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <Jolt/Jolt.h>}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ "{}Jolt/Physics/Body/Body.h"{}}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ "{}glm/fwd.hpp"{}}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <rigidbody/rigidbody.hh>}}
+\DoxyCodeLine{00011\ }
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00013\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classBox2D}{Box2D}}\ :\ \textcolor{keyword}{public}\ \mbox{\hyperlink{classRigidBody}{RigidBody}}\ \{}
+\DoxyCodeLine{00014\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00015\ \ \ \ \ \mbox{\hyperlink{classBox2D}{Box2D}}(glm::vec2\ position,\ glm::vec2\ size);\ \textcolor{comment}{//\ position\ is\ center\ of\ mass}}
+\DoxyCodeLine{00016\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnCollisionEnter(entity\_id)\ =0;}
+\DoxyCodeLine{00017\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnCollision(entity\_id)\ =0;}
+\DoxyCodeLine{00018\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnCollisionLeave(entity\_id)\ =0;}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00021\ \};}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

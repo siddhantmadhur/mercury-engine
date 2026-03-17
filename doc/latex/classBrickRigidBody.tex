@@ -1,0 +1,85 @@
+\doxysection{Brick\+Rigid\+Body Class Reference}
+\hypertarget{classBrickRigidBody}{}\label{classBrickRigidBody}\index{BrickRigidBody@{BrickRigidBody}}
+Inheritance diagram for Brick\+Rigid\+Body\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=3.000000cm]{classBrickRigidBody}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{classBrickRigidBody_a22eb8c163ffe5f2ec427106ea8d0c417}\label{classBrickRigidBody_a22eb8c163ffe5f2ec427106ea8d0c417} 
+{\bfseries Brick\+Rigid\+Body} (glm\+::vec2 pos, glm\+::vec2 size)
+\item 
+void \mbox{\hyperlink{classBrickRigidBody_a4d3d539e04ba798b8b524431e1f0f7dc}{On\+Collision\+Enter}} (entity\+\_\+id) override
+\item 
+void \mbox{\hyperlink{classBrickRigidBody_ac3368896de364a3abed102f12d7d709f}{On\+Collision}} (entity\+\_\+id) override
+\item 
+void \mbox{\hyperlink{classBrickRigidBody_acabbd847b83ed2465a5607e864d1420d}{On\+Collision\+Leave}} (entity\+\_\+id) override
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{classBox2D}{Box2D}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Box2D} (glm\+::vec2 position, glm\+::vec2 size)
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{classRigidBody}{Rigid\+Body}}}
+\begin{DoxyCompactItemize}
+\item 
+JPH\+::\+Body\+Creation\+Settings {\bfseries get\+Body\+Creation\+Settings} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Additional Inherited Members}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{classRigidBody}{Rigid\+Body}}}
+\begin{DoxyCompactItemize}
+\item 
+entity\+\_\+id {\bfseries id}
+\item 
+JPH\+::\+Body\+ID {\bfseries jolt\+\_\+id}
+\item 
+JPH\+::\+EAllowed\+DOFs {\bfseries allowed\+\_\+dofs} = JPH\+::\+EAllowed\+DOFs\+::\+Plane2D
+\item 
+JPH\+::\+Body \texorpdfstring{$\ast$}{*} {\bfseries body}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{classRigidBody}{Rigid\+Body}}}
+\begin{DoxyCompactItemize}
+\item 
+JPH\+::\+Body\+Creation\+Settings {\bfseries creation\+Settings}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\Hypertarget{classBrickRigidBody_ac3368896de364a3abed102f12d7d709f}\index{BrickRigidBody@{BrickRigidBody}!OnCollision@{OnCollision}}
+\index{OnCollision@{OnCollision}!BrickRigidBody@{BrickRigidBody}}
+\doxysubsubsection{\texorpdfstring{OnCollision()}{OnCollision()}}
+{\footnotesize\ttfamily \label{classBrickRigidBody_ac3368896de364a3abed102f12d7d709f} 
+void Brick\+Rigid\+Body\+::\+On\+Collision (\begin{DoxyParamCaption}\item[{entity\+\_\+id}]{}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [override]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{classBox2D}{Box2D}}.
+
+\Hypertarget{classBrickRigidBody_a4d3d539e04ba798b8b524431e1f0f7dc}\index{BrickRigidBody@{BrickRigidBody}!OnCollisionEnter@{OnCollisionEnter}}
+\index{OnCollisionEnter@{OnCollisionEnter}!BrickRigidBody@{BrickRigidBody}}
+\doxysubsubsection{\texorpdfstring{OnCollisionEnter()}{OnCollisionEnter()}}
+{\footnotesize\ttfamily \label{classBrickRigidBody_a4d3d539e04ba798b8b524431e1f0f7dc} 
+void Brick\+Rigid\+Body\+::\+On\+Collision\+Enter (\begin{DoxyParamCaption}\item[{entity\+\_\+id}]{}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [override]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{classBox2D}{Box2D}}.
+
+\Hypertarget{classBrickRigidBody_acabbd847b83ed2465a5607e864d1420d}\index{BrickRigidBody@{BrickRigidBody}!OnCollisionLeave@{OnCollisionLeave}}
+\index{OnCollisionLeave@{OnCollisionLeave}!BrickRigidBody@{BrickRigidBody}}
+\doxysubsubsection{\texorpdfstring{OnCollisionLeave()}{OnCollisionLeave()}}
+{\footnotesize\ttfamily \label{classBrickRigidBody_acabbd847b83ed2465a5607e864d1420d} 
+void Brick\+Rigid\+Body\+::\+On\+Collision\+Leave (\begin{DoxyParamCaption}\item[{entity\+\_\+id}]{}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [override]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{classBox2D}{Box2D}}.
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+editor/panel/breakout\+\_\+scene.\+cc\end{DoxyCompactItemize}

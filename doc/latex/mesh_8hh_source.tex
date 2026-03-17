@@ -1,0 +1,34 @@
+\doxysection{mesh.\+hh}
+\hypertarget{mesh_8hh_source}{}\label{mesh_8hh_source}\index{pequod/ecs/mesh.hh@{pequod/ecs/mesh.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ PEQUOD\_MESH\_IMPL\_HH\_}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ PEQUOD\_MESH\_IMPL\_HH\_}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <cstdint>}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <vector>}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <glm/glm.hpp>}}
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00008\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structvertex__t}{vertex\_t}}\ \{}
+\DoxyCodeLine{00009\ \ \ \ \ \textcolor{keywordtype}{float}\ x,\ y,\ z;}
+\DoxyCodeLine{00010\ \ \ \ \ int16\_t\ u,\ v;}
+\DoxyCodeLine{00011\ \ \ \ \ \textcolor{keywordtype}{float}\ r,\ g,\ b,\ a;}
+\DoxyCodeLine{00012\ \}\ \mbox{\hyperlink{structvertex__t}{vertex\_t}};}
+\DoxyCodeLine{00013\ }
+\DoxyCodeLine{00014\ }
+\DoxyCodeLine{00015\ \textcolor{comment}{//\ TODO:\ allow\ two\ gameobjects\ to\ combine\ their\ vertices\ so\ that\ the\ no.\ of\ draw\ calls\ is\ reduced}}
+\DoxyCodeLine{00016\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classMesh}{Mesh}}\ \{}
+\DoxyCodeLine{00017\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00018\ \ \ \ \ \mbox{\hyperlink{classMesh}{Mesh}}(std::vector<vertex\_t>,\ std::vector<uint16\_t>,\ glm::vec3);}
+\DoxyCodeLine{00019\ \ \ \ \ \mbox{\hyperlink{classMesh}{\string~Mesh}}();}
+\DoxyCodeLine{00020\ \ \ \ \ std::vector<vertex\_t>\ vertices;}
+\DoxyCodeLine{00021\ \ \ \ \ std::vector<uint16\_t>\ indices;}
+\DoxyCodeLine{00022\ \ \ \ \ uint32\_t\ vertices\_id\ =\ 0;\ \ \ \textcolor{comment}{//\ the\ id\ to\ get\ this\ in\ the\ ECS\ vertex\ vector}}
+\DoxyCodeLine{00023\ \ \ \ \ uint32\_t\ indices\_id\ =\ 0;\ \ \ \ \textcolor{comment}{//\ \string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\string^\ indices\ vector}}
+\DoxyCodeLine{00024\ \ \ \ \ glm::vec3\ scale;}
+\DoxyCodeLine{00025\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00026\ \};}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

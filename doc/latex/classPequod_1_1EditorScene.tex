@@ -1,0 +1,73 @@
+\doxysection{Pequod\+::Editor\+Scene Class Reference}
+\hypertarget{classPequod_1_1EditorScene}{}\label{classPequod_1_1EditorScene}\index{Pequod::EditorScene@{Pequod::EditorScene}}
+Inheritance diagram for Pequod\+::Editor\+Scene\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=2.000000cm]{classPequod_1_1EditorScene}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{classPequod_1_1EditorScene_a75eac0af6e57d9c10782218c08263192}\label{classPequod_1_1EditorScene_a75eac0af6e57d9c10782218c08263192} 
+bool {\bfseries Is\+Key\+Pressed} (sapp\+\_\+keycode)
+\item 
+virtual void \mbox{\hyperlink{classPequod_1_1EditorScene_a4565b66b16ce1ba2f6e336a304fe8597}{On\+Initial\+Load}} ()=0
+\item 
+\Hypertarget{classPequod_1_1EditorScene_ad9246851fc291b5c0c2a1135f051e697}\label{classPequod_1_1EditorScene_ad9246851fc291b5c0c2a1135f051e697} 
+virtual void {\bfseries On\+Event\+Update} (const sapp\+\_\+event \texorpdfstring{$\ast$}{*}event)=0
+\item 
+\Hypertarget{classPequod_1_1EditorScene_a988fb884fe4af13056e3a2d7aab18f0b}\label{classPequod_1_1EditorScene_a988fb884fe4af13056e3a2d7aab18f0b} 
+virtual void {\bfseries On\+Frame\+Update} ()=0
+\item 
+\Hypertarget{classPequod_1_1EditorScene_a92d42d572c35a5d2063de337a16154c7}\label{classPequod_1_1EditorScene_a92d42d572c35a5d2063de337a16154c7} 
+virtual void {\bfseries On\+Tick\+Update} ()=0
+\item 
+\Hypertarget{classPequod_1_1EditorScene_af7c435db3698db113af9c33c26acafdc}\label{classPequod_1_1EditorScene_af7c435db3698db113af9c33c26acafdc} 
+virtual void {\bfseries On\+Destroy} ()=0
+\item 
+void \mbox{\hyperlink{classPequod_1_1EditorScene_a4afb1c272ba905068ffcb6e5dd68b79d}{Initialize\+Scene}} ()
+\item 
+\Hypertarget{classPequod_1_1EditorScene_a22402541a695051cdb829121f4b268c6}\label{classPequod_1_1EditorScene_a22402541a695051cdb829121f4b268c6} 
+void {\bfseries On\+Event\+Internal} (const sapp\+\_\+event \texorpdfstring{$\ast$}{*}event)
+\item 
+\Hypertarget{classPequod_1_1EditorScene_a5fe8fe9bb2a16034b8fe95b5d5edc6fc}\label{classPequod_1_1EditorScene_a5fe8fe9bb2a16034b8fe95b5d5edc6fc} 
+void {\bfseries On\+Frame\+Internal} ()
+\item 
+\Hypertarget{classPequod_1_1EditorScene_a97742d97e9d9b97e13bac09cbba13d06}\label{classPequod_1_1EditorScene_a97742d97e9d9b97e13bac09cbba13d06} 
+void {\bfseries On\+Destroy\+Internal} ()
+\item 
+\Hypertarget{classPequod_1_1EditorScene_ab0b912ffeb2aa342baab49181f950043}\label{classPequod_1_1EditorScene_ab0b912ffeb2aa342baab49181f950043} 
+virtual void {\bfseries Render\+Scene\+Preview} (\mbox{\hyperlink{classScene}{Scene}} \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}scene)=0
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{classPequod_1_1EditorScene_aae1f8765c68ed6f646450fa56fd7e86c}\label{classPequod_1_1EditorScene_aae1f8765c68ed6f646450fa56fd7e86c} 
+uint64\+\_\+t {\bfseries current\+\_\+tick}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\Hypertarget{classPequod_1_1EditorScene_a4afb1c272ba905068ffcb6e5dd68b79d}\index{Pequod::EditorScene@{Pequod::EditorScene}!InitializeScene@{InitializeScene}}
+\index{InitializeScene@{InitializeScene}!Pequod::EditorScene@{Pequod::EditorScene}}
+\doxysubsubsection{\texorpdfstring{InitializeScene()}{InitializeScene()}}
+{\footnotesize\ttfamily \label{classPequod_1_1EditorScene_a4afb1c272ba905068ffcb6e5dd68b79d} 
+void Pequod\+::\+Editor\+Scene\+::\+Initialize\+Scene (\begin{DoxyParamCaption}{}{}\end{DoxyParamCaption})}
+
+These functions are meant for the engine to interface with scenes directly. DO NOT EXTEND THESE FUNCTIONS \Hypertarget{classPequod_1_1EditorScene_a4565b66b16ce1ba2f6e336a304fe8597}\index{Pequod::EditorScene@{Pequod::EditorScene}!OnInitialLoad@{OnInitialLoad}}
+\index{OnInitialLoad@{OnInitialLoad}!Pequod::EditorScene@{Pequod::EditorScene}}
+\doxysubsubsection{\texorpdfstring{OnInitialLoad()}{OnInitialLoad()}}
+{\footnotesize\ttfamily \label{classPequod_1_1EditorScene_a4565b66b16ce1ba2f6e336a304fe8597} 
+virtual void Pequod\+::\+Editor\+Scene\+::\+On\+Initial\+Load (\begin{DoxyParamCaption}{}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [pure virtual]}}
+
+Extend these functions to create functionality in scenes 
+
+Implemented in \mbox{\hyperlink{classPequod_1_1ProjectSelectionScene_a32228ea3d762e3a87dcc445fa58bef4d}{Pequod\+::\+Project\+Selection\+Scene}}.
+
+
+
+The documentation for this class was generated from the following files\+:\begin{DoxyCompactItemize}
+\item 
+editor/editor\+\_\+windows/editor\+\_\+scene.\+hh\item 
+editor/editor\+\_\+windows/editor\+\_\+scene.\+cc\end{DoxyCompactItemize}

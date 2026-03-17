@@ -1,0 +1,49 @@
+\doxysection{editor\+\_\+scene.\+hh}
+\hypertarget{editor__scene_8hh_source}{}\label{editor__scene_8hh_source}\index{editor/editor\_windows/editor\_scene.hh@{editor/editor\_windows/editor\_scene.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ EDITOR\_SCENE\_IMPL\_HH\_}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ EDITOR\_SCENE\_IMPL\_HH\_}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ "{}engine/scene.hh"{}}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ "{}panel/game\_preview.hh"{}}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <cstdint>}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <sokol/sokol\_app.h>}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ <unordered\_map>}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <vector>}}
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{keyword}{namespace\ }\mbox{\hyperlink{namespacePequod}{Pequod}}\ \{}
+\DoxyCodeLine{00012\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classPequod_1_1EditorScene}{EditorScene}}\ \{}
+\DoxyCodeLine{00013\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00014\ \ \ \ \ \mbox{\hyperlink{classPequod_1_1EditorScene}{EditorScene}}();\ }
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keywordtype}{bool}\ IsKeyPressed(sapp\_keycode);}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00020\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPequod_1_1EditorScene_a4565b66b16ce1ba2f6e336a304fe8597}{OnInitialLoad}}()\ =0;}
+\DoxyCodeLine{00021\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnEventUpdate(\textcolor{keyword}{const}\ sapp\_event*\ event)\ =0;}
+\DoxyCodeLine{00022\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnFrameUpdate()\ =0;}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnTickUpdate()\ =0;}
+\DoxyCodeLine{00024\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnDestroy()=0;}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00030\ \ \ \ \ \textcolor{keywordtype}{void}\ \mbox{\hyperlink{classPequod_1_1EditorScene_a4afb1c272ba905068ffcb6e5dd68b79d}{InitializeScene}}();}
+\DoxyCodeLine{00031\ \ \ \ \ \textcolor{keywordtype}{void}\ OnEventInternal(\textcolor{keyword}{const}\ sapp\_event*\ event);\ \ \ \ \ }
+\DoxyCodeLine{00032\ \ \ \ \ \textcolor{keywordtype}{void}\ OnFrameInternal();}
+\DoxyCodeLine{00033\ \ \ \ \ \textcolor{keywordtype}{void}\ OnDestroyInternal();}
+\DoxyCodeLine{00034\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ RenderScenePreview(\mbox{\hyperlink{classScene}{Scene}}**\ scene)\ =0;}
+\DoxyCodeLine{00035\ \ \ \ \ }
+\DoxyCodeLine{00036\ \ \ \ \ \textcolor{comment}{//BreakoutScene\ *game\_scene;}}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \textcolor{keyword}{protected}:}
+\DoxyCodeLine{00039\ \ \ \ \ uint64\_t\ current\_tick;}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00041\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00042\ \ \ \ \ std::unordered\_map<sapp\_keycode,\ bool>\ pressed\_keys;}
+\DoxyCodeLine{00043\ \ \ \ \ \textcolor{keywordtype}{float}\ total\_run\_time=0.0f;}
+\DoxyCodeLine{00044\ \ \ \ \ uint64\_t\ frame\_time\ =\ 1;}
+\DoxyCodeLine{00045\ \ \ \ \ \textcolor{keywordtype}{float}\ tick\_frame\_time\ =\ 1;}
+\DoxyCodeLine{00046\ \ \ \ \ \textcolor{keywordtype}{float}\ delta\_t\ =\ 0;}
+\DoxyCodeLine{00047\ \};}
+\DoxyCodeLine{00048\ \}}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

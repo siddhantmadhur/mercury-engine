@@ -1,0 +1,34 @@
+\doxysection{entity.\+hh}
+\hypertarget{entity_8hh_source}{}\label{entity_8hh_source}\index{pequod/ecs/entity.hh@{pequod/ecs/entity.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ PEQUOD\_ENTITY\_IMPL\_HH\_}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ PEQUOD\_ENTITY\_IMPL\_HH\_}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <glm/glm.hpp>}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <sokol/sokol\_app.h>}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#define\ entity\_id\ uint64\_t}}
+\DoxyCodeLine{00008\ }
+\DoxyCodeLine{00009\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classEntity}{Entity}}\ \{}
+\DoxyCodeLine{00010\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00011\ \ \ \ \ \mbox{\hyperlink{classEntity}{Entity}}();}
+\DoxyCodeLine{00012\ \ \ \ \ \mbox{\hyperlink{classEntity}{\string~Entity}}();}
+\DoxyCodeLine{00013\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnStart()\ =0;}
+\DoxyCodeLine{00014\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnTick()\ =0;}
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnFrame()\ =0;}
+\DoxyCodeLine{00016\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnEvent(\textcolor{keyword}{const}\ sapp\_event*)\ =0;}
+\DoxyCodeLine{00017\ \ \ \ \ \textcolor{keyword}{virtual}\ \textcolor{keywordtype}{void}\ OnEnd()\ =0;}
+\DoxyCodeLine{00018\ \ \ \ \ \textcolor{keywordtype}{void}\ setEnabled();}
+\DoxyCodeLine{00019\ \ \ \ \ \textcolor{keywordtype}{void}\ setDisabled();}
+\DoxyCodeLine{00020\ \ \ \ \ \textcolor{keywordtype}{void}\ toggleDisabled();}
+\DoxyCodeLine{00021\ \ \ \ \ \textcolor{keywordtype}{bool}\ isDisabled();}
+\DoxyCodeLine{00022\ \ \ \ \ \textcolor{keywordtype}{bool}\ isEnabled();}
+\DoxyCodeLine{00023\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00024\ \ \ \ \ entity\_id\ id;}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keywordtype}{bool}\ disabled;}
+\DoxyCodeLine{00026\ \};}
+\DoxyCodeLine{00027\ }
+\DoxyCodeLine{00028\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

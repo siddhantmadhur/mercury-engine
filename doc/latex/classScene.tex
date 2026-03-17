@@ -1,0 +1,136 @@
+\doxysection{Scene Class Reference}
+\hypertarget{classScene}{}\label{classScene}\index{Scene@{Scene}}
+
+
+{\ttfamily \#include $<$scene.\+hh$>$}
+
+Inheritance diagram for Scene\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=2.000000cm]{classScene}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \mbox{\hyperlink{classScene_aeb7cbca43291a19ffce130c2ef28026a}{Deinit}} ()
+\item 
+void \mbox{\hyperlink{classScene_a0f3009b2ffcd55c44ebb1d571bbdd101}{Init}} ()
+\item 
+void \mbox{\hyperlink{classScene_a7cc322cfad7f513e187c43bcab6b6ef3}{Render}} (float width, float height)
+\item 
+\Hypertarget{classScene_aa69bff58561f43a778abe937013a3007}\label{classScene_aa69bff58561f43a778abe937013a3007} 
+void {\bfseries Add\+Sprite\+Map} (std\+::string)
+\item 
+\Hypertarget{classScene_a2270cc61c728cc48335590c14b9e4152}\label{classScene_a2270cc61c728cc48335590c14b9e4152} 
+void {\bfseries simulate\+Physics} (int)
+\item 
+\Hypertarget{classScene_a9311833e144d691f6a3d0a306a7eea69}\label{classScene_a9311833e144d691f6a3d0a306a7eea69} 
+virtual void {\bfseries On\+Start} ()=0
+\item 
+\Hypertarget{classScene_a4442aa86d53a296569d56e00e9abc277}\label{classScene_a4442aa86d53a296569d56e00e9abc277} 
+virtual void {\bfseries On\+Update} ()=0
+\item 
+\Hypertarget{classScene_acb3d6629b5557a8a43ba9816adaaf499}\label{classScene_acb3d6629b5557a8a43ba9816adaaf499} 
+virtual void {\bfseries On\+Event} (const sapp\+\_\+event \texorpdfstring{$\ast$}{*}event)=0
+\item 
+\Hypertarget{classScene_a575b8a0460480f423f646d30b47f57a1}\label{classScene_a575b8a0460480f423f646d30b47f57a1} 
+virtual void {\bfseries On\+End} ()=0
+\item 
+virtual void \mbox{\hyperlink{classScene_a292ae93a0866aadee6402c3b52836dca}{On\+Tick}} (float tick\+\_\+t)=0
+\item 
+\Hypertarget{classScene_a402349031d53c842a2fc74d73d2bec56}\label{classScene_a402349031d53c842a2fc74d73d2bec56} 
+void {\bfseries Set\+Player\+Camera} (\mbox{\hyperlink{classCamera}{Camera}} \&cam)
+\item 
+\Hypertarget{classScene_a4e21392db6fb791c0c11b8ec56c854df}\label{classScene_a4e21392db6fb791c0c11b8ec56c854df} 
+\mbox{\hyperlink{classCamera}{Camera}} \& {\bfseries Get\+Player\+Camera} ()
+\item 
+\Hypertarget{classScene_a640b0c043b6907091e65665f2d75464c}\label{classScene_a640b0c043b6907091e65665f2d75464c} 
+void {\bfseries Set\+Delta} (float delta\+\_\+t)
+\item 
+\Hypertarget{classScene_a011e340478d31cb1023cd0ed4fbcd7ab}\label{classScene_a011e340478d31cb1023cd0ed4fbcd7ab} 
+void {\bfseries Set\+Bg\+Color} (glm\+::vec4)
+\item 
+\Hypertarget{classScene_a0ef00da9405d6d3973dfa01ea03aa8fd}\label{classScene_a0ef00da9405d6d3973dfa01ea03aa8fd} 
+bool {\bfseries Is\+Key\+Pressed} (sapp\+\_\+keycode key)
+\item 
+\Hypertarget{classScene_a56a0ae87261079d907b4caf2a8913c58}\label{classScene_a56a0ae87261079d907b4caf2a8913c58} 
+void {\bfseries handle\+Keys} (const sapp\+\_\+event \texorpdfstring{$\ast$}{*}event)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{classScene_a000eed8302c872695e3c0da5ac4ae1d0}\label{classScene_a000eed8302c872695e3c0da5ac4ae1d0} 
+float {\bfseries delta\+\_\+t}
+\item 
+\Hypertarget{classScene_ab025074df881ea1047b308a0baef4a93}\label{classScene_ab025074df881ea1047b308a0baef4a93} 
+float {\bfseries tick\+\_\+t}
+\item 
+\Hypertarget{classScene_a6a6d9bb36bdb70927ee7b28dc9f73693}\label{classScene_a6a6d9bb36bdb70927ee7b28dc9f73693} 
+uint64\+\_\+t {\bfseries tick}
+\item 
+\Hypertarget{classScene_a6ece20d74fd940fd5c5f7d4d2f954d92}\label{classScene_a6ece20d74fd940fd5c5f7d4d2f954d92} 
+\mbox{\hyperlink{classECS}{ECS}} {\bfseries ecs} = \mbox{\hyperlink{classECS}{ECS}}()
+\item 
+\Hypertarget{classScene_a2ddeccf877cbfe4e01c91b00a53c582a}\label{classScene_a2ddeccf877cbfe4e01c91b00a53c582a} 
+sg\+\_\+pipeline {\bfseries pip}
+\item 
+\Hypertarget{classScene_a5a6e4954a475ed76a1b79cd1368df487}\label{classScene_a5a6e4954a475ed76a1b79cd1368df487} 
+sg\+\_\+pass\+\_\+action {\bfseries pass\+\_\+action}
+\item 
+\Hypertarget{classScene_a66f4ac967efc900253251ad9058626b7}\label{classScene_a66f4ac967efc900253251ad9058626b7} 
+sg\+\_\+bindings {\bfseries bind}
+\item 
+\Hypertarget{classScene_a3bdd17a40836cef20883564edfe20142}\label{classScene_a3bdd17a40836cef20883564edfe20142} 
+\mbox{\hyperlink{classCamera}{Camera}} {\bfseries player\+Camera}
+\item 
+\Hypertarget{classScene_a5ba80b70c931bd626e04de373295cd41}\label{classScene_a5ba80b70c931bd626e04de373295cd41} 
+glm\+::vec4 {\bfseries bg\+Color} = glm\+::vec4(0.\+2f, 0.\+3f, 0.\+3f, 1.\+0f)
+\item 
+\Hypertarget{classScene_a1d791778da6a29e812fe598616e9f3fc}\label{classScene_a1d791778da6a29e812fe598616e9f3fc} 
+std\+::unordered\+\_\+map$<$ sapp\+\_\+keycode, bool $>$ {\bfseries keys\+\_\+pressed}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+MERCURY \+: SCENE MANAGEMENT 
+
+\doxysubsection{Member Function Documentation}
+\Hypertarget{classScene_aeb7cbca43291a19ffce130c2ef28026a}\index{Scene@{Scene}!Deinit@{Deinit}}
+\index{Deinit@{Deinit}!Scene@{Scene}}
+\doxysubsubsection{\texorpdfstring{Deinit()}{Deinit()}}
+{\footnotesize\ttfamily \label{classScene_aeb7cbca43291a19ffce130c2ef28026a} 
+void Scene\+::\+Deinit (\begin{DoxyParamCaption}{}{}\end{DoxyParamCaption})}
+
+for (int i = 0; i \texorpdfstring{$<$}{<} objects.\+size(); i++) \{ delete objects\mbox{[}i\mbox{]}; \}\Hypertarget{classScene_a0f3009b2ffcd55c44ebb1d571bbdd101}\index{Scene@{Scene}!Init@{Init}}
+\index{Init@{Init}!Scene@{Scene}}
+\doxysubsubsection{\texorpdfstring{Init()}{Init()}}
+{\footnotesize\ttfamily \label{classScene_a0f3009b2ffcd55c44ebb1d571bbdd101} 
+void Scene\+::\+Init (\begin{DoxyParamCaption}{}{}\end{DoxyParamCaption})}
+
+bind.\+samplers\mbox{[}SMP\+\_\+smp\mbox{]} = sg\+\_\+make\+\_\+sampler((sg\+\_\+sampler\+\_\+desc)\{ .min\+\_\+filter = SG\+\_\+\+FILTER\+\_\+\+LINEAR, .mag\+\_\+filter = SG\+\_\+\+FILTER\+\_\+\+LINEAR, .label = "{}jpg-\/sampler"{}, \});
+
+sg\+\_\+image img = sg\+\_\+make\+\_\+image(img\+\_\+desc);
+
+sg\+\_\+init\+\_\+view(bind.\+views\mbox{[}VIEW\+\_\+tex\mbox{]}, (sg\+\_\+view\+\_\+desc)\{ .texture = \{ .image = img \}, .label = "{}jpg-\/texture-\/view"{}, \});\Hypertarget{classScene_a292ae93a0866aadee6402c3b52836dca}\index{Scene@{Scene}!OnTick@{OnTick}}
+\index{OnTick@{OnTick}!Scene@{Scene}}
+\doxysubsubsection{\texorpdfstring{OnTick()}{OnTick()}}
+{\footnotesize\ttfamily \label{classScene_a292ae93a0866aadee6402c3b52836dca} 
+virtual void Scene\+::\+On\+Tick (\begin{DoxyParamCaption}\item[{float}]{tick\+\_\+t}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [pure virtual]}}
+
+
+
+Implemented in \mbox{\hyperlink{classBreakoutScene_a3342facb8f0094f9b4dd8ee1b86cae3a}{Breakout\+Scene}}.
+
+\Hypertarget{classScene_a7cc322cfad7f513e187c43bcab6b6ef3}\index{Scene@{Scene}!Render@{Render}}
+\index{Render@{Render}!Scene@{Scene}}
+\doxysubsubsection{\texorpdfstring{Render()}{Render()}}
+{\footnotesize\ttfamily \label{classScene_a7cc322cfad7f513e187c43bcab6b6ef3} 
+void Scene\+::\+Render (\begin{DoxyParamCaption}\item[{float}]{width}{, }\item[{float}]{height}{}\end{DoxyParamCaption})}
+
+sg\+\_\+begin\+\_\+pass((sg\+\_\+pass)\{ .action = pass\+\_\+action, .swapchain = sglue\+\_\+swapchain(), \});
+
+The documentation for this class was generated from the following files\+:\begin{DoxyCompactItemize}
+\item 
+pequod/engine/scene.\+hh\item 
+pequod/engine/scene.\+cc\end{DoxyCompactItemize}

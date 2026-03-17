@@ -1,0 +1,28 @@
+\doxysection{camera.\+hh}
+\hypertarget{camera_8hh_source}{}\label{camera_8hh_source}\index{pequod/gameobjects/camera.hh@{pequod/gameobjects/camera.hh}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ MERCURY\_CAMERA\_IMPL\_HH}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ MERCURY\_CAMERA\_IMPL\_HH}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <glm/glm.hpp>}}
+\DoxyCodeLine{00005\ }
+\DoxyCodeLine{00006\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classCamera}{Camera}}\ \{}
+\DoxyCodeLine{00007\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00008\ \ \ \ \ \mbox{\hyperlink{classCamera}{Camera}}(\textcolor{keywordtype}{float}\ aspect\_ratio);}
+\DoxyCodeLine{00009\ \ \ \ \ \mbox{\hyperlink{classCamera}{\string~Camera}}();}
+\DoxyCodeLine{00010\ \ \ \ \ glm::mat4\ getView();}
+\DoxyCodeLine{00011\ \ \ \ \ glm::mat4\ getProjection();}
+\DoxyCodeLine{00012\ \ \ \ \ \textcolor{keywordtype}{void}\ setView(glm::mat4);}
+\DoxyCodeLine{00013\ \ \ \ \ \textcolor{keywordtype}{void}\ setProj(glm::mat4);}
+\DoxyCodeLine{00014\ \ \ \ \ \textcolor{keywordtype}{void}\ setPosition(glm::vec3);}
+\DoxyCodeLine{00015\ \ \ \ \ glm::vec3\ getPosition();}
+\DoxyCodeLine{00016\ \ \ \ \ \textcolor{keywordtype}{void}\ configure2D(\textcolor{keywordtype}{float}\ width,\ \textcolor{keywordtype}{float}\ height,\ \textcolor{keywordtype}{float}\ zoom);}
+\DoxyCodeLine{00017\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00018\ \ \ \ \ glm::mat4\ view;}
+\DoxyCodeLine{00019\ \ \ \ \ glm::mat4\ proj;}
+\DoxyCodeLine{00020\ \ \ \ \ glm::vec3\ cameraPosition;}
+\DoxyCodeLine{00021\ \};}
+\DoxyCodeLine{00022\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

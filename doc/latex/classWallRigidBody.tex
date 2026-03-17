@@ -1,0 +1,85 @@
+\doxysection{Wall\+Rigid\+Body Class Reference}
+\hypertarget{classWallRigidBody}{}\label{classWallRigidBody}\index{WallRigidBody@{WallRigidBody}}
+Inheritance diagram for Wall\+Rigid\+Body\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=3.000000cm]{classWallRigidBody}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{classWallRigidBody_ab1be99e88920f0a10040349a1714d312}\label{classWallRigidBody_ab1be99e88920f0a10040349a1714d312} 
+{\bfseries Wall\+Rigid\+Body} (glm\+::vec2 pos, glm\+::vec2 size)
+\item 
+void \mbox{\hyperlink{classWallRigidBody_aecd5fdb6e5b3425025a3413dab858074}{On\+Collision\+Enter}} (entity\+\_\+id) override
+\item 
+void \mbox{\hyperlink{classWallRigidBody_a72187fd484b528484d24bcc5aced68b6}{On\+Collision}} (entity\+\_\+id) override
+\item 
+void \mbox{\hyperlink{classWallRigidBody_a6652f27de6959d5123081011e3436382}{On\+Collision\+Leave}} (entity\+\_\+id) override
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{classBox2D}{Box2D}}}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Box2D} (glm\+::vec2 position, glm\+::vec2 size)
+\end{DoxyCompactItemize}
+\doxysubsection*{Public Member Functions inherited from \mbox{\hyperlink{classRigidBody}{Rigid\+Body}}}
+\begin{DoxyCompactItemize}
+\item 
+JPH\+::\+Body\+Creation\+Settings {\bfseries get\+Body\+Creation\+Settings} ()
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Additional Inherited Members}
+\doxysubsection*{Public Attributes inherited from \mbox{\hyperlink{classRigidBody}{Rigid\+Body}}}
+\begin{DoxyCompactItemize}
+\item 
+entity\+\_\+id {\bfseries id}
+\item 
+JPH\+::\+Body\+ID {\bfseries jolt\+\_\+id}
+\item 
+JPH\+::\+EAllowed\+DOFs {\bfseries allowed\+\_\+dofs} = JPH\+::\+EAllowed\+DOFs\+::\+Plane2D
+\item 
+JPH\+::\+Body \texorpdfstring{$\ast$}{*} {\bfseries body}
+\end{DoxyCompactItemize}
+\doxysubsection*{Protected Attributes inherited from \mbox{\hyperlink{classRigidBody}{Rigid\+Body}}}
+\begin{DoxyCompactItemize}
+\item 
+JPH\+::\+Body\+Creation\+Settings {\bfseries creation\+Settings}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\Hypertarget{classWallRigidBody_a72187fd484b528484d24bcc5aced68b6}\index{WallRigidBody@{WallRigidBody}!OnCollision@{OnCollision}}
+\index{OnCollision@{OnCollision}!WallRigidBody@{WallRigidBody}}
+\doxysubsubsection{\texorpdfstring{OnCollision()}{OnCollision()}}
+{\footnotesize\ttfamily \label{classWallRigidBody_a72187fd484b528484d24bcc5aced68b6} 
+void Wall\+Rigid\+Body\+::\+On\+Collision (\begin{DoxyParamCaption}\item[{entity\+\_\+id}]{}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [override]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{classBox2D}{Box2D}}.
+
+\Hypertarget{classWallRigidBody_aecd5fdb6e5b3425025a3413dab858074}\index{WallRigidBody@{WallRigidBody}!OnCollisionEnter@{OnCollisionEnter}}
+\index{OnCollisionEnter@{OnCollisionEnter}!WallRigidBody@{WallRigidBody}}
+\doxysubsubsection{\texorpdfstring{OnCollisionEnter()}{OnCollisionEnter()}}
+{\footnotesize\ttfamily \label{classWallRigidBody_aecd5fdb6e5b3425025a3413dab858074} 
+void Wall\+Rigid\+Body\+::\+On\+Collision\+Enter (\begin{DoxyParamCaption}\item[{entity\+\_\+id}]{}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [override]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{classBox2D}{Box2D}}.
+
+\Hypertarget{classWallRigidBody_a6652f27de6959d5123081011e3436382}\index{WallRigidBody@{WallRigidBody}!OnCollisionLeave@{OnCollisionLeave}}
+\index{OnCollisionLeave@{OnCollisionLeave}!WallRigidBody@{WallRigidBody}}
+\doxysubsubsection{\texorpdfstring{OnCollisionLeave()}{OnCollisionLeave()}}
+{\footnotesize\ttfamily \label{classWallRigidBody_a6652f27de6959d5123081011e3436382} 
+void Wall\+Rigid\+Body\+::\+On\+Collision\+Leave (\begin{DoxyParamCaption}\item[{entity\+\_\+id}]{}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [inline]}, {\ttfamily [override]}, {\ttfamily [virtual]}}
+
+
+
+Implements \mbox{\hyperlink{classBox2D}{Box2D}}.
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+editor/panel/breakout\+\_\+scene.\+cc\end{DoxyCompactItemize}
