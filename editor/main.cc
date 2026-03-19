@@ -6,10 +6,14 @@
 
 #include <ecs/ecs.hh>
 
+#if TARGET_OS_LINUX
 #define VK_USE_PLATFORM_XLIB_KHR
+#define SOKOL_VULKAN
+#elif TARGET_OS_MAC
+#define SOKOL_GLCORE
+#endif
 
 #define SOKOL_IMPL
-#define SOKOL_VULKAN
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_glue.h>
@@ -150,7 +154,7 @@ sapp_desc sokol_main(int argc, char *argv[]) {
         .event_cb = sokol_event,
         .width = 1920,
         .height = 1080,
-        .window_title = "Pequod Editor [v0.0.1]",
+        .window_title = "Pequod Editor [pre-alpha]",
         .icon = {
             .sokol_default = true,
         },

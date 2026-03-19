@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.30)
 
-project(PequodEngine)
+project(PequodEngine LANGUAGES CXX C OBJC OBJCXX)
 include_directories("third_party")
 include_directories("shaders")
 
@@ -78,7 +78,10 @@ include_directories("third_party/tinyxml2")
 target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2)
 
 
-file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc")
+file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
+if (APPLE)
+  set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
+endif()
 add_executable(pequod_editor ${EDITOR_SOURCE})
 target_link_libraries(pequod_editor pequod)
 

@@ -46,23 +46,23 @@ void ProjectSelectionScene::OnInitialLoad() {
 
 static void imgui_callback(const ImDrawList* dl, const ImDrawCmd* cmd) {
     Scene** scene_ptr = (Scene**) cmd->UserCallbackData;
-    if (scene_ptr) {
-        PDebug::warn("Callback ptr is none.");
-        Scene *cur_scene = *scene_ptr;
-        if (!cur_scene) {
-            return;
-        }
-
-        const int cx = (int) cmd->ClipRect.x;
-        const int cy = (int) cmd->ClipRect.y;
-        const int cw = (int) (cmd->ClipRect.z - cmd->ClipRect.x);
-        const int ch = (int) (cmd->ClipRect.w - cmd->ClipRect.y);
-        sg_apply_scissor_rect(cx, cy, cw, ch, true);
-        //sg_apply_viewport(cx, cy, cw, cw * (16.0f / 9.0f), true);
-
-        cur_scene->Render(cw, ch);
-
+    if (!scene_ptr) {
+        return;
     }
+    Scene *cur_scene = *scene_ptr;
+    if (!cur_scene) {
+        return;
+    }
+
+    const int cx = (int) cmd->ClipRect.x;
+    const int cy = (int) cmd->ClipRect.y;
+    const int cw = (int) (cmd->ClipRect.z - cmd->ClipRect.x);
+    const int ch = (int) (cmd->ClipRect.w - cmd->ClipRect.y);
+    sg_apply_scissor_rect(cx, cy, cw, ch, true);
+    //sg_apply_viewport(cx, cy, cw, cw * (16.0f / 9.0f), true);
+
+    cur_scene->Render(cw, ch);
+
 
  
 }
