@@ -8,7 +8,7 @@
 #ifndef PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 #define PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 
-#include "engine/scene.h"
+#include "engine/world_scene.h"
 #include "panel/file_explorer.hh"
 #include "panel/game_preview.hh"
 #include <editor_windows/editor_scene.hh>

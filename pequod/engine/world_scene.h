@@ -1,5 +1,5 @@
 /**
- * scene.hh
+ * world_scene.h
  *
  * Scene management file for the game engine. This classes responsibilities are
  * to manage the entire scene for a game world, i.e. the objects rendered inside
@@ -68,23 +68,23 @@ private:
 
     std::unordered_map<sapp_keycode, bool> keys_pressed;
 
-    float delta_t; // time difference per frame
-    float tick_t;  // time difference per tick
-    float elapsed_t; // total time elapsed since scene began
-    uint64_t frame_time;
-    uint64_t tick_time;
+    float delta_t=0.0f; // time difference per frame
+    float tick_t=0.0f;  // time difference per tick
+    float elapsed_t=0.0f; // total time elapsed since scene began
+    uint64_t frame_time=0;
+    uint64_t tick_time=0;
 
-    uint64_t current_tick;
-    uint64_t last_processed_tick;
+    uint64_t current_tick{};
+    uint64_t last_processed_tick{};
 
     Camera playerCamera;
     glm::vec4 bgColor = glm::vec4(0.2f, 0.3f, 0.3f, 1.0f);
 
     //@{
     // Variables required by sokol to function
-    sg_pipeline pip;
-    sg_pass_action pass_action;
-    sg_bindings bind;
+    sg_pipeline pip{};
+    sg_pass_action pass_action{};
+    sg_bindings bind{};
     //@}
 };
 

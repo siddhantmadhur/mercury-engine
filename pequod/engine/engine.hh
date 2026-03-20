@@ -4,7 +4,7 @@
 
 #include <condition_variable>
 #include <cstdint>
-#include <engine/scene.h>
+#include <engine/world_scene.h>
 
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_gfx.h>

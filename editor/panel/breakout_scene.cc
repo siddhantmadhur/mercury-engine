@@ -1,6 +1,6 @@
 #include "breakout_scene.hh"
 #include "Jolt/Physics/Body/AllowedDOFs.h"
-#include "engine/scene.h"
+#include "engine/world_scene.h"
 #include "glm/common.hpp"
 #include "glm/geometric.hpp"
 #include "glm/trigonometric.hpp"

@@ -1,7 +1,7 @@
 #ifndef EDITOR_SCENE_IMPL_HH_
 #define EDITOR_SCENE_IMPL_HH_
 
-#include "engine/scene.h"
+#include "engine/world_scene.h"
 #include "panel/game_preview.hh"
 #include <cstdint>
 #include <sokol/sokol_app.h>

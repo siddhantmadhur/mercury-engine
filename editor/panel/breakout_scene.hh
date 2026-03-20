@@ -1,4 +1,4 @@
-#include <engine/scene.h>
+#include <engine/world_scene.h>
 #include <gameobjects/quad.hh>
 
 class BreakoutScene : public WorldScene {

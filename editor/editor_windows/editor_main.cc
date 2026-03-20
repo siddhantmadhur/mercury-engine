@@ -1,4 +1,4 @@
-#include "editor_main.hh"
+#include "editor_main.h"
 #include "imgui/imgui.h"
 #include "panel/game_preview.hh"
 

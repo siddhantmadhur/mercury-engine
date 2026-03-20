@@ -14,7 +14,7 @@
 #include <sokol/sokol_time.h>
 #include <shaders/generic_texture.glsl.hh>
 
-#include <engine/scene.h>
+#include <engine/world_scene.h>
 
 #include <iostream>
 
@@ -22,17 +22,17 @@
 using namespace std;
 
 #define INIT_VERTICES 600
-#define INIT_INDICES ((INIT_VERTICES)/2)*3
+#define INIT_INDICES (((INIT_VERTICES)/2)*3)
 #define COLOR_ONLY 1
 
 #define MAX_VERTICES 5120
-#define MAX_INDICES ((MAX_VERTICES)/2)*3
+#define MAX_INDICES (((MAX_VERTICES)/2)*3)
 
 WorldScene::WorldScene() : playerCamera(1.0f) {
-    //vertices = std::vector<vertex_t>();
-    //indices = std::vector<uint16_t>();
-    //vertices.reserve(INIT_VERTICES);
-    //indices.reserve(INIT_INDICES);
+    this->delta_t = 0.0f;
+    this->current_tick = 0;
+    this->tick_time = 0;
+    this->frame_time = 0;
 }
 
 void WorldScene::ComputePhysics(int steps) {

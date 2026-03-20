@@ -3,7 +3,7 @@
 #include "Jolt/Physics/Collision/Shape/BoxShape.h"
 #include "Jolt/Physics/EActivation.h"
 #include "ecs/position.hh"
-#include "engine/scene.h"
+#include "engine/world_scene.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "rigidbody/rigidbody.hh"
 #include <ecs/ecs.hh>
