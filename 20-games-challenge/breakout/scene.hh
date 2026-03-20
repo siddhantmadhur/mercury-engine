@@ -1,12 +1,12 @@
-#include <engine/scene.hh>
+#include <engine/scene.h>
 #include <gameobjects/quad.hh>
 
-class BreakoutScene : public Scene {
+class BreakoutScene : public WorldScene {
 public:
     void OnStart() override;
-    void OnEnd() override;
-    void OnUpdate() override;
-    void OnTick(float) override;
+    void OnDestroy() override;
+    void OnFrameUpdate() override;
+    void OnTickUpdate(float) override;
     void OnEvent(const sapp_event* event) override;
 
     void ChangeDirection(float x, float y);

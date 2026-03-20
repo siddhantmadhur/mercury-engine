@@ -45,11 +45,11 @@ void ProjectSelectionScene::OnInitialLoad() {
 }
 
 static void imgui_callback(const ImDrawList* dl, const ImDrawCmd* cmd) {
-    Scene** scene_ptr = (Scene**) cmd->UserCallbackData;
+    WorldScene** scene_ptr = (WorldScene**) cmd->UserCallbackData;
     if (!scene_ptr) {
         return;
     }
-    Scene *cur_scene = *scene_ptr;
+    WorldScene *cur_scene = *scene_ptr;
     if (!cur_scene) {
         return;
     }
@@ -61,13 +61,13 @@ static void imgui_callback(const ImDrawList* dl, const ImDrawCmd* cmd) {
     sg_apply_scissor_rect(cx, cy, cw, ch, true);
     //sg_apply_viewport(cx, cy, cw, cw * (16.0f / 9.0f), true);
 
-    cur_scene->Render(cw, ch);
+    cur_scene->BeginRenderPass(cw, ch);
 
 
  
 }
 
-void ProjectSelectionScene::RenderScenePreview(Scene** scene) {
+void ProjectSelectionScene::RenderScenePreview(WorldScene** scene) {
     ImGui::Begin("GamePreview");
     auto *dl = ImGui::GetWindowDrawList();
     dl->AddCallback(imgui_callback, scene);

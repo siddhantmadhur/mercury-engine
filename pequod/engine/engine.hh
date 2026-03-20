@@ -4,7 +4,7 @@
 
 #include <condition_variable>
 #include <cstdint>
-#include <engine/scene.hh>
+#include <engine/scene.h>
 
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_gfx.h>
@@ -18,7 +18,7 @@ class PequodEngine
 public:
     PequodEngine();
     void startUp();
-    void SetScene(Scene* scene);
+    void SetScene(WorldScene* scene);
     void sokol_init();
     void sokol_frame_cb();
     void sokol_cleanup();
@@ -35,7 +35,7 @@ private:
     double delta_t;
     uint8_t fps;
     double total_t;
-    Scene *currentScene;
+    WorldScene *currentScene;
     bool show_debug_stats = true;
 };
 

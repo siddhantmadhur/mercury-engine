@@ -16,7 +16,7 @@
 #define PEQUOD_EDITOR_MAIN_IMPL_HH_
 
 #include "editor_scene.hh"
-#include "engine/scene.hh"
+#include "engine/scene.h"
 #include "panel/game_preview.hh"
 #include <sokol/sokol_gfx.h>
 

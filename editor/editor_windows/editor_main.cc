@@ -47,7 +47,8 @@ void Editor::sokol_init() {
     };
 
     game_scene = new BreakoutScene();
-    game_scene->Init();
+    game_scene->OnStartInternal();
+    game_scene->Initialize();
     game_scene->OnStart();
 
     currentScene.InitializeScene();
@@ -64,11 +65,11 @@ void Editor::sokol_frame_cb() {
 
     { 
         currentScene.OnFrameInternal();
-        currentScene.RenderScenePreview((Scene**) &game_scene);
+        currentScene.RenderScenePreview((WorldScene**) &game_scene);
     }
     
     sg_begin_pass((sg_pass){
-        .action = game_scene->pass_action,
+        .action = game_scene->GetPassAction(),
         .swapchain = sglue_swapchain(),
     });
     simgui_render();

@@ -1,7 +1,7 @@
 #ifndef EDITOR_SCENE_IMPL_HH_
 #define EDITOR_SCENE_IMPL_HH_
 
-#include "engine/scene.hh"
+#include "engine/scene.h"
 #include "panel/game_preview.hh"
 #include <cstdint>
 #include <sokol/sokol_app.h>
@@ -31,7 +31,7 @@ public:
     void OnEventInternal(const sapp_event* event);     
     void OnFrameInternal();
     void OnDestroyInternal();
-    virtual void RenderScenePreview(Scene** scene) =0;
+    virtual void RenderScenePreview(WorldScene** scene) =0;
     
     //BreakoutScene *game_scene;
 

@@ -1,6 +1,6 @@
 #include "breakout_scene.hh"
 #include "Jolt/Physics/Body/AllowedDOFs.h"
-#include "engine/scene.hh"
+#include "engine/scene.h"
 #include "glm/common.hpp"
 #include "glm/geometric.hpp"
 #include "glm/trigonometric.hpp"
@@ -204,7 +204,7 @@ void BreakoutScene::OnStart() {
 
 #define CONSTANT_VELOCITY false
 
-void BreakoutScene::OnTick(float tick_t) {
+void BreakoutScene::OnTickUpdate(float tick_t) {
 
     { // MOVEMNT
 
@@ -353,7 +353,7 @@ void BreakoutScene::OnTick(float tick_t) {
 
 
 
-void BreakoutScene::OnUpdate() {
+void BreakoutScene::OnFrameUpdate() {
 
 
     ImGui::Begin("pos", NULL, 0);
@@ -368,7 +368,7 @@ void BreakoutScene::OnUpdate() {
     ImGui::End();
 
 }
-void BreakoutScene::OnEnd() {
+void BreakoutScene::OnDestroy() {
 }
 
 void BreakoutScene::OnEvent(const sapp_event* event) {

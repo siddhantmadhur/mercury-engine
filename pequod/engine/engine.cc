@@ -68,27 +68,15 @@ void PequodEngine::startUp() {
 }
 
 
-void PequodEngine::SetScene(Scene* scene) {
+void PequodEngine::SetScene(WorldScene* scene) {
     currentScene = scene;
 }
 
 void PequodEngine::sokol_init() {
 
+    currentScene->OnStartInternal();
 
-    sg_setup((sg_desc){
-        .logger = {
-            .func = slog_func,
-        },
-        .environment = sglue_environment(),
-    });
-
-    stm_setup();
-    
-    simgui_desc_t simgui_desc = { };
-    simgui_desc.logger.func = slog_func;
-    simgui_setup(&simgui_desc);
-
-    currentScene->Init(); // runs only for the initial default scene; every other scene needs to call this themselves
+    currentScene->Initialize(); // runs only for the initial default scene; every other scene needs to call this themselves
 
     currentScene->OnStart();
 };
@@ -97,48 +85,8 @@ void PequodEngine::sokol_init() {
 
 void PequodEngine::sokol_frame_cb() {
 
-
-    const int width = sapp_width();
-    const int height = sapp_height();
-
-
-    delta_t = stm_ms(stm_laptime(&frame_time));
-    currentScene->SetDelta(delta_t);
-    total_t += delta_t;
-
-
-    ticks = int(total_t / (1000.0/60.0)); // 20 
-
-    bool run_tick = false;
-    
-    currentScene->OnUpdate();
-
-    if (last_tick < ticks) {
-        tick_t = stm_ms(stm_laptime(&tick_frame_time));
-
-        currentScene->OnTick(tick_t);
-
-
-        currentScene->tick = ticks;
-        last_tick = ticks;
-        run_tick = true;
-    }
-    
-
-    if (run_tick) {
-        if (tick_t > 0 && delta_t > 0) {
-            currentScene->simulatePhysics(std::round(tick_t / delta_t));
-        }
-    }
-
-    if (currentScene) {
-        currentScene->Render(width, height);
-    } else {
-        throw std::invalid_argument("current scene not provided");
-    }
-
-   
     //sg_end_pass();
+    currentScene->OnFrameInternal();
     
     //sg_commit();
 }
@@ -149,22 +97,14 @@ bool PequodEngine::isShowDebugStats() {
 
 void PequodEngine::sokol_cleanup() {
     if (currentScene) {
-        currentScene->OnEnd();
-        currentScene->Deinit();
+        currentScene->OnDestroy();
+        currentScene->Destroy();
     }
     //simgui_shutdown();
     //sg_shutdown();
 }
 
 void PequodEngine::sokol_event(const sapp_event *event) {
-    simgui_handle_event(event);
-    currentScene->handleKeys(event);
-    currentScene->OnEvent(event);
-    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
-        if (event->key_code == SAPP_KEYCODE_F1) {
-            PDebug::info("toggling debug stats");
-            show_debug_stats = !show_debug_stats;
-        }
-    }
+    currentScene->OnEventInternal(event);
 }
 

@@ -8,7 +8,7 @@
 #ifndef PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 #define PEQUOD_EDITOR_PROJECT_SCENE_IMPL_HH_
 
-#include "engine/scene.hh"
+#include "engine/scene.h"
 #include "panel/file_explorer.hh"
 #include "panel/game_preview.hh"
 #include <editor_windows/editor_scene.hh>
@@ -24,7 +24,7 @@ public:
     void OnFrameUpdate() override;
     void OnTickUpdate() override;
     void OnDestroy() override;
-    void RenderScenePreview(Scene** scene) override;
+    void RenderScenePreview(WorldScene** scene) override;
 
 
 private:

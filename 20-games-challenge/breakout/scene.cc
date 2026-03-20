@@ -1,6 +1,6 @@
 #include "scene.hh"
 #include "Jolt/Physics/Body/AllowedDOFs.h"
-#include "engine/scene.hh"
+#include "engine/scene.h"
 #include "glm/common.hpp"
 #include "glm/geometric.hpp"
 #include "glm/trigonometric.hpp"
@@ -190,7 +190,7 @@ void BreakoutScene::OnStart() {
 
 #define CONSTANT_VELOCITY false
 
-void BreakoutScene::OnTick(float tick_t) {
+void BreakoutScene::OnTickUpdate(float tick_t) {
 
     { // MOVEMNT
 
@@ -204,6 +204,7 @@ void BreakoutScene::OnTick(float tick_t) {
         }
 
         if ((!game_started) && IsKeyPressed(SAPP_KEYCODE_UP)) {
+            PDebug::log("move");
             float deg = 30 + (rand() % 120);
             ball_dx = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
             game_started = true;
@@ -339,7 +340,7 @@ void BreakoutScene::OnTick(float tick_t) {
 
 
 
-void BreakoutScene::OnUpdate() {
+void BreakoutScene::OnFrameUpdate() {
 
 
     ImGui::Begin("pos", NULL, 0);
@@ -354,7 +355,7 @@ void BreakoutScene::OnUpdate() {
     ImGui::End();
 
 }
-void BreakoutScene::OnEnd() {
+void BreakoutScene::OnDestroy() {
     ImGui::SaveIniSettingsToDisk("breakout_scene.ini");
 }
 

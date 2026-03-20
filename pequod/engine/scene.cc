@@ -1,4 +1,4 @@
-
+#define target_tps  60
 
 #include "assets/images.hh"
 #include "ecs/ecs.hh"
@@ -14,9 +14,11 @@
 #include <sokol/sokol_time.h>
 #include <shaders/generic_texture.glsl.hh>
 
-#include <engine/scene.hh>
+#include <engine/scene.h>
 
 #include <iostream>
+
+#include "sokol/util/sokol_imgui.h"
 using namespace std;
 
 #define INIT_VERTICES 600
@@ -26,18 +28,57 @@ using namespace std;
 #define MAX_VERTICES 5120
 #define MAX_INDICES ((MAX_VERTICES)/2)*3
 
-Scene::Scene() : playerCamera(1.0f) {
+WorldScene::WorldScene() : playerCamera(1.0f) {
     //vertices = std::vector<vertex_t>();
     //indices = std::vector<uint16_t>();
     //vertices.reserve(INIT_VERTICES);
     //indices.reserve(INIT_INDICES);
 }
 
-void Scene::simulatePhysics(int steps) {
+void WorldScene::ComputePhysics(int steps) {
     ecs.simulatePhysics(steps);
 }
 
-void Scene::Deinit() {
+void WorldScene::OnFrameInternal() {
+    // TODO: Add an internal width and height that is updated on event
+    //  updates and does not require a call to sokol
+    const int width = sapp_width();
+    const int height = sapp_height();
+
+
+    delta_t = stm_ms(stm_laptime(&frame_time));
+    elapsed_t += delta_t;
+
+
+    current_tick = int(elapsed_t / (1000.0/target_tps));
+
+    bool run_tick = false;
+
+
+    if (last_processed_tick < current_tick) {
+        tick_t = stm_ms(stm_laptime(&tick_time));
+
+        OnTickUpdate(tick_t);
+
+        last_processed_tick = current_tick;
+
+        run_tick = true;
+    }
+
+
+    if (run_tick) {
+        if (tick_t > 0 && delta_t > 0) {
+            ComputePhysics(std::round(tick_t / delta_t));
+        }
+    }
+
+    BeginRenderPass(width, height);
+    OnFrameUpdate();
+    CompleteRender();
+}
+
+
+void WorldScene::Destroy() {
     /**
     for (int i = 0; i < objects.size(); i++) {
         delete objects[i];
@@ -49,7 +90,7 @@ void Scene::Deinit() {
     //sg_destroy_sampler(bind.samplers[SMP_smp]);
 }
 
-void Scene::handleKeys(const sapp_event* event) {
+void WorldScene::handleKeys(const sapp_event* event) {
     if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
         keys_pressed[event->key_code] = true;
     } else if (event->type == SAPP_EVENTTYPE_KEY_UP) {
@@ -57,7 +98,31 @@ void Scene::handleKeys(const sapp_event* event) {
     }
 }
 
-void Scene::Init() {
+void WorldScene::OnStartInternal() {
+    sg_setup((sg_desc){
+        .logger = {
+            .func = slog_func,
+        },
+        .environment = sglue_environment(),
+    });
+
+    stm_setup();
+
+    simgui_desc_t simgui_desc = { };
+    simgui_desc.logger.func = slog_func;
+    simgui_setup(&simgui_desc);
+}
+
+void WorldScene::OnEventInternal(const sapp_event *event) {
+    simgui_handle_event(event);
+    handleKeys(event);
+    OnEvent(event);
+}
+
+WorldScene::~WorldScene() {
+}
+
+void WorldScene::Initialize() {
 
 
     Image wall_texture = Image("assets/wall.jpg");
@@ -143,13 +208,7 @@ void Scene::Init() {
     ecs.initializeJolt();
 }
 
-
-void Scene::SetDelta(float delta_t) {
-    this->delta_t = delta_t;
-}
-
-
-void Scene::Render(float width, float height) {
+void WorldScene::BeginRenderPass(float width, float height) {
 
    
     cam_params_t params;
@@ -159,45 +218,60 @@ void Scene::Render(float width, float height) {
 
     ecs.setupRender(bind);
 
-    /**
     sg_begin_pass((sg_pass){
         .action = pass_action,
         .swapchain = sglue_swapchain(),
     });
-    **/
+
+    simgui_new_frame((simgui_frame_desc_t){
+        .width = sapp_width(),
+        .height = sapp_height(),
+        .delta_time = delta_t
+    });
 
     sg_apply_pipeline(pip);
-    
+
     sg_apply_bindings(bind);
 
-
     sg_apply_uniforms(UB_cam_params, SG_RANGE(params));
+
+}
+
+void WorldScene::CompleteRender() {
+
 
     //cout << "Rendering " << indices.size() << " indices!" << endl;
 
     ecs.render(playerCamera, delta_t);
+
+    simgui_render();
+    sg_end_pass();
+    sg_commit();
 }
 
-
-void Scene::SetPlayerCamera(Camera& cam) {
+void WorldScene::SetPlayerCamera(Camera& cam) {
     this->playerCamera = cam;
 }
 
-Camera& Scene::GetPlayerCamera() {
+Camera& WorldScene::GetPlayerCamera() {
     return this->playerCamera;
 }
 
-void Scene::SetBgColor(glm::vec4 newColor) {
+void WorldScene::SetBgColor(glm::vec4 newColor) {
     bgColor = newColor;
     pass_action = (sg_pass_action){
         .colors = { { .load_action = SG_LOADACTION_CLEAR, .clear_value={bgColor.x, bgColor.y, bgColor.z, bgColor.a}}}
     };
 }
 
-bool Scene::IsKeyPressed(sapp_keycode key) {
+bool WorldScene::IsKeyPressed(sapp_keycode key) {
     if (keys_pressed.contains(key)) {
         return keys_pressed[key];
     } else {
         return false;
     }
+}
+
+sg_pass_action WorldScene::GetPassAction() {
+    return this->pass_action;
 }

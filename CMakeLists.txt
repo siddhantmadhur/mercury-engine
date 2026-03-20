@@ -93,6 +93,9 @@ target_link_libraries(pequod_editor pequod)
 
 file(GLOB_RECURSE BREAKOUT_SRC "20-games-challenge/breakout/*.cc")
 add_executable(breakout ${BREAKOUT_SRC})
+if (APPLE)
+  set_source_files_properties(20-games-challenge/breakout/main.cc PROPERTIES LANGUAGE OBJCXX)
+endif()
 target_link_libraries(breakout pequod)
 
 #file(GLOB_RECURSE SPACE_INVADERS_SRC "20-games-challenge/space_invaders/*.cc")
