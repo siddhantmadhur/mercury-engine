@@ -51,7 +51,7 @@ public:
 
 private:
     EditorScene &currentScene;
-   
+
     //@{
     /**
     * These are variables only required by sokol calls; goal is to phase them 

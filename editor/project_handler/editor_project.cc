@@ -58,6 +58,13 @@ static void imgui_callback(const ImDrawList* dl, const ImDrawCmd* cmd) {
     const int cw = (int) (cmd->ClipRect.z - cmd->ClipRect.x);
     const int ch = (int) (cmd->ClipRect.w - cmd->ClipRect.y);
     sg_apply_scissor_rect(cx, cy, cw, ch, true);
+    if ((cw / 16.0) < (ch / 9.0)) {
+        float offset_y = (ch - (cw * (9.0/16.0f))) / 2.0f;
+        sg_apply_viewport(cx, cy + offset_y, cw, cw * (9.0/16.0), true);
+    } else {
+        float offset_x = (cw - (ch * (16.0/9.0))) / 2.0f;
+        sg_apply_viewport(cx + offset_x, cy, ch * (16.0/9.0), ch, true);
+    }
 
     cur_scene->SetupRenderState();
     cur_scene->RenderObjects();

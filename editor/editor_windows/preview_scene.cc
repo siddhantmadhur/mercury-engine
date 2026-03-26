@@ -6,13 +6,42 @@
 
 #include "gameobjects/quad.hh"
 
+#define ZOOM 4.0f
+#define FAKE_RES 1
+#if FAKE_RES
+#define height_s 1080
+#define width_s 1920
+#else
+#define height_s (sapp_heightf() * (1.0f / ZOOM))
+#define width_s (sapp_widthf() * (1.0f / ZOOM))
+#endif
+
+
 void GamePreviewScene::OnStart() {
-    auto bg = ecs.createEntity();
-    Quad q = Quad(glm::vec2(0.0, 0.0), glm::vec2(1920, 1080), glm::vec4(0.0, 0.0, 0.0, 1.0));
-    ecs.addMesh(bg, q.mesh);
-    ecs.addPosition(bg, q.position);
+    if (true) {
+        auto bg = ecs.createEntity();
+        Quad q = Quad(glm::vec3(0.0, 0.0, 0.0), glm::vec3(width_s, height_s, 1), glm::vec4(0.0, 1.0, 0.0, 1.0));
+        ecs.addMesh(bg, q.mesh);
+        ecs.addPosition(bg, q.position);
+    }
+    { // CAMERA
+
+        Camera playerCam = Camera(width_s / height_s);
+        playerCam.configure2D(width_s, height_s, ZOOM);
+        SetPlayerCamera(playerCam);
+    }
+    {
+        auto block = ecs.createEntity();
+        Quad q = Quad(glm::vec3(0.0, 0.0, 1.0), glm::vec3(100, 100, 1), glm::vec4(1.0, 1.0, 1.0, 1.0));
+        ecs.addMesh(block, q.mesh);
+        ecs.addPosition(block, q.position);
+    }
 }
 void GamePreviewScene::OnEvent(const sapp_event *event) {};
 void GamePreviewScene::OnDestroy() {};
 void GamePreviewScene::OnFrameUpdate() {};
 void GamePreviewScene::OnTickUpdate(float tick_t) {};
+
+void GamePreviewScene::SetResolution(glm::vec2 new_res) {
+    resolution = new_res;
+};

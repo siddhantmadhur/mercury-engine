@@ -13,6 +13,10 @@ public:
     void OnDestroy() override;
     void OnFrameUpdate() override;
     void OnTickUpdate(float tick_t) override;
+
+    void SetResolution(glm::vec2);
+private:
+    glm::vec2 resolution;
 };
 
 #endif //PEQUODENGINE_PREVIEW_SCENE_H
