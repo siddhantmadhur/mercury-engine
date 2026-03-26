@@ -46,8 +46,8 @@ void Editor::sokol_init() {
         .clear_value = { gray, gray, gray, 1.0f },
     };
 
-    game_scene = new BreakoutScene();
-    game_scene->OnStartInternal();
+    game_scene = std::make_unique<GamePreviewScene>();
+    //game_scene->OnStartInternal();
     game_scene->Initialize();
     game_scene->OnStart();
 

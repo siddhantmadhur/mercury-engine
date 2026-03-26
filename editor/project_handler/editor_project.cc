@@ -32,12 +32,11 @@ void ProjectSelectionScene::OnInitialLoad() {
 #ifdef AUTO_LOAD_PONG
         current_project_handler->ReloadProjects();
         auto proj = current_project_handler->GetProjects();
-        current_project_handler->Load(proj[0]);
-        OpenProject();
-
-
-        game_preview.Show();
-
+        if (!proj.empty()) {
+            current_project_handler->Load(proj[0]);
+            OpenProject();
+            game_preview.Show();
+        }
 #endif
     }
 
@@ -59,9 +58,9 @@ static void imgui_callback(const ImDrawList* dl, const ImDrawCmd* cmd) {
     const int cw = (int) (cmd->ClipRect.z - cmd->ClipRect.x);
     const int ch = (int) (cmd->ClipRect.w - cmd->ClipRect.y);
     sg_apply_scissor_rect(cx, cy, cw, ch, true);
-    //sg_apply_viewport(cx, cy, cw, cw * (16.0f / 9.0f), true);
 
-    cur_scene->BeginRenderPass(cw, ch);
+    cur_scene->SetupRenderState();
+    cur_scene->RenderObjects();
 
 
  

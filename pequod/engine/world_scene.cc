@@ -208,16 +208,15 @@ void WorldScene::Initialize() {
     ecs.initializeJolt();
 }
 
-void WorldScene::BeginRenderPass(float width, float height) {
-
-   
+void WorldScene::SetupRenderState() {
     cam_params_t params;
     params.view = playerCamera.getView();
     params.projection = playerCamera.getProjection();
+    sg_apply_pipeline(pip);
+    sg_apply_uniforms(UB_cam_params, SG_RANGE(params));
+}
 
-
-    ecs.setupRender(bind);
-
+void WorldScene::BeginRenderPass(float width, float height) {
     sg_begin_pass((sg_pass){
         .action = pass_action,
         .swapchain = sglue_swapchain(),
@@ -229,12 +228,13 @@ void WorldScene::BeginRenderPass(float width, float height) {
         .delta_time = delta_t
     });
 
-    sg_apply_pipeline(pip);
+    SetupRenderState();
+}
 
+void WorldScene::RenderObjects() {
+    ecs.setupRender(bind);
     sg_apply_bindings(bind);
-
-    sg_apply_uniforms(UB_cam_params, SG_RANGE(params));
-
+    ecs.render(playerCamera, delta_t);
 }
 
 void WorldScene::CompleteRender() {
@@ -242,7 +242,6 @@ void WorldScene::CompleteRender() {
 
     //cout << "Rendering " << indices.size() << " indices!" << endl;
 
-    ecs.render(playerCamera, delta_t);
 
     simgui_render();
     sg_end_pass();

@@ -34,6 +34,8 @@ public:
     void Destroy();
     // Renders the scene with selected viewport
     void BeginRenderPass(float width, float height);
+    void SetupRenderState();
+    void RenderObjects();
     void CompleteRender();
 
     // Step that computes all the physics. Should only run once a physics tick.

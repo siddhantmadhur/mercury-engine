@@ -19,6 +19,8 @@
 #include "panel/game_preview.hh"
 #include <sokol/sokol_gfx.h>
 
+#include "preview_scene.h"
+
 namespace Pequod {
 
 class Editor {
@@ -45,7 +47,7 @@ public:
     //@}
 
 
-    BreakoutScene *game_scene;
+    std::unique_ptr<GamePreviewScene> game_scene;
 
 private:
     EditorScene &currentScene;

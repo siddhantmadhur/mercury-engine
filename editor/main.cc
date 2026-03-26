@@ -1,5 +1,5 @@
 #include <cstdlib>
-#include <editor_windows/editor_main.hh>
+#include <editor_windows/editor_main.h>
 
 #include <format>
 #include <iostream>
@@ -144,7 +144,6 @@ sapp_desc sokol_main(int argc, char *argv[]) {
 
     PDebug::info("pequod editor: starting");
 
-    selection_scene.InitializeScene();
     pequod_editor_main.InitializeEditor();
 
     return (sapp_desc){

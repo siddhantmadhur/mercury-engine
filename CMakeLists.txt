@@ -82,7 +82,10 @@ file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
 if (APPLE)
   set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
 endif()
-add_executable(pequod_editor ${EDITOR_SOURCE})
+add_executable(pequod_editor ${EDITOR_SOURCE}
+        editor/main.cc
+        editor/editor_windows/preview_scene.h
+        editor/editor_windows/preview_scene.cc)
 target_link_libraries(pequod_editor pequod)
 
 # CREATE NEW BINARIES USING THIS
