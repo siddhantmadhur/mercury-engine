@@ -85,10 +85,30 @@ void PequodEngine::sokol_init() {
 
 void PequodEngine::sokol_frame_cb() {
 
-    //sg_end_pass();
-    currentScene->OnFrameInternal();
-    
-    //sg_commit();
+    const int width = sapp_width();
+    const int height = sapp_height();
+
+    simgui_new_frame({ width, height, sapp_frame_duration(), sapp_dpi_scale() });
+
+
+    sg_begin_pass((sg_pass){
+        .action = currentScene->GetPassAction(),
+        .swapchain = sglue_swapchain(),
+    });
+
+    {
+        currentScene->ComputeTick();
+        currentScene->OnFrameUpdate();
+        currentScene->SetupRenderState();
+        currentScene->RenderObjects();
+        //currentScene.RenderScenePreview((WorldScene**) &game_scene);
+    }
+
+    simgui_render();
+
+    sg_end_pass();
+
+    sg_commit();
 }
 
 bool PequodEngine::isShowDebugStats() {

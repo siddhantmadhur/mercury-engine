@@ -16,10 +16,12 @@
 
 #include "editor_scene.hh"
 #include "engine/world_scene.h"
-#include "panel/game_preview.hh"
 #include <sokol/sokol_gfx.h>
 
 #include "preview_scene.h"
+#include "panel/file_explorer.hh"
+
+namespace fs = std::filesystem;
 
 namespace Pequod {
 
@@ -59,6 +61,8 @@ private:
     **/
     sg_pass_action pass_action;
     //@}
+
+    fs::path editor_cwd;
 };
 
 };

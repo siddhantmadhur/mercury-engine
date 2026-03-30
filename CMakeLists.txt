@@ -11,7 +11,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE ENGINE_SRC "pequod/*.cc")
 
-add_library(pequod ${ENGINE_SRC})
+add_library(pequod ${ENGINE_SRC}
+        pequod/pobject/property.h
+        pequod/pobject/property.cc
+        pequod/pobject/pobject.h
+        pequod/pobject/pobject.cc
+        pequod/ecs/ecs.hh
+        pequod/ecs/ecs.cc
+        pequod/gameobjects/gameobject.cc)
 
 
 include_directories("pequod")
@@ -85,7 +92,10 @@ endif()
 add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/main.cc
         editor/editor_windows/preview_scene.h
-        editor/editor_windows/preview_scene.cc)
+        editor/editor_windows/preview_scene.cc
+        editor/panel/object_tree.h
+        editor/panel/object_tree.cc
+)
 target_link_libraries(pequod_editor pequod)
 
 # CREATE NEW BINARIES USING THIS

@@ -18,11 +18,11 @@
 
 
 void GamePreviewScene::OnStart() {
-    if (true) {
+    { // Background quad
         auto bg = ecs.createEntity();
-        Quad q = Quad(glm::vec3(0.0, 0.0, 0.0), glm::vec3(width_s, height_s, 1), glm::vec4(0.0, 1.0, 0.0, 1.0));
-        ecs.addMesh(bg, q.mesh);
-        ecs.addPosition(bg, q.position);
+        Quad q = Quad(glm::vec3(0.0, 0.0, 0.0), glm::vec3(width_s, height_s, 1), glm::vec4(0.0, 0.0, 0.0, 1.0));
+        ecs.AddProperty(bg, q.mesh);
+        ecs.AddProperty(bg, q.position);
     }
     { // CAMERA
 

@@ -45,7 +45,14 @@ void WorldScene::OnFrameInternal() {
     const int width = sapp_width();
     const int height = sapp_height();
 
+    ComputeTick();
 
+    BeginRenderPass(width, height);
+    OnFrameUpdate();
+    CompleteRender();
+}
+
+void WorldScene::ComputeTick() {
     delta_t = stm_ms(stm_laptime(&frame_time));
     elapsed_t += delta_t;
 
@@ -72,11 +79,7 @@ void WorldScene::OnFrameInternal() {
         }
     }
 
-    BeginRenderPass(width, height);
-    OnFrameUpdate();
-    CompleteRender();
 }
-
 
 void WorldScene::Destroy() {
     /**

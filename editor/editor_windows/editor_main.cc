@@ -8,16 +8,19 @@
 #include <sokol/sokol_time.h>
 #include <sokol/util/sokol_imgui.h>
 
+#include "tinyxml2.h"
+
 
 namespace Pequod {
 
 Editor::Editor(EditorScene& defaultScene) : currentScene(defaultScene) 
 {
-    
+    const char *home_dir = getenv("HOME");
+    editor_cwd = fs::path(home_dir) / "pequod";
 }
 
 void Editor::InitializeEditor() {
-    
+    fs::path config_file = editor_cwd / "editor_config.xml";
 }
 
 void Editor::SetScene(EditorScene& scene) {
@@ -63,7 +66,7 @@ void Editor::sokol_frame_cb() {
 
     simgui_new_frame({ width, height, sapp_frame_duration(), sapp_dpi_scale() });
 
-    { 
+    {
         currentScene.OnFrameInternal();
         currentScene.RenderScenePreview((WorldScene**) &game_scene);
     }

@@ -6,9 +6,4 @@
 GameObject::~GameObject() {
     PDebug::log("releasing game object...");
 }
-/**
-GameObject::GameObject() {
-    std::cout << "game object" << std::endl;
-}
-**/
 

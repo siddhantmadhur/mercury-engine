@@ -9,8 +9,12 @@
 #include <ecs/ecs.hh>
 #include <format>
 #include <iostream>
+#include <type_traits>
 #include <debugger/debugger.hh>
 #include <unordered_map>
+
+template<class TProperty>
+std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<TProperty>>> ECS::properties;
 
 
 class MyContactListener : public ContactListener
@@ -123,13 +127,15 @@ glm::vec3 ECS::GetVelocity(entity_id id) {
 
 void ECS::Disable(entity_id id) {
     
-    Mesh* mesh = getMesh(id);
+    auto mesh = GetProperty<Mesh>(id);
     if (mesh) {
+        auto & meshes = properties<Mesh>[typeid(Mesh)];
         meshes.erase(id);
     }
     
-    auto* pos = getPosition(id);
+    auto pos = GetProperty<Position>(id);
     if (pos) {
+        auto & positions = properties<Position>[typeid(Position)];
         positions.erase(id);
     }
     
@@ -163,6 +169,7 @@ void ECS::simulatePhysics(int steps) { // call every 60hz
         JPH::BodyID body_id = pair.first;
         entity_id id = pair.second;
         auto phys_position = body_interface.GetCenterOfMassPosition(body_id);
+        auto positions = properties<Position>[typeid(Position)];
         glm::vec3 & position = positions[id]->position;
         position.x = phys_position.GetX();
         position.y = phys_position.GetY();
@@ -241,8 +248,8 @@ entity_id ECS::createEntity() {
     return new_id; 
 }
 
-void ECS::addMesh(entity_id id, Mesh* mesh) {
-   
+void ECS::addMesh(entity_id id, std::shared_ptr<Mesh> mesh) {
+    auto& meshes = properties<Mesh>[typeid(Mesh)];
     if (meshes.contains(id)) {
         std::cout << "Mesh already added" << std::endl;
         return;
@@ -256,17 +263,18 @@ void ECS::addMesh(entity_id id, Mesh* mesh) {
     size_t prev_size = vertices.size();
     if (prev_size > 0) {
         for (int i = 0; i < mesh->indices.size(); i++) {
-            mesh->indices[i] += prev_size; 
+            mesh->indices[i] += prev_size;
         }
     }
-    
+
    // std::cout << "i: " << mesh->indices[i] << std::endl;
     this->vertices.insert(vertices.end(), mesh->vertices.begin(), mesh->vertices.end());
     this->indices.insert(indices.end(), mesh->indices.begin(), mesh->indices.end());
 }
 
+/**
 
-void ECS::addPosition(entity_id id, Position* position) {
+void ECS::addPosition(entity_id id, std::shared_ptr<Position> position) {
     if (position == nullptr) {
         std::cout << "Position is null" << std::endl;
         return;
@@ -279,18 +287,44 @@ void ECS::addPosition(entity_id id, Position* position) {
     this->positions[id] = position;
 }
 
-Position* ECS::getPosition(entity_id id) {
+std::shared_ptr<Position> ECS::getPosition(entity_id id) {
     if (positions.contains(id)) {
         return positions[id];
     }
     return NULL;
 }
 
-Mesh* ECS::getMesh(entity_id id) {
+std::shared_ptr<Mesh> ECS::GetProperty<Mesh>(entity_id id) {
     if (meshes.contains(id)) {
         return meshes[id];
     }
     return NULL;
+}
+**/
+
+
+template<class TProperty>
+void ECS::AddProperty(entity_id id, std::shared_ptr<TProperty> property) {
+    auto& arr = properties<TProperty>[typeid(TProperty)];
+    if (!arr.contains(id)) {
+        if constexpr (std::is_same_v<TProperty, Mesh>) {
+            addMesh(id, property);
+        } else {
+            arr[id] = property;
+        }
+    } else {
+        PDebug::error(std::format("Property already exists for id: {}", id));
+    }
+}
+
+template<class TProperty>
+std::shared_ptr<TProperty> ECS::GetProperty(entity_id id) {
+    auto arr = properties<TProperty>[typeid(TProperty)];
+    if (arr.contains(id)) {
+        return arr[id];
+    } else {
+        return nullptr;
+    }
 }
 
 void ECS::setupRender(sg_bindings& bind) {
@@ -336,8 +370,10 @@ void ECS::SetFriction(entity_id id, float friction) {
 
 void ECS::render(Camera& cam, float delta_t) {
     for (int i = 0; i < current_id; i++) {
-        Mesh* mesh = meshes[i];
-        Position* position = positions[i];
+        auto& meshes = properties<Mesh>[typeid(Mesh)];
+        auto mesh = meshes[i];
+        auto& positions = properties<Position>[typeid(Position)];
+        auto position = positions[i];
 
         if (mesh == nullptr || position == nullptr) {
             continue;
@@ -371,4 +407,9 @@ void ECS::render(Camera& cam, float delta_t) {
     }
 }
 
-
+template std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<Mesh>>> ECS::properties<Mesh>;
+template std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<Position>>> ECS::properties<Position>;
+template void ECS::AddProperty<Mesh>(entity_id, std::shared_ptr<Mesh>);
+template void ECS::AddProperty<Position>(entity_id, std::shared_ptr<Position>);
+template std::shared_ptr<Mesh> ECS::GetProperty<Mesh>(entity_id);
+template std::shared_ptr<Position> ECS::GetProperty<Position>(entity_id);

@@ -37,6 +37,7 @@ public:
     void SetupRenderState();
     void RenderObjects();
     void CompleteRender();
+    void ComputeTick(); // call every frame, processes whether tick is run
 
     // Step that computes all the physics. Should only run once a physics tick.
     // @param steps the number of physics steps to take (should sum to atleast 60 per second)

@@ -11,6 +11,8 @@
 #define PEQUOD_ECS_IMPL_HH_
 
 #include <iostream>
+#include <memory>
+#include <typeindex>
 #include <sokol/sokol_gfx.h>
 
 #include "gameobjects/camera.hh"
@@ -139,11 +141,10 @@ public:
     void simulatePhysics(int steps);
     entity_id createEntity(); // use to create new entities that are part of the engine  
 
-    void addMesh(entity_id, Mesh*);
-    void addPosition(entity_id, Position*);
+    //void addPosition(entity_id, std::shared_ptr<Position>);
     
-    Mesh* getMesh(entity_id);
-    Position* getPosition(entity_id);
+    //std::shared_ptr<Mesh> getMesh(entity_id);
+    //std::shared_ptr<Position> getPosition(entity_id);
 
     void addRigidBody(entity_id, RigidBody*);
     RigidBody* getRigidBody(entity_id);
@@ -152,6 +153,12 @@ public:
     void SetPosition(entity_id, glm::vec3);
     void SetRestitution(entity_id, float);
     void SetFriction(entity_id, float);
+
+	template <class TProperty>
+	void AddProperty(entity_id, std::shared_ptr<TProperty>); // Add property
+
+	template <class TProperty>
+	std::shared_ptr<TProperty> GetProperty(entity_id); // Add property
 
     void SetMotionType(entity_id, JPH::EMotionType);
 
@@ -171,8 +178,9 @@ public:
     std::unordered_map<JPH::BodyID, entity_id> jolt_bodies;
     std::unordered_map<entity_id, RigidBody*> rigid_bodies;
 protected:
-    std::unordered_map<entity_id, Mesh*> meshes;
-    std::unordered_map<entity_id, Position*> positions;
+	template <class TProperty>
+	static std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<TProperty>>> properties;
+
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;
     
@@ -183,6 +191,7 @@ protected:
 
 
 private:
+    void addMesh(entity_id, std::shared_ptr<Mesh>);
     entity_id current_id;
 };
 

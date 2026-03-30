@@ -16,6 +16,8 @@
 #include <project_handler/project_handler.hh>
 #include <string>
 
+#include "panel/object_tree.h"
+
 namespace Pequod {
 class ProjectSelectionScene : public EditorScene {
 public:
@@ -46,6 +48,7 @@ private:
 
     FileExplorer explorer;
     GamePreview game_preview;
+    std::unique_ptr<ObjectTree> object_tree = nullptr;
 
 
 };

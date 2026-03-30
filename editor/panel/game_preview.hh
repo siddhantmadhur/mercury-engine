@@ -9,8 +9,6 @@
 
 #include <panel/panel.hh>
 
-#include "breakout_scene.hh"
-
 namespace Pequod {
 
 class GamePreview : public Panel {

@@ -6,11 +6,11 @@
 
 #include <ecs/ecs.hh>
 
-#if TARGET_OS_LINUX
+#if TARGET_OS_MAC
+#define SOKOL_GLCORE
+#else
 #define VK_USE_PLATFORM_XLIB_KHR
 #define SOKOL_VULKAN
-#elif TARGET_OS_MAC
-#define SOKOL_GLCORE
 #endif
 
 #define SOKOL_IMPL

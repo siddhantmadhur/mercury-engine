@@ -26,6 +26,7 @@ public:
     void DrawFolder(fs::path root);
 
     void SetRootDirectory(fs::path init_directory);
+    void CreateFile(fs::path file_path);
 
     std::vector<fs::path> GetItems(fs::path);
 private:

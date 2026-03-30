@@ -108,6 +108,8 @@ void ProjectSelectionScene::OpenProject() {
     current_project_handler->ReloadProjects();
     explorer.SetRootDirectory(current_project_handler->project_path);
     explorer.Initialize();
+    object_tree = std::make_unique<ObjectTree>(current_project_handler->project_path);
+    object_tree->Initialize();
 }
 
 
@@ -136,6 +138,11 @@ void ProjectSelectionScene::OnFrameUpdate() {
             }
             if (ImGui::MenuItem("GamePreview", "", game_preview.IsShown())) {
                 game_preview.Toggle();
+            }
+            if (object_tree) {
+                if (ImGui::MenuItem("ObjectTree", "", object_tree->IsShown())) {
+                    object_tree->Toggle();
+                }
             }
 
             ImGui::EndMenu();
@@ -204,11 +211,11 @@ void ProjectSelectionScene::OnFrameUpdate() {
 
         explorer.Draw();
         //game_preview.Draw();
-            
-        {
-            ImGui::Begin("Nodes");
-            ImGui::End();
+
+        if (object_tree && object_tree->IsShown()) {
+            object_tree->Draw();
         }
+
         {
             ImGui::Begin("ObjectProperties");
             ImGui::End();

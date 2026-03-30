@@ -50,7 +50,13 @@ void FileExplorer::ReloadFolders() {
 void FileExplorer::Draw() {
     if (show_panel) {
         ImGui::Begin("FileExplorer", &show_panel, 0);
-           
+        if (ImGui::BeginPopupContextWindow()) {
+            if (ImGui::Button("New File")) {
+
+            }
+            ImGui::EndPopup();
+        }
+
         ImGuiTreeNodeFlags base_flags = ImGuiTreeNodeFlags_DrawLinesFull | ImGuiTreeNodeFlags_DefaultOpen;
         if (ImGui::TreeNodeEx("pequod://", base_flags)) {
             ImGui::SameLine();
@@ -60,6 +66,7 @@ void FileExplorer::Draw() {
             DrawFolder(root_directory);
             ImGui::TreePop();
         }
+
 
         ImGui::End();
     }

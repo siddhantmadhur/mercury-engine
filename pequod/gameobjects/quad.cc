@@ -28,8 +28,8 @@ Quad::Quad(glm::vec2 position, glm::vec2 init_size, glm::vec4 color) {
     std::vector<uint16_t> indices = std::vector<uint16_t>(std::begin(raw_indices), std::end(raw_indices));
 
 
-    this->position = new Position(glm::vec3(position.x, position.y, 0));
-    this->mesh = new Mesh(vertices, indices, glm::vec3(init_size.x, init_size.y, 1.0f));
+    this->position = std::make_shared<Position>(glm::vec3(position.x, position.y, 0));
+    this->mesh = std::make_shared<Mesh>(vertices, indices, glm::vec3(init_size.x, init_size.y, 1.0f));
 }
 
 

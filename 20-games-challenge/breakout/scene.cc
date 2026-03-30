@@ -19,8 +19,8 @@
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 
-#define playerPos ecs.getPosition(player)->position 
-#define playerSize ecs.getMesh(player)->scale
+#define playerPos ecs.GetProperty<Position>(player)->position
+#define playerSize ecs.GetProperty<Mesh>(player)->scale
 
 class BallRigidBody : public Box2D {
 public:
@@ -85,9 +85,9 @@ void BreakoutScene::OnStart() {
         glm::vec2 size = glm::vec2(10.0f, height_s);
         glm::vec2 pos = glm::vec2(-size.x / 2.0f, size.y / 2.0f);
 
-        Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.addPosition(wall, quad->position);
-        ecs.addMesh(wall, quad->mesh);
+        auto quad = std::make_shared<Quad>(pos, size, glm::vec4(1.0f));
+        ecs.AddProperty(wall, quad->position);
+        ecs.AddProperty(wall, quad->mesh);
 
         WallRigidBody* rigid_body = new WallRigidBody(pos, size);
         ecs.addRigidBody(wall, rigid_body);
@@ -101,8 +101,8 @@ void BreakoutScene::OnStart() {
         glm::vec2 pos = glm::vec2(width_s + (size.x / 2.0f), size.y / 2.0f);
 
         Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.addPosition(wall, quad->position);
-        ecs.addMesh(wall, quad->mesh);
+        ecs.AddProperty(wall, quad->position);
+        ecs.AddProperty(wall, quad->mesh);
 
         WallRigidBody* rigid_body = new WallRigidBody(pos, size);
         ecs.addRigidBody(wall, rigid_body);
@@ -116,8 +116,8 @@ void BreakoutScene::OnStart() {
         glm::vec2 pos = glm::vec2(width_s / 2.0f, height_s + (size.y / 2.0f));
 
         Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.addPosition(wall, quad->position);
-        ecs.addMesh(wall, quad->mesh);
+        ecs.AddProperty(wall, quad->position);
+        ecs.AddProperty(wall, quad->mesh);
 
         WallRigidBody* rigid_body = new WallRigidBody(pos, size);
         ecs.addRigidBody(wall, rigid_body);
@@ -130,8 +130,8 @@ void BreakoutScene::OnStart() {
         glm::vec3 pos = glm::vec3(width_s / 2.0f, 16, 0.0f);
         glm::vec3 size = glm::vec3(24.0f, 3.0f, 1.0f);
         Quad *quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.addPosition(player, quad->position);
-        ecs.addMesh(player, quad->mesh);
+        ecs.AddProperty(player, quad->position);
+        ecs.AddProperty(player, quad->mesh);
         
         PlayerRigidBody* rigid_body = new PlayerRigidBody(pos, size);
         rigid_body->allowed_dofs = JPH::EAllowedDOFs::TranslationX;
@@ -147,8 +147,8 @@ void BreakoutScene::OnStart() {
         glm::vec3 size = glm::vec3(4.0f, 4.0f, 1.0f);
         glm::vec3 pos = glm::vec3(playerPos.x, playerPos.y + playerSize.y, 0.0f);
         Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.addPosition(ball, quad->position);
-        ecs.addMesh(ball, quad->mesh);
+        ecs.AddProperty(ball, quad->position);
+        ecs.AddProperty(ball, quad->mesh);
         
         BallRigidBody* rigid_body = new BallRigidBody(pos, size);
         ecs.addRigidBody(ball, rigid_body);
@@ -169,8 +169,8 @@ void BreakoutScene::OnStart() {
                 auto brick_id = ecs.createEntity();
                 bricks.push_back(brick_id);
                 Quad* quad = new Quad(offset, brick_size, glm::vec4(1.0 / (8.0/j), 0.1f, 0.8f, 1.0f));
-                ecs.addPosition(brick_id, quad->position);
-                ecs.addMesh(brick_id, quad->mesh);
+                ecs.AddProperty(brick_id, quad->position);
+                ecs.AddProperty(brick_id, quad->mesh);
                
                 BrickRigidBody* rigid_body = new BrickRigidBody(offset, brick_size);
 
@@ -214,7 +214,7 @@ void BreakoutScene::OnTickUpdate(float tick_t) {
         }
 
         if (game_started) {
-            glm::vec3 & pos = ecs.getPosition(ball)->raw_position;
+            glm::vec3 & pos = ecs.GetProperty<Position>(ball)->raw_position;
             if (pos.y < 0) {
                 game_started = false;
                 pos = playerPos;
@@ -281,7 +281,7 @@ void BreakoutScene::OnTickUpdate(float tick_t) {
             //ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed);
             glm::vec3 newPos = playerPos;
             newPos.y += playerSize.y;
-            glm::vec3 & ballPos = ecs.getPosition(ball)->raw_position;
+            glm::vec3 & ballPos = ecs.GetProperty<Position>(ball)->raw_position;
             ecs.SetPosition(ball, newPos);
         } else {
 #if CONSTANT_VELOCITY
@@ -345,7 +345,7 @@ void BreakoutScene::OnFrameUpdate() {
 
     ImGui::Begin("pos", NULL, 0);
    
-    glm::vec3 ballPos = ecs.getPosition(ball)->raw_position;
+    glm::vec3 ballPos = ecs.GetProperty<Position>(ball)->raw_position;
     ImGui::Text("player: (%.2f, %.2f, %.2f)", ballPos.x, ballPos.y, ballPos.z);
     //ImGui::Text("ball: (%.2f, %.2f)", ball->GetPosition().x, ball->GetPosition().y);
 
