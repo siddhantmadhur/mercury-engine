@@ -19,8 +19,8 @@
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 
-#define playerPos ecs.GetProperty<Position>(player)->position
-#define playerSize ecs.GetProperty<Mesh>(player)->scale
+#define playerPos ecs->GetProperty<Position>(player)->position
+#define playerSize ecs->GetProperty<Mesh>(player)->scale
 
 using namespace Pequod;
 
@@ -83,80 +83,80 @@ void BreakoutScene::OnStart() {
     }
 
     { // left wall
-        entity_id wall = ecs.createEntity();
+        entity_id wall = ecs->createEntity();
         glm::vec2 size = glm::vec2(10.0f, height_s);
         glm::vec2 pos = glm::vec2(-size.x / 2.0f, size.y / 2.0f);
 
         auto quad = std::make_shared<Quad>(pos, size, glm::vec4(1.0f));
-        ecs.AddProperty(wall, quad->position);
-        ecs.AddProperty(wall, quad->mesh);
+        ecs->AddProperty(wall, quad->position);
+        ecs->AddProperty(wall, quad->mesh);
 
         WallRigidBody* rigid_body = new WallRigidBody(pos, size);
-        ecs.addRigidBody(wall, rigid_body);
-        ecs.SetRestitution(wall, 0.0f);
-        ecs.SetMotionType(wall, JPH::EMotionType::Static);
+        ecs->addRigidBody(wall, rigid_body);
+        ecs->SetRestitution(wall, 0.0f);
+        ecs->SetMotionType(wall, JPH::EMotionType::Static);
     }
 
     { // right wall
-        entity_id wall = ecs.createEntity();
+        entity_id wall = ecs->createEntity();
         glm::vec2 size = glm::vec2(10.0f, height_s);
         glm::vec2 pos = glm::vec2(width_s + (size.x / 2.0f), size.y / 2.0f);
 
         Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.AddProperty(wall, quad->position);
-        ecs.AddProperty(wall, quad->mesh);
+        ecs->AddProperty(wall, quad->position);
+        ecs->AddProperty(wall, quad->mesh);
 
         WallRigidBody* rigid_body = new WallRigidBody(pos, size);
-        ecs.addRigidBody(wall, rigid_body);
-        ecs.SetRestitution(wall, 0.0f);
-        ecs.SetMotionType(wall, JPH::EMotionType::Static);
+        ecs->addRigidBody(wall, rigid_body);
+        ecs->SetRestitution(wall, 0.0f);
+        ecs->SetMotionType(wall, JPH::EMotionType::Static);
     }
     
     { // upper wall
-        entity_id wall = ecs.createEntity();
+        entity_id wall = ecs->createEntity();
         glm::vec2 size = glm::vec2(width_s, 10.0f);
         glm::vec2 pos = glm::vec2(width_s / 2.0f, height_s + (size.y / 2.0f));
 
         Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.AddProperty(wall, quad->position);
-        ecs.AddProperty(wall, quad->mesh);
+        ecs->AddProperty(wall, quad->position);
+        ecs->AddProperty(wall, quad->mesh);
 
         WallRigidBody* rigid_body = new WallRigidBody(pos, size);
-        ecs.addRigidBody(wall, rigid_body);
-        ecs.SetRestitution(wall, 0.0f);
-        ecs.SetMotionType(wall, JPH::EMotionType::Static);
+        ecs->addRigidBody(wall, rigid_body);
+        ecs->SetRestitution(wall, 0.0f);
+        ecs->SetMotionType(wall, JPH::EMotionType::Static);
     }
 
     { // PLAYER
-        player = ecs.createEntity();
+        player = ecs->createEntity();
         glm::vec3 pos = glm::vec3(width_s / 2.0f, 16, 0.0f);
         glm::vec3 size = glm::vec3(24.0f, 3.0f, 1.0f);
         Quad *quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.AddProperty(player, quad->position);
-        ecs.AddProperty(player, quad->mesh);
+        ecs->AddProperty(player, quad->position);
+        ecs->AddProperty(player, quad->mesh);
         
         PlayerRigidBody* rigid_body = new PlayerRigidBody(pos, size);
         rigid_body->allowed_dofs = JPH::EAllowedDOFs::TranslationX;
 
-        ecs.addRigidBody(player, rigid_body);
-        ecs.SetMotionType(player, JPH::EMotionType::Dynamic);
+        ecs->addRigidBody(player, rigid_body);
+        ecs->SetMotionType(player, JPH::EMotionType::Dynamic);
     }
 
     { // ball
         ball_dx = glm::vec2(0.0f);
 
-        ball = ecs.createEntity();
+        ball = ecs->createEntity();
         glm::vec3 size = glm::vec3(4.0f, 4.0f, 1.0f);
         glm::vec3 pos = glm::vec3(playerPos.x, playerPos.y + playerSize.y, 0.0f);
         Quad* quad = new Quad(pos, size, glm::vec4(1.0f));
-        ecs.AddProperty(ball, quad->position);
-        ecs.AddProperty(ball, quad->mesh);
+        ecs->AddProperty(ball, quad->position);
+        ecs->AddProperty(ball, quad->mesh);
         
         BallRigidBody* rigid_body = new BallRigidBody(pos, size);
-        ecs.addRigidBody(ball, rigid_body);
-        ecs.SetFriction(ball, 0.0f);
-        ecs.SetRestitution(ball, 1.0f);
-        ecs.SetMotionType(ball, JPH::EMotionType::Dynamic);
+        ecs->addRigidBody(ball, rigid_body);
+        ecs->SetFriction(ball, 0.0f);
+        ecs->SetRestitution(ball, 1.0f);
+        ecs->SetMotionType(ball, JPH::EMotionType::Dynamic);
     }
 
     { // BRICKS 
@@ -168,16 +168,16 @@ void BreakoutScene::OnStart() {
         for (int j = 0; j < 8; j++) {
             offset.x = padding_around + (brick_size.x);
             for (int i = 0; i < 8; i++) {
-                auto brick_id = ecs.createEntity();
+                auto brick_id = ecs->createEntity();
                 bricks.push_back(brick_id);
                 Quad* quad = new Quad(offset, brick_size, glm::vec4(1.0 / (8.0/j), 0.1f, 0.8f, 1.0f));
-                ecs.AddProperty(brick_id, quad->position);
-                ecs.AddProperty(brick_id, quad->mesh);
+                ecs->AddProperty(brick_id, quad->position);
+                ecs->AddProperty(brick_id, quad->mesh);
                
                 BrickRigidBody* rigid_body = new BrickRigidBody(offset, brick_size);
 
-                ecs.addRigidBody(brick_id, rigid_body);
-                ecs.SetMotionType(brick_id, JPH::EMotionType::Static);
+                ecs->addRigidBody(brick_id, rigid_body);
+                ecs->SetMotionType(brick_id, JPH::EMotionType::Static);
 
 
                 offset.x += brick_size.x;
@@ -199,7 +199,7 @@ void BreakoutScene::OnTickUpdate(float tick_t) {
         while (bricks_to_remove.size() > 0) {
             entity_id brick_id = bricks_to_remove.back();
             
-            ecs.Disable(brick_id);
+            ecs->Disable(brick_id);
 
             bricks_to_remove.pop_back();
 
@@ -211,12 +211,12 @@ void BreakoutScene::OnTickUpdate(float tick_t) {
             ball_dx = glm::vec2(glm::cos(glm::radians(deg)), glm::sin(glm::radians(deg)));
             game_started = true;
 #if !CONSTANT_VELOCITY
-            ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
+            ecs->setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
 #endif
         }
 
         if (game_started) {
-            glm::vec3 & pos = ecs.GetProperty<Position>(ball)->raw_position;
+            glm::vec3 & pos = ecs->GetProperty<Position>(ball)->raw_position;
             if (pos.y < 0) {
                 game_started = false;
                 pos = playerPos;
@@ -239,21 +239,21 @@ void BreakoutScene::OnTickUpdate(float tick_t) {
             direction = direction * 2.0f;
         }
 
-        ecs.setVelocity(player, glm::vec3(direction * player_speed * tick_t, 0.0f, 0.0f));
+        ecs->setVelocity(player, glm::vec3(direction * player_speed * tick_t, 0.0f, 0.0f));
 
         /**
 
         if (playerPos.x - (playerSize.x / 2.0f) < 0) {
             glm::vec3 newPos = playerPos;
             newPos.x = playerSize.x / 2.0f;
-            ecs.setVelocity(player, glm::vec3(0.0f));
-            ecs.SetPosition(player, newPos);
+            ecs->setVelocity(player, glm::vec3(0.0f));
+            ecs->SetPosition(player, newPos);
         } 
         if (playerPos.x + (playerSize.x / 2.0f) > width_s) {
             glm::vec3 newPos = playerPos;
             newPos.x = width_s - (playerSize.x / 2.0f);
-            ecs.setVelocity(player, glm::vec3(0.0f));
-            ecs.SetPosition(player, newPos);
+            ecs->setVelocity(player, glm::vec3(0.0f));
+            ecs->SetPosition(player, newPos);
         } 
         **/
         
@@ -280,19 +280,19 @@ void BreakoutScene::OnTickUpdate(float tick_t) {
         **/
     
         if (!game_started) {
-            //ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed);
+            //ecs->setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed);
             glm::vec3 newPos = playerPos;
             newPos.y += playerSize.y;
-            glm::vec3 & ballPos = ecs.GetProperty<Position>(ball)->raw_position;
-            ecs.SetPosition(ball, newPos);
+            glm::vec3 & ballPos = ecs->GetProperty<Position>(ball)->raw_position;
+            ecs->SetPosition(ball, newPos);
         } else {
 #if CONSTANT_VELOCITY
 
-            ecs.setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
+            ecs->setVelocity(ball, glm::vec3(ball_dx.x, ball_dx.y, 0.0f) * ball_speed * tick_t);
 #else
-            glm::vec3 ball_velocity = ecs.GetVelocity(ball);
+            glm::vec3 ball_velocity = ecs->GetVelocity(ball);
             ball_velocity = glm::normalize(ball_velocity);
-            ecs.setVelocity(ball, ball_velocity * ball_speed * tick_t);
+            ecs->setVelocity(ball, ball_velocity * ball_speed * tick_t);
 #endif
         }
 
@@ -347,7 +347,7 @@ void BreakoutScene::OnFrameUpdate() {
 
     ImGui::Begin("pos", NULL, 0);
    
-    glm::vec3 ballPos = ecs.GetProperty<Position>(ball)->raw_position;
+    glm::vec3 ballPos = ecs->GetProperty<Position>(ball)->raw_position;
     ImGui::Text("player: (%.2f, %.2f, %.2f)", ballPos.x, ballPos.y, ballPos.z);
     //ImGui::Text("ball: (%.2f, %.2f)", ball->GetPosition().x, ball->GetPosition().y);
 

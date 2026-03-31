@@ -13,6 +13,8 @@
 #include <debugger/debugger.hh>
 #include <unordered_map>
 
+#define PEQUOD_INTERPOLATE_MOVEMENT 0
+
 #include "pobject/pobject.h"
 
 namespace Pequod {
@@ -398,6 +400,7 @@ void ECS::render(Camera& cam, float delta_t) {
 
         glm::vec3 diff = position->position - position->raw_position;
 
+#if PEQUOD_INTERPOLATE_MOVEMENT
         if (delta_t > 0) {
             //positions[i]->raw_position = positions[i]->position;
             //PDebug::log(std::format("POSITION: {}, {}", diff.x, diff.y));
@@ -406,8 +409,9 @@ void ECS::render(Camera& cam, float delta_t) {
             //position->raw_position += diff;
             position->raw_position = position->position;
         }
-
-        //position->raw_position = position->position;
+#else
+        position->raw_position = position->position;
+#endif
         glm::vec3 pos = position->raw_position;
 
 
