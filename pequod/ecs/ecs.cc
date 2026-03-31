@@ -13,6 +13,8 @@
 #include <debugger/debugger.hh>
 #include <unordered_map>
 
+#include "pobject/pobject.h"
+
 namespace Pequod {
 
 template<class TProperty>
@@ -101,9 +103,10 @@ public:
 
 
 ECS::ECS () {
-    current_id = 0;
     vertices = std::vector<vertex_t>();
     indices = std::vector<uint16_t>();
+    auto root = std::make_shared<PObject>(0);
+    AddProperty(0, root);
 }
 
 ECS::~ECS () {
@@ -246,8 +249,20 @@ void ECS::initializeJolt() {
 
 entity_id ECS::createEntity() {
     entity_id new_id = current_id;
+    auto obj = std::make_shared<PObject>(new_id);
+    AddProperty(new_id, obj);
+
+    auto root = GetProperty<PObject>(0);
+    root->AddChild(new_id);
+
     current_id += 1;
     return new_id;
+}
+
+template <class TProperty>
+std::unordered_map<entity_id, std::shared_ptr<TProperty>>& ECS::GetProperties() {
+    auto& arr = properties<TProperty>[typeid(TProperty)];
+    return arr;
 }
 
 void ECS::addMesh(entity_id id, std::shared_ptr<Mesh> mesh) {
@@ -411,8 +426,17 @@ void ECS::render(Camera& cam, float delta_t) {
 
 template std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<Mesh>>> ECS::properties<Mesh>;
 template std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<Position>>> ECS::properties<Position>;
+    template std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<PObject>>> ECS::properties<PObject>;
+
 template void ECS::AddProperty<Mesh>(entity_id, std::shared_ptr<Mesh>);
 template void ECS::AddProperty<Position>(entity_id, std::shared_ptr<Position>);
+template void ECS::AddProperty<PObject>(entity_id, std::shared_ptr<PObject>);
+
 template std::shared_ptr<Mesh> ECS::GetProperty<Mesh>(entity_id);
 template std::shared_ptr<Position> ECS::GetProperty<Position>(entity_id);
+template std::shared_ptr<PObject> ECS::GetProperty<PObject>(entity_id);
+
+template std::unordered_map<entity_id, std::shared_ptr<Mesh>> & ECS::GetProperties<Mesh>();
+template std::unordered_map<entity_id, std::shared_ptr<Position>> & ECS::GetProperties<Position>();
+template std::unordered_map<entity_id, std::shared_ptr<PObject>> & ECS::GetProperties<PObject>();
 }

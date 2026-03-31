@@ -11,6 +11,8 @@ namespace Pequod {
 
 class Panel {
 public:
+    virtual ~Panel() = default;
+
     Panel(bool init_show = false);
     virtual void Initialize() =0;
     virtual void Draw() =0;

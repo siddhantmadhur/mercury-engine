@@ -35,7 +35,6 @@ void ProjectSelectionScene::OnInitialLoad() {
         if (!proj.empty()) {
             current_project_handler->Load(proj[0]);
             OpenProject();
-            game_preview.Show();
         }
 #endif
     }
@@ -108,8 +107,11 @@ void ProjectSelectionScene::OpenProject() {
     current_project_handler->ReloadProjects();
     explorer.SetRootDirectory(current_project_handler->project_path);
     explorer.Initialize();
-    object_tree = std::make_unique<ObjectTree>(current_project_handler->project_path);
+    object_tree = std::make_unique<ObjectTree>(current_project_handler->project_path, this->ecs, this->selected_entity);
     object_tree->Initialize();
+
+    object_properties = std::make_unique<ObjectPropertiesPanel>(this->selected_entity, this->ecs);
+    object_properties->Initialize();
 }
 
 
@@ -135,9 +137,6 @@ void ProjectSelectionScene::OnFrameUpdate() {
         if (ImGui::BeginMenu("Windows")) {
             if (ImGui::MenuItem("FileExplorer", "", explorer.IsShown())) {
                 explorer.Toggle();
-            }
-            if (ImGui::MenuItem("GamePreview", "", game_preview.IsShown())) {
-                game_preview.Toggle();
             }
             if (object_tree) {
                 if (ImGui::MenuItem("ObjectTree", "", object_tree->IsShown())) {
@@ -216,9 +215,8 @@ void ProjectSelectionScene::OnFrameUpdate() {
             object_tree->Draw();
         }
 
-        {
-            ImGui::Begin("ObjectProperties");
-            ImGui::End();
+        if (object_properties && object_properties->IsShown()) {
+            object_properties->Draw();
         }
         {
             ImGui::Begin("TilesetEditor");

@@ -95,6 +95,8 @@ add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/editor_windows/preview_scene.cc
         editor/panel/object_tree.h
         editor/panel/object_tree.cc
+        editor/panel/object_properties.h
+        editor/panel/object_properties.cc
 )
 target_link_libraries(pequod_editor pequod)
 

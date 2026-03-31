@@ -10,12 +10,12 @@
 
 #include "engine/world_scene.h"
 #include "panel/file_explorer.hh"
-#include "panel/game_preview.hh"
 #include <editor_windows/editor_scene.hh>
 #include <memory>
 #include <project_handler/project_handler.hh>
 #include <string>
 
+#include "panel/object_properties.h"
 #include "panel/object_tree.h"
 
 namespace Pequod {
@@ -47,10 +47,9 @@ private:
     std::string imgui_configuration_path;
 
     FileExplorer explorer;
-    GamePreview game_preview;
     std::unique_ptr<ObjectTree> object_tree = nullptr;
-
-
+    std::unique_ptr<ObjectPropertiesPanel> object_properties = nullptr;
+    entity_id selected_entity = 0; // 0 - root / none, 1> - some entity
 };
 } // namespace Pequod
 

@@ -161,6 +161,9 @@ public:
 	template <class TProperty>
 	std::shared_ptr<TProperty> GetProperty(entity_id); // Add property
 
+	template <class TProperty>
+	std::unordered_map<entity_id, std::shared_ptr<TProperty>> & GetProperties(); // Add property
+
     void SetMotionType(entity_id, JPH::EMotionType);
 
     void Disable(entity_id);
@@ -193,7 +196,7 @@ protected:
 
 private:
     void addMesh(entity_id, std::shared_ptr<Mesh>);
-    entity_id current_id;
+    entity_id current_id = 1;
 };
 
 }

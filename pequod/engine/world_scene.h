@@ -62,10 +62,11 @@ public:
     void OnFrameInternal();
     void OnEventInternal(const sapp_event* event);
 
+    std::shared_ptr<ECS> ecs = nullptr;
+
 protected:
     // Scene de-constructor, does NOT free resources, should be done by destroy
     ~WorldScene();
-    ECS ecs = ECS();
 
 private:
     void handleKeys(const sapp_event*event);

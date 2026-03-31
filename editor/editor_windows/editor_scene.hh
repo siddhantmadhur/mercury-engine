@@ -2,7 +2,6 @@
 #define EDITOR_SCENE_IMPL_HH_
 
 #include "engine/world_scene.h"
-#include "panel/game_preview.hh"
 #include <cstdint>
 #include <sokol/sokol_app.h>
 #include <unordered_map>
@@ -33,7 +32,7 @@ public:
     void OnDestroyInternal();
     virtual void RenderScenePreview(WorldScene** scene) =0;
     
-    //BreakoutScene *game_scene;
+    std::shared_ptr<ECS> ecs = nullptr;
 
 protected:
     uint64_t current_tick;

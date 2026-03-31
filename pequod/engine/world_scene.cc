@@ -35,10 +35,11 @@ WorldScene::WorldScene() : playerCamera(1.0f) {
     this->current_tick = 0;
     this->tick_time = 0;
     this->frame_time = 0;
+    this->ecs = std::make_shared<ECS>();
 }
 
 void WorldScene::ComputePhysics(int steps) {
-    ecs.simulatePhysics(steps);
+    ecs->simulatePhysics(steps);
 }
 
 void WorldScene::OnFrameInternal() {
@@ -210,7 +211,7 @@ void WorldScene::Initialize() {
     });
     **/
 
-    ecs.initializeJolt();
+    ecs->initializeJolt();
 }
 
 void WorldScene::SetupRenderState() {
@@ -237,9 +238,9 @@ void WorldScene::BeginRenderPass(float width, float height) {
 }
 
 void WorldScene::RenderObjects() {
-    ecs.setupRender(bind);
+    ecs->setupRender(bind);
     sg_apply_bindings(bind);
-    ecs.render(playerCamera, delta_t);
+    ecs->render(playerCamera, delta_t);
 }
 
 void WorldScene::CompleteRender() {

@@ -18,18 +18,17 @@
 namespace Pequod {
     class PObject {
     public:
-        PObject();
+        PObject(uint64_t id = 0);
         ~PObject();
 
-        uint64_t id = -1; // -1 means it is not registered to a scene
+        uint64_t id = 0; // 0 signifies root
         std::string name = "object";
 
         void AddChild(uint64_t child_id);
-
+        std::vector<uint64_t> children;
     private:
 
 
-        std::vector<uint64_t> children;
         std::unordered_map<std::type_index, std::shared_ptr<Property>> properties;
 
     };

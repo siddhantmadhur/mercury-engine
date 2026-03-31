@@ -19,10 +19,10 @@
 namespace Pequod {
     void GamePreviewScene::OnStart() {
         { // Background quad
-            auto bg = ecs.createEntity();
+            auto bg = ecs->createEntity();
             Quad q = Quad(glm::vec3(0.0, 0.0, 0.0), glm::vec3(width_s, height_s, 1), glm::vec4(0.0, 0.0, 0.0, 1.0));
-            ecs.AddProperty(bg, q.mesh);
-            ecs.AddProperty(bg, q.position);
+            ecs->AddProperty(bg, q.mesh);
+            ecs->AddProperty(bg, q.position);
         }
         { // CAMERA
 
@@ -31,10 +31,10 @@ namespace Pequod {
             SetPlayerCamera(playerCam);
         }
         {
-            auto block = ecs.createEntity();
+            auto block = ecs->createEntity();
             Quad q = Quad(glm::vec3(0.0, 0.0, 1.0), glm::vec3(100, 100, 1), glm::vec4(1.0, 1.0, 1.0, 1.0));
-            ecs.AddProperty(block, q.mesh);
-            ecs.AddProperty(block, q.position);
+            ecs->AddProperty(block, q.mesh);
+            ecs->AddProperty(block, q.position);
         }
     }
     void GamePreviewScene::OnEvent(const sapp_event *event) {};

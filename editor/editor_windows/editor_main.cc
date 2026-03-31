@@ -1,6 +1,5 @@
 #include "editor_main.h"
 #include "imgui/imgui.h"
-#include "panel/game_preview.hh"
 
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_glue.h>
@@ -54,7 +53,10 @@ void Editor::sokol_init() {
     game_scene->Initialize();
     game_scene->OnStart();
 
+    currentScene.ecs = game_scene->ecs;
+
     currentScene.InitializeScene();
+
 
 }
 
