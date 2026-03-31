@@ -13,6 +13,8 @@
 #include <debugger/debugger.hh>
 #include <unordered_map>
 
+namespace Pequod {
+
 template<class TProperty>
 std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<TProperty>>> ECS::properties;
 
@@ -21,10 +23,10 @@ class MyContactListener : public ContactListener
 {
 public:
     MyContactListener(
-        std::unordered_map<JPH::BodyID, entity_id> &init_map, 
+        std::unordered_map<JPH::BodyID, entity_id> &init_map,
         std::unordered_map<entity_id, RigidBody*>& init_rigid_bodies
     ) : jolt_bodies(init_map), rigid_bodies(init_rigid_bodies)
-    { 
+    {
         PDebug::info("created contact listener");
     };
 
@@ -105,13 +107,13 @@ ECS::ECS () {
 }
 
 ECS::~ECS () {
-    
+
 }
 
 void ECS::setVelocity(entity_id id, glm::vec3 vel) {
     RigidBody* body = rigid_bodies[id];
     JPH::BodyID body_id = body->jolt_id;
-    
+
     auto& body_interface = physics_system.GetBodyInterface();
     body_interface.SetLinearVelocity(body_id, JPH::Vec3(vel.x, vel.y, vel.z));
 }
@@ -119,30 +121,30 @@ void ECS::setVelocity(entity_id id, glm::vec3 vel) {
 glm::vec3 ECS::GetVelocity(entity_id id) {
     RigidBody* body = rigid_bodies[id];
     JPH::BodyID body_id = body->jolt_id;
-    
+
     auto& body_interface = physics_system.GetBodyInterface();
     JPH::Vec3 vel = body_interface.GetLinearVelocity(body_id);
     return glm::vec3(vel.GetX(), vel.GetY(), vel.GetZ());
 }
 
 void ECS::Disable(entity_id id) {
-    
+
     auto mesh = GetProperty<Mesh>(id);
     if (mesh) {
         auto & meshes = properties<Mesh>[typeid(Mesh)];
         meshes.erase(id);
     }
-    
+
     auto pos = GetProperty<Position>(id);
     if (pos) {
         auto & positions = properties<Position>[typeid(Position)];
         positions.erase(id);
     }
-    
+
     RigidBody* body = getRigidBody(id);
     if (body) {
         auto& body_interface = physics_system.GetBodyInterface();
-        body_interface.RemoveBody(body->jolt_id);  
+        body_interface.RemoveBody(body->jolt_id);
         body_interface.DestroyBody(body->jolt_id);
         jolt_bodies.erase(body->jolt_id);
         rigid_bodies[id] = NULL;
@@ -154,7 +156,7 @@ void ECS::Disable(entity_id id) {
 void ECS::SetPosition(entity_id id, glm::vec3 pos) {
     RigidBody* body = rigid_bodies[id];
     JPH::BodyID body_id = body->jolt_id;
-    
+
     auto& body_interface = physics_system.GetBodyInterface();
     body_interface.SetPosition(body_id, JPH::Vec3(pos.x, pos.y, pos.z), JPH::EActivation::Activate);
 }
@@ -181,7 +183,7 @@ void ECS::simulatePhysics(int steps) { // call every 60hz
 void ECS::addRigidBody(entity_id id, RigidBody* rigid_body) {
 
     auto& body_interface = physics_system.GetBodyInterface();
-    
+
     auto creation_settings = rigid_body->getBodyCreationSettings();
     creation_settings.mAllowedDOFs = rigid_body->allowed_dofs;
 
@@ -232,7 +234,7 @@ void ECS::initializeJolt() {
     physics_system.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, broad_phase_layer_interface, object_vs_broadphase_layer_filter, object_vs_object_layer_filter);
 
     physics_system.SetBodyActivationListener(&body_activation_listener);
-   
+
     MyContactListener* contact_listener = new MyContactListener(jolt_bodies, rigid_bodies);
 
     physics_system.SetContactListener(contact_listener);
@@ -245,7 +247,7 @@ void ECS::initializeJolt() {
 entity_id ECS::createEntity() {
     entity_id new_id = current_id;
     current_id += 1;
-    return new_id; 
+    return new_id;
 }
 
 void ECS::addMesh(entity_id id, std::shared_ptr<Mesh> mesh) {
@@ -335,14 +337,14 @@ void ECS::setupRender(sg_bindings& bind) {
             .size = vertex_size,
         });
     }
-  
+
     size_t indices_size = indices.size() * sizeof(uint16_t);
     if (indices.size() > 0) {
         sg_update_buffer(bind.index_buffer, (sg_range){
             .ptr = indices.data(),
             .size = indices_size,
         });
-    }     
+    }
 }
 
 void ECS::SetMotionType(entity_id id, JPH::EMotionType motion_type) {
@@ -399,8 +401,8 @@ void ECS::render(Camera& cam, float delta_t) {
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, pos);
         model_params_t new_params;
-        new_params.model = model; 
-        new_params.use_texture0 = false ? 1.0f : 0.0f; 
+        new_params.model = model;
+        new_params.use_texture0 = false ? 1.0f : 0.0f;
         new_params.scale = mesh->scale;
         sg_apply_uniforms(UB_model_params, SG_RANGE(new_params));
         sg_draw(mesh->indices_id, mesh->indices.size(), 1);
@@ -413,3 +415,4 @@ template void ECS::AddProperty<Mesh>(entity_id, std::shared_ptr<Mesh>);
 template void ECS::AddProperty<Position>(entity_id, std::shared_ptr<Position>);
 template std::shared_ptr<Mesh> ECS::GetProperty<Mesh>(entity_id);
 template std::shared_ptr<Position> ECS::GetProperty<Position>(entity_id);
+}

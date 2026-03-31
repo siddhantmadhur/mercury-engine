@@ -55,6 +55,7 @@ using JPH::ValidateResult;
 using JPH::Body;
 
 
+namespace Pequod {
 class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter
 {
 public:
@@ -131,18 +132,18 @@ public:
 	virtual void OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {}
 	virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {}
 };
-    
+
 
 class ECS {
 public:
     ECS();
     ~ECS();
-    void initializeJolt(); // run this once  
+    void initializeJolt(); // run this once
     void simulatePhysics(int steps);
-    entity_id createEntity(); // use to create new entities that are part of the engine  
+    entity_id createEntity(); // use to create new entities that are part of the engine
 
     //void addPosition(entity_id, std::shared_ptr<Position>);
-    
+
     //std::shared_ptr<Mesh> getMesh(entity_id);
     //std::shared_ptr<Position> getPosition(entity_id);
 
@@ -183,7 +184,7 @@ protected:
 
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;
-    
+
     BPLayerInterfaceImpl broad_phase_layer_interface;
     ObjectVsBroadPhaseLayerFilterImpl object_vs_broadphase_layer_filter;
     ObjectLayerPairFilterImpl object_vs_object_layer_filter;
@@ -194,5 +195,7 @@ private:
     void addMesh(entity_id, std::shared_ptr<Mesh>);
     entity_id current_id;
 };
+
+}
 
 #endif

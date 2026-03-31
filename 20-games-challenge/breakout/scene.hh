@@ -1,7 +1,7 @@
 #include <engine/world_scene.h>
 #include <gameobjects/quad.hh>
 
-class BreakoutScene : public WorldScene {
+class BreakoutScene : public Pequod::WorldScene {
 public:
     void OnStart() override;
     void OnDestroy() override;

@@ -7,7 +7,7 @@
 #include <cstdint>
 
 namespace Pequod {
-    enum PropertyId {
+    enum class PropertyId {
         Mesh = 1,
         Position = 2,
     };

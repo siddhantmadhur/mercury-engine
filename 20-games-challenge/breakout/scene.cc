@@ -22,6 +22,8 @@
 #define playerPos ecs.GetProperty<Position>(player)->position
 #define playerSize ecs.GetProperty<Mesh>(player)->scale
 
+using namespace Pequod;
+
 class BallRigidBody : public Box2D {
 public:
     BallRigidBody(glm::vec3 pos, glm::vec3 size) : Box2D(pos, size) { PDebug::log("initialized ball rigidbody"); }

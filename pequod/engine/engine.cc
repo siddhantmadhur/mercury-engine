@@ -48,42 +48,44 @@ void LoadMainMenuBar() {
     }
 }
 
-PequodEngine::PequodEngine() {
+namespace Pequod {
+
+  PequodEngine::PequodEngine() {
     //this->ecs = ECS();
-}
+  }
 
 
-uint64_t PequodEngine::getTicks() {
+  uint64_t PequodEngine::getTicks() {
     return this->ticks;
-}
+  }
 
-void PequodEngine::startUp() {
+  void PequodEngine::startUp() {
     frame_time = 1;
     tick_frame_time = 1;
     delta_t = 0;
     ticks = 0;
 
     // Create new thread for ticks here
-    //ticks_thread = std::thread(run_every_tick, (void*)this);     
-}
+    //ticks_thread = std::thread(run_every_tick, (void*)this);
+  }
 
 
-void PequodEngine::SetScene(WorldScene* scene) {
+  void PequodEngine::SetScene(WorldScene* scene) {
     currentScene = scene;
-}
+  }
 
-void PequodEngine::sokol_init() {
+  void PequodEngine::sokol_init() {
 
     currentScene->OnStartInternal();
 
     currentScene->Initialize(); // runs only for the initial default scene; every other scene needs to call this themselves
 
     currentScene->OnStart();
-};
+  };
 
 
 
-void PequodEngine::sokol_frame_cb() {
+  void PequodEngine::sokol_frame_cb() {
 
     const int width = sapp_width();
     const int height = sapp_height();
@@ -97,11 +99,11 @@ void PequodEngine::sokol_frame_cb() {
     });
 
     {
-        currentScene->ComputeTick();
-        currentScene->OnFrameUpdate();
-        currentScene->SetupRenderState();
-        currentScene->RenderObjects();
-        //currentScene.RenderScenePreview((WorldScene**) &game_scene);
+      currentScene->ComputeTick();
+      currentScene->OnFrameUpdate();
+      currentScene->SetupRenderState();
+      currentScene->RenderObjects();
+      //currentScene.RenderScenePreview((WorldScene**) &game_scene);
     }
 
     simgui_render();
@@ -109,22 +111,23 @@ void PequodEngine::sokol_frame_cb() {
     sg_end_pass();
 
     sg_commit();
-}
+  }
 
-bool PequodEngine::isShowDebugStats() {
+  bool PequodEngine::isShowDebugStats() {
     return this->show_debug_stats;
-}
+  }
 
-void PequodEngine::sokol_cleanup() {
+  void PequodEngine::sokol_cleanup() {
     if (currentScene) {
-        currentScene->OnDestroy();
-        currentScene->Destroy();
+      currentScene->OnDestroy();
+      currentScene->Destroy();
     }
     //simgui_shutdown();
     //sg_shutdown();
-}
+  }
 
-void PequodEngine::sokol_event(const sapp_event *event) {
+  void PequodEngine::sokol_event(const sapp_event *event) {
     currentScene->OnEventInternal(event);
-}
+  }
 
+}

@@ -4,11 +4,12 @@
 #include <stb/stb_image.h>
 #include <string>
 
-class Image {
-public:
-    Image(std::string);
-    stbi_uc* raw_data;
-    int x, y, channels;
-};
-
+namespace Pequod {
+    class Image {
+    public:
+        Image(std::string);
+        stbi_uc* raw_data;
+        int x, y, channels;
+    };
+}
 #endif

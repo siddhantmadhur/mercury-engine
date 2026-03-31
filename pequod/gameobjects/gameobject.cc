@@ -3,7 +3,8 @@
 #include <iostream>
 #include <debugger/debugger.hh>
 
-GameObject::~GameObject() {
-    PDebug::log("releasing game object...");
+namespace Pequod {
+    GameObject::~GameObject() {
+        PDebug::log("releasing game object...");
+    }
 }
-

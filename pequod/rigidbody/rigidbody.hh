@@ -20,35 +20,36 @@
 #include "glm/fwd.hpp"
 
 
-namespace Layers
-{
-	static constexpr JPH::ObjectLayer NON_MOVING = 0;
-	static constexpr JPH::ObjectLayer MOVING = 1;
-	static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
-};
+namespace Pequod {
+    namespace Layers
+    {
+        static constexpr JPH::ObjectLayer NON_MOVING = 0;
+        static constexpr JPH::ObjectLayer MOVING = 1;
+        static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
+    };
 
 
-enum CollisionStatus {
-	JUST_ACTIVE = 0,
-	ACTIVE = 0,
-	INACTIVE = 0,
-};
+    enum CollisionStatus {
+        JUST_ACTIVE = 0,
+        ACTIVE = 0,
+        INACTIVE = 0,
+    };
 
-class RigidBody {
-public:
-    virtual void OnCollisionEnter(entity_id) =0;
-    virtual void OnCollision(entity_id) =0;
-    virtual void OnCollisionLeave(entity_id) =0;
+    class RigidBody {
+    public:
+        virtual void OnCollisionEnter(entity_id) =0;
+        virtual void OnCollision(entity_id) =0;
+        virtual void OnCollisionLeave(entity_id) =0;
 
-    JPH::BodyCreationSettings getBodyCreationSettings();
-    entity_id id;
-    JPH::BodyID jolt_id;
-    JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::Plane2D;
-    JPH::Body* body;
-protected:     
-    JPH::BodyCreationSettings creationSettings;
+        JPH::BodyCreationSettings getBodyCreationSettings();
+        entity_id id;
+        JPH::BodyID jolt_id;
+        JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::Plane2D;
+        JPH::Body* body;
+    protected:
+        JPH::BodyCreationSettings creationSettings;
 
-};
-
+    };
+}
 
 #endif

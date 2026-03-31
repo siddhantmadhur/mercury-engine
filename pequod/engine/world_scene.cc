@@ -28,6 +28,8 @@ using namespace std;
 #define MAX_VERTICES 5120
 #define MAX_INDICES (((MAX_VERTICES)/2)*3)
 
+namespace Pequod {
+
 WorldScene::WorldScene() : playerCamera(1.0f) {
     this->delta_t = 0.0f;
     this->current_tick = 0;
@@ -130,7 +132,7 @@ void WorldScene::Initialize() {
 
     Image wall_texture = Image("assets/wall.jpg");
 
- 
+
     //bind.views[VIEW_tex] = sg_alloc_view();
 
     //bind.images[IMG_tex] = sg_alloc_image();
@@ -151,13 +153,13 @@ void WorldScene::Initialize() {
         .usage = {.dynamic_update = true},
         .label = "quad-vertices",
     });
-    
+
     size_t indices_size = MAX_INDICES * sizeof(uint16_t);
     bind.index_buffer = sg_make_buffer((sg_buffer_desc){
         .size = indices_size,
-        .usage = { 
-            .index_buffer = true, 
-            .dynamic_update = true 
+        .usage = {
+            .index_buffer = true,
+            .dynamic_update = true
         },
         .label = "quad-indices",
     });
@@ -198,7 +200,7 @@ void WorldScene::Initialize() {
         .ptr = wall_texture.raw_data,
         .size = (size_t) wall_texture.x * wall_texture.y * 4,
     };
-   
+
     /**
     sg_image img = sg_make_image(img_desc);
 
@@ -276,4 +278,5 @@ bool WorldScene::IsKeyPressed(sapp_keycode key) {
 
 sg_pass_action WorldScene::GetPassAction() {
     return this->pass_action;
+}
 }

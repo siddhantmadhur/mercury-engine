@@ -24,13 +24,6 @@ namespace Pequod {
         uint64_t id = -1; // -1 means it is not registered to a scene
         std::string name = "object";
 
-
-        //template <class TProperty>
-        //std::shared_ptr<TProperty> GetProperty();
-
-        //template <class TProperty>
-        //void AddProperty(std::shared_ptr<TProperty>);
-
         void AddChild(uint64_t child_id);
 
     private:

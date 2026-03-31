@@ -16,7 +16,7 @@
 #include <sokol/util/sokol_imgui.h>
 
 
-PequodEngine* engine = NULL;
+Pequod::PequodEngine* engine = NULL;
 
 void sokol_init() {
     engine->sokol_init();
@@ -34,7 +34,7 @@ void sokol_event(const sapp_event* event) {
 sapp_desc sokol_main(int argc, char *argv[]) {
 
 
-    engine = new PequodEngine();    
+    engine = new Pequod::PequodEngine();
 
 
     BreakoutScene* game = new BreakoutScene();

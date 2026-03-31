@@ -23,6 +23,7 @@
 
 #include <sokol/sokol_gfx.h>
 
+namespace Pequod {
 class WorldScene {
 public:
 
@@ -90,5 +91,5 @@ private:
     sg_bindings bind{};
     //@}
 };
-
+}
 #endif

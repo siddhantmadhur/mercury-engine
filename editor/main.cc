@@ -3,6 +3,7 @@
 
 #include <format>
 #include <iostream>
+#include <debugger/debugger.hh>
 
 #include <ecs/ecs.hh>
 

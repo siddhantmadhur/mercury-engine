@@ -9,17 +9,18 @@
 #include <vector>
 
 
-class GameObject {
-public:
-    ~GameObject();
-    std::shared_ptr<Mesh> mesh;
-    std::shared_ptr<Position> position;
-    glm::vec2 size;
-    //template <class TProperty>
-    //std::shared_ptr<Property> GetProperty();
-protected:
-    //std::unordered_map<std::type_index, Property> properties;
-};
-
+namespace Pequod {
+    class GameObject {
+    public:
+        ~GameObject();
+        std::shared_ptr<Mesh> mesh = nullptr;
+        std::shared_ptr<Position> position = nullptr;
+        glm::vec2 size;
+        //template <class TProperty>
+        //std::shared_ptr<Property> GetProperty();
+    protected:
+        //std::unordered_map<std::type_index, Property> properties;
+    };
+}
 
 #endif

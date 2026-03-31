@@ -13,30 +13,31 @@
 
 //#include <engine/engine.cc>
 
-class PequodEngine
-{
-public:
-    PequodEngine();
-    void startUp();
-    void SetScene(WorldScene* scene);
-    void sokol_init();
-    void sokol_frame_cb();
-    void sokol_cleanup();
-    void sokol_event(const sapp_event* event);
-    uint64_t getTicks();
-    std::condition_variable ticks_cv;
-    bool isShowDebugStats();
-private:
-    uint64_t ticks;
-    uint64_t last_tick;
-    uint64_t frame_time;
-    uint64_t tick_frame_time;
-    double tick_t;
-    double delta_t;
-    uint8_t fps;
-    double total_t;
-    WorldScene *currentScene;
-    bool show_debug_stats = true;
-};
-
+namespace Pequod {
+    class PequodEngine
+    {
+    public:
+        PequodEngine();
+        void startUp();
+        void SetScene(WorldScene* scene);
+        void sokol_init();
+        void sokol_frame_cb();
+        void sokol_cleanup();
+        void sokol_event(const sapp_event* event);
+        uint64_t getTicks();
+        std::condition_variable ticks_cv;
+        bool isShowDebugStats();
+    private:
+        uint64_t ticks;
+        uint64_t last_tick;
+        uint64_t frame_time;
+        uint64_t tick_frame_time;
+        double tick_t;
+        double delta_t;
+        uint8_t fps;
+        double total_t;
+        WorldScene *currentScene;
+        bool show_debug_stats = true;
+    };
+}
 #endif

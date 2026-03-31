@@ -9,15 +9,17 @@
 #include "glm/fwd.hpp"
 #include <rigidbody/rigidbody.hh>
 
+namespace Pequod {
+    class Box2D : public RigidBody {
+    public:
+        Box2D(glm::vec2 position, glm::vec2 size); // position is center of mass
+        virtual void OnCollisionEnter(entity_id) =0;
+        virtual void OnCollision(entity_id) =0;
+        virtual void OnCollisionLeave(entity_id) =0;
 
-class Box2D : public RigidBody {
-public:
-    Box2D(glm::vec2 position, glm::vec2 size); // position is center of mass
-    virtual void OnCollisionEnter(entity_id) =0;
-    virtual void OnCollision(entity_id) =0;
-    virtual void OnCollisionLeave(entity_id) =0;
+    protected:
+    };
 
-protected:
-};
+}
 
 #endif

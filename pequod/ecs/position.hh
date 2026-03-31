@@ -23,15 +23,19 @@
 #include <sokol/sokol_gfx.h>
 #include <shaders/generic_texture.glsl.hh>
 
-// TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
-class Position {
-public:
-    Position(glm::vec3 position = glm::vec3(0.0f));
-    glm::vec3 raw_position; // actual position of object interpolated per frame to smooth animation out
-    glm::vec3 position; // update this per tick
-    
-private:
-    //glm::vec3 future_position; // position needed to be updated to next frame/tick 
-};
+#include "pobject/property.h"
+
+namespace Pequod {
+    // TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
+    class Position {
+    public:
+        Position(glm::vec3 position = glm::vec3(0.0f));
+        glm::vec3 raw_position; // actual position of object interpolated per frame to smooth animation out
+        glm::vec3 position; // update this per tick
+
+    private:
+        //glm::vec3 future_position; // position needed to be updated to next frame/tick
+    };
+}
 
 #endif
