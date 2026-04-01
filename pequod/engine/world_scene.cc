@@ -36,10 +36,12 @@ WorldScene::WorldScene() : playerCamera(1.0f) {
     this->tick_time = 0;
     this->frame_time = 0;
     this->ecs = std::make_shared<ECS>();
+    this->physics_engine = std::make_shared<PhysicsEngine>(this->ecs);
 }
 
 void WorldScene::ComputePhysics(int steps) {
-    ecs->simulatePhysics(steps);
+    //ecs->simulatePhysics(steps);
+    physics_engine->Compute(steps);
 }
 
 void WorldScene::OnFrameInternal() {
@@ -211,7 +213,6 @@ void WorldScene::Initialize() {
     });
     **/
 
-    ecs->initializeJolt();
 }
 
 void WorldScene::SetupRenderState() {

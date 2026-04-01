@@ -29,6 +29,10 @@ namespace Pequod {
             if (pos) {
                 position = pos->position;
             }
+            auto mesh = ecs->GetProperty<Mesh>(selected_id);
+            if (mesh) {
+                scale = mesh->scale;
+            }
         }
         ImGui::Begin("ObjectProperties");
         if (selected_id != 0) {
@@ -55,11 +59,23 @@ namespace Pequod {
             auto pos = ecs->GetProperty<Position>(id);
             if (pos) {
                 ImGui::SeparatorText("Position");
-                if (ImGui::DragFloat("x", &position.x)) {
-                    //ecs->SetPosition(id, position);
-                    pos->position = position;
-                    pos->raw_position = position;
-                }
+                ImGui::DragFloat("x###posx", &position.x);
+                ImGui::DragFloat("y###posy", &position.y);
+                ImGui::DragFloat("z###posz", &position.z);
+
+                pos->position = position;
+                pos->raw_position = position;
+            }
+        }
+        { // Mesh
+            auto mesh = ecs->GetProperty<Mesh>(id);
+            if (mesh) {
+                ImGui::SeparatorText("Size");
+                ImGui::DragFloat("x###sizex", &scale.x);
+                ImGui::DragFloat("y###sizey", &scale.y);
+                ImGui::DragFloat("z###sizez", &scale.z);
+
+                mesh->scale = scale;
             }
         }
     }

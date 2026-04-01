@@ -12,12 +12,14 @@
 #ifndef PEQUOD_RIGIDBODY_IMPL_HH_
 #define PEQUOD_RIGIDBODY_IMPL_HH_
 
+#include <memory>
 #include <Jolt/Jolt.h>
 #include "Jolt/Physics/Body/AllowedDOFs.h"
 #include "Jolt/Physics/Body/BodyCreationSettings.h"
 #include "Jolt/Physics/Body/MotionType.h"
 #include "ecs/entity.hh"
 #include "glm/fwd.hpp"
+#include "physics_engine/collision_shape.h"
 
 
 namespace Pequod {
@@ -41,11 +43,9 @@ namespace Pequod {
         virtual void OnCollision(entity_id) =0;
         virtual void OnCollisionLeave(entity_id) =0;
 
-        JPH::BodyCreationSettings getBodyCreationSettings();
-        entity_id id;
-        JPH::BodyID jolt_id;
-        JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::Plane2D;
-        JPH::Body* body;
+    private:
+        std::shared_ptr<CollisionShape> collision_shape;
+
     protected:
         JPH::BodyCreationSettings creationSettings;
 

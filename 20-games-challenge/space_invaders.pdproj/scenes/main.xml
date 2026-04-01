@@ -1,0 +1,19 @@
+<scene>
+    <editor>
+        <version>
+            <major>0</major>
+            <minor>0</minor>
+            <patch>PRE_ALPHA</patch>
+        </version>
+        <name>space_invaders</name>
+    </editor>
+    <camera>
+        <position x="0" y="0"/>
+    </camera>
+    <objects>
+        <object name="cube">
+            <size x="56" y="54"/>
+            <position x="308" y="115"/>
+        </object>
+    </objects>
+</scene>

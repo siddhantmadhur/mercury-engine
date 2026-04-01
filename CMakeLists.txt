@@ -18,7 +18,11 @@ add_library(pequod ${ENGINE_SRC}
         pequod/pobject/pobject.cc
         pequod/ecs/ecs.hh
         pequod/ecs/ecs.cc
-        pequod/gameobjects/gameobject.cc)
+        pequod/gameobjects/gameobject.cc
+        pequod/physics_engine/physics_engine.cc
+        pequod/physics_engine/physics_engine.h
+        pequod/physics_engine/collision_shape.cc
+        pequod/physics_engine/collision_shape.h)
 
 
 include_directories("pequod")
@@ -97,6 +101,7 @@ add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/panel/object_tree.cc
         editor/panel/object_properties.h
         editor/panel/object_properties.cc
+        editor/files/scene_parser.cc
 )
 target_link_libraries(pequod_editor pequod)
 

@@ -32,7 +32,7 @@ namespace Pequod {
         }
         auto arr = obj->children;
 
-        if (ImGui::TreeNodeEx(id == 0 ? "root" : std::format("{}[{}]", obj->name, id).c_str(), base_flags)) {
+        if (ImGui::TreeNodeEx(id == 0 ? "root" : std::format("{}###{}]", obj->name, id).c_str(), base_flags)) {
             if (ImGui::IsItemClicked()) {
                 selected_id = selected_id == id ? 0 : id;
             }

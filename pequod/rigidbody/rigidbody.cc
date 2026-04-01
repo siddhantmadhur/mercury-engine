@@ -3,7 +3,4 @@
 #include <rigidbody/rigidbody.hh>
 
 namespace Pequod {
-    JPH::BodyCreationSettings RigidBody::getBodyCreationSettings() {
-        return this->creationSettings;
-    }
 }

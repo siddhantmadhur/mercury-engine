@@ -23,6 +23,8 @@
 
 #include <sokol/sokol_gfx.h>
 
+#include "physics_engine/physics_engine.h"
+
 namespace Pequod {
 class WorldScene {
 public:
@@ -63,6 +65,7 @@ public:
     void OnEventInternal(const sapp_event* event);
 
     std::shared_ptr<ECS> ecs = nullptr;
+    std::shared_ptr<PhysicsEngine> physics_engine = nullptr;
 
 protected:
     // Scene de-constructor, does NOT free resources, should be done by destroy

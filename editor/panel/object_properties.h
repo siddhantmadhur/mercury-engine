@@ -23,7 +23,8 @@ namespace Pequod {
         std::shared_ptr<ECS> ecs;
 
         char input_name[255];
-        glm::vec3 position;
+        glm::vec3 position = glm::vec3(0.0f);
+        glm::vec3 scale = glm::vec3(1.0f);
     };
 }
 

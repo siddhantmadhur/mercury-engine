@@ -8,10 +8,13 @@
 #include <string>
 #include <cstring>
 #include <stdlib.h>
+#include <filesystem>
 
 #define STR_LEN 128
 
-#define AUTO_LOAD_PONG 
+#define AUTO_LOAD_PONG
+
+namespace fs = std::filesystem;
 
 
 namespace Pequod {
@@ -79,7 +82,13 @@ void ProjectSelectionScene::RenderScenePreview(WorldScene** scene) {
     ImGui::End();
 }
 
-void ProjectSelectionScene::OnEventUpdate(const sapp_event* event) {}
+void ProjectSelectionScene::OnEventUpdate(const sapp_event* event) {
+    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
+        if ((event->modifiers & SAPP_MODIFIER_CTRL) && event->key_code == SAPP_KEYCODE_S) {
+            SaveScene();
+        }
+    }
+}
 
 void ProjectSelectionScene::QuitProgram() {
     sapp_quit();
@@ -112,6 +121,19 @@ void ProjectSelectionScene::OpenProject() {
 
     object_properties = std::make_unique<ObjectPropertiesPanel>(this->selected_entity, this->ecs);
     object_properties->Initialize();
+
+    scene_parser = std::make_unique<SceneParser>(this->ecs);
+    fs::path scene_path = current_project_handler->project_path / "scenes" / "main.xml";
+    if (fs::exists(scene_path)) {
+        scene_parser->Load(scene_path.string());
+    }
+}
+
+void ProjectSelectionScene::SaveScene() {
+    if (!scene_parser || !current_project_handler->has_loaded_project) return;
+    fs::path scene_path = current_project_handler->project_path / "scenes" / "main.xml";
+    fs::create_directories(scene_path.parent_path());
+    scene_parser->Save(scene_path.string());
 }
 
 
@@ -124,6 +146,9 @@ void ProjectSelectionScene::OnFrameUpdate() {
             }
             if (ImGui::MenuItem("Open Project", "Ctrl+O")) {
                 ToggleOpenProjectWin();
+            }
+            if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
+                SaveScene();
             }
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
             if (ImGui::MenuItem("Quit", "Ctrl+Q")) {
