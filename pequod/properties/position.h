@@ -37,7 +37,7 @@ namespace Pequod {
     private:
         glm::vec3 position = glm::vec3(0.0f); // update this per tick
         glm::vec3 interpolated_position = glm::vec3(0.0f);
-        //glm::vec3 future_position; // position needed to be updated to next frame/tick
+        // [CLAUDE] TODO: Remove dead commented-out field: //glm::vec3 future_position;
     };
 }
 

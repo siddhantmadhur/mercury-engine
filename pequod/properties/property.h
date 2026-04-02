@@ -7,6 +7,7 @@
 #include <cstdint>
 
 // Runs a function with all the types
+// [CLAUDE] TODO: RUN_ON_PROPERTIES macro is defined but never invoked anywhere — remove or use
 #define RUN_ON_PROPERTIES(func)     \
     func(Position);                 \
     func(Mesh);

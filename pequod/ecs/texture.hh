@@ -7,6 +7,7 @@
 // Possible extensions: 
 // - Sprite
 // - SolidColor
+// [CLAUDE] TODO: This class is empty and never referenced anywhere — remove or implement
 class Texture {
 public:
     Texture();

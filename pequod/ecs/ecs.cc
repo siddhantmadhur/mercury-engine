@@ -102,6 +102,7 @@ namespace Pequod {
         }
         for (int i = 0; i < max_id; i++) {
             auto &meshes = GetProperties<Mesh>();
+            // [CLAUDE] TODO: meshes[i] silently creates a default entry if key doesn't exist — use .find() or .contains() check
             auto mesh = meshes[i];
             auto &positions = GetProperties<Position>();
             auto position = positions[i];

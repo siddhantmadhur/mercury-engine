@@ -6,6 +6,7 @@
 
 #define entity_id uint64_t
 
+// [CLAUDE] TODO: This class is defined outside namespace Pequod and is never inherited or used — remove or integrate
 class Entity {
 public:
     Entity();

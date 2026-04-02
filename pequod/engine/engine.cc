@@ -20,6 +20,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+// [CLAUDE] TODO: Duplicate include — glm/glm.hpp already included two lines above
 #include <glm/glm.hpp>
 
 #include <shaders/generic_texture.glsl.hh>

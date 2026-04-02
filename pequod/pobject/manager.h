@@ -63,4 +63,4 @@ namespace Pequod {
     };
 }
 
-#endif //
+#endif // PEQUOD_POBJECT_MANAGER_H

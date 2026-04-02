@@ -31,6 +31,7 @@ namespace Pequod {
     };
 
 
+    // [CLAUDE] TODO: All enum values are = 0; they should be JUST_ACTIVE=0, ACTIVE=1, INACTIVE=2
     enum CollisionStatus {
         JUST_ACTIVE = 0,
         ACTIVE = 0,

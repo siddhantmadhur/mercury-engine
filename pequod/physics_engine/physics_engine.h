@@ -26,6 +26,7 @@
 #include "Jolt/RegisterTypes.h"
 #include "rigidbody/rigidbody.hh"
 
+// [CLAUDE] TODO: 'using namespace JPH' in a header pollutes every TU that includes this — move to .cc or use JPH:: prefix
 using namespace JPH;
 
 
@@ -113,13 +114,17 @@ namespace Pequod {
         PhysicsEngine(std::shared_ptr<ECS>);
         void RegisterEntity(entity_id);
         void Compute(int steps);
+        // [CLAUDE] TODO: DisableBody is declared but never implemented
         void DisableBody(entity_id);
     private:
+        // [CLAUDE] TODO: body_id is declared but never used
         BodyID* body_id = nullptr;
         std::shared_ptr<ECS> ecs = nullptr;
 
+        // [CLAUDE] TODO: jolt_bodies is never populated — physics system not initialized
         std::unordered_map<JPH::BodyID, entity_id> jolt_bodies; // maps jolt id <--> pequods entity_id
 
+        // [CLAUDE] TODO: temp_allocator and job_system are declared but never initialized
         TempAllocatorImpl *temp_allocator; // 10MB
         JobSystemThreadPool *job_system;
         //PhysicsSystem physics_system;

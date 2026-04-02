@@ -11,7 +11,7 @@
 #include <thread>
 
 
-//#include <engine/engine.cc>
+// [CLAUDE] TODO: Remove — including a .cc file is bad practice even as a comment
 
 namespace Pequod {
     class PequodEngine

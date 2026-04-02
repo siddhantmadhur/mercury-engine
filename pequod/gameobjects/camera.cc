@@ -8,6 +8,7 @@ namespace Pequod {
 
     Camera::Camera(float aspect_ratio) {
         proj = glm::perspective<float>(glm::radians(60.0f), aspect_ratio, 0.1f, 10.0f);
+        // [CLAUDE] TODO: View matrix is hardcoded — setPosition() stores cameraPosition but it isn't used here
         view = glm::lookAt(glm::vec3(0.0f, 3.5f, 7.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     }
 
