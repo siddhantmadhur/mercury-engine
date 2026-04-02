@@ -17,7 +17,6 @@
 
 #include "panel/object_properties.h"
 #include "panel/object_tree.h"
-#include "files/scene_parser.hh"
 
 namespace Pequod {
 class ProjectSelectionScene : public EditorScene {
@@ -51,7 +50,6 @@ private:
     FileExplorer explorer;
     std::unique_ptr<ObjectTree> object_tree = nullptr;
     std::unique_ptr<ObjectPropertiesPanel> object_properties = nullptr;
-    std::unique_ptr<SceneParser> scene_parser = nullptr;
     entity_id selected_entity = 0; // 0 - root / none, 1> - some entity
 };
 } // namespace Pequod

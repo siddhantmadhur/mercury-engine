@@ -23,17 +23,20 @@
 #include <sokol/sokol_gfx.h>
 #include <shaders/generic_texture.glsl.hh>
 
-#include "pobject/property.h"
+#include <properties/property.h>
 
 namespace Pequod {
     // TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
-    class Position {
+    class Position : public Property {
     public:
-        Position(glm::vec3 position = glm::vec3(0.0f));
-        glm::vec3 raw_position; // actual position of object interpolated per frame to smooth animation out
-        glm::vec3 position; // update this per tick
+        Position();
 
+        void Set(glm::vec3);
+
+        glm::vec3 Get();
     private:
+        glm::vec3 position = glm::vec3(0.0f); // update this per tick
+        glm::vec3 interpolated_position = glm::vec3(0.0f);
         //glm::vec3 future_position; // position needed to be updated to next frame/tick
     };
 }

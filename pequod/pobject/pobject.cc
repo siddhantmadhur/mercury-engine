@@ -6,9 +6,9 @@
 #include <format>
 #include "debugger/debugger.hh"
 
+
 namespace Pequod {
-    PObject::PObject(uint64_t id) {
-        this->id = id;
+    PObject::PObject() {
     }
     PObject::~PObject() {
     }
@@ -16,4 +16,14 @@ namespace Pequod {
     void PObject::AddChild(uint64_t child_id) {
         children.push_back(child_id);
     }
+
+
+    void PObject::SetECS(std::shared_ptr<ECS> _ecs) {
+        this->ecs = _ecs;
+        for (auto& reg : pending_registrations) {
+            reg(ecs, id);
+        }
+        pending_registrations.clear();
+    }
+
 }

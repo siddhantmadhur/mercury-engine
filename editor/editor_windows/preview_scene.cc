@@ -4,9 +4,9 @@
 
 #include "preview_scene.h"
 
-#include "gameobjects/quad.hh"
+#include <pobject/nodes/box2d.h>
 
-#define ZOOM 4.0f
+#define ZOOM 1.0f
 #define FAKE_RES 1
 #if FAKE_RES
 #define height_s 1080.0f
@@ -19,22 +19,17 @@
 namespace Pequod {
     void GamePreviewScene::OnStart() {
         { // Background quad
-            auto bg = ecs->createEntity();
-            Quad q = Quad(glm::vec3(0.0, 0.0, 0.0), glm::vec3(width_s, height_s, 1), glm::vec4(0.0, 0.0, 0.0, 1.0));
-            ecs->AddProperty(bg, q.mesh);
-            ecs->AddProperty(bg, q.position);
+            std::shared_ptr<PObject> bg =
+                object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(width_s, height_s), glm::vec4(0, 0, 0, 1));
         }
         { // CAMERA
-
             Camera playerCam = Camera(width_s / height_s);
             playerCam.configure2D(width_s, height_s, ZOOM);
             SetPlayerCamera(playerCam);
         }
         {
-            auto block = ecs->createEntity();
-            Quad q = Quad(glm::vec3(0.0, 0.0, 1.0), glm::vec3(100, 100, 1), glm::vec4(1.0, 1.0, 1.0, 1.0));
-            ecs->AddProperty(block, q.mesh);
-            ecs->AddProperty(block, q.position);
+            std::shared_ptr<PObject> block =
+                object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(100.0f, 100.0f), glm::vec4(1.0f));
         }
     }
     void GamePreviewScene::OnEvent(const sapp_event *event) {};

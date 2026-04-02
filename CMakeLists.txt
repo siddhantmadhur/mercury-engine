@@ -9,20 +9,30 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-file(GLOB_RECURSE ENGINE_SRC "pequod/*.cc")
-
-add_library(pequod ${ENGINE_SRC}
-        pequod/pobject/property.h
-        pequod/pobject/property.cc
-        pequod/pobject/pobject.h
-        pequod/pobject/pobject.cc
+add_library(pequod
         pequod/ecs/ecs.hh
         pequod/ecs/ecs.cc
-        pequod/gameobjects/gameobject.cc
         pequod/physics_engine/physics_engine.cc
         pequod/physics_engine/physics_engine.h
         pequod/physics_engine/collision_shape.cc
-        pequod/physics_engine/collision_shape.h)
+        pequod/physics_engine/collision_shape.h
+        pequod/ecs/texture.hh
+        pequod/engine/engine.cc
+        pequod/engine/world_scene.cc
+        pequod/pobject/nodes/box2d.cc
+        pequod/pobject/nodes/box2d.h
+        pequod/pobject/manager.cc
+        pequod/pobject/manager.h
+        pequod/pobject/pobject.cc
+        pequod/properties/property.cc
+        pequod/assets/images.cc
+        pequod/debugger/debugger.cc
+        pequod/gameobjects/camera.cc
+        pequod/properties/mesh.cc
+        pequod/properties/position.cc
+        pequod/rigidbody/rigidbody.cc
+        pequod/window/window.h
+)
 
 
 include_directories("pequod")
@@ -101,7 +111,6 @@ add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/panel/object_tree.cc
         editor/panel/object_properties.h
         editor/panel/object_properties.cc
-        editor/files/scene_parser.cc
 )
 target_link_libraries(pequod_editor pequod)
 
@@ -121,3 +130,4 @@ target_link_libraries(breakout pequod)
 #file(GLOB_RECURSE SPACE_INVADERS_SRC "20-games-challenge/space_invaders/*.cc")
 #add_executable(spaceinvaders ${SPACE_INVADERS_SRC})
 #target_link_libraries(spaceinvaders pequod)
+add_executable(pequod_test tests/main.cc)

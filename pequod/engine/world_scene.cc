@@ -4,7 +4,6 @@
 #include "ecs/ecs.hh"
 #include "ecs/entity.hh"
 #include "gameobjects/camera.hh"
-#include "gameobjects/quad.hh"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/vector_float4.hpp"
@@ -37,6 +36,7 @@ WorldScene::WorldScene() : playerCamera(1.0f) {
     this->frame_time = 0;
     this->ecs = std::make_shared<ECS>();
     this->physics_engine = std::make_shared<PhysicsEngine>(this->ecs);
+    this->object_manager = std::make_shared<PObjectManager>(this->ecs);
 }
 
 void WorldScene::ComputePhysics(int steps) {

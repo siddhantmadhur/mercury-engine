@@ -10,7 +10,7 @@
 namespace Pequod {
 class EditorScene {
 public:
-    EditorScene(); 
+    EditorScene();
     bool IsKeyPressed(sapp_keycode);
 
     /**
@@ -33,6 +33,7 @@ public:
     virtual void RenderScenePreview(WorldScene** scene) =0;
     
     std::shared_ptr<ECS> ecs = nullptr;
+    std::shared_ptr<PObjectManager> object_manager = nullptr;
 
 protected:
     uint64_t current_tick;

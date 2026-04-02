@@ -54,6 +54,7 @@ void Editor::sokol_init() {
     game_scene->OnStart();
 
     currentScene.ecs = game_scene->ecs;
+    currentScene.object_manager = game_scene->object_manager;
 
     currentScene.InitializeScene();
 

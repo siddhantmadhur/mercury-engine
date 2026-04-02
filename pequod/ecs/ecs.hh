@@ -10,6 +10,7 @@
 #ifndef PEQUOD_ECS_IMPL_HH_
 #define PEQUOD_ECS_IMPL_HH_
 
+#include <format>
 #include <iostream>
 #include <memory>
 #include <typeindex>
@@ -20,8 +21,8 @@
 #include <vector>
 
 #include <ecs/entity.hh> 
-#include <ecs/mesh.hh> 
-#include <ecs/position.hh> 
+#include <properties/mesh.h>
+#include <properties/position.h>
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Memory.h>
@@ -40,10 +41,8 @@
 #include "Jolt/Physics/PhysicsSystem.h"
 #include "Jolt/RegisterTypes.h"
 
-#include "rigidbody/rigidbody.hh"
-
 #include <debugger/debugger.hh>
-
+#include <rigidbody/rigidbody.hh>
 
 namespace Pequod {
 
@@ -52,11 +51,12 @@ class ECS {
 public:
     ECS();
     ~ECS();
-    entity_id current_id = 1;
+    // TODO: ECS is now managed by PObjectManager
+    entity_id max_id = 0;
 
     //void initializeJolt(); // run this once
     //void simulatePhysics(int steps);
-    entity_id createEntity(); // use to create new entities that are part of the engine
+    //entity_id createEntity(); // use to create new entities that are part of the engine
 
     //void addPosition(entity_id, std::shared_ptr<Position>);
 
@@ -72,20 +72,37 @@ public:
     //void SetRestitution(entity_id, float);
     //void SetFriction(entity_id, float);
 
-	template <class TProperty>
-	void AddProperty(entity_id, std::shared_ptr<TProperty>); // Add property
+    template<std::derived_from<Property> TProperty>
+    void AddProperty(entity_id id, std::shared_ptr<TProperty> property) {
+        auto &arr = GetProperties<TProperty>();
+        if (!arr.contains(id)) {
+            if constexpr (std::is_same_v<TProperty, Mesh>) {
+                addMesh(id, property);
+            } else {
+                arr[id] = property;
+            }
+        } else {
+            PDebug::error(std::format("Property already exists for id: {}", id));
+        }
+    }
 
-	template <class TProperty>
-	std::shared_ptr<TProperty> GetProperty(entity_id); // Add property
+    template<std::derived_from<Property> TProperty>
+    std::shared_ptr<TProperty> GetProperty(entity_id id) {
+        auto arr = GetProperties<TProperty>();
+        if (arr.contains(id)) {
+            return arr[id];
+        } else {
+            return nullptr;
+        }
+    }
 
-	template <class TProperty>
-	std::unordered_map<entity_id, std::shared_ptr<TProperty>> & GetProperties(); // Add property
-
-    void SetMotionType(entity_id, JPH::EMotionType);
+    template<std::derived_from<Property> TProperty>
+    std::unordered_map<entity_id, std::shared_ptr<TProperty>> & GetProperties() {
+        auto &arr = properties<TProperty>[typeid(TProperty)];
+        return arr;
+    }
 
     void Disable(entity_id);
-
-    JPH::BodyID* getJoltId(entity_id);
 
     void ResetBuffers(); // clears vertex/index buffers for scene reload
 
@@ -97,8 +114,10 @@ public:
 
 
 protected:
-	template <class TProperty>
-	static std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<TProperty>>> properties;
+
+    template <class TProperty>
+    static std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<TProperty>>>
+    properties;
 
     std::vector<vertex_t> vertices;
     std::vector<uint16_t> indices;

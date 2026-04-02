@@ -10,9 +10,9 @@
 #include "pobject/pobject.h"
 
 namespace Pequod {
-    ObjectTree::ObjectTree(const fs::path& dir, std::shared_ptr<ECS> ecs, entity_id& selected_id)
+    ObjectTree::ObjectTree(const fs::path& dir, std::shared_ptr<PObjectManager> manager, entity_id& selected_id)
     : selected_id(selected_id), Panel(true) {
-        this->ecs = ecs;
+        this->manager = manager;
         this->project_path = dir;
     };
     ObjectTree::~ObjectTree() = default;
@@ -22,34 +22,34 @@ namespace Pequod {
     }
 
     void ObjectTree::DrawID(entity_id id) {
-        ImGuiTreeNodeFlags base_flags = ImGuiTreeNodeFlags_DrawLinesFull | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Leaf;
-        if (id != 0 && id == selected_id) {
-            base_flags |= ImGuiTreeNodeFlags_Selected;
-        }
-        auto obj = ecs->GetProperty<PObject>(id);
-        if (!obj) {
-            return;
-        }
-        auto arr = obj->children;
+        auto obj = manager->GetObjectById(id);
+        if (!obj) return;
 
-        if (ImGui::TreeNodeEx(id == 0 ? "root" : std::format("{}###{}]", obj->name, id).c_str(), base_flags)) {
-            if (ImGui::IsItemClicked()) {
-                selected_id = selected_id == id ? 0 : id;
-            }
-            for (int i = 0 ; i < arr.size(); i++) {
-                auto cur = arr[i];
-                DrawID(cur);
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
+        if (obj->children.empty()) flags |= ImGuiTreeNodeFlags_Leaf;
+        if (id != 0 && id == selected_id) flags |= ImGuiTreeNodeFlags_Selected;
+
+        bool open = ImGui::TreeNodeEx(
+            id == 0 ? "root" : std::format("{}###{}", obj->name, id).c_str(),
+            flags
+        );
+        if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+            selected_id = (selected_id == id) ? 0 : id;
+        }
+        if (open) {
+            for (auto child_id : obj->children) {
+                DrawID(child_id);
             }
             ImGui::TreePop();
         }
     }
+
     void ObjectTree::Draw() {
         ImGui::Begin("ObjectTree");
-        if (ecs) {
-            if (ImGui::IsWindowHovered() && !ImGui::IsItemClicked() && ImGui::IsMouseClicked(0)) {
+        if (manager) {
+            if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(0)) {
                 selected_id = 0;
             }
-            ImGuiTreeNodeFlags base_flags = ImGuiTreeNodeFlags_DrawLinesFull | ImGuiTreeNodeFlags_DefaultOpen;
             DrawID(0);
         }
         ImGui::End();

@@ -10,28 +10,23 @@
 #include "pobject/pobject.h"
 
 namespace Pequod {
-    ObjectPropertiesPanel::ObjectPropertiesPanel(entity_id& selected_id, std::shared_ptr<ECS> ecs)
+    ObjectPropertiesPanel::ObjectPropertiesPanel(entity_id& selected_id, std::shared_ptr<PObjectManager> manager)
     : selected_id(selected_id), Panel(true) {
-        this->ecs = ecs;
+        this->manager = manager;
     }
 
     void ObjectPropertiesPanel::Initialize() {}
+
     void ObjectPropertiesPanel::Draw() {
         if (selected_id != 0 && prev_id != selected_id) {
-            PDebug::info(std::format("Selected new entity: {}", selected_id));
             prev_id = selected_id;
-            auto obj = ecs->GetProperty<PObject>(selected_id) ;
-
-            if (obj && selected_id != 0) {
+            auto obj = manager->GetObjectById(selected_id);
+            if (obj) {
                 strcpy(input_name, obj->name.c_str());
-            }
-            auto pos = ecs->GetProperty<Position>(selected_id);
-            if (pos) {
-                position = pos->position;
-            }
-            auto mesh = ecs->GetProperty<Mesh>(selected_id);
-            if (mesh) {
-                scale = mesh->scale;
+                auto pos = obj->Get<Position>();
+                if (pos) position = pos->Get();
+                auto mesh = obj->Get<Mesh>();
+                if (mesh) scale = mesh->GetScale();
             }
         }
         ImGui::Begin("ObjectProperties");
@@ -44,38 +39,36 @@ namespace Pequod {
     }
 
     void ObjectPropertiesPanel::DrawProperties(uint64_t id) {
+        auto obj = manager->GetObjectById(id);
+        if (!obj) return;
+
         { // Object info
-            auto obj_info = ecs->GetProperty<PObject>(id);
-            if (obj_info) {
-                ImGui::SeparatorText("Object Info");
-                if (ImGui::InputText(
-                    "Name", input_name, 255,
-                    ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue) && strlen(input_name) > 2) {
-                    obj_info->name = input_name;
-                }
+            ImGui::SeparatorText("Object Info");
+            if (ImGui::InputText(
+                "Name", input_name, 255,
+                ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue
+            ) && strlen(input_name) > 2) {
+                obj->name = input_name;
             }
         }
-        { // Position info
-            auto pos = ecs->GetProperty<Position>(id);
+        { // Position
+            auto pos = obj->Get<Position>();
             if (pos) {
                 ImGui::SeparatorText("Position");
                 ImGui::DragFloat("x###posx", &position.x);
                 ImGui::DragFloat("y###posy", &position.y);
                 ImGui::DragFloat("z###posz", &position.z);
-
-                pos->position = position;
-                pos->raw_position = position;
+                pos->Set(position);
             }
         }
-        { // Mesh
-            auto mesh = ecs->GetProperty<Mesh>(id);
+        { // Mesh scale
+            auto mesh = obj->Get<Mesh>();
             if (mesh) {
                 ImGui::SeparatorText("Size");
-                ImGui::DragFloat("x###sizex", &scale.x);
-                ImGui::DragFloat("y###sizey", &scale.y);
-                ImGui::DragFloat("z###sizez", &scale.z);
-
-                mesh->scale = scale;
+                ImGui::DragFloat("x###sizex", &scale.x, 1, 0, 99999);
+                ImGui::DragFloat("y###sizey", &scale.y, 1, 0, 99999);
+                ImGui::DragFloat("z###sizez", &scale.z, 1, 0, 99999);
+                mesh->SetScale(scale);
             }
         }
     }

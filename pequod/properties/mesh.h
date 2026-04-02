@@ -5,7 +5,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 
-#include "pobject/property.h"
+#include "property.h"
 
 namespace Pequod {
     typedef struct vertex_t {
@@ -16,14 +16,22 @@ namespace Pequod {
 
 
     // TODO: allow two gameobjects to combine their vertices so that the no. of draw calls is reduced
-    class Mesh {
+    class Mesh : public Property {
     public:
-        Mesh(std::vector<vertex_t>, std::vector<uint16_t>, glm::vec3);
+        Mesh();
         ~Mesh();
+
+        void SetVertices(std::vector<vertex_t>);
+        void SetIndicies(std::vector<uint16_t>);
+        void SetScale(glm::vec3);
+        glm::vec3 GetScale();
+        uint32_t GetIndicesID();
+        const std::vector<uint16_t> GetIndices();
         std::vector<vertex_t> vertices;
         std::vector<uint16_t> indices;
         uint32_t vertices_id = 0;   // the id to get this in the ECS vertex vector
         uint32_t indices_id = 0;    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
+    private:
         glm::vec3 scale;
     };
 }

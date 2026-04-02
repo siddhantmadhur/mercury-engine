@@ -5,6 +5,7 @@
 #ifndef PEQUOD_OBJECT_TREE_H
 #define PEQUOD_OBJECT_TREE_H
 #include <filesystem>
+#include <pobject/manager.h>
 
 #include "panel.hh"
 #include "ecs/ecs.hh"
@@ -14,7 +15,7 @@ namespace fs = std::filesystem;
 namespace Pequod {
     class ObjectTree : public Panel {
     public:
-        ObjectTree(const fs::path&, std::shared_ptr<ECS> ecs, entity_id&);
+        ObjectTree(const fs::path&, std::shared_ptr<PObjectManager>, entity_id&);
         ~ObjectTree();
         void Initialize() override;
         void Draw() override;
@@ -22,7 +23,7 @@ namespace Pequod {
         void DrawID(entity_id);
     private:
         fs::path project_path;
-        std::shared_ptr<ECS> ecs;
+        std::shared_ptr<PObjectManager> manager = nullptr;
         entity_id& selected_id;
     };
 }

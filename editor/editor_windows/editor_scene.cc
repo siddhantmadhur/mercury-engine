@@ -5,7 +5,8 @@
 
 namespace Pequod {
 
-EditorScene::EditorScene() {}
+EditorScene::EditorScene() {
+}
 
 void EditorScene::OnDestroyInternal() {
     this->OnDestroy();

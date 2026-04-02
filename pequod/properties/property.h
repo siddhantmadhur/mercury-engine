@@ -6,6 +6,11 @@
 #define PEQUODENGINE_PROPERTY_H
 #include <cstdint>
 
+// Runs a function with all the types
+#define RUN_ON_PROPERTIES(func)     \
+    func(Position);                 \
+    func(Mesh);
+
 namespace Pequod {
     enum class PropertyId {
         Mesh = 1,
@@ -13,7 +18,7 @@ namespace Pequod {
     };
     class Property {
     public:
-        Property(PropertyId property_id);
+        Property();
     };
 }
 #endif //PEQUODENGINE_PROPERTY_H

@@ -12,8 +12,8 @@
     </camera>
     <objects>
         <object name="cube">
-            <size x="56" y="54"/>
-            <position x="308" y="115"/>
+            <size x="64" y="64"/>
+            <position x="0" y="0"/>
         </object>
     </objects>
 </scene>

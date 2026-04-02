@@ -116,24 +116,15 @@ void ProjectSelectionScene::OpenProject() {
     current_project_handler->ReloadProjects();
     explorer.SetRootDirectory(current_project_handler->project_path);
     explorer.Initialize();
-    object_tree = std::make_unique<ObjectTree>(current_project_handler->project_path, this->ecs, this->selected_entity);
+    object_tree = std::make_unique<ObjectTree>(current_project_handler->project_path, this->object_manager, this->selected_entity);
     object_tree->Initialize();
 
-    object_properties = std::make_unique<ObjectPropertiesPanel>(this->selected_entity, this->ecs);
+    object_properties = std::make_unique<ObjectPropertiesPanel>(this->selected_entity, this->object_manager);
     object_properties->Initialize();
 
-    scene_parser = std::make_unique<SceneParser>(this->ecs);
-    fs::path scene_path = current_project_handler->project_path / "scenes" / "main.xml";
-    if (fs::exists(scene_path)) {
-        scene_parser->Load(scene_path.string());
-    }
 }
 
 void ProjectSelectionScene::SaveScene() {
-    if (!scene_parser || !current_project_handler->has_loaded_project) return;
-    fs::path scene_path = current_project_handler->project_path / "scenes" / "main.xml";
-    fs::create_directories(scene_path.parent_path());
-    scene_parser->Save(scene_path.string());
 }
 
 

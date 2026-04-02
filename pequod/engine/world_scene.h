@@ -20,6 +20,7 @@
 #include "gameobjects/camera.hh"
 #include <ecs/ecs.hh>
 #include <vector>
+#include <pobject/manager.h>
 
 #include <sokol/sokol_gfx.h>
 
@@ -66,6 +67,7 @@ public:
 
     std::shared_ptr<ECS> ecs = nullptr;
     std::shared_ptr<PhysicsEngine> physics_engine = nullptr;
+    std::shared_ptr<PObjectManager> object_manager = nullptr;
 
 protected:
     // Scene de-constructor, does NOT free resources, should be done by destroy

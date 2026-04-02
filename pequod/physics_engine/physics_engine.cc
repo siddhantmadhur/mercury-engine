@@ -124,9 +124,6 @@ namespace {
 
     void PhysicsEngine::RegisterEntity(uint64_t id) {
         // register object here
-        auto rigid_body = ecs->GetProperty<RigidBody>(id);
-        //auto& body_interface = physics_system.GetBodyInterface();
-
         // TODO: IMPLEMENT THIS
     }
 
