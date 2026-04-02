@@ -10,15 +10,15 @@
 #include "pobject/pobject.h"
 
 namespace Pequod {
-    ObjectTree::ObjectTree(const fs::path& dir, std::shared_ptr<PObjectManager> manager, entity_id& selected_id)
-    : selected_id(selected_id), Panel(true) {
+    ObjectTree::ObjectTree(const fs::path &dir, std::shared_ptr<PObjectManager> manager, entity_id &selected_id)
+        : selected_id(selected_id), Panel(true) {
         this->manager = manager;
         this->project_path = dir;
     };
+
     ObjectTree::~ObjectTree() = default;
 
     void ObjectTree::Initialize() {
-
     }
 
     void ObjectTree::DrawID(entity_id id) {
@@ -37,7 +37,7 @@ namespace Pequod {
             selected_id = (selected_id == id) ? 0 : id;
         }
         if (open) {
-            for (auto child_id : obj->children) {
+            for (auto child_id: obj->children) {
                 DrawID(child_id);
             }
             ImGui::TreePop();

@@ -12,17 +12,20 @@
 #include <string>
 
 namespace Pequod {
-class Window {
-public:
-    Window(
-        std::string title, 
-        uint16_t width, uint16_t height, 
-        bool no_depth_buffer=true
-    );
-    int Start(); 
-    void SwapBuffers();
-    void OnEvent();
-};
+    class Window {
+    public:
+        Window(
+            std::string title,
+            uint16_t width, uint16_t height,
+            bool no_depth_buffer = true
+        );
+
+        int Start();
+
+        void SwapBuffers();
+
+        void OnEvent();
+    };
 }
 
 #endif

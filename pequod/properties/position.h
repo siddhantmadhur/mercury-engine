@@ -34,6 +34,7 @@ namespace Pequod {
         void Set(glm::vec3);
 
         glm::vec3 Get();
+
     private:
         glm::vec3 position = glm::vec3(0.0f); // update this per tick
         glm::vec3 interpolated_position = glm::vec3(0.0f);

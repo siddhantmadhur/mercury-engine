@@ -10,6 +10,7 @@
 namespace Pequod {
     PObject::PObject() {
     }
+
     PObject::~PObject() {
     }
 
@@ -20,10 +21,9 @@ namespace Pequod {
 
     void PObject::SetECS(std::shared_ptr<ECS> _ecs) {
         this->ecs = _ecs;
-        for (auto& reg : pending_registrations) {
+        for (auto &reg: pending_registrations) {
             reg(ecs, id);
         }
         pending_registrations.clear();
     }
-
 }

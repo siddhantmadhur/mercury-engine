@@ -10,12 +10,17 @@ namespace Pequod {
     class GamePreviewScene : public WorldScene {
     public:
         void OnStart() override;
+
         void OnEvent(const sapp_event *event) override;
+
         void OnDestroy() override;
+
         void OnFrameUpdate() override;
+
         void OnTickUpdate(float tick_t) override;
 
         void SetResolution(glm::vec2);
+
     private:
         glm::vec2 resolution;
     };

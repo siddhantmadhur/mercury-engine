@@ -10,12 +10,13 @@
 #include "pobject/pobject.h"
 
 namespace Pequod {
-    ObjectPropertiesPanel::ObjectPropertiesPanel(entity_id& selected_id, std::shared_ptr<PObjectManager> manager)
-    : selected_id(selected_id), Panel(true) {
+    ObjectPropertiesPanel::ObjectPropertiesPanel(entity_id &selected_id, std::shared_ptr<PObjectManager> manager)
+        : selected_id(selected_id), Panel(true) {
         this->manager = manager;
     }
 
-    void ObjectPropertiesPanel::Initialize() {}
+    void ObjectPropertiesPanel::Initialize() {
+    }
 
     void ObjectPropertiesPanel::Draw() {
         if (selected_id != 0 && prev_id != selected_id) {
@@ -42,16 +43,18 @@ namespace Pequod {
         auto obj = manager->GetObjectById(id);
         if (!obj) return;
 
-        { // Object info
+        {
+            // Object info
             ImGui::SeparatorText("Object Info");
             if (ImGui::InputText(
-                "Name", input_name, 255,
-                ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue
-            ) && strlen(input_name) > 2) {
+                    "Name", input_name, 255,
+                    ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_EnterReturnsTrue
+                ) && strlen(input_name) > 2) {
                 obj->name = input_name;
             }
         }
-        { // Position
+        {
+            // Position
             auto pos = obj->Get<Position>();
             if (pos) {
                 ImGui::SeparatorText("Position");
@@ -61,7 +64,8 @@ namespace Pequod {
                 pos->Set(position);
             }
         }
-        { // Mesh scale
+        {
+            // Mesh scale
             auto mesh = obj->Get<Mesh>();
             if (mesh) {
                 ImGui::SeparatorText("Size");

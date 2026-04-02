@@ -32,6 +32,8 @@ add_library(pequod
         pequod/properties/position.cc
         pequod/rigidbody/rigidbody.cc
         pequod/window/window.h
+        pequod/serialization/serialization.cc
+        pequod/serialization/serialization.h
 )
 
 

@@ -6,7 +6,9 @@ namespace Pequod {
         this->indices = {};
         this->scale = glm::vec3(1.0f);
     }
-    Mesh::~Mesh() {}
+
+    Mesh::~Mesh() {
+    }
 
     void Mesh::SetVertices(std::vector<vertex_t> vertices) {
         this->vertices = vertices;

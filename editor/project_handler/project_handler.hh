@@ -19,36 +19,36 @@
 namespace fs = std::filesystem;
 
 namespace Pequod {
+    class ProjectHandler {
+    public:
+        ProjectHandler(fs::path);
 
-class ProjectHandler {
+        ~ProjectHandler();
 
-public:
-    ProjectHandler(fs::path);
+        void Load(fs::path proj_directory);
 
-    ~ProjectHandler();
-    void Load(fs::path proj_directory);
-    void Create(std::string name);
-    void Save();
-    std::vector<fs::path> GetProjects(); 
-    void ReloadProjects(); 
+        void Create(std::string name);
 
-    bool has_loaded_project = false;
-    fs::path project_path;
+        void Save();
 
-private:
-    // semantic versioning: (major).(minor).(patch)
-    uint16_t project_version_major;
-    uint16_t project_version_minor;
-    uint16_t project_version_patch;
+        std::vector<fs::path> GetProjects();
 
-    std::string project_name;
-    fs::path directory_path;
+        void ReloadProjects();
 
-    std::vector<fs::path> projects_list;
+        bool has_loaded_project = false;
+        fs::path project_path;
 
-};
+    private:
+        // semantic versioning: (major).(minor).(patch)
+        uint16_t project_version_major;
+        uint16_t project_version_minor;
+        uint16_t project_version_patch;
 
+        std::string project_name;
+        fs::path directory_path;
 
+        std::vector<fs::path> projects_list;
+    };
 } // namespace Pequod
 
 #endif

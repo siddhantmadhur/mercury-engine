@@ -15,7 +15,7 @@ namespace Pequod {
             glm::vec2 position = glm::vec2(0.0f),
             glm::vec2 size = glm::vec2(1.0f),
             glm::vec4 color = glm::vec4(1.0f)
-            );
+        );
     };
 }
 

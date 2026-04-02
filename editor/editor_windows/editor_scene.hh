@@ -8,43 +8,52 @@
 #include <vector>
 
 namespace Pequod {
-class EditorScene {
-public:
-    EditorScene();
-    bool IsKeyPressed(sapp_keycode);
+    class EditorScene {
+    public:
+        EditorScene();
 
-    /**
-    * Extend these functions to create functionality in scenes
-    **/
-    virtual void OnInitialLoad() =0;
-    virtual void OnEventUpdate(const sapp_event* event) =0;
-    virtual void OnFrameUpdate() =0;
-    virtual void OnTickUpdate() =0;
-    virtual void OnDestroy()=0;
+        bool IsKeyPressed(sapp_keycode);
 
-    /**
-    * These functions are meant for the engine to interface with scenes directly.
-    * DO NOT EXTEND THESE FUNCTIONS
-    **/
-    void InitializeScene();
-    void OnEventInternal(const sapp_event* event);     
-    void OnFrameInternal();
-    void OnDestroyInternal();
-    virtual void RenderScenePreview(WorldScene** scene) =0;
-    
-    std::shared_ptr<ECS> ecs = nullptr;
-    std::shared_ptr<PObjectManager> object_manager = nullptr;
+        /**
+        * Extend these functions to create functionality in scenes
+        **/
+        virtual void OnInitialLoad() =0;
 
-protected:
-    uint64_t current_tick;
+        virtual void OnEventUpdate(const sapp_event *event) =0;
 
-private:
-    std::unordered_map<sapp_keycode, bool> pressed_keys;
-    float total_run_time=0.0f;
-    uint64_t frame_time = 1;
-    float tick_frame_time = 1;
-    float delta_t = 0;
-};
+        virtual void OnFrameUpdate() =0;
+
+        virtual void OnTickUpdate() =0;
+
+        virtual void OnDestroy() =0;
+
+        /**
+        * These functions are meant for the engine to interface with scenes directly.
+        * DO NOT EXTEND THESE FUNCTIONS
+        **/
+        void InitializeScene();
+
+        void OnEventInternal(const sapp_event *event);
+
+        void OnFrameInternal();
+
+        void OnDestroyInternal();
+
+        virtual void RenderScenePreview(WorldScene **scene) =0;
+
+        std::shared_ptr<ECS> ecs = nullptr;
+        std::shared_ptr<PObjectManager> object_manager = nullptr;
+
+    protected:
+        uint64_t current_tick;
+
+    private:
+        std::unordered_map<sapp_keycode, bool> pressed_keys;
+        float total_run_time = 0.0f;
+        uint64_t frame_time = 1;
+        float tick_frame_time = 1;
+        float delta_t = 0;
+    };
 }
 
 #endif

@@ -19,18 +19,25 @@ namespace Pequod {
     class Mesh : public Property {
     public:
         Mesh();
+
         ~Mesh();
 
         void SetVertices(std::vector<vertex_t>);
+
         void SetIndicies(std::vector<uint16_t>);
+
         void SetScale(glm::vec3);
+
         glm::vec3 GetScale();
+
         uint32_t GetIndicesID();
+
         const std::vector<uint16_t> GetIndices();
+
         std::vector<vertex_t> vertices;
         std::vector<uint16_t> indices;
-        uint32_t vertices_id = 0;   // the id to get this in the ECS vertex vector
-        uint32_t indices_id = 0;    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
+        uint32_t vertices_id = 0; // the id to get this in the ECS vertex vector
+        uint32_t indices_id = 0; // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
     private:
         glm::vec3 scale;
     };

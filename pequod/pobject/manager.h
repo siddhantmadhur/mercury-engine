@@ -49,6 +49,7 @@ namespace Pequod {
         void DeleteObject(std::shared_ptr<PObject>);
 
         std::shared_ptr<PObject> GetRoot() { return root; }
+
         std::shared_ptr<PObject> GetObjectById(entity_id id) {
             if (id < objects.size()) return objects[id];
             return nullptr;

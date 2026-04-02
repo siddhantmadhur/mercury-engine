@@ -5,7 +5,6 @@
 #include <iostream>
 
 namespace Pequod {
-
     Camera::Camera(float aspect_ratio) {
         proj = glm::perspective<float>(glm::radians(60.0f), aspect_ratio, 0.1f, 10.0f);
         // [CLAUDE] TODO: View matrix is hardcoded — setPosition() stores cameraPosition but it isn't used here
@@ -19,6 +18,7 @@ namespace Pequod {
     glm::mat4 Camera::getProjection() {
         return proj;
     }
+
     glm::mat4 Camera::getView() {
         return view;
     }
@@ -26,9 +26,11 @@ namespace Pequod {
     void Camera::setView(glm::mat4 view) {
         this->view = view;
     }
+
     void Camera::setProj(glm::mat4 proj) {
         this->proj = proj;
     }
+
     void Camera::setPosition(glm::vec3 pos) {
         this->cameraPosition = pos;
     }

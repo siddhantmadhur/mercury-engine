@@ -6,7 +6,6 @@
 
 namespace Pequod {
     Property::Property() {
-
     }
 }
 

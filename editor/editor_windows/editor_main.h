@@ -24,47 +24,51 @@
 namespace fs = std::filesystem;
 
 namespace Pequod {
+    class Editor {
+    public:
+        Editor(EditorScene &init_scene);
 
-class Editor {
-public:
-    Editor(EditorScene& init_scene); 
+        //@{
+        /**
+        * These functions are to manage the main editor instance
+        **/
+        void InitializeEditor();
 
-    //@{
-    /**
-    * These functions are to manage the main editor instance
-    **/
-    void InitializeEditor();
-    void SetScene(EditorScene& scene);
-    //@}
+        void SetScene(EditorScene &scene);
 
-    /**
-     *@{
-     * These sokol_* functions are only to be used inside of sokol functions with
-     * no extension
-    **/
-    void sokol_init();
-    void sokol_frame_cb();
-    void sokol_cleanup();
-    void sokol_event(const sapp_event* event);
-    //@}
+        //@}
+
+        /**
+         *@{
+         * These sokol_* functions are only to be used inside of sokol functions with
+         * no extension
+        **/
+        void sokol_init();
+
+        void sokol_frame_cb();
+
+        void sokol_cleanup();
+
+        void sokol_event(const sapp_event *event);
+
+        //@}
 
 
-    std::unique_ptr<GamePreviewScene> game_scene;
+        std::unique_ptr<GamePreviewScene> game_scene;
 
-private:
-    EditorScene &currentScene;
+    private:
+        EditorScene &currentScene;
 
-    //@{
-    /**
-    * These are variables only required by sokol calls; goal is to phase them 
-    * out for a custom impl
-    **/
-    sg_pass_action pass_action;
-    //@}
+        //@{
+        /**
+        * These are variables only required by sokol calls; goal is to phase them 
+        * out for a custom impl
+        **/
+        sg_pass_action pass_action;
+        //@}
 
-    fs::path editor_cwd;
-};
-
+        fs::path editor_cwd;
+    };
 };
 
 #endif

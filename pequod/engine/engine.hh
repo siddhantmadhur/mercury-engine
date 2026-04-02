@@ -14,19 +14,28 @@
 // [CLAUDE] TODO: Remove — including a .cc file is bad practice even as a comment
 
 namespace Pequod {
-    class PequodEngine
-    {
+    class PequodEngine {
     public:
         PequodEngine();
+
         void startUp();
-        void SetScene(WorldScene* scene);
+
+        void SetScene(WorldScene *scene);
+
         void sokol_init();
+
         void sokol_frame_cb();
+
         void sokol_cleanup();
-        void sokol_event(const sapp_event* event);
+
+        void sokol_event(const sapp_event *event);
+
         uint64_t getTicks();
+
         std::condition_variable ticks_cv;
+
         bool isShowDebugStats();
+
     private:
         uint64_t ticks;
         uint64_t last_tick;

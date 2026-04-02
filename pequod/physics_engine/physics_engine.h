@@ -32,13 +32,10 @@ using namespace JPH;
 
 namespace Pequod {
     namespace {
-        class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter
-        {
+        class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter {
         public:
-            virtual bool ShouldCollide(ObjectLayer inObject1, ObjectLayer inObject2) const override
-            {
-                switch (inObject1)
-                {
+            virtual bool ShouldCollide(ObjectLayer inObject1, ObjectLayer inObject2) const override {
+                switch (inObject1) {
                     case Layers::NON_MOVING:
                         return inObject2 == Layers::MOVING; // Non moving only collides with moving
                     case Layers::MOVING:
@@ -50,46 +47,37 @@ namespace Pequod {
             }
         };
 
-        namespace BroadPhaseLayers
-        {
+        namespace BroadPhaseLayers {
             static constexpr BroadPhaseLayer NON_MOVING(0);
             static constexpr BroadPhaseLayer MOVING(1);
             static constexpr uint NUM_LAYERS(2);
         };
 
-        class BPLayerInterfaceImpl final : public BroadPhaseLayerInterface
-        {
+        class BPLayerInterfaceImpl final : public BroadPhaseLayerInterface {
         public:
-            BPLayerInterfaceImpl()
-            {
+            BPLayerInterfaceImpl() {
                 // Create a mapping table from object to broad phase layer
                 mObjectToBroadPhase[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
                 mObjectToBroadPhase[Layers::MOVING] = BroadPhaseLayers::MOVING;
             }
 
-            virtual uint GetNumBroadPhaseLayers() const override
-            {
+            virtual uint GetNumBroadPhaseLayers() const override {
                 return BroadPhaseLayers::NUM_LAYERS;
             }
 
-            virtual BroadPhaseLayer GetBroadPhaseLayer(ObjectLayer inLayer) const override
-            {
+            virtual BroadPhaseLayer GetBroadPhaseLayer(ObjectLayer inLayer) const override {
                 JPH_ASSERT(inLayer < Layers::NUM_LAYERS);
                 return mObjectToBroadPhase[inLayer];
             }
 
-
         private:
-            BroadPhaseLayer	mObjectToBroadPhase[Layers::NUM_LAYERS];
+            BroadPhaseLayer mObjectToBroadPhase[Layers::NUM_LAYERS];
         };
 
-        class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter
-        {
+        class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter {
         public:
-            virtual bool ShouldCollide(ObjectLayer inLayer1, BroadPhaseLayer inLayer2) const override
-            {
-                switch (inLayer1)
-                {
+            virtual bool ShouldCollide(ObjectLayer inLayer1, BroadPhaseLayer inLayer2) const override {
+                switch (inLayer1) {
                     case Layers::NON_MOVING:
                         PDebug::info("Non moving!");
                         return inLayer2 == BroadPhaseLayers::MOVING;
@@ -102,23 +90,30 @@ namespace Pequod {
             }
         };
 
-        class MyBodyActivationListener : public JPH::BodyActivationListener
-        {
+        class MyBodyActivationListener : public JPH::BodyActivationListener {
         public:
-            virtual void OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {}
-            virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {}
+            virtual void OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {
+            }
+
+            virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {
+            }
         };
     }
+
     class PhysicsEngine {
     public:
         PhysicsEngine(std::shared_ptr<ECS>);
+
         void RegisterEntity(entity_id);
+
         void Compute(int steps);
+
         // [CLAUDE] TODO: DisableBody is declared but never implemented
         void DisableBody(entity_id);
+
     private:
         // [CLAUDE] TODO: body_id is declared but never used
-        BodyID* body_id = nullptr;
+        BodyID *body_id = nullptr;
         std::shared_ptr<ECS> ecs = nullptr;
 
         // [CLAUDE] TODO: jolt_bodies is never populated — physics system not initialized

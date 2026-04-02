@@ -16,26 +16,29 @@
 namespace fs = std::filesystem;
 
 namespace Pequod {
+    class FileExplorer : public Panel {
+    public:
+        FileExplorer();
 
-class FileExplorer : public Panel {
-public:
-    FileExplorer();
-    void Initialize() override;
-    void ReloadFolders();
-    void Draw() override;
-    void DrawFolder(fs::path root);
+        void Initialize() override;
 
-    void SetRootDirectory(fs::path init_directory);
-    void CreateFile(fs::path file_path);
+        void ReloadFolders();
 
-    std::vector<fs::path> GetItems(fs::path);
-private:
+        void Draw() override;
 
-    fs::path root_directory;
+        void DrawFolder(fs::path root);
 
-    std::unordered_map<std::string, std::vector<fs::directory_entry>> folder_data;
-};
+        void SetRootDirectory(fs::path init_directory);
 
+        void CreateFile(fs::path file_path);
+
+        std::vector<fs::path> GetItems(fs::path);
+
+    private:
+        fs::path root_directory;
+
+        std::unordered_map<std::string, std::vector<fs::directory_entry> > folder_data;
+    };
 } // namespace Pequod
 
 #endif

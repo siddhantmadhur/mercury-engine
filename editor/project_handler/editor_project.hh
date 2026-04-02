@@ -19,39 +19,43 @@
 #include "panel/object_tree.h"
 
 namespace Pequod {
-class ProjectSelectionScene : public EditorScene {
-public:
-    void OnInitialLoad() override;
-    void OnEventUpdate(const sapp_event* event) override;
-    void OnFrameUpdate() override;
-    void OnTickUpdate() override;
-    void OnDestroy() override;
-    void RenderScenePreview(WorldScene** scene) override;
+    class ProjectSelectionScene : public EditorScene {
+    public:
+        void OnInitialLoad() override;
 
+        void OnEventUpdate(const sapp_event *event) override;
 
-private:
-    void CreateProject(); // Creates new project files
-    void OpenProject(); // Opens project files
-    void SaveScene(); // Saves current scene to XML
+        void OnFrameUpdate() override;
 
-    void ToggleNewProjectWin(); // Toggles the wizard window to create a project
-    void ToggleOpenProjectWin(); // Toggles the wizard window to open a project
-    void QuitProgram();
+        void OnTickUpdate() override;
 
-    std::unique_ptr<ProjectHandler> current_project_handler;
-   
-    bool show_new_project_window = false;
-    bool open_prev_project_window = false;
-    char* new_project_name;
-    char* project_directory;
-    
-    std::string imgui_configuration_path;
+        void OnDestroy() override;
 
-    FileExplorer explorer;
-    std::unique_ptr<ObjectTree> object_tree = nullptr;
-    std::unique_ptr<ObjectPropertiesPanel> object_properties = nullptr;
-    entity_id selected_entity = 0; // 0 - root / none, 1> - some entity
-};
+        void RenderScenePreview(WorldScene **scene) override;
+
+    private:
+        void CreateProject(); // Creates new project files
+        void OpenProject(); // Opens project files
+        void SaveScene(); // Saves current scene to XML
+
+        void ToggleNewProjectWin(); // Toggles the wizard window to create a project
+        void ToggleOpenProjectWin(); // Toggles the wizard window to open a project
+        void QuitProgram();
+
+        std::unique_ptr<ProjectHandler> current_project_handler;
+
+        bool show_new_project_window = false;
+        bool open_prev_project_window = false;
+        char *new_project_name;
+        char *project_directory;
+
+        std::string imgui_configuration_path;
+
+        FileExplorer explorer;
+        std::unique_ptr<ObjectTree> object_tree = nullptr;
+        std::unique_ptr<ObjectPropertiesPanel> object_properties = nullptr;
+        entity_id selected_entity = 0; // 0 - root / none, 1> - some entity
+    };
 } // namespace Pequod
 
 #endif

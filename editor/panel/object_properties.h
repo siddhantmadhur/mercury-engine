@@ -14,12 +14,16 @@
 namespace Pequod {
     class ObjectPropertiesPanel : public Panel {
     public:
-        ObjectPropertiesPanel(entity_id& current_selected_id, std::shared_ptr<PObjectManager> manager);
+        ObjectPropertiesPanel(entity_id &current_selected_id, std::shared_ptr<PObjectManager> manager);
+
         void Initialize() override;
+
         void Draw() override;
+
         void DrawProperties(entity_id id);
+
     private:
-        entity_id& selected_id;
+        entity_id &selected_id;
         entity_id prev_id = 0; // use to check if selection has changed
         std::shared_ptr<PObjectManager> manager = nullptr;
 

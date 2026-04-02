@@ -18,27 +18,37 @@
 
 namespace Pequod {
     void GamePreviewScene::OnStart() {
-        { // Background quad
+        {
+            // Background quad
             std::shared_ptr<PObject> bg =
-                object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(width_s, height_s), glm::vec4(0, 0, 0, 1));
+                    object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(width_s, height_s),
+                                                     glm::vec4(0, 0, 0, 1));
         }
-        { // CAMERA
+        {
+            // CAMERA
             Camera playerCam = Camera(width_s / height_s);
             playerCam.configure2D(width_s, height_s, ZOOM);
             SetPlayerCamera(playerCam);
         }
         {
             std::shared_ptr<PObject> block =
-                object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(100.0f, 100.0f), glm::vec4(1.0f));
+                    object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(100.0f, 100.0f), glm::vec4(1.0f));
         }
     }
-    void GamePreviewScene::OnEvent(const sapp_event *event) {};
-    void GamePreviewScene::OnDestroy() {};
-    void GamePreviewScene::OnFrameUpdate() {};
-    void GamePreviewScene::OnTickUpdate(float tick_t) {};
+
+    void GamePreviewScene::OnEvent(const sapp_event *event) {
+    };
+
+    void GamePreviewScene::OnDestroy() {
+    };
+
+    void GamePreviewScene::OnFrameUpdate() {
+    };
+
+    void GamePreviewScene::OnTickUpdate(float tick_t) {
+    };
 
     void GamePreviewScene::SetResolution(glm::vec2 new_res) {
         resolution = new_res;
     };
 }
-

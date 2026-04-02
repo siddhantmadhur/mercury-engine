@@ -15,16 +15,20 @@ namespace fs = std::filesystem;
 namespace Pequod {
     class ObjectTree : public Panel {
     public:
-        ObjectTree(const fs::path&, std::shared_ptr<PObjectManager>, entity_id&);
+        ObjectTree(const fs::path &, std::shared_ptr<PObjectManager>, entity_id &);
+
         ~ObjectTree();
+
         void Initialize() override;
+
         void Draw() override;
 
         void DrawID(entity_id);
+
     private:
         fs::path project_path;
         std::shared_ptr<PObjectManager> manager = nullptr;
-        entity_id& selected_id;
+        entity_id &selected_id;
     };
 }
 

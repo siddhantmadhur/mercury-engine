@@ -17,6 +17,7 @@ namespace Pequod {
         Mesh = 1,
         Position = 2,
     };
+
     class Property {
     public:
         Property();

@@ -10,17 +10,29 @@
 class Entity {
 public:
     Entity();
+
     ~Entity();
+
     virtual void OnStart() =0;
+
     virtual void OnTick() =0;
+
     virtual void OnFrame() =0;
-    virtual void OnEvent(const sapp_event*) =0;
+
+    virtual void OnEvent(const sapp_event *) =0;
+
     virtual void OnEnd() =0;
+
     void setEnabled();
+
     void setDisabled();
+
     void toggleDisabled();
+
     bool isDisabled();
+
     bool isEnabled();
+
 private:
     entity_id id;
     bool disabled;

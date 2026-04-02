@@ -19,6 +19,7 @@ void PDebug::warn(std::string inputString) {
 
     std::cout << "[WARN]" << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ") << inputString << std::endl;
 }
+
 void PDebug::info(std::string inputString) {
     std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);

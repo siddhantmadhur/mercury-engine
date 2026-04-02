@@ -14,7 +14,6 @@ namespace Pequod {
     // [CLAUDE] TODO: Empty class body — RigidBody holds a shared_ptr<CollisionShape> but never uses it
     class CollisionShape {
     public:
-
     };
 }
 

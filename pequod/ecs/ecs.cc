@@ -21,8 +21,9 @@ namespace Pequod {
 
     ECS::~ECS() {
     }
+
     template<class TProperty>
-    std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<TProperty>>> ECS::properties;
+    std::unordered_map<std::type_index, std::unordered_map<entity_id, std::shared_ptr<TProperty> > > ECS::properties;
 
     void ECS::Disable(entity_id id) {
         auto mesh = GetProperty<Mesh>(id);
@@ -57,8 +58,8 @@ namespace Pequod {
         mesh->vertices_id = vertices.size();
 
         PDebug::log(std::format("addMesh: id={} vertices={} indices={} scale=({},{},{})",
-            id, mesh->vertices.size(), mesh->indices.size(),
-            mesh->GetScale().x, mesh->GetScale().y, mesh->GetScale().z));
+                                id, mesh->vertices.size(), mesh->indices.size(),
+                                mesh->GetScale().x, mesh->GetScale().y, mesh->GetScale().z));
 
         size_t prev_size = vertices.size();
         if (prev_size > 0) {
@@ -71,7 +72,6 @@ namespace Pequod {
         this->vertices.insert(vertices.end(), mesh->vertices.begin(), mesh->vertices.end());
         this->indices.insert(indices.end(), mesh->indices.begin(), mesh->indices.end());
     }
-
 
 
     void ECS::setupRender(sg_bindings &bind) {
@@ -97,7 +97,7 @@ namespace Pequod {
         static int render_log_count = 0;
         if (render_log_count < 3) {
             PDebug::log(std::format("render: max_id={} total_vertices={} total_indices={}",
-                max_id, vertices.size(), indices.size()));
+                                    max_id, vertices.size(), indices.size()));
             render_log_count++;
         }
         for (int i = 0; i < max_id; i++) {
@@ -139,11 +139,10 @@ namespace Pequod {
             sg_draw(mesh->GetIndicesID(), mesh->GetIndices().size(), 1);
         }
     }
+
     /**
     #define ADD_PROPERTY(prop) template void ECS::AddProperty<prop>(entity_id, std::shared_ptr<prop>)
     ADD_PROPERTY(Position);
     ADD_PROPERTY(Mesh);
     **/
-
-
 }
