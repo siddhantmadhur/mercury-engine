@@ -3,17 +3,17 @@
 
 #include <Jolt/Jolt.h>
 #include "Jolt/Physics/Body/BodyID.h"
-#include <engine/scene.hh>
-#include <gameobjects/quad.hh>
 #include <ecs/entity.hh>
 
-class PongScene : public Scene {
+#include "engine/world_scene.h"
+
+class PongScene : public Pequod::WorldScene {
 public:
     void OnStart() override;
-    void OnUpdate() override;
+    void OnFrameUpdate() override;
     void OnEvent(const sapp_event *event) override;
-    void OnEnd() override;
-    void OnTick(float tick_t) override;
+    void OnDestroy() override;
+    void OnTickUpdate(float tick_t) override;
 
     void ResetRound();
 

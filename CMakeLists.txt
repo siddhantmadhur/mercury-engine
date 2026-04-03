@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.30)
 
-project(PequodEngine LANGUAGES CXX C OBJC OBJCXX)
+project(PequodEngine LANGUAGES CXX C)
+# for windows only:
+include_directories("C:\\VulkanSDK\\1.4.341.1\\Include")
+
 include_directories("third_party")
 include_directories("shaders")
 
@@ -48,7 +51,7 @@ if (APPLE)
   target_link_libraries(pequod "-framework MetalKit")
   target_link_libraries(pequod "-framework QuartzCore")
   target_link_libraries(pequod "-framework OpenGL")
-else()
+elseif (LINUX)
   target_link_libraries(pequod "-lX11")
   target_link_libraries(pequod "-lXi")
   target_link_libraries(pequod "-lXcursor")
@@ -57,6 +60,8 @@ else()
   target_link_libraries(pequod "-lm")
   target_link_libraries(pequod "-lvulkan")
   target_link_libraries(pequod "-lGL")
+else()
+  target_link_libraries(pequod "-ld3d11")
 endif()
 
 # link imgui
@@ -133,3 +138,7 @@ target_link_libraries(breakout pequod)
 #add_executable(spaceinvaders ${SPACE_INVADERS_SRC})
 #target_link_libraries(spaceinvaders pequod)
 add_executable(pequod_test tests/main.cc)
+add_executable(pong 20-games-challenge/pong/main.cc
+        20-games-challenge/pong/scene.cc
+        20-games-challenge/pong/scene.hh)
+target_link_libraries(pong pequod)

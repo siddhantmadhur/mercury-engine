@@ -5,7 +5,7 @@
 #include <ecs/ecs.hh>
 
 #define SOKOL_IMPL
-#define SOKOL_GLCORE
+#define SOKOL_D3D11
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_glue.h>
@@ -16,7 +16,7 @@
 #include <sokol/util/sokol_imgui.h>
 
 
-static PequodEngine engine;
+static Pequod::PequodEngine engine;
 
 void sokol_init() {
     engine.sokol_init();

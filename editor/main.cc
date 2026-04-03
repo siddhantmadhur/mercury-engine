@@ -10,8 +10,7 @@
 #if TARGET_OS_MAC
 #define SOKOL_GLCORE
 #else
-#define VK_USE_PLATFORM_XLIB_KHR
-#define SOKOL_VULKAN
+#define SOKOL_D3D11
 #endif
 
 #define SOKOL_IMPL

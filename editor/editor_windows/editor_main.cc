@@ -65,7 +65,7 @@ namespace Pequod {
 
         {
             currentScene.OnFrameInternal();
-            currentScene.RenderScenePreview((WorldScene **) &game_scene);
+            currentScene.RenderScenePreview(reinterpret_cast<WorldScene**>(&game_scene));
         }
 
         sg_begin_pass((sg_pass){

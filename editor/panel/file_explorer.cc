@@ -27,12 +27,12 @@ namespace Pequod {
         for (int i = 0; i < arr.size(); i++) {
             auto cur = arr[i];
             if (cur.is_directory()) {
-                if (ImGui::TreeNodeEx(cur.path().stem().c_str(), base_flags)) {
+                if (ImGui::TreeNodeEx(cur.path().stem().generic_string().c_str(), base_flags)) {
                     DrawFolder(cur.path());
                     ImGui::TreePop();
                 }
             } else {
-                ImGui::Text("%s", cur.path().filename().c_str());
+                ImGui::Text("%s", cur.path().filename().generic_string().c_str());
             }
         }
     }

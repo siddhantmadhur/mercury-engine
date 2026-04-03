@@ -1,5 +1,4 @@
 #include "panel.hh"
-#include <panel.h>
 
 namespace Pequod {
     Panel::Panel(bool init_show) {

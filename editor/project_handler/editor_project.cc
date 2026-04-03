@@ -57,6 +57,9 @@ namespace Pequod {
         const int cw = (int) (cmd->ClipRect.z - cmd->ClipRect.x);
         const int ch = (int) (cmd->ClipRect.w - cmd->ClipRect.y);
         sg_apply_scissor_rect(cx, cy, cw, ch, true);
+        // TODO: remove this debug, issue resolved
+#define DEBUG_CENTER_PREVIEW 1
+#if DEBUG_CENTER_PREVIEW
         if ((cw / 16.0) < (ch / 9.0)) {
             float offset_y = (ch - (cw * (9.0 / 16.0f))) / 2.0f;
             sg_apply_viewport(cx, cy + offset_y, cw, cw * (9.0 / 16.0), true);
@@ -64,6 +67,9 @@ namespace Pequod {
             float offset_x = (cw - (ch * (16.0 / 9.0))) / 2.0f;
             sg_apply_viewport(cx + offset_x, cy, ch * (16.0 / 9.0), ch, true);
         }
+#else
+        sg_apply_viewport(cx , cy, cw, ch , true);
+#endif
 
         cur_scene->SetupRenderState();
         cur_scene->RenderObjects();
@@ -72,6 +78,7 @@ namespace Pequod {
     void ProjectSelectionScene::RenderScenePreview(WorldScene **scene) {
         ImGui::Begin("GamePreview");
         auto *dl = ImGui::GetWindowDrawList();
+        dl->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         dl->AddCallback(imgui_callback, scene);
         ImGui::End();
     }
@@ -194,7 +201,7 @@ namespace Pequod {
                 ImGui::BeginChild("Projects", {300.0f, 80.0f});
                 for (int i = 0; i < projects.size(); i++) {
                     const bool is_selected = selected_index == i;
-                    if (ImGui::Selectable(projects[i].c_str(), is_selected)) {
+                    if (ImGui::Selectable(reinterpret_cast<const char*>(projects[i].c_str()), is_selected)) {
                         selected_index = i;
                     }
 
