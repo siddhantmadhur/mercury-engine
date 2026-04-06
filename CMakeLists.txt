@@ -112,7 +112,7 @@ if (APPLE)
 endif()
 add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/main.cc
-        editor/editor_windows/preview_scene.h
+        "editor/panel/preview_scene.h"
         editor/editor_windows/preview_scene.cc
         editor/panel/object_tree.h
         editor/panel/object_tree.cc

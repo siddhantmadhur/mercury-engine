@@ -77,7 +77,7 @@ namespace Pequod {
     void ECS::setupRender(sg_bindings &bind) {
         size_t vertex_size = vertices.size() * sizeof(vertex_t);
         if (vertices.size() > 0) {
-            sg_update_buffer(bind.vertex_buffers[0], (sg_range){
+            sg_update_buffer(bind.vertex_buffers[0], sg_range{
                                  .ptr = vertices.data(),
                                  .size = vertex_size,
                              });
@@ -85,7 +85,7 @@ namespace Pequod {
 
         size_t indices_size = indices.size() * sizeof(uint16_t);
         if (indices.size() > 0) {
-            sg_update_buffer(bind.index_buffer, (sg_range){
+            sg_update_buffer(bind.index_buffer, sg_range{
                                  .ptr = indices.data(),
                                  .size = indices_size,
                              });

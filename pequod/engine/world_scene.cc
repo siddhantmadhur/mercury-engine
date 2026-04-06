@@ -105,7 +105,7 @@ namespace Pequod {
     }
 
     void WorldScene::OnStartInternal() {
-        sg_setup((sg_desc){
+        sg_setup(sg_desc{
             .logger = {
                 .func = slog_func,
             },
@@ -147,14 +147,14 @@ namespace Pequod {
         sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
         size_t vertex_size = MAX_VERTICES * sizeof(vertex_t);
-        bind.vertex_buffers[0] = sg_make_buffer((sg_buffer_desc){
+        bind.vertex_buffers[0] = sg_make_buffer(sg_buffer_desc{
             .size = vertex_size,
             .usage = {.dynamic_update = true},
             .label = "quad-vertices",
         });
 
         size_t indices_size = MAX_INDICES * sizeof(uint16_t);
-        bind.index_buffer = sg_make_buffer((sg_buffer_desc){
+        bind.index_buffer = sg_make_buffer(sg_buffer_desc{
             .size = indices_size,
             .usage = {
                 .index_buffer = true,
@@ -163,7 +163,7 @@ namespace Pequod {
             .label = "quad-indices",
         });
 
-        sg_pipeline_desc pip_desc = (sg_pipeline_desc){
+        auto pip_desc = sg_pipeline_desc{
             .shader = shd,
             .depth = {
                 .pixel_format = SG_PIXELFORMAT_DEPTH_STENCIL,
@@ -184,14 +184,14 @@ namespace Pequod {
         pip = sg_make_pipeline(pip_desc);
 
 
-        pass_action = (sg_pass_action){
+        pass_action = sg_pass_action{
             .colors = {
                 {.load_action = SG_LOADACTION_CLEAR, .clear_value = {bgColor.x, bgColor.y, bgColor.z, bgColor.a}}
             }
         };
 
 
-        auto img_desc = (sg_image_desc){
+        auto img_desc = sg_image_desc{
             .width = wall_texture.x,
             .height = wall_texture.y,
             .pixel_format = SG_PIXELFORMAT_RGBA8,
@@ -221,12 +221,12 @@ namespace Pequod {
     }
 
     void WorldScene::BeginRenderPass(float width, float height) {
-        sg_begin_pass((sg_pass){
+        sg_begin_pass(sg_pass{
             .action = pass_action,
             .swapchain = sglue_swapchain(),
         });
 
-        simgui_new_frame((simgui_frame_desc_t){
+        simgui_new_frame(simgui_frame_desc_t{
             .width = sapp_width(),
             .height = sapp_height(),
             .delta_time = delta_t
@@ -260,7 +260,7 @@ namespace Pequod {
 
     void WorldScene::SetBgColor(glm::vec4 newColor) {
         bgColor = newColor;
-        pass_action = (sg_pass_action){
+        pass_action = sg_pass_action{
             .colors = {
                 {.load_action = SG_LOADACTION_CLEAR, .clear_value = {bgColor.x, bgColor.y, bgColor.z, bgColor.a}}
             }

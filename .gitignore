@@ -4,3 +4,4 @@ bin/
 sokol-shdc
 *.shader.hh
 .todolist
+/.vs

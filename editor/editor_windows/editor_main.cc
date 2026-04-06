@@ -8,6 +8,7 @@
 #include <sokol/util/sokol_imgui.h>
 
 #include "tinyxml2.h"
+#include <panel/preview_scene.h>
 
 
 namespace Pequod {
@@ -25,7 +26,7 @@ namespace Pequod {
     }
 
     void Editor::sokol_init() {
-        sg_setup((sg_desc){
+        sg_setup(sg_desc{
             .logger = {
                 .func = slog_func,
             },
@@ -68,7 +69,7 @@ namespace Pequod {
             currentScene.RenderScenePreview(reinterpret_cast<WorldScene**>(&game_scene));
         }
 
-        sg_begin_pass((sg_pass){
+        sg_begin_pass(sg_pass{
             .action = game_scene->GetPassAction(),
             .swapchain = sglue_swapchain(),
         });

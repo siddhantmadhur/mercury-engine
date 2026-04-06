@@ -26,7 +26,6 @@
 #include <shaders/generic_texture.glsl.hh>
 #include <stdexcept>
 #include <thread>
-#include <unistd.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
@@ -88,7 +87,7 @@ namespace Pequod {
         simgui_new_frame({width, height, sapp_frame_duration(), sapp_dpi_scale()});
 
 
-        sg_begin_pass((sg_pass){
+        sg_begin_pass(sg_pass{
             .action = currentScene->GetPassAction(),
             .swapchain = sglue_swapchain(),
         });
