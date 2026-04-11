@@ -1,14 +1,10 @@
 cmake_minimum_required(VERSION 3.30)
 
-project(PequodEngine )
-
-set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
-
+project(PequodEngine LANGUAGES CXX C)
 # for windows only:
 include_directories("C:\\VulkanSDK\\1.4.341.1\\Include")
 
 include_directories("third_party")
-include_directories("third_party/glfw/include")
 include_directories("shaders")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -16,17 +12,31 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_FLAGS_DEBUG "/MDd /ZI /Ob0 /Od /RTC1")
-
 add_library(pequod
-        pequod/application/application.cc
-        pequod/application/application.h
+        pequod/ecs/ecs.hh
+        pequod/ecs/ecs.cc
+        pequod/physics_engine/physics_engine.cc
+        pequod/physics_engine/physics_engine.h
+        pequod/physics_engine/collision_shape.cc
+        pequod/physics_engine/collision_shape.h
+        pequod/ecs/texture.hh
+        pequod/engine/engine.cc
+        pequod/engine/world_scene.cc
+        pequod/pobject/nodes/box2d.cc
+        pequod/pobject/nodes/box2d.h
+        pequod/pobject/manager.cc
+        pequod/pobject/manager.h
+        pequod/pobject/pobject.cc
+        pequod/properties/property.cc
+        pequod/assets/images.cc
         pequod/debugger/debugger.cc
-        pequod/debugger/debugger.hh
-        pequod/application/d3d11_application.cc
-        pequod/application/d3d11_application.h
-        pequod/renderer/renderer.cc
-        pequod/renderer/renderer.h
+        pequod/gameobjects/camera.cc
+        pequod/properties/mesh.cc
+        pequod/properties/position.cc
+        pequod/rigidbody/rigidbody.cc
+        pequod/window/window.h
+        pequod/serialization/serialization.cc
+        pequod/serialization/serialization.h
 )
 
 
@@ -51,6 +61,7 @@ elseif (LINUX)
   target_link_libraries(pequod "-lvulkan")
   target_link_libraries(pequod "-lGL")
 else()
+  target_link_libraries(pequod "-ld3d11")
 endif()
 
 # link imgui
@@ -92,21 +103,23 @@ include_directories("third_party/tinyxml2")
 
 # End of TinyXML2
 
-#glfw
-add_subdirectory(third_party/glfw)
-
-target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
+target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2)
 
 
+file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
 if (APPLE)
   set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
 endif()
-add_executable(pequod_editor
+add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/main.cc
+        "editor/panel/preview_scene.h"
+        editor/editor_windows/preview_scene.cc
+        editor/panel/object_tree.h
+        editor/panel/object_tree.cc
+        editor/panel/object_properties.h
+        editor/panel/object_properties.cc
 )
 target_link_libraries(pequod_editor pequod)
-set_target_properties(pequod PROPERTIES LINK_FLAGS "/INCREMENTAL")
-set_target_properties(pequod_editor PROPERTIES LINK_FLAGS "/INCREMENTAL")
 
 # CREATE NEW BINARIES USING THIS
 
