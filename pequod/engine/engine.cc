@@ -86,18 +86,17 @@ namespace Pequod {
 
         simgui_new_frame({width, height, sapp_frame_duration(), sapp_dpi_scale()});
 
+        auto pass = sg_pass{ 0 };
+        pass.action = currentScene->GetPassAction();
+        pass.swapchain = sglue_swapchain();
 
-        sg_begin_pass(sg_pass{
-            .action = currentScene->GetPassAction(),
-            .swapchain = sglue_swapchain(),
-        });
+        sg_begin_pass(&pass);
 
         {
             currentScene->ComputeTick();
             currentScene->OnFrameUpdate();
             currentScene->SetupRenderState();
             currentScene->RenderObjects();
-            //currentScene.RenderScenePreview((WorldScene**) &game_scene);
         }
 
         simgui_render();

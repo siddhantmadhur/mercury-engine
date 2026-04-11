@@ -44,7 +44,7 @@ sapp_desc sokol_main(int argc, char *argv[]) {
 
     engine.SetScene(demoScene);
 
-    return (sapp_desc){
+    return sapp_desc{
         .init_cb = sokol_init,
         .frame_cb = sokol_frame_cb,
         .cleanup_cb = sokol_cleanup,

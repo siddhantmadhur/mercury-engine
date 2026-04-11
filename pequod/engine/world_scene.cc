@@ -147,32 +147,32 @@ namespace Pequod {
         sg_shader shd = sg_make_shader(simple_shader_desc(sg_query_backend()));
 
         size_t vertex_size = MAX_VERTICES * sizeof(vertex_t);
-        bind.vertex_buffers[0] = sg_make_buffer(sg_buffer_desc{
-            .size = vertex_size,
-            .usage = {.dynamic_update = true},
-            .label = "quad-vertices",
-        });
+        auto vertex_buffer = sg_buffer_desc{ 0 };
+        vertex_buffer.size = vertex_size;
+        vertex_buffer.usage = { .dynamic_update = true };
+        vertex_buffer.label = "quad-vertices";
+
+        bind.vertex_buffers[0] = sg_make_buffer(&vertex_buffer);
 
         size_t indices_size = MAX_INDICES * sizeof(uint16_t);
-        bind.index_buffer = sg_make_buffer(sg_buffer_desc{
-            .size = indices_size,
-            .usage = {
-                .index_buffer = true,
-                .dynamic_update = true
-            },
-            .label = "quad-indices",
-        });
-
-        auto pip_desc = sg_pipeline_desc{
-            .shader = shd,
-            .depth = {
-                .pixel_format = SG_PIXELFORMAT_DEPTH_STENCIL,
-                .compare = SG_COMPAREFUNC_LESS_EQUAL,
-                .write_enabled = true,
-            },
-            .cull_mode = SG_CULLMODE_BACK,
-            .label = "triangle-pipeline",
+        auto index_buffer = sg_buffer_desc{ 0 };
+        index_buffer.size = indices_size;
+        index_buffer.usage = {
+            .index_buffer = true,
+            .dynamic_update = true
         };
+        index_buffer.label = "quad-indices";
+        bind.index_buffer = sg_make_buffer(&index_buffer);
+
+        sg_pipeline_desc pip_desc = { 0 };
+        pip_desc.shader = shd;
+        pip_desc.depth = {
+            .pixel_format = SG_PIXELFORMAT_DEPTH_STENCIL,
+            .compare = SG_COMPAREFUNC_LESS_EQUAL,
+            .write_enabled = true,
+        };
+        pip_desc.cull_mode = SG_CULLMODE_BACK;
+        pip_desc.label = "triangle-pipeline";
 
 
         pip_desc.index_type = SG_INDEXTYPE_UINT16;
@@ -181,13 +181,12 @@ namespace Pequod {
         pip_desc.layout.attrs[ATTR_simple_texcoord0].format = SG_VERTEXFORMAT_SHORT2N;
         pip_desc.layout.attrs[ATTR_simple_color0].format = SG_VERTEXFORMAT_FLOAT4;
 
-        pip = sg_make_pipeline(pip_desc);
+        pip = sg_make_pipeline(&pip_desc);
 
 
-        pass_action = sg_pass_action{
-            .colors = {
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = {bgColor.x, bgColor.y, bgColor.z, bgColor.a}}
-            }
+        pass_action = sg_pass_action{};
+        pass_action.colors[0] = {
+            .load_action = SG_LOADACTION_CLEAR, .clear_value = {bgColor.x, bgColor.y, bgColor.z, bgColor.a}
         };
 
 
@@ -213,7 +212,7 @@ namespace Pequod {
     }
 
     void WorldScene::SetupRenderState() {
-        cam_params_t params;
+        cam_params_t params = { 0 };
         params.view = playerCamera.getView();
         params.projection = playerCamera.getProjection();
         sg_apply_pipeline(pip);
@@ -221,10 +220,11 @@ namespace Pequod {
     }
 
     void WorldScene::BeginRenderPass(float width, float height) {
-        sg_begin_pass(sg_pass{
-            .action = pass_action,
-            .swapchain = sglue_swapchain(),
-        });
+        sg_reset_state_cache();
+        auto pass = sg_pass{0};
+        pass.action = pass_action;
+        pass.swapchain = sglue_swapchain();
+        sg_begin_pass(&pass);
 
         simgui_new_frame(simgui_frame_desc_t{
             .width = sapp_width(),
@@ -237,7 +237,7 @@ namespace Pequod {
 
     void WorldScene::RenderObjects() {
         ecs->setupRender(bind);
-        sg_apply_bindings(bind);
+        sg_apply_bindings(&bind);
         ecs->render(playerCamera, delta_t);
     }
 
@@ -260,10 +260,10 @@ namespace Pequod {
 
     void WorldScene::SetBgColor(glm::vec4 newColor) {
         bgColor = newColor;
-        pass_action = sg_pass_action{
-            .colors = {
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = {bgColor.x, bgColor.y, bgColor.z, bgColor.a}}
-            }
+        pass_action = sg_pass_action{};
+
+        pass_action.colors[0] = {
+            .load_action = SG_LOADACTION_CLEAR, .clear_value = {bgColor.x, bgColor.y, bgColor.z, bgColor.a}
         };
     }
 

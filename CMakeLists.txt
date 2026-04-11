@@ -8,7 +8,7 @@ include_directories("third_party")
 include_directories("shaders")
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -34,7 +34,6 @@ add_library(pequod
         pequod/properties/mesh.cc
         pequod/properties/position.cc
         pequod/rigidbody/rigidbody.cc
-        pequod/window/window.h
         pequod/serialization/serialization.cc
         pequod/serialization/serialization.h
 )
@@ -138,7 +137,7 @@ target_link_libraries(breakout pequod)
 #add_executable(spaceinvaders ${SPACE_INVADERS_SRC})
 #target_link_libraries(spaceinvaders pequod)
 add_executable(pequod_test tests/main.cc)
-add_executable(pong 20-games-challenge/pong/main.cc
+add_executable(pong WIN32 20-games-challenge/pong/main.cc
         20-games-challenge/pong/scene.cc
         20-games-challenge/pong/scene.hh)
 target_link_libraries(pong pequod)

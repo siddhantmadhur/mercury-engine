@@ -131,7 +131,7 @@ namespace Pequod {
             //std::cout << mesh->indices_id << ", " << mesh->indices.size() << std::endl;
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, pos);
-            model_params_t new_params;
+            model_params_t new_params = { 0 };
             new_params.model = model;
             new_params.use_texture0 = false ? 1.0f : 0.0f;
             new_params.scale = mesh->GetScale();

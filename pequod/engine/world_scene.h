@@ -103,9 +103,9 @@ namespace Pequod {
 
         //@{
         // Variables required by sokol to function
-        sg_pipeline pip{};
+        sg_pipeline pip{0};
         sg_pass_action pass_action{};
-        sg_bindings bind{};
+        sg_bindings bind{0};
         //@}
     };
 }

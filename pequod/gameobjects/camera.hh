@@ -25,9 +25,9 @@ namespace Pequod {
         void configure2D(float width, float height, float zoom);
 
     private:
-        glm::mat4 view;
-        glm::mat4 proj;
-        glm::vec3 cameraPosition;
+        glm::mat4 view{};
+        glm::mat4 proj{};
+        glm::vec3 cameraPosition{};
     };
 }
 #endif
