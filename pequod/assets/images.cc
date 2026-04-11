@@ -1,6 +1,6 @@
 #include "images.hh"
 #include <iostream>
-#include <debugger/debugger.hh>
+#include <debugger/debugger.h>
 
 namespace Pequod {
     Image::Image(std::string pathname) {

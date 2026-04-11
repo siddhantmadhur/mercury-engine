@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.30)
 
 project(PequodEngine LANGUAGES CXX C)
 # for windows only:
-include_directories("C:\\VulkanSDK\\1.4.341.1\\Include")
+
+set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
 
 include_directories("third_party")
 include_directories("shaders")
@@ -29,7 +30,7 @@ add_library(pequod
         pequod/pobject/pobject.cc
         pequod/properties/property.cc
         pequod/assets/images.cc
-        pequod/debugger/debugger.cc
+        pequod/debugger/debugger.h
         pequod/gameobjects/camera.cc
         pequod/properties/mesh.cc
         pequod/properties/position.cc
@@ -59,8 +60,6 @@ elseif (LINUX)
   target_link_libraries(pequod "-lm")
   target_link_libraries(pequod "-lvulkan")
   target_link_libraries(pequod "-lGL")
-else()
-  target_link_libraries(pequod "-ld3d11")
 endif()
 
 # link imgui

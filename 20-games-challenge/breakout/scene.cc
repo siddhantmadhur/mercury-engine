@@ -55,7 +55,7 @@ class BrickRigidBody : public Box2D {
 public:
     BrickRigidBody(glm::vec2 pos, glm::vec2 size) : Box2D(pos, size) { PDebug::log("initialized brick rigidbody"); }
     void OnCollisionEnter(entity_id) override {
-        PDebug::log(std::format("Brick ID: {}", this->id));
+        PDebug::log("Brick ID: {}", this->id);
         bricks_to_remove.push_back(id);
     };
     void OnCollision(entity_id) override {};

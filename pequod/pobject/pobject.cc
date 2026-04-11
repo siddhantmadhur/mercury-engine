@@ -4,7 +4,7 @@
 
 #include "pobject.h"
 #include <format>
-#include "debugger/debugger.hh"
+#include "debugger/debugger.h"
 
 
 namespace Pequod {

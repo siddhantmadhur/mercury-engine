@@ -1,6 +1,6 @@
 #include <format>
 #include "editor_project.hh"
-#include "debugger/debugger.hh"
+#include "debugger/debugger.h"
 #include <editor_windows/editor_scene.hh>
 #include <project_handler/project_handler.hh>
 #include "imgui/imgui.h"
@@ -100,7 +100,7 @@ namespace Pequod {
             current_project_handler->Save();
         }
 
-        PDebug::info(std::format("Creating new project: {}", new_project_name));
+        PDebug::info("Creating new project: {}", new_project_name);
 
         current_project_handler->Create(new_project_name);
         show_new_project_window = false;

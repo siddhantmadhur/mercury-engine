@@ -1,5 +1,5 @@
 #include "file_explorer.hh"
-#include "debugger/debugger.hh"
+#include "debugger/debugger.h"
 #include "imgui/imgui.h"
 #include <cstdlib>
 #include <filesystem>

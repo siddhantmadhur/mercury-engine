@@ -41,7 +41,7 @@
 #include "Jolt/Physics/PhysicsSystem.h"
 #include "Jolt/RegisterTypes.h"
 
-#include <debugger/debugger.hh>
+#include <debugger/debugger.h>
 #include <rigidbody/rigidbody.hh>
 
 namespace Pequod {
@@ -82,7 +82,7 @@ namespace Pequod {
                     arr[id] = property;
                 }
             } else {
-                PDebug::error(std::format("Property already exists for id: {}", id));
+                PDebug::error("Property already exists for id: {}", id);
             }
         }
 

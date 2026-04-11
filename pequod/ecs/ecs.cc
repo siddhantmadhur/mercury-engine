@@ -6,7 +6,7 @@
 #include <format>
 #include <iostream>
 #include <type_traits>
-#include <debugger/debugger.hh>
+#include <debugger/debugger.h>
 #include <unordered_map>
 
 #define PEQUOD_INTERPOLATE_MOVEMENT 0
@@ -57,9 +57,9 @@ namespace Pequod {
         mesh->indices_id = indices.size();
         mesh->vertices_id = vertices.size();
 
-        PDebug::log(std::format("addMesh: id={} vertices={} indices={} scale=({},{},{})",
+        PDebug::log("addMesh: id={} vertices={} indices={} scale=({},{},{})",
                                 id, mesh->vertices.size(), mesh->indices.size(),
-                                mesh->GetScale().x, mesh->GetScale().y, mesh->GetScale().z));
+                                mesh->GetScale().x, mesh->GetScale().y, mesh->GetScale().z);
 
         size_t prev_size = vertices.size();
         if (prev_size > 0) {
@@ -96,8 +96,8 @@ namespace Pequod {
     void ECS::render(Camera &cam, float delta_t) {
         static int render_log_count = 0;
         if (render_log_count < 3) {
-            PDebug::log(std::format("render: max_id={} total_vertices={} total_indices={}",
-                                    max_id, vertices.size(), indices.size()));
+            PDebug::log("render: max_id={} total_vertices={} total_indices={}",
+                                    max_id, vertices.size(), indices.size());
             render_log_count++;
         }
         for (int i = 0; i < max_id; i++) {

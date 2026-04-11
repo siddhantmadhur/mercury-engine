@@ -1,7 +1,7 @@
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include <gameobjects/camera.hh>
-#include <debugger/debugger.hh>
+#include <debugger/debugger.h>
 #include <iostream>
 
 namespace Pequod {

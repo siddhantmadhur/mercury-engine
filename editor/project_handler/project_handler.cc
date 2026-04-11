@@ -1,5 +1,5 @@
 #include "project_handler.hh"
-#include "debugger/debugger.hh"
+#include "debugger/debugger.h"
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -11,7 +11,7 @@ namespace Pequod {
 
         directory_path = root_directory_path / "pequod";
 
-        PDebug::info(std::format("Path: {}", directory_path.string()));
+        PDebug::info("Path: {}", directory_path.string());
     }
 
     ProjectHandler::~ProjectHandler() {

@@ -6,7 +6,7 @@
 #include <format>
 #include <gameobjects/camera.hh>
 #include <engine/engine.hh>
-#include <debugger/debugger.hh>
+#include <debugger/debugger.h>
 #include <assets/images.hh>
 
 #include <sokol/sokol_gfx.h>

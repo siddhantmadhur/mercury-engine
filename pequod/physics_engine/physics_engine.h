@@ -8,7 +8,7 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Memory.h>
 
-#include "debugger/debugger.hh"
+#include "debugger/debugger.h"
 #include "ecs/ecs.hh"
 #include "Jolt/Physics/Body/BodyID.h"
 #include "Jolt/Physics/Collision/CollideShape.h"
