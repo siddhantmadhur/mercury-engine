@@ -167,7 +167,6 @@ namespace Pequod {
             ImGui::EndMainMenuBar();
         }
 
-
         if (show_new_project_window) {
             //ImGui::SetNextWindowSize({360.0f, 128.0f});
             //ImGui::SetNextWindowPos({sapp_widthf() / 2.0f, sapp_heightf() / 2.0f}, 0, {0.5f, 0.5f});

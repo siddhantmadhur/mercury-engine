@@ -1,4 +1,3 @@
-#define target_tps  60
 
 #include "assets/images.hh"
 #include "ecs/ecs.hh"
@@ -50,9 +49,10 @@ namespace Pequod {
         const int height = sapp_height();
 
         ComputeTick();
-
         BeginRenderPass(width, height);
-        OnFrameUpdate();
+        OnFrameUpdate(delta_t);
+        SetupRenderState();
+        RenderObjects();
         CompleteRender();
     }
 
@@ -61,7 +61,7 @@ namespace Pequod {
         elapsed_t += delta_t;
 
 
-        current_tick = int(elapsed_t / (1000.0 / target_tps));
+        current_tick = int(elapsed_t / (1000.0 / ticks_per_second));
 
         bool run_tick = false;
 

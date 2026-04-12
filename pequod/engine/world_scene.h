@@ -65,10 +65,10 @@ namespace Pequod {
 
 
         virtual void OnStart() =0; // runs at scene creation
-        virtual void OnFrameUpdate() =0; // runs once every frame
+        virtual void OnFrameUpdate(float delta_t) =0; // runs once every frame
+        virtual void OnTickUpdate(float tick_t) =0; // runs every tick (rn is 60 per second)
         virtual void OnEvent(const sapp_event *event) =0; // runs once every event
         virtual void OnDestroy() =0; // runs when scene is closing
-        virtual void OnTickUpdate(float tick_t) =0; // runs every tick (rn is 60 per second)
 
         void OnStartInternal();
 
@@ -83,15 +83,16 @@ namespace Pequod {
     protected:
         // Scene de-constructor, does NOT free resources, should be done by destroy
         ~WorldScene();
+        int ticks_per_second = 60;
 
     private:
         void handleKeys(const sapp_event *event);
 
         std::unordered_map<sapp_keycode, bool> keys_pressed;
 
-        float delta_t = 0.0f; // time difference per frame
-        float tick_t = 0.0f; // time difference per tick
-        float elapsed_t = 0.0f; // total time elapsed since scene began
+        float delta_t = 0.0f; // time difference per frame (ms)
+        float tick_t = 0.0f; // time difference per tick (ms)
+        float elapsed_t = 0.0f; // total time elapsed since scene began (ms)
         uint64_t frame_time = 0;
         uint64_t tick_time = 0;
 

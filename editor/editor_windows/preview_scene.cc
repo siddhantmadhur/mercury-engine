@@ -33,6 +33,8 @@ namespace Pequod {
         {
             std::shared_ptr<PObject> block =
                     object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(100.0f, 100.0f), glm::vec4(1.0f));
+            std::shared_ptr<PObject> child =
+                    object_manager->NewObject<Box2D>(block, glm::vec2(200.0f), glm::vec2(100.0f, 100.0f), glm::vec4(1.0f));
         }
     }
 

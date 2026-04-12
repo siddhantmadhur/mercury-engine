@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "scene.hh"
+#include "scene.h"
 #include <engine/engine.hh>
 #include <ecs/ecs.hh>
 
@@ -51,7 +51,7 @@ sapp_desc sokol_main(int argc, char *argv[]) {
         .event_cb = sokol_event,
         .width = 1280,
         .height = 720,
-        .window_title = "Pong Demo - Pequod",
+        .window_title = "Pong [Pequod v0.1]",
         .logger = {
             .func = slog_func,
         },

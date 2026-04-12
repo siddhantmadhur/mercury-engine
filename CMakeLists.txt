@@ -116,6 +116,7 @@ add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/panel/object_tree.cc
         editor/panel/object_properties.h
         editor/panel/object_properties.cc
+        pequod/globals.h
 )
 target_link_libraries(pequod_editor pequod)
 
@@ -136,7 +137,7 @@ target_link_libraries(breakout pequod)
 #add_executable(spaceinvaders ${SPACE_INVADERS_SRC})
 #target_link_libraries(spaceinvaders pequod)
 add_executable(pequod_test tests/main.cc)
-add_executable(pong WIN32 20-games-challenge/pong/main.cc
+add_executable(pong 20-games-challenge/pong/main.cc
         20-games-challenge/pong/scene.cc
-        20-games-challenge/pong/scene.hh)
+        20-games-challenge/pong/scene.h)
 target_link_libraries(pong pequod)

@@ -81,6 +81,7 @@ namespace Pequod {
 
 
     void PequodEngine::sokol_frame_cb() {
+        /**
         const int width = sapp_width();
         const int height = sapp_height();
 
@@ -91,19 +92,22 @@ namespace Pequod {
         pass.swapchain = sglue_swapchain();
 
         sg_begin_pass(&pass);
+        **/
 
         {
-            currentScene->ComputeTick();
-            currentScene->OnFrameUpdate();
-            currentScene->SetupRenderState();
-            currentScene->RenderObjects();
+            //currentScene->ComputeTick();
+            currentScene->OnFrameInternal();
+            //currentScene->SetupRenderState();
+            //currentScene->RenderObjects();
         }
 
+        /**
         simgui_render();
 
         sg_end_pass();
 
         sg_commit();
+        **/
     }
 
     bool PequodEngine::isShowDebugStats() {

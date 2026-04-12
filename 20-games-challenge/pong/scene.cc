@@ -1,52 +1,83 @@
-#include "scene.hh"
-#include "Jolt/Math/Quat.h"
-#include "Jolt/Math/Real.h"
-#include "Jolt/Math/Vec3.h"
-#include "Jolt/Physics/Body/BodyCreationSettings.h"
-#include "Jolt/Physics/Body/MotionType.h"
-#include "Jolt/Physics/Collision/NarrowPhaseQuery.h"
-#include "Jolt/Physics/Collision/Shape/BoxShape.h"
-#include "Jolt/Physics/EActivation.h"
-#include "ecs/entity.hh"
-#include "gameobjects/camera.hh"
-#include "glm/fwd.hpp"
-#include "rigidbody/rigidbody.hh"
-#include <format>
-#include <iostream>
-#include <imgui/imgui.h>
-#include <glm/glm.hpp>
-#include <debugger/debugger.hh>
+#include "scene.h"
 
+#include "pobject/nodes/box2d.h"
 
-#define ZOOM 8.0f
-    
+#define ZOOM 1.0f
+
 #define heights (sapp_heightf() * (1 / ZOOM))
 #define widths (sapp_widthf() * (1 / ZOOM))
 
-void PongScene::ResetRound() {
+using namespace Pequod;
 
+void PongScene::ResetRound()
+{
 }
 
-void PongScene::OnStart() {
+void PongScene::OnStart()
+{
+    {
+        // CAMERA
+        Camera playerCam = Camera(width_s / height_s);
+        playerCam.configure2D(width_s, height_s, ZOOM);
+        SetPlayerCamera(playerCam);
+    }
+
+    auto offset_from_center = glm::vec2((width_s / 2.0f) - 64.0f, 0.0f);
+    {
+        player =
+            object_manager->NewObject<Box2D>(-offset_from_center, glm::vec2(24.0f, 96.0f), glm::vec4(1.0f));
+    }
+    {
+        enemy =
+            object_manager->NewObject<Box2D>(offset_from_center, glm::vec2(24.0f, 96.0f), glm::vec4(1.0f));
+    }
+    {
+        ball =
+            object_manager->NewObject<Box2D>(glm::vec2(0.0f), glm::vec2(24.0f, 24.0f), glm::vec4(1.0f));
+    }
 }
 
-void PongScene::OnDestroy() {
+void PongScene::OnDestroy()
+{
 }
 
-void PongScene::OnEvent(const sapp_event* event) {
-    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
-        if (event->key_code == SAPP_KEYCODE_ESCAPE) {
-            sapp_quit();
-        }
-    } 
+void PongScene::OnEvent(const sapp_event* event)
+{
 }
+
+#define SPEED 0.8f
+
+
+void PongScene::OnTickUpdate(float tick_t)
+{
+    if (IsKeyPressed(SAPP_KEYCODE_ESCAPE))
+    {
+        sapp_quit();
+    }
+
+    if (IsKeyPressed(SAPP_KEYCODE_W))
+    {
+        auto pos = player->Get<Position>();
+        pos->Set(pos->Get() + glm::vec3(0.0f, SPEED * tick_t, 0.0f));
+    }
+    if (IsKeyPressed(SAPP_KEYCODE_S))
+    {
+        auto pos = player->Get<Position>();
+        pos->Set(pos->Get() + glm::vec3(0.0f, -SPEED * tick_t, 0.0f));
+    }
     
-#define SPEED 0.4f
-
-
-void PongScene::OnTickUpdate(float tick_t) {
-
+    if (IsKeyPressed(SAPP_KEYCODE_UP))
+    {
+        auto pos = enemy->Get<Position>();
+        pos->Set(pos->Get() + glm::vec3(0.0f, SPEED * tick_t, 0.0f));
+    }
+    if (IsKeyPressed(SAPP_KEYCODE_DOWN))
+    {
+        auto pos = enemy->Get<Position>();
+        pos->Set(pos->Get() + glm::vec3(0.0f, -SPEED * tick_t, 0.0f));
+    }
 }
 
-void PongScene::OnFrameUpdate() {
+void PongScene::OnFrameUpdate(float delta_t)
+{
 }

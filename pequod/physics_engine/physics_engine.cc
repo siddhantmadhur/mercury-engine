@@ -122,7 +122,7 @@ namespace Pequod {
             **/
     }
 
-    void PhysicsEngine::RegisterEntity(uint64_t id) {
+    void PhysicsEngine::RegisterEntity(entity_id id) {
         // register object here
         // TODO: IMPLEMENT THIS
     }

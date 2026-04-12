@@ -3,8 +3,7 @@
 
 #include <glm/glm.hpp>
 #include <sokol/sokol_app.h>
-
-#define entity_id uint64_t
+#include <globals.h>
 
 // [CLAUDE] TODO: This class is defined outside namespace Pequod and is never inherited or used — remove or integrate
 class Entity {
