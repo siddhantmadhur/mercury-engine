@@ -1,7 +1,16 @@
-//
-// Created by smadhur on 3/31/26.
-//
-
+/*
+ * physics_engine.h
+ *
+ * Physics system for game objects
+ * The way it works is that the user has to define a "shape" to encapsulate the
+ * object, along with size. For example if it's a capsule the shape has to be a
+ * capsule shape with the dimensions for it.
+ *
+ * Then during every tick, the position is inferred from the object system and
+ * the velocity is synchronized with it as well. So if the physics system figures
+ * out that it's reached a wall, it will set the velocity to 0.
+ *
+ */
 #ifndef PEQUOD_PHYSICS_ENGINE_H_
 #define PEQUOD_PHYSICS_ENGINE_H_
 
@@ -114,14 +123,13 @@ namespace Pequod {
     private:
         // [CLAUDE] TODO: body_id is declared but never used
         BodyID *body_id = nullptr;
-        std::shared_ptr<ECS> ecs = nullptr;
+        std::shared_ptr<ECS> ecs_ = nullptr;
 
         // [CLAUDE] TODO: jolt_bodies is never populated — physics system not initialized
         std::unordered_map<JPH::BodyID, entity_id> jolt_bodies; // maps jolt id <--> pequods entity_id
 
-        // [CLAUDE] TODO: temp_allocator and job_system are declared but never initialized
-        TempAllocatorImpl *temp_allocator; // 10MB
-        JobSystemThreadPool *job_system;
+        std::unique_ptr<TempAllocatorImpl> temp_allocator = nullptr; // 10MB
+        std::unique_ptr<JobSystemThreadPool> job_system = nullptr;
         //PhysicsSystem physics_system;
 
         BPLayerInterfaceImpl broad_phase_layer_interface;

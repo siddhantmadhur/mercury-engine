@@ -33,11 +33,12 @@ add_library(pequod
         pequod/debugger/debugger.h
         pequod/gameobjects/camera.cc
         pequod/properties/mesh.cc
-        pequod/properties/position.cc
         pequod/rigidbody/rigidbody.cc
         pequod/serialization/serialization.cc
         pequod/serialization/serialization.h
-)
+ "pequod/properties/transform.h"
+        pequod/properties/transform.cc
+        pequod/properties/transform.h)
 
 
 include_directories("pequod")
@@ -101,6 +102,10 @@ include_directories("third_party/tinyxml2")
 
 # End of TinyXML2
 
+
+# Live++ :
+include_directories("sdk/LivePP/API/x64/")
+
 target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2)
 
 
@@ -108,6 +113,7 @@ file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
 if (APPLE)
   set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
 endif()
+
 add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/main.cc
         "editor/panel/preview_scene.h"
@@ -141,3 +147,5 @@ add_executable(pong 20-games-challenge/pong/main.cc
         20-games-challenge/pong/scene.cc
         20-games-challenge/pong/scene.h)
 target_link_libraries(pong pequod)
+
+

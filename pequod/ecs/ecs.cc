@@ -1,4 +1,4 @@
-#include "properties/position.h"
+#include "properties/transform.h"
 #include "engine/world_scene.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "rigidbody/rigidbody.hh"
@@ -9,9 +9,10 @@
 #include <debugger/debugger.h>
 #include <unordered_map>
 
-#define PEQUOD_INTERPOLATE_MOVEMENT 0
+#define PEQUOD_INTERPOLATE_MOVEMENT 1
 
 #include "pobject/pobject.h"
+#include "shaders/generic_texture.glsl.hh"
 
 namespace Pequod {
     ECS::ECS() {
@@ -32,9 +33,9 @@ namespace Pequod {
             meshes.erase(id);
         }
 
-        auto pos = GetProperty<Position>(id);
+        auto pos = GetProperty<Transform>(id);
         if (pos) {
-            auto &positions = GetProperties<Position>();
+            auto &positions = GetProperties<Transform>();
             positions.erase(id);
         }
     }
@@ -104,7 +105,7 @@ namespace Pequod {
             auto &meshes = GetProperties<Mesh>();
             // [CLAUDE] TODO: meshes[i] silently creates a default entry if key doesn't exist — use .find() or .contains() check
             auto mesh = meshes[i];
-            auto &positions = GetProperties<Position>();
+            auto &positions = GetProperties<Transform>();
             auto position = positions[i];
 
             if (mesh == nullptr || position == nullptr) {
@@ -113,18 +114,10 @@ namespace Pequod {
 
 
 #if PEQUOD_INTERPOLATE_MOVEMENT
-            glm::vec3 diff = position->position - position->raw_position;
-            if (delta_t > 0) {
-                //positions[i]->raw_position = positions[i]->position;
-                //PDebug::log(std::format("POSITION: {}, {}", diff.x, diff.y));
-                position->raw_position += diff / delta_t;
-            } else {
-                //position->raw_position += diff;
-                position->raw_position = position->position;
-            }
+            glm::vec3 pos = position->GetInterpolatedPosition();
 #else
+            glm::vec3 pos = position->GetPosition();
 #endif
-            glm::vec3 pos = position->Get();
 
 
             //std::cout << "ID: " << i << std::endl;

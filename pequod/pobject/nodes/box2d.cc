@@ -6,13 +6,15 @@
 
 #include <properties/mesh.h>
 
+#include "properties/transform.h"
+
 #define SHORT_MAX 32767
 
 namespace Pequod {
     Box2D::Box2D(glm::vec2 position, glm::vec2 size, glm::vec4 color) {
         this->name = "box2d";
-        auto pos = Add<Position>();
-        pos->Set(glm::vec3(position, 0.0f));
+        auto pos = Add<Transform>();
+        pos->SetPosition(glm::vec3(position, 0.0f));
 
         auto mesh = Add<Mesh>();
 

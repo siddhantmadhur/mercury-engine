@@ -21,28 +21,11 @@
 #include <vector>
 
 #include <ecs/entity.hh>
+#include <properties/property.h>
 #include <properties/mesh.h>
-#include <properties/position.h>
 
-#include <Jolt/Jolt.h>
-#include <Jolt/Core/Memory.h>
-#include "Jolt/Physics/Body/BodyID.h"
-#include "Jolt/Physics/Collision/CollideShape.h"
-#include "Jolt/Physics/Body/MotionType.h"
-
-#include "Jolt/Core/Factory.h"
-#include "Jolt/Core/JobSystemThreadPool.h"
-#include "Jolt/Core/TempAllocator.h"
-#include "Jolt/Physics/Body/BodyActivationListener.h"
-#include "Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h"
-#include "Jolt/Physics/Collision/ContactListener.h"
-#include "Jolt/Physics/Collision/ObjectLayer.h"
-#include "Jolt/Physics/PhysicsSettings.h"
-#include "Jolt/Physics/PhysicsSystem.h"
-#include "Jolt/RegisterTypes.h"
 
 #include <debugger/debugger.h>
-#include <rigidbody/rigidbody.hh>
 
 namespace Pequod {
     class ECS {

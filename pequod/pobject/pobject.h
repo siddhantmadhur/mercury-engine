@@ -20,7 +20,6 @@
 #include <vector>
 #include <ecs/ecs.hh>
 
-#include "properties/position.h"
 
 using tinyxml2::XMLDocument;
 

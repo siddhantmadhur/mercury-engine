@@ -1,6 +1,7 @@
 #include "scene.h"
 
 #include "pobject/nodes/box2d.h"
+#include "properties/transform.h"
 
 #define ZOOM 1.0f
 
@@ -55,26 +56,27 @@ void PongScene::OnTickUpdate(float tick_t)
         sapp_quit();
     }
 
+    float direction = 0.0f;
     if (IsKeyPressed(SAPP_KEYCODE_W))
     {
-        auto pos = player->Get<Position>();
-        pos->Set(pos->Get() + glm::vec3(0.0f, SPEED * tick_t, 0.0f));
+        direction = SPEED * tick_t;
     }
     if (IsKeyPressed(SAPP_KEYCODE_S))
     {
-        auto pos = player->Get<Position>();
-        pos->Set(pos->Get() + glm::vec3(0.0f, -SPEED * tick_t, 0.0f));
+        direction = -SPEED * tick_t;
     }
-    
+    auto pos = player->Get<Transform>();
+    pos->Move(glm::vec3(0.0f, direction, 0.0f));
+
     if (IsKeyPressed(SAPP_KEYCODE_UP))
     {
-        auto pos = enemy->Get<Position>();
-        pos->Set(pos->Get() + glm::vec3(0.0f, SPEED * tick_t, 0.0f));
+        auto pos = enemy->Get<Transform>();
+        pos->SetPosition(pos->GetPosition() + glm::vec3(0.0f, SPEED * tick_t, 0.0f));
     }
     if (IsKeyPressed(SAPP_KEYCODE_DOWN))
     {
-        auto pos = enemy->Get<Position>();
-        pos->Set(pos->Get() + glm::vec3(0.0f, -SPEED * tick_t, 0.0f));
+        auto pos = enemy->Get<Transform>();
+        pos->SetPosition(pos->GetPosition() + glm::vec3(0.0f, -SPEED * tick_t, 0.0f));
     }
 }
 

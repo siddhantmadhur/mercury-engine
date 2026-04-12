@@ -16,6 +16,7 @@
 
 #include <iostream>
 
+#include "properties/transform.h"
 #include "sokol/util/sokol_imgui.h"
 using namespace std;
 
@@ -51,6 +52,17 @@ namespace Pequod {
         ComputeTick();
         BeginRenderPass(width, height);
         OnFrameUpdate(delta_t);
+        {
+            auto transforms = ecs->GetProperties<Transform>();
+
+            for (const auto& [id, transform] : transforms)
+            {
+                if (transform)
+                {
+                    transform->InterpolatePosition(delta_t, tick_t);
+                }
+            }
+        }
         SetupRenderState();
         RenderObjects();
         CompleteRender();
@@ -79,7 +91,20 @@ namespace Pequod {
 
         if (run_tick) {
             if (tick_t > 0 && delta_t > 0) {
-                ComputePhysics(std::round(tick_t / delta_t));
+
+                /*
+                 * Steps -> Needs to be 1 step per 1/60th of a second
+                 * So if ticks per second is 60 -> steps is 1
+                 * So if ticks per second is 20 -> steps is 3
+                 * If ticks are higher than 60 then steps needs to be 1 atleast
+                 */
+                if (tick_t / 1000 > (1 / 60))
+                {
+                    ComputePhysics(1);
+                } else
+                {
+                    ComputePhysics(std::round((tick_t / 1000) / (1.0/60.0)));
+                }
             }
         }
     }

@@ -6,3 +6,4 @@ sokol-shdc
 .todolist
 /.vs
 /.idea
+/sdk

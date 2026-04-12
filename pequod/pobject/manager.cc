@@ -6,7 +6,6 @@
 
 #include "nodes/box2d.h"
 
-#include "properties/position.h"
 #include "properties/mesh.h"
 
 
