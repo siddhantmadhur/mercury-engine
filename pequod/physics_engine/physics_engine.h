@@ -33,48 +33,60 @@
 #include "Jolt/Physics/PhysicsSettings.h"
 #include "Jolt/Physics/PhysicsSystem.h"
 #include "Jolt/RegisterTypes.h"
+#include "pobject/pobject.h"
 #include "rigidbody/rigidbody.hh"
+#include <properties/collision_body.h>
 
 // [CLAUDE] TODO: 'using namespace JPH' in a header pollutes every TU that includes this — move to .cc or use JPH:: prefix
 using namespace JPH;
 
 
-namespace Pequod {
-    namespace {
-        class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter {
+namespace Pequod
+{
+    namespace
+    {
+        class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter
+        {
         public:
-            virtual bool ShouldCollide(ObjectLayer inObject1, ObjectLayer inObject2) const override {
-                switch (inObject1) {
-                    case Layers::NON_MOVING:
-                        return inObject2 == Layers::MOVING; // Non moving only collides with moving
-                    case Layers::MOVING:
-                        return true; // Moving collides with everything
-                    default:
-                        JPH_ASSERT(false);
-                        return false;
+            virtual bool ShouldCollide(ObjectLayer inObject1, ObjectLayer inObject2) const override
+            {
+                switch (inObject1)
+                {
+                case Layers::NON_MOVING:
+                    return inObject2 == Layers::MOVING; // Non moving only collides with moving
+                case Layers::MOVING:
+                    return true; // Moving collides with everything
+                default:
+                    JPH_ASSERT(false);
+                    return false;
                 }
             }
         };
 
-        namespace BroadPhaseLayers {
+        namespace BroadPhaseLayers
+        {
             static constexpr BroadPhaseLayer NON_MOVING(0);
             static constexpr BroadPhaseLayer MOVING(1);
             static constexpr uint NUM_LAYERS(2);
         };
 
-        class BPLayerInterfaceImpl final : public BroadPhaseLayerInterface {
+        class BPLayerInterfaceImpl final : public BroadPhaseLayerInterface
+        {
         public:
-            BPLayerInterfaceImpl() {
+            BPLayerInterfaceImpl()
+            {
                 // Create a mapping table from object to broad phase layer
                 mObjectToBroadPhase[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
                 mObjectToBroadPhase[Layers::MOVING] = BroadPhaseLayers::MOVING;
             }
 
-            virtual uint GetNumBroadPhaseLayers() const override {
+            virtual uint GetNumBroadPhaseLayers() const override
+            {
                 return BroadPhaseLayers::NUM_LAYERS;
             }
 
-            virtual BroadPhaseLayer GetBroadPhaseLayer(ObjectLayer inLayer) const override {
+            virtual BroadPhaseLayer GetBroadPhaseLayer(ObjectLayer inLayer) const override
+            {
                 JPH_ASSERT(inLayer < Layers::NUM_LAYERS);
                 return mObjectToBroadPhase[inLayer];
             }
@@ -83,54 +95,78 @@ namespace Pequod {
             BroadPhaseLayer mObjectToBroadPhase[Layers::NUM_LAYERS];
         };
 
-        class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter {
+        class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter
+        {
         public:
-            virtual bool ShouldCollide(ObjectLayer inLayer1, BroadPhaseLayer inLayer2) const override {
-                switch (inLayer1) {
-                    case Layers::NON_MOVING:
-                        PDebug::info("Non moving!");
-                        return inLayer2 == BroadPhaseLayers::MOVING;
-                    case Layers::MOVING:
-                        return true;
-                    default:
-                        JPH_ASSERT(false);
-                        return false;
+            virtual bool ShouldCollide(ObjectLayer inLayer1, BroadPhaseLayer inLayer2) const override
+            {
+                switch (inLayer1)
+                {
+                case Layers::NON_MOVING:
+                    PDebug::info("Non moving!");
+                    return inLayer2 == BroadPhaseLayers::MOVING;
+                case Layers::MOVING:
+                    return true;
+                default:
+                    JPH_ASSERT(false);
+                    return false;
                 }
             }
         };
 
-        class MyBodyActivationListener : public JPH::BodyActivationListener {
+        class MyBodyActivationListener : public JPH::BodyActivationListener
+        {
         public:
-            virtual void OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {
+            virtual void OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override
+            {
             }
 
-            virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override {
+            virtual void OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override
+            {
             }
         };
     }
 
-    class PhysicsEngine {
+    enum class CollisionType
+    {
+        kCollisionNone,
+        kCollisionEnter,
+        kCollisionOn,
+        kCollisionLeave
+    };
+
+    class PhysicsEngine
+    {
     public:
-        PhysicsEngine(std::shared_ptr<ECS>);
+        PhysicsEngine();
+        ~PhysicsEngine();
 
-        void RegisterEntity(entity_id);
+        // Add object to physics system
+        void RegisterEntity(std::shared_ptr<PObject>, CollisionBody);
 
-        void Compute(int steps);
+        void Compute(int steps, std::shared_ptr<ECS> ecs);
 
         // [CLAUDE] TODO: DisableBody is declared but never implemented
         void DisableBody(entity_id);
 
+        // use to check the collided status
+        CollisionType GetCollisionState(entity_id self, entity_id other) const;
+
+        // Returns the bodies colliding with the object
+        std::vector<entity_id> GetCollidingBodies(entity_id) const;
+
     private:
         // [CLAUDE] TODO: body_id is declared but never used
-        BodyID *body_id = nullptr;
-        std::shared_ptr<ECS> ecs_ = nullptr;
+        BodyID* body_id = nullptr;
+
+        std::vector<std::shared_ptr<PObject>> objects_;
 
         // [CLAUDE] TODO: jolt_bodies is never populated — physics system not initialized
         std::unordered_map<JPH::BodyID, entity_id> jolt_bodies; // maps jolt id <--> pequods entity_id
 
-        std::unique_ptr<TempAllocatorImpl> temp_allocator = nullptr; // 10MB
-        std::unique_ptr<JobSystemThreadPool> job_system = nullptr;
-        //PhysicsSystem physics_system;
+        TempAllocatorImpl* temp_allocator = nullptr; // 10MB
+        JobSystemThreadPool* job_system = nullptr;
+        PhysicsSystem physics_system;
 
         BPLayerInterfaceImpl broad_phase_layer_interface;
         ObjectVsBroadPhaseLayerFilterImpl object_vs_broadphase_layer_filter;
@@ -139,4 +175,4 @@ namespace Pequod {
     };
 }
 
-#endif //
+#endif

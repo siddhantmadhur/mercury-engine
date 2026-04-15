@@ -20,6 +20,7 @@ namespace Pequod {
 
     class Property {
     public:
+        virtual ~Property() = default;
         Property();
     };
 }

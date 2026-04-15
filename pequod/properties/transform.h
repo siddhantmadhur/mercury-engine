@@ -23,7 +23,7 @@ namespace Pequod
 
         void Move(glm::vec3);
 
-        // Interpolate the position to be closer to its real value
+        // Run this every frame to interpolate position between ticks
         void InterpolatePosition(float delta_t, float tick_t);
     private:
         glm::vec3 position_;

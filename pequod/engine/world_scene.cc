@@ -34,7 +34,7 @@ namespace Pequod {
         this->tick_time = 0;
         this->frame_time = 0;
         this->ecs = std::make_shared<ECS>();
-        this->physics_engine = std::make_shared<PhysicsEngine>(this->ecs);
+        this->physics_engine = std::make_shared<PhysicsEngine>();
         this->object_manager = std::make_shared<PObjectManager>(this->ecs);
     }
 

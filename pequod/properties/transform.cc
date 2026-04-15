@@ -46,7 +46,7 @@ namespace Pequod
 
     void Transform::InterpolatePosition(float delta_t, float tick_t)
     {
-        if (delta_t == 0 || (tick_t / delta_t) == 0)
+        if (delta_t == 0 || tick_t == 0)
         {
             return;
         }

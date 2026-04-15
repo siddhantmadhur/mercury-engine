@@ -19,7 +19,7 @@
 #include "Jolt/Physics/Body/MotionType.h"
 #include "ecs/entity.hh"
 #include "glm/fwd.hpp"
-#include "physics_engine/collision_shape.h"
+#include "../properties/collision_body.h"
 
 
 namespace Pequod {

@@ -18,8 +18,8 @@ add_library(pequod
         pequod/ecs/ecs.cc
         pequod/physics_engine/physics_engine.cc
         pequod/physics_engine/physics_engine.h
-        pequod/physics_engine/collision_shape.cc
-        pequod/physics_engine/collision_shape.h
+        pequod/properties/collision_body.cc
+        pequod/properties/collision_body.h
         pequod/ecs/texture.hh
         pequod/engine/engine.cc
         pequod/engine/world_scene.cc
@@ -38,7 +38,9 @@ add_library(pequod
         pequod/serialization/serialization.h
  "pequod/properties/transform.h"
         pequod/properties/transform.cc
-        pequod/properties/transform.h)
+        pequod/properties/transform.h
+        pequod/physics_engine/shapes/box.cc
+        pequod/physics_engine/shapes/box.h)
 
 
 include_directories("pequod")

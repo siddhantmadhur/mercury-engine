@@ -1,5 +1,5 @@
 /*
- * collision_shape.h
+ * collision_body.h
  *
  * Provides details and information required to create physical bodies
  * on the game engine. Supposed to be agnostic but is directly related
@@ -10,10 +10,16 @@
 #ifndef PEQUOD_PHYSICS_COLLISION_SHAPE_H_
 #define PEQUOD_PHYSICS_COLLISION_SHAPE_H_
 
-namespace Pequod {
-    // [CLAUDE] TODO: Empty class body — RigidBody holds a shared_ptr<CollisionShape> but never uses it
-    class CollisionShape {
+#include "pobject/pobject.h"
+#include "properties/property.h"
+
+namespace Pequod
+{
+    class CollisionBody : public Property
+    {
     public:
+        // reference to the body its handling
+        CollisionBody(std::shared_ptr<PObject>);
     };
 }
 

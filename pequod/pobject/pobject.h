@@ -32,7 +32,6 @@ namespace Pequod {
 
     public:
         PObject();
-
         ~PObject();
 
         uint64_t id = 0; // 0 signifies root
@@ -60,6 +59,7 @@ namespace Pequod {
             });
             return ptr;
         }
+
     };
 }
 
