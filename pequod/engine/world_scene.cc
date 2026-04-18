@@ -40,7 +40,7 @@ namespace Pequod {
 
     void WorldScene::ComputePhysics(int steps) {
         //ecs->simulatePhysics(steps);
-        physics_engine->Compute(steps);
+        physics_engine->Compute(steps, this->ecs);
     }
 
     void WorldScene::OnFrameInternal() {

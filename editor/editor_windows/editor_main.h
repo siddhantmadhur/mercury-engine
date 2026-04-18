@@ -21,7 +21,7 @@
 #include "preview_scene.h"
 #include "panel/file_explorer.hh"
 
-namespace fs = std::filesystem;
+#include <os/filesystem.h>
 
 namespace Pequod {
     class Editor {

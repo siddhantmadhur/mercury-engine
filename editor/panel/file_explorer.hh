@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace fs = std::filesystem;
+#include <os/filesystem.h>
 
 namespace Pequod {
     class FileExplorer : public Panel {

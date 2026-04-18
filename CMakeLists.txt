@@ -36,11 +36,16 @@ add_library(pequod
         pequod/rigidbody/rigidbody.cc
         pequod/serialization/serialization.cc
         pequod/serialization/serialization.h
- "pequod/properties/transform.h"
+        pequod/properties/transform.h
         pequod/properties/transform.cc
         pequod/properties/transform.h
         pequod/physics_engine/shapes/box.cc
-        pequod/physics_engine/shapes/box.h)
+        pequod/physics_engine/shapes/box.h
+        pequod/application/application.h
+        pequod/application/application.cc
+        pequod/application/d3d11_application.cc
+        pequod/os/filesystem.h
+)
 
 
 include_directories("pequod")
@@ -48,32 +53,32 @@ include_directories("editor")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)
 
 if (APPLE)
-# MacOS libraries
-  target_link_libraries(pequod "-framework Cocoa")
-  target_link_libraries(pequod "-framework Metal")
-  target_link_libraries(pequod "-framework MetalKit")
-  target_link_libraries(pequod "-framework QuartzCore")
-  target_link_libraries(pequod "-framework OpenGL")
+    # MacOS libraries
+    target_link_libraries(pequod "-framework Cocoa")
+    target_link_libraries(pequod "-framework Metal")
+    target_link_libraries(pequod "-framework MetalKit")
+    target_link_libraries(pequod "-framework QuartzCore")
+    target_link_libraries(pequod "-framework OpenGL")
 elseif (LINUX)
-  target_link_libraries(pequod "-lX11")
-  target_link_libraries(pequod "-lXi")
-  target_link_libraries(pequod "-lXcursor")
-  target_link_libraries(pequod "-ldl")
-  target_link_libraries(pequod "-lpthread")
-  target_link_libraries(pequod "-lm")
-  target_link_libraries(pequod "-lvulkan")
-  target_link_libraries(pequod "-lGL")
-endif()
+    target_link_libraries(pequod "-lX11")
+    target_link_libraries(pequod "-lXi")
+    target_link_libraries(pequod "-lXcursor")
+    target_link_libraries(pequod "-ldl")
+    target_link_libraries(pequod "-lpthread")
+    target_link_libraries(pequod "-lm")
+    target_link_libraries(pequod "-lvulkan")
+    target_link_libraries(pequod "-lGL")
+endif ()
 
 # link imgui
 
 set(IMGUI_SRC "third_party/imgui")
 add_library(imgui STATIC
-    ${IMGUI_SRC}/imgui.cpp
-    ${IMGUI_SRC}/imgui_widgets.cpp
-    ${IMGUI_SRC}/imgui_draw.cpp
-    ${IMGUI_SRC}/imgui_tables.cpp
-    ${IMGUI_SRC}/imgui_demo.cpp
+        ${IMGUI_SRC}/imgui.cpp
+        ${IMGUI_SRC}/imgui_widgets.cpp
+        ${IMGUI_SRC}/imgui_draw.cpp
+        ${IMGUI_SRC}/imgui_tables.cpp
+        ${IMGUI_SRC}/imgui_demo.cpp
 )
 
 target_include_directories(imgui INTERFACE imgui)
@@ -104,17 +109,23 @@ include_directories("third_party/tinyxml2")
 
 # End of TinyXML2
 
+include_directories("third_party/glfw/include")
+add_subdirectory("third_party/glfw")
 
 # Live++ :
 include_directories("sdk/LivePP/API/x64/")
 
-target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2)
+target_compile_definitions(pequod PRIVATE
+        PEQUOD_SHADER_PATH="${CMAKE_SOURCE_DIR}/pequod/shaders"
+)
+
+target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
 
 
 file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
 if (APPLE)
-  set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
-endif()
+    set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
+endif ()
 
 add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/main.cc
@@ -137,8 +148,8 @@ target_link_libraries(pequod_editor pequod)
 file(GLOB_RECURSE BREAKOUT_SRC "20-games-challenge/breakout/*.cc")
 add_executable(breakout ${BREAKOUT_SRC})
 if (APPLE)
-  set_source_files_properties(20-games-challenge/breakout/main.cc PROPERTIES LANGUAGE OBJCXX)
-endif()
+    set_source_files_properties(20-games-challenge/breakout/main.cc PROPERTIES LANGUAGE OBJCXX)
+endif ()
 target_link_libraries(breakout pequod)
 
 #file(GLOB_RECURSE SPACE_INVADERS_SRC "20-games-challenge/space_invaders/*.cc")
@@ -146,8 +157,7 @@ target_link_libraries(breakout pequod)
 #target_link_libraries(spaceinvaders pequod)
 add_executable(pequod_test tests/main.cc)
 add_executable(pong 20-games-challenge/pong/main.cc
-        20-games-challenge/pong/scene.cc
-        20-games-challenge/pong/scene.h)
+)
 target_link_libraries(pong pequod)
 
 

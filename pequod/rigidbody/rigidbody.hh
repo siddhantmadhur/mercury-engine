@@ -46,7 +46,7 @@ namespace Pequod {
         virtual void OnCollisionLeave(entity_id) =0;
 
     private:
-        std::shared_ptr<CollisionShape> collision_shape;
+        std::shared_ptr<CollisionBody> collision_body_;
 
     protected:
         JPH::BodyCreationSettings creationSettings;

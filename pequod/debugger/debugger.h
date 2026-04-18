@@ -13,7 +13,7 @@ namespace PDebug
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
         std::tm time_struct = *std::localtime(&now_c);
 
-        std::cout << "[DEBUG]" << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ") << std::format(fmt, std::forward<Args>(args)...) << std::endl;
+        std::cerr << "[DEBUG]" << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ") << std::format(fmt, std::forward<Args>(args)...) << std::endl;
     }
 
     template <class... Args>
@@ -22,7 +22,7 @@ namespace PDebug
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
         std::tm time_struct = *std::localtime(&now_c);
 
-        std::cout << "[WARN]" << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ") << std::format(fmt, std::forward<Args>(args)...) << std::endl;
+        std::cerr << "[WARN]" << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ") << std::format(fmt, std::forward<Args>(args)...) << std::endl;
     }
 
     template <class... Args>

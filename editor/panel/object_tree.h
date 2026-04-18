@@ -10,7 +10,7 @@
 #include "panel.hh"
 #include "ecs/ecs.hh"
 
-namespace fs = std::filesystem;
+#include <os/filesystem.h>
 
 namespace Pequod {
     class ObjectTree : public Panel {

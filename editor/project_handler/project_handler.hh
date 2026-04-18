@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace fs = std::filesystem;
+#include <os/filesystem.h>
 
 namespace Pequod {
     class ProjectHandler {

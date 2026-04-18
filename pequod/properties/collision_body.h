@@ -19,7 +19,7 @@ namespace Pequod
     {
     public:
         // reference to the body its handling
-        CollisionBody(std::shared_ptr<PObject>);
+        CollisionBody();
     };
 }
 

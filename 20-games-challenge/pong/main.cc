@@ -1,60 +1,18 @@
 #include <iostream>
 
-#include "scene.h"
 #include <engine/engine.hh>
 #include <ecs/ecs.hh>
 
-#define SOKOL_IMPL
-#define SOKOL_D3D11
-#include <sokol/sokol_gfx.h>
-#include <sokol/sokol_app.h>
-#include <sokol/sokol_glue.h>
-#include <sokol/sokol_log.h>
-#include <sokol/sokol_time.h>
 
-#include <imgui/imgui.h>
-#include <sokol/util/sokol_imgui.h>
+#include "application/application.h"
+#include "application/d3d11_application.h"
+
+using namespace Pequod;
 
 
-static Pequod::PequodEngine engine;
+int main(void)
+{
+    auto *pong = new D3D11Application("Pong");
 
-void sokol_init() {
-    engine.sokol_init();
-};
-void sokol_frame_cb() {
-    engine.sokol_frame_cb();
-};
-void sokol_cleanup() {
-    engine.sokol_cleanup();
-};
-void sokol_event(const sapp_event* event) {
-    engine.sokol_event(event);
-};
-
-sapp_desc sokol_main(int argc, char *argv[]) {
-
-
-    //engine = new PequodEngine();    
-    
-    engine.startUp();
-
-    //Scene *demoScene = new Scene();
-
-    PongScene* demoScene = new PongScene();
-
-    engine.SetScene(demoScene);
-
-    return sapp_desc{
-        .init_cb = sokol_init,
-        .frame_cb = sokol_frame_cb,
-        .cleanup_cb = sokol_cleanup,
-        .event_cb = sokol_event,
-        .width = 1280,
-        .height = 720,
-        .window_title = "Pong [Pequod v0.1]",
-        .logger = {
-            .func = slog_func,
-        },
-    };;
+    return pong->Run();
 }
-
