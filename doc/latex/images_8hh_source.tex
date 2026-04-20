@@ -6,15 +6,18 @@
 \DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ MERCURY\_IMAGES\_IMPL\_HH}}
 \DoxyCodeLine{00003\ }
 \DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <stb/stb\_image.h>}}
-\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <string>}}
-\DoxyCodeLine{00006\ }
-\DoxyCodeLine{00007\ \textcolor{keyword}{class\ }\mbox{\hyperlink{classImage}{Image}}\ \{}
-\DoxyCodeLine{00008\ \textcolor{keyword}{public}:}
-\DoxyCodeLine{00009\ \ \ \ \ \mbox{\hyperlink{classImage}{Image}}(std::string);}
-\DoxyCodeLine{00010\ \ \ \ \ stbi\_uc*\ raw\_data;}
-\DoxyCodeLine{00011\ \ \ \ \ \textcolor{keywordtype}{int}\ x,\ y,\ channels;}
-\DoxyCodeLine{00012\ \};}
-\DoxyCodeLine{00013\ }
-\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00005\ }
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <string>}}
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00008\ \textcolor{keyword}{namespace\ }\doxymbox{\hyperlink{namespace_pequod}{Pequod}}\ \{}
+\DoxyCodeLine{00009\ \textcolor{keyword}{class\ }Image\ \{}
+\DoxyCodeLine{00010\ \ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00011\ \ \ Image(std::string);}
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00013\ \ \ stbi\_uc\ *raw\_data;}
+\DoxyCodeLine{00014\ \ \ \textcolor{keywordtype}{int}\ x,\ y,\ channels;}
+\DoxyCodeLine{00015\ \};}
+\DoxyCodeLine{00016\ \}\ \ \textcolor{comment}{//\ namespace\ Pequod}}
+\DoxyCodeLine{00017\ \textcolor{preprocessor}{\#endif}}
 
 \end{DoxyCode}

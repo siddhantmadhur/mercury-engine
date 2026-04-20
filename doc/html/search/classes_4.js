@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['gameobject_0',['GameObject',['../classGameObject.html',1,'']]],
-  ['gamepreview_1',['GamePreview',['../classPequod_1_1GamePreview.html',1,'Pequod']]],
-  ['gamescene_2',['GameScene',['../classPequod_1_1GameScene.html',1,'Pequod']]]
+  ['editor_0',['Editor',['../class_pequod_1_1_editor.html',1,'Pequod']]],
+  ['editorscene_1',['EditorScene',['../class_pequod_1_1_editor_scene.html',1,'Pequod']]]
 ];

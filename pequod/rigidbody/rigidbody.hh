@@ -22,7 +22,6 @@
 #include "Jolt/Physics/Body/AllowedDOFs.h"
 #include "Jolt/Physics/Body/BodyCreationSettings.h"
 #include "Jolt/Physics/Body/MotionType.h"
-#include "ecs/entity.hh"
 #include "glm/fwd.hpp"
 
 namespace Pequod {

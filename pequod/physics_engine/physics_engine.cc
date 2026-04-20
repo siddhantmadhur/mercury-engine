@@ -4,6 +4,9 @@
 
 #include "physics_engine.h"
 
+#include <Jolt/Jolt.h>
+#include "Jolt/Core/Memory.h"
+
 #include "properties/transform.h"
 #include "shapes/box.h"
 
@@ -44,7 +47,7 @@ class PhysicsContactListener : public ContactListener {
 }  // namespace
 
 PhysicsEngine::PhysicsEngine() {
-  JPH::RegisterDefaultAllocator();
+  RegisterDefaultAllocator();
 
   JPH::Factory::sInstance = new JPH::Factory();
 
@@ -83,11 +86,7 @@ void PhysicsEngine::RegisterEntity(std::shared_ptr<PObject> object,
   PDebug::log("Adding box shape to {}", object->id);
 }
 
-void PhysicsEngine::Compute(int steps, std::shared_ptr<ECS> ecs) {
-  if (ecs == nullptr) {
-    PDebug::error("PhysicsEngine::Compute --> ECS passed as nullptr");
-    return;
-  }
+void PhysicsEngine::Compute(int steps) {
 
   float cHz = 1.0f / 60.0f;
   physics_system.Update(cHz, steps, temp_allocator, job_system);
@@ -97,7 +96,6 @@ void PhysicsEngine::Compute(int steps, std::shared_ptr<ECS> ecs) {
     JPH::BodyID body_id = pair.first;
     entity_id id = pair.second;
     auto phys_position = body_interface.GetCenterOfMassPosition(body_id);
-    auto transforms = ecs->GetProperty<Transform>(id);
   }
 }
 }  // namespace Pequod

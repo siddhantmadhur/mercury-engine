@@ -11,7 +11,6 @@
 #define PEQUODENGINE_POBJECT_H
 #include <tinyxml2.h>
 
-#include <ecs/ecs.hh>
 #include <functional>
 #include <memory>
 #include <string>
@@ -21,15 +20,11 @@
 
 #include "../properties/property.h"
 
-using tinyxml2::XMLDocument;
 
 namespace Pequod {
 class PObject {
  private:
   std::unordered_map<std::type_index, std::shared_ptr<Property> > properties;
-  std::vector<std::function<void(std::shared_ptr<ECS>, entity_id)> >
-      pending_registrations;
-  std::shared_ptr<ECS> ecs;
 
  public:
   PObject();
@@ -42,7 +37,6 @@ class PObject {
 
   std::vector<uint64_t> children = {};
 
-  void SetECS(std::shared_ptr<ECS>);
 
   template <std::derived_from<Property> TProperty>
   std::shared_ptr<TProperty> Get() {
@@ -55,10 +49,6 @@ class PObject {
   std::shared_ptr<TProperty> Add(Args &&...args) {
     auto ptr = std::make_shared<TProperty>(args...);
     properties[typeid(TProperty)] = ptr;
-    pending_registrations.push_back(
-        [ptr](std::shared_ptr<ECS> ecs, entity_id id) {
-          ecs->AddProperty(id, ptr);
-        });
     return ptr;
   }
 };

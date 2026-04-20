@@ -152,6 +152,8 @@ bool D3D11Application::OnLoad() {
       {Position{-0.5f, -0.5f, 0.0f}, Color{0.38f, 0.55f, 0.20f}},
   };
 
+  primitives_ = game_scene_->GetPrimitives();
+
   D3D11_BUFFER_DESC bufferInfo = {};
   bufferInfo.ByteWidth = sizeof(vertices);
   bufferInfo.Usage = D3D11_USAGE::D3D11_USAGE_IMMUTABLE;
@@ -195,10 +197,6 @@ void D3D11Application::Render() {
   deviceContext_->Draw(3, 0);
   swapchain_->Present(1, 0);
 }
-
-void D3D11Application::UpdateOnFrame() {}
-
-void D3D11Application::UpdateOnTick() {}
 
 void D3D11Application::OnResize(int32_t width, int32_t height) {
   Application::OnResize(width, height);

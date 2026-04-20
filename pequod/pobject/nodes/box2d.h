@@ -7,6 +7,7 @@
 #ifndef PEQUOD_POBJECT_BOX_2D_H_
 #define PEQUOD_POBJECT_BOX_2D_H_
 #include "pobject/pobject.h"
+#include <glm/glm.hpp>
 
 namespace Pequod {
 class Box2D : public PObject {

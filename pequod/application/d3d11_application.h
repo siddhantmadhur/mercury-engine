@@ -30,13 +30,11 @@ class D3D11Application : public Application {
   D3D11Application(const std::string& window_title);
 
  protected:
-  bool OnLoad() override;         // Runs when the application is created
-  void UpdateOnTick() override;   // Runs every tick (takes priority over frame)
-  void UpdateOnFrame() override;  // Runs every frame
-  void Render() override;         // Renders objects
-  bool Initialize() override;     // Renders objects
+  bool OnLoad() override;      // Runs when the application is created
+  void Render() override;      // Renders objects
+  bool Initialize() override;  // Renders objects
 
-  void OnResize(int32_t width, int32_t height);
+  void OnResize(int32_t width, int32_t height) override;
   static bool CompileShader(const std::wstring& fileName,
                             const std::string& entryPoint,
                             const std::string& profile,
@@ -61,6 +59,8 @@ class D3D11Application : public Application {
   ComPtr<ID3D11InputLayout> vertexLayout_ = nullptr;
   ComPtr<ID3D11VertexShader> vertexShader_ = nullptr;
   ComPtr<ID3D11PixelShader> pixelShader_ = nullptr;
+
+  std::vector<Primitive> primitives_ = {};
 };
 }  // namespace Pequod
 

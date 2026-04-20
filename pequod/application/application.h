@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "GLFW/glfw3.h"
+#include "scene/scene.h"
 
 namespace Pequod {
 class Application {
@@ -21,27 +22,33 @@ class Application {
   Application(const std::string& window_title);
   ~Application();
   int Run();
+  void SetGameScene(std::unique_ptr<GameScene>);
 
  protected:
   virtual bool OnLoad() = 0;  // Runs when the application is created
-  virtual void
-  UpdateOnTick() = 0;  // Runs every tick (takes priority over frame)
-  virtual void UpdateOnFrame() = 0;  // Runs every frame
-  virtual void Render() = 0;         // Renders objects
+  virtual void Render() = 0;  // Renders objects
   virtual bool Initialize();
   virtual void OnResize(int32_t width, int32_t height);
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);
 
-  const int32_t GetWidth();
-  const int32_t GetHeight();
-  GLFWwindow* GetWindow();
+  int32_t GetWidth() const;
+  int32_t GetHeight() const;
+  GLFWwindow* GetWindow() const;
+
+ protected:
+  std::unique_ptr<GameScene> game_scene_ = nullptr;
 
  private:
   GLFWwindow* window_ = nullptr;
   int32_t width_ = 0;
   int32_t height_ = 0;
-  std::string_view title_ = "Pequod";
+  std::string title_ = "Pequod";
   bool is_loaded_ = false;
+
+  double delta_time_ = 0.0f;
+  double time_elapsed_ = 0.0f;
+  int64_t last_tick_ = 0;
+  double time_since_last_tick_ = 0.0f;
 };
 }  // namespace Pequod
 

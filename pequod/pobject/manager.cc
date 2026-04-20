@@ -14,12 +14,18 @@
   }
 
 namespace Pequod {
-PObjectManager::PObjectManager(std::shared_ptr<ECS> ecs) {
-  if (!ecs) {
-    PDebug::error("nullptr ecs provided to object manager");
+PObjectManager::PObjectManager() = default;
+std::vector<Primitive> PObjectManager::GetPrimitives() {
+  std::vector<Primitive> primitives;
+  for (const auto& object : objects) {
+    if (auto mesh = object->Get<Mesh>()) {
+      Primitive primitive = {};
+      primitive.indices = mesh->GetIndices();
+      primitive.vertices = mesh->GetVertices();
+      primitives.push_back(primitive);
+    }
   }
-  this->ecs = ecs;
-  this->root = NewObject<PObject>();
+  return primitives;
 }
 
 // [CLAUDE] TODO: DeleteObject is an empty stub — objects added via NewObject

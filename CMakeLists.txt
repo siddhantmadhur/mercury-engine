@@ -14,15 +14,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(pequod
-        pequod/ecs/ecs.hh
-        pequod/ecs/ecs.cc
         pequod/physics_engine/physics_engine.cc
         pequod/physics_engine/physics_engine.h
         pequod/properties/collision_body.cc
         pequod/properties/collision_body.h
-        pequod/ecs/texture.hh
-        pequod/engine/engine.cc
-        pequod/engine/world_scene.cc
         pequod/pobject/nodes/box2d.cc
         pequod/pobject/nodes/box2d.h
         pequod/pobject/manager.cc
@@ -33,7 +28,6 @@ add_library(pequod
         pequod/debugger/debugger.h
         pequod/gameobjects/camera.cc
         pequod/properties/mesh.cc
-        pequod/rigidbody/rigidbody.cc
         pequod/serialization/serialization.cc
         pequod/serialization/serialization.h
         pequod/properties/transform.h
@@ -45,6 +39,7 @@ add_library(pequod
         pequod/application/application.cc
         pequod/application/d3d11_application.cc
         pequod/os/filesystem.h
+        pequod/scene/scene.cc
 )
 
 
@@ -117,6 +112,7 @@ include_directories("sdk/LivePP/API/x64/")
 
 target_compile_definitions(pequod PRIVATE
         PEQUOD_SHADER_PATH="${CMAKE_SOURCE_DIR}/pequod/shaders"
+        PEQUOD_GRAPHICS_D3D11=1
 )
 
 target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
@@ -136,6 +132,7 @@ add_executable(pequod_editor ${EDITOR_SOURCE}
         editor/panel/object_properties.h
         editor/panel/object_properties.cc
         pequod/globals.h
+        pequod/scene/scene.h
 )
 target_link_libraries(pequod_editor pequod)
 
@@ -157,6 +154,8 @@ target_link_libraries(breakout pequod)
 #target_link_libraries(spaceinvaders pequod)
 add_executable(pequod_test tests/main.cc)
 add_executable(pong 20-games-challenge/pong/main.cc
+        20-games-challenge/pong/pong_scene.cc
+        20-games-challenge/pong/pong_scene.h
 )
 target_link_libraries(pong pequod)
 

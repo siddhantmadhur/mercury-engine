@@ -25,6 +25,10 @@ bool Application::Initialize() {
 
   GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
   const GLFWvidmode* videoMode = glfwGetVideoMode(primaryMonitor);
+  if (videoMode == nullptr) {
+    PDebug::error("Could not create glfw video mode");
+    return false;
+  }
   width_ = static_cast<int32_t>(videoMode->width * 0.6f);
   height_ = static_cast<int32_t>(videoMode->height * 0.6f);
 
@@ -32,7 +36,8 @@ bool Application::Initialize() {
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-  window_ = glfwCreateWindow(width_, height_, title_.data(), nullptr, nullptr);
+  PDebug::info("Creating window: {}", title_);
+  window_ = glfwCreateWindow(width_, height_, title_.c_str(), nullptr, nullptr);
   if (window_ == nullptr) {
     PDebug::error("GLFW: could not create window.");
     glfwTerminate();
@@ -60,11 +65,30 @@ int Application::Run() {
     return 1;
   }
 
-  while (!glfwWindowShouldClose(window_)) {
-    glfwPollEvents();
-    UpdateOnTick();  // Run as many ticks as possible (i.e. 1 per frame)
+  game_scene_->OnStart();
 
-    UpdateOnFrame();
+  while (!glfwWindowShouldClose(window_)) {
+    double current_time = glfwGetTime() * 1000;
+    delta_time_ = current_time - time_elapsed_;
+    time_elapsed_ = current_time;
+    auto ticks_per_sec = 20;
+    time_since_last_tick_ += delta_time_;
+
+    int ticks = int(time_elapsed_ / (1000.0 / ticks_per_sec));
+
+    glfwPollEvents();
+
+    if (game_scene_) {
+      if (ticks > last_tick_) {
+        last_tick_ = ticks;
+        game_scene_->OnTick(time_since_last_tick_);
+        time_since_last_tick_ = 0.0f;
+      }
+      game_scene_->OnFrame(delta_time_);
+    } else {
+      PDebug::warn("Game scene not set");
+    }
+
     Render();
   }
 
@@ -84,12 +108,15 @@ void Application::HandleResize(GLFWwindow* window, int32_t width,
       static_cast<Application*>(glfwGetWindowUserPointer(window));
   application->OnResize(width, height);
 }
+void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {
+  this->game_scene_ = std::move(game_scene);
+}
 
-const int32_t Application::GetHeight() { return height_; }
+int32_t Application::GetHeight() const { return height_; }
 
-const int32_t Application::GetWidth() { return width_; }
+int32_t Application::GetWidth() const { return width_; }
 
-GLFWwindow* Application::GetWindow() { return window_; }
+GLFWwindow* Application::GetWindow() const { return window_; }
 
 void Application::OnResize(int32_t width, int32_t height) {
   width_ = width;

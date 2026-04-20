@@ -14,8 +14,8 @@
 #ifndef PEQUOD_PHYSICS_ENGINE_H_
 #define PEQUOD_PHYSICS_ENGINE_H_
 
-#include <Jolt/Core/Memory.h>
 #include <Jolt/Jolt.h>
+#include <Jolt/Core/Memory.h>
 #include <properties/collision_body.h>
 
 #include "Jolt/Core/Factory.h"
@@ -32,7 +32,7 @@
 #include "Jolt/Physics/PhysicsSystem.h"
 #include "Jolt/RegisterTypes.h"
 #include "debugger/debugger.h"
-#include "ecs/ecs.hh"
+#include "globals.h"
 #include "pobject/pobject.h"
 #include "rigidbody/rigidbody.hh"
 
@@ -129,7 +129,7 @@ class PhysicsEngine {
   // Add object to physics system
   void RegisterEntity(std::shared_ptr<PObject>, CollisionBody);
 
-  void Compute(int steps, std::shared_ptr<ECS> ecs);
+  void Compute(int steps);
 
   // [CLAUDE] TODO: DisableBody is declared but never implemented
   void DisableBody(entity_id);

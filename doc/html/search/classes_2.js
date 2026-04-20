@@ -1,7 +1,5 @@
 var searchData=
 [
-  ['ecs_0',['ECS',['../classECS.html',1,'']]],
-  ['editor_1',['Editor',['../classPequod_1_1Editor.html',1,'Pequod']]],
-  ['editorscene_2',['EditorScene',['../classPequod_1_1EditorScene.html',1,'Pequod']]],
-  ['entity_3',['Entity',['../classEntity.html',1,'']]]
+  ['camera_0',['Camera',['../class_pequod_1_1_camera.html',1,'Pequod']]],
+  ['collisionbody_1',['CollisionBody',['../class_pequod_1_1_collision_body.html',1,'Pequod']]]
 ];

@@ -1,7 +1,7 @@
 var searchData=
 [
-  ['image_0',['Image',['../classImage.html',1,'']]],
-  ['init_1',['Init',['../classScene.html#a0f3009b2ffcd55c44ebb1d571bbdd101',1,'Scene']]],
-  ['initializeeditor_2',['InitializeEditor',['../classPequod_1_1Editor.html#aa4f94885f2f4afac09cf40607bdaf7f1',1,'Pequod::Editor']]],
-  ['initializescene_3',['InitializeScene',['../classPequod_1_1EditorScene.html#a4afb1c272ba905068ffcb6e5dd68b79d',1,'Pequod::EditorScene']]]
+  ['gamepreviewscene_0',['GamePreviewScene',['../class_pequod_1_1_game_preview_scene.html',1,'Pequod']]],
+  ['games_20challenge_1',['14 Games Challenge',['../md__g_o_a_l_s.html',1,'']]],
+  ['gamescene_2',['GameScene',['../class_pequod_1_1_game_scene.html',1,'Pequod']]],
+  ['goal_3',['Goal',['../index.html#autotoc_md4',1,'']]]
 ];

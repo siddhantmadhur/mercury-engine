@@ -1,18 +1,16 @@
 #ifndef PEQUOD_MESH_IMPL_HH_
 #define PEQUOD_MESH_IMPL_HH_
 
+#include <intsafe.h>
+
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
 
+#include "globals.h"
 #include "property.h"
 
 namespace Pequod {
-typedef struct vertex_t {
-  float x, y, z;
-  int16_t u, v;
-  float r, g, b, a;
-} vertex_t;
 
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw
 // calls is reduced
@@ -22,24 +20,24 @@ class Mesh : public Property {
 
   ~Mesh();
 
-  void SetVertices(std::vector<vertex_t>);
+  void SetVertices(std::vector<Vertex>);
+  std::vector<Vertex> GetVertices() const;
 
-  void SetIndicies(std::vector<uint16_t>);
+  void SetIndices(const std::vector<UINT>&);
+  std::vector<UINT> GetIndices() const;
 
   void SetScale(glm::vec3);
 
-  glm::vec3 GetScale();
+  glm::vec3 GetScale() const;
 
-  uint32_t GetIndicesID();
+  uint32_t GetIndicesID() const;
 
-  const std::vector<uint16_t> GetIndices();
-
-  std::vector<vertex_t> vertices;
-  std::vector<uint16_t> indices;
-  uint32_t vertices_id = 0;  // the id to get this in the ECS vertex vector
-  uint32_t indices_id = 0;   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
+  std::vector<Vertex> vertices_;
+  std::vector<UINT> indices_;
+  UINT vertices_id = 0;  // the id to get this in the ECS vertex vector
+  UINT indices_id = 0;   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
  private:
-  glm::vec3 scale;
+  glm::vec3 scale{};
 };
 }  // namespace Pequod
 #endif
