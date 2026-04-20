@@ -1,18 +1,18 @@
 #ifndef PEQUOD_TEXTURE_IMPL_HH_
 #define PEQUOD_TEXTURE_IMPL_HH_
 
-
-// Possible extensions: 
+// Possible extensions:
 // - Sprite
 // - SolidColor
-// [CLAUDE] TODO: This class is empty and never referenced anywhere — remove or implement
+// [CLAUDE] TODO: This class is empty and never referenced anywhere — remove or
+// implement
 class Texture {
-public:
-    Texture();
+ public:
+  Texture();
 
-    ~Texture();
+  ~Texture();
 
-private:
+ private:
 };
 
 #endif

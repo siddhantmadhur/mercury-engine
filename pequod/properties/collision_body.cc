@@ -4,10 +4,6 @@
 
 #include "collision_body.h"
 
-namespace Pequod
-{
-    CollisionBody::CollisionBody()
-    {
-
-    }
-}
+namespace Pequod {
+CollisionBody::CollisionBody() {}
+}  // namespace Pequod

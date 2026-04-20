@@ -4,30 +4,30 @@
 #include <glm/glm.hpp>
 
 namespace Pequod {
-    class Camera {
-    public:
-        Camera(float aspect_ratio);
+class Camera {
+ public:
+  Camera(float aspect_ratio);
 
-        ~Camera();
+  ~Camera();
 
-        glm::mat4 getView();
+  glm::mat4 getView();
 
-        glm::mat4 getProjection();
+  glm::mat4 getProjection();
 
-        void setView(glm::mat4);
+  void setView(glm::mat4);
 
-        void setProj(glm::mat4);
+  void setProj(glm::mat4);
 
-        void setPosition(glm::vec3);
+  void setPosition(glm::vec3);
 
-        glm::vec3 getPosition();
+  glm::vec3 getPosition();
 
-        void configure2D(float width, float height, float zoom);
+  void configure2D(float width, float height, float zoom);
 
-    private:
-        glm::mat4 view{};
-        glm::mat4 proj{};
-        glm::vec3 cameraPosition{};
-    };
-}
+ private:
+  glm::mat4 view{};
+  glm::mat4 proj{};
+  glm::vec3 cameraPosition{};
+};
+}  // namespace Pequod
 #endif

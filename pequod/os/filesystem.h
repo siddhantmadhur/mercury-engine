@@ -7,10 +7,6 @@
 
 namespace fs = std::filesystem;
 
-namespace Pequod::os {
+namespace Pequod::os {}
 
-
-
-}
-
-#endif //PEQUODENGINE_FILESYSTEM_H
+#endif  // PEQUODENGINE_FILESYSTEM_H

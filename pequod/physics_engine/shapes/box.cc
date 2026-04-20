@@ -4,10 +4,6 @@
 
 #include "box.h"
 
-namespace Pequod
-{
-    Box::Box(glm::vec3 dim)
-    {
-
-    }
-} // Pequod
+namespace Pequod {
+Box::Box(glm::vec3 dim) {}
+}  // namespace Pequod

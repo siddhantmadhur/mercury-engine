@@ -4,5 +4,4 @@
 
 #include "filesystem.h"
 
-namespace Pequod {
-} // Pequod
+namespace Pequod {}  // namespace Pequod

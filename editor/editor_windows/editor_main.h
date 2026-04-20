@@ -9,66 +9,64 @@
  * resources. That is left upto each scene in the editor. For example,
  * the first scene you see might be a project picker, which will be its own
  * file with its own resources. This editor interface only manages the cleanup
-**/
+ **/
 
 #ifndef PEQUOD_EDITOR_MAIN_IMPL_HH_
 #define PEQUOD_EDITOR_MAIN_IMPL_HH_
 
-#include "editor_scene.hh"
-#include "engine/world_scene.h"
+#include <os/filesystem.h>
 #include <sokol/sokol_gfx.h>
 
-#include "preview_scene.h"
+#include "editor_scene.hh"
+#include "engine/world_scene.h"
 #include "panel/file_explorer.hh"
-
-#include <os/filesystem.h>
+#include "preview_scene.h"
 
 namespace Pequod {
-    class Editor {
-    public:
-        Editor(EditorScene &init_scene);
+class Editor {
+ public:
+  Editor(EditorScene &init_scene);
 
-        //@{
-        /**
-        * These functions are to manage the main editor instance
-        **/
-        void InitializeEditor();
+  //@{
+  /**
+   * These functions are to manage the main editor instance
+   **/
+  void InitializeEditor();
 
-        void SetScene(EditorScene &scene);
+  void SetScene(EditorScene &scene);
 
-        //@}
+  //@}
 
-        /**
-         *@{
-         * These sokol_* functions are only to be used inside of sokol functions with
-         * no extension
-        **/
-        void sokol_init();
+  /**
+   *@{
+   * These sokol_* functions are only to be used inside of sokol functions with
+   * no extension
+   **/
+  void sokol_init();
 
-        void sokol_frame_cb();
+  void sokol_frame_cb();
 
-        void sokol_cleanup();
+  void sokol_cleanup();
 
-        void sokol_event(const sapp_event *event);
+  void sokol_event(const sapp_event *event);
 
-        //@}
+  //@}
 
+  std::unique_ptr<GamePreviewScene> game_scene;
 
-        std::unique_ptr<GamePreviewScene> game_scene;
+ private:
+  EditorScene &currentScene;
 
-    private:
-        EditorScene &currentScene;
+  //@{
+  /**
+   * These are variables only required by sokol calls; goal is to phase them
+   * out for a custom impl
+   **/
+  sg_pass_action pass_action;
+  //@}
 
-        //@{
-        /**
-        * These are variables only required by sokol calls; goal is to phase them 
-        * out for a custom impl
-        **/
-        sg_pass_action pass_action;
-        //@}
-
-        fs::path editor_cwd;
-    };
+  fs::path editor_cwd;
 };
+};  // namespace Pequod
 
 #endif

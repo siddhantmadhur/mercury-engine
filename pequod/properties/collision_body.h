@@ -13,14 +13,12 @@
 #include "pobject/pobject.h"
 #include "properties/property.h"
 
-namespace Pequod
-{
-    class CollisionBody : public Property
-    {
-    public:
-        // reference to the body its handling
-        CollisionBody();
-    };
-}
+namespace Pequod {
+class CollisionBody : public Property {
+ public:
+  // reference to the body its handling
+  CollisionBody();
+};
+}  // namespace Pequod
 
-#endif //
+#endif  //

@@ -7,21 +7,22 @@
 #include <cstdint>
 
 // Runs a function with all the types
-// [CLAUDE] TODO: RUN_ON_PROPERTIES macro is defined but never invoked anywhere — remove or use
-#define RUN_ON_PROPERTIES(func)     \
-    func(Position);                 \
-    func(Mesh);
+// [CLAUDE] TODO: RUN_ON_PROPERTIES macro is defined but never invoked anywhere
+// — remove or use
+#define RUN_ON_PROPERTIES(func) \
+  func(Position);               \
+  func(Mesh);
 
 namespace Pequod {
-    enum class PropertyId {
-        Mesh = 1,
-        Position = 2,
-    };
+enum class PropertyId {
+  Mesh = 1,
+  Position = 2,
+};
 
-    class Property {
-    public:
-        virtual ~Property() = default;
-        Property();
-    };
-}
-#endif //PEQUODENGINE_PROPERTY_H
+class Property {
+ public:
+  virtual ~Property() = default;
+  Property();
+};
+}  // namespace Pequod
+#endif  // PEQUODENGINE_PROPERTY_H

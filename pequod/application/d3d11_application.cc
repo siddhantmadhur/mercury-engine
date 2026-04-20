@@ -185,7 +185,8 @@ void D3D11Application::Render() {
   deviceContext_->IASetInputLayout(vertexLayout_.Get());
   deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
                                      &vertexStride, &vertexOffset);
-  deviceContext_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  deviceContext_->IASetPrimitiveTopology(
+      D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
 
   deviceContext_->RSSetViewports(1, &viewport);

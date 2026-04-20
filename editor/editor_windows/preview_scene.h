@@ -7,23 +7,23 @@
 #include "engine/world_scene.h"
 
 namespace Pequod {
-    class GamePreviewScene : public WorldScene {
-    public:
-        void OnStart() override;
+class GamePreviewScene : public WorldScene {
+ public:
+  void OnStart() override;
 
-        void OnEvent(const sapp_event *event) override;
+  void OnEvent(const sapp_event *event) override;
 
-        void OnDestroy() override;
+  void OnDestroy() override;
 
-        void OnFrameUpdate() override;
+  void OnFrameUpdate() override;
 
-        void OnTickUpdate(float tick_t) override;
+  void OnTickUpdate(float tick_t) override;
 
-        void SetResolution(glm::vec2);
+  void SetResolution(glm::vec2);
 
-    private:
-        glm::vec2 resolution;
-    };
-}
+ private:
+  glm::vec2 resolution;
+};
+}  // namespace Pequod
 
-#endif //PEQUODENGINE_PREVIEW_SCENE_H
+#endif  // PEQUODENGINE_PREVIEW_SCENE_H

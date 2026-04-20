@@ -4,32 +4,32 @@
 
 #ifndef PEQUOD_OBJECT_TREE_H
 #define PEQUOD_OBJECT_TREE_H
-#include <filesystem>
+#include <os/filesystem.h>
 #include <pobject/manager.h>
 
-#include "panel.hh"
-#include "ecs/ecs.hh"
+#include <filesystem>
 
-#include <os/filesystem.h>
+#include "ecs/ecs.hh"
+#include "panel.hh"
 
 namespace Pequod {
-    class ObjectTree : public Panel {
-    public:
-        ObjectTree(const fs::path &, std::shared_ptr<PObjectManager>, entity_id &);
+class ObjectTree : public Panel {
+ public:
+  ObjectTree(const fs::path &, std::shared_ptr<PObjectManager>, entity_id &);
 
-        ~ObjectTree();
+  ~ObjectTree();
 
-        void Initialize() override;
+  void Initialize() override;
 
-        void Draw() override;
+  void Draw() override;
 
-        void DrawID(entity_id);
+  void DrawID(entity_id);
 
-    private:
-        fs::path project_path;
-        std::shared_ptr<PObjectManager> manager = nullptr;
-        entity_id &selected_id;
-    };
-}
+ private:
+  fs::path project_path;
+  std::shared_ptr<PObjectManager> manager = nullptr;
+  entity_id &selected_id;
+};
+}  // namespace Pequod
 
 #endif

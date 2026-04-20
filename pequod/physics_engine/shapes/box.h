@@ -4,17 +4,16 @@
 
 #ifndef PEQUODENGINE_BOX_H
 #define PEQUODENGINE_BOX_H
-#include "glm/vec3.hpp"
-#include "glm/detail/func_packing_simd.inl"
 #include "../../properties/collision_body.h"
+#include "glm/detail/func_packing_simd.inl"
+#include "glm/vec3.hpp"
 
 namespace Pequod {
-    class Box : public CollisionBody
-    {
-    public:
-        Box(glm::vec3 dim);
-    };
+class Box : public CollisionBody {
+ public:
+  Box(glm::vec3 dim);
+};
 
-} // Pequod
+}  // namespace Pequod
 
-#endif //PEQUODENGINE_BOX_H
+#endif  // PEQUODENGINE_BOX_H

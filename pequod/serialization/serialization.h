@@ -4,17 +4,17 @@
 
 #ifndef PEQUOD_SERIALIZATION_H_
 #define PEQUOD_SERIALIZATION_H_
-#include <tinyxml2.h>
 #include <pobject/pobject.h>
+#include <tinyxml2.h>
 
 using tinyxml2::XMLDocument;
 
 namespace Pequod {
-    namespace Serialization {
-        XMLDocument Marshal();
+namespace Serialization {
+XMLDocument Marshal();
 
-        std::shared_ptr<PObject> Unmarshal();
-    }
-}
+std::shared_ptr<PObject> Unmarshal();
+}  // namespace Serialization
+}  // namespace Pequod
 
-#endif //
+#endif  //

@@ -14,7 +14,6 @@
 
 namespace Pequod {
 
-
 using Position = DirectX::XMFLOAT3;
 using Color = DirectX::XMFLOAT3;
 
@@ -39,8 +38,9 @@ class D3D11Application : public Application {
 
   void OnResize(int32_t width, int32_t height);
   static bool CompileShader(const std::wstring& fileName,
-                     const std::string& entryPoint, const std::string& profile,
-                     ComPtr<ID3DBlob>& shaderBlob) ;
+                            const std::string& entryPoint,
+                            const std::string& profile,
+                            ComPtr<ID3DBlob>& shaderBlob);
 
   [[nodiscard]] ComPtr<ID3D11VertexShader> CreateVertexShader(
       const std::wstring& fileName, ComPtr<ID3DBlob>& vertexShaderBlob) const;

@@ -5,8 +5,7 @@
 #include <properties/property.h>
 
 namespace Pequod {
-    Property::Property() {
-    }
-}
+Property::Property() {}
+}  // namespace Pequod
 
 #include <memory>

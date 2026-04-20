@@ -11,103 +11,104 @@
  * self-contained, so for example the engine just needs to run an internal
  * function on start, every frame and on events and the scene will automatically
  * decide when to compute physics, update tick etc.
-**/
+ **/
 
 #ifndef PEQUOD_WORLD_SCENE_IMPL_H_
 #define PEQUOD_WORLD_SCENE_IMPL_H_
 
-#include <sokol/sokol_app.h>
-#include "gameobjects/camera.hh"
-#include <ecs/ecs.hh>
-#include <vector>
 #include <pobject/manager.h>
-
+#include <sokol/sokol_app.h>
 #include <sokol/sokol_gfx.h>
 
+#include <ecs/ecs.hh>
+#include <vector>
+
+#include "gameobjects/camera.hh"
 #include "physics_engine/physics_engine.h"
 
 namespace Pequod {
-    class WorldScene {
-    public:
-        // Initial scene creation, does NOT load any scene, create any buffers etc.
-        WorldScene();
+class WorldScene {
+ public:
+  // Initial scene creation, does NOT load any scene, create any buffers etc.
+  WorldScene();
 
-        // Initialize the scene and allocate the buffers, resources needed to function
-        void Initialize();
+  // Initialize the scene and allocate the buffers, resources needed to function
+  void Initialize();
 
-        // Destroys the scene, unloads any assets, frees any buffers, etc.
-        void Destroy();
+  // Destroys the scene, unloads any assets, frees any buffers, etc.
+  void Destroy();
 
-        // Renders the scene with selected viewport
-        void BeginRenderPass(float width, float height);
+  // Renders the scene with selected viewport
+  void BeginRenderPass(float width, float height);
 
-        void SetupRenderState();
+  void SetupRenderState();
 
-        void RenderObjects();
+  void RenderObjects();
 
-        void CompleteRender();
+  void CompleteRender();
 
-        void ComputeTick(); // call every frame, processes whether tick is run
+  void ComputeTick();  // call every frame, processes whether tick is run
 
-        // Step that computes all the physics. Should only run once a physics tick.
-        // @param steps the number of physics steps to take (should sum to atleast 60 per second)
-        void ComputePhysics(int);
+  // Step that computes all the physics. Should only run once a physics tick.
+  // @param steps the number of physics steps to take (should sum to atleast 60
+  // per second)
+  void ComputePhysics(int);
 
-        void SetPlayerCamera(Camera &cam);
+  void SetPlayerCamera(Camera &cam);
 
-        Camera &GetPlayerCamera();
+  Camera &GetPlayerCamera();
 
-        void SetBgColor(glm::vec4);
+  void SetBgColor(glm::vec4);
 
-        bool IsKeyPressed(sapp_keycode key);
+  bool IsKeyPressed(sapp_keycode key);
 
-        sg_pass_action GetPassAction();
+  sg_pass_action GetPassAction();
 
+  virtual void OnStart() = 0;                     // runs at scene creation
+  virtual void OnFrameUpdate(float delta_t) = 0;  // runs once every frame
+  virtual void OnTickUpdate(
+      float tick_t) = 0;  // runs every tick (rn is 60 per second)
+  virtual void OnEvent(const sapp_event *event) = 0;  // runs once every event
+  virtual void OnDestroy() = 0;  // runs when scene is closing
 
-        virtual void OnStart() =0; // runs at scene creation
-        virtual void OnFrameUpdate(float delta_t) =0; // runs once every frame
-        virtual void OnTickUpdate(float tick_t) =0; // runs every tick (rn is 60 per second)
-        virtual void OnEvent(const sapp_event *event) =0; // runs once every event
-        virtual void OnDestroy() =0; // runs when scene is closing
+  void OnStartInternal();
 
-        void OnStartInternal();
+  void OnFrameInternal();
 
-        void OnFrameInternal();
+  void OnEventInternal(const sapp_event *event);
 
-        void OnEventInternal(const sapp_event *event);
+  std::shared_ptr<ECS> ecs = nullptr;
+  std::shared_ptr<PhysicsEngine> physics_engine = nullptr;
+  std::shared_ptr<PObjectManager> object_manager = nullptr;
 
-        std::shared_ptr<ECS> ecs = nullptr;
-        std::shared_ptr<PhysicsEngine> physics_engine = nullptr;
-        std::shared_ptr<PObjectManager> object_manager = nullptr;
+ protected:
+  // Scene de-constructor, does NOT free resources, should be done by destroy
+  ~WorldScene();
+  int ticks_per_second = 60;
 
-    protected:
-        // Scene de-constructor, does NOT free resources, should be done by destroy
-        ~WorldScene();
-        int ticks_per_second = 60;
+ private:
+  void handleKeys(const sapp_event *event);
 
-    private:
-        void handleKeys(const sapp_event *event);
+  std::unordered_map<sapp_keycode, bool> keys_pressed;
 
-        std::unordered_map<sapp_keycode, bool> keys_pressed;
+  float delta_t = 0.0f;    // time difference per frame (ms)
+  float tick_t = 0.0f;     // time difference per tick (ms)
+  float elapsed_t = 0.0f;  // total time elapsed since scene began (ms)
+  uint64_t frame_time = 0;
+  uint64_t tick_time = 0;
 
-        float delta_t = 0.0f; // time difference per frame (ms)
-        float tick_t = 0.0f; // time difference per tick (ms)
-        float elapsed_t = 0.0f; // total time elapsed since scene began (ms)
-        uint64_t frame_time = 0;
-        uint64_t tick_time = 0;
+  uint64_t current_tick{};
+  uint64_t last_processed_tick{};
 
-        uint64_t current_tick{};
-        uint64_t last_processed_tick{};
+  Camera playerCamera;
+  glm::vec4 bgColor = glm::vec4(0.2f, 0.3f, 0.3f, 1.0f);
 
-        Camera playerCamera;
-        glm::vec4 bgColor = glm::vec4(0.2f, 0.3f, 0.3f, 1.0f);
-
-        //@{
-        // Variables required by sokol to function
-        sg_pipeline pip{0};
-        sg_pass_action pass_action{};
-        sg_bindings bind{0};
-        //@}
-    };
-}
+  //@{
+  // Variables required by sokol to function
+  sg_pipeline pip{0};
+  sg_pass_action pass_action{};
+  sg_bindings bind{0};
+  //@}
+};
+}  // namespace Pequod
 #endif

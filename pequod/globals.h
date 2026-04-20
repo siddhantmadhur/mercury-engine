@@ -11,4 +11,4 @@ using entity_id = uint16_t;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 
-#endif //PEQUODENGINE_GLOBALS_H
+#endif  // PEQUODENGINE_GLOBALS_H
