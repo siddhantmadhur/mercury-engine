@@ -42,7 +42,7 @@ In fact there are much better engines already out there that do most things
 better so I'd recommend using that if you cannot find a feature here.
 
 That being said, there are many instances where you might want a change (bugs, vulnerabilities)
-in which case please email [report@pequodengine.com](mailto:report@reocelot.com) with
+in which case please email [report@pequodengine.com](mailto:report@pequodengine.com) with
 more information or
 a [git patch](https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-Project#_project_over_email).
 
