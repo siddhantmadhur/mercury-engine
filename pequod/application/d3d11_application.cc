@@ -131,10 +131,10 @@ bool D3D11Application::OnLoad() {
 
   constexpr D3D11_INPUT_ELEMENT_DESC vertexInputLayoutInfo[] = {
       {"POSITION", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
-       offsetof(VertexPositionColor, position),
+       offsetof(Vertex, position),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
       {"COLOR", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
-       offsetof(VertexPositionColor, color),
+       offsetof(Vertex, color),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
   };
 
@@ -146,7 +146,7 @@ bool D3D11Application::OnLoad() {
     return false;
   }
 
-  constexpr VertexPositionColor vertices[] = {
+  constexpr Vertex vertices[] = {
       {Position{0.0f, 0.5f, 0.0f}, Color{0.25f, 0.39f, 0.19f}},
       {Position{0.5f, -0.5f, 0.0f}, Color{0.44f, 0.75f, 0.35f}},
       {Position{-0.5f, -0.5f, 0.0f}, Color{0.38f, 0.55f, 0.20f}},
@@ -167,10 +167,38 @@ bool D3D11Application::OnLoad() {
     return false;
   }
 
+  // Fill in a buffer description.
+  D3D11_BUFFER_DESC cbDesc = {};
+  cbDesc.ByteWidth = sizeof(CameraCBuffer);
+  cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+  cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+  cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &camera_c_buffer_))) {
+    PDebug::error("D3D11: Failed to create camera cbuffer");
+    return false;
+  }
+
   return true;
 }
 
 void D3D11Application::Render() {
+  if (game_scene_) {
+    glm::mat4x4 camera_proj_view = {};
+    if (game_scene_->GetCameraProj(camera_proj_view)) {
+      // Create camera buffer
+      CameraCBuffer camera_c_buffer = {};
+      camera_c_buffer.mWorldViewProj =
+          DirectX::XMFLOAT4X4{&camera_proj_view[0][0]};
+      // map and copy from it
+      D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+      deviceContext_->Map(camera_c_buffer_.Get(), 0,
+                          D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                          &mapped_subresource);
+      memcpy(mapped_subresource.pData, &camera_c_buffer, sizeof(CameraCBuffer));
+      deviceContext_->Unmap(camera_c_buffer_.Get(), 0);
+    }
+  }
+
   D3D11_VIEWPORT viewport = {};
   viewport.TopLeftX = 0;
   viewport.TopLeftY = 0;
@@ -180,7 +208,7 @@ void D3D11Application::Render() {
   viewport.MaxDepth = 1.0f;
 
   constexpr float clearColor[] = {0.1f, 0.1f, 0.1f, 1.0f};
-  constexpr UINT vertexStride = sizeof(VertexPositionColor);
+  constexpr UINT vertexStride = sizeof(Vertex);
   constexpr UINT vertexOffset = 0;
 
   deviceContext_->ClearRenderTargetView(renderTarget_.Get(), clearColor);
@@ -194,6 +222,10 @@ void D3D11Application::Render() {
   deviceContext_->RSSetViewports(1, &viewport);
   deviceContext_->PSSetShader(pixelShader_.Get(), nullptr, 0);
   deviceContext_->OMSetRenderTargets(1, renderTarget_.GetAddressOf(), nullptr);
+
+  ID3D11Buffer* constant_buffers[1] = {camera_c_buffer_.Get()};
+  deviceContext_->VSSetConstantBuffers(0, 1, constant_buffers);
+
   deviceContext_->Draw(3, 0);
   swapchain_->Present(1, 0);
 }

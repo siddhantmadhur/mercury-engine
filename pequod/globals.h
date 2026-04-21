@@ -15,12 +15,8 @@ using entity_id = uint16_t;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 
-#if PEQUOD_GRAPHICS_D3D11
-#define PQ_FLOAT3 DirectX::XMFLOAT3
-#endif
-
-using Position = PQ_FLOAT3;
-using Color = PQ_FLOAT3;
+using Position = DirectX::XMFLOAT3;
+using Color = DirectX::XMFLOAT3;
 
 struct Vertex {
   Position position;

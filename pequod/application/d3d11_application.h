@@ -14,12 +14,8 @@
 
 namespace Pequod {
 
-using Position = DirectX::XMFLOAT3;
-using Color = DirectX::XMFLOAT3;
-
-struct VertexPositionColor {
-  Position position;
-  Color color;
+struct CameraCBuffer {
+  DirectX::XMFLOAT4X4 mWorldViewProj;
 };
 
 class D3D11Application : public Application {
@@ -56,6 +52,7 @@ class D3D11Application : public Application {
   ComPtr<IDXGISwapChain1> swapchain_ = nullptr;
   ComPtr<ID3D11RenderTargetView> renderTarget_ = nullptr;
   ComPtr<ID3D11Buffer> triangleVertices_ = nullptr;
+  ComPtr<ID3D11Buffer> camera_c_buffer_ = nullptr;
   ComPtr<ID3D11InputLayout> vertexLayout_ = nullptr;
   ComPtr<ID3D11VertexShader> vertexShader_ = nullptr;
   ComPtr<ID3D11PixelShader> pixelShader_ = nullptr;

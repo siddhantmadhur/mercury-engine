@@ -13,6 +13,7 @@
 #define PEQUODENGINE_SCENE_H
 #include <memory>
 
+#include "gameobjects/camera.hh"
 #include "pobject/manager.h"
 
 namespace Pequod {
@@ -27,10 +28,13 @@ class GameScene {
   virtual void OnTick(double delta_t) = 0;   // delta time in ms
   virtual void OnDestroy() = 0;
 
+  bool GetCameraProj(glm::mat4x4&);
+
   std::vector<Primitive> GetPrimitives();
 
  protected:
   std::unique_ptr<PObjectManager> object_manager_ = nullptr;
+  std::unique_ptr<Camera> player_camera_ = nullptr;
 
  private:
 };

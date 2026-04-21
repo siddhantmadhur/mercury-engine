@@ -1,3 +1,8 @@
+cbuffer VS_CAMERA_BUFFER : register(b0)
+{
+    matrix mWorldViewProj;
+};
+
 struct VSInput
 {
     float3 position : POSITION;
@@ -13,7 +18,7 @@ struct VSOutput
 VSOutput Main(VSInput input)
 {
     VSOutput output = (VSOutput) 0;
-    output.position = float4(input.position, 1.0);
+    output.position = mul(float4(input.position, 1.0), mWorldViewProj);
     output.color = input.color;
     return output;
 }
