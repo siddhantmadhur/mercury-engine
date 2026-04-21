@@ -43,7 +43,7 @@ better so I'd recommend using that if you cannot find a feature here.
 
 That being said, there are many instances where you might want a change (bugs, vulnerabilities)
 in which case please email [report@pequodengine.com](mailto:report@pequodengine.com) with
-more information or
+more information or with
 a [git patch](https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-Project#_project_over_email).
 
 Official repositories for the code:
@@ -59,6 +59,8 @@ its design. First is its implementation which is how you can get started with ad
 Pequod to your project, or building using it. And the other is it's internal design
 which is how I've decided to go about designing the program which you hopefully never
 see.
+
+You can find detailed documentation at: [docs.pequodengine.com](https://docs.pequodengine.com)
 
 Some important design features to better understand the engine:
 
@@ -82,7 +84,7 @@ them to the screen.
 
 Pequod::Application is responsible for handling cross-platform application level features such as
 creating a window, taking in user-input like mouse, keyboard or controller.
-It also implements how
+It also implements how Primitives are rendered by the graphics backend.
 
 ## License
 
