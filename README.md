@@ -30,14 +30,17 @@ If a platform is not on the list then that means supporting is not a goal of thi
 | Platform      | Renderer | Support |
 |---------------|----------|---------|
 | Windows 10/11 | D3D11    | Yes     |
-| SteamOS       | Vulkan   | None    |
-| MacOS         | Metal    | None    |
+| SteamOS       | DXVK     | No [1]  |
 | Linux         | Vulkan   | None    |
+| MacOS         | MoltenVK | None    |
+
+[1] The goal is to have SteamOS specific features like support for those touchpads on the
+SteamDeck or the controllers. Along with support for controller layouts, battery modes and more.
 
 ## Contributing
 
 Pequod is open-source but not open-contribution. Features part of this engine
-are specifically for games **we** want to make and not to be generalized.
+are specifically for games **I** want to make and not to be generalized.
 In fact there are much better engines already out there that do most things
 better so I'd recommend using that if you cannot find a feature here.
 
@@ -53,7 +56,7 @@ Official repositories for the code:
 
 ## Design
 
-Pequod is designed as C++ library that can be used to produce games. This involves
+Pequod is designed as a C++ library that can be used to produce games. This involves
 tasks such as windowing, shaders, input, memory and more. There are two parts of
 its design. First is its implementation which is how you can get started with adding
 Pequod to your project, or building using it. And the other is it's internal design
@@ -63,6 +66,15 @@ see.
 You can find detailed documentation at: [docs.pequodengine.com](https://docs.pequodengine.com)
 
 Some important design features to better understand the engine:
+
+### Application
+
+Pequod::Application is responsible for handling cross-platform application level
+features such as creating a window, taking in user-input like mouse, keyboard or
+controller.
+
+The goal was to minimize platform-specific code to as little of the codebase as
+possible. This is why the next branch of the engine are Scenes and Primitives.
 
 ### Scenes
 
@@ -78,13 +90,9 @@ want a single texture atlas and contain a bunch of objects in their vertices so 
 are called, that's upto the scene to implement.
 
 When the Application finally receives the Primitives, it creates buffers out of it and draws
-them to the screen.
-
-### Application
-
-Pequod::Application is responsible for handling cross-platform application level features such as
-creating a window, taking in user-input like mouse, keyboard or controller.
-It also implements how Primitives are rendered by the graphics backend.
+them to the screen. Again the way primitives are understood by Application is quite simple
+and thus optimizing how primitives are created or pooled (for batch rendering) should be
+easy to implement on all platforms then.
 
 ## License
 

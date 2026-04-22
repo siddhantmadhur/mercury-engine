@@ -13,6 +13,7 @@
 #include <vector>
 
 using entity_id = uint16_t;
+using kEntityId = uint16_t;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 using PQ_FLOAT3 = DirectX::XMFLOAT3;
@@ -37,7 +38,12 @@ struct Primitive {
   glm::vec3 world_position_;
 };
 
-// Handles information on a per-model basis
+/**
+ * @brief Contains per-object information required to render
+ *
+ * These can be changing often and provide per-object required to render
+ * correctly.
+ */
 struct VsModelBuffer {
   PQ_FLOAT3 scale;
   float opacity;

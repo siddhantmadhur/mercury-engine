@@ -1,4 +1,4 @@
-/*
+/**
  * physics_engine.h
  *
  * Physics system for game objects
@@ -13,45 +13,43 @@
  */
 #ifndef PEQUOD_PHYSICS_ENGINE_H_
 #define PEQUOD_PHYSICS_ENGINE_H_
-
 #include <Jolt/Jolt.h>
-#include <Jolt/Core/Memory.h>
-#include <properties/collision_body.h>
 
-#include "Jolt/Core/Factory.h"
+#include <map>
+
+#include "Jolt/Core/Core.h"
+#include "Jolt/Core/JobSystem.h"
 #include "Jolt/Core/JobSystemThreadPool.h"
 #include "Jolt/Core/TempAllocator.h"
-#include "Jolt/Physics/Body/BodyActivationListener.h"
-#include "Jolt/Physics/Body/BodyID.h"
-#include "Jolt/Physics/Body/MotionType.h"
-#include "Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h"
-#include "Jolt/Physics/Collision/CollideShape.h"
-#include "Jolt/Physics/Collision/ContactListener.h"
-#include "Jolt/Physics/Collision/ObjectLayer.h"
-#include "Jolt/Physics/PhysicsSettings.h"
+#include "Jolt/Physics/Body/Body.h"
 #include "Jolt/Physics/PhysicsSystem.h"
-#include "Jolt/RegisterTypes.h"
 #include "debugger/debugger.h"
 #include "globals.h"
-#include "pobject/pobject.h"
-#include "rigidbody/rigidbody.hh"
-
-// [CLAUDE] TODO: 'using namespace JPH' in a header pollutes every TU that
-// includes this — move to .cc or use JPH:: prefix
-using namespace JPH;
+#include "pobject/manager.h"
+#include "properties/collision_body.h"
 
 namespace Pequod {
+
+/**
+ * Empty namespace to register Jolt-specific classes
+ */
 namespace {
-class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter {
+
+namespace Layers {
+static constexpr JPH::ObjectLayer NON_MOVING = 0;
+static constexpr JPH::ObjectLayer MOVING = 1;
+static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
+};  // namespace Layers
+
+class ObjectLayerPairFilterImpl : public JPH::ObjectLayerPairFilter {
  public:
-  virtual bool ShouldCollide(ObjectLayer inObject1,
-                             ObjectLayer inObject2) const override {
-    switch (inObject1) {
+  virtual bool ShouldCollide(JPH::ObjectLayer inLayer1,
+                             JPH::ObjectLayer inLayer2) const override {
+    switch (inLayer1) {
       case Layers::NON_MOVING:
-        return inObject2 ==
-               Layers::MOVING;  // Non moving only collides with moving
+        return inLayer2 == Layers::MOVING;
       case Layers::MOVING:
-        return true;  // Moving collides with everything
+        return true;
       default:
         JPH_ASSERT(false);
         return false;
@@ -60,40 +58,38 @@ class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter {
 };
 
 namespace BroadPhaseLayers {
-static constexpr BroadPhaseLayer NON_MOVING(0);
-static constexpr BroadPhaseLayer MOVING(1);
-static constexpr uint NUM_LAYERS(2);
+static constexpr JPH::BroadPhaseLayer NON_MOVING(0);
+static constexpr JPH::BroadPhaseLayer MOVING(1);
+static constexpr UINT NUM_LAYERS(2);
 };  // namespace BroadPhaseLayers
 
-class BPLayerInterfaceImpl final : public BroadPhaseLayerInterface {
+class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
  public:
   BPLayerInterfaceImpl() {
     // Create a mapping table from object to broad phase layer
     mObjectToBroadPhase[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
     mObjectToBroadPhase[Layers::MOVING] = BroadPhaseLayers::MOVING;
   }
-
-  virtual uint GetNumBroadPhaseLayers() const override {
+  virtual UINT GetNumBroadPhaseLayers() const override {
     return BroadPhaseLayers::NUM_LAYERS;
   }
-
-  virtual BroadPhaseLayer GetBroadPhaseLayer(
-      ObjectLayer inLayer) const override {
+  virtual JPH::BroadPhaseLayer GetBroadPhaseLayer(
+      JPH::ObjectLayer inLayer) const override {
     JPH_ASSERT(inLayer < Layers::NUM_LAYERS);
     return mObjectToBroadPhase[inLayer];
   }
 
  private:
-  BroadPhaseLayer mObjectToBroadPhase[Layers::NUM_LAYERS];
+  JPH::BroadPhaseLayer mObjectToBroadPhase[Layers::NUM_LAYERS];
 };
 
-class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter {
+class ObjectVsBroadPhaseLayerFilterImpl
+    : public JPH::ObjectVsBroadPhaseLayerFilter {
  public:
-  virtual bool ShouldCollide(ObjectLayer inLayer1,
-                             BroadPhaseLayer inLayer2) const override {
+  virtual bool ShouldCollide(JPH::ObjectLayer inLayer1,
+                             JPH::BroadPhaseLayer inLayer2) const override {
     switch (inLayer1) {
       case Layers::NON_MOVING:
-        PDebug::info("Non moving!");
         return inLayer2 == BroadPhaseLayers::MOVING;
       case Layers::MOVING:
         return true;
@@ -104,62 +100,124 @@ class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter {
   }
 };
 
-class MyBodyActivationListener : public JPH::BodyActivationListener {
- public:
-  virtual void OnBodyActivated(const JPH::BodyID& inBodyID,
-                               JPH::uint64 inBodyUserData) override {}
-
-  virtual void OnBodyDeactivated(const JPH::BodyID& inBodyID,
-                                 JPH::uint64 inBodyUserData) override {}
-};
 }  // namespace
 
-enum class CollisionType {
-  kCollisionNone,
-  kCollisionEnter,
-  kCollisionOn,
-  kCollisionLeave
-};
+/**
+ * @brief Describes a type of collision
+ */
+enum CollisionType { kCollisionEnter, kCollisionPersisted, kCollisionLeave };
 
+/**
+ * @brief Function type that runs whenever bodies collide
+ */
+using CollisionCallbackLambda =
+    std::function<void(kEntityId self, kEntityId other)>;
+
+/**
+ * @brief Provides easy-access to Physics using Jolt
+ *
+ * It is a basic wrapper around Jolt. It is designed to be simple and not add
+ * features, rather rely completely on Jolt for most things like resource
+ * management and physics simulations.
+ *
+ * Rather it provides a way to interface PObject's with Physics. Like allowing
+ * on collision functions to be defined as lambdas that are called on collision
+ * rather than complete classes that have to stay through the entire program
+ * lifetime.
+ */
 class PhysicsEngine {
  public:
   PhysicsEngine();
   ~PhysicsEngine();
 
-  // Add object to physics system
-  void RegisterEntity(std::shared_ptr<PObject>, CollisionBody);
+  /**
+   * @brief Initialize Jolt before computing
+   */
+  void Initialize();
 
+  /**
+   * @brief Calculate the physics for the environment such as collision
+   * @param steps No. of steps to take in a computation (1 every 60hz)
+   *
+   * First is that it synchronizes transformations between Jolt and
+   * PObjectManager. If a user sets a position it has to take preference over
+   * Jolt so first it copies over all manual transformations to the physics
+   * system. Then it computes the physics using Jolt using these values and any
+   * prior values. Then in the second step it synchronizes all the changes by
+   * Jolt to the PObjectManager
+   *
+   */
   void Compute(int steps);
 
-  // [CLAUDE] TODO: DisableBody is declared but never implemented
-  void DisableBody(entity_id);
+  /**
+   * @brief Register a body to the physics engine before adding properties
+   */
+  void RegisterBody(std::shared_ptr<PObject> self, CollisionBody collision_body,
+                    JPH::EAllowedDOFs allowed_dofs);
 
-  // use to check the collided status
-  CollisionType GetCollisionState(entity_id self, entity_id other) const;
+  /**
+   * @brief Unregister a body from the physics engine
+   * @param id Entity ID
+   */
+  void DisableBody(kEntityId id);
 
-  // Returns the bodies colliding with the object
-  std::vector<entity_id> GetCollidingBodies(entity_id) const;
+  /**
+   * @brief Add a callback to trigger when bodies collide
+   *
+   * @tparam T Type of Pequod::CollisionType to trigger the lambda on
+   * @param self ID of the registered PObject to add the callback to
+   * @param callback_lambda Lambda that is triggered when bodies collide
+   */
+  template <CollisionType T>
+  void AddCollisionCallback(kEntityId self,
+                            CollisionCallbackLambda callback_lambda);
+
+  /**
+   * @brief Manually triggers the callback function stored in the physics engine
+   *
+   * @tparam T Type of Pequod::CollisionType to trigger
+   * @param self ID of the body the trigger is attached to
+   * @param other ID of the body being collided with
+   */
+  template <CollisionType T>
+  void TriggerCollisionCallback(kEntityId self, kEntityId other);
+
+  /**
+   * @brief Get the associated PObject ID from Jolts system
+   * @return The associated PObject ID from the JoltID
+   */
+  kEntityId Get(JPH::BodyID);
+
+  /**
+   * @brief Check whether an entity has a corresponding physics registration
+   *
+   * @param id Entity ID
+   * @return Is the entity registered on the physics system
+   */
+  bool IsRegistered(kEntityId id);
+
+  void SetGravity(kEntityId id, float gravity);
+  void SetRestitution(kEntityId id, float restitution);
+  void SetMotionType(kEntityId id, JPH::EMotionType motion);
+
+ protected:
+  std::map<kEntityId, CollisionCallbackLambda> on_collision_persisted_ = {};
+  std::map<kEntityId, CollisionCallbackLambda> on_collision_enter_ = {};
+  std::map<kEntityId, CollisionCallbackLambda> on_collision_leave_ = {};
+  std::map<JPH::BodyID, kEntityId> jolt_bodies_ref_ = {};
+  std::map<kEntityId, JPH::BodyID> entity_bodies_ref_ = {};
+  std::map<kEntityId, std::shared_ptr<PObject>> registered_bodies_ = {};
 
  private:
-  // [CLAUDE] TODO: body_id is declared but never used
-  BodyID* body_id = nullptr;
+  JPH::TempAllocator* temp_allocator_ = nullptr;
+  JPH::JobSystemThreadPool* job_system_thread_pool_ = nullptr;
+  JPH::PhysicsSystem physics_system_;
 
-  std::vector<std::shared_ptr<PObject>> objects_;
-
-  // [CLAUDE] TODO: jolt_bodies is never populated — physics system not
-  // initialized
-  std::unordered_map<JPH::BodyID, entity_id>
-      jolt_bodies;  // maps jolt id <--> pequods entity_id
-
-  TempAllocatorImpl* temp_allocator = nullptr;  // 10MB
-  JobSystemThreadPool* job_system = nullptr;
-  PhysicsSystem physics_system;
-
-  BPLayerInterfaceImpl broad_phase_layer_interface;
-  ObjectVsBroadPhaseLayerFilterImpl object_vs_broadphase_layer_filter;
-  ObjectLayerPairFilterImpl object_vs_object_layer_filter;
-  MyBodyActivationListener body_activation_listener;
+  BPLayerInterfaceImpl broad_phase_layer_interface_;
+  ObjectVsBroadPhaseLayerFilterImpl object_vs_broad_phase_layer_filter_impl_;
+  ObjectLayerPairFilterImpl object_layer_pair_filter_impl_;
 };
+
 }  // namespace Pequod
 
 #endif

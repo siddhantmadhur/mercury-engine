@@ -8,6 +8,9 @@ namespace Pequod {
 
 GameScene::GameScene() {
   this->object_manager_ = std::make_unique<PObjectManager>();
+  this->physics_engine_ = std::make_unique<PhysicsEngine>();
+
+  physics_engine_->Initialize();
 }
 
 bool GameScene::GetCameraProj(glm::mat4x4& proj) {
@@ -29,6 +32,7 @@ void GameScene::SetInputManager(InputManager* input_manager) {
 }
 void GameScene::QuitScene() { should_close = true; }
 bool GameScene::ShouldQuit() const { return should_close; }
+void GameScene::SimulatePhysics() { physics_engine_->Compute(1); }
 void GameScene::SetWidth(float width) { this->width_ = width; }
 float GameScene::GetHeight() const { return this->height_; }
 

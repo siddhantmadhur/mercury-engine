@@ -82,7 +82,7 @@ int Application::Run() {
     double current_time = glfwGetTime() * 1000;
     delta_time_ = current_time - time_elapsed_;
     time_elapsed_ = current_time;
-    auto ticks_per_sec = 20;
+    auto ticks_per_sec = 60;
     time_since_last_tick_ += delta_time_;
 
     int ticks = int(time_elapsed_ / (1000.0 / ticks_per_sec));
@@ -94,6 +94,7 @@ int Application::Run() {
         last_tick_ = ticks;
         game_scene_->OnTick(time_since_last_tick_);
         time_since_last_tick_ = 0.0f;
+        game_scene_->SimulatePhysics();  // Only works as long as tps is 60
       }
       game_scene_->OnFrame(delta_time_);
     } else {

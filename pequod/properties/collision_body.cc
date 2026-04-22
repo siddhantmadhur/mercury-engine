@@ -6,4 +6,5 @@
 
 namespace Pequod {
 CollisionBody::CollisionBody() {}
+JPH::ShapeRefC CollisionBody::GetShapeRef() const { return this->shape_ref_c_; }
 }  // namespace Pequod

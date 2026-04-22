@@ -17,10 +17,14 @@ glm::vec3 Transform::GetPosition() const { return this->position_; }
 void Transform::SetPosition(glm::vec3 position) {
   this->position_ = position;
   this->interpolated_position_ = position;
+  transformations_.push_back(kTransformPosition);
 }
 
 glm::vec3 Transform::GetVelocity() const { return this->velocity_; }
-void Transform::SetVelocity(glm::vec3 velocity) { this->velocity_ = velocity; }
+void Transform::SetVelocity(glm::vec3 velocity) {
+  this->velocity_ = velocity;
+  transformations_.push_back(kTransformLinearVelocity);
+}
 
 void Transform::Move(glm::vec3 movement) { this->position_ += movement; }
 
@@ -40,4 +44,9 @@ void Transform::InterpolatePosition(float delta_t, float tick_t) {
   interpolated_position_ +=
       (position_ - interpolated_position_) * (delta_t / tick_t);
 }
+std::vector<TransformationType> Transform::GetTransformations() {
+  auto transformations = transformations_;
+  return transformations;
+}
+void Transform::ClearTransformations() { transformations_.clear(); }
 }  // namespace Pequod

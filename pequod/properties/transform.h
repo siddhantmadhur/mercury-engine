@@ -9,6 +9,12 @@
 #include "property.h"
 
 namespace Pequod {
+
+enum TransformationType {
+  kTransformPosition = 0,
+  kTransformLinearVelocity = 1
+};
+
 class Transform : public Property {
  public:
   Transform();
@@ -24,6 +30,9 @@ class Transform : public Property {
   // Run this every frame to interpolate position between ticks
   void InterpolatePosition(float delta_t, float tick_t);
 
+  std::vector<TransformationType> GetTransformations();
+  void ClearTransformations();
+
  private:
   glm::vec3 position_;
   glm::vec3 velocity_{};
@@ -32,6 +41,13 @@ class Transform : public Property {
    * so this makes sure its smoothed out
    */
   glm::vec3 interpolated_position_;
+
+  /**
+   * A queue of fixed transformations made (like position and velocity) so that
+   * the physics system knows whether to listen to the entities property or the
+   * calculated physics property
+   */
+  std::vector<TransformationType> transformations_;
 };
 }  // namespace Pequod
 

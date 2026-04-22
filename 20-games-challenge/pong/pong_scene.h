@@ -17,9 +17,12 @@ class PongScene : public GameScene {
   void OnTick(double delta_t) override;
   void OnDestroy() override;
 
+  void DestroyBrick();
+
  private:
   std::shared_ptr<PObject> player_ = nullptr;
   std::shared_ptr<PObject> enemy_ = nullptr;
+  std::map<kEntityId, std::function<void()>> on_collisions_ = {};
 };
 
 #endif  // PEQUODENGINE_PONG_SCENE_H

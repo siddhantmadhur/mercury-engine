@@ -10,6 +10,9 @@
 #ifndef PEQUOD_PHYSICS_COLLISION_SHAPE_H_
 #define PEQUOD_PHYSICS_COLLISION_SHAPE_H_
 
+#include <Jolt/Jolt.h>
+
+#include "Jolt/Physics/Body/BodyCreationSettings.h"
 #include "pobject/pobject.h"
 #include "properties/property.h"
 
@@ -18,6 +21,10 @@ class CollisionBody : public Property {
  public:
   // reference to the body its handling
   CollisionBody();
+  JPH::ShapeRefC GetShapeRef() const;
+
+ protected:
+  JPH::ShapeRefC shape_ref_c_;
 };
 }  // namespace Pequod
 
