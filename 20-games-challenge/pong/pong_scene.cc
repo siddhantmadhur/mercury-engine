@@ -4,10 +4,12 @@
 
 #include "pong_scene.h"
 
+#include "GLFW/glfw3.h"
 #include "debugger/debugger.h"
 #include "pobject/nodes/box2d.h"
+#include "properties/transform.h"
 
-#define ZOOM 12.0f
+#define ZOOM 8.0f
 #define scaled_width (GetWidth() / (ZOOM))
 #define scaled_height (GetHeight() / (ZOOM))
 
@@ -24,6 +26,24 @@ void PongScene::OnStart() {
 
 void PongScene::OnFrame(double delta_t) {};
 
-void PongScene::OnTick(double delta_t) {};
+#define SPEED 1.2
+
+void PongScene::OnTick(double delta_t) {
+  if (input_manager_) {
+    if (input_manager_->IsPressed(GLFW_KEY_ESCAPE)) {
+      this->QuitScene();
+    }
+
+    auto transform = player_->Get<Transform>();
+    auto pos = transform->GetPosition();
+    if (input_manager_->IsPressed(GLFW_KEY_W)) {
+      pos.y += SPEED * 0.05 * delta_t;
+    }
+    if (input_manager_->IsPressed(GLFW_KEY_S)) {
+      pos.y -= SPEED * 0.05 * delta_t;
+    }
+    transform->SetPosition(pos);
+  }
+};
 
 void PongScene::OnDestroy() {};

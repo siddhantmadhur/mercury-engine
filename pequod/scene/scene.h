@@ -14,6 +14,7 @@
 #include <memory>
 
 #include "gameobjects/camera.hh"
+#include "input/input_manager.h"
 #include "pobject/manager.h"
 
 namespace Pequod {
@@ -37,13 +38,20 @@ class GameScene {
   void SetWidth(float);
   void SetHeight(float);
 
+  void SetInputManager(InputManager*);
+
+  void QuitScene();
+  bool ShouldQuit() const;
+
  protected:
   std::unique_ptr<PObjectManager> object_manager_ = nullptr;
   std::unique_ptr<Camera> player_camera_ = nullptr;
+  InputManager* input_manager_ = nullptr;
 
  private:
   float width_ = 0.0;
   float height_ = 0.0;
+  bool should_close = false;
 };
 
 }  // namespace Pequod

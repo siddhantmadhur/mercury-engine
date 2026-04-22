@@ -10,6 +10,8 @@
 
 #ifndef PEQUODENGINE_APPLICATION_H
 #define PEQUODENGINE_APPLICATION_H
+#include <input/input_manager.h>
+
 #include <string>
 #include <string_view>
 
@@ -17,11 +19,13 @@
 #include "scene/scene.h"
 
 namespace Pequod {
+static InputManager input_manager_;
 class Application {
  public:
   Application(const std::string& window_title);
-  ~Application();
+  virtual ~Application();
   int Run();
+  void Quit() const;
   void SetGameScene(std::unique_ptr<GameScene>);
 
  protected:
@@ -30,6 +34,8 @@ class Application {
   virtual bool Initialize();
   virtual void OnResize(int32_t width, int32_t height);
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);
+  static void HandleKeyCallback(GLFWwindow* window, int key, int scancode,
+                                int action, int mods);
 
   int32_t GetWidth() const;
   int32_t GetHeight() const;

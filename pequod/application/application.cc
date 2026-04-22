@@ -11,6 +11,9 @@
 #include "debugger/debugger.h"
 
 namespace Pequod {
+
+static InputManager input_manager;
+
 Application::Application(const std::string& window_title) {
   PDebug::info("Application context created...");
   title_ = window_title;
@@ -35,6 +38,7 @@ bool Application::Initialize() {
   if (game_scene_) {
     game_scene_->SetWidth(width_);
     game_scene_->SetHeight(height_);
+    game_scene_->SetInputManager(&input_manager);
   }
 
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
@@ -56,6 +60,8 @@ bool Application::Initialize() {
   glfwSetWindowUserPointer(window_, this);
   glfwSetFramebufferSizeCallback(window_, HandleResize);
 
+  glfwSetKeyCallback(window_, HandleKeyCallback);
+
   return true;
 }
 
@@ -72,7 +78,7 @@ int Application::Run() {
 
   game_scene_->OnStart();
 
-  while (!glfwWindowShouldClose(window_)) {
+  while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
     double current_time = glfwGetTime() * 1000;
     delta_time_ = current_time - time_elapsed_;
     time_elapsed_ = current_time;
@@ -113,6 +119,15 @@ void Application::HandleResize(GLFWwindow* window, int32_t width,
       static_cast<Application*>(glfwGetWindowUserPointer(window));
   application->OnResize(width, height);
 }
+void Application::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
+                                    int action, int mods) {
+  if (action == GLFW_PRESS) {
+    input_manager.SetKeyDown(key);
+  } else if (action == GLFW_RELEASE) {
+    input_manager.SetKeyUp(key);
+  }
+}
+void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }
 void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {
   this->game_scene_ = std::move(game_scene);
 }

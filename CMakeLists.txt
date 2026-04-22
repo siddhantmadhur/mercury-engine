@@ -40,6 +40,8 @@ add_library(pequod
         pequod/application/d3d11_application.cc
         pequod/os/filesystem.h
         pequod/scene/scene.cc
+        pequod/input/input_manager.cc
+        pequod/input/input_manager.h
 )
 
 
@@ -47,22 +49,8 @@ include_directories("pequod")
 include_directories("editor")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)
 
-if (APPLE)
-    # MacOS libraries
-    target_link_libraries(pequod "-framework Cocoa")
-    target_link_libraries(pequod "-framework Metal")
-    target_link_libraries(pequod "-framework MetalKit")
-    target_link_libraries(pequod "-framework QuartzCore")
-    target_link_libraries(pequod "-framework OpenGL")
-elseif (LINUX)
-    target_link_libraries(pequod "-lX11")
-    target_link_libraries(pequod "-lXi")
-    target_link_libraries(pequod "-lXcursor")
-    target_link_libraries(pequod "-ldl")
-    target_link_libraries(pequod "-lpthread")
-    target_link_libraries(pequod "-lm")
-    target_link_libraries(pequod "-lvulkan")
-    target_link_libraries(pequod "-lGL")
+if (!WIN32)
+    message(WARNING "Pequod does not support this platform")
 endif ()
 
 # link imgui

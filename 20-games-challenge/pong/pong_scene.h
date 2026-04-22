@@ -4,6 +4,8 @@
 
 #ifndef PEQUODENGINE_PONG_SCENE_H
 #define PEQUODENGINE_PONG_SCENE_H
+#include <input/input_manager.h>
+
 #include "scene/scene.h"
 
 using namespace Pequod;

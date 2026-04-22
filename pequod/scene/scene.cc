@@ -9,6 +9,7 @@ namespace Pequod {
 GameScene::GameScene() {
   this->object_manager_ = std::make_unique<PObjectManager>();
 }
+
 bool GameScene::GetCameraProj(glm::mat4x4& proj) {
   if (this->player_camera_ == nullptr) {
     return false;
@@ -23,6 +24,11 @@ std::vector<Primitive> GameScene::GetPrimitives() {
 }
 float GameScene::GetWidth() const { return this->width_; }
 void GameScene::SetHeight(float height) { this->height_ = height; }
+void GameScene::SetInputManager(InputManager* input_manager) {
+  this->input_manager_ = input_manager;
+}
+void GameScene::QuitScene() { should_close = true; }
+bool GameScene::ShouldQuit() const { return should_close; }
 void GameScene::SetWidth(float width) { this->width_ = width; }
 float GameScene::GetHeight() const { return this->height_; }
 
