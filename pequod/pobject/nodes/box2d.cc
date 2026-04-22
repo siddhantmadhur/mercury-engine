@@ -17,12 +17,12 @@ Box2D::Box2D(glm::vec2 position, glm::vec2 size, glm::vec4 color) {
   pos->SetPosition(glm::vec3(position, 0.0f));
 
   auto mesh = Add<Mesh>();
-  DirectX::XMFLOAT3 dx_color(color.r, color.g, color.b);
+  PQ_FLOAT3 dx_color(color.r, color.g, color.b);
   Vertex raw_vertices[4] = {
-      {Position{1.0f, 1.0f, 0.0}, dx_color},
-      {Position{1.0f, -1.0f, 0.0f}, dx_color},
-      {Position{-1.0f, -1.0f, 0.0f}, dx_color},
-      {Position{-1.0f, 1.0f, 0.0f}, dx_color},
+      {PQ_FLOAT3{1.0f, 1.0f, 0.0}, dx_color},
+      {PQ_FLOAT3{1.0f, -1.0f, 0.0f}, dx_color},
+      {PQ_FLOAT3{-1.0f, -1.0f, 0.0f}, dx_color},
+      {PQ_FLOAT3{-1.0f, 1.0f, 0.0f}, dx_color},
   };
   mesh->SetVertices(
       std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));

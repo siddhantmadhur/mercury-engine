@@ -21,5 +21,9 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
 std::vector<Primitive> GameScene::GetPrimitives() {
   return object_manager_->GetPrimitives();
 }
+float GameScene::GetWidth() const { return this->width_; }
+void GameScene::SetHeight(float height) { this->height_ = height; }
+void GameScene::SetWidth(float width) { this->width_ = width; }
+float GameScene::GetHeight() const { return this->height_; }
 
 }  // namespace Pequod

@@ -52,10 +52,15 @@ class D3D11Application : public Application {
   ComPtr<IDXGISwapChain1> swapchain_ = nullptr;
   ComPtr<ID3D11RenderTargetView> renderTarget_ = nullptr;
   ComPtr<ID3D11Buffer> triangleVertices_ = nullptr;
+  ComPtr<ID3D11Buffer> indices_buffer_ = nullptr;
+
   ComPtr<ID3D11Buffer> camera_c_buffer_ = nullptr;
+  ComPtr<ID3D11Buffer> vs_model_buffer_ = nullptr;
+
   ComPtr<ID3D11InputLayout> vertexLayout_ = nullptr;
   ComPtr<ID3D11VertexShader> vertexShader_ = nullptr;
   ComPtr<ID3D11PixelShader> pixelShader_ = nullptr;
+  ComPtr<ID3D11BlendState> blendState_ = nullptr;
 
   std::vector<Primitive> primitives_ = {};
 };

@@ -32,11 +32,18 @@ class GameScene {
 
   std::vector<Primitive> GetPrimitives();
 
+  float GetWidth() const;
+  float GetHeight() const;
+  void SetWidth(float);
+  void SetHeight(float);
+
  protected:
   std::unique_ptr<PObjectManager> object_manager_ = nullptr;
   std::unique_ptr<Camera> player_camera_ = nullptr;
 
  private:
+  float width_ = 0.0;
+  float height_ = 0.0;
 };
 
 }  // namespace Pequod

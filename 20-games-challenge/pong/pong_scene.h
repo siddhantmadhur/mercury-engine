@@ -9,12 +9,15 @@
 using namespace Pequod;
 
 class PongScene : public GameScene {
-public:
+ public:
   void OnStart() override;
   void OnFrame(double delta_t) override;
   void OnTick(double delta_t) override;
   void OnDestroy() override;
 
+ private:
+  std::shared_ptr<PObject> player_ = nullptr;
+  std::shared_ptr<PObject> enemy_ = nullptr;
 };
 
-#endif //PEQUODENGINE_PONG_SCENE_H
+#endif  // PEQUODENGINE_PONG_SCENE_H

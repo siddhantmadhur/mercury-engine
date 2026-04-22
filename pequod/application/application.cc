@@ -32,6 +32,11 @@ bool Application::Initialize() {
   width_ = static_cast<int32_t>(videoMode->width * 0.6f);
   height_ = static_cast<int32_t>(videoMode->height * 0.6f);
 
+  if (game_scene_) {
+    game_scene_->SetWidth(width_);
+    game_scene_->SetHeight(height_);
+  }
+
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -121,5 +126,9 @@ GLFWwindow* Application::GetWindow() const { return window_; }
 void Application::OnResize(int32_t width, int32_t height) {
   width_ = width;
   height_ = height;
+  if (game_scene_) {
+    game_scene_->SetWidth(width);
+    game_scene_->SetHeight(height);
+  }
 }
 }  // namespace Pequod

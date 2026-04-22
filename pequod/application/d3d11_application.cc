@@ -15,6 +15,7 @@
 #include <string>
 
 #include "debugger/debugger.h"
+#include "glm/ext/matrix_transform.hpp"
 #include "os/filesystem.h"
 
 #pragma comment(lib, "d3d11.lib")
@@ -146,28 +147,31 @@ bool D3D11Application::OnLoad() {
     return false;
   }
 
-  constexpr Vertex vertices[] = {
-      {Position{0.0f, 0.5f, 0.0f}, Color{0.25f, 0.39f, 0.19f}},
-      {Position{0.5f, -0.5f, 0.0f}, Color{0.44f, 0.75f, 0.35f}},
-      {Position{-0.5f, -0.5f, 0.0f}, Color{0.38f, 0.55f, 0.20f}},
-  };
-
   primitives_ = game_scene_->GetPrimitives();
 
   D3D11_BUFFER_DESC bufferInfo = {};
-  bufferInfo.ByteWidth = sizeof(vertices);
-  bufferInfo.Usage = D3D11_USAGE::D3D11_USAGE_IMMUTABLE;
+  bufferInfo.ByteWidth = sizeof(Vertex) * 64000;  // Max no. of vertices
+  bufferInfo.Usage = D3D11_USAGE::D3D11_USAGE_DYNAMIC;
   bufferInfo.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VERTEX_BUFFER;
+  bufferInfo.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
   D3D11_SUBRESOURCE_DATA resourceData = {};
-  resourceData.pSysMem = vertices;
-  if (FAILED(device_->CreateBuffer(&bufferInfo, &resourceData,
-                                   &triangleVertices_))) {
+  if (FAILED(device_->CreateBuffer(&bufferInfo, nullptr, &triangleVertices_))) {
     PDebug::error("D3D11: Failed to create triangle vertex buffer");
     return false;
   }
+  D3D11_BUFFER_DESC indices_buffer_info = {};
+  indices_buffer_info.ByteWidth = sizeof(UINT) * 64000;  // Max no. of indices
+  indices_buffer_info.Usage = D3D11_USAGE::D3D11_USAGE_DYNAMIC;
+  indices_buffer_info.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_INDEX_BUFFER;
+  indices_buffer_info.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  if (FAILED(device_->CreateBuffer(&indices_buffer_info, nullptr,
+                                   &indices_buffer_))) {
+    PDebug::error("D3D11: Failed to create index buffer");
+    return false;
+  }
 
-  // Fill in a buffer description.
+  // Create cbuffers
   D3D11_BUFFER_DESC cbDesc = {};
   cbDesc.ByteWidth = sizeof(CameraCBuffer);
   cbDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -178,12 +182,34 @@ bool D3D11Application::OnLoad() {
     return false;
   }
 
+  cbDesc.ByteWidth = sizeof(VsModelBuffer);
+  if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &vs_model_buffer_))) {
+    PDebug::error("D3D11: Failed to create model cbuffer");
+    return false;
+  }
+
+  D3D11_BLEND_DESC blendDesc = {};
+  blendDesc.RenderTarget[0].BlendEnable = TRUE;
+  blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+  blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+  blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+  blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+  blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+  blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+  blendDesc.RenderTarget[0].RenderTargetWriteMask =
+      D3D11_COLOR_WRITE_ENABLE_ALL;
+  if (FAILED(device_->CreateBlendState(&blendDesc, &blendState_))) {
+    PDebug::error("D3D11: Failed to create blend state");
+    return false;
+  }
+
   return true;
 }
 
 void D3D11Application::Render() {
   if (game_scene_) {
     glm::mat4x4 camera_proj_view = {};
+    // Set camera buffer
     if (game_scene_->GetCameraProj(camera_proj_view)) {
       // Create camera buffer
       CameraCBuffer camera_c_buffer = {};
@@ -211,10 +237,10 @@ void D3D11Application::Render() {
   constexpr UINT vertexStride = sizeof(Vertex);
   constexpr UINT vertexOffset = 0;
 
+  constexpr UINT indexStride = sizeof(UINT);
+  constexpr UINT indexOffset = 0;
   deviceContext_->ClearRenderTargetView(renderTarget_.Get(), clearColor);
   deviceContext_->IASetInputLayout(vertexLayout_.Get());
-  deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
-                                     &vertexStride, &vertexOffset);
   deviceContext_->IASetPrimitiveTopology(
       D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
@@ -226,7 +252,57 @@ void D3D11Application::Render() {
   ID3D11Buffer* constant_buffers[1] = {camera_c_buffer_.Get()};
   deviceContext_->VSSetConstantBuffers(0, 1, constant_buffers);
 
-  deviceContext_->Draw(3, 0);
+  float blendFactor[4] = {0, 0, 0, 0};
+  deviceContext_->OMSetBlendState(blendState_.Get(), blendFactor, 0xFFFFFFFF);
+
+  auto primitives = game_scene_->GetPrimitives();
+  if (game_scene_) {
+    for (const auto& primitive : primitives) {
+      {  // Set vertex buffer for object
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+        deviceContext_->Map(triangleVertices_.Get(), 0,
+                            D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_subresource);
+        memcpy(mapped_subresource.pData, &primitive.vertices_[0],
+               sizeof(Vertex) * primitive.vertices_.size());
+        deviceContext_->Unmap(triangleVertices_.Get(), 0);
+      }
+      {  // Set index buffer
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+        deviceContext_->Map(indices_buffer_.Get(), 0,
+                            D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_subresource);
+        memcpy(mapped_subresource.pData, &primitive.indices_[0],
+               sizeof(UINT) * primitive.indices_.size());
+        deviceContext_->Unmap(indices_buffer_.Get(), 0);
+      }
+      {  // Update model buffer per object
+        VsModelBuffer vs_model_buffer = {};
+        vs_model_buffer.scale = PQ_FLOAT3{&primitive.scale_[0]};
+        vs_model_buffer.opacity = 1;
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, primitive.world_position_);
+        vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
+        // map and copy from it
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+        deviceContext_->Map(vs_model_buffer_.Get(), 0,
+                            D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_subresource);
+        memcpy(mapped_subresource.pData, &vs_model_buffer,
+               sizeof(VsModelBuffer));
+        deviceContext_->Unmap(vs_model_buffer_.Get(), 0);
+      }
+      // Configure the buffers created
+      deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
+                                         &vertexStride, &vertexOffset);
+      deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
+                                       DXGI_FORMAT_R32_UINT, 0);
+      ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
+      deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+      deviceContext_->DrawIndexed(primitive.indices_.size(), 0, 0);
+    }
+  }
+
   swapchain_->Present(1, 0);
 }
 

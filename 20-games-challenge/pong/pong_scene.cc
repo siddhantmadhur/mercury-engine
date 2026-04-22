@@ -7,12 +7,19 @@
 #include "debugger/debugger.h"
 #include "pobject/nodes/box2d.h"
 
-void PongScene::OnStart() {
-  player_camera_ = std::make_unique<Camera>(16.0 / 9.0);
-  player_camera_->configure2D(1280, 720, 100.0f);
+#define ZOOM 12.0f
+#define scaled_width (GetWidth() / (ZOOM))
+#define scaled_height (GetHeight() / (ZOOM))
 
-  auto player = object_manager_->NewObject<Box2D>(
-      glm::vec2(1.0f), glm::vec2(5.0f), glm::vec4(1.0f));
+void PongScene::OnStart() {
+  player_camera_ = std::make_unique<Camera>(GetWidth() / GetHeight());
+  player_camera_->configure2D(GetWidth(), GetHeight(), ZOOM);
+
+  auto offset = glm::vec2((scaled_width / 2.0f) - 12.0f, 0.0f);
+  player_ = object_manager_->NewObject<Box2D>(-offset, glm::vec2(2.0f, 10.0f),
+                                              glm::vec4(1.0f));
+  enemy_ = object_manager_->NewObject<Box2D>(offset, glm::vec2(2.0f, 10.0f),
+                                             glm::vec4(1.0f));
 };
 
 void PongScene::OnFrame(double delta_t) {};
