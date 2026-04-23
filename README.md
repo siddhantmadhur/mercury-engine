@@ -30,11 +30,11 @@ If a platform is not on the list then that means supporting is not a goal of thi
 | Platform      | Renderer | Support |
 |---------------|----------|---------|
 | Windows 10/11 | D3D11    | Yes     |
-| SteamOS       | DXVK     | No [1]  |
+| SteamOS       | DXVK     | No [^1] |
 | Linux         | Vulkan   | None    |
 | MacOS         | MoltenVK | None    |
 
-[1] The goal is to have SteamOS specific features like support for those touchpads on the
+[^1]: The goal is to have SteamOS specific features like support for those touchpads on the
 SteamDeck or the controllers. Along with support for controller layouts, battery modes and more.
 
 ## Contributing
