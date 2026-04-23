@@ -20,12 +20,19 @@
 
 #include "../properties/property.h"
 
-
 namespace Pequod {
-class PObject {
- private:
-  std::unordered_map<std::type_index, std::shared_ptr<Property> > properties;
 
+/**
+ * @brief Object class which represents every entity in the game engine
+ *
+ * It is a generic class that can have properties dynamically added rather than
+ * defined at compile time. This is kind of stupid to do but the reason I
+ * designed it this way was so that later on if I ever need to switch to use an
+ * ECS or even think of memory optimizations, the user code would not have to
+ * change because of it. Basically prioritized compatibility over optimizations
+ * for now which is fine.
+ */
+class PObject {
  public:
   PObject();
   ~PObject();
@@ -36,7 +43,6 @@ class PObject {
   void AddChild(uint64_t child_id);
 
   std::vector<uint64_t> children = {};
-
 
   template <std::derived_from<Property> TProperty>
   std::shared_ptr<TProperty> Get() {
@@ -51,6 +57,14 @@ class PObject {
     properties[typeid(TProperty)] = ptr;
     return ptr;
   }
+
+ private:
+  /**
+   * Not very memory optimized and slow for scenes with a number of objects but
+   * the goal is to make it more streamlined later on. Like if an ECS exist the
+   * pointer would simply point to the index in that property array.
+   */
+  std::unordered_map<std::type_index, std::shared_ptr<Property> > properties;
 };
 }  // namespace Pequod
 

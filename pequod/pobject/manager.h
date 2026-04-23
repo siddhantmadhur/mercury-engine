@@ -14,12 +14,43 @@
 #include "pobject.h"
 
 namespace Pequod {
+
+/**
+ * @brief Manager to handle creating and deleting PObjects
+ * * Usual use-case is to have one per scene and is used for the renderer and
+ * application to understand what to draw. It's not quite an ECS but the idea
+ * was similar where it is just an easy way to access Objects and their
+ * properties
+ *
+ * You can also use it to compose new PObjects based off created templates
+ * Like creating a simple Box can be done with Box2D.
+ *
+ * It is abstracted because I intend to change the memory layout later on and
+ * this provides an easy way to do so without having user implementation change
+ */
 class PObjectManager {
  public:
   PObjectManager();
 
+  /**
+   * @brief Returns a list of primitives to draw
+   *
+   * Primitive are the basic building block that instructs the Application on
+   * what to render. This function goes through every object it is managing and
+   * creates a list of primitives for the renderer to draw. Any optimization
+   * like batching vertices can be done here as well.
+   *
+   */
   std::vector<Primitive> GetPrimitives();
 
+  /**
+   * @brief Create a new object in the manager
+   *
+   * @tparam PType The base class the object needs to be generated from (eg.
+   * Box2D or Capsule)
+   * @tparam Args List of arguments required for the base class
+   * @return A shared pointer pointing to the new object created
+   */
   template <std::derived_from<PObject> PType, class... Args>
     requires std::constructible_from<PType, Args...>
   std::shared_ptr<PObject> NewObject(Args &&...args) {
