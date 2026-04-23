@@ -5,6 +5,9 @@
 #include "application.h"
 
 #include <GLFW/glfw3.h>
+#include <imgui/imgui.h>
+#include <imgui/backends/imgui_impl_dx11.h>
+#include <imgui/backends/imgui_impl_glfw.h>
 
 #include <format>
 
@@ -62,6 +65,12 @@ bool Application::Initialize() {
 
   glfwSetKeyCallback(window_, HandleKeyCallback);
 
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+
+  ImGui_ImplGlfw_InitForOther(window_, true);
+
   return true;
 }
 
@@ -87,9 +96,12 @@ int Application::Run() {
 
     int ticks = int(time_elapsed_ / (1000.0 / ticks_per_sec));
 
-    glfwPollEvents();
-
     if (game_scene_) {
+      glfwPollEvents();
+      ImGui_ImplDX11_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+
       if (ticks > last_tick_) {
         last_tick_ = ticks;
         game_scene_->OnTick(time_since_last_tick_);

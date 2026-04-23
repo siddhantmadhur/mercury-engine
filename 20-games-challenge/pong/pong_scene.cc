@@ -6,6 +6,7 @@
 
 #include "GLFW/glfw3.h"
 #include "debugger/debugger.h"
+#include "imgui/imgui.h"
 #include "physics_engine/shapes/box.h"
 #include "pobject/nodes/box2d.h"
 #include "properties/transform.h"
@@ -31,20 +32,28 @@ void PongScene::OnStart() {
   physics_engine_->SetGravity(player_->id, 0.0f);
   physics_engine_->SetMotionType(player_->id, JPH::EMotionType::Dynamic);
 
-  physics_engine_->AddCollisionCallback<kCollisionPersisted>(
-      player_->id,
-      [](kEntityId self, kEntityId other) { PDebug::log("Player collided!"); });
+  auto screen = glm::vec2(scaled_width, scaled_height);
   {
-    auto temp = object_manager_->NewObject<Box2D>(
-        -offset + glm::vec2(0.0f, 20.0f), glm::vec2(20.0f), glm::vec4(1.0f));
-    physics_engine_->RegisterBody(temp, Physics::Box(glm::vec2(20.0f)),
+    auto dim = glm::vec2(screen.x, 20);
+    auto roof = object_manager_->NewObject<Box2D>(
+        glm::vec2(0, (screen.y / 2.0f) + 10), dim, glm::vec4(1.0f));
+    physics_engine_->RegisterBody(roof, Physics::Box(dim),
                                   JPH::EAllowedDOFs::All);
-    physics_engine_->SetGravity(temp->id, 0.0f);
-    physics_engine_->SetMotionType(temp->id, JPH::EMotionType::Dynamic);
+    physics_engine_->SetGravity(roof->id, 0.0f);
+    physics_engine_->SetMotionType(roof->id, JPH::EMotionType::Kinematic);
+  }
+  {
+    auto dim = glm::vec2(screen.x, 20);
+    auto roof = object_manager_->NewObject<Box2D>(
+        glm::vec2(0, -(screen.y / 2.0f) - 10), dim, glm::vec4(1.0f));
+    physics_engine_->RegisterBody(roof, Physics::Box(dim),
+                                  JPH::EAllowedDOFs::All);
+    physics_engine_->SetGravity(roof->id, 0.0f);
+    physics_engine_->SetMotionType(roof->id, JPH::EMotionType::Kinematic);
   }
 };
 
-void PongScene::OnFrame(double delta_t) {};
+void PongScene::OnFrame(double delta_t) { ImGui::ShowDemoWindow(); };
 
 #define SPEED 80
 

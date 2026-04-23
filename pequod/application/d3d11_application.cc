@@ -1,14 +1,16 @@
 //
 // Created by smadhur on 4/5/2026.
 //
-
 #include "d3d11_application.h"
 
-#include <GLFW/glfw3.h>
+#include <imgui/imgui.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3.h>
+
 #include <DirectXMath.h>
 #include <GLFW/glfw3native.h>
 #include <d3dcompiler.h>
+#include <imgui/backends/imgui_impl_dx11.h>
 
 #include <filesystem>
 #include <format>
@@ -16,6 +18,7 @@
 
 #include "debugger/debugger.h"
 #include "glm/ext/matrix_transform.hpp"
+#include "imgui/backends/imgui_impl_glfw.h"
 #include "os/filesystem.h"
 
 #pragma comment(lib, "d3d11.lib")
@@ -86,6 +89,8 @@ bool D3D11Application::Initialize() {
     PDebug::error("Could not create swapchain resource");
     return false;
   }
+
+  ImGui_ImplDX11_Init(device_.Get(), deviceContext_.Get());
 
   return true;
 }
@@ -224,7 +229,6 @@ void D3D11Application::Render() {
       deviceContext_->Unmap(camera_c_buffer_.Get(), 0);
     }
   }
-
   D3D11_VIEWPORT viewport = {};
   viewport.TopLeftX = 0;
   viewport.TopLeftY = 0;
@@ -303,6 +307,8 @@ void D3D11Application::Render() {
     }
   }
 
+  ImGui::Render();
+  ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
   swapchain_->Present(1, 0);
 }
 

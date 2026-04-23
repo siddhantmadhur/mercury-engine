@@ -55,16 +55,20 @@ endif ()
 
 # link imgui
 
-set(IMGUI_SRC "third_party/imgui")
+
+file(GLOB IMGUI_SOURCES
+        "third_party/imgui/backends/imgui_impl_dx11.cpp"
+        "third_party/imgui/backends/imgui_impl_glfw.cpp"
+        "third_party/imgui/backends/*.h"
+        "third_party/imgui/*.cpp"
+        "third_party/imgui/*.h"
+)
 add_library(imgui STATIC
-        ${IMGUI_SRC}/imgui.cpp
-        ${IMGUI_SRC}/imgui_widgets.cpp
-        ${IMGUI_SRC}/imgui_draw.cpp
-        ${IMGUI_SRC}/imgui_tables.cpp
-        ${IMGUI_SRC}/imgui_demo.cpp
+        ${IMGUI_SOURCES}
 )
 
-target_include_directories(imgui INTERFACE imgui)
+target_include_directories(imgui PUBLIC "third_party/imgui")
+target_link_libraries(imgui glfw)
 
 
 add_subdirectory(third_party/glm)
