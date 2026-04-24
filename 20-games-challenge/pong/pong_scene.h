@@ -22,6 +22,7 @@ class PongScene : public GameScene {
  private:
   std::shared_ptr<PObject> player_ = nullptr;
   std::shared_ptr<PObject> enemy_ = nullptr;
+  std::shared_ptr<PObject> ball_ = nullptr;
   std::map<kEntityId, std::function<void()>> on_collisions_ = {};
 };
 

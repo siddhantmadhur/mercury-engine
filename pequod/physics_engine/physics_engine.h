@@ -107,6 +107,8 @@ class ObjectVsBroadPhaseLayerFilterImpl
  */
 enum CollisionType { kCollisionEnter, kCollisionPersisted, kCollisionLeave };
 
+enum PhysicsProperty { kFriction, kRestitution, kGravity, kMotionType };
+
 /**
  * @brief Function type that runs whenever bodies collide
  */
@@ -196,9 +198,13 @@ class PhysicsEngine {
    */
   bool IsRegistered(kEntityId id);
 
-  void SetGravity(kEntityId id, float gravity);
-  void SetRestitution(kEntityId id, float restitution);
-  void SetMotionType(kEntityId id, JPH::EMotionType motion);
+  template <PhysicsProperty TProperty, typename Value>
+  void Set(kEntityId, Value);
+
+  template <PhysicsProperty TProperty, typename Value>
+  void Set(const std::shared_ptr<PObject>& obj, Value val) {
+    Set<TProperty>(obj->id, val);
+  }
 
  protected:
   std::map<kEntityId, CollisionCallbackLambda> on_collision_persisted_ = {};

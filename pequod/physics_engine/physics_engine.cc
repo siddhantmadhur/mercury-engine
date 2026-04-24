@@ -131,6 +131,7 @@ void PhysicsEngine::RegisterBody(std::shared_ptr<PObject> self,
       JPH::EMotionType::Kinematic, Layers::MOVING);
 
   creation_settings.mAllowedDOFs = allowed_dofs;
+  creation_settings.mLinearDamping = 0.0f;
   auto& body_interface = physics_system_.GetBodyInterface();
 
   auto body = body_interface.CreateBody(creation_settings);
@@ -186,14 +187,20 @@ void PhysicsEngine::Compute(int steps) {
     auto body_id = pair.first;
     auto entity_id = pair.second;
 
-    auto phys_position = body_interface.GetPosition(body_id);
     auto entity = registered_bodies_[entity_id];
 
     auto transform = entity->Get<Transform>();
     auto transformations = transform->GetTransformations();
     if (!std::binary_search(transformations.begin(), transformations.end(),
                             kTransformPosition)) {
+      auto phys_position = body_interface.GetPosition(body_id);
       transform->SetPosition(glm::vec3(
+          phys_position.GetX(), phys_position.GetY(), phys_position.GetZ()));
+    }
+    if (!std::binary_search(transformations.begin(), transformations.end(),
+                            kTransformLinearVelocity)) {
+      auto phys_position = body_interface.GetLinearVelocity(body_id);
+      transform->SetVelocity(glm::vec3(
           phys_position.GetX(), phys_position.GetY(), phys_position.GetZ()));
     }
     transform->ClearTransformations();
@@ -220,21 +227,32 @@ bool PhysicsEngine::IsRegistered(kEntityId id) {
     return false;
   }
 }
-void PhysicsEngine::SetGravity(kEntityId id, float gravity) {
-  auto jolt_body = entity_bodies_ref_[id];
-  auto& body_interface = physics_system_.GetBodyInterface();
-  body_interface.SetGravityFactor(jolt_body, gravity);
-}
-void PhysicsEngine::SetRestitution(kEntityId id, float restitution) {
+
+template <>
+void PhysicsEngine::Set<kRestitution>(kEntityId id, float restitution) {
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetRestitution(jolt_body, restitution);
 }
 
-void PhysicsEngine::SetMotionType(kEntityId id, JPH::EMotionType motion) {
+template <>
+void PhysicsEngine::Set<kMotionType>(kEntityId id, JPH::EMotionType motion) {
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetMotionType(jolt_body, motion, JPH::EActivation::Activate);
+}
+template <>
+void PhysicsEngine::Set<kFriction>(kEntityId id, float friction) {
+  auto jolt_body = entity_bodies_ref_[id];
+  auto& body_interface = physics_system_.GetBodyInterface();
+  body_interface.SetFriction(jolt_body, friction);
+}
+
+template <>
+void PhysicsEngine::Set<kGravity>(kEntityId id, float value) {
+  auto jolt_body = entity_bodies_ref_[id];
+  auto& body_interface = physics_system_.GetBodyInterface();
+  body_interface.SetGravityFactor(jolt_body, value);
 }
 
 template <>
