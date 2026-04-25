@@ -17,9 +17,12 @@ namespace Pequod {
 
 static InputManager input_manager;
 
-Application::Application(const std::string& window_title) {
+Application::Application(const std::string& window_title, float initial_width,
+                         float initial_height) {
   PDebug::info("Application context created...");
   title_ = window_title;
+  width_ = initial_width;
+  height_ = initial_height;
 }
 
 bool Application::Initialize() {
@@ -35,8 +38,6 @@ bool Application::Initialize() {
     PDebug::error("Could not create glfw video mode");
     return false;
   }
-  width_ = static_cast<int32_t>(videoMode->width * 0.6f);
-  height_ = static_cast<int32_t>(videoMode->height * 0.6f);
 
   if (game_scene_) {
     game_scene_->SetWidth(width_);

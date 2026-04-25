@@ -35,7 +35,8 @@ static InputManager input_manager_;
  */
 class Application {
  public:
-  Application(const std::string& window_title);
+  Application(const std::string& window_title, float initial_width = 1280,
+              float initial_height = 720);
   virtual ~Application();
   /**
    * Initializes and runs the program only ending once Quit() is ran or window

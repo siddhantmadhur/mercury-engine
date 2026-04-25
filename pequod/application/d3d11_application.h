@@ -23,7 +23,8 @@ class D3D11Application : public Application {
   using ComPtr = Microsoft::WRL::ComPtr<T>;
 
  public:
-  D3D11Application(const std::string& window_title);
+  D3D11Application(const std::string& window_title, float initial_width = 1280,
+                   float initial_height = 720);
 
  protected:
   bool OnLoad() override;      // Runs when the application is created

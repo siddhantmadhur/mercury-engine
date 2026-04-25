@@ -145,3 +145,8 @@ add_executable(example_breakout examples/breakout/main.cc
         examples/breakout/breakout_scene.cc
         examples/breakout/breakout_scene.h)
 target_link_libraries(example_breakout pequod)
+
+add_executable(example_space_invaders examples/space_invaders/main.cc
+        examples/space_invaders/space_invaders.cc
+        examples/space_invaders/space_invaders.h)
+target_link_libraries(example_space_invaders pequod)

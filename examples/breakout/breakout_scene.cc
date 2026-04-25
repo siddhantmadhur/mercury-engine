@@ -79,7 +79,6 @@ void BreakoutScene::OnStart() {
     auto direction = glm::vec3(glm::cos(glm::radians(degree)),
                                glm::sin(glm::radians(degree)), 0.0f);
     transform->SetVelocity(direction * BALL_SPEED);
-    physics_engine_->Set<kConstantVelocity>(*ball_, true);
     physics_engine_->AddCollisionCallback<kCollisionLeave>(
         ball_->id, [this](kEntityId self, kEntityId other) {
           {

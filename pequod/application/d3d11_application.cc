@@ -30,8 +30,9 @@
 using std::string;
 
 namespace Pequod {
-D3D11Application::D3D11Application(const std::string& window_title)
-    : Application(window_title) {}
+D3D11Application::D3D11Application(const std::string& window_title,
+                                   float initial_width, float initial_height)
+    : Application(window_title, initial_width, initial_height) {}
 
 bool D3D11Application::Initialize() {
   if (!Application::Initialize()) {
