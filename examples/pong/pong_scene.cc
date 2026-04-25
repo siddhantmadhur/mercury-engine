@@ -44,9 +44,9 @@ void PongScene::OnStart() {
     physics_engine_->RegisterBody(player_, Physics::Box(player_dim),
                                   JPH::EAllowedDOFs::TranslationY);
 
-    physics_engine_->Set<kGravity>(player_, 0.0f);
-    physics_engine_->Set<kMotionType>(player_, JPH::EMotionType::Kinematic);
-    physics_engine_->Set<kRestitution>(player_, 0.0f);
+    physics_engine_->Set<kGravity>(*player_, 0.0f);
+    physics_engine_->Set<kMotionType>(*player_, JPH::EMotionType::Kinematic);
+    physics_engine_->Set<kRestitution>(*player_, 0.0f);
   }
   {  // Create enemy
     enemy_ = object_manager_->NewObject<Box2D>(offset, glm::vec2(2.0f, 10.0f),
@@ -54,9 +54,9 @@ void PongScene::OnStart() {
     physics_engine_->RegisterBody(enemy_, Physics::Box(player_dim),
                                   JPH::EAllowedDOFs::TranslationY);
 
-    physics_engine_->Set<kGravity>(enemy_, 0.0f);
-    physics_engine_->Set<kMotionType>(enemy_, JPH::EMotionType::Kinematic);
-    physics_engine_->Set<kRestitution>(enemy_, 0.0f);
+    physics_engine_->Set<kGravity>(*enemy_, 0.0f);
+    physics_engine_->Set<kMotionType>(*enemy_, JPH::EMotionType::Kinematic);
+    physics_engine_->Set<kRestitution>(*enemy_, 0.0f);
   }
   {  // Create ball
     auto dim = glm::vec2(2.0f);
@@ -66,9 +66,9 @@ void PongScene::OnStart() {
         ball_, Physics::Box(dim),
         JPH::EAllowedDOFs::TranslationX | JPH::EAllowedDOFs::TranslationY);
 
-    physics_engine_->Set<kMotionType>(ball_, JPH::EMotionType::Dynamic);
-    physics_engine_->Set<kRestitution>(ball_, 1.0f);
-    physics_engine_->Set<kGravity>(ball_, 0.0f);
+    physics_engine_->Set<kMotionType>(*ball_, JPH::EMotionType::Dynamic);
+    physics_engine_->Set<kRestitution>(*ball_, 1.0f);
+    physics_engine_->Set<kGravity>(*ball_, 0.0f);
 
     // auto transform = ball_->Get<Transform>();
     // transform->SetVelocity(glm::vec3(-1.0f * 50, 0.0f, 0.0f));
@@ -80,8 +80,8 @@ void PongScene::OnStart() {
         glm::vec2(0, (screen.y / 2.0f) + 10), dim, glm::vec4(1.0f));
     physics_engine_->RegisterBody(roof, Physics::Box(dim),
                                   JPH::EAllowedDOFs::All);
-    physics_engine_->Set<kGravity>(roof->id, 0.0f);
-    physics_engine_->Set<kMotionType>(roof->id, JPH::EMotionType::Kinematic);
+    physics_engine_->Set<kGravity>(*roof, 0.0f);
+    physics_engine_->Set<kMotionType>(*roof, JPH::EMotionType::Kinematic);
   }
   {  // Create bottom floor
     auto dim = glm::vec2(screen.x, 20);
@@ -89,8 +89,8 @@ void PongScene::OnStart() {
         glm::vec2(0, -(screen.y / 2.0f) - 10), dim, glm::vec4(1.0f));
     physics_engine_->RegisterBody(roof, Physics::Box(dim),
                                   JPH::EAllowedDOFs::All);
-    physics_engine_->Set<kGravity>(roof->id, 0.0f);
-    physics_engine_->Set<kMotionType>(roof->id, JPH::EMotionType::Kinematic);
+    physics_engine_->Set<kGravity>(*roof, 0.0f);
+    physics_engine_->Set<kMotionType>(*roof, JPH::EMotionType::Kinematic);
   }
 
   {  // Create left wall
@@ -100,7 +100,7 @@ void PongScene::OnStart() {
         glm::vec4(1.0f));
     physics_engine_->RegisterBody(wall, Physics::Box(dim),
                                   JPH::EAllowedDOFs::All);
-    physics_engine_->Set<kMotionType>(wall->id, JPH::EMotionType::Kinematic);
+    physics_engine_->Set<kMotionType>(*wall, JPH::EMotionType::Kinematic);
     this->left_wall_ = wall->id;
   }
   {  // Create right wall
@@ -110,7 +110,7 @@ void PongScene::OnStart() {
         glm::vec4(1.0f));
     physics_engine_->RegisterBody(wall, Physics::Box(dim),
                                   JPH::EAllowedDOFs::All);
-    physics_engine_->Set<kMotionType>(wall->id, JPH::EMotionType::Kinematic);
+    physics_engine_->Set<kMotionType>(*wall, JPH::EMotionType::Kinematic);
     this->right_wall_ = wall->id;
     physics_engine_->AddCollisionCallback<kCollisionEnter>(
         wall->id, [this](kEntityId self, kEntityId other) {

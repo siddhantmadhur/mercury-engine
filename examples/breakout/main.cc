@@ -1,57 +1,13 @@
-#include <iostream>
+//
+// Created by smadhur on 4/25/2026.
+//
 
-#include "scene.hh"
-#include <engine/engine.hh>
-
-
-#define SOKOL_IMPL
-#define SOKOL_GLCORE
-#include <sokol/sokol_gfx.h>
-#include <sokol/sokol_app.h>
-#include <sokol/sokol_glue.h>
-#include <sokol/sokol_log.h>
-#include <sokol/sokol_time.h>
-
-#include <imgui/imgui.h>
-#include <sokol/util/sokol_imgui.h>
-
-
-Pequod::PequodEngine* engine = NULL;
-
-void sokol_init() {
-    engine->sokol_init();
-};
-void sokol_frame_cb() {
-    engine->sokol_frame_cb();
-};
-void sokol_cleanup() {
-    engine->sokol_cleanup();
-};
-void sokol_event(const sapp_event* event) {
-    engine->sokol_event(event);
-};
-
-sapp_desc sokol_main(int argc, char *argv[]) {
-
-
-    engine = new Pequod::PequodEngine();
-
-
-    BreakoutScene* game = new BreakoutScene();
-
-    engine->SetScene(game);
-
-    return (sapp_desc){
-        .init_cb = sokol_init,
-        .frame_cb = sokol_frame_cb,
-        .cleanup_cb = sokol_cleanup,
-        .event_cb = sokol_event,
-        .width = 1280,
-        .height = 720,
-        .window_title = "Breakout Demo - Pequod",
-        .logger = {
-            .func = slog_func,
-        },
-    };;
+#include "application/d3d11_application.h"
+#include "breakout_scene.h"
+int main() {
+  auto application = D3D11Application(
+      std::format("Breakout [Pequod {}]", PEQUOD_ENGINE_VERSION));
+  auto breakout_scene = std::make_unique<BreakoutScene>();
+  application.SetGameScene(std::move(breakout_scene));
+  return application.Run();
 }
-

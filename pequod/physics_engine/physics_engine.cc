@@ -244,27 +244,32 @@ bool PhysicsEngine::IsRegistered(kEntityId id) {
 }
 
 template <>
-void PhysicsEngine::Set<kRestitution>(kEntityId id, float restitution) {
+void PhysicsEngine::Set<kRestitution>(const PObject& obj, float restitution) {
+  auto id = obj.id;
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetRestitution(jolt_body, restitution);
 }
 
 template <>
-void PhysicsEngine::Set<kMotionType>(kEntityId id, JPH::EMotionType motion) {
+void PhysicsEngine::Set<kMotionType>(const PObject& obj,
+                                     JPH::EMotionType motion) {
+  auto id = obj.id;
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetMotionType(jolt_body, motion, JPH::EActivation::Activate);
 }
 template <>
-void PhysicsEngine::Set<kFriction>(kEntityId id, float friction) {
+void PhysicsEngine::Set<kFriction>(const PObject& obj, float friction) {
+  auto id = obj.id;
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetFriction(jolt_body, friction);
 }
 
 template <>
-void PhysicsEngine::Set<kGravity>(kEntityId id, float value) {
+void PhysicsEngine::Set<kGravity>(const PObject& obj, float value) {
+  auto id = obj.id;
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetGravityFactor(jolt_body, value);

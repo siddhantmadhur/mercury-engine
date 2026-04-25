@@ -139,3 +139,7 @@ add_executable(pong examples/pong/main.cc
 target_link_libraries(pong pequod)
 
 
+add_executable(example_breakout examples/breakout/main.cc
+        examples/breakout/breakout_scene.cc
+        examples/breakout/breakout_scene.h)
+target_link_libraries(example_breakout pequod)

@@ -203,13 +203,14 @@ class PhysicsEngine {
    */
   void SynchronizePObjects();
 
+  /**
+   * @brief Set a physics property for an object such as Linear Accel or
+   * Position
+   * @tparam TProperty The physics property to modify
+   * @tparam Value The value to set for the property
+   */
   template <PhysicsProperty TProperty, typename Value>
-  void Set(kEntityId, Value);
-
-  template <PhysicsProperty TProperty, typename Value>
-  void Set(const std::shared_ptr<PObject>& obj, Value val) {
-    Set<TProperty>(obj->id, val);
-  }
+  void Set(const PObject& obj, Value val);
 
  protected:
   std::map<kEntityId, CollisionCallbackLambda> on_collision_persisted_ = {};

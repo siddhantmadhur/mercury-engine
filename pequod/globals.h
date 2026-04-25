@@ -2,6 +2,10 @@
 // Created by smadhur on 4/10/2026.
 //
 
+#ifndef PEQUOD_ENGINE_VERSION
+#define PEQUOD_ENGINE_VERSION "dev"
+#endif
+
 #ifndef PEQUODENGINE_GLOBALS_H
 #define PEQUODENGINE_GLOBALS_H
 
