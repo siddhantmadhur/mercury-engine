@@ -198,6 +198,11 @@ class PhysicsEngine {
    */
   bool IsRegistered(kEntityId id);
 
+  /**
+   * @brief Synchronize the PObjects with manual transformations
+   */
+  void SynchronizePObjects();
+
   template <PhysicsProperty TProperty, typename Value>
   void Set(kEntityId, Value);
 

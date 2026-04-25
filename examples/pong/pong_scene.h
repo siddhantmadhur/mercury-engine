@@ -19,6 +19,14 @@ class PongScene : public GameScene {
 
   void DestroyBrick();
 
+ protected:
+  void StartNewRound();
+  int player_wins_ = 0;
+  int enemy_wins_ = 0;
+
+  kEntityId left_wall_ = -1;
+  kEntityId right_wall_ = -1;
+
  private:
   std::shared_ptr<PObject> player_ = nullptr;
   std::shared_ptr<PObject> enemy_ = nullptr;

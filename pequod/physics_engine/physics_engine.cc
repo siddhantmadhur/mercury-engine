@@ -11,6 +11,9 @@ auto PhysicsEngine::TriggerCollisionCallback<kCollisionPersisted>(
   if (on_collision_persisted_.contains(self)) {
     on_collision_persisted_[self](self, other);
   }
+  if (on_collision_persisted_.contains(other)) {
+    on_collision_persisted_[other](other, self);
+  }
 }
 
 template <>
@@ -19,6 +22,9 @@ void PhysicsEngine::TriggerCollisionCallback<kCollisionEnter>(kEntityId self,
   if (on_collision_enter_.contains(self)) {
     on_collision_enter_[self](self, other);
   }
+  if (on_collision_enter_.contains(other)) {
+    on_collision_enter_[other](other, self);
+  }
 }
 
 template <>
@@ -26,6 +32,9 @@ void PhysicsEngine::TriggerCollisionCallback<kCollisionLeave>(kEntityId self,
                                                               kEntityId other) {
   if (on_collision_leave_.contains(self)) {
     on_collision_leave_[self](self, other);
+  }
+  if (on_collision_leave_.contains(other)) {
+    on_collision_leave_[other](other, self);
   }
 }
 
@@ -144,44 +153,48 @@ void PhysicsEngine::RegisterBody(std::shared_ptr<PObject> self,
   body_interface.AddBody(body_id, JPH::EActivation::Activate);
 }
 
-void PhysicsEngine::Compute(int steps) {
+void PhysicsEngine::SynchronizePObjects() {
   auto& body_interface = physics_system_.GetBodyInterface();
+  for (const auto& pair : registered_bodies_) {
+    auto entity_id = pair.first;
+    auto entity = pair.second;
+    if (!entity) {
+      continue;
+    }
+    auto transform = entity->Get<Transform>();
+    if (transform) {
+      auto transformations = transform->GetTransformations();
+      auto jolt_id = entity_bodies_ref_[entity_id];
 
-  // If the scene defines a velocity/position it should overwrite what the
-  // physics has calculated
-  {
-    for (const auto& pair : registered_bodies_) {
-      auto entity_id = pair.first;
-      auto entity = pair.second;
-      if (!entity) {
-        continue;
-      }
-      auto transform = entity->Get<Transform>();
-      if (transform) {
-        auto transformations = transform->GetTransformations();
-        auto jolt_id = entity_bodies_ref_[entity_id];
-
-        for (auto transform_type : transformations) {
-          switch (transform_type) {
-            case kTransformLinearVelocity:
-              auto vel = transform->GetVelocity();
-              body_interface.SetLinearVelocity(jolt_id,
-                                               JPH::Vec3(vel.x, vel.y, vel.z));
-              break;
-
-            case kTransformPosition:
-              auto pos = transform->GetPosition();
-              body_interface.SetPosition(jolt_id,
-                                         JPH::Vec3(pos.x, pos.y, pos.z),
-                                         JPH::EActivation::Activate);
-              break;
-          }
+      for (auto transform_type : transformations) {
+        switch (transform_type) {
+          case kTransformLinearVelocity:
+            auto vel = transform->GetVelocity();
+            body_interface.SetLinearVelocity(jolt_id,
+                                             JPH::Vec3(vel.x, vel.y, vel.z));
+            break;
+          case kTransformPosition:
+            auto pos = transform->GetPosition();
+            body_interface.SetPosition(jolt_id, JPH::Vec3(pos.x, pos.y, pos.z),
+                                       JPH::EActivation::Activate);
+            break;
         }
       }
     }
   }
+}
+
+void PhysicsEngine::Compute(int steps) {
+  // If the scene defines a velocity/position it should overwrite what the
+  // physics has calculated
+  this->SynchronizePObjects();
   float cHz = 1.0f / 60.0f;
   physics_system_.Update(cHz, steps, temp_allocator_, job_system_thread_pool_);
+
+  // The reason this runs again is because sometimes if a collision changes the
+  // position it needs to overwrite jolt again
+  this->SynchronizePObjects();
+  auto& body_interface = physics_system_.GetBodyInterface();
 
   for (const auto& pair : jolt_bodies_ref_) {
     auto body_id = pair.first;
@@ -196,6 +209,8 @@ void PhysicsEngine::Compute(int steps) {
       auto phys_position = body_interface.GetPosition(body_id);
       transform->SetPosition(glm::vec3(
           phys_position.GetX(), phys_position.GetY(), phys_position.GetZ()));
+    } else {
+      PDebug::info("Transform set manually: {}", entity_id);
     }
     if (!std::binary_search(transformations.begin(), transformations.end(),
                             kTransformLinearVelocity)) {
