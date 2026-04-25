@@ -22,6 +22,7 @@ class CollisionBody : public Property {
   // reference to the body its handling
   CollisionBody();
   JPH::ShapeRefC GetShapeRef() const;
+  virtual void OverrideBodyCreation(JPH::BodyCreationSettings&) = 0;
 
  protected:
   JPH::ShapeRefC shape_ref_c_;

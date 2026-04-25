@@ -12,18 +12,22 @@ namespace Pequod {
 
 enum TransformationType {
   kTransformPosition = 0,
-  kTransformLinearVelocity = 1
+  kTransformLinearVelocity = 1,
+  kTransformLinearMagnitude = 2
 };
 
 class Transform : public Property {
  public:
   Transform();
+  Transform(glm::vec3 position);
   glm::vec3 GetPosition() const;
   void SetPosition(glm::vec3);
   glm::vec3 GetInterpolatedPosition() const;
 
   glm::vec3 GetVelocity() const;
   void SetVelocity(glm::vec3);
+
+  void SetVelocityMagnitude(float);
 
   void Move(glm::vec3);
 

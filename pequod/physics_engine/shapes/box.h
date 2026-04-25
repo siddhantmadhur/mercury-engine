@@ -15,6 +15,7 @@ class Box : public CollisionBody {
  public:
   Box(glm::vec2 dim);
   Box(glm::vec3 dim);
+  void OverrideBodyCreation(JPH::BodyCreationSettings&) override;
 };
 
 }  // namespace Physics

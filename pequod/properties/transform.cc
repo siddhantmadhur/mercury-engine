@@ -12,6 +12,7 @@ Transform::Transform() {
   this->interpolated_position_ = glm::vec3(0.0f);
   this->velocity_ = glm::vec3(0.0f);
 }
+Transform::Transform(glm::vec3 position) { SetPosition(position); }
 
 glm::vec3 Transform::GetPosition() const { return this->position_; }
 void Transform::SetPosition(glm::vec3 position) {
@@ -24,6 +25,9 @@ glm::vec3 Transform::GetVelocity() const { return this->velocity_; }
 void Transform::SetVelocity(glm::vec3 velocity) {
   this->velocity_ = velocity;
   transformations_.push_back(kTransformLinearVelocity);
+}
+void Transform::SetVelocityMagnitude(float) {
+  transformations_.push_back(kTransformLinearMagnitude);
 }
 
 void Transform::Move(glm::vec3 movement) { this->position_ += movement; }

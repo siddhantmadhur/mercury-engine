@@ -14,7 +14,7 @@
 #ifndef PEQUOD_PHYSICS_ENGINE_H_
 #define PEQUOD_PHYSICS_ENGINE_H_
 #include <Jolt/Jolt.h>
-
+#include "shapes/plane.h"
 #include <map>
 
 #include "Jolt/Core/Core.h"
@@ -27,6 +27,7 @@
 #include "globals.h"
 #include "pobject/manager.h"
 #include "properties/collision_body.h"
+#include "shapes/box.h"
 
 namespace Pequod {
 
@@ -107,7 +108,12 @@ class ObjectVsBroadPhaseLayerFilterImpl
  */
 enum CollisionType { kCollisionEnter, kCollisionPersisted, kCollisionLeave };
 
-enum PhysicsProperty { kFriction, kRestitution, kGravity, kMotionType };
+enum PhysicsProperty {
+  kFriction,
+  kRestitution,
+  kGravity,
+  kMotionType,
+};
 
 /**
  * @brief Function type that runs whenever bodies collide
@@ -154,8 +160,10 @@ class PhysicsEngine {
   /**
    * @brief Register a body to the physics engine before adding properties
    */
-  void RegisterBody(std::shared_ptr<PObject> self, CollisionBody collision_body,
-                    JPH::EAllowedDOFs allowed_dofs);
+  template <class T>
+  void RegisterBody(std::shared_ptr<PObject> self, T collision_body,
+                    JPH::EAllowedDOFs allowed_dofs)
+    requires std::derived_from<T, CollisionBody>;
 
   /**
    * @brief Unregister a body from the physics engine

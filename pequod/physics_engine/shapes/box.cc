@@ -20,4 +20,12 @@ Box::Box(glm::vec3 dim) {
       box_shape_settings.Create();
   this->shape_ref_c_ = box_shape_result.Get();
 }
+void Box::OverrideBodyCreation(JPH::BodyCreationSettings& creation_settings) {
+  // creation_settings.mMotionQuality = JPH::EMotionQuality::Discrete;
+  creation_settings.mLinearDamping = 0.0f;
+  creation_settings.mAngularDamping = 0.0f;
+  creation_settings.mFriction = 0.0f;
+  creation_settings.mAllowDynamicOrKinematic = true;
+  creation_settings.mAllowSleeping = false;
+}
 }  // namespace Pequod::Physics

@@ -103,10 +103,11 @@ int Application::Run() {
       ImGui::NewFrame();
 
       if (ticks > last_tick_) {
+        game_scene_->OnTick(time_since_last_tick_);
+
         game_scene_->SimulatePhysics();  // Only works as long as tps is 60
 
         last_tick_ = ticks;
-        game_scene_->OnTick(time_since_last_tick_);
         time_since_last_tick_ = 0.0f;
       }
       game_scene_->OnFrame(delta_time_);

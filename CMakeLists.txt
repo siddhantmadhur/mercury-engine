@@ -35,6 +35,8 @@ add_library(pequod
         pequod/properties/transform.h
         pequod/physics_engine/shapes/box.cc
         pequod/physics_engine/shapes/box.h
+        pequod/physics_engine/shapes/plane.cc
+        pequod/physics_engine/shapes/plane.h
         pequod/application/application.h
         pequod/application/application.cc
         pequod/application/d3d11_application.cc

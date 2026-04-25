@@ -17,6 +17,7 @@ class BreakoutScene : public GameScene {
 
  protected:
   kEntityId bricks_[5][10] = {};
-  kEntityId player_ = -1;
+  std::shared_ptr<PObject> player_ = nullptr;
+  std::shared_ptr<PObject> ball_ = nullptr;
 };
 #endif  // PEQUODENGINE_BREAKOUT_SCENE_H
