@@ -7,6 +7,7 @@
 #include "debugger/debugger.h"
 #include "nodes/box2d.h"
 #include "properties/mesh.h"
+#include "properties/texture2d.h"
 #include "properties/transform.h"
 
 // [CLAUDE] TODO: RUN_ON_ALL_NODES macro is defined but never called — remove
@@ -30,6 +31,12 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
         primitive.world_position_ = world_position;
       } else {
         primitive.world_position_ = glm::vec3(1.0f);
+      }
+
+      if (auto tex = object->Get<Texture2D>()) {
+        primitive.texture_data_   = tex->GetData();
+        primitive.texture_width_  = tex->GetWidth();
+        primitive.texture_height_ = tex->GetHeight();
       }
 
       primitives.push_back(primitive);

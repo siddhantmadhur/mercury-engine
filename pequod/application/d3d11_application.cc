@@ -143,6 +143,9 @@ bool D3D11Application::OnLoad() {
       {"COLOR", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
        offsetof(Vertex, color),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
+      {"TEXCOORD", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32_FLOAT, 0,
+       offsetof(Vertex, uv),
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
   };
 
   if (FAILED(device_->CreateInputLayout(
@@ -191,6 +194,24 @@ bool D3D11Application::OnLoad() {
   cbDesc.ByteWidth = sizeof(VsModelBuffer);
   if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &vs_model_buffer_))) {
     PDebug::error("D3D11: Failed to create model cbuffer");
+    return false;
+  }
+
+  fs::path textured_ps_path = shader_path / "textured.ps.hlsl";
+  textured_pixel_shader_ = CreatePixelShader(textured_ps_path);
+  if (textured_pixel_shader_ == nullptr) {
+    PDebug::error("D3D11: Failed to create textured pixel shader");
+    return false;
+  }
+
+  D3D11_SAMPLER_DESC sampler_desc = {};
+  sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+  sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+  sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+  sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+  sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
+  if (FAILED(device_->CreateSamplerState(&sampler_desc, &texture_sampler_))) {
+    PDebug::error("D3D11: Failed to create texture sampler state");
     return false;
   }
 
@@ -251,7 +272,6 @@ void D3D11Application::Render() {
   deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
 
   deviceContext_->RSSetViewports(1, &viewport);
-  deviceContext_->PSSetShader(pixelShader_.Get(), nullptr, 0);
   deviceContext_->OMSetRenderTargets(1, renderTarget_.GetAddressOf(), nullptr);
 
   ID3D11Buffer* constant_buffers[1] = {camera_c_buffer_.Get()};
@@ -304,6 +324,18 @@ void D3D11Application::Render() {
                                        DXGI_FORMAT_R32_UINT, 0);
       ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
       deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+      if (primitive.texture_data_) {
+        auto* srv = GetOrCreateSRV(primitive.texture_data_,
+                                   primitive.texture_width_,
+                                   primitive.texture_height_);
+        deviceContext_->PSSetShader(textured_pixel_shader_.Get(), nullptr, 0);
+        deviceContext_->PSSetShaderResources(0, 1, &srv);
+        deviceContext_->PSSetSamplers(0, 1, texture_sampler_.GetAddressOf());
+      } else {
+        deviceContext_->PSSetShader(pixelShader_.Get(), nullptr, 0);
+        ID3D11ShaderResourceView* null_srv = nullptr;
+        deviceContext_->PSSetShaderResources(0, 1, &null_srv);
+      }
       deviceContext_->DrawIndexed(primitive.indices_.size(), 0, 0);
     }
   }
@@ -390,6 +422,49 @@ D3D11Application::ComPtr<ID3D11PixelShader> D3D11Application::CreatePixelShader(
   }
 
   return pixelShader;
+}
+
+ID3D11ShaderResourceView* D3D11Application::GetOrCreateSRV(
+    const unsigned char* data, int width, int height) {
+  auto it = texture_cache_.find(data);
+  if (it != texture_cache_.end()) {
+    return it->second.Get();
+  }
+
+  D3D11_TEXTURE2D_DESC tex_desc = {};
+  tex_desc.Width = static_cast<UINT>(width);
+  tex_desc.Height = static_cast<UINT>(height);
+  tex_desc.MipLevels = 1;
+  tex_desc.ArraySize = 1;
+  tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  tex_desc.SampleDesc.Count = 1;
+  tex_desc.Usage = D3D11_USAGE_IMMUTABLE;
+  tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+  D3D11_SUBRESOURCE_DATA tex_data = {};
+  tex_data.pSysMem = data;
+  tex_data.SysMemPitch = static_cast<UINT>(width * 4);
+
+  ComPtr<ID3D11Texture2D> texture;
+  if (FAILED(device_->CreateTexture2D(&tex_desc, &tex_data, &texture))) {
+    PDebug::error("D3D11: Failed to create texture from Texture2D property");
+    return nullptr;
+  }
+
+  D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+  srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+  srv_desc.Texture2D.MipLevels = 1;
+  srv_desc.Texture2D.MostDetailedMip = 0;
+
+  ComPtr<ID3D11ShaderResourceView> srv;
+  if (FAILED(device_->CreateShaderResourceView(texture.Get(), &srv_desc, &srv))) {
+    PDebug::error("D3D11: Failed to create SRV for texture");
+    return nullptr;
+  }
+
+  texture_cache_[data] = std::move(srv);
+  return texture_cache_[data].Get();
 }
 
 }  // namespace Pequod

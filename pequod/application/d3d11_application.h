@@ -10,6 +10,8 @@
 #include <dxgi1_3.h>
 #include <wrl.h>
 
+#include <unordered_map>
+
 #include "application.h"
 
 namespace Pequod {
@@ -61,7 +63,15 @@ class D3D11Application : public Application {
   ComPtr<ID3D11InputLayout> vertexLayout_ = nullptr;
   ComPtr<ID3D11VertexShader> vertexShader_ = nullptr;
   ComPtr<ID3D11PixelShader> pixelShader_ = nullptr;
+  ComPtr<ID3D11PixelShader> textured_pixel_shader_ = nullptr;
   ComPtr<ID3D11BlendState> blendState_ = nullptr;
+  ComPtr<ID3D11SamplerState> texture_sampler_ = nullptr;
+
+  std::unordered_map<const unsigned char*,
+                     ComPtr<ID3D11ShaderResourceView>> texture_cache_;
+
+  ID3D11ShaderResourceView* GetOrCreateSRV(const unsigned char* data,
+                                           int width, int height);
 
   std::vector<Primitive> primitives_ = {};
 };

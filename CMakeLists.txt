@@ -44,6 +44,8 @@ add_library(pequod
         pequod/scene/scene.cc
         pequod/input/input_manager.cc
         pequod/input/input_manager.h
+        pequod/properties/texture2d.cc
+        pequod/properties/texture2d.h
 )
 
 
@@ -104,8 +106,9 @@ add_subdirectory("third_party/glfw")
 # Live++ :
 include_directories("sdk/LivePP/API/x64/")
 
-target_compile_definitions(pequod PRIVATE
+target_compile_definitions(pequod PUBLIC
         PEQUOD_SHADER_PATH="${CMAKE_SOURCE_DIR}/pequod/shaders"
+        PEQUOD_ASSET_PATH="${CMAKE_SOURCE_DIR}/examples/assets"
         PEQUOD_GRAPHICS_D3D11=1
 )
 

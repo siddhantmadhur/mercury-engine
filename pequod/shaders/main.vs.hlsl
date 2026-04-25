@@ -16,12 +16,14 @@ struct VSInput
 {
     float3 position : POSITION;
     float3 color : COLOR0;
+    float2 uv : TEXCOORD0;
 };
 
 struct VSOutput
 {
     float4 position : SV_Position;
     float4 color : COLOR0;
+    float2 uv : TEXCOORD0;
 };
 
 VSOutput Main(VSInput input)
@@ -32,5 +34,6 @@ VSOutput Main(VSInput input)
     float4 world_pos = mul(model, float4(scaled_position, 1.0));
     output.position = mul(mWorldViewProj, world_pos);
     output.color = float4(input.color, opacity);
+    output.uv = input.uv;
     return output;
 }

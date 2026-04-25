@@ -20,12 +20,14 @@ using entity_id = uint16_t;
 using kEntityId = uint16_t;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
+using PQ_FLOAT2 = DirectX::XMFLOAT2;
 using PQ_FLOAT3 = DirectX::XMFLOAT3;
 using PQ_MATRIX = DirectX::XMFLOAT4X4;
 
 struct Vertex {
   PQ_FLOAT3 position;
   PQ_FLOAT3 color;
+  PQ_FLOAT2 uv;
 };
 
 /**
@@ -40,6 +42,9 @@ struct Primitive {
   std::vector<UINT> indices_;
   glm::vec3 scale_;
   glm::vec3 world_position_;
+  const unsigned char* texture_data_ = nullptr;
+  int texture_width_ = 0;
+  int texture_height_ = 0;
 };
 
 /**

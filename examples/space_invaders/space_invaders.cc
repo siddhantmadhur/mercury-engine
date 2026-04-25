@@ -5,8 +5,12 @@
 #include "space_invaders.h"
 
 #include "GLFW/glfw3.h"
+#include "os/filesystem.h"
 #include "pobject/nodes/box2d.h"
+#include "properties/texture2d.h"
 #include "properties/transform.h"
+
+#include <filesystem>
 
 constexpr float ZOOM = 2.0f;
 constexpr float PLAYER_SPEED = 20.0f;
@@ -23,6 +27,8 @@ void SpaceInvaders::OnStart() {
   {
     player_ = object_manager_->NewObject<Box2D>(glm::vec2(0, -offset.y),
                                                 glm::vec2(12.0f));
+    auto texture_path = std::filesystem::path(PEQUOD_ASSET_PATH) / "wall.jpg";
+    player_->Add<Texture2D>(texture_path.string());
     physics_engine_->RegisterBody(player_, Physics::Box(glm::vec2(12.0f)),
                                   JPH::EAllowedDOFs::TranslationX);
     physics_engine_->Set<kGravity>(*player_, 0.0f);
