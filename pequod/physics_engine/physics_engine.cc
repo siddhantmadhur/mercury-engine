@@ -197,17 +197,34 @@ void PhysicsEngine::Compute(int steps) {
   this->SynchronizePObjects();
   float cHz = 1.0f / 60.0f;
   physics_system_.Update(cHz, steps, temp_allocator_, job_system_thread_pool_);
+  
+  auto& body_interface = physics_system_.GetBodyInterface();
+
+  // Handle deletion queue here
+  while (!disable_queue_.empty()) {
+    kEntityId id = disable_queue_.back();
+
+    auto body_id = entity_bodies_ref_[id];
+
+    body_interface.RemoveBody(body_id);
+    jolt_bodies_ref_.erase(body_id);
+    entity_bodies_ref_.erase(id);
+    registered_bodies_[id] = nullptr;
+    disable_queue_.pop_back();
+  }
 
   // The reason this runs again is because sometimes if a collision changes the
   // position it needs to overwrite jolt again
   this->SynchronizePObjects();
-  auto& body_interface = physics_system_.GetBodyInterface();
 
   for (const auto& pair : jolt_bodies_ref_) {
     auto body_id = pair.first;
     auto entity_id = pair.second;
 
     auto entity = registered_bodies_[entity_id];
+    if (entity == nullptr) {
+      continue;
+    }
 
     auto transform = entity->Get<Transform>();
     auto transformations = transform->GetTransformations();
@@ -229,9 +246,24 @@ void PhysicsEngine::Compute(int steps) {
 
 void PhysicsEngine::DisableBody(kEntityId id) {
   auto body_id = entity_bodies_ref_[id];
+  PDebug::log("Disabling body: {}", id);
+  if (registered_bodies_[id] == nullptr) {
+    return; 
+  }
+
+  if (std::binary_search(disable_queue_.begin(), disable_queue_.end(), id)) {
+    return; 
+  }
+
+  disable_queue_.push_back(id);
+  /*
+  auto& body_interface = physics_system_.GetBodyInterface();
+  body_interface.RemoveBody(body_id);
+  
   jolt_bodies_ref_.erase(body_id);
   entity_bodies_ref_.erase(id);
   registered_bodies_[id] = nullptr;
+  */
 }
 
 kEntityId PhysicsEngine::Get(JPH::BodyID jolt_id) {

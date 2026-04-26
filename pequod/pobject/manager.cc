@@ -21,6 +21,9 @@ PObjectManager::PObjectManager() = default;
 std::vector<Primitive> PObjectManager::GetPrimitives() {
   std::vector<Primitive> primitives;
   for (const auto& object : objects) {
+    if (object == nullptr) {
+      continue;
+    }
     if (auto mesh = object->Get<Mesh>()) {
       Primitive primitive = {};
       primitive.indices_ = mesh->GetIndices();
@@ -34,8 +37,8 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
       }
 
       if (auto tex = object->Get<Texture2D>()) {
-        primitive.texture_data_   = tex->GetData();
-        primitive.texture_width_  = tex->GetWidth();
+        primitive.texture_data_ = tex->GetData();
+        primitive.texture_width_ = tex->GetWidth();
         primitive.texture_height_ = tex->GetHeight();
       }
 
@@ -45,9 +48,5 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
   return primitives;
 }
 
-// [CLAUDE] TODO: DeleteObject is an empty stub — objects added via NewObject
-// are never freed (memory leak)
-void PObjectManager::DeleteObject(std::shared_ptr<PObject> object) {
-  objects[object->id] = nullptr;
-}
+void PObjectManager::DeleteObject(kEntityId id) { objects[id] = nullptr; }
 }  // namespace Pequod

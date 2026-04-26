@@ -10,8 +10,8 @@ using namespace Pequod;
 
 int main(void) {
   auto game_win = std::make_unique<D3D11Application>(
-      std::format("Space Invaders [Pequod {}]", PEQUOD_ENGINE_VERSION), 720,
-      1080);
+      std::format("Space Invaders [Pequod {}]", PEQUOD_ENGINE_VERSION),
+      224 * ZOOM, 256 * ZOOM);
 
   auto space_invaders = std::make_unique<SpaceInvaders>();
 

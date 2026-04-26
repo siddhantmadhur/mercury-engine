@@ -18,11 +18,15 @@ class InputManager {
   InputManager();
   bool IsPressed(Key k);
   bool IsJustPressed(Key k);
+  void SetKeyRepeat(Key k);
   void SetKeyDown(Key k);
   void SetKeyUp(Key k);
+  void ResetFreshPresses();
 
  private:
   std::map<int, bool> key_status_ = {};
+  std::map<int, bool> repeated_keys_ = {};
+  std::map<int, bool> fresh_presses_ = {};
 };
 
 }  // namespace Pequod

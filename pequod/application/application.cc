@@ -108,6 +108,8 @@ int Application::Run() {
 
         game_scene_->SimulatePhysics();  // Only works as long as tps is 60
 
+        input_manager.ResetFreshPresses();
+
         last_tick_ = ticks;
         time_since_last_tick_ = 0.0f;
       }
@@ -141,6 +143,8 @@ void Application::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
     input_manager.SetKeyDown(key);
   } else if (action == GLFW_RELEASE) {
     input_manager.SetKeyUp(key);
+  } else if (action == GLFW_REPEAT) {
+    input_manager.SetKeyRepeat(key);
   }
 }
 void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }

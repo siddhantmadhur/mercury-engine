@@ -16,7 +16,7 @@
 #include <Jolt/Jolt.h>
 #include "shapes/plane.h"
 #include <map>
-
+#include <stack>
 #include "Jolt/Core/Core.h"
 #include "Jolt/Core/JobSystem.h"
 #include "Jolt/Core/JobSystemThreadPool.h"
@@ -220,6 +220,7 @@ class PhysicsEngine {
   template <PhysicsProperty TProperty, typename Value>
   void Set(const PObject& obj, Value val);
 
+
  protected:
   std::map<kEntityId, CollisionCallbackLambda> on_collision_persisted_ = {};
   std::map<kEntityId, CollisionCallbackLambda> on_collision_enter_ = {};
@@ -236,6 +237,8 @@ class PhysicsEngine {
   BPLayerInterfaceImpl broad_phase_layer_interface_;
   ObjectVsBroadPhaseLayerFilterImpl object_vs_broad_phase_layer_filter_impl_;
   ObjectLayerPairFilterImpl object_layer_pair_filter_impl_;
+
+  std::vector<kEntityId> disable_queue_;
 };
 
 }  // namespace Pequod

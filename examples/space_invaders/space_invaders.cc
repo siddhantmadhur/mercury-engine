@@ -12,7 +12,7 @@
 
 #include <filesystem>
 
-constexpr float ZOOM = 2.0f;
+constexpr float PELLET_SPEED = 140.0f;
 constexpr float PLAYER_SPEED = 20.0f;
 #define scaled_width (GetWidth() / (ZOOM))
 #define scaled_height (GetHeight() / (ZOOM))
@@ -23,9 +23,9 @@ void SpaceInvaders::OnStart() {
     player_camera_->configure2D(GetWidth(), GetHeight(), ZOOM);
   }
   glm::vec2 offset =
-      (glm::vec2(scaled_width, scaled_height) / 2.0f) - glm::vec2(32);
+      (glm::vec2(scaled_width, scaled_height) / 2.0f) - glm::vec2(24);
   {
-    constexpr float player_size = 32.0f;
+    constexpr float player_size = 16.0f;
     player_ = object_manager_->NewObject<Box2D>(glm::vec2(0, -offset.y),
                                                 glm::vec2(player_size));
     auto texture_path =
@@ -50,6 +50,17 @@ void SpaceInvaders::OnStart() {
     physics_engine_->RegisterBody(wall, Physics::Plane(glm::vec3(-1, 0, 0)),
                                   JPH::EAllowedDOFs::All);
   }
+  {
+    auto roof = object_manager_->NewObject<PObject>();
+    roof->Add<Transform>(glm::vec3(0.0f, scaled_height / 2.0f, 0.0f));
+    physics_engine_->RegisterBody(roof, Physics::Plane(glm::vec3(0, -1, 0)),
+                                  JPH::EAllowedDOFs::All);
+    physics_engine_->AddCollisionCallback<kCollisionEnter>(
+        roof->id, [this](kEntityId self, kEntityId other) {
+          physics_engine_->DisableBody(other);
+          object_manager_->DeleteObject(other);
+        });
+  }
 }
 void SpaceInvaders::OnDestroy() {}
 void SpaceInvaders::OnFrame(double delta_t) {
@@ -71,4 +82,24 @@ void SpaceInvaders::OnTick(double delta_t) {
   auto transform = player_->Get<Transform>();
   transform->SetVelocity(
       glm::vec3(direction * PLAYER_SPEED * delta_t, 0.0f, 0.0f));
+
+  if (input_manager_->IsJustPressed(GLFW_KEY_SPACE)) {
+    ShootPellet();
+  }
+}
+void SpaceInvaders::ShootPellet() {
+  auto transform = player_->Get<Transform>();
+  auto pos = transform->GetPosition();
+  pos.y += 12;
+
+  auto pellet_size = glm::vec2(1, 6);
+  auto pellet = object_manager_->NewObject<Box2D>(pos, pellet_size);
+  auto pellet_transform = pellet->Get<Transform>();
+  physics_engine_->RegisterBody(pellet, Physics::Box(pellet_size),
+                                JPH::EAllowedDOFs::TranslationY);
+  physics_engine_->Set<kFriction>(*pellet, 0.0f);
+  physics_engine_->Set<kGravity>(*pellet, 0.0f);
+  physics_engine_->Set<kRestitution>(*pellet, 0.0f);
+  physics_engine_->Set<kMotionType>(*pellet, JPH::EMotionType::Dynamic);
+  pellet_transform->SetVelocity(glm::vec3(0, PELLET_SPEED, 0));
 }

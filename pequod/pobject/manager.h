@@ -61,7 +61,7 @@ class PObjectManager {
     return object;
   }
 
-  void DeleteObject(std::shared_ptr<PObject>);
+  void DeleteObject(kEntityId id);
 
   std::shared_ptr<PObject> GetObjectById(entity_id id) {
     if (id < objects.size()) return objects[id];

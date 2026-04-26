@@ -6,6 +6,8 @@
 #define PEQUODENGINE_SPACE_INVADERS_H
 #include "scene/scene.h"
 
+constexpr int ZOOM = 4;
+
 using namespace Pequod;
 
 class SpaceInvaders : public GameScene {
@@ -14,6 +16,8 @@ class SpaceInvaders : public GameScene {
   void OnDestroy() override;
   void OnFrame(double delta_t) override;
   void OnTick(double delta_t) override;
+
+  void ShootPellet();
 
  protected:
   std::shared_ptr<PObject> player_ = nullptr;
