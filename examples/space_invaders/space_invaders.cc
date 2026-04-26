@@ -61,6 +61,35 @@ void SpaceInvaders::OnStart() {
           object_manager_->DeleteObject(other);
         });
   }
+
+  {  // Enemy code here
+    auto pos = offset;
+    auto size = glm::vec2(16.0f);
+    for (int i = 0; i < 5; i++) {
+      pos.x = offset.x;
+      for (int j = 0; j < 8; j++) {
+        auto enemy = object_manager_->NewObject<Box2D>(pos, size);
+        auto texture_path = std::filesystem::path(PEQUOD_ASSET_PATH) /
+                            "space_invaders/enemy1.png";
+        enemy->Add<Texture2D>(texture_path.string());
+        physics_engine_->RegisterBody(enemy,
+                                      Physics::Box(size - glm::vec2(2.0f)),
+                                      JPH::EAllowedDOFs::Plane2D);
+        physics_engine_->Set<kMotionType>(*enemy, JPH::EMotionType::Kinematic);
+        physics_engine_->AddCollisionCallback<kCollisionEnter>(
+            enemy->id, [this](kEntityId self, kEntityId other) {
+              physics_engine_->DisableBody(other);
+              physics_engine_->DisableBody(self);
+
+              object_manager_->DeleteObject(other);
+              object_manager_->DeleteObject(self);
+            });
+
+        pos.x -= size.x + 4;
+      }
+      pos.y -= size.y + 4;
+    }
+  }
 }
 void SpaceInvaders::OnDestroy() {}
 void SpaceInvaders::OnFrame(double delta_t) {

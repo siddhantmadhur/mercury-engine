@@ -168,6 +168,9 @@ class PhysicsEngine {
   /**
    * @brief Unregister a body from the physics engine
    * @param id Entity ID
+   *
+   * Adds the id to a deletion queue. It's safe to call inside a callback
+   * function because it does not modify any data between ticks.
    */
   void DisableBody(kEntityId id);
 
@@ -219,7 +222,6 @@ class PhysicsEngine {
    */
   template <PhysicsProperty TProperty, typename Value>
   void Set(const PObject& obj, Value val);
-
 
  protected:
   std::map<kEntityId, CollisionCallbackLambda> on_collision_persisted_ = {};
