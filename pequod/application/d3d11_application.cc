@@ -205,7 +205,7 @@ bool D3D11Application::OnLoad() {
   }
 
   D3D11_SAMPLER_DESC sampler_desc = {};
-  sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+  sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
   sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
   sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
   sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -325,9 +325,9 @@ void D3D11Application::Render() {
       ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
       deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
       if (primitive.texture_data_) {
-        auto* srv = GetOrCreateSRV(primitive.texture_data_,
-                                   primitive.texture_width_,
-                                   primitive.texture_height_);
+        auto* srv =
+            GetOrCreateSRV(primitive.texture_data_, primitive.texture_width_,
+                           primitive.texture_height_);
         deviceContext_->PSSetShader(textured_pixel_shader_.Get(), nullptr, 0);
         deviceContext_->PSSetShaderResources(0, 1, &srv);
         deviceContext_->PSSetSamplers(0, 1, texture_sampler_.GetAddressOf());
@@ -458,7 +458,8 @@ ID3D11ShaderResourceView* D3D11Application::GetOrCreateSRV(
   srv_desc.Texture2D.MostDetailedMip = 0;
 
   ComPtr<ID3D11ShaderResourceView> srv;
-  if (FAILED(device_->CreateShaderResourceView(texture.Get(), &srv_desc, &srv))) {
+  if (FAILED(
+          device_->CreateShaderResourceView(texture.Get(), &srv_desc, &srv))) {
     PDebug::error("D3D11: Failed to create SRV for texture");
     return nullptr;
   }

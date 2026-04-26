@@ -25,11 +25,13 @@ void SpaceInvaders::OnStart() {
   glm::vec2 offset =
       (glm::vec2(scaled_width, scaled_height) / 2.0f) - glm::vec2(32);
   {
+    constexpr float player_size = 32.0f;
     player_ = object_manager_->NewObject<Box2D>(glm::vec2(0, -offset.y),
-                                                glm::vec2(12.0f));
-    auto texture_path = std::filesystem::path(PEQUOD_ASSET_PATH) / "wall.jpg";
+                                                glm::vec2(player_size));
+    auto texture_path =
+        std::filesystem::path(PEQUOD_ASSET_PATH) / "space_invaders/player.png";
     player_->Add<Texture2D>(texture_path.string());
-    physics_engine_->RegisterBody(player_, Physics::Box(glm::vec2(12.0f)),
+    physics_engine_->RegisterBody(player_, Physics::Box(glm::vec2(player_size)),
                                   JPH::EAllowedDOFs::TranslationX);
     physics_engine_->Set<kGravity>(*player_, 0.0f);
     physics_engine_->Set<kFriction>(*player_, 0.0f);

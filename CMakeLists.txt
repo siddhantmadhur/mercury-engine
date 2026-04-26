@@ -24,7 +24,6 @@ add_library(pequod
         pequod/pobject/manager.h
         pequod/pobject/pobject.cc
         pequod/properties/property.cc
-        pequod/assets/images.cc
         pequod/debugger/debugger.h
         pequod/gameobjects/camera.cc
         pequod/properties/mesh.cc
