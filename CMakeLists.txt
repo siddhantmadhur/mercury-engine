@@ -106,8 +106,8 @@ add_subdirectory("third_party/glfw")
 include_directories("sdk/LivePP/API/x64/")
 
 target_compile_definitions(pequod PUBLIC
-        PEQUOD_SHADER_PATH="${CMAKE_SOURCE_DIR}/pequod/shaders"
-        PEQUOD_ASSET_PATH="${CMAKE_SOURCE_DIR}/examples/assets"
+        PEQUOD_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/pequod/shaders"
+        PEQUOD_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
         PEQUOD_GRAPHICS_D3D11=1
 )
 
