@@ -175,16 +175,18 @@ void PhysicsEngine::SynchronizePObjects() {
 
       for (auto transform_type : transformations) {
         switch (transform_type) {
-          case kTransformLinearVelocity:
+          case kTransformLinearVelocity: {
             auto vel = transform->GetVelocity();
             body_interface.SetLinearVelocity(jolt_id,
                                              JPH::Vec3(vel.x, vel.y, vel.z));
             break;
-          case kTransformPosition:
+          }
+          case kTransformPosition: {
             auto pos = transform->GetPosition();
             body_interface.SetPosition(jolt_id, JPH::Vec3(pos.x, pos.y, pos.z),
                                        JPH::EActivation::Activate);
             break;
+          }
         }
       }
     }

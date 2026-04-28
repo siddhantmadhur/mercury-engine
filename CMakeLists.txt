@@ -52,7 +52,7 @@ include_directories("pequod")
 include_directories("editor")
 #X11, Xi, Xcursor, GL, dl, pthread, m(?)
 
-if (!WIN32)
+if (NOT WIN32)
     message(WARNING "Pequod does not support this platform")
 endif ()
 
@@ -112,6 +112,17 @@ target_compile_definitions(pequod PUBLIC
 )
 
 target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
+
+# MinGW (and any non-MSVC compiler) ignores `#pragma comment(lib, ...)`,
+# so the D3D11 system libs have to be linked explicitly.
+if (WIN32 AND NOT MSVC)
+    target_link_libraries(pequod d3d11 dxgi d3dcompiler dxguid winmm)
+    # The full DirectXMath headers (with `DirectXMath.h` casing the source
+    # uses) are shipped as a separate package on mingw — the `directxmath.h`
+    # in mingw-w64-headers is only a partial stub.
+    find_package(directxmath CONFIG REQUIRED)
+    target_link_libraries(pequod Microsoft::DirectXMath)
+endif ()
 
 
 file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
