@@ -11,6 +11,7 @@ GameScene::GameScene() {
   this->physics_engine_ = std::make_unique<PhysicsEngine>();
 
   physics_engine_->Initialize();
+  this->player_camera_ = std::make_unique<Camera2D>(width_, height_);
 }
 
 bool GameScene::GetCameraProj(glm::mat4x4& proj) {
@@ -18,7 +19,7 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
     return false;
   }
 
-  proj = player_camera_->getProjection() * player_camera_->getView();
+  proj = player_camera_->GetProjection() * player_camera_->GetView();
 
   return true;
 }

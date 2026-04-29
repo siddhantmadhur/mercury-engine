@@ -46,7 +46,6 @@ add_library(pequod
         pequod/pobject/pobject.cc
         pequod/properties/property.cc
         pequod/debugger/debugger.h
-        pequod/gameobjects/camera.cc
         pequod/properties/mesh.cc
         pequod/serialization/serialization.cc
         pequod/serialization/serialization.h
@@ -66,6 +65,8 @@ add_library(pequod
         pequod/input/input_manager.h
         pequod/properties/texture2d.cc
         pequod/properties/texture2d.h
+        pequod/pobject/nodes/camera2d.cc
+        pequod/pobject/nodes/camera2d.h
 )
 
 

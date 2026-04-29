@@ -19,8 +19,7 @@ constexpr float PLAYER_SPEED = 20.0f;
 
 void SpaceInvaders::OnStart() {
   {  // Camera
-    player_camera_ = std::make_unique<Camera>(GetWidth() / GetHeight());
-    player_camera_->configure2D(GetWidth(), GetHeight(), ZOOM);
+    player_camera_->SetZoom(ZOOM);
   }
   glm::vec2 offset =
       (glm::vec2(scaled_width, scaled_height) / 2.0f) - glm::vec2(24);

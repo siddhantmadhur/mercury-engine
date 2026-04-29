@@ -18,8 +18,7 @@ constexpr float BALL_SPEED = 160;
 
 void BreakoutScene::OnStart() {
   {  // Camera
-    player_camera_ = std::make_unique<Camera>(GetWidth() / GetHeight());
-    player_camera_->configure2D(GetWidth(), GetHeight(), ZOOM);
+    player_camera_->SetZoom(ZOOM);
   }
   auto offset = (glm::vec2(scaled_width, scaled_height) / 2.0f) - glm::vec2(20);
   {
