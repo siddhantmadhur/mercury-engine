@@ -35,20 +35,19 @@ static const std::vector<const char*> kValidationLayers = {
 static const std::vector<const char*> kDeviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-#define VKCHECK(expr, msg)                              \
-  do {                                                  \
-    VkResult _r = (expr);                               \
-    if (_r != VK_SUCCESS) {                             \
-      PDebug::error("Vulkan: {} (VkResult {})", msg,    \
-                    static_cast<int>(_r));              \
-      return false;                                     \
-    }                                                   \
+#define VKCHECK(expr, msg)                                                  \
+  do {                                                                      \
+    VkResult _r = (expr);                                                   \
+    if (_r != VK_SUCCESS) {                                                 \
+      PDebug::error("Vulkan: {} (VkResult {})", msg, static_cast<int>(_r)); \
+      return false;                                                         \
+    }                                                                       \
   } while (0)
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-    VkDebugUtilsMessageTypeFlagsEXT,
-    const VkDebugUtilsMessengerCallbackDataEXT* data, void*) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL
+DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+              VkDebugUtilsMessageTypeFlagsEXT,
+              const VkDebugUtilsMessengerCallbackDataEXT* data, void*) {
   if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
     PDebug::error("Vulkan validation: {}", data->pMessage);
   } else {
@@ -74,8 +73,7 @@ VulkanApplication::~VulkanApplication() {
     }
     texture_cache_.clear();
 
-    if (texture_sampler_)
-      vkDestroySampler(device_, texture_sampler_, nullptr);
+    if (texture_sampler_) vkDestroySampler(device_, texture_sampler_, nullptr);
     if (descriptor_pool_)
       vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
 
@@ -94,8 +92,7 @@ VulkanApplication::~VulkanApplication() {
     destroy_buffer(camera_ubo_, camera_ubo_memory_, camera_mapped_);
     destroy_buffer(model_ubo_, model_ubo_memory_, model_mapped_);
 
-    if (plain_pipeline_)
-      vkDestroyPipeline(device_, plain_pipeline_, nullptr);
+    if (plain_pipeline_) vkDestroyPipeline(device_, plain_pipeline_, nullptr);
     if (textured_pipeline_)
       vkDestroyPipeline(device_, textured_pipeline_, nullptr);
     if (pipeline_layout_)
@@ -117,8 +114,9 @@ VulkanApplication::~VulkanApplication() {
   }
 
   if (debug_messenger_ != VK_NULL_HANDLE) {
-    auto destroy_fn = (PFN_vkDestroyDebugUtilsMessengerEXT)
-        vkGetInstanceProcAddr(instance_, "vkDestroyDebugUtilsMessengerEXT");
+    auto destroy_fn =
+        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+            instance_, "vkDestroyDebugUtilsMessengerEXT");
     if (destroy_fn) destroy_fn(instance_, debug_messenger_, nullptr);
   }
   if (surface_) vkDestroySurfaceKHR(instance_, surface_, nullptr);
@@ -452,8 +450,7 @@ uint32_t VulkanApplication::FindMemoryType(uint32_t type_bits,
 bool VulkanApplication::CreateBuffer(VkDeviceSize size,
                                      VkBufferUsageFlags usage,
                                      VkMemoryPropertyFlags props,
-                                     VkBuffer& buffer,
-                                     VkDeviceMemory& memory) {
+                                     VkBuffer& buffer, VkDeviceMemory& memory) {
   VkBufferCreateInfo bi = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
   bi.size = size;
   bi.usage = usage;
@@ -473,7 +470,8 @@ bool VulkanApplication::CreateBuffer(VkDeviceSize size,
 
 bool VulkanApplication::CreateBuffers() {
   const VkMemoryPropertyFlags host_visible =
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
   if (!CreateBuffer(sizeof(Vertex) * kMaxVertices,
                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, host_visible,
@@ -914,8 +912,8 @@ VulkanApplication::CachedTex& VulkanApplication::GetOrCreateTexture(
 
   VkDescriptorBufferInfo cam = {camera_ubo_, 0, sizeof(CameraCBuffer)};
   VkDescriptorBufferInfo mdl = {model_ubo_, 0, sizeof(VsModelBuffer)};
-  VkDescriptorImageInfo image_info = {
-      VK_NULL_HANDLE, t.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkDescriptorImageInfo image_info = {VK_NULL_HANDLE, t.view,
+                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
   VkDescriptorImageInfo sampler_info = {texture_sampler_, VK_NULL_HANDLE,
                                         VK_IMAGE_LAYOUT_UNDEFINED};
   std::array<VkWriteDescriptorSet, 4> w = {};
@@ -1034,10 +1032,8 @@ void VulkanApplication::Render() {
                      kMaxPrimitivesPerFrame);
         break;
       }
-      const VkDeviceSize vbytes =
-          sizeof(Vertex) * primitive.vertices_.size();
-      const VkDeviceSize ibytes =
-          sizeof(uint32_t) * primitive.indices_.size();
+      const VkDeviceSize vbytes = sizeof(Vertex) * primitive.vertices_.size();
+      const VkDeviceSize ibytes = sizeof(uint32_t) * primitive.indices_.size();
       if (vertex_byte_off + vbytes > sizeof(Vertex) * kMaxVertices ||
           index_byte_off + ibytes > sizeof(uint32_t) * kMaxIndices) {
         PDebug::warn("Vulkan: per-frame VBO/IBO budget exceeded, skipping");
@@ -1051,7 +1047,7 @@ void VulkanApplication::Render() {
 
       VsModelBuffer vs_model_buffer = {};
       vs_model_buffer.scale = primitive.scale_;
-      vs_model_buffer.opacity = 1;
+      vs_model_buffer.opacity = primitive.opacity_;
       glm::mat4 model = glm::mat4(1.0f);
       model = glm::translate(model, primitive.world_position_);
       vs_model_buffer.world_position = model;
@@ -1073,17 +1069,15 @@ void VulkanApplication::Render() {
                                           primitive.texture_height_);
         vkCmdBindPipeline(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           textured_pipeline_);
-        vkCmdBindDescriptorSets(command_buffer_,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                pipeline_layout_, 0, 1, &cached.set, 1,
-                                &dynamic_off);
+        vkCmdBindDescriptorSets(
+            command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_,
+            0, 1, &cached.set, 1, &dynamic_off);
       } else {
         vkCmdBindPipeline(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           plain_pipeline_);
-        vkCmdBindDescriptorSets(command_buffer_,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                pipeline_layout_, 0, 1, &uniform_set_, 1,
-                                &dynamic_off);
+        vkCmdBindDescriptorSets(
+            command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_,
+            0, 1, &uniform_set_, 1, &dynamic_off);
       }
       vkCmdDrawIndexed(command_buffer_, (uint32_t)primitive.indices_.size(), 1,
                        0, 0, 0);

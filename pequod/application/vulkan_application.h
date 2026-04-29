@@ -133,7 +133,7 @@ class VulkanApplication : public Application {
   // Per-frame ring offsets so each primitive draws from its own region
   // (mirrors D3D11 map/discard renaming).
   VkDeviceSize model_aligned_size_ = 0;
-  static constexpr uint32_t kMaxPrimitivesPerFrame = 1024;
+  static constexpr uint32_t kMaxPrimitivesPerFrame = 16840;
 };
 
 }  // namespace Pequod

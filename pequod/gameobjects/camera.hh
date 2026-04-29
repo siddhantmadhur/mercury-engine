@@ -28,6 +28,9 @@ class Camera {
   glm::mat4 view{};
   glm::mat4 proj{};
   glm::vec3 cameraPosition{};
+  float zoom_ = 1.0f;
+  float width_ = 0.0f;
+  float height_ = 0.0f;
 };
 }  // namespace Pequod
 #endif

@@ -19,10 +19,10 @@ Box2D::Box2D(glm::vec2 position, glm::vec2 size, glm::vec4 color) {
   auto mesh = Add<Mesh>();
   PQ_FLOAT3 dx_color(color.r, color.g, color.b);
   Vertex raw_vertices[4] = {
-      {PQ_FLOAT3{1.0f, 1.0f, 0.0f},   dx_color, PQ_FLOAT2{1.0f, 0.0f}},
-      {PQ_FLOAT3{1.0f, -1.0f, 0.0f},  dx_color, PQ_FLOAT2{1.0f, 1.0f}},
+      {PQ_FLOAT3{1.0f, 1.0f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
+      {PQ_FLOAT3{1.0f, -1.0f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
       {PQ_FLOAT3{-1.0f, -1.0f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
-      {PQ_FLOAT3{-1.0f, 1.0f, 0.0f},  dx_color, PQ_FLOAT2{0.0f, 0.0f}},
+      {PQ_FLOAT3{-1.0f, 1.0f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
   };
   mesh->SetVertices(
       std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
@@ -31,6 +31,7 @@ Box2D::Box2D(glm::vec2 position, glm::vec2 size, glm::vec4 color) {
   mesh->SetIndices(
       std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
 
+  mesh->opacity_ = color[3];
   mesh->SetScale(glm::vec3(size.x, size.y, 1.0f));
 }
 }  // namespace Pequod

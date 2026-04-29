@@ -53,6 +53,7 @@ struct Primitive {
   std::vector<UINT> indices_;
   glm::vec3 scale_;
   glm::vec3 world_position_;
+  float opacity_ = 1.0f;
   const unsigned char* texture_data_ = nullptr;
   int texture_width_ = 0;
   int texture_height_ = 0;

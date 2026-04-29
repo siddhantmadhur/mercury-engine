@@ -136,9 +136,14 @@ endif ()
 
 target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
 
+if (MSVC)
+    message(STATUS "Using Visual Studio Compiler")
+endif ()
+
 if (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11" AND WIN32 AND NOT MSVC)
     # MinGW (and any non-MSVC compiler) ignores `#pragma comment(lib, ...)`,
     # so the D3D11 system libs have to be linked explicitly.
+    message(WARNING "Not using MSVC")
     target_link_libraries(pequod d3d11 dxgi d3dcompiler dxguid winmm)
     # The full DirectXMath headers (with `DirectXMath.h` casing the source
     # uses) are shipped as a separate package on mingw — the `directxmath.h`
@@ -176,8 +181,8 @@ if (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
         add_custom_command(
                 OUTPUT ${SHADER_BIN}/${OUT}
                 COMMAND ${DXC} ${DXC_COMMON_FLAGS} ${EXTRA_LIST}
-                        -T ${PROFILE} -E Main
-                        ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
+                -T ${PROFILE} -E Main
+                ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
                 DEPENDS ${SHADER_SRC}/${SRC}
                 COMMENT "DXC ${SRC} -> ${OUT}")
         list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})

@@ -29,6 +29,7 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
       primitive.indices_ = mesh->GetIndices();
       primitive.vertices_ = mesh->GetVertices();
       primitive.scale_ = mesh->GetScale();
+      primitive.opacity_ = mesh->opacity_;
       if (auto transform = object->Get<Transform>()) {
         auto world_position = transform->GetPosition();
         primitive.world_position_ = world_position;
@@ -41,7 +42,6 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
         primitive.texture_width_ = tex->GetWidth();
         primitive.texture_height_ = tex->GetHeight();
       }
-
       primitives.push_back(primitive);
     }
   }

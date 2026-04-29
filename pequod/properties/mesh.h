@@ -30,6 +30,8 @@ class Mesh : public Property {
 
   uint32_t GetIndicesID() const;
 
+  float opacity_ = 1.0f;
+
   std::vector<Vertex> vertices_;
   std::vector<UINT> indices_;
   UINT vertices_id = 0;  // the id to get this in the ECS vertex vector

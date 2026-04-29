@@ -308,7 +308,7 @@ void D3D11Application::Render() {
       {  // Update model buffer per object
         VsModelBuffer vs_model_buffer = {};
         vs_model_buffer.scale = PQ_FLOAT3{&primitive.scale_[0]};
-        vs_model_buffer.opacity = 1;
+        vs_model_buffer.opacity = primitive.opacity_;
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, primitive.world_position_);
         vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
