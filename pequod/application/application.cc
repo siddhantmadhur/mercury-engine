@@ -6,7 +6,6 @@
 
 #include <GLFW/glfw3.h>
 #include <imgui/imgui.h>
-#include <imgui/backends/imgui_impl_dx11.h>
 #include <imgui/backends/imgui_impl_glfw.h>
 
 #include <format>
@@ -99,7 +98,7 @@ int Application::Run() {
 
     if (game_scene_) {
       glfwPollEvents();
-      ImGui_ImplDX11_NewFrame();
+      ImGuiNewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 

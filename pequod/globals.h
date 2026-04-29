@@ -9,20 +9,31 @@
 #ifndef PEQUODENGINE_GLOBALS_H
 #define PEQUODENGINE_GLOBALS_H
 
-#include <DirectXMath.h>
-#include <intsafe.h>
-
 #include <cstdint>
+#include <cstring>
 #include <glm/glm.hpp>
 #include <vector>
+
+#ifdef PEQUOD_GRAPHICS_D3D11
+#include <DirectXMath.h>
+#include <intsafe.h>
+#endif
 
 using entity_id = uint16_t;
 using kEntityId = uint16_t;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
+
+#ifdef PEQUOD_GRAPHICS_D3D11
 using PQ_FLOAT2 = DirectX::XMFLOAT2;
 using PQ_FLOAT3 = DirectX::XMFLOAT3;
 using PQ_MATRIX = DirectX::XMFLOAT4X4;
+#else
+using PQ_FLOAT2 = glm::vec2;
+using PQ_FLOAT3 = glm::vec3;
+using PQ_MATRIX = glm::mat4;
+using UINT = uint32_t;
+#endif
 
 struct Vertex {
   PQ_FLOAT3 position;

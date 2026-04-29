@@ -3,6 +3,8 @@
 //
 #include "d3d11_application.h"
 
+#ifdef PEQUOD_GRAPHICS_D3D11
+
 #include <imgui/imgui.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
@@ -33,6 +35,8 @@ namespace Pequod {
 D3D11Application::D3D11Application(const std::string& window_title,
                                    float initial_width, float initial_height)
     : Application(window_title, initial_width, initial_height) {}
+
+void D3D11Application::ImGuiNewFrame() { ImGui_ImplDX11_NewFrame(); }
 
 bool D3D11Application::Initialize() {
   if (!Application::Initialize()) {
@@ -469,3 +473,5 @@ ID3D11ShaderResourceView* D3D11Application::GetOrCreateSRV(
 }
 
 }  // namespace Pequod
+
+#endif  // PEQUOD_GRAPHICS_D3D11

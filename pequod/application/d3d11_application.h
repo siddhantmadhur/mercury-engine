@@ -5,6 +5,8 @@
 #ifndef PEQUODENGINE_D3D11_APPLICATION_H
 #define PEQUODENGINE_D3D11_APPLICATION_H
 
+#ifdef PEQUOD_GRAPHICS_D3D11
+
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include <dxgi1_3.h>
@@ -34,6 +36,7 @@ class D3D11Application : public Application {
   bool Initialize() override;  // Renders objects
 
   void OnResize(int32_t width, int32_t height) override;
+  void ImGuiNewFrame() override;
   static bool CompileShader(const std::wstring& fileName,
                             const std::string& entryPoint,
                             const std::string& profile,
@@ -76,5 +79,7 @@ class D3D11Application : public Application {
   std::vector<Primitive> primitives_ = {};
 };
 }  // namespace Pequod
+
+#endif  // PEQUOD_GRAPHICS_D3D11
 
 #endif  // PEQUODENGINE_D3D11_APPLICATION_H

@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.30)
 
 project(PequodEngine LANGUAGES CXX C)
-# for windows only:
 
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
 
@@ -12,6 +11,28 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Backend selection. Defaults: D3D11 on Windows, VULKAN elsewhere.
+set(PEQUOD_GRAPHICS_BACKEND "" CACHE STRING "Graphics backend: D3D11 or VULKAN")
+if (NOT PEQUOD_GRAPHICS_BACKEND)
+    if (WIN32)
+        set(PEQUOD_GRAPHICS_BACKEND "D3D11")
+    else ()
+        set(PEQUOD_GRAPHICS_BACKEND "VULKAN")
+    endif ()
+endif ()
+message(STATUS "Pequod graphics backend: ${PEQUOD_GRAPHICS_BACKEND}")
+
+if (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
+    set(PEQUOD_BACKEND_SOURCE pequod/application/vulkan_application.cc)
+    set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
+    find_package(Vulkan REQUIRED)
+elseif (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11")
+    set(PEQUOD_BACKEND_SOURCE pequod/application/d3d11_application.cc)
+    set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_dx11.cpp)
+else ()
+    message(FATAL_ERROR "Unknown PEQUOD_GRAPHICS_BACKEND: ${PEQUOD_GRAPHICS_BACKEND}")
+endif ()
 
 add_library(pequod
         pequod/physics_engine/physics_engine.cc
@@ -38,7 +59,7 @@ add_library(pequod
         pequod/physics_engine/shapes/plane.h
         pequod/application/application.h
         pequod/application/application.cc
-        pequod/application/d3d11_application.cc
+        ${PEQUOD_BACKEND_SOURCE}
         pequod/os/filesystem.h
         pequod/scene/scene.cc
         pequod/input/input_manager.cc
@@ -50,17 +71,11 @@ add_library(pequod
 
 include_directories("pequod")
 include_directories("editor")
-#X11, Xi, Xcursor, GL, dl, pthread, m(?)
-
-if (NOT WIN32)
-    message(WARNING "Pequod does not support this platform")
-endif ()
 
 # link imgui
 
-
 file(GLOB IMGUI_SOURCES
-        "third_party/imgui/backends/imgui_impl_dx11.cpp"
+        "${IMGUI_BACKEND_SRC}"
         "third_party/imgui/backends/imgui_impl_glfw.cpp"
         "third_party/imgui/backends/*.h"
         "third_party/imgui/*.cpp"
@@ -72,6 +87,9 @@ add_library(imgui STATIC
 
 target_include_directories(imgui PUBLIC "third_party/imgui")
 target_link_libraries(imgui glfw)
+if (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
+    target_link_libraries(imgui Vulkan::Vulkan)
+endif ()
 
 
 add_subdirectory(third_party/glm)
@@ -108,14 +126,19 @@ include_directories("sdk/LivePP/API/x64/")
 target_compile_definitions(pequod PUBLIC
         PEQUOD_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/pequod/shaders"
         PEQUOD_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
-        PEQUOD_GRAPHICS_D3D11=1
 )
+
+if (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11")
+    target_compile_definitions(pequod PUBLIC PEQUOD_GRAPHICS_D3D11=1)
+elseif (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
+    target_compile_definitions(pequod PUBLIC PEQUOD_GRAPHICS_VULKAN=1)
+endif ()
 
 target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
 
-# MinGW (and any non-MSVC compiler) ignores `#pragma comment(lib, ...)`,
-# so the D3D11 system libs have to be linked explicitly.
-if (WIN32 AND NOT MSVC)
+if (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11" AND WIN32 AND NOT MSVC)
+    # MinGW (and any non-MSVC compiler) ignores `#pragma comment(lib, ...)`,
+    # so the D3D11 system libs have to be linked explicitly.
     target_link_libraries(pequod d3d11 dxgi d3dcompiler dxguid winmm)
     # The full DirectXMath headers (with `DirectXMath.h` casing the source
     # uses) are shipped as a separate package on mingw — the `directxmath.h`
@@ -124,24 +147,68 @@ if (WIN32 AND NOT MSVC)
     target_link_libraries(pequod Microsoft::DirectXMath)
 endif ()
 
+if (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
+    target_link_libraries(pequod Vulkan::Vulkan)
 
-file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
-if (APPLE)
-    set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
+    # Compile HLSL -> SPIR-V via DXC at build time. -fvk-invert-y is
+    # vertex-stage-only (DXC errors on PS), so it is appended per-job.
+    find_program(DXC dxc REQUIRED)
+    set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/pequod/shaders)
+    set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+    file(MAKE_DIRECTORY ${SHADER_BIN})
+    set(DXC_COMMON_FLAGS -spirv
+            -fvk-b-shift 0 0    # cbuffer bN -> binding N
+            -fvk-t-shift 10 0   # texture tN -> binding N+10
+            -fvk-s-shift 20 0)  # sampler sN -> binding N+20
+    # job: src|profile|out|extra
+    set(SHADER_JOBS
+            "main.vs.hlsl|vs_6_0|main.vs.spv|-fvk-invert-y"
+            "main.ps.hlsl|ps_6_0|main.ps.spv|"
+            "textured.ps.hlsl|ps_6_0|textured.ps.spv|")
+    set(SPV_OUTS "")
+    foreach (JOB ${SHADER_JOBS})
+        string(REPLACE "|" ";" JOB_PARTS "${JOB}")
+        list(GET JOB_PARTS 0 SRC)
+        list(GET JOB_PARTS 1 PROFILE)
+        list(GET JOB_PARTS 2 OUT)
+        list(GET JOB_PARTS 3 EXTRA)
+        separate_arguments(EXTRA_LIST UNIX_COMMAND "${EXTRA}")
+        add_custom_command(
+                OUTPUT ${SHADER_BIN}/${OUT}
+                COMMAND ${DXC} ${DXC_COMMON_FLAGS} ${EXTRA_LIST}
+                        -T ${PROFILE} -E Main
+                        ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
+                DEPENDS ${SHADER_SRC}/${SRC}
+                COMMENT "DXC ${SRC} -> ${OUT}")
+        list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})
+    endforeach ()
+    add_custom_target(pequod_shaders DEPENDS ${SPV_OUTS})
+    add_dependencies(pequod pequod_shaders)
+    target_compile_definitions(pequod PUBLIC PEQUOD_SPIRV_PATH="${SHADER_BIN}")
 endif ()
 
-add_executable(pequod_editor ${EDITOR_SOURCE}
-        editor/main.cc
-        "editor/panel/preview_scene.h"
-        editor/editor_windows/preview_scene.cc
-        editor/panel/object_tree.h
-        editor/panel/object_tree.cc
-        editor/panel/object_properties.h
-        editor/panel/object_properties.cc
-        pequod/globals.h
-        pequod/scene/scene.h
-)
-target_link_libraries(pequod_editor pequod)
+
+# The editor uses Sokol with a hardcoded D3D11 backend; only build it on
+# Windows for now.
+if (WIN32)
+    file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
+    if (APPLE)
+        set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
+    endif ()
+
+    add_executable(pequod_editor ${EDITOR_SOURCE}
+            editor/main.cc
+            "editor/panel/preview_scene.h"
+            editor/editor_windows/preview_scene.cc
+            editor/panel/object_tree.h
+            editor/panel/object_tree.cc
+            editor/panel/object_properties.h
+            editor/panel/object_properties.cc
+            pequod/globals.h
+            pequod/scene/scene.h
+    )
+    target_link_libraries(pequod_editor pequod)
+endif ()
 
 # CREATE NEW BINARIES USING THIS
 

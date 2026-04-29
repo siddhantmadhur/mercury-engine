@@ -1,8 +1,6 @@
 #ifndef PEQUOD_MESH_IMPL_HH_
 #define PEQUOD_MESH_IMPL_HH_
 
-#include <intsafe.h>
-
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>

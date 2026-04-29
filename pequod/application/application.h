@@ -90,6 +90,9 @@ class Application {
    */
   virtual void OnResize(int32_t width, int32_t height);
 
+  // Per-backend ImGui frame begin (e.g. ImGui_ImplDX11_NewFrame).
+  virtual void ImGuiNewFrame() = 0;
+
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);
   static void HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                 int action, int mods);
