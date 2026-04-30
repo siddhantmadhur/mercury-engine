@@ -53,7 +53,7 @@ class PObjectManager {
    */
   template <std::derived_from<PObject> PType, class... Args>
     requires std::constructible_from<PType, Args...>
-  std::shared_ptr<PObject> NewObject(Args &&...args) {
+  std::shared_ptr<PType> NewObject(Args &&...args) {
     std::shared_ptr<PType> object =
         std::make_shared<PType>(std::forward<Args>(args)...);
     object->id = objects.size();

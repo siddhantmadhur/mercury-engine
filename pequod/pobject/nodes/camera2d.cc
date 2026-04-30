@@ -26,9 +26,8 @@ void Camera2D::SetZoom(float zoom) { this->zoom_ = zoom; }
 glm::mat4 Camera2D::GetView() {
   auto transform = Get<Transform>();
   auto pos = transform->GetPosition();
-  glm::mat4 view =
-      glm::translate(glm::mat4(1.0f), glm::vec3(-pos.x, -pos.y, 0.0f));
-  view = glm::scale(view, glm::vec3(zoom_, zoom_, 1.0f));
+  glm::mat4 view = glm::scale(glm::mat4(1.0f), glm::vec3(zoom_, zoom_, 1.0f));
+  view = glm::translate(view, glm::vec3(-pos.x, -pos.y, 0.0f));
   return view;
 }
 
