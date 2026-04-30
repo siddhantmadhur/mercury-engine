@@ -16,6 +16,6 @@ struct PSOutput
 PSOutput Main(PSInput input)
 {
     PSOutput output = (PSOutput) 0;
-    output.color = diffuse_texture.Sample(texture_sampler, input.uv);
+    output.color = diffuse_texture.Sample(texture_sampler, input.uv) * input.color;
     return output;
 }

@@ -27,10 +27,12 @@ using kEntityId = uint16_t;
 #ifdef PEQUOD_GRAPHICS_D3D11
 using PQ_FLOAT2 = DirectX::XMFLOAT2;
 using PQ_FLOAT3 = DirectX::XMFLOAT3;
+using PQ_FLOAT4 = DirectX::XMFLOAT4;
 using PQ_MATRIX = DirectX::XMFLOAT4X4;
 #else
 using PQ_FLOAT2 = glm::vec2;
 using PQ_FLOAT3 = glm::vec3;
+using PQ_FLOAT4 = glm::vec4;
 using PQ_MATRIX = glm::mat4;
 using UINT = uint32_t;
 #endif
@@ -54,9 +56,7 @@ struct Primitive {
   glm::vec3 scale_;
   glm::vec3 world_position_;
   float opacity_ = 1.0f;
-  const unsigned char* texture_data_ = nullptr;
-  int texture_width_ = 0;
-  int texture_height_ = 0;
+  glm::vec4 atlas_uv_ = glm::vec4(0.0f);
 };
 
 /**
@@ -69,5 +69,12 @@ struct VsModelBuffer {
   PQ_FLOAT3 scale;
   float opacity;
   PQ_MATRIX world_position;
+  PQ_FLOAT4 atlas_uv;
 };
+
+#define PEQUOD_SAFE_FREE(pointer) \
+  {                               \
+    delete pointer;               \
+    pointer = nullptr;            \
+  }
 #endif  // PEQUODENGINE_GLOBALS_H

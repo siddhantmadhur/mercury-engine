@@ -127,16 +127,10 @@ bool D3D11Application::OnLoad() {
   fs::path shader_path = PEQUOD_SHADER_PATH;
 
   fs::path vertex_shader_path = shader_path / "main.vs.hlsl";
-  fs::path pixel_shader_path = shader_path / "main.ps.hlsl";
 
   ComPtr<ID3DBlob> vertexShaderBlob = nullptr;
   vertexShader_ = CreateVertexShader(vertex_shader_path, vertexShaderBlob);
   if (vertexShader_ == nullptr) {
-    return false;
-  }
-
-  pixelShader_ = CreatePixelShader(pixel_shader_path);
-  if (pixelShader_ == nullptr) {
     return false;
   }
 
@@ -234,6 +228,34 @@ bool D3D11Application::OnLoad() {
     return false;
   }
 
+  // Single dynamic atlas texture; uploaded only when the atlas changes.
+  TextureAtlas& atlas = game_scene_->GetAtlas();
+  D3D11_TEXTURE2D_DESC atlas_desc = {};
+  atlas_desc.Width = static_cast<UINT>(atlas.GetWidth());
+  atlas_desc.Height = static_cast<UINT>(atlas.GetHeight());
+  atlas_desc.MipLevels = 1;
+  atlas_desc.ArraySize = 1;
+  atlas_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  atlas_desc.SampleDesc.Count = 1;
+  atlas_desc.Usage = D3D11_USAGE_DYNAMIC;
+  atlas_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+  atlas_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  if (FAILED(device_->CreateTexture2D(&atlas_desc, nullptr, &atlas_texture_))) {
+    PDebug::error("D3D11: Failed to create atlas texture");
+    return false;
+  }
+
+  D3D11_SHADER_RESOURCE_VIEW_DESC atlas_srv_desc = {};
+  atlas_srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  atlas_srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+  atlas_srv_desc.Texture2D.MipLevels = 1;
+  atlas_srv_desc.Texture2D.MostDetailedMip = 0;
+  if (FAILED(device_->CreateShaderResourceView(atlas_texture_.Get(),
+                                               &atlas_srv_desc, &atlas_srv_))) {
+    PDebug::error("D3D11: Failed to create atlas SRV");
+    return false;
+  }
+
   return true;
 }
 
@@ -286,6 +308,32 @@ void D3D11Application::Render() {
 
   auto primitives = game_scene_->GetPrimitives();
   if (game_scene_) {
+    // Re-upload the atlas only when a new image was added since the last
+    // frame. UpdateAtlas() (called from GetPrimitives()) sets the flag; we
+    // clear it after the GPU copy.
+    TextureAtlas& atlas = game_scene_->GetAtlas();
+    if (atlas.NeedsGpuUpload() && atlas.GetData() != nullptr) {
+      D3D11_MAPPED_SUBRESOURCE mapped = {};
+      if (SUCCEEDED(deviceContext_->Map(atlas_texture_.Get(), 0,
+                                        D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        const int aw = atlas.GetWidth();
+        const int ah = atlas.GetHeight();
+        const uint8_t* src = atlas.GetData();
+        uint8_t* dst = static_cast<uint8_t*>(mapped.pData);
+        const size_t src_pitch = static_cast<size_t>(aw) * 4;
+        for (int row = 0; row < ah; ++row) {
+          memcpy(dst + row * mapped.RowPitch, src + row * src_pitch,
+                 src_pitch);
+        }
+        deviceContext_->Unmap(atlas_texture_.Get(), 0);
+        atlas.ClearGpuUploadFlag();
+      }
+    }
+
+    // Bind the atlas SRV + sampler once for the whole frame.
+    deviceContext_->PSSetShaderResources(0, 1, atlas_srv_.GetAddressOf());
+    deviceContext_->PSSetSamplers(0, 1, texture_sampler_.GetAddressOf());
+
     for (const auto& primitive : primitives) {
       {  // Set vertex buffer for object
         D3D11_MAPPED_SUBRESOURCE mapped_subresource;
@@ -312,6 +360,9 @@ void D3D11Application::Render() {
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, primitive.world_position_);
         vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
+        vs_model_buffer.atlas_uv = PQ_FLOAT4{
+            primitive.atlas_uv_.x, primitive.atlas_uv_.y,
+            primitive.atlas_uv_.z, primitive.atlas_uv_.w};
         // map and copy from it
         D3D11_MAPPED_SUBRESOURCE mapped_subresource;
         deviceContext_->Map(vs_model_buffer_.Get(), 0,
@@ -328,18 +379,7 @@ void D3D11Application::Render() {
                                        DXGI_FORMAT_R32_UINT, 0);
       ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
       deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
-      if (primitive.texture_data_) {
-        auto* srv =
-            GetOrCreateSRV(primitive.texture_data_, primitive.texture_width_,
-                           primitive.texture_height_);
-        deviceContext_->PSSetShader(textured_pixel_shader_.Get(), nullptr, 0);
-        deviceContext_->PSSetShaderResources(0, 1, &srv);
-        deviceContext_->PSSetSamplers(0, 1, texture_sampler_.GetAddressOf());
-      } else {
-        deviceContext_->PSSetShader(pixelShader_.Get(), nullptr, 0);
-        ID3D11ShaderResourceView* null_srv = nullptr;
-        deviceContext_->PSSetShaderResources(0, 1, &null_srv);
-      }
+      deviceContext_->PSSetShader(textured_pixel_shader_.Get(), nullptr, 0);
       deviceContext_->DrawIndexed(primitive.indices_.size(), 0, 0);
     }
   }
@@ -426,50 +466,6 @@ D3D11Application::ComPtr<ID3D11PixelShader> D3D11Application::CreatePixelShader(
   }
 
   return pixelShader;
-}
-
-ID3D11ShaderResourceView* D3D11Application::GetOrCreateSRV(
-    const unsigned char* data, int width, int height) {
-  auto it = texture_cache_.find(data);
-  if (it != texture_cache_.end()) {
-    return it->second.Get();
-  }
-
-  D3D11_TEXTURE2D_DESC tex_desc = {};
-  tex_desc.Width = static_cast<UINT>(width);
-  tex_desc.Height = static_cast<UINT>(height);
-  tex_desc.MipLevels = 1;
-  tex_desc.ArraySize = 1;
-  tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-  tex_desc.SampleDesc.Count = 1;
-  tex_desc.Usage = D3D11_USAGE_IMMUTABLE;
-  tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-  D3D11_SUBRESOURCE_DATA tex_data = {};
-  tex_data.pSysMem = data;
-  tex_data.SysMemPitch = static_cast<UINT>(width * 4);
-
-  ComPtr<ID3D11Texture2D> texture;
-  if (FAILED(device_->CreateTexture2D(&tex_desc, &tex_data, &texture))) {
-    PDebug::error("D3D11: Failed to create texture from Texture2D property");
-    return nullptr;
-  }
-
-  D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-  srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-  srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-  srv_desc.Texture2D.MipLevels = 1;
-  srv_desc.Texture2D.MostDetailedMip = 0;
-
-  ComPtr<ID3D11ShaderResourceView> srv;
-  if (FAILED(
-          device_->CreateShaderResourceView(texture.Get(), &srv_desc, &srv))) {
-    PDebug::error("D3D11: Failed to create SRV for texture");
-    return nullptr;
-  }
-
-  texture_cache_[data] = std::move(srv);
-  return texture_cache_[data].Get();
 }
 
 }  // namespace Pequod

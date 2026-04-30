@@ -12,6 +12,7 @@
 
 #include "globals.h"
 #include "pobject.h"
+#include "texture_atlas.h"
 
 namespace Pequod {
 
@@ -63,6 +64,8 @@ class PObjectManager {
 
   void DeleteObject(kEntityId id);
 
+  TextureAtlas& GetAtlas() { return atlas_; }
+
   std::shared_ptr<PObject> GetObjectById(entity_id id) {
     if (id < objects.size()) return objects[id];
     return nullptr;
@@ -70,6 +73,7 @@ class PObjectManager {
 
  private:
   std::vector<std::shared_ptr<PObject>> objects = {};
+  TextureAtlas atlas_;
 };
 }  // namespace Pequod
 

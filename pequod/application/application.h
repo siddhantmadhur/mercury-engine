@@ -16,6 +16,7 @@
 #include <string_view>
 
 #include "GLFW/glfw3.h"
+#include "pobject/texture_atlas.h"
 #include "scene/scene.h"
 
 namespace Pequod {

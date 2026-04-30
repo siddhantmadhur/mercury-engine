@@ -10,6 +10,7 @@ cbuffer VS_MODEL_BUFFER : register(b1)
     float3 scale;
     float opacity;
     matrix model;
+    float4 atlas_uv;
 };
 
 struct VSInput
@@ -34,6 +35,6 @@ VSOutput Main(VSInput input)
     float4 world_pos = mul(model, float4(scaled_position, 1.0));
     output.position = mul(mWorldViewProj, world_pos);
     output.color = float4(input.color, opacity);
-    output.uv = input.uv;
+    output.uv = atlas_uv.xy + input.uv * (atlas_uv.zw - atlas_uv.xy);
     return output;
 }

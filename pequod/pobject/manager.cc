@@ -37,13 +37,26 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
         primitive.world_position_ = glm::vec3(1.0f);
       }
 
-      if (auto tex = object->Get<Texture2D>()) {
-        primitive.texture_data_ = tex->GetData();
-        primitive.texture_width_ = tex->GetWidth();
-        primitive.texture_height_ = tex->GetHeight();
+      std::shared_ptr<Texture2D> tex = object->Get<Texture2D>();
+      if (tex) {
+        atlas_.AddTexture(tex);
       }
       primitives.push_back(primitive);
     }
+  }
+  atlas_.UpdateAtlas();
+  // Populate atlas UVs after the atlas has been (re)packed so each primitive
+  // sees its current sub-rect.
+  size_t pi = 0;
+  for (const auto& object : objects) {
+    if (object == nullptr) continue;
+    if (!object->Get<Mesh>()) continue;
+    if (auto tex = object->Get<Texture2D>()) {
+      primitives[pi].atlas_uv_ = tex->GetAtlasUV();
+    } else {
+      primitives[pi].atlas_uv_ = atlas_.GetWhitePixelUV();
+    }
+    ++pi;
   }
   return primitives;
 }

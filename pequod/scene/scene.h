@@ -46,6 +46,8 @@ class GameScene {
 
   std::vector<Primitive> GetPrimitives();
 
+  TextureAtlas& GetAtlas();
+
   float GetWidth() const;
   float GetHeight() const;
   void SetWidth(float);
