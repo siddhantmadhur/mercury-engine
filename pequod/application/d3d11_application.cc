@@ -349,7 +349,7 @@ void D3D11Application::Render() {
       }
     }
 
-    {
+    {  // Map a vertex buffer to gpu
       D3D11_MAPPED_SUBRESOURCE mapped_subresource;
       deviceContext_->Map(triangleVertices_.Get(), 0,
                           D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
@@ -358,7 +358,7 @@ void D3D11Application::Render() {
              sizeof(Vertex) * vertex_buffer.size());
       deviceContext_->Unmap(triangleVertices_.Get(), 0);
     }
-    {
+    {  // map index buffer to gpu
       D3D11_MAPPED_SUBRESOURCE mapped_subresource;
       deviceContext_->Map(indices_buffer_.Get(), 0,
                           D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,

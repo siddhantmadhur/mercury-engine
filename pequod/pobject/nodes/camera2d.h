@@ -14,6 +14,7 @@ class Camera2D : public PObject {
   glm::mat4 GetView();
   glm::mat4 GetProjection();
   void SetZoom(float zoom);
+  float GetZoom();
 
  private:
   glm::mat4 view_{};

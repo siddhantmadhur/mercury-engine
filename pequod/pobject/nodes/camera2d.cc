@@ -22,6 +22,7 @@ glm::mat4 Camera2D::GetProjection() {
 }
 
 void Camera2D::SetZoom(float zoom) { this->zoom_ = zoom; }
+float Camera2D::GetZoom() { return this->zoom_; }
 
 glm::mat4 Camera2D::GetView() {
   auto transform = Get<Transform>();
