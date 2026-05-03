@@ -82,6 +82,8 @@ class Application {
    */
   virtual void Render() = 0;  // Renders objects
 
+  virtual void OnNewTick() = 0;
+
   /**
    * @brief Callback that runs when an application is resized
    * @param width Width after resizing

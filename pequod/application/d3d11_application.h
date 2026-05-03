@@ -32,6 +32,7 @@ class D3D11Application : public Application {
   bool OnLoad() override;      // Runs when the application is created
   void Render() override;      // Renders objects
   bool Initialize() override;  // Renders objects
+  void OnNewTick() override;
 
   void OnResize(int32_t width, int32_t height) override;
   void ImGuiNewFrame() override;
@@ -56,6 +57,8 @@ class D3D11Application : public Application {
   ComPtr<IDXGISwapChain1> swapchain_ = nullptr;
   ComPtr<ID3D11RenderTargetView> renderTarget_ = nullptr;
   ComPtr<ID3D11Buffer> triangleVertices_ = nullptr;
+  ComPtr<ID3D11Buffer> static_vertices_ =
+      nullptr;  // Static geometry like background
   ComPtr<ID3D11Buffer> indices_buffer_ = nullptr;
 
   ComPtr<ID3D11Buffer> camera_c_buffer_ = nullptr;

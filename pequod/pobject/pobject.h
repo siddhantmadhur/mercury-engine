@@ -19,6 +19,10 @@
 #include <vector>
 
 #include "../properties/property.h"
+#include "properties/collision_body.h"
+#include "properties/mesh.h"
+#include "properties/texture2d.h"
+#include "properties/transform.h"
 
 namespace Pequod {
 
@@ -45,26 +49,20 @@ class PObject {
   std::vector<uint64_t> children = {};
 
   template <std::derived_from<Property> TProperty>
-  std::shared_ptr<TProperty> Get() {
-    auto it = properties.find(typeid(TProperty));
-    if (it == properties.end()) return nullptr;
-    return std::static_pointer_cast<TProperty>(it->second);
+  TProperty* Get() {
+    auto property = std::get<TProperty*>(properties_);
+    return property;
   }
 
   template <std::derived_from<Property> TProperty, class... Args>
-  std::shared_ptr<TProperty> Add(Args &&...args) {
-    auto ptr = std::make_shared<TProperty>(args...);
-    properties[typeid(TProperty)] = ptr;
-    return ptr;
+  TProperty* Add(Args&&... args) {
+    auto property = new TProperty(args...);
+    std::get<TProperty*>(properties_) = property;
+    return property;
   }
 
  private:
-  /**
-   * Not very memory optimized and slow for scenes with a number of objects but
-   * the goal is to make it more streamlined later on. Like if an ECS exist the
-   * pointer would simply point to the index in that property array.
-   */
-  std::unordered_map<std::type_index, std::shared_ptr<Property> > properties;
+  std::tuple<Transform*, Mesh*, Texture2D*> properties_;
 };
 }  // namespace Pequod
 

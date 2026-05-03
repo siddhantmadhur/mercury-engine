@@ -17,7 +17,7 @@ class TextureAtlas {
  public:
   TextureAtlas();
   ~TextureAtlas();
-  void AddTexture(std::shared_ptr<Texture2D>);
+  void AddTexture(Texture2D*);
   void UpdateAtlas();
 
   bool NeedsGpuUpload() const { return needs_gpu_upload_; }
@@ -33,9 +33,9 @@ class TextureAtlas {
   int height_ = 1300;  // max size of the atlas
   stbrp_context ctx_{};
   stbrp_node nodes_[512] = {};
-  std::shared_ptr<Texture2D> white_pixel_;
+  Texture2D* white_pixel_;
   std::vector<stbrp_rect> rects;
-  std::vector<std::shared_ptr<Texture2D>> textures_;
+  std::vector<Texture2D*> textures_;
   int img_id_ = 0;
   uint8_t* raw_data_ = nullptr;
   std::map<std::string, int> images_;

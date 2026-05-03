@@ -111,6 +111,8 @@ int Application::Run() {
 
         last_tick_ = ticks;
         time_since_last_tick_ = 0.0f;
+
+        OnNewTick();
       }
       game_scene_->OnFrame(delta_time_);
     } else {

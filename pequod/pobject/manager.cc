@@ -37,7 +37,7 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
         primitive.world_position_ = glm::vec3(1.0f);
       }
 
-      std::shared_ptr<Texture2D> tex = object->Get<Texture2D>();
+      auto tex = object->Get<Texture2D>();
       if (tex) {
         atlas_.AddTexture(tex);
       }
@@ -60,6 +60,9 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
   }
   return primitives;
 }
+void PObjectManager::GroupPrimitives(kEntityId primary, kEntityId begin,
+                                     kEntityId end) {}
+void PObjectManager::GenerateVertices() {}
 
 void PObjectManager::DeleteObject(kEntityId id) { objects[id] = nullptr; }
 }  // namespace Pequod
