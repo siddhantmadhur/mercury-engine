@@ -26,6 +26,12 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
 std::vector<Primitive> GameScene::GetPrimitives() {
   return object_manager_->GetPrimitives();
 }
+std::vector<Vertex> GameScene::GetStaticVertices() {
+  return object_manager_->GetStaticVertices();
+}
+std::vector<UINT> GameScene::GetStaticIndices() {
+  return object_manager_->GetStaticIndices();
+}
 TextureAtlas& GameScene::GetAtlas() { return object_manager_->GetAtlas(); }
 float GameScene::GetWidth() const { return this->width_; }
 void GameScene::SetHeight(float height) { this->height_ = height; }

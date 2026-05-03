@@ -102,39 +102,20 @@ bool D3D11Application::Initialize() {
 void D3D11Application::OnNewTick() {
   primitives_ = game_scene_->GetPrimitives();
 
-  std::vector<Vertex> vertex_buffer;
-  std::vector<UINT> index_buffer;
+  vertex_buffer_.clear();
+  index_buffer_.clear();
 
   for (const auto& primitive : primitives_) {
     {  // Set index buffer
-      auto offset = vertex_buffer.size();
+      auto offset = vertex_buffer_.size();
       for (UINT index : primitive.indices_) {
-        index_buffer.push_back(index + offset);
+        index_buffer_.push_back(index + offset);
       }
     }
     {  // Set vertex buffer for object
-      vertex_buffer.insert(vertex_buffer.end(), primitive.vertices_.begin(),
-                           primitive.vertices_.end());
+      vertex_buffer_.insert(vertex_buffer_.end(), primitive.vertices_.begin(),
+                            primitive.vertices_.end());
     }
-  }
-
-  {  // Map a vertex buffer to gpu
-    D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-    deviceContext_->Map(triangleVertices_.Get(), 0,
-                        D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
-                        &mapped_subresource);
-    memcpy(mapped_subresource.pData, &vertex_buffer[0],
-           sizeof(Vertex) * vertex_buffer.size());
-    deviceContext_->Unmap(triangleVertices_.Get(), 0);
-  }
-  {  // map index buffer to gpu
-    D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-    deviceContext_->Map(indices_buffer_.Get(), 0,
-                        D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
-                        &mapped_subresource);
-    memcpy(mapped_subresource.pData, &index_buffer[0],
-           sizeof(UINT) * index_buffer.size());
-    deviceContext_->Unmap(indices_buffer_.Get(), 0);
   }
 }
 
@@ -348,6 +329,7 @@ void D3D11Application::Render() {
 
   float blendFactor[4] = {0, 0, 0, 0};
   deviceContext_->OMSetBlendState(blendState_.Get(), blendFactor, 0xFFFFFFFF);
+  int copies = 0;
 
   if (game_scene_) {
     // Re-upload the atlas only when a new image was added since the last
@@ -374,15 +356,66 @@ void D3D11Application::Render() {
     // Bind the atlas SRV + sampler once for the whole frame.
     deviceContext_->PSSetShaderResources(0, 1, atlas_srv_.GetAddressOf());
     deviceContext_->PSSetSamplers(0, 1, texture_sampler_.GetAddressOf());
+    deviceContext_->PSSetShader(textured_pixel_shader_.Get(), nullptr, 0);
 
     int vertex_offset = 0;
     int index_offset = 0;
+
+    auto static_vertices = game_scene_->GetStaticVertices();
+    auto static_indices = game_scene_->GetStaticIndices();
+    if (static_vertices.size() > 0) {  // Render static geometry here
+
+      {  // Map a vertex buffer to gpu
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+        deviceContext_->Map(triangleVertices_.Get(), 0,
+                            D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_subresource);
+        memcpy(mapped_subresource.pData, &static_vertices[0],
+               sizeof(Vertex) * static_vertices.size());
+        deviceContext_->Unmap(triangleVertices_.Get(), 0);
+      }
+      {  // map index buffer to gpu
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+        deviceContext_->Map(indices_buffer_.Get(), 0,
+                            D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_subresource);
+        memcpy(mapped_subresource.pData, &static_indices[0],
+               sizeof(UINT) * static_indices.size());
+        deviceContext_->Unmap(indices_buffer_.Get(), 0);
+      }
+      deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
+                                         &vertexStride, &vertexOffset);
+      deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
+                                       DXGI_FORMAT_R32_UINT, 0);
+      // Configure the buffers created
+      ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
+      deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+      deviceContext_->DrawIndexed(static_indices.size(), 0, 0);
+      PDebug::log("Drawing {} indices", static_indices.size());
+    }
+
+    {  // Map a vertex buffer to gpu
+      D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+      deviceContext_->Map(triangleVertices_.Get(), 0,
+                          D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                          &mapped_subresource);
+      memcpy(mapped_subresource.pData, &vertex_buffer_[0],
+             sizeof(Vertex) * vertex_buffer_.size());
+      deviceContext_->Unmap(triangleVertices_.Get(), 0);
+    }
+    {  // map index buffer to gpu
+      D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+      deviceContext_->Map(indices_buffer_.Get(), 0,
+                          D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                          &mapped_subresource);
+      memcpy(mapped_subresource.pData, &index_buffer_[0],
+             sizeof(UINT) * index_buffer_.size());
+      deviceContext_->Unmap(indices_buffer_.Get(), 0);
+    }
     deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
                                        &vertexStride, &vertexOffset);
     deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
                                      DXGI_FORMAT_R32_UINT, 0);
-
-    deviceContext_->PSSetShader(textured_pixel_shader_.Get(), nullptr, 0);
     for (const auto& primitive : primitives_) {
       {  // Update model buffer per object
         VsModelBuffer vs_model_buffer = {};
@@ -402,6 +435,7 @@ void D3D11Application::Render() {
         memcpy(mapped_subresource.pData, &vs_model_buffer,
                sizeof(VsModelBuffer));
         deviceContext_->Unmap(vs_model_buffer_.Get(), 0);
+        copies += 1;
       }
       // Configure the buffers created
       ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
@@ -412,6 +446,9 @@ void D3D11Application::Render() {
       vertex_offset += primitive.vertices_.size();
     }
   }
+  ImGui::Begin("Render Status");
+  ImGui::Text("Copied: %d times", copies);
+  ImGui::End();
 
   ImGui::Render();
   ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

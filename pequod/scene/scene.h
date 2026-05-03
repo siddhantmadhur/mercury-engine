@@ -45,6 +45,8 @@ class GameScene {
   bool GetCameraProj(glm::mat4x4&);
 
   std::vector<Primitive> GetPrimitives();
+  std::vector<Vertex> GetStaticVertices();
+  std::vector<UINT> GetStaticIndices();
 
   TextureAtlas& GetAtlas();
 

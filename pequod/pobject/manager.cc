@@ -62,6 +62,37 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
 }
 void PObjectManager::GroupPrimitives(kEntityId primary, kEntityId begin,
                                      kEntityId end) {}
+void PObjectManager::MakeStatic(kEntityId id) {
+  auto object = objects[id];
+
+  auto transform = object->Get<Transform>();
+  auto mesh = object->Get<Mesh>();
+  if (transform && mesh) {
+    auto pos = transform->GetPosition();
+    auto vertices = mesh->GetVertices();
+    auto indices = mesh->GetIndices();
+    auto offset = static_vertices_.size();
+    for (auto index : indices) {
+      static_indices_.push_back(index + offset);
+    }
+    for (auto vertex : vertices) {
+      vertex.position.x += pos.x;
+      vertex.position.y += pos.y;
+      vertex.position.z += pos.z;
+      static_vertices_.push_back(vertex);
+    }
+    DeleteObject(id);
+  } else {
+    PDebug::warn(
+        "Could not make static: Object did not have transform or mesh");
+  }
+}
+std::vector<Vertex> PObjectManager::GetStaticVertices() const {
+  return this->static_vertices_;
+}
+std::vector<UINT> PObjectManager::GetStaticIndices() const {
+  return this->static_indices_;
+}
 void PObjectManager::GenerateVertices() {}
 
 void PObjectManager::DeleteObject(kEntityId id) { objects[id] = nullptr; }
