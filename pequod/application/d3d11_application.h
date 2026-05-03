@@ -59,14 +59,19 @@ class D3D11Application : public Application {
   ComPtr<ID3D11Buffer> triangleVertices_ = nullptr;
   ComPtr<ID3D11Buffer> static_vertices_ =
       nullptr;  // Static geometry like background
+  std::vector<Vertex> vertex_buffer_;
+  std::vector<UINT> index_buffer_;
   ComPtr<ID3D11Buffer> indices_buffer_ = nullptr;
+  ComPtr<ID3D11Buffer> static_indices_buffer_ = nullptr;
 
   ComPtr<ID3D11Buffer> camera_c_buffer_ = nullptr;
   ComPtr<ID3D11Buffer> vs_model_buffer_ = nullptr;
 
   ComPtr<ID3D11InputLayout> vertexLayout_ = nullptr;
+  ComPtr<ID3D11InputLayout> static_vertex_layout_ = nullptr;
   ComPtr<ID3D11VertexShader> vertexShader_ = nullptr;
   ComPtr<ID3D11PixelShader> textured_pixel_shader_ = nullptr;
+  ComPtr<ID3D11VertexShader> static_vertex_shader_ = nullptr;
   ComPtr<ID3D11BlendState> blendState_ = nullptr;
   ComPtr<ID3D11SamplerState> texture_sampler_ = nullptr;
 

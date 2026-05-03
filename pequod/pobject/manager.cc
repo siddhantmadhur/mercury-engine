@@ -62,6 +62,53 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
 }
 void PObjectManager::GroupPrimitives(kEntityId primary, kEntityId begin,
                                      kEntityId end) {}
+void PObjectManager::MakeStatic(kEntityId id) {
+  auto object = objects[id];
+
+  auto transform = object->Get<Transform>();
+  auto mesh = object->Get<Mesh>();
+  if (transform && mesh) {
+    auto pos = transform->GetPosition();
+    auto vertices = mesh->GetVertices();
+    auto indices = mesh->GetIndices();
+    auto scale = mesh->GetScale();
+    auto offset = static_vertices_.size();
+
+    auto tex = object->Get<Texture2D>();
+    glm::vec4 atlas_uv;
+    if (tex) {
+      atlas_.AddTexture(tex);
+      atlas_.UpdateAtlas();
+      atlas_uv = tex->GetAtlasUV();
+    } else {
+      atlas_uv = atlas_.GetWhitePixelUV();
+    }
+
+    for (auto index : indices) {
+      static_indices_.push_back(index + offset);
+    }
+    for (auto vertex : vertices) {
+      StaticVertex sv = {};
+      sv.position.x = vertex.position.x * scale.x * 0.5f + pos.x;
+      sv.position.y = vertex.position.y * scale.y * 0.5f + pos.y;
+      sv.position.z = vertex.position.z * scale.z * 0.5f + pos.z;
+      sv.color = vertex.color;
+      sv.uv = vertex.uv;
+      sv.atlas_uv = PQ_FLOAT4{atlas_uv.x, atlas_uv.y, atlas_uv.z, atlas_uv.w};
+      static_vertices_.push_back(sv);
+    }
+    DeleteObject(id);
+  } else {
+    PDebug::warn(
+        "Could not make static: Object did not have transform or mesh");
+  }
+}
+std::vector<StaticVertex> PObjectManager::GetStaticVertices() const {
+  return this->static_vertices_;
+}
+std::vector<UINT> PObjectManager::GetStaticIndices() const {
+  return this->static_indices_;
+}
 void PObjectManager::GenerateVertices() {}
 
 void PObjectManager::DeleteObject(kEntityId id) { objects[id] = nullptr; }

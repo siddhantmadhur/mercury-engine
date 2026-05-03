@@ -43,6 +43,13 @@ struct Vertex {
   PQ_FLOAT2 uv;
 };
 
+struct StaticVertex {
+  PQ_FLOAT3 position;
+  PQ_FLOAT3 color;
+  PQ_FLOAT2 uv;
+  PQ_FLOAT4 atlas_uv;
+};
+
 /**
  * @brief Describes how a singular object can be drawn
  *
