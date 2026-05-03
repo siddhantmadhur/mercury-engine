@@ -9,7 +9,7 @@ cbuffer VS_CAMERA_BUFFER : register(b0)
 struct VSInput
 {
     float3 position : POSITION;
-    float3 color : COLOR0;
+    float4 color : COLOR0;
     float2 uv : TEXCOORD0;
     float4 atlas_uv : TEXCOORD1;
 };
@@ -30,7 +30,7 @@ VSOutput Main(VSInput input)
     float2 halfRes = float2(mResolution.x * 0.5, mResolution.y * 0.5);
     output.position.xy = round(output.position.xy / output.position.w * halfRes) / halfRes * output.position.w;
 
-    output.color = float4(input.color, 1.0);
+    output.color = input.color;
     output.uv = input.atlas_uv.xy + input.uv * (input.atlas_uv.zw - input.atlas_uv.xy);
     return output;
 }

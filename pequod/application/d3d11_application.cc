@@ -185,7 +185,7 @@ bool D3D11Application::OnLoad() {
       {"POSITION", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
        offsetof(StaticVertex, position),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
-      {"COLOR", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
+      {"COLOR", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
        offsetof(StaticVertex, color),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
       {"TEXCOORD", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32_FLOAT, 0,
@@ -216,7 +216,7 @@ bool D3D11Application::OnLoad() {
     PDebug::error("D3D11: Failed to create triangle vertex buffer");
     return false;
   }
-  bufferInfo.ByteWidth = sizeof(StaticVertex) * 64000;
+  bufferInfo.ByteWidth = sizeof(StaticVertex) * 640000;
   if (FAILED(device_->CreateBuffer(&bufferInfo, nullptr, &static_vertices_))) {
     PDebug::error("D3D11: Failed to create static vertex buffer");
     return false;
@@ -395,9 +395,6 @@ void D3D11Application::Render() {
     deviceContext_->PSSetSamplers(0, 1, texture_sampler_.GetAddressOf());
     deviceContext_->PSSetShader(textured_pixel_shader_.Get(), nullptr, 0);
 
-    int vertex_offset = 0;
-    int index_offset = 0;
-
     auto static_vertices = game_scene_->GetStaticVertices();
     auto static_indices = game_scene_->GetStaticIndices();
     if (static_vertices.size() > 0) {  // Render static geometry here
@@ -429,62 +426,66 @@ void D3D11Application::Render() {
       deviceContext_->DrawIndexed(static_indices.size(), 0, 0);
     }
 
-    deviceContext_->IASetInputLayout(vertexLayout_.Get());
-    deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
-    {
-      ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
-      deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
-    }
-    {  // Map a vertex buffer to gpu
-      D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-      deviceContext_->Map(triangleVertices_.Get(), 0,
-                          D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
-                          &mapped_subresource);
-      memcpy(mapped_subresource.pData, &vertex_buffer_[0],
-             sizeof(Vertex) * vertex_buffer_.size());
-      deviceContext_->Unmap(triangleVertices_.Get(), 0);
-    }
-    {  // map index buffer to gpu
-      D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-      deviceContext_->Map(indices_buffer_.Get(), 0,
-                          D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
-                          &mapped_subresource);
-      memcpy(mapped_subresource.pData, &index_buffer_[0],
-             sizeof(UINT) * index_buffer_.size());
-      deviceContext_->Unmap(indices_buffer_.Get(), 0);
-    }
-    deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
-                                       &dynamicVertexStride, &vertexOffset);
-    deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
-                                     DXGI_FORMAT_R32_UINT, 0);
-    for (const auto& primitive : primitives_) {
-      {  // Update model buffer per object
-        VsModelBuffer vs_model_buffer = {};
-        vs_model_buffer.scale = PQ_FLOAT3{&primitive.scale_[0]};
-        vs_model_buffer.opacity = primitive.opacity_;
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, primitive.world_position_);
-        vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
-        vs_model_buffer.atlas_uv =
-            PQ_FLOAT4{primitive.atlas_uv_.x, primitive.atlas_uv_.y,
-                      primitive.atlas_uv_.z, primitive.atlas_uv_.w};
-        // map and copy from it
+    if (primitives_.size() > 0) {
+      deviceContext_->IASetInputLayout(vertexLayout_.Get());
+      deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
+      {
+        ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
+        deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+      }
+      {  // Map a vertex buffer to gpu
         D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-        deviceContext_->Map(vs_model_buffer_.Get(), 0,
+        deviceContext_->Map(triangleVertices_.Get(), 0,
                             D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
                             &mapped_subresource);
-        memcpy(mapped_subresource.pData, &vs_model_buffer,
-               sizeof(VsModelBuffer));
-        deviceContext_->Unmap(vs_model_buffer_.Get(), 0);
-        copies += 1;
+        memcpy(mapped_subresource.pData, &vertex_buffer_[0],
+               sizeof(Vertex) * vertex_buffer_.size());
+        deviceContext_->Unmap(triangleVertices_.Get(), 0);
       }
-      // Configure the buffers created
-      ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
-      deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
-      deviceContext_->DrawIndexed(primitive.indices_.size(), index_offset, 0);
+      {  // map index buffer to gpu
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+        deviceContext_->Map(indices_buffer_.Get(), 0,
+                            D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_subresource);
+        memcpy(mapped_subresource.pData, &index_buffer_[0],
+               sizeof(UINT) * index_buffer_.size());
+        deviceContext_->Unmap(indices_buffer_.Get(), 0);
+      }
+      deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
+                                         &dynamicVertexStride, &vertexOffset);
+      deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
+                                       DXGI_FORMAT_R32_UINT, 0);
+      int vertex_offset = 0;
+      int index_offset = 0;
+      for (const auto& primitive : primitives_) {
+        {  // Update model buffer per object
+          VsModelBuffer vs_model_buffer = {};
+          vs_model_buffer.scale = PQ_FLOAT3{&primitive.scale_[0]};
+          vs_model_buffer.opacity = primitive.opacity_;
+          glm::mat4 model = glm::mat4(1.0f);
+          model = glm::translate(model, primitive.world_position_);
+          vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
+          vs_model_buffer.atlas_uv =
+              PQ_FLOAT4{primitive.atlas_uv_.x, primitive.atlas_uv_.y,
+                        primitive.atlas_uv_.z, primitive.atlas_uv_.w};
+          // map and copy from it
+          D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+          deviceContext_->Map(vs_model_buffer_.Get(), 0,
+                              D3D11_MAP::D3D11_MAP_WRITE_DISCARD, 0,
+                              &mapped_subresource);
+          memcpy(mapped_subresource.pData, &vs_model_buffer,
+                 sizeof(VsModelBuffer));
+          deviceContext_->Unmap(vs_model_buffer_.Get(), 0);
+          copies += 1;
+        }
+        // Configure the buffers created
+        ID3D11Buffer* per_object_cbuffer[1] = {vs_model_buffer_.Get()};
+        deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+        deviceContext_->DrawIndexed(primitive.indices_.size(), index_offset, 0);
 
-      index_offset += primitive.indices_.size();
-      vertex_offset += primitive.vertices_.size();
+        index_offset += primitive.indices_.size();
+        vertex_offset += primitive.vertices_.size();
+      }
     }
   }
   ImGui::Begin("Render Status");

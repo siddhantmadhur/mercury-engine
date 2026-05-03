@@ -92,7 +92,8 @@ void PObjectManager::MakeStatic(kEntityId id) {
       sv.position.x = vertex.position.x * scale.x * 0.5f + pos.x;
       sv.position.y = vertex.position.y * scale.y * 0.5f + pos.y;
       sv.position.z = vertex.position.z * scale.z * 0.5f + pos.z;
-      sv.color = vertex.color;
+      sv.color = PQ_FLOAT4{vertex.color.x, vertex.color.y, vertex.color.z,
+                           mesh->opacity_};
       sv.uv = vertex.uv;
       sv.atlas_uv = PQ_FLOAT4{atlas_uv.x, atlas_uv.y, atlas_uv.z, atlas_uv.w};
       static_vertices_.push_back(sv);
