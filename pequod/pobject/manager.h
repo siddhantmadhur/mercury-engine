@@ -74,11 +74,6 @@ class PObjectManager {
     return object;
   }
 
-  void MakeStatic(kEntityId id);
-
-  std::vector<Vertex> GetStaticVertices() const;
-  std::vector<UINT> GetStaticIndices() const;
-
   void GenerateVertices();
   std::vector<Vertex> GetVertices() const;
   void DeleteObject(kEntityId id);
@@ -92,8 +87,7 @@ class PObjectManager {
 
  private:
   std::vector<std::shared_ptr<PObject>> objects = {};
-  std::vector<Vertex> static_vertices_ = {};
-  std::vector<UINT> static_indices_ = {};
+  std::vector<std::shared_ptr<PObject>> static_objects_ = {};
   TextureAtlas atlas_;
   std::vector<Vertex> vertices_;
 };
