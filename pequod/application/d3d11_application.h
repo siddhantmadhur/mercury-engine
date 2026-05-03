@@ -18,6 +18,8 @@ namespace Pequod {
 
 struct CameraCBuffer {
   DirectX::XMFLOAT4X4 mWorldViewProj;
+  PQ_FLOAT2 mResolution;
+  PQ_FLOAT2 _pad;
 };
 
 class D3D11Application : public Application {

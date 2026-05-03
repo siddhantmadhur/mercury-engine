@@ -328,6 +328,8 @@ void D3D11Application::Render() {
       CameraCBuffer camera_c_buffer = {};
       camera_c_buffer.mWorldViewProj =
           DirectX::XMFLOAT4X4{&camera_proj_view[0][0]};
+      camera_c_buffer.mResolution =
+          PQ_FLOAT2{game_scene_->GetWidth(), game_scene_->GetHeight()};
       // map and copy from it
       D3D11_MAPPED_SUBRESOURCE mapped_subresource;
       deviceContext_->Map(camera_c_buffer_.Get(), 0,
