@@ -29,7 +29,7 @@ void SpaceInvaders::OnStart() {
                                                 glm::vec2(player_size));
     auto texture_path =
         std::filesystem::path(PEQUOD_ASSET_PATH) / "space_invaders/player.png";
-    player_->Add<Texture2D>(texture_path.string());
+    player_->NewProperty<Texture2D>(texture_path.string());
     physics_engine_->RegisterBody(player_, Physics::Box(glm::vec2(player_size)),
                                   JPH::EAllowedDOFs::TranslationX);
     physics_engine_->Set<kGravity>(*player_, 0.0f);
@@ -39,19 +39,19 @@ void SpaceInvaders::OnStart() {
 
   {
     auto wall = object_manager_->NewObject<PObject>();
-    wall->Add<Transform>(glm::vec3(-scaled_width / 2.0f, 0.0f, 0));
+    wall->NewProperty<Transform>(glm::vec3(-scaled_width / 2.0f, 0.0f, 0));
     physics_engine_->RegisterBody(wall, Physics::Plane(glm::vec3(1, 0, 0)),
                                   JPH::EAllowedDOFs::All);
   }
   {
     auto wall = object_manager_->NewObject<PObject>();
-    wall->Add<Transform>(glm::vec3(scaled_width / 2.0f, 0.0f, 0));
+    wall->NewProperty<Transform>(glm::vec3(scaled_width / 2.0f, 0.0f, 0));
     physics_engine_->RegisterBody(wall, Physics::Plane(glm::vec3(-1, 0, 0)),
                                   JPH::EAllowedDOFs::All);
   }
   {
     auto roof = object_manager_->NewObject<PObject>();
-    roof->Add<Transform>(glm::vec3(0.0f, scaled_height / 2.0f, 0.0f));
+    roof->NewProperty<Transform>(glm::vec3(0.0f, scaled_height / 2.0f, 0.0f));
     physics_engine_->RegisterBody(roof, Physics::Plane(glm::vec3(0, -1, 0)),
                                   JPH::EAllowedDOFs::All);
     physics_engine_->AddCollisionCallback<kCollisionEnter>(
@@ -70,7 +70,7 @@ void SpaceInvaders::OnStart() {
         auto enemy = object_manager_->NewObject<Box2D>(pos, size);
         auto texture_path = std::filesystem::path(PEQUOD_ASSET_PATH) /
                             "space_invaders/enemy1.png";
-        enemy->Add<Texture2D>(texture_path.string());
+        enemy->NewProperty<Texture2D>(texture_path.string());
         physics_engine_->RegisterBody(enemy,
                                       Physics::Box(size - glm::vec2(2.0f)),
                                       JPH::EAllowedDOFs::Plane2D);

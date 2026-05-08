@@ -26,6 +26,9 @@ void Transform::SetVelocity(glm::vec3 velocity) {
   this->velocity_ = velocity;
   transformations_.push_back(kTransformLinearVelocity);
 }
+void Transform::SetRotate(glm::vec3 new_value) { this->rotation_ = new_value; }
+void Transform::ChangeRotate(glm::vec3 delta) { rotation_ += delta; }
+glm::vec3 Transform::GetRotate() const { return this->rotation_; }
 void Transform::SetVelocityMagnitude(float) {
   transformations_.push_back(kTransformLinearMagnitude);
 }

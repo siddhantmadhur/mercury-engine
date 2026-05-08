@@ -4,6 +4,8 @@
 
 #include "input_manager.h"
 
+#include "imgui.h"
+
 namespace Pequod {
 InputManager::InputManager() {}
 bool InputManager::IsPressed(Key k) {
@@ -20,6 +22,7 @@ bool InputManager::IsJustPressed(Key k) {
     return false;
   }
 }
+glm::vec2 InputManager::GetCursorPos() { return this->mouse_position_; }
 void InputManager::SetKeyDown(Key k) {
   key_status_[k] = true;
   fresh_presses_[k] = true;
@@ -29,7 +32,37 @@ void InputManager::SetKeyUp(Key k) {
   repeated_keys_[k] = false;
   fresh_presses_[k] = false;
 }
-void InputManager::ResetFreshPresses() { fresh_presses_.clear(); }
+void InputManager::ResetFreshPresses() {
+  fresh_presses_.clear();
+  this->scroll_offset_ = glm::vec2(0.0f);
+}
+void InputManager::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
+                                     int action, int mods) {
+  if (action == GLFW_PRESS) {
+    SetKeyDown(key);
+  } else if (action == GLFW_RELEASE) {
+    SetKeyUp(key);
+  } else if (action == GLFW_REPEAT) {
+    SetKeyRepeat(key);
+  }
+}
+void InputManager::HandleCursorCallback(GLFWwindow* window, double xpos,
+                                        double ypos) {
+  this->mouse_position_ = glm::vec2(xpos, ypos);
+}
+void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
+                                        double yoffset) {
+  this->scroll_offset_ = glm::vec2(xoffset, yoffset);
+}
+
+float InputManager::GetScroll() { return this->scroll_offset_.y; }
+void InputManager::SetHoveringOverUI(bool new_value) {
+  this->is_hovering_on_ui_ = new_value;
+}
+bool InputManager::IsHoveringOnUI() {
+  bool is_hovering = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
+  return is_hovering;
+}
 void InputManager::SetKeyRepeat(Key k) { repeated_keys_[k] = true; }
 
 }  // namespace Pequod

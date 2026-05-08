@@ -52,14 +52,26 @@ class PObject {
   TProperty* Get() {
     auto property = std::get<TProperty*>(properties_);
     return property;
-  }
+  };
 
   template <std::derived_from<Property> TProperty, class... Args>
-  TProperty* Add(Args&&... args) {
+  TProperty* NewProperty(Args&&... args) {
     auto property = new TProperty(args...);
     std::get<TProperty*>(properties_) = property;
     return property;
-  }
+  };
+
+  template <typename TProperty>
+    requires std::derived_from<TProperty, Property>
+  void AddProperty(TProperty* property) {
+    std::get<TProperty*>(properties_) = new TProperty(*property);
+  };
+
+  template <class TProperty>
+    requires std::derived_from<TProperty, Property>
+  void Remove() {
+    std::get<TProperty*>(properties_) = nullptr;
+  };
 
  private:
   std::tuple<Transform*, Mesh*, Texture2D*> properties_;

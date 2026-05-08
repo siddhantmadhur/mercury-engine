@@ -104,6 +104,12 @@ class ObjectVsBroadPhaseLayerFilterImpl
 }  // namespace
 
 /**
+ * [1]: The entity id of the body it is connecting with
+ * [2]: The point at which the raycast hits
+ */
+using RayCastResult = std::tuple<kEntityId, glm::vec3>;
+
+/**
  * @brief Describes a type of collision
  */
 enum CollisionType { kCollisionEnter, kCollisionPersisted, kCollisionLeave };
@@ -222,6 +228,14 @@ class PhysicsEngine {
    */
   template <PhysicsProperty TProperty, typename Value>
   void Set(const PObject& obj, Value val);
+
+  /**
+   *   * @param origin The position in world space from which the ray is
+   * originating
+   * @param direction The direction of the ray as a 3d vector
+   * @return whether it has hit a body
+   */
+  std::optional<RayCastResult> RayCast(glm::vec3 origin, glm::vec3 direction);
 
  protected:
   std::map<kEntityId, CollisionCallbackLambda> on_collision_persisted_ = {};

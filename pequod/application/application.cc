@@ -64,6 +64,15 @@ bool Application::Initialize() {
   glfwSetFramebufferSizeCallback(window_, HandleResize);
 
   glfwSetKeyCallback(window_, HandleKeyCallback);
+  glfwSetCursorPosCallback(
+      window_, [](GLFWwindow* window, double xpos, double ypos) {
+        input_manager.HandleCursorCallback(window, xpos, ypos);
+      });
+
+  glfwSetScrollCallback(
+      window_, [](GLFWwindow* window, double xoffset, double yoffset) {
+        input_manager.HandleScrollCallback(window, xoffset, yoffset);
+      });
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -102,6 +111,7 @@ int Application::Run() {
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
+      game_scene_->OnFrame(delta_time_);
       if (ticks > last_tick_) {
         game_scene_->OnTick(time_since_last_tick_);
 
@@ -114,7 +124,6 @@ int Application::Run() {
 
         OnNewTick();
       }
-      game_scene_->OnFrame(delta_time_);
     } else {
       PDebug::warn("Game scene not set");
     }
@@ -140,13 +149,7 @@ void Application::HandleResize(GLFWwindow* window, int32_t width,
 }
 void Application::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                     int action, int mods) {
-  if (action == GLFW_PRESS) {
-    input_manager.SetKeyDown(key);
-  } else if (action == GLFW_RELEASE) {
-    input_manager.SetKeyUp(key);
-  } else if (action == GLFW_REPEAT) {
-    input_manager.SetKeyRepeat(key);
-  }
+  input_manager.HandleKeyCallback(window, key, scancode, action, mods);
 }
 void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }
 void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {

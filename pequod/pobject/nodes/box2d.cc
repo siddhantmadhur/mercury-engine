@@ -13,10 +13,10 @@
 namespace Pequod {
 Box2D::Box2D(glm::vec2 position, glm::vec2 size, glm::vec4 color) {
   this->name = "box2d";
-  auto pos = Add<Transform>();
+  auto pos = NewProperty<Transform>();
   pos->SetPosition(glm::vec3(position, 0.0f));
 
-  auto mesh = Add<Mesh>();
+  auto mesh = NewProperty<Mesh>();
   PQ_FLOAT3 dx_color(color.r, color.g, color.b);
   Vertex raw_vertices[4] = {
       {PQ_FLOAT3{1.0f, 1.0f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},

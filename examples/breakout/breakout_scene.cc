@@ -34,20 +34,20 @@ void BreakoutScene::OnStart() {
   }
   {  // left wall
     auto wall = object_manager_->NewObject<PObject>();
-    wall->Add<Transform>(glm::vec3(-scaled_width / 2.0f, 0, 0));
+    wall->NewProperty<Transform>(glm::vec3(-scaled_width / 2.0f, 0, 0));
     physics_engine_->RegisterBody(wall, Physics::Plane(glm::vec3(1, 0, 0)),
                                   JPH::EAllowedDOFs::All);
   }
   {  // right wall
     auto wall = object_manager_->NewObject<PObject>();
-    wall->Add<Transform>(glm::vec3(scaled_width / 2.0f, 0, 0));
+    wall->NewProperty<Transform>(glm::vec3(scaled_width / 2.0f, 0, 0));
     physics_engine_->RegisterBody(wall, Physics::Plane(glm::vec3(-1, 0, 0)),
                                   JPH::EAllowedDOFs::All);
   }
 
   {  // bottom follow
     auto floor = object_manager_->NewObject<PObject>();
-    floor->Add<Transform>(glm::vec3(0.0f, -scaled_height / 2.0f, 0));
+    floor->NewProperty<Transform>(glm::vec3(0.0f, -scaled_height / 2.0f, 0));
     physics_engine_->RegisterBody(floor, Physics::Plane(glm::vec3(0, 1, 0)),
                                   JPH::EAllowedDOFs::All);
     physics_engine_->AddCollisionCallback<kCollisionEnter>(
@@ -57,7 +57,7 @@ void BreakoutScene::OnStart() {
   }
   {
     auto roof = object_manager_->NewObject<PObject>();
-    roof->Add<Transform>(glm::vec3(0.0f, scaled_height / 2.0f, 0));
+    roof->NewProperty<Transform>(glm::vec3(0.0f, scaled_height / 2.0f, 0));
     physics_engine_->RegisterBody(roof, Physics::Plane(glm::vec3(0, -1, 0)),
                                   JPH::EAllowedDOFs::All);
   }

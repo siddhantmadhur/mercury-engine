@@ -4,6 +4,8 @@
 #include "shapes/plane.h"
 #include "Jolt/Core/Factory.h"
 #include "Jolt/RegisterTypes.h"
+#include "Jolt/Physics/Collision/CastResult.h"
+#include "Jolt/Physics/Collision/RayCast.h"
 #include "properties/transform.h"
 
 namespace Pequod {
@@ -191,6 +193,25 @@ void PhysicsEngine::SynchronizePObjects() {
       }
     }
   }
+}
+std::optional<RayCastResult> PhysicsEngine::RayCast(glm::vec3 origin,
+                                                    glm::vec3 direction) {
+  JPH::RRayCast ray{JPH::Vec3(origin.x, origin.y, origin.z),
+                    JPH::Vec3(direction.x, direction.y, direction.z)};
+  JPH::RayCastResult ray_hit;
+
+  if (physics_system_.GetNarrowPhaseQuery().CastRay(ray, ray_hit)) {
+    auto collision_point = ray.GetPointOnRay(ray_hit.mFraction);
+    auto body_id = ray_hit.mBodyID;
+    auto entity_id = jolt_bodies_ref_[body_id];
+    RayCastResult result = std::make_tuple(
+        entity_id, glm::vec3(collision_point.GetX(), collision_point.GetY(),
+                             collision_point.GetZ()));
+
+    return result;
+  }
+
+  return std::nullopt;
 }
 
 void PhysicsEngine::Compute(int steps) {

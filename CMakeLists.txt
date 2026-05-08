@@ -69,6 +69,8 @@ add_library(pequod
         pequod/pobject/nodes/camera2d.h
         pequod/pobject/texture_atlas.cc
         pequod/pobject/texture_atlas.h
+        pequod/pobject/nodes/camera3d.cc
+        pequod/pobject/nodes/camera3d.h
 )
 
 

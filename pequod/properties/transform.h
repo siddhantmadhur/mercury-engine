@@ -27,6 +27,10 @@ class Transform : public Property {
   glm::vec3 GetVelocity() const;
   void SetVelocity(glm::vec3);
 
+  void SetRotate(glm::vec3);
+  void ChangeRotate(glm::vec3);
+  glm::vec3 GetRotate() const;
+
   void SetVelocityMagnitude(float);
 
   void Move(glm::vec3);
@@ -40,6 +44,7 @@ class Transform : public Property {
  private:
   glm::vec3 position_;
   glm::vec3 velocity_{};
+  glm::vec3 rotation_;
   /*
    * Position only updates per tick (which can be significantly lower than fps)
    * so this makes sure its smoothed out

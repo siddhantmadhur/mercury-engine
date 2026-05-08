@@ -98,7 +98,12 @@ void PObjectManager::MakeStatic(kEntityId id) {
       sv.atlas_uv = PQ_FLOAT4{atlas_uv.x, atlas_uv.y, atlas_uv.z, atlas_uv.w};
       static_vertices_.push_back(sv);
     }
-    DeleteObject(id);
+    // Instead of deleting, removing from active objects so physics (for
+    // collision) still works
+    // DeleteObject(id);
+
+    object->Remove<Mesh>();
+    object->Remove<Texture2D>();
   } else {
     PDebug::warn(
         "Could not make static: Object did not have transform or mesh");

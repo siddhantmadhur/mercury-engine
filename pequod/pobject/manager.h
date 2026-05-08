@@ -64,8 +64,9 @@ class PObjectManager {
    * @tparam Args List of arguments required for the base class
    * @return A shared pointer pointing to the new object created
    */
-  template <std::derived_from<PObject> PType, class... Args>
-    requires std::constructible_from<PType, Args...>
+  template <class PType, class... Args>
+    requires std::derived_from<PType, PObject> &&
+             std::constructible_from<PType, Args...>
   std::shared_ptr<PType> NewObject(Args&&... args) {
     std::shared_ptr<PType> object =
         std::make_shared<PType>(std::forward<Args>(args)...);
@@ -74,6 +75,12 @@ class PObjectManager {
     return object;
   }
 
+  /**
+   * Moves object to a static buffer which means while its data cannot be
+   * changed, it renders very well
+   *
+   * @param id Entity to make static
+   */
   void MakeStatic(kEntityId id);
 
   std::vector<StaticVertex> GetStaticVertices() const;
