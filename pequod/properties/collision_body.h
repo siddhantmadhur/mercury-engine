@@ -13,7 +13,6 @@
 #include <Jolt/Jolt.h>
 
 #include "Jolt/Physics/Body/BodyCreationSettings.h"
-#include "pobject/pobject.h"
 #include "properties/property.h"
 
 namespace Pequod {
@@ -22,7 +21,6 @@ class CollisionBody : public Property {
   // reference to the body its handling
   CollisionBody();
   JPH::ShapeRefC GetShapeRef() const;
-  virtual void OverrideBodyCreation(JPH::BodyCreationSettings&) = 0;
 
  protected:
   JPH::ShapeRefC shape_ref_c_;

@@ -16,7 +16,6 @@
 #include "input/input_manager.h"
 #include "physics_engine/physics_engine.h"
 #include "pobject/manager.h"
-#include "pobject/nodes/camera2d.h"
 
 namespace Pequod {
 
@@ -65,7 +64,7 @@ class GameScene {
  protected:
   std::unique_ptr<PObjectManager> object_manager_ = nullptr;
   std::unique_ptr<PhysicsEngine> physics_engine_ = nullptr;
-  std::shared_ptr<Camera2D> player_camera_ = nullptr;
+  kEntityId player_camera_ = -1;
   InputManager* input_manager_ = nullptr;
 
  private:

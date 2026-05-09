@@ -141,7 +141,7 @@ using CollisionCallbackLambda =
  */
 class PhysicsEngine {
  public:
-  PhysicsEngine();
+  PhysicsEngine(PObjectManager& object_manager);
   ~PhysicsEngine();
 
   /**
@@ -167,7 +167,7 @@ class PhysicsEngine {
    * @brief Register a body to the physics engine before adding properties
    */
   template <class T>
-  void RegisterBody(std::shared_ptr<PObject> self, T collision_body,
+  void RegisterBody(kEntityId self, T collision_body,
                     JPH::EAllowedDOFs allowed_dofs)
     requires std::derived_from<T, CollisionBody>;
 
@@ -227,7 +227,7 @@ class PhysicsEngine {
    * @tparam Value The value to set for the property
    */
   template <PhysicsProperty TProperty, typename Value>
-  void Set(const PObject& obj, Value val);
+  void Set(kEntityId self, Value val);
 
   /**
    *   * @param origin The position in world space from which the ray is
@@ -243,7 +243,6 @@ class PhysicsEngine {
   std::map<kEntityId, CollisionCallbackLambda> on_collision_leave_ = {};
   std::map<JPH::BodyID, kEntityId> jolt_bodies_ref_ = {};
   std::map<kEntityId, JPH::BodyID> entity_bodies_ref_ = {};
-  std::map<kEntityId, std::shared_ptr<PObject>> registered_bodies_ = {};
 
  private:
   JPH::TempAllocator* temp_allocator_ = nullptr;
@@ -255,6 +254,8 @@ class PhysicsEngine {
   ObjectLayerPairFilterImpl object_layer_pair_filter_impl_;
 
   std::vector<kEntityId> disable_queue_;
+
+  PObjectManager& object_manager_;
 };
 
 }  // namespace Pequod

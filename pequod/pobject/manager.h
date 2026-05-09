@@ -8,14 +8,27 @@
  */
 #ifndef PEQUOD_POBJECT_MANAGER_H
 #define PEQUOD_POBJECT_MANAGER_H
+#include <array>
 #include <memory>
 #include <optional>
 
 #include "globals.h"
-#include "pobject.h"
 #include "texture_atlas.h"
+#include "properties/camera.h"
+#include <properties/transform.h>
+#include <properties/texture2d.h>
+#include <properties/mesh.h>
+#include <properties/collision_body.h>
 
 namespace Pequod {
+
+enum Node {
+  kEmpty,
+  kBox2D,
+};
+
+constexpr int kMaxProperties = 80960;
+#define PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Type) std::optional<Type>*
 
 /**
  * @brief Manager to handle creating and deleting PObjects
@@ -56,23 +69,36 @@ class PObjectManager {
    */
   void GroupPrimitives(kEntityId primary, kEntityId begin, kEntityId end);
 
-  /**
-   * @brief Create a new object in the manager
-   *
-   * @tparam PType The base class the object needs to be generated from (eg.
-   * Box2D or Capsule)
-   * @tparam Args List of arguments required for the base class
-   * @return A shared pointer pointing to the new object created
-   */
-  template <class PType, class... Args>
-    requires std::derived_from<PType, PObject> &&
-             std::constructible_from<PType, Args...>
-  std::shared_ptr<PType> NewObject(Args&&... args) {
-    std::shared_ptr<PType> object =
-        std::make_shared<PType>(std::forward<Args>(args)...);
-    object->id = objects.size();
-    objects.push_back(object);
-    return object;
+  kEntityId NewObject();
+  kEntityId NewBox2D(glm::vec2, glm::vec2, glm::vec4);
+
+  template <class TProperty>
+    requires std::derived_from<TProperty, Property>
+  void AddProperty(kEntityId self, TProperty property) {
+    std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
+        properties_)[self] = property;
+  }
+
+  template <class TProperty>
+    requires std::derived_from<TProperty, Property>
+  TProperty* GetProperty(kEntityId self) {
+    if (self >= current_entity_size_) {
+      return nullptr;
+    }
+    std::optional<TProperty>& property =
+        std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
+            properties_)[self];
+    if (property.has_value()) {
+      return &property.value();
+    }
+    return nullptr;
+  }
+
+  template <class TProperty>
+    requires std::derived_from<TProperty, Property>
+  void DeleteProperty(kEntityId self) {
+    std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
+        properties_)[self] = std::nullopt;
   }
 
   /**
@@ -92,17 +118,20 @@ class PObjectManager {
 
   TextureAtlas& GetAtlas() { return atlas_; }
 
-  std::shared_ptr<PObject> GetObjectById(entity_id id) {
-    if (id < objects.size()) return objects[id];
-    return nullptr;
-  }
-
  private:
-  std::vector<std::shared_ptr<PObject>> objects = {};
   std::vector<StaticVertex> static_vertices_ = {};
   std::vector<UINT> static_indices_ = {};
   TextureAtlas atlas_;
   std::vector<Vertex> vertices_;
+
+  kEntityId current_entity_size_ = 0;
+
+  std::tuple<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Mesh),
+             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Transform),
+             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(CollisionBody),
+             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Camera),
+             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Texture2D)>
+      properties_;
 };
 }  // namespace Pequod
 

@@ -16,7 +16,4 @@ Plane::Plane(glm::vec3 normal) {
   this->shape_ref_c_ = shape_result.Get();
 }
 
-void Plane::OverrideBodyCreation(JPH::BodyCreationSettings& creation_settings) {
-}
-
 }  // namespace Pequod::Physics

@@ -1,18 +1,19 @@
 //
-// Created by smadhur on 4/29/2026.
+// Created by smadhur on 5/8/2026.
 //
 
 #ifndef PEQUOD_ENGINE_CAMERA_H
 #define PEQUOD_ENGINE_CAMERA_H
+#include "property.h"
 #include <glm/glm.hpp>
-#include "pobject/pobject.h"
 
 namespace Pequod {
-class Camera2D : public PObject {
+class Camera : public Property {
  public:
-  Camera2D(float& width_, float& height_, glm::vec3 position = glm::vec3(0.0f));
-  glm::mat4 GetView();
-  glm::mat4 GetProjection();
+  Camera();
+  ~Camera();
+  glm::mat4 GetView(glm::vec3);
+  glm::mat4 GetProjection(float width, float height);
   void SetZoom(float zoom);
   float GetZoom();
 
@@ -20,8 +21,6 @@ class Camera2D : public PObject {
   glm::mat4 view_{};
   glm::mat4 proj_{};
   float zoom_ = 1.0f;
-  float& width_;
-  float& height_;
 };
 }  // namespace Pequod
 

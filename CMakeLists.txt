@@ -39,16 +39,11 @@ add_library(pequod
         pequod/physics_engine/physics_engine.h
         pequod/properties/collision_body.cc
         pequod/properties/collision_body.h
-        pequod/pobject/nodes/box2d.cc
-        pequod/pobject/nodes/box2d.h
         pequod/pobject/manager.cc
         pequod/pobject/manager.h
-        pequod/pobject/pobject.cc
         pequod/properties/property.cc
         pequod/debugger/debugger.h
         pequod/properties/mesh.cc
-        pequod/serialization/serialization.cc
-        pequod/serialization/serialization.h
         pequod/properties/transform.h
         pequod/properties/transform.cc
         pequod/properties/transform.h
@@ -65,12 +60,10 @@ add_library(pequod
         pequod/input/input_manager.h
         pequod/properties/texture2d.cc
         pequod/properties/texture2d.h
-        pequod/pobject/nodes/camera2d.cc
-        pequod/pobject/nodes/camera2d.h
         pequod/pobject/texture_atlas.cc
         pequod/pobject/texture_atlas.h
-        pequod/pobject/nodes/camera3d.cc
-        pequod/pobject/nodes/camera3d.h
+        pequod/properties/camera.cc
+        pequod/properties/camera.h
 )
 
 

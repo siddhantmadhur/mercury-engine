@@ -7,7 +7,7 @@
 #include "debugger/debugger.h"
 
 namespace Pequod {
-Transform::Transform() {
+Transform::Transform() : transformations_(0) {
   this->position_ = glm::vec3(0.0f);
   this->interpolated_position_ = glm::vec3(0.0f);
   this->velocity_ = glm::vec3(0.0f);

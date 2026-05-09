@@ -3,23 +3,27 @@
 //
 
 #include "scene.h"
+#include <properties/camera.h>
 
 namespace Pequod {
 
 GameScene::GameScene() {
   this->object_manager_ = std::make_unique<PObjectManager>();
-  this->physics_engine_ = std::make_unique<PhysicsEngine>();
+  this->physics_engine_ = std::make_unique<PhysicsEngine>(*object_manager_);
 
   physics_engine_->Initialize();
-  this->player_camera_ = object_manager_->NewObject<Camera2D>(width_, height_);
+  this->player_camera_ = object_manager_->NewObject();
+  object_manager_->AddProperty(player_camera_, Camera());
+  object_manager_->AddProperty(player_camera_, Transform(glm::vec3(0.0)));
 }
 
 bool GameScene::GetCameraProj(glm::mat4x4& proj) {
-  if (this->player_camera_ == nullptr) {
+  auto cam = object_manager_->GetProperty<Camera>(player_camera_);
+  auto pos = object_manager_->GetProperty<Transform>(player_camera_);
+  if (!cam || !pos) {
     return false;
   }
-
-  proj = player_camera_->GetProjection() * player_camera_->GetView();
+  proj = cam->GetProjection(width_, height_) * cam->GetView(pos->GetPosition());
 
   return true;
 }

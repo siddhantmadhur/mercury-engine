@@ -8,3 +8,4 @@ sokol-shdc
 /.vs
 /.idea
 /sdk
+out/

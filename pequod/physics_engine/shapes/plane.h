@@ -11,7 +11,6 @@ namespace Pequod::Physics {
 class Plane : public CollisionBody {
  public:
   Plane(glm::vec3 normal);
-  void OverrideBodyCreation(JPH::BodyCreationSettings&) override;
 };
 }  // namespace Pequod::Physics
 

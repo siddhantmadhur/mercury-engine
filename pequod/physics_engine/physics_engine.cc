@@ -89,7 +89,8 @@ class PhysicsContactListener : public JPH::ContactListener {
 };
 }  // namespace
 
-PhysicsEngine::PhysicsEngine() {
+PhysicsEngine::PhysicsEngine(PObjectManager& object_manager)
+    : object_manager_(object_manager) {
   PDebug::info("Created physics engine...");
   JPH::RegisterDefaultAllocator();
   JPH::Factory::sInstance = new JPH::Factory();
@@ -128,13 +129,12 @@ void PhysicsEngine::Initialize() {
 }
 
 template <class TCollisionShape>
-void PhysicsEngine::RegisterBody(std::shared_ptr<PObject> self,
-                                 TCollisionShape collision_body,
+void PhysicsEngine::RegisterBody(kEntityId self, TCollisionShape collision_body,
                                  JPH::EAllowedDOFs allowed_dofs)
   requires std::derived_from<TCollisionShape, CollisionBody>
 {
   PDebug::info("Registering body to physics engine...");
-  auto transform = self->Get<Transform>();
+  auto transform = object_manager_.GetProperty<Transform>(self);
   if (transform == nullptr) {
     PDebug::error("Physics body needs transform property to register");
     assert(false);
@@ -148,29 +148,25 @@ void PhysicsEngine::RegisterBody(std::shared_ptr<PObject> self,
 
   creation_settings.mAllowedDOFs = allowed_dofs;
   creation_settings.mMotionQuality = JPH::EMotionQuality::LinearCast;
-  collision_body.OverrideBodyCreation(creation_settings);
+  // collision_body.OverrideBodyCreation(creation_settings);
 
   auto& body_interface = physics_system_.GetBodyInterface();
 
   auto body = body_interface.CreateBody(creation_settings);
 
   auto body_id = body->GetID();
-  this->jolt_bodies_ref_[body_id] = self->id;
-  this->entity_bodies_ref_[self->id] = body_id;
-  this->registered_bodies_[self->id] = self;
+  this->jolt_bodies_ref_[body_id] = self;
+  this->entity_bodies_ref_[self] = body_id;
 
   body_interface.AddBody(body_id, JPH::EActivation::Activate);
 }
 
 void PhysicsEngine::SynchronizePObjects() {
   auto& body_interface = physics_system_.GetBodyInterface();
-  for (const auto& pair : registered_bodies_) {
+  for (const auto& pair : entity_bodies_ref_) {
     auto entity_id = pair.first;
-    auto entity = pair.second;
-    if (!entity) {
-      continue;
-    }
-    auto transform = entity->Get<Transform>();
+    auto jolt_id = pair.second;
+    auto transform = object_manager_.GetProperty<Transform>(entity_id);
     if (transform) {
       auto transformations = transform->GetTransformations();
       auto jolt_id = entity_bodies_ref_[entity_id];
@@ -232,7 +228,6 @@ void PhysicsEngine::Compute(int steps) {
     body_interface.RemoveBody(body_id);
     jolt_bodies_ref_.erase(body_id);
     entity_bodies_ref_.erase(id);
-    registered_bodies_[id] = nullptr;
     disable_queue_.pop_back();
   }
 
@@ -244,12 +239,7 @@ void PhysicsEngine::Compute(int steps) {
     auto body_id = pair.first;
     auto entity_id = pair.second;
 
-    auto entity = registered_bodies_[entity_id];
-    if (entity == nullptr) {
-      continue;
-    }
-
-    auto transform = entity->Get<Transform>();
+    auto transform = object_manager_.GetProperty<Transform>(entity_id);
     auto transformations = transform->GetTransformations();
     if (!std::binary_search(transformations.begin(), transformations.end(),
                             kTransformPosition)) {
@@ -270,9 +260,6 @@ void PhysicsEngine::Compute(int steps) {
 void PhysicsEngine::DisableBody(kEntityId id) {
   auto body_id = entity_bodies_ref_[id];
   PDebug::log("Disabling body: {}", id);
-  if (registered_bodies_[id] == nullptr) {
-    return;
-  }
 
   if (std::binary_search(disable_queue_.begin(), disable_queue_.end(), id)) {
     return;
@@ -288,40 +275,36 @@ kEntityId PhysicsEngine::Get(JPH::BodyID jolt_id) {
   return this->jolt_bodies_ref_[jolt_id];
 }
 bool PhysicsEngine::IsRegistered(kEntityId id) {
-  if (this->registered_bodies_.contains(id)) {
-    return this->registered_bodies_[id] != nullptr;
+  if (this->entity_bodies_ref_.contains(id)) {
+    auto jolt_id = this->entity_bodies_ref_[id];
+    return this->jolt_bodies_ref_[jolt_id] > 0;
   } else {
     return false;
   }
 }
 
 template <>
-void PhysicsEngine::Set<kRestitution>(const PObject& obj, float restitution) {
-  auto id = obj.id;
+void PhysicsEngine::Set<kRestitution>(kEntityId id, float restitution) {
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetRestitution(jolt_body, restitution);
 }
 
 template <>
-void PhysicsEngine::Set<kMotionType>(const PObject& obj,
-                                     JPH::EMotionType motion) {
-  auto id = obj.id;
+void PhysicsEngine::Set<kMotionType>(kEntityId id, JPH::EMotionType motion) {
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetMotionType(jolt_body, motion, JPH::EActivation::Activate);
 }
 template <>
-void PhysicsEngine::Set<kFriction>(const PObject& obj, float friction) {
-  auto id = obj.id;
+void PhysicsEngine::Set<kFriction>(kEntityId id, float friction) {
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetFriction(jolt_body, friction);
 }
 
 template <>
-void PhysicsEngine::Set<kGravity>(const PObject& obj, float value) {
-  auto id = obj.id;
+void PhysicsEngine::Set<kGravity>(kEntityId id, float value) {
   auto jolt_body = entity_bodies_ref_[id];
   auto& body_interface = physics_system_.GetBodyInterface();
   body_interface.SetGravityFactor(jolt_body, value);
@@ -345,10 +328,8 @@ void PhysicsEngine::AddCollisionCallback<kCollisionLeave>(
 }
 
 template void PhysicsEngine::RegisterBody<class Physics::Box>(
-    class std::shared_ptr<class PObject>, class Physics::Box,
-    enum JPH::EAllowedDOFs);
+    kEntityId, class Physics::Box, enum JPH::EAllowedDOFs);
 template void PhysicsEngine::RegisterBody<class Physics::Plane>(
-    class std::shared_ptr<class PObject>, class Physics::Plane,
-    enum JPH::EAllowedDOFs);
+    kEntityId, class Physics::Plane, enum JPH::EAllowedDOFs);
 
 }  // namespace Pequod

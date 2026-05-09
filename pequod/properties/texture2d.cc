@@ -11,7 +11,9 @@
 namespace Pequod {
 
 Texture2D::Texture2D() {
-  x = 1; y = 1; channels = 4;
+  x = 1;
+  y = 1;
+  channels = 4;
   raw_data = (stbi_uc*)malloc(4);
   memset(raw_data, 255, 4);
 }
@@ -29,10 +31,6 @@ Texture2D::Texture2D(const std::string& file_path) {
 std::string Texture2D::GetPath() const { return this->path_; }
 void Texture2D::SetAtlasUV(glm::vec4 atlas_uv) { this->atlas_uv_ = atlas_uv; }
 
-Texture2D::~Texture2D() {
-  if (raw_data) {
-    stbi_image_free(raw_data);
-  }
-}
+Texture2D::~Texture2D() {}
 
 }  // namespace Pequod
