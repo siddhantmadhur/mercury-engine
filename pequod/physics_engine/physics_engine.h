@@ -14,7 +14,6 @@
 #ifndef PEQUOD_PHYSICS_ENGINE_H_
 #define PEQUOD_PHYSICS_ENGINE_H_
 #include <Jolt/Jolt.h>
-#include "shapes/plane.h"
 #include <map>
 #include <stack>
 #include "Jolt/Core/Core.h"
@@ -26,8 +25,6 @@
 #include "debugger/debugger.h"
 #include "globals.h"
 #include "pobject/manager.h"
-#include "properties/collision_body.h"
-#include "shapes/box.h"
 
 namespace Pequod {
 
@@ -164,12 +161,30 @@ class PhysicsEngine {
   void Compute(int steps);
 
   /**
-   * @brief Register a body to the physics engine before adding properties
+   *
+   * @param self The object id it is being applied to
+   * @param dimensions The dimension of the box being created
+   * @param override Lambda function that runs to override any body creating
+   * settings
+   * @return Successful registration or not
    */
-  template <class T>
-  void RegisterBody(kEntityId self, T collision_body,
-                    JPH::EAllowedDOFs allowed_dofs)
-    requires std::derived_from<T, CollisionBody>;
+  bool CreateBox3D(
+      kEntityId self, glm::vec3 dimensions,
+      std::function<void(JPH::BodyCreationSettings&)> override =
+          [](JPH::BodyCreationSettings&) {});
+
+  /**
+   * @brief Create a static infinite plane
+   * @param self The object id it is being applied to
+   * @param normal The normal of the plane
+   * @param override_function Lambda function that runs to override any body
+   * creating settings
+   * @return Successful registration or not
+   */
+  bool CreatePlane(
+      kEntityId self, glm::vec3 normal,
+      std::function<void(JPH::BodyCreationSettings&)> override_function =
+          [](JPH::BodyCreationSettings&) {});
 
   /**
    * @brief Unregister a body from the physics engine

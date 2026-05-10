@@ -56,6 +56,12 @@ class Application {
    */
   void SetGameScene(std::unique_ptr<GameScene>);
 
+  /**
+   * Set the cursor
+   * @param file_path Filepath to an image containing the cursor data
+   */
+  void SetPointer(std::string file_path);
+
  protected:
   /**
    * @brief Runs when the application context is created
@@ -113,6 +119,8 @@ class Application {
   int32_t height_ = 0;
   std::string title_ = "Pequod";
   bool is_loaded_ = false;
+
+  GLFWimage* current_cursor = nullptr;
 
   double delta_time_ = 0.0f;
   double time_elapsed_ = 0.0f;

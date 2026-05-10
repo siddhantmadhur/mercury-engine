@@ -37,8 +37,6 @@ endif ()
 add_library(pequod
         pequod/physics_engine/physics_engine.cc
         pequod/physics_engine/physics_engine.h
-        pequod/properties/collision_body.cc
-        pequod/properties/collision_body.h
         pequod/pobject/manager.cc
         pequod/pobject/manager.h
         pequod/properties/property.cc
@@ -47,10 +45,6 @@ add_library(pequod
         pequod/properties/transform.h
         pequod/properties/transform.cc
         pequod/properties/transform.h
-        pequod/physics_engine/shapes/box.cc
-        pequod/physics_engine/shapes/box.h
-        pequod/physics_engine/shapes/plane.cc
-        pequod/physics_engine/shapes/plane.h
         pequod/application/application.h
         pequod/application/application.cc
         ${PEQUOD_BACKEND_SOURCE}

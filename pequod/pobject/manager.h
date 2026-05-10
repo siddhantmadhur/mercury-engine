@@ -18,7 +18,6 @@
 #include <properties/transform.h>
 #include <properties/texture2d.h>
 #include <properties/mesh.h>
-#include <properties/collision_body.h>
 
 namespace Pequod {
 
@@ -27,7 +26,8 @@ enum Node {
   kBox2D,
 };
 
-constexpr int kMaxProperties = 80960;
+constexpr kEntityId kMaxEntities = 80960;
+// TODO: Going to replace this with a sparsed set later
 #define PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Type) std::optional<Type>*
 
 /**
@@ -128,7 +128,6 @@ class PObjectManager {
 
   std::tuple<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Mesh),
              PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Transform),
-             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(CollisionBody),
              PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Camera),
              PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Texture2D)>
       properties_;

@@ -18,15 +18,14 @@ static InputManager input_manager;
 
 Application::Application(const std::string& window_title, float initial_width,
                          float initial_height) {
-  PDebug::info("Application context created...");
+  PDebug::info("==================[ Pequod | {} | Windows ]==================",
+               window_title);
   title_ = window_title;
   width_ = initial_width;
   height_ = initial_height;
 }
 
 bool Application::Initialize() {
-  PDebug::info("Initializing...");
-
   if (!glfwInit()) {
     PDebug::error("Could not initialize glfw");
   }
@@ -93,10 +92,21 @@ int Application::Run() {
     PDebug::error("Could not load application");
     return 1;
   }
-
   game_scene_->OnStart();
 
+  GLFWcursor* cursor = nullptr;
+  if (current_cursor) {
+    cursor = glfwCreateCursor(current_cursor, 0, 0);
+    if (cursor) {
+      glfwSetCursor(window_, cursor);
+
+    } else {
+      PDebug::error("Cursor could not be created");
+    }
+  }
   while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
+    glfwSetCursor(window_, cursor);
+
     double current_time = glfwGetTime() * 1000;
     delta_time_ = current_time - time_elapsed_;
     time_elapsed_ = current_time;
@@ -150,6 +160,22 @@ void Application::HandleResize(GLFWwindow* window, int32_t width,
 void Application::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                     int action, int mods) {
   input_manager.HandleKeyCallback(window, key, scancode, action, mods);
+}
+void Application::SetPointer(std::string file_path) {
+  PDebug::info("Setting cursor...");
+
+  int x, y, channels;
+  auto* res = stbi_load(file_path.c_str(), &x, &y, &channels, 4);
+  if (res) {
+    GLFWimage* image = new GLFWimage();
+    image->width = x;
+    image->height = y;
+    image->pixels = res;
+    this->current_cursor = image;
+
+  } else {
+    PDebug::error("Could not read file: {}", file_path);
+  }
 }
 void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }
 void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {

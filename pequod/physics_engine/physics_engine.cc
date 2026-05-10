@@ -1,11 +1,12 @@
 #include "physics_engine.h"
 
-#include "shapes/box.h"
-#include "shapes/plane.h"
 #include "Jolt/Core/Factory.h"
 #include "Jolt/RegisterTypes.h"
+#include "Jolt/Physics/Body/BodyCreationSettings.h"
 #include "Jolt/Physics/Collision/CastResult.h"
 #include "Jolt/Physics/Collision/RayCast.h"
+#include "Jolt/Physics/Collision/Shape/BoxShape.h"
+#include "Jolt/Physics/Collision/Shape/PlaneShape.h"
 #include "properties/transform.h"
 
 namespace Pequod {
@@ -128,27 +129,31 @@ void PhysicsEngine::Initialize() {
   PDebug::info("Initialized Jolt Physics System");
 }
 
-template <class TCollisionShape>
-void PhysicsEngine::RegisterBody(kEntityId self, TCollisionShape collision_body,
-                                 JPH::EAllowedDOFs allowed_dofs)
-  requires std::derived_from<TCollisionShape, CollisionBody>
-{
+bool PhysicsEngine::CreateBox3D(
+    kEntityId self, glm::vec3 dimensions,
+    std::function<void(JPH::BodyCreationSettings&)> override_function) {
   PDebug::info("Registering body to physics engine...");
   auto transform = object_manager_.GetProperty<Transform>(self);
   if (transform == nullptr) {
     PDebug::error("Physics body needs transform property to register");
-    assert(false);
-    return;
+    return false;
   }
-  auto position = transform->GetPosition();
-  auto creation_settings = JPH::BodyCreationSettings(
-      collision_body.GetShapeRef(),
-      JPH::RVec3(position.x, position.y, position.z), JPH::Quat::sIdentity(),
-      JPH::EMotionType::Static, Layers::MOVING);
 
-  creation_settings.mAllowedDOFs = allowed_dofs;
-  creation_settings.mMotionQuality = JPH::EMotionQuality::LinearCast;
-  // collision_body.OverrideBodyCreation(creation_settings);
+  auto position = transform->GetPosition();
+  dimensions /= 2;
+  JPH::BoxShapeSettings box_shape_settings(
+      JPH::Vec3(dimensions.x, dimensions.y, dimensions.z));
+  box_shape_settings.SetEmbedded();
+
+  JPH::ShapeSettings::ShapeResult box_shape_result =
+      box_shape_settings.Create();
+  auto shape_ref = box_shape_result.Get();
+
+  auto creation_settings = JPH::BodyCreationSettings(
+      shape_ref, JPH::RVec3(position.x, position.y, position.z),
+      JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::MOVING);
+
+  override_function(creation_settings);
 
   auto& body_interface = physics_system_.GetBodyInterface();
 
@@ -159,6 +164,43 @@ void PhysicsEngine::RegisterBody(kEntityId self, TCollisionShape collision_body,
   this->entity_bodies_ref_[self] = body_id;
 
   body_interface.AddBody(body_id, JPH::EActivation::Activate);
+  return true;
+}
+
+bool PhysicsEngine::CreatePlane(
+    kEntityId self, glm::vec3 normal,
+    std::function<void(JPH::BodyCreationSettings&)> override_function) {
+  PDebug::info("Registering body to physics engine...");
+  auto transform = object_manager_.GetProperty<Transform>(self);
+  if (transform == nullptr) {
+    PDebug::error("Physics body needs transform property to register");
+    return false;
+  }
+
+  auto position = transform->GetPosition();
+  JPH::Plane plane(JPH::Vec3(normal.x, normal.y, normal.z), 0);
+  JPH::PlaneShapeSettings plane_shape_settings(plane);
+  plane_shape_settings.SetEmbedded();
+
+  JPH::ShapeSettings::ShapeResult shape_result = plane_shape_settings.Create();
+  auto shape_ref = shape_result.Get();
+
+  auto creation_settings = JPH::BodyCreationSettings(
+      shape_ref, JPH::RVec3(position.x, position.y, position.z),
+      JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::NON_MOVING);
+
+  override_function(creation_settings);
+
+  auto& body_interface = physics_system_.GetBodyInterface();
+
+  auto body = body_interface.CreateBody(creation_settings);
+
+  auto body_id = body->GetID();
+  this->jolt_bodies_ref_[body_id] = self;
+  this->entity_bodies_ref_[self] = body_id;
+
+  body_interface.AddBody(body_id, JPH::EActivation::Activate);
+  return true;
 }
 
 void PhysicsEngine::SynchronizePObjects() {
@@ -326,10 +368,5 @@ void PhysicsEngine::AddCollisionCallback<kCollisionLeave>(
     kEntityId self, CollisionCallbackLambda callback_lambda) {
   this->on_collision_leave_[self] = callback_lambda;
 }
-
-template void PhysicsEngine::RegisterBody<class Physics::Box>(
-    kEntityId, class Physics::Box, enum JPH::EAllowedDOFs);
-template void PhysicsEngine::RegisterBody<class Physics::Plane>(
-    kEntityId, class Physics::Plane, enum JPH::EAllowedDOFs);
 
 }  // namespace Pequod

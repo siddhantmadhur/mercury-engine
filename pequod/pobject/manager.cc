@@ -18,15 +18,13 @@
 namespace Pequod {
 PObjectManager::PObjectManager() {
   std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Mesh)>(properties_) =
-      new std::optional<Mesh>[kMaxProperties] {};
+      new std::optional<Mesh>[kMaxEntities] {};
   std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Transform)>(properties_) =
-      new std::optional<Transform>[kMaxProperties] {};
-  std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(CollisionBody)>(
-      properties_) = new std::optional<CollisionBody>[kMaxProperties] {};
+      new std::optional<Transform>[kMaxEntities] {};
   std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Camera)>(properties_) =
-      new std::optional<Camera>[kMaxProperties] {};
+      new std::optional<Camera>[kMaxEntities] {};
   std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Texture2D)>(properties_) =
-      new std::optional<Texture2D>[kMaxProperties] {};
+      new std::optional<Texture2D>[kMaxEntities] {};
 };
 std::vector<Primitive> PObjectManager::GetPrimitives() {
   std::vector<Primitive> primitives;
@@ -114,7 +112,7 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
 }
 
 kEntityId PObjectManager::NewObject() {
-  if (current_entity_size_ == kMaxProperties) {
+  if (current_entity_size_ == kMaxEntities) {
     PDebug::error("Reached max properties size");
     return -1;
   }
