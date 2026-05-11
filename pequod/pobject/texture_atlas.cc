@@ -27,6 +27,7 @@ void TextureAtlas::AddTexture(Texture2D* texture) {
     auto img_id = images_[texture->GetPath()];
     auto img = textures_[img_id];
     texture->SetAtlasUV(img->GetAtlasUV());
+    aliases_[img_id].push_back(texture);
     return;
   }
   rects.push_back(stbrp_rect{
@@ -36,6 +37,7 @@ void TextureAtlas::AddTexture(Texture2D* texture) {
   });
   stbrp_pack_rects(&ctx_, rects.data(), static_cast<int>(rects.size()));
   textures_.push_back(texture);
+  aliases_.push_back({texture});
   images_[texture->GetPath()] = img_id_;
 
   img_id_ += 1;
@@ -70,6 +72,9 @@ void TextureAtlas::UpdateAtlas() {
     atlas_uv.z = atlas_uv.x + img_width / fw;
     atlas_uv.w = atlas_uv.y + img_height / fh;
     img->SetAtlasUV(atlas_uv);
+    for (Texture2D *alias : aliases_[rect.id]) {
+      if (alias != img) alias->SetAtlasUV(atlas_uv);
+    }
   }
 
   PDebug::info("Writing atlas...");

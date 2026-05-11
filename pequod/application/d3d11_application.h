@@ -82,6 +82,10 @@ class D3D11Application : public Application {
   ComPtr<ID3D11PixelShader> textured_pixel_shader_ = nullptr;
   ComPtr<ID3D11VertexShader> static_vertex_shader_ = nullptr;
   ComPtr<ID3D11BlendState> blendState_ = nullptr;
+  ComPtr<ID3D11RasterizerState> rasterizer_state_ = nullptr;
+  ComPtr<ID3D11Texture2D> depth_stencil_buffer_ = nullptr;
+  ComPtr<ID3D11DepthStencilView> depth_stencil_view_ = nullptr;
+  ComPtr<ID3D11DepthStencilState> depth_stencil_state_ = nullptr;
   ComPtr<ID3D11SamplerState> texture_sampler_ = nullptr;
 
   ComPtr<ID3D11Texture2D> atlas_texture_ = nullptr;

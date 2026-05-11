@@ -9,28 +9,27 @@
 #include "stb/stb_image.h"
 
 namespace Pequod {
-
-Texture2D::Texture2D() {
-  x = 1;
-  y = 1;
-  channels = 4;
-  raw_data = (stbi_uc*)malloc(4);
-  memset(raw_data, 255, 4);
-}
-
-Texture2D::Texture2D(const std::string& file_path) {
-  this->path_ = file_path;
-  raw_data = stbi_load(file_path.c_str(), &x, &y, &channels, 4);
-  if (raw_data) {
-    PDebug::log("Loaded image: {}", file_path);
-  } else {
-    PDebug::error("Could not load image: {}", file_path);
+  Texture2D::Texture2D() {
+    x = 1;
+    y = 1;
+    channels = 4;
+    raw_data = (stbi_uc *) malloc(4);
+    memset(raw_data, 255, 4);
   }
-}
 
-std::string Texture2D::GetPath() const { return this->path_; }
-void Texture2D::SetAtlasUV(glm::vec4 atlas_uv) { this->atlas_uv_ = atlas_uv; }
+  Texture2D::Texture2D(const std::string &file_path, int depth) {
+    this->path_ = file_path;
+    raw_data = stbi_load(file_path.c_str(), &x, &y, &channels, depth);
+    if (raw_data) {
+      PDebug::log("Loaded image: {} [{}x{} - {}]", file_path, x, y, channels);
+    } else {
+      PDebug::error("Could not load image: {}", file_path);
+    }
+  }
 
-Texture2D::~Texture2D() {}
+  std::string Texture2D::GetPath() const { return this->path_; }
+  void Texture2D::SetAtlasUV(glm::vec4 atlas_uv) { this->atlas_uv_ = atlas_uv; }
 
-}  // namespace Pequod
+  Texture2D::~Texture2D() {
+  }
+} // namespace Pequod

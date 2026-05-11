@@ -110,6 +110,10 @@ include_directories("third_party/tinyxml2")
 include_directories("third_party/glfw/include")
 add_subdirectory("third_party/glfw")
 
+
+include_directories("third_party/assimp/include")
+add_subdirectory("third_party/assimp")
+
 # Live++ :
 include_directories("sdk/LivePP/API/x64/")
 
@@ -122,7 +126,7 @@ if (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11")
     target_compile_definitions(pequod PUBLIC PEQUOD_GRAPHICS_D3D11=1)
 endif ()
 
-target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
+target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw assimp)
 
 if (MSVC)
     message(STATUS "Using Visual Studio Compiler")
