@@ -12,6 +12,7 @@
 #define PEQUODENGINE_APPLICATION_H
 #include <input/input_manager.h>
 
+#include <queue>
 #include <string>
 #include <string_view>
 
@@ -112,6 +113,7 @@ class Application {
 
  protected:
   std::unique_ptr<GameScene> game_scene_ = nullptr;
+  int average_fps_ = 0;
 
  private:
   GLFWwindow* window_ = nullptr;
@@ -121,6 +123,9 @@ class Application {
   bool is_loaded_ = false;
 
   GLFWimage* current_cursor = nullptr;
+  bool default_arrow_ = false;
+
+  std::deque<double> fps_sliding_window_;
 
   double delta_time_ = 0.0f;
   double time_elapsed_ = 0.0f;

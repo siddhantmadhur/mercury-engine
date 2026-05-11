@@ -12,22 +12,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Backend selection. Defaults: D3D11 on Windows, VULKAN elsewhere.
-set(PEQUOD_GRAPHICS_BACKEND "" CACHE STRING "Graphics backend: D3D11 or VULKAN")
+# Backend selection. Defaults: D3D11 on Windows,
+set(PEQUOD_GRAPHICS_BACKEND "" CACHE STRING "Graphics backend: D3D11")
 if (NOT PEQUOD_GRAPHICS_BACKEND)
     if (WIN32)
         set(PEQUOD_GRAPHICS_BACKEND "D3D11")
-    else ()
-        set(PEQUOD_GRAPHICS_BACKEND "VULKAN")
     endif ()
 endif ()
 message(STATUS "Pequod graphics backend: ${PEQUOD_GRAPHICS_BACKEND}")
 
-if (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
-    set(PEQUOD_BACKEND_SOURCE pequod/application/vulkan_application.cc)
-    set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
-    find_package(Vulkan REQUIRED)
-elseif (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11")
+if (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11")
     set(PEQUOD_BACKEND_SOURCE pequod/application/d3d11_application.cc)
     set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_dx11.cpp)
 else ()
@@ -58,6 +52,10 @@ add_library(pequod
         pequod/pobject/texture_atlas.h
         pequod/properties/camera.cc
         pequod/properties/camera.h
+        pequod/ui/ui_system.cc
+        pequod/ui/ui_system.h
+        pequod/ui/ui_element.cc
+        pequod/ui/ui_element.h
 )
 
 
@@ -122,8 +120,6 @@ target_compile_definitions(pequod PUBLIC
 
 if (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11")
     target_compile_definitions(pequod PUBLIC PEQUOD_GRAPHICS_D3D11=1)
-elseif (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
-    target_compile_definitions(pequod PUBLIC PEQUOD_GRAPHICS_VULKAN=1)
 endif ()
 
 target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw)
@@ -185,28 +181,6 @@ if (PEQUOD_GRAPHICS_BACKEND STREQUAL "VULKAN")
 endif ()
 
 
-# The editor uses Sokol with a hardcoded D3D11 backend; only build it on
-# Windows for now.
-if (WIN32)
-    file(GLOB_RECURSE EDITOR_SOURCE "editor/*.cc" "editor/main.cc")
-    if (APPLE)
-        set_source_files_properties(editor/main.cc PROPERTIES LANGUAGE OBJCXX)
-    endif ()
-
-    add_executable(pequod_editor ${EDITOR_SOURCE}
-            editor/main.cc
-            "editor/panel/preview_scene.h"
-            editor/editor_windows/preview_scene.cc
-            editor/panel/object_tree.h
-            editor/panel/object_tree.cc
-            editor/panel/object_properties.h
-            editor/panel/object_properties.cc
-            pequod/globals.h
-            pequod/scene/scene.h
-    )
-    target_link_libraries(pequod_editor pequod)
-endif ()
-
 # CREATE NEW BINARIES USING THIS
 
 
@@ -227,3 +201,8 @@ add_executable(example_space_invaders examples/space_invaders/main.cc
         examples/space_invaders/space_invaders.cc
         examples/space_invaders/space_invaders.h)
 target_link_libraries(example_space_invaders pequod)
+
+add_executable(pequod_editor editor/main.cc
+        editor/ui_editor/scene.cc)
+target_link_libraries(pequod_editor pequod)
+target_compile_definitions(pequod_editor PRIVATE PEQUOD_EDITOR_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets")

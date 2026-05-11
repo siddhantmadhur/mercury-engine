@@ -105,11 +105,27 @@ int Application::Run() {
     }
   }
   while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
-    glfwSetCursor(window_, cursor);
-
     double current_time = glfwGetTime() * 1000;
-    delta_time_ = current_time - time_elapsed_;
+    auto frametime = current_time - time_elapsed_;
+    delta_time_ = frametime;
     time_elapsed_ = current_time;
+
+    {  // FPS logic
+      int kFrametimeSlidingWindowSize = 30;
+      fps_sliding_window_.push_back(frametime);
+
+      if (fps_sliding_window_.size() > kFrametimeSlidingWindowSize) {
+        fps_sliding_window_.pop_front();
+      }
+
+      double total = 0;
+      for (int i = 0; i < fps_sliding_window_.size(); i++) {
+        total += fps_sliding_window_[i];
+      }
+      double average = total / fps_sliding_window_.size();
+      average_fps_ = std::round(1000 / average);
+    }
+
     auto ticks_per_sec = 60;
     time_since_last_tick_ += delta_time_;
 
@@ -139,6 +155,12 @@ int Application::Run() {
     }
 
     Render();
+
+    {
+      if (!input_manager.IsHoveringOnUI()) {
+        glfwSetCursor(window_, cursor);
+      }
+    }
   }
 
   return 0;

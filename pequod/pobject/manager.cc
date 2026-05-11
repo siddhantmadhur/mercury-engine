@@ -41,7 +41,7 @@ std::vector<Primitive> PObjectManager::GetPrimitives() {
         auto world_position = transform->GetPosition();
         primitive.world_position_ = world_position;
       } else {
-        primitive.world_position_ = glm::vec3(1.0f);
+        primitive.world_position_ = glm::vec3(0.0f);
       }
 
       auto tex = GetProperty<Texture2D>(id);
@@ -90,10 +90,10 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
   auto mesh = Mesh();
   PQ_FLOAT3 dx_color(color.r, color.g, color.b);
   Vertex raw_vertices[4] = {
-      {PQ_FLOAT3{1.0f, 1.0f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
-      {PQ_FLOAT3{1.0f, -1.0f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
-      {PQ_FLOAT3{-1.0f, -1.0f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
-      {PQ_FLOAT3{-1.0f, 1.0f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, -0.5f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
   };
   mesh.SetVertices(
       std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
@@ -108,6 +108,35 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
   AddProperty(id, pos);
   AddProperty(id, mesh);
 
+  return id;
+}
+kEntityId PObjectManager::NewPlane2D(glm::vec3 position, glm::vec2 size,
+                                     glm::vec4 color) {
+  kEntityId id = NewObject();
+
+  auto pos = Transform();
+  pos.SetPosition(position);
+
+  auto mesh = Mesh();
+  PQ_FLOAT3 dx_color(color.r, color.g, color.b);
+  Vertex raw_vertices[4] = {
+      {PQ_FLOAT3{0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
+      {PQ_FLOAT3{0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
+      {PQ_FLOAT3{-0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
+      {PQ_FLOAT3{-0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
+  };
+  mesh.SetVertices(
+      std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
+
+  uint16_t raw_indices[6] = {0, 3, 1, 1, 3, 2};
+  mesh.SetIndices(
+      std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
+
+  mesh.opacity_ = color[3];
+  mesh.SetScale(glm::vec3(size.x, 0.0f, size.y));
+
+  AddProperty(id, pos);
+  AddProperty(id, mesh);
   return id;
 }
 
@@ -146,9 +175,9 @@ void PObjectManager::MakeStatic(kEntityId id) {
     }
     for (auto vertex : vertices) {
       StaticVertex sv = {};
-      sv.position.x = vertex.position.x * scale.x * 0.5f + pos.x;
-      sv.position.y = vertex.position.y * scale.y * 0.5f + pos.y;
-      sv.position.z = vertex.position.z * scale.z * 0.5f + pos.z;
+      sv.position.x = (vertex.position.x * scale.x) + pos.x;
+      sv.position.y = (vertex.position.y * scale.y) + pos.y;
+      sv.position.z = (vertex.position.z * scale.z) + pos.z;
       sv.color = PQ_FLOAT4{vertex.color.x, vertex.color.y, vertex.color.z,
                            mesh->opacity_};
       sv.uv = vertex.uv;

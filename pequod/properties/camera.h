@@ -16,10 +16,20 @@ class Camera : public Property {
   glm::mat4 GetProjection(float width, float height);
   void SetZoom(float zoom);
   float GetZoom();
+  glm::vec3 GetDirection();
+
+  void SetYaw(float);
+  void UpdateYaw(float);
+  void SetPitch(float);
+  void UpdatePitch(float);
 
  private:
   glm::mat4 view_{};
   glm::mat4 proj_{};
+  float yaw = 45.0f;
+  float pitch = -40.0f;
+
+  float coord[3] = {0.0, 100.0, 0.0};
   float zoom_ = 1.0f;
 };
 }  // namespace Pequod

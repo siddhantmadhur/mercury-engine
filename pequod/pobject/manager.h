@@ -71,6 +71,8 @@ class PObjectManager {
 
   kEntityId NewObject();
   kEntityId NewBox2D(glm::vec2, glm::vec2, glm::vec4);
+  kEntityId NewPlane2D(glm::vec3 position, glm::vec2 size,
+                       glm::vec4 color = glm::vec4(1.0));
 
   template <class TProperty>
     requires std::derived_from<TProperty, Property>

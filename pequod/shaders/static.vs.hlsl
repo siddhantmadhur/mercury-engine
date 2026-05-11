@@ -23,12 +23,15 @@ struct VSOutput
 
 VSOutput Main(VSInput input)
 {
-    VSOutput output = (VSOutput) 0;
-    output.position = mul(mWorldViewProj, float4(input.position, 1.0));
+    // Snap in world space (before WVP) so exact half-integer coords like
+    // ±638.5 don't get perturbed by the projection roundtrip and end up
+    // rounding asymmetrically across the origin. Round-half-toward-zero
+    // keeps odd-thickness primitives at their intended pixel width.
+    float3 snapped = input.position;
+    snapped.xy = sign(snapped.xy) * ceil(abs(snapped.xy) - 0.5);
 
-    // Snap to nearest pixel
-    float2 halfRes = float2(mResolution.x * 0.5, mResolution.y * 0.5);
-    output.position.xy = round(output.position.xy / output.position.w * halfRes) / halfRes * output.position.w;
+    VSOutput output = (VSOutput) 0;
+    output.position = mul(mWorldViewProj, float4(snapped, 1.0));
 
     output.color = input.color;
     output.uv = input.atlas_uv.xy + input.uv * (input.atlas_uv.zw - input.atlas_uv.xy);

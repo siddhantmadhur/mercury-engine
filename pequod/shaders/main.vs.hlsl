@@ -32,13 +32,16 @@ VSOutput Main(VSInput input)
 {
     VSOutput output = (VSOutput) 0;
     // proj * view * model * pos
-    float3 scaled_position = input.position * scale * 0.5;
+    float3 scaled_position = input.position * scale * 1.0;
     float4 world_pos = mul(model, float4(scaled_position, 1.0));
-    output.position = mul(mWorldViewProj, world_pos);
 
-    // Snap to nearest pixel
-    float2 halfRes = float2(mResolution.x * 0.5, mResolution.y * 0.5);
-    output.position.xy = round(output.position.xy / output.position.w * halfRes) / halfRes * output.position.w;
+    // Snap in world space (before WVP) so exact half-integer coords like
+    // ±638.5 don't get perturbed by the projection roundtrip and end up
+    // rounding asymmetrically across the origin. Round-half-toward-zero
+    // keeps odd-thickness primitives at their intended pixel width.
+    world_pos.xy = sign(world_pos.xy) * ceil(abs(world_pos.xy) - 0.5);
+
+    output.position = mul(mWorldViewProj, world_pos);
 
     output.color = float4(input.color, opacity);
     output.uv = atlas_uv.xy + input.uv * (atlas_uv.zw - atlas_uv.xy);

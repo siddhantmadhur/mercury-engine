@@ -23,6 +23,7 @@ class InputManager {
   bool IsPressed(Key k);
   bool IsJustPressed(Key k);
   glm::vec2 GetCursorPos();
+  glm::vec2 GetCursorDelta();
 
   void HandleKeyCallback(GLFWwindow* window, int key, int scancode, int action,
                          int mods);
@@ -48,6 +49,7 @@ class InputManager {
   glm::vec2 mouse_position_ = glm::vec2(0.0);
   glm::vec2 scroll_offset_ = glm::vec2(0.0);
   bool is_hovering_on_ui_ = false;
+  glm::vec2 last_mouse_position_;
 };
 
 }  // namespace Pequod

@@ -22,6 +22,10 @@ bool InputManager::IsJustPressed(Key k) {
     return false;
   }
 }
+
+glm::vec2 InputManager::GetCursorDelta() {
+  return this->mouse_position_ - this->last_mouse_position_;
+}
 glm::vec2 InputManager::GetCursorPos() { return this->mouse_position_; }
 void InputManager::SetKeyDown(Key k) {
   key_status_[k] = true;
@@ -35,6 +39,7 @@ void InputManager::SetKeyUp(Key k) {
 void InputManager::ResetFreshPresses() {
   fresh_presses_.clear();
   this->scroll_offset_ = glm::vec2(0.0f);
+  this->last_mouse_position_ = GetCursorPos();
 }
 void InputManager::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                      int action, int mods) {

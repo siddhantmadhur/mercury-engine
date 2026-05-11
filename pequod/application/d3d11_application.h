@@ -12,6 +12,8 @@
 #include <dxgi1_3.h>
 #include <wrl.h>
 
+#include <any>
+
 #include "application.h"
 
 namespace Pequod {
@@ -52,6 +54,11 @@ class D3D11Application : public Application {
  private:
   bool CreateSwapchainResources();
   void DestroySwapchainResources();
+
+  template <typename T>
+  bool MapBuffer(ComPtr<ID3D11Buffer>, const std::vector<T>&);
+  template <typename T>
+  bool MapBuffer(ComPtr<ID3D11Buffer>, const T&);
 
   ComPtr<ID3D11Device> device_ = nullptr;
   ComPtr<ID3D11DeviceContext> deviceContext_ = nullptr;
