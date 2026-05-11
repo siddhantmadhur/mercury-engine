@@ -14,6 +14,8 @@
 
 namespace Pequod {
 
+constexpr int kFrametimeSlidingWindowSize = 50;
+
 static InputManager input_manager;
 
 Application::Application(const std::string& window_title, float initial_width,
@@ -111,11 +113,10 @@ int Application::Run() {
     time_elapsed_ = current_time;
 
     {  // FPS logic
-      int kFrametimeSlidingWindowSize = 30;
-      fps_sliding_window_.push_back(frametime);
+      fps_sliding_window_.push_front(frametime);
 
       if (fps_sliding_window_.size() > kFrametimeSlidingWindowSize) {
-        fps_sliding_window_.pop_front();
+        fps_sliding_window_.pop_back();
       }
 
       double total = 0;

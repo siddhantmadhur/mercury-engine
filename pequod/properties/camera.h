@@ -27,7 +27,7 @@ class Camera : public Property {
   glm::mat4 view_{};
   glm::mat4 proj_{};
   float yaw = 45.0f;
-  float pitch = -40.0f;
+  float pitch = -30.0f;
 
   float coord[3] = {0.0, 100.0, 0.0};
   float zoom_ = 1.0f;

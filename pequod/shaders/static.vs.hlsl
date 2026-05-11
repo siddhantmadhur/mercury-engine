@@ -28,7 +28,7 @@ VSOutput Main(VSInput input)
     // rounding asymmetrically across the origin. Round-half-toward-zero
     // keeps odd-thickness primitives at their intended pixel width.
     float3 snapped = input.position;
-    snapped.xy = sign(snapped.xy) * ceil(abs(snapped.xy) - 0.5);
+    //snapped.xy = sign(snapped.xy) * ceil(abs(snapped.xy) - 0.5);
 
     VSOutput output = (VSOutput) 0;
     output.position = mul(mWorldViewProj, float4(snapped, 1.0));

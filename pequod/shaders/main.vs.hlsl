@@ -39,7 +39,7 @@ VSOutput Main(VSInput input)
     // ±638.5 don't get perturbed by the projection roundtrip and end up
     // rounding asymmetrically across the origin. Round-half-toward-zero
     // keeps odd-thickness primitives at their intended pixel width.
-    world_pos.xy = sign(world_pos.xy) * ceil(abs(world_pos.xy) - 0.5);
+    //world_pos.xy = sign(world_pos.xy) * ceil(abs(world_pos.xy) - 0.5);
 
     output.position = mul(mWorldViewProj, world_pos);
 

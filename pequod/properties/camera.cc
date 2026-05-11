@@ -20,10 +20,10 @@ glm::mat4 Camera::GetProjection(float width, float height) {
   glm::mat4 proj = glm::ortho<float>(-width / 2, width / 2, -height / 2,
                                      height / 2, -1.0f, 1.0f);
 #else
-  float size = 1.0f;
+  float size = 40.0f;
   float aspect = width / height;
 
-  float fov = 50.0f;
+  float fov = 45.0f;
   glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.0f);
 
 #endif
