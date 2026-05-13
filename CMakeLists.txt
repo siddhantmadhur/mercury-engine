@@ -56,6 +56,7 @@ add_library(pequod
         pequod/ui/ui_system.h
         pequod/ui/ui_element.cc
         pequod/ui/ui_element.h
+        pequod/algorithms/sparse_set.h
 )
 
 

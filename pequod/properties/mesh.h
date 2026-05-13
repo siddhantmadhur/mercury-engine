@@ -9,7 +9,6 @@
 #include "property.h"
 
 namespace Pequod {
-
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw
 // calls is reduced
 class Mesh : public Property {
@@ -19,9 +18,11 @@ class Mesh : public Property {
   ~Mesh();
 
   void SetVertices(std::vector<Vertex>);
+
   std::vector<Vertex> GetVertices() const;
 
   void SetIndices(const std::vector<UINT>&);
+
   std::vector<UINT> GetIndices() const;
 
   void SetScale(glm::vec3);
@@ -32,12 +33,15 @@ class Mesh : public Property {
 
   float opacity_ = 1.0f;
 
+  float GetHeight();
+
   std::vector<Vertex> vertices_;
   std::vector<UINT> indices_;
   UINT vertices_id = 0;  // the id to get this in the ECS vertex vector
   UINT indices_id = 0;   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
  private:
   glm::vec3 scale{};
+  float height_ = 0.0;
 };
 }  // namespace Pequod
 #endif

@@ -72,7 +72,7 @@ void TextureAtlas::UpdateAtlas() {
     atlas_uv.z = atlas_uv.x + img_width / fw;
     atlas_uv.w = atlas_uv.y + img_height / fh;
     img->SetAtlasUV(atlas_uv);
-    for (Texture2D *alias : aliases_[rect.id]) {
+    for (Texture2D* alias : aliases_[rect.id]) {
       if (alias != img) alias->SetAtlasUV(atlas_uv);
     }
   }

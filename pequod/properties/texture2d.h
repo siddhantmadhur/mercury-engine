@@ -12,9 +12,9 @@
 #include "glm/vec4.hpp"
 
 namespace Pequod {
- class Texture2D : public Property {
+class Texture2D : public Property {
  public:
-  Texture2D(); // Creates a blank white texture
+  Texture2D();  // Creates a blank white texture
   Texture2D(const std::string &file_path, int depth = 4);
 
   ~Texture2D();
@@ -35,7 +35,7 @@ namespace Pequod {
   std::string path_;
 
   glm::vec4 atlas_uv_;
- };
-} // namespace Pequod
+};
+}  // namespace Pequod
 
 #endif  // PEQUODENGINE_TEXTURE2D_H
