@@ -40,7 +40,10 @@ glm::vec3 Camera::GetDirection() {
   direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
   return glm::normalize(direction);
 }
+
 void Camera::SetPitch(float new_val) { this->pitch = new_val; }
+float Camera::GetPitch() { return this->pitch; }
+float Camera::GetYaw() { return this->yaw; }
 void Camera::SetYaw(float new_val) { this->yaw = new_val; }
 void Camera::UpdateYaw(float new_val) { this->yaw += new_val; }
 void Camera::UpdatePitch(float new_val) { this->pitch += new_val; }

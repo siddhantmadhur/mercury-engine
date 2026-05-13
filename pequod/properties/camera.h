@@ -17,7 +17,10 @@ class Camera : public Property {
   void SetZoom(float zoom);
   float GetZoom();
   glm::vec3 GetDirection();
+  void SetDirection(glm::vec3 direction);
 
+  float GetYaw();
+  float GetPitch();
   void SetYaw(float);
   void UpdateYaw(float);
   void SetPitch(float);
@@ -26,6 +29,7 @@ class Camera : public Property {
   glm::vec3 GetRayFromScreen(glm::vec2 cursor, glm::vec2 res, glm::vec3 pos);
 
  private:
+  glm::vec3 direction_;
   glm::mat4 view_{};
   glm::mat4 proj_{};
   float yaw = 45.0f;

@@ -67,20 +67,18 @@ void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
                                         double yoffset) {
   this->scroll_offset_ = glm::vec2(xoffset, yoffset);
 }
+#define GET_ACTION(a) a == GLFW_PRESS ? kJustPressed : kReleased
 void InputManager::HandleMouseButtonCallback(GLFWwindow* window, int button,
                                              int action, int mods) {
-  if (action == GLFW_PRESS) {
-    switch (button) {
-      case GLFW_MOUSE_BUTTON_LEFT:
-        mouse_btn_status_[MouseButton::kLeft] = kJustPressed;
-        break;
-    }
-  } else if (action == GLFW_RELEASE) {
-    switch (button) {
-      case GLFW_MOUSE_BUTTON_LEFT:
-        mouse_btn_status_[MouseButton::kLeft] = kReleased;
-        break;
-    }
+  switch (button) {
+    case GLFW_MOUSE_BUTTON_LEFT:
+      mouse_btn_status_[MouseButton::kLeft] = GET_ACTION(action);
+      break;
+    case GLFW_MOUSE_BUTTON_MIDDLE:
+      mouse_btn_status_[MouseButton::kMiddle] = GET_ACTION(action);
+      break;
+    default:
+      break;
   }
 }
 

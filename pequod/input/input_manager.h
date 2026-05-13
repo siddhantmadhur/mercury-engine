@@ -13,7 +13,7 @@ namespace Pequod {
 
 using Key = int;
 
-enum class MouseButton { kLeft, kRight, KMiddle };
+enum class MouseButton { kLeft, kRight, kMiddle };
 enum KeyStatus { kJustPressed = 0, kContinuous = 1, kReleased = 2 };
 
 /**
