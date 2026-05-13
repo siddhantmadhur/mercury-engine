@@ -23,6 +23,8 @@ class Camera : public Property {
   void SetPitch(float);
   void UpdatePitch(float);
 
+  glm::vec3 GetRayFromScreen(glm::vec2 cursor, glm::vec2 res, glm::vec3 pos);
+
  private:
   glm::mat4 view_{};
   glm::mat4 proj_{};

@@ -13,6 +13,9 @@ namespace Pequod {
 
 using Key = int;
 
+enum class MouseButton { kLeft, kRight, KMiddle };
+enum KeyStatus { kJustPressed = 0, kContinuous = 1, kReleased = 2 };
+
 /**
  * @brief Get inputs from application
  */
@@ -21,7 +24,10 @@ class InputManager {
   InputManager();
   void Initialize(GLFWwindow* window);
   bool IsPressed(Key k);
+  bool IsPressed(MouseButton btn);
   bool IsJustPressed(Key k);
+  bool IsJustPressed(MouseButton btn);
+
   glm::vec2 GetCursorPos();
   glm::vec2 GetCursorDelta();
 
@@ -31,6 +37,9 @@ class InputManager {
   void HandleCursorCallback(GLFWwindow* window, double xpos, double ypos);
 
   void HandleScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+
+  void HandleMouseButtonCallback(GLFWwindow* window, int button, int action,
+                                 int mods);
 
   void ResetFreshPresses();
 
@@ -44,6 +53,7 @@ class InputManager {
   void SetKeyDown(Key k);
   void SetKeyUp(Key k);
   std::map<int, bool> key_status_ = {};
+  std::map<MouseButton, KeyStatus> mouse_btn_status_ = {};
   std::map<int, bool> repeated_keys_ = {};
   std::map<int, bool> fresh_presses_ = {};
   glm::vec2 mouse_position_ = glm::vec2(0.0);

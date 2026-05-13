@@ -14,19 +14,6 @@ Mesh::Mesh() {
 Mesh::~Mesh() {}
 
 void Mesh::SetVertices(std::vector<Vertex> vertices) {
-  float lowest = 0.0;
-  float highest = 0.0;
-  for (auto &vertex : vertices) {
-    PDebug::log("POS: {}", vertex.position.y);
-    if (vertex.position.y < lowest) {
-      lowest = vertex.position.y;
-    }
-    if (vertex.position.y > highest) {
-      highest = vertex.position.y;
-    }
-  }
-  this->height_ = highest - lowest;
-
   this->vertices_ = std::move(vertices);
 }
 
@@ -41,8 +28,17 @@ void Mesh::SetScale(glm::vec3 scale) { this->scale = scale; }
 glm::vec3 Mesh::GetScale() const { return scale; }
 
 uint32_t Mesh::GetIndicesID() const { return indices_id; }
+void Mesh::SetAABB(glm::vec3 min, glm::vec3 max) {
+  this->aabb_.min = min;
+  this->aabb_.max = max;
+}
 
-float Mesh::GetHeight() { return this->height_ * this->scale.y; }
+mAABB Mesh::GetAABB() { return this->aabb_; }
+
+float Mesh::GetHeight() {
+  float local_height = (aabb_.max.y - aabb_.min.y) * scale.y;
+  return local_height;
+}
 
 std::vector<UINT> Mesh::GetIndices() const { return indices_; }
 }  // namespace Pequod

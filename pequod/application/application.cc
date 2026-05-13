@@ -75,6 +75,11 @@ bool Application::Initialize() {
         input_manager.HandleScrollCallback(window, xoffset, yoffset);
       });
 
+  glfwSetMouseButtonCallback(
+      window_, [](GLFWwindow* win, int button, int action, int mods) {
+        input_manager.HandleMouseButtonCallback(win, button, action, mods);
+      });
+
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
@@ -98,7 +103,7 @@ int Application::Run() {
 
   GLFWcursor* cursor = nullptr;
   if (current_cursor) {
-    cursor = glfwCreateCursor(current_cursor, 0, 0);
+    cursor = glfwCreateCursor(current_cursor, 10, 8);
     if (cursor) {
       glfwSetCursor(window_, cursor);
 

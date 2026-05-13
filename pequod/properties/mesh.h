@@ -11,6 +11,12 @@
 namespace Pequod {
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw
 // calls is reduced
+
+typedef struct mAABB {
+  glm::vec3 min;
+  glm::vec3 max;
+} mAABB;
+
 class Mesh : public Property {
  public:
   Mesh();
@@ -30,6 +36,8 @@ class Mesh : public Property {
   glm::vec3 GetScale() const;
 
   uint32_t GetIndicesID() const;
+  void SetAABB(glm::vec3 min, glm::vec3 max);
+  mAABB GetAABB();
 
   float opacity_ = 1.0f;
 
@@ -42,6 +50,8 @@ class Mesh : public Property {
  private:
   glm::vec3 scale{};
   float height_ = 0.0;
+
+  mAABB aabb_;
 };
 }  // namespace Pequod
 #endif

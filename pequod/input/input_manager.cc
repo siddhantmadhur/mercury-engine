@@ -23,6 +23,14 @@ bool InputManager::IsJustPressed(Key k) {
   }
 }
 
+bool InputManager::IsPressed(MouseButton btn) {
+  if (mouse_btn_status_.contains(btn)) {
+    return mouse_btn_status_[btn] == kJustPressed;
+  }
+  return false;
+}
+bool InputManager::IsJustPressed(MouseButton btn) { return IsPressed(btn); }
+
 glm::vec2 InputManager::GetCursorDelta() {
   return this->mouse_position_ - this->last_mouse_position_;
 }
@@ -58,6 +66,22 @@ void InputManager::HandleCursorCallback(GLFWwindow* window, double xpos,
 void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
                                         double yoffset) {
   this->scroll_offset_ = glm::vec2(xoffset, yoffset);
+}
+void InputManager::HandleMouseButtonCallback(GLFWwindow* window, int button,
+                                             int action, int mods) {
+  if (action == GLFW_PRESS) {
+    switch (button) {
+      case GLFW_MOUSE_BUTTON_LEFT:
+        mouse_btn_status_[MouseButton::kLeft] = kJustPressed;
+        break;
+    }
+  } else if (action == GLFW_RELEASE) {
+    switch (button) {
+      case GLFW_MOUSE_BUTTON_LEFT:
+        mouse_btn_status_[MouseButton::kLeft] = kReleased;
+        break;
+    }
+  }
 }
 
 float InputManager::GetScroll() { return this->scroll_offset_.y; }

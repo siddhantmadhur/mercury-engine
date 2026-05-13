@@ -44,6 +44,27 @@ void Camera::SetPitch(float new_val) { this->pitch = new_val; }
 void Camera::SetYaw(float new_val) { this->yaw = new_val; }
 void Camera::UpdateYaw(float new_val) { this->yaw += new_val; }
 void Camera::UpdatePitch(float new_val) { this->pitch += new_val; }
+glm::vec3 Camera::GetRayFromScreen(glm::vec2 cursor, glm::vec2 res,
+                                   glm::vec3 pos) {
+  auto mouse = glm::vec2((2.0f * cursor.x) / res.x - 1.0f,
+                         1.0 - (2.0f * cursor.y) / res.y);
+
+  glm::vec4 ray_start_ndc(mouse.x, mouse.y, -1.0f, 1.0f);
+  glm::vec4 ray_end_ndc(mouse.x, mouse.y, 1.0f, 1.0f);
+
+  glm::mat4 inv_vp = glm::inverse(GetProjection(res.x, res.y) * GetView(pos));
+
+  glm::vec4 ray_start_world = inv_vp * ray_start_ndc;
+  ray_start_world /= ray_start_world.w;
+
+  glm::vec4 ray_end_world = inv_vp * ray_end_ndc;
+  ray_end_world /= ray_end_world.w;
+
+  glm::vec3 ray_dir =
+      glm::normalize(glm::vec3(ray_end_world) - glm::vec3(ray_start_world));
+  // glm::vec3 ray_origin = glm::vec3(ray_start_world) * 1.0f;
+  return ray_dir;
+}
 
 glm::mat4 Camera::GetView(glm::vec3 position) {
 #ifdef TOPDOWN_2D_VIEW
