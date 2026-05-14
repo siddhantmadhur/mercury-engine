@@ -444,19 +444,21 @@ void D3D11Application::Render() {
     // frame. UpdateAtlas() (called from GetPrimitives()) sets the flag; we
     // clear it after the GPU copy.
     TextureAtlas &atlas = game_scene_->GetAtlas();
-    D3D11_MAPPED_SUBRESOURCE mapped = {};
-    if (SUCCEEDED(deviceContext_->Map(atlas_texture_.Get(), 0,
-                                      D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-      const int aw = atlas.GetWidth();
-      const int ah = atlas.GetHeight();
-      const uint8_t *src = atlas.GetData();
-      uint8_t *dst = static_cast<uint8_t *>(mapped.pData);
-      const size_t src_pitch = static_cast<size_t>(aw) * 4;
-      for (int row = 0; row < ah; ++row) {
-        memcpy(dst + row * mapped.RowPitch, src + row * src_pitch, src_pitch);
-      }
-      deviceContext_->Unmap(atlas_texture_.Get(), 0);
-      atlas.ClearGpuUploadFlag();
+    if (atlas.NeedsGpuUpload()) {
+		D3D11_MAPPED_SUBRESOURCE mapped = {};
+		if (SUCCEEDED(deviceContext_->Map(atlas_texture_.Get(), 0,
+										  D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+		  const int aw = atlas.GetWidth();
+		  const int ah = atlas.GetHeight();
+		  const uint8_t *src = atlas.GetData();
+		  uint8_t *dst = static_cast<uint8_t *>(mapped.pData);
+		  const size_t src_pitch = static_cast<size_t>(aw) * 4;
+		  for (int row = 0; row < ah; ++row) {
+			memcpy(dst + row * mapped.RowPitch, src + row * src_pitch, src_pitch);
+		  }
+		  deviceContext_->Unmap(atlas_texture_.Get(), 0);
+		  atlas.ClearGpuUploadFlag();
+		}
     }
 
     // Bind the atlas SRV + sampler once for the whole frame.

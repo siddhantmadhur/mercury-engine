@@ -41,19 +41,26 @@ void Transform::SetVelocity(glm::vec3 velocity) {
   this->velocity_ = velocity;
   transformations_.push_back(kTransformLinearVelocity);
 }
-void Transform::SetRotate(glm::vec3 new_value) { this->rotation_ = new_value; }
-void Transform::ChangeRotate(glm::vec3 delta) { rotation_ += delta; }
+void Transform::SetRotate(glm::vec3 new_value) {
+  this->rotation_ = new_value;
+  transformations_.push_back(kTransformRotation);
+}
+void Transform::ChangeRotate(glm::vec3 delta) {
+  rotation_ += delta;
+  transformations_.push_back(kTransformRotation);
+}
 glm::vec3 Transform::GetRotate() const { return this->rotation_; }
 glm::vec3 Transform::GetInterpolatedRotation() const {
   return this->interpolated_rotation_;
 }
 glm::mat4 Transform::GetRotationMatrix() const {
   glm::mat4 m(1.0f);
-  m = glm::rotate(m, glm::radians(interpolated_rotation_.y),
-                  glm::vec3(0.0f, 1.0f, 0.0f));
-  m = glm::rotate(m, glm::radians(interpolated_rotation_.x),
+  float conv_const = 360.0;
+  m = glm::rotate(m, glm::radians(interpolated_rotation_.x * conv_const),
                   glm::vec3(1.0f, 0.0f, 0.0f));
-  m = glm::rotate(m, glm::radians(interpolated_rotation_.z),
+  m = glm::rotate(m, glm::radians(interpolated_rotation_.y * conv_const),
+                  glm::vec3(0.0f, 1.0f, 0.0f));
+  m = glm::rotate(m, glm::radians(interpolated_rotation_.z * conv_const),
                   glm::vec3(0.0f, 0.0f, 1.0f));
   return m;
 }

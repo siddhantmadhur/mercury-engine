@@ -32,8 +32,8 @@ class TextureAtlas {
 
  protected:
  private:
-  int width_ = 2300;   // max size of the atlas
-  int height_ = 2300;  // max size of the atlas
+  int width_ = 5000;   // max size of the atlas
+  int height_ = 5000;  // max size of the atlas
   stbrp_context ctx_{};
   stbrp_node nodes_[512] = {};
   Texture2D *white_pixel_;

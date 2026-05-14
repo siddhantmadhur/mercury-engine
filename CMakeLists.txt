@@ -59,6 +59,8 @@ add_library(pequod
         pequod/algorithms/sparse_set.h
         pequod/renderer/renderer.cc
         pequod/renderer/renderer.h
+        pequod/math/vector.cc
+        pequod/math/vector.h
 )
 
 

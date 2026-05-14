@@ -7,6 +7,7 @@
 
 #include <stack>
 
+#include "imgui.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
@@ -35,6 +36,7 @@ PObjectManager::PObjectManager() {
 };
 
 std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
+  ImGui::Begin("Rotations");
   std::vector<Primitive> primitives;
   for (int id = 0; id < current_entity_size_; id++) {
     auto mesh = GetProperty<Mesh>(id);
@@ -49,6 +51,10 @@ std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
         auto world_position = transform->GetInterpolatedPosition();
         primitive.world_position_ = world_position;
         primitive.rotation_matrix_ = transform->GetRotationMatrix();
+        ImGui::Text("%d: %f, %f, %f", id,
+                    transform->GetInterpolatedRotation().x,
+                    transform->GetInterpolatedRotation().y,
+                    transform->GetInterpolatedRotation().z);
       } else {
         primitive.world_position_ = glm::vec3(0.0f);
       }
@@ -60,6 +66,7 @@ std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
       primitives.push_back(primitive);
     }
   }
+  ImGui::End();
   atlas_.UpdateAtlas();
   RefreshStaticAtlasUVs();
   // Populate atlas UVs after the atlas has been (re)packed so each primitive
@@ -217,7 +224,7 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
           auto uv = aiMesh->mTextureCoords[0][i];
           dir_vertex.uv = PQ_FLOAT2{uv.x, uv.y};
         } else {
-          dir_vertex.uv = PQ_FLOAT2{0.0f, 0.0f};
+          dir_vertex.uv = PQ_FLOAT2{0.0, 0.0};
         }
         vertices.push_back(dir_vertex);
       }
@@ -237,6 +244,76 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
 
   AddProperty<Mesh>(id, mesh);
 
+  return id;
+}
+kEntityId PObjectManager::NewCube3D(glm::vec3 position, glm::vec3 size,
+                                    glm::vec4 color) {
+  kEntityId id = NewObject();
+
+  auto pos = Transform();
+  pos.SetPosition(position);
+
+  auto mesh = Mesh();
+  PQ_FLOAT3 dx_color(color.r, color.g, color.b);
+
+  auto uv_0 = PQ_FLOAT2{0.0f, 1.0f};
+  auto uv_1 = PQ_FLOAT2{1.0f, 1.0f};
+  auto uv_2 = PQ_FLOAT2{1.0f, 0.0f};
+  auto uv_3 = PQ_FLOAT2{0.0f, 0.0f};
+
+  Vertex raw_vertices[] = {
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.5f}, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.5f}, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.5}, dx_color, uv_3},
+
+      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, dx_color, uv_0},
+      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, dx_color, uv_1},
+      {PQ_FLOAT3{-0.5f, 0.5f, -0.5f}, dx_color, uv_2},
+      {PQ_FLOAT3{0.5f, 0.5f, -0.5}, dx_color, uv_3},
+
+      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, dx_color, uv_0},
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.5f}, dx_color, uv_1},
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.5f}, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, 0.5f, -0.5}, dx_color, uv_3},
+
+      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, 0.5f, -0.5f}, dx_color, uv_2},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.5}, dx_color, uv_3},
+
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.5f}, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.5f}, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, 0.5f, -0.5f}, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, 0.5f, -0.5}, dx_color, uv_3},
+
+      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.5}, dx_color, uv_3},
+  };
+
+  mesh.SetVertices(
+      std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
+
+  uint16_t raw_indices[] = {
+      0,  1,  2,  2,  3,  0,   // Front
+      4,  5,  6,  6,  7,  4,   // Back
+      8,  9,  10, 10, 11, 8,   // Left
+      12, 13, 14, 14, 15, 12,  // Right
+      16, 17, 18, 18, 19, 16,  // Top
+      20, 21, 22, 22, 23, 20   // Bottom
+  };
+  // other way around
+  // uint16_t raw_indices[6] = {0, 3, 1, 1, 3, 2};
+  mesh.SetIndices(
+      std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
+
+  mesh.opacity_ = color[3];
+  mesh.SetScale(glm::vec3(size.x, size.y, size.z));
+
+  AddProperty(id, pos);
+  AddProperty(id, mesh);
   return id;
 }
 void PObjectManager::ProcessTransformations(float alpha) {

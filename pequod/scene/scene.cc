@@ -8,8 +8,8 @@
 namespace Pequod {
 
 GameScene::GameScene() {
-  this->object_manager_ = std::make_unique<PObjectManager>();
-  this->physics_engine_ = std::make_unique<PhysicsEngine>(*object_manager_);
+  this->object_manager_ = std::make_shared<PObjectManager>();
+  this->physics_engine_ = std::make_shared<PhysicsEngine>(*object_manager_);
 
   physics_engine_->Initialize();
   this->player_camera_ = object_manager_->NewObject();

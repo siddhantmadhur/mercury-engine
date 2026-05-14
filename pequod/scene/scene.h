@@ -65,8 +65,8 @@ class GameScene {
   void OnTickBegin();
 
  protected:
-  std::unique_ptr<PObjectManager> object_manager_ = nullptr;
-  std::unique_ptr<PhysicsEngine> physics_engine_ = nullptr;
+  std::shared_ptr<PObjectManager> object_manager_ = nullptr;
+  std::shared_ptr<PhysicsEngine> physics_engine_ = nullptr;
   kEntityId player_camera_ = -1;
   InputManager* input_manager_ = nullptr;
 

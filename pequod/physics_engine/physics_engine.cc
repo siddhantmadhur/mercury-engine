@@ -126,6 +126,7 @@ void PhysicsEngine::Initialize() {
 
   auto contact_listener = new PhysicsContactListener(this);
   physics_system_.SetContactListener(contact_listener);
+  physics_system_.SetGravity(JPH::Vec3Arg{0.0, -98.0, 0.0});
   PDebug::info("Initialized Jolt Physics System");
 }
 
@@ -227,6 +228,12 @@ void PhysicsEngine::SynchronizePObjects() {
                                        JPH::EActivation::Activate);
             break;
           }
+          case kTransformRotation: {
+            auto rot = transform->GetRotate();
+            // body_interface.SetRotation(jolt_id, JPH::QuatArg{rot.x, rot.y,
+            // rot.z});
+            break;
+          }
         }
       }
     }
@@ -290,10 +297,10 @@ void PhysicsEngine::Compute(int steps) {
           phys_position.GetX(), phys_position.GetY(), phys_position.GetZ()));
     }
     if (!std::binary_search(transformations.begin(), transformations.end(),
-                            kTransformLinearVelocity)) {
-      auto phys_position = body_interface.GetLinearVelocity(body_id);
-      transform->SetVelocity(glm::vec3(
-          phys_position.GetX(), phys_position.GetY(), phys_position.GetZ()));
+                            kTransformRotation)) {
+      auto phys_position = body_interface.GetRotation(body_id);
+      transform->SetRotate(glm::vec3(phys_position.GetX(), phys_position.GetY(),
+                                     phys_position.GetZ()));
     }
     transform->ClearTransformations();
   }

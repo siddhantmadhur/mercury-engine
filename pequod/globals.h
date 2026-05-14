@@ -14,6 +14,8 @@
 #include <glm/glm.hpp>
 #include <vector>
 
+#include <memory>
+
 #ifdef PEQUOD_GRAPHICS_D3D11
 #include <DirectXMath.h>
 #include <intsafe.h>
@@ -23,6 +25,12 @@ using entity_id = uint16_t;
 using kEntityId = uint16_t;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
+
+template <typename T>
+using UPtr = std::unique_ptr<T>;
+
+template <typename T>
+using SPtr = std::shared_ptr<T>;
 
 #ifdef PEQUOD_GRAPHICS_D3D11
 using PQ_FLOAT2 = DirectX::XMFLOAT2;

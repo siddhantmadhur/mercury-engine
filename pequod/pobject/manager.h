@@ -80,6 +80,10 @@ class PObjectManager {
   kEntityId NewObjectFromFile(const std::string &file_path, float scale = 1.0,
                               glm::vec4 color = glm::vec4(1));
 
+  kEntityId NewCube3D(glm::vec3 position = glm::vec3(0.0),
+                      glm::vec3 size = glm::vec3(1.0),
+                      glm::vec4 color = glm::vec4(1.0f));
+
   void ProcessTransformations(float alpha);
   void CaptureTickSnapshots();
 

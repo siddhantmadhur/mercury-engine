@@ -77,8 +77,8 @@ void TextureAtlas::UpdateAtlas() {
     }
   }
 
-  PDebug::info("Writing atlas...");
-  stbi_write_png("atlas.png", width_, height_, 4, raw_data_, 4 * width_);
+  // PDebug::info("Writing atlas...");
+  // stbi_write_png("atlas.png", width_, height_, 4, raw_data_, 4 * width_);
 
   needs_gpu_upload_ = true;
 }

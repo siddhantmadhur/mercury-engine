@@ -14,7 +14,8 @@ namespace Pequod {
 enum TransformationType {
   kTransformPosition = 0,
   kTransformLinearVelocity = 1,
-  kTransformLinearMagnitude = 2
+  kTransformLinearMagnitude = 2,
+  kTransformRotation = 3,
 };
 
 class Transform : public Property {
