@@ -9,9 +9,7 @@
 
 using namespace Pequod;
 
-
 int main(void) {
-
   auto pong_win = std::make_unique<DefaultApplication>("Pong");
 
   auto pong_scene = std::make_unique<PongScene>();

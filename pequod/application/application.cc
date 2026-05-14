@@ -132,10 +132,10 @@ int Application::Run() {
       average_fps_ = std::round(1000 / average);
     }
 
-    auto ticks_per_sec = 60;
+    constexpr double kTickMs = 1000.0 / kTicksPerSec;
     time_since_last_tick_ += delta_time_;
 
-    int ticks = int(time_elapsed_ / (1000.0 / ticks_per_sec));
+    int ticks = int(time_elapsed_ / kTickMs);
 
     if (game_scene_) {
       glfwPollEvents();
@@ -145,17 +145,23 @@ int Application::Run() {
 
       game_scene_->OnFrame(delta_time_);
       if (ticks > last_tick_) {
+        game_scene_->OnTickBegin();
         game_scene_->OnTick(time_since_last_tick_);
 
-        game_scene_->SimulatePhysics();  // Only works as long as tps is 60
+        game_scene_->SimulatePhysics(
+            60 / kTicksPerSec);  // Only works as long as tps is 60
 
         input_manager.ResetFreshPresses();
 
         last_tick_ = ticks;
-        time_since_last_tick_ = 0.0f;
+        time_since_last_tick_ = 0.0;
 
         OnNewTick();
       }
+
+      float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
+      game_scene_->ProcessOnFrame(alpha);
+      primitives_ = game_scene_->GetPrimitives();
     } else {
       PDebug::warn("Game scene not set");
     }

@@ -62,6 +62,7 @@ struct Primitive {
   std::vector<UINT> indices_;
   glm::vec3 scale_;
   glm::vec3 world_position_;
+  glm::mat4 rotation_matrix_ = glm::mat4(1.0f);
   float opacity_ = 1.0f;
   glm::vec4 atlas_uv_ = glm::vec4(0.0f);
 };

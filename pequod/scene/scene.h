@@ -59,7 +59,10 @@ class GameScene {
   void QuitScene();
   bool ShouldQuit() const;
 
-  void SimulatePhysics();
+  void SimulatePhysics(int steps);
+
+  void ProcessOnFrame(float alpha);
+  void OnTickBegin();
 
  protected:
   std::unique_ptr<PObjectManager> object_manager_ = nullptr;

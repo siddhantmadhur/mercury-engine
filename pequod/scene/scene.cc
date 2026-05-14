@@ -23,7 +23,7 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
   if (!cam || !pos) {
     return false;
   }
-  proj = cam->GetProjection(width_, height_) * cam->GetView(pos->GetPosition());
+  proj = cam->GetProjection(width_, height_) * cam->GetView(*pos);
 
   return true;
 }
@@ -44,7 +44,13 @@ void GameScene::SetInputManager(InputManager* input_manager) {
 }
 void GameScene::QuitScene() { should_close = true; }
 bool GameScene::ShouldQuit() const { return should_close; }
-void GameScene::SimulatePhysics() { physics_engine_->Compute(1); }
+void GameScene::SimulatePhysics(int steps) {
+  if (steps < 5) physics_engine_->Compute(steps);
+}
+void GameScene::ProcessOnFrame(float alpha) {
+  object_manager_->ProcessTransformations(alpha);
+}
+void GameScene::OnTickBegin() { object_manager_->CaptureTickSnapshots(); }
 void GameScene::SetWidth(float width) { this->width_ = width; }
 float GameScene::GetHeight() const { return this->height_; }
 

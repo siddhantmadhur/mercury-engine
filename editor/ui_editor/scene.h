@@ -9,13 +9,13 @@
 
 namespace Pequod {
 class UIEditorScene : public GameScene {
-public:
+ public:
   void OnStart() override;
   void OnDestroy() override;
   void OnFrame(double delta_t) override;
   void OnTick(double delta_t) override;
 
-private:
+ private:
   kEntityId horizontal_slice_left = -1;
   kEntityId horizontal_slice_right = -1;
   kEntityId vertical_slice_left = -1;
@@ -23,8 +23,7 @@ private:
   float camera_zoom = 1.0;
   float horizontal_ratio = 0.33;
   float vertical_ratio = 0.33;
-
 };
-}
+}  // namespace Pequod
 
-#endif //PEQUOD_ENGINE_SCENE_H
+#endif  // PEQUOD_ENGINE_SCENE_H

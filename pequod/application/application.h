@@ -20,6 +20,8 @@
 #include "pobject/texture_atlas.h"
 #include "scene/scene.h"
 
+constexpr int kTicksPerSec = 60;
+
 namespace Pequod {
 static InputManager input_manager_;
 
@@ -114,6 +116,7 @@ class Application {
  protected:
   std::unique_ptr<GameScene> game_scene_ = nullptr;
   int average_fps_ = 0;
+  std::vector<Primitive> primitives_ = {};
 
  private:
   GLFWwindow* window_ = nullptr;

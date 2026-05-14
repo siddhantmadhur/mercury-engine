@@ -57,7 +57,7 @@ class PObjectManager {
    * like batching vertices can be done here as well.
    *
    */
-  std::vector<Primitive> GetPrimitives();
+  std::vector<Primitive> GetPrimitives(bool refresh_vertices = true);
 
   /**
    * @brief Combines a group of primitives so it returns as one instance to the
@@ -80,6 +80,9 @@ class PObjectManager {
   kEntityId NewObjectFromFile(const std::string &file_path, float scale = 1.0,
                               glm::vec4 color = glm::vec4(1));
 
+  void ProcessTransformations(float alpha);
+  void CaptureTickSnapshots();
+
   template <class TProperty>
     requires std::derived_from<TProperty, Property>
   void AddProperty(kEntityId self, TProperty property) {
@@ -100,6 +103,14 @@ class PObjectManager {
       return &property.value();
     }
     return nullptr;
+  }
+
+  template <class TProperty>
+    requires std::derived_from<TProperty, Property>
+  PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)
+  GetProperties() {
+    return std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
+        properties_);
   }
 
   template <class TProperty>

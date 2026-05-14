@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace Pequod {
- class TextureAtlas {
+class TextureAtlas {
  public:
   TextureAtlas();
 
@@ -32,8 +32,8 @@ namespace Pequod {
 
  protected:
  private:
-  int width_ = 2300; // max size of the atlas
-  int height_ = 2300; // max size of the atlas
+  int width_ = 2300;   // max size of the atlas
+  int height_ = 2300;  // max size of the atlas
   stbrp_context ctx_{};
   stbrp_node nodes_[512] = {};
   Texture2D *white_pixel_;
@@ -48,7 +48,7 @@ namespace Pequod {
   std::map<std::string, int> images_;
   int last_img_id_updated_ = 0;
   bool needs_gpu_upload_ = false;
- };
-} // namespace Pequod
+};
+}  // namespace Pequod
 
 #endif  // PEQUOD_ENGINE_TEXTURE_ATLAS_H

@@ -101,8 +101,6 @@ bool D3D11Application::Initialize() {
 }
 
 void D3D11Application::OnNewTick() {
-  primitives_ = game_scene_->GetPrimitives();
-
   vertex_buffer_.clear();
   index_buffer_.clear();
 
@@ -168,6 +166,7 @@ void D3D11Application::DestroySwapchainResources() {
 template <typename T>
 bool D3D11Application::MapBuffer(ComPtr<ID3D11Buffer> gpu_buffer,
                                  const std::vector<T> &vertex_buffer) {
+  if (vertex_buffer.size() == 0) return false;
   D3D11_MAPPED_SUBRESOURCE mapped_subresource;
   deviceContext_->Map(gpu_buffer.Get(), 0, D3D11_MAP::D3D11_MAP_WRITE_DISCARD,
                       0, &mapped_subresource);
@@ -254,8 +253,6 @@ bool D3D11Application::OnLoad() {
     PDebug::error("D3D11: Failed to create static vertex input layout");
     return false;
   }
-
-  primitives_ = game_scene_->GetPrimitives();
 
   D3D11_BUFFER_DESC bufferInfo = {};
   bufferInfo.ByteWidth = sizeof(Vertex) * 64000;  // Max no. of vertices
@@ -406,6 +403,7 @@ void D3D11Application::Render() {
       MapBuffer(camera_c_buffer_, camera_c_buffer);
     }
   }
+
   D3D11_VIEWPORT viewport = {};
   viewport.TopLeftX = 0;
   viewport.TopLeftY = 0;
@@ -508,6 +506,7 @@ void D3D11Application::Render() {
           vs_model_buffer.opacity = primitive.opacity_;
           glm::mat4 model = glm::mat4(1.0f);
           model = glm::translate(model, primitive.world_position_);
+          model = model * primitive.rotation_matrix_;
           vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
           vs_model_buffer.atlas_uv =
               PQ_FLOAT4{primitive.atlas_uv_.x, primitive.atlas_uv_.y,

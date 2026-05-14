@@ -90,8 +90,6 @@ class D3D11Application : public Application {
 
   ComPtr<ID3D11Texture2D> atlas_texture_ = nullptr;
   ComPtr<ID3D11ShaderResourceView> atlas_srv_ = nullptr;
-
-  std::vector<Primitive> primitives_ = {};
 };
 }  // namespace Pequod
 

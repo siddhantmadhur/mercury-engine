@@ -3,11 +3,11 @@ set(CMAKE_SYSTEM_PROCESSOR x86_64)
 
 set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
 
-set(CMAKE_C_COMPILER   ${TOOLCHAIN_PREFIX}-gcc)
+set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc)
 set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++)
-set(CMAKE_RC_COMPILER  ${TOOLCHAIN_PREFIX}-windres)
-set(CMAKE_AR           ${TOOLCHAIN_PREFIX}-ar)
-set(CMAKE_RANLIB       ${TOOLCHAIN_PREFIX}-ranlib)
+set(CMAKE_RC_COMPILER ${TOOLCHAIN_PREFIX}-windres)
+set(CMAKE_AR ${TOOLCHAIN_PREFIX}-ar)
+set(CMAKE_RANLIB ${TOOLCHAIN_PREFIX}-ranlib)
 
 set(CMAKE_FIND_ROOT_PATH /usr/${TOOLCHAIN_PREFIX}/sys-root/mingw)
 
@@ -23,4 +23,4 @@ set(CMAKE_CROSSCOMPILING_EMULATOR /usr/bin/wine64)
 # Static-link libgcc/libstdc++/winpthread so the .exe is portable under wine
 # without dragging mingw runtime DLLs alongside it.
 set(CMAKE_EXE_LINKER_FLAGS_INIT
-    "-static -static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive")
+        "-static -static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive")

@@ -5,6 +5,7 @@
 #ifndef PEQUOD_ENGINE_CAMERA_H
 #define PEQUOD_ENGINE_CAMERA_H
 #include "property.h"
+#include "transform.h"
 #include <glm/glm.hpp>
 
 namespace Pequod {
@@ -12,30 +13,28 @@ class Camera : public Property {
  public:
   Camera();
   ~Camera();
-  glm::mat4 GetView(glm::vec3);
+
+  // The camera reads its orientation (pitch, yaw, roll) from the entity's
+  // Transform — rotation_.x is pitch, rotation_.y is yaw, rotation_.z is roll,
+  // all in degrees. Position likewise comes from the Transform.
+  glm::mat4 GetView(const Transform& t);
   glm::mat4 GetProjection(float width, float height);
   void SetZoom(float zoom);
   float GetZoom();
-  glm::vec3 GetDirection();
-  void SetDirection(glm::vec3 direction);
+  glm::vec3 GetDirection(const Transform& t) const;
+  glm::vec3 GetInterpolatedDirection(const Transform& t) const;
 
-  float GetYaw();
-  float GetPitch();
-  void SetYaw(float);
-  void UpdateYaw(float);
-  void SetPitch(float);
-  void UpdatePitch(float);
+  void SetFOV(float);
 
-  glm::vec3 GetRayFromScreen(glm::vec2 cursor, glm::vec2 res, glm::vec3 pos);
+  glm::vec3 GetRayFromScreen(glm::vec2 cursor, glm::vec2 res,
+                             const Transform& t);
 
  private:
-  glm::vec3 direction_;
   glm::mat4 view_{};
   glm::mat4 proj_{};
-  float yaw = 45.0f;
-  float pitch = -30.0f;
 
-  float coord[3] = {0.0, 100.0, 0.0};
+  float fov_ = 60.0f;
+
   float zoom_ = 1.0f;
 };
 }  // namespace Pequod
