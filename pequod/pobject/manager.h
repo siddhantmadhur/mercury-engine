@@ -71,6 +71,8 @@ class PObjectManager {
    */
   void GroupPrimitives(kEntityId primary, kEntityId begin, kEntityId end);
 
+  static void UpdateAtlas(entt::registry &, const entt::entity);
+
   kEntityId NewObject();
 
   kEntityId NewBox2D(glm::vec2, glm::vec2, glm::vec4);

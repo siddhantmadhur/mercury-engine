@@ -10,7 +10,8 @@ cbuffer VS_MODEL_BUFFER : register(b1)
 {
     float3 scale;
     float opacity;
-    matrix model;
+    float3 object_position;
+    float3 object_rotation;
     float4 atlas_uv;
 };
 
@@ -28,11 +29,81 @@ struct VSOutput
     float2 uv : TEXCOORD0;
 };
 
+float3 degToRad(float3 deg)
+{
+    float3 rad = deg;
+    rad.x = radians(deg.x);
+    rad.y = radians(deg.y);
+    rad.z = radians(deg.z);
+    return rad;
+}
+
+float4x4 RotateX(float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    return float4x4(
+        1, 0,  0, 0,
+        0, c, -s, 0,
+        0, s,  c, 0,
+        0, 0,  0, 1
+    );
+}
+
+// Rotation around Y axis
+float4x4 RotateY(float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    return float4x4(
+        c, 0, s, 0,
+        0, 1, 0, 0,
+       -s, 0, c, 0,
+        0, 0, 0, 1
+    );
+}
+
+// Rotation around Z axis
+float4x4 RotateZ(float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    return float4x4(
+        c, -s, 0, 0,
+        s,  c, 0, 0,
+        0,  0, 1, 0,
+        0,  0, 0, 1
+    );
+}
+
+float4x4 Rotate(matrix self, float3 rotation) {
+    float4x4 rotMat = mul(RotateZ(rotation.z), mul(RotateY(rotation.y), RotateX(rotation.x)));
+    matrix m = mul(self, rotMat);
+    return m;
+}
+
+float4x4 Translate(float3 t) {
+    return float4x4(
+        1, 0, 0, t.x,
+        0, 1, 0, t.y,
+        0, 0, 1, t.z,
+        0, 0, 0, 1
+    );
+}
+
 VSOutput Main(VSInput input)
 {
     VSOutput output = (VSOutput) 0;
     // proj * view * model * pos
     float3 scaled_position = input.position * scale * 1.0;
+    float4x4 model = {
+       1, 0, 0, 0,
+       0, 1, 0, 0,
+       0, 0, 1, 0,
+       0, 0, 0, 1
+    };
+     model = Rotate(model, object_rotation);
+     model = mul(Translate(object_position), model);
+
+
+
     float4 world_pos = mul(model, float4(scaled_position, 1.0));
 
     // Snap in world space (before WVP) so exact half-integer coords like

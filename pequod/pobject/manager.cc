@@ -24,7 +24,14 @@
   }
 
 namespace Pequod {
-PObjectManager::PObjectManager() {};
+
+void PObjectManager::UpdateAtlas(entt::registry &, const entt::entity) {
+  PDebug::log("Updated atlas");
+}
+
+PObjectManager::PObjectManager() {
+  registry_.on_construct<Texture2D>().connect<&PObjectManager::UpdateAtlas>();
+};
 
 std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
   //  ImGui::Begin("Rotations");
@@ -44,13 +51,7 @@ std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
     if (transform) {
       auto world_position = transform->GetInterpolatedPosition();
       primitive.world_position_ = world_position;
-      primitive.rotation_matrix_ = transform->GetRotationMatrix();
-      /**
-      ImGui::Text("%d: %f, %f, %f", entity,
-                  transform->GetInterpolatedRotation().x,
-                  transform->GetInterpolatedRotation().y,
-                  transform->GetInterpolatedRotation().z);
-                  **/
+      primitive.world_rotation_ = transform->GetRotate() * 360.0f;
     } else {
       primitive.world_position_ = glm::vec3(0.0f);
     }
@@ -61,22 +62,18 @@ std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
     }
     primitives.push_back(primitive);
   }
-  // ImGui::End();
   atlas_.UpdateAtlas();
   RefreshStaticAtlasUVs();
 
-  size_t pi = 0;
-  for (auto entity : view) {
-    auto mesh = GetProperty<Mesh>(entity);
-    if (!mesh) continue;
+  view.each([this, &primitives, &primitive_id](auto entity, Mesh &mesh) {
     auto tex = GetProperty<Texture2D>(entity);
+    auto pi = primitive_id[entity];
     if (tex) {
       primitives[pi].atlas_uv_ = tex->GetAtlasUV();
     } else {
       primitives[pi].atlas_uv_ = atlas_.GetWhitePixelUV();
     }
-    ++pi;
-  }
+  });
   return primitives;
 }
 

@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <format>
 #include <string>
+#include <globals.h>
 
 #include "debugger/debugger.h"
 #include "glm/ext/matrix_transform.hpp"
@@ -506,10 +507,17 @@ void D3D11Application::Render() {
           VsModelBuffer vs_model_buffer = {};
           vs_model_buffer.scale = PQ_FLOAT3{&primitive.scale_[0]};
           vs_model_buffer.opacity = primitive.opacity_;
+          /**
           glm::mat4 model = glm::mat4(1.0f);
           model = glm::translate(model, primitive.world_position_);
           model = model * primitive.rotation_matrix_;
           vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
+          **/
+#define GLM_TO_DX(val) PQ_FLOAT3(&val[0])
+          vs_model_buffer.object_position =
+              GLM_TO_DX(primitive.world_position_);
+          vs_model_buffer.object_rotation =
+              GLM_TO_DX(primitive.world_rotation_);
           vs_model_buffer.atlas_uv =
               PQ_FLOAT4{primitive.atlas_uv_.x, primitive.atlas_uv_.y,
                         primitive.atlas_uv_.z, primitive.atlas_uv_.w};

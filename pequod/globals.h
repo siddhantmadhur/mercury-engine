@@ -27,11 +27,23 @@ using kEntityId = entt::entity;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 
+// The reason I'm wrapping basic memory functions so I can modify memory
+// management later without user code needing to be changed
+
 template <typename T>
 using UPtr = std::unique_ptr<T>;
 
 template <typename T>
 using SPtr = std::shared_ptr<T>;
+
+/*
+template <typename T>
+using MakeUPtr = std::make_unique<T>;
+
+template <typename T>
+using MakeUPtr = std::make_shared<T>;
+*/
+// Wrapper around math structs so every platform uses the appropriate equivalent
 
 #ifdef PEQUOD_GRAPHICS_D3D11
 using PQ_FLOAT2 = DirectX::XMFLOAT2;
@@ -71,7 +83,7 @@ struct Primitive {
   std::vector<UINT> indices_;
   glm::vec3 scale_;
   glm::vec3 world_position_;
-  glm::mat4 rotation_matrix_ = glm::mat4(1.0f);
+  glm::vec3 world_rotation_ = glm::vec3(0.0f);
   float opacity_ = 1.0f;
   glm::vec4 atlas_uv_ = glm::vec4(0.0f);
 };
@@ -85,7 +97,10 @@ struct Primitive {
 struct VsModelBuffer {
   PQ_FLOAT3 scale;
   float opacity;
-  PQ_MATRIX world_position;
+  PQ_FLOAT3 object_position;
+  float pad0_;
+  PQ_FLOAT3 object_rotation;
+  float pad1_;
   PQ_FLOAT4 atlas_uv;
 };
 
