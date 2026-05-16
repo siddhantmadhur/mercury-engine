@@ -48,7 +48,7 @@ void GameScene::SimulatePhysics(int steps) {
   if (steps < 5) physics_engine_->Compute(steps);
 }
 void GameScene::ProcessOnFrame(float alpha) {
-  object_manager_->ProcessTransformations(alpha);
+  object_manager_->ProcessOnFrame(alpha);
 }
 void GameScene::OnTickBegin() { object_manager_->CaptureTickSnapshots(); }
 void GameScene::SetWidth(float width) { this->width_ = width; }

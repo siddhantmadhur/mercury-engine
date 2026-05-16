@@ -108,10 +108,8 @@ include_directories("third_party/JoltPhysics")
 # END OF JOLT PHYSICS
 
 # TinyXML2
-
 add_subdirectory(third_party/tinyxml2)
 include_directories("third_party/tinyxml2")
-
 # End of TinyXML2
 
 include_directories("third_party/glfw/include")
@@ -121,19 +119,26 @@ add_subdirectory("third_party/glfw")
 include_directories("third_party/assimp/include")
 add_subdirectory("third_party/assimp")
 
-# Live++ :
-include_directories("sdk/LivePP/API/x64/")
+include_directories("third_party/entt/single_include")
+add_subdirectory("third_party/entt")
+
 
 target_compile_definitions(pequod PUBLIC
         PEQUOD_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/pequod/shaders"
         PEQUOD_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
 )
 
+if (WIN32)
+    # Prevent <windows.h> from defining min/max macros, which collide with
+    # std::numeric_limits<...>::max() inside EnTT's dense_hash_map/_set.
+    target_compile_definitions(pequod PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+endif ()
+
 if (PEQUOD_GRAPHICS_BACKEND STREQUAL "D3D11")
     target_compile_definitions(pequod PUBLIC PEQUOD_GRAPHICS_D3D11=1)
 endif ()
 
-target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw assimp)
+target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw assimp EnTT::EnTT)
 
 if (MSVC)
     message(STATUS "Using Visual Studio Compiler")

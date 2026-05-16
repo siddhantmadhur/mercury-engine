@@ -67,7 +67,7 @@ class GameScene {
  protected:
   std::shared_ptr<PObjectManager> object_manager_ = nullptr;
   std::shared_ptr<PhysicsEngine> physics_engine_ = nullptr;
-  kEntityId player_camera_ = -1;
+  kEntityId player_camera_ = entt::null;
   InputManager* input_manager_ = nullptr;
 
  private:

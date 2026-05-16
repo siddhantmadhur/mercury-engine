@@ -24,58 +24,52 @@
   }
 
 namespace Pequod {
-PObjectManager::PObjectManager() {
-  std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Mesh)>(properties_) =
-      new std::optional<Mesh>[kMaxEntities] {};
-  std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Transform)>(properties_) =
-      new std::optional<Transform>[kMaxEntities] {};
-  std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Camera)>(properties_) =
-      new std::optional<Camera>[kMaxEntities] {};
-  std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Texture2D)>(properties_) =
-      new std::optional<Texture2D>[kMaxEntities] {};
-};
+PObjectManager::PObjectManager() {};
 
 std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
-  ImGui::Begin("Rotations");
+  //  ImGui::Begin("Rotations");
+  auto view = registry_.view<Mesh>();
   std::vector<Primitive> primitives;
-  for (int id = 0; id < current_entity_size_; id++) {
-    auto mesh = GetProperty<Mesh>(id);
-    if (mesh) {
-      Primitive primitive = {};
-      primitive.indices_ = mesh->GetIndices();
-      primitive.vertices_ = mesh->GetVertices();
-      primitive.scale_ = mesh->GetScale();
-      primitive.opacity_ = mesh->opacity_;
-      auto transform = GetProperty<Transform>(id);
-      if (transform) {
-        auto world_position = transform->GetInterpolatedPosition();
-        primitive.world_position_ = world_position;
-        primitive.rotation_matrix_ = transform->GetRotationMatrix();
-        ImGui::Text("%d: %f, %f, %f", id,
-                    transform->GetInterpolatedRotation().x,
-                    transform->GetInterpolatedRotation().y,
-                    transform->GetInterpolatedRotation().z);
-      } else {
-        primitive.world_position_ = glm::vec3(0.0f);
-      }
-
-      auto tex = GetProperty<Texture2D>(id);
-      if (tex) {
-        atlas_.AddTexture(tex);
-      }
-      primitives.push_back(primitive);
+  primitives.reserve(view.size());
+  std::unordered_map<kEntityId, uint32_t> primitive_id = {};
+  for (auto entity : view) {
+    primitive_id[entity] = primitives.size();
+    auto &mesh = registry_.get<Mesh>(entity);
+    Primitive primitive = {};
+    primitive.indices_ = mesh.GetIndices();
+    primitive.vertices_ = mesh.GetVertices();
+    primitive.scale_ = mesh.GetScale();
+    primitive.opacity_ = mesh.opacity_;
+    auto *transform = registry_.try_get<Transform>(entity);
+    if (transform) {
+      auto world_position = transform->GetInterpolatedPosition();
+      primitive.world_position_ = world_position;
+      primitive.rotation_matrix_ = transform->GetRotationMatrix();
+      /**
+      ImGui::Text("%d: %f, %f, %f", entity,
+                  transform->GetInterpolatedRotation().x,
+                  transform->GetInterpolatedRotation().y,
+                  transform->GetInterpolatedRotation().z);
+                  **/
+    } else {
+      primitive.world_position_ = glm::vec3(0.0f);
     }
+
+    auto tex = registry_.try_get<Texture2D>(entity);
+    if (tex) {
+      atlas_.AddTexture(tex);
+    }
+    primitives.push_back(primitive);
   }
-  ImGui::End();
+  // ImGui::End();
   atlas_.UpdateAtlas();
   RefreshStaticAtlasUVs();
-  // Populate atlas UVs after the atlas has been (re)packed so each primitive
-  // sees its current sub-rect.
+
   size_t pi = 0;
-  for (int id = 0; id < current_entity_size_; id++) {
-    auto mesh = GetProperty<Mesh>(id);
+  for (auto entity : view) {
+    auto mesh = GetProperty<Mesh>(entity);
     if (!mesh) continue;
-    auto tex = GetProperty<Texture2D>(id);
+    auto tex = GetProperty<Texture2D>(entity);
     if (tex) {
       primitives[pi].atlas_uv_ = tex->GetAtlasUV();
     } else {
@@ -173,7 +167,7 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
 
   if (scene == nullptr) {
     PDebug::error("Could not load object");
-    return -1;
+    return entt::null;
   }
   kEntityId id = NewObject();
   auto mesh = Mesh();
@@ -318,31 +312,22 @@ kEntityId PObjectManager::NewCube3D(glm::vec3 position, glm::vec3 size,
   AddProperty(id, mesh);
   return id;
 }
-void PObjectManager::ProcessTransformations(float alpha) {
-  auto transforms = GetProperties<Transform>();
-  for (kEntityId id = 0; id < current_entity_size_; id++) {
-    if (transforms[id].has_value()) {
-      transforms[id].value().Interpolate(alpha);
-    }
-  }
+void PObjectManager::ProcessOnFrame(float delta) {
+  auto view = registry_.view<Transform>();
+  view.each([delta](auto entity, Transform &transform) {
+    transform.Interpolate(delta);
+  });
 }
 
 void PObjectManager::CaptureTickSnapshots() {
-  auto transforms = GetProperties<Transform>();
-  for (kEntityId id = 0; id < current_entity_size_; id++) {
-    if (transforms[id].has_value()) {
-      transforms[id].value().CaptureTickSnapshot();
-    }
-  }
+  auto view = registry_.view<Transform>();
+  view.each([](auto entity, Transform &transform) {
+    transform.CaptureTickSnapshot();
+  });
 }
 
 kEntityId PObjectManager::NewObject() {
-  if (current_entity_size_ == kMaxEntities) {
-    PDebug::error("Reached max properties size");
-    return -1;
-  }
-  auto id = current_entity_size_;
-  current_entity_size_ += 1;
+  auto id = registry_.create();
   return id;
 }
 

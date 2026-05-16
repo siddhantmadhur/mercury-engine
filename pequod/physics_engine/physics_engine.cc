@@ -308,7 +308,7 @@ void PhysicsEngine::Compute(int steps) {
 
 void PhysicsEngine::DisableBody(kEntityId id) {
   auto body_id = entity_bodies_ref_[id];
-  PDebug::log("Disabling body: {}", id);
+  PDebug::log("Disabling body: {}", static_cast<uint32_t>(id));
 
   if (std::binary_search(disable_queue_.begin(), disable_queue_.end(), id)) {
     return;
@@ -319,14 +319,14 @@ void PhysicsEngine::DisableBody(kEntityId id) {
 
 kEntityId PhysicsEngine::Get(JPH::BodyID jolt_id) {
   if (!this->jolt_bodies_ref_.contains(jolt_id)) {
-    return -1;
+    return entt::null;
   }
   return this->jolt_bodies_ref_[jolt_id];
 }
 bool PhysicsEngine::IsRegistered(kEntityId id) {
   if (this->entity_bodies_ref_.contains(id)) {
     auto jolt_id = this->entity_bodies_ref_[id];
-    return this->jolt_bodies_ref_[jolt_id] > 0;
+    return this->jolt_bodies_ref_[jolt_id] != entt::null;
   } else {
     return false;
   }

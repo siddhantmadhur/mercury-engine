@@ -18,16 +18,17 @@
 #include <properties/transform.h>
 #include <properties/texture2d.h>
 #include <properties/mesh.h>
+#define ENTT_USE_STL 1
+#include <entt/entt.hpp>
 
 #include "algorithms/sparse_set.h"
-
 namespace Pequod {
 enum Node {
   kEmpty,
   kBox2D,
 };
 
-constexpr kEntityId kMaxEntities = 80960;
+constexpr unsigned int kMaxEntities = 80960;
 // TODO: Going to replace this with a sparsed set later
 #define PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Type) std::optional<Type> *
 
@@ -84,44 +85,29 @@ class PObjectManager {
                       glm::vec3 size = glm::vec3(1.0),
                       glm::vec4 color = glm::vec4(1.0f));
 
-  void ProcessTransformations(float alpha);
+  void ProcessOnFrame(float delta);
   void CaptureTickSnapshots();
 
-  template <class TProperty>
-    requires std::derived_from<TProperty, Property>
-  void AddProperty(kEntityId self, TProperty property) {
-    std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
-        properties_)[self] = property;
+  template <class T, typename... Args>
+    requires std::constructible_from<T, Args...>
+  void AddProperty(kEntityId self, Args &&...args) {
+    registry_.emplace_or_replace<T>(self, std::forward<Args>(args)...);
+  };
+
+  template <class T>
+  void AddProperty(kEntityId self, T property) {
+    registry_.emplace_or_replace<T>(self, property);
+  };
+
+  template <typename T>
+  T *GetProperty(kEntityId self) {
+    auto property = registry_.try_get<T>(self);
+    return property;
   }
 
-  template <class TProperty>
-    requires std::derived_from<TProperty, Property>
-  TProperty *GetProperty(kEntityId self) {
-    if (self >= current_entity_size_) {
-      return nullptr;
-    }
-    std::optional<TProperty> &property =
-        std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
-            properties_)[self];
-    if (property.has_value()) {
-      return &property.value();
-    }
-    return nullptr;
-  }
-
-  template <class TProperty>
-    requires std::derived_from<TProperty, Property>
-  PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)
-  GetProperties() {
-    return std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
-        properties_);
-  }
-
-  template <class TProperty>
-    requires std::derived_from<TProperty, Property>
+  template <class T>
   void DeleteProperty(kEntityId self) {
-    std::get<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(TProperty)>(
-        properties_)[self] = std::nullopt;
+    registry_.remove<T>(self);
   }
 
   /**
@@ -159,13 +145,15 @@ class PObjectManager {
   TextureAtlas atlas_;
   std::vector<Vertex> vertices_;
 
-  kEntityId current_entity_size_ = 0;
-
+  /**
   std::tuple<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Mesh),
              PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Transform),
              PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Camera),
              PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Texture2D)>
       properties_;
+      **/
+
+  entt::registry registry_;
 };
 }  // namespace Pequod
 

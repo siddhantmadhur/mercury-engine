@@ -4,6 +4,7 @@
 
 #ifndef PEQUOD_ENGINE_VERSION
 #define PEQUOD_ENGINE_VERSION "dev"
+#include "entt/entt.hpp"
 #endif
 
 #ifndef PEQUODENGINE_GLOBALS_H
@@ -13,7 +14,7 @@
 #include <cstring>
 #include <glm/glm.hpp>
 #include <vector>
-
+#include <entt/entt.hpp>
 #include <memory>
 
 #ifdef PEQUOD_GRAPHICS_D3D11
@@ -22,7 +23,7 @@
 #endif
 
 using entity_id = uint16_t;
-using kEntityId = uint16_t;
+using kEntityId = entt::entity;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 
