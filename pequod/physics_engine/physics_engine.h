@@ -104,7 +104,7 @@ class ObjectVsBroadPhaseLayerFilterImpl
  * [1]: The entity id of the body it is connecting with
  * [2]: The point at which the raycast hits
  */
-using RayCastResult = std::tuple<kEntityId, glm::vec3>;
+using RayCastResult = std::pair<kEntityId, glm::vec3>;
 
 /**
  * @brief Describes a type of collision

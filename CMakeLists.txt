@@ -57,10 +57,12 @@ add_library(pequod
         pequod/ui/ui_element.cc
         pequod/ui/ui_element.h
         pequod/algorithms/sparse_set.h
-        pequod/renderer/renderer.cc
-        pequod/renderer/renderer.h
+        pequod/pipelines/renderer.cc
+        pequod/pipelines/renderer.h
         pequod/math/vector.cc
         pequod/math/vector.h
+        pequod/application/d3d11_renderer.cc
+        pequod/application/d3d11_renderer.h
 )
 
 

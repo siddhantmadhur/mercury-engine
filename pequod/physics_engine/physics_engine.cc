@@ -249,7 +249,7 @@ std::optional<RayCastResult> PhysicsEngine::RayCast(glm::vec3 origin,
     auto collision_point = ray.GetPointOnRay(ray_hit.mFraction);
     auto body_id = ray_hit.mBodyID;
     auto entity_id = jolt_bodies_ref_[body_id];
-    RayCastResult result = std::make_tuple(
+    RayCastResult result = std::make_pair(
         entity_id, glm::vec3(collision_point.GetX(), collision_point.GetY(),
                              collision_point.GetZ()));
 

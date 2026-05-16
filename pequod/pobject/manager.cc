@@ -312,6 +312,8 @@ kEntityId PObjectManager::NewCube3D(glm::vec3 position, glm::vec3 size,
   mesh.opacity_ = color[3];
   mesh.SetScale(glm::vec3(size.x, size.y, size.z));
 
+  mesh.SetAABB(glm::vec3(-0.5), glm::vec3(0.5));
+
   AddProperty(id, pos);
   AddProperty(id, mesh);
   return id;

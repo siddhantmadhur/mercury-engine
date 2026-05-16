@@ -6,6 +6,7 @@ Pequod is a game-engine built with C++ for performant games
 
 - [Goal](#goal)
 - [Support](#support)
+- [Issues](#issues)
 - [Contributing](#contributing)
 - [Design](#design)
 - [LICENSE](#license)
@@ -37,6 +38,10 @@ If a platform is not on the list then that means supporting is not a goal of thi
 [^1]: The goal is to have SteamOS specific features like support for those touchpads on the
 SteamDeck or the controllers. Along with support for controller layouts, battery modes and more.
 
+## Issues
+
+Any bugs related to the game engine can be reported at [issues.reocelot.com](https://issues.reocelot.com)
+
 ## Contributing
 
 Pequod is open-source but not open-contribution. Features part of this engine
@@ -44,8 +49,8 @@ are specifically for games **I** want to make and not to be generalized.
 In fact there are much better engines already out there that do most things
 better so I'd recommend using that if you cannot find a feature here.
 
-That being said, there are many instances where you might want a change (bugs, vulnerabilities)
-in which case please email [report@pequodengine.com](mailto:report@pequodengine.com) with
+That being said, there are many instances where you might want a change urgently (bugs, vulnerabilities)
+and perhaps already fixed it, in which case email [maintainer@pequodengine.com](mailto:maintainer@pequodengine.com) with
 more information or with
 a [git patch](https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-Project#_project_over_email).
 

@@ -74,7 +74,7 @@ bool D3D11Application::Initialize() {
   swapChainDescriptor.SwapEffect =
       DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_FLIP_DISCARD;
   swapChainDescriptor.Scaling = DXGI_SCALING::DXGI_SCALING_STRETCH;
-  swapChainDescriptor.Flags = {};
+  swapChainDescriptor.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
   DXGI_SWAP_CHAIN_FULLSCREEN_DESC swapChainFullscreenDescriptor = {};
   swapChainFullscreenDescriptor.Windowed = true;
 
@@ -445,20 +445,20 @@ void D3D11Application::Render() {
     // clear it after the GPU copy.
     TextureAtlas &atlas = game_scene_->GetAtlas();
     if (atlas.NeedsGpuUpload()) {
-		D3D11_MAPPED_SUBRESOURCE mapped = {};
-		if (SUCCEEDED(deviceContext_->Map(atlas_texture_.Get(), 0,
-										  D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-		  const int aw = atlas.GetWidth();
-		  const int ah = atlas.GetHeight();
-		  const uint8_t *src = atlas.GetData();
-		  uint8_t *dst = static_cast<uint8_t *>(mapped.pData);
-		  const size_t src_pitch = static_cast<size_t>(aw) * 4;
-		  for (int row = 0; row < ah; ++row) {
-			memcpy(dst + row * mapped.RowPitch, src + row * src_pitch, src_pitch);
-		  }
-		  deviceContext_->Unmap(atlas_texture_.Get(), 0);
-		  atlas.ClearGpuUploadFlag();
-		}
+      D3D11_MAPPED_SUBRESOURCE mapped = {};
+      if (SUCCEEDED(deviceContext_->Map(atlas_texture_.Get(), 0,
+                                        D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        const int aw = atlas.GetWidth();
+        const int ah = atlas.GetHeight();
+        const uint8_t *src = atlas.GetData();
+        uint8_t *dst = static_cast<uint8_t *>(mapped.pData);
+        const size_t src_pitch = static_cast<size_t>(aw) * 4;
+        for (int row = 0; row < ah; ++row) {
+          memcpy(dst + row * mapped.RowPitch, src + row * src_pitch, src_pitch);
+        }
+        deviceContext_->Unmap(atlas_texture_.Get(), 0);
+        atlas.ClearGpuUploadFlag();
+      }
     }
 
     // Bind the atlas SRV + sampler once for the whole frame.

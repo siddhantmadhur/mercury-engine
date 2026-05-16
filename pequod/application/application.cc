@@ -48,6 +48,7 @@ bool Application::Initialize() {
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  // glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_FALSE);
 
   PDebug::info("Creating window: {}", title_);
   window_ = glfwCreateWindow(width_, height_, title_.c_str(), nullptr, nullptr);
@@ -112,6 +113,9 @@ int Application::Run() {
     }
   }
   while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
+    glfwMakeContextCurrent(window_);
+    glfwSwapInterval(0);
+
     double current_time = glfwGetTime() * 1000;
     auto frametime = current_time - time_elapsed_;
     delta_time_ = frametime;
