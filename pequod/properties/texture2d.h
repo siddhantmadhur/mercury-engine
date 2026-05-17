@@ -4,7 +4,6 @@
 
 #ifndef PEQUODENGINE_TEXTURE2D_H
 #define PEQUODENGINE_TEXTURE2D_H
-#include "property.h"
 #include "stb/stb_image.h"
 
 #include <string>
@@ -12,7 +11,7 @@
 #include "glm/vec4.hpp"
 
 namespace Pequod {
-class Texture2D : public Property {
+class Texture2D {
  public:
   Texture2D();  // Creates a blank white texture
   Texture2D(const std::string &file_path, int depth = 4);

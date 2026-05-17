@@ -99,7 +99,7 @@ VSOutput Main(VSInput input)
        0, 0, 1, 0,
        0, 0, 0, 1
     };
-     model = Rotate(model, object_rotation);
+     model = Rotate(model, degToRad(object_rotation));
      model = mul(Translate(object_position), model);
 
 

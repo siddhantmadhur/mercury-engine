@@ -159,13 +159,17 @@ int Application::Run() {
 
         last_tick_ = ticks;
         time_since_last_tick_ = 0.0;
-
-        OnNewTick();
       }
 
       float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
       game_scene_->ProcessOnFrame(alpha);
       primitives_ = game_scene_->GetPrimitives();
+      // Rebuild the per-frame vertex/index buffers to match the primitives_ we
+      // are about to render. Doing this anywhere other than immediately after
+      // GetPrimitives() lets the buffer and the list desync (e.g. when a new
+      // entity is spawned mid-tick), which causes per-primitive draws to read
+      // the wrong slice of the buffer.
+      OnNewTick();
     } else {
       PDebug::warn("Game scene not set");
     }

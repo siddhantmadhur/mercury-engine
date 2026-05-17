@@ -4,12 +4,11 @@
 
 #ifndef PEQUOD_ENGINE_CAMERA_H
 #define PEQUOD_ENGINE_CAMERA_H
-#include "property.h"
 #include "transform.h"
 #include <glm/glm.hpp>
 
 namespace Pequod {
-class Camera : public Property {
+class Camera {
  public:
   Camera();
   ~Camera();
