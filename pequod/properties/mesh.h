@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "globals.h"
-#include "property.h"
 
 namespace Pequod {
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw
@@ -17,7 +16,7 @@ typedef struct mAABB {
   glm::vec3 max;
 } mAABB;
 
-class Mesh : public Property {
+class Mesh {
  public:
   Mesh();
 

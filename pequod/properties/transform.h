@@ -7,7 +7,6 @@
 #include "glm/detail/func_packing_simd.inl"
 #include "glm/mat4x4.hpp"
 #include "glm/vec3.hpp"
-#include "property.h"
 
 namespace Pequod {
 
@@ -18,7 +17,7 @@ enum TransformationType {
   kTransformRotation = 3,
 };
 
-class Transform : public Property {
+class Transform {
  public:
   Transform();
   Transform(glm::vec3 position);

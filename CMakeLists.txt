@@ -33,7 +33,6 @@ add_library(pequod
         pequod/physics_engine/physics_engine.h
         pequod/pobject/manager.cc
         pequod/pobject/manager.h
-        pequod/properties/property.cc
         pequod/debugger/debugger.h
         pequod/properties/mesh.cc
         pequod/properties/transform.h
