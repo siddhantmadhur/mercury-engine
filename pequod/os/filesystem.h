@@ -5,6 +5,7 @@
 #ifndef PEQUODENGINE_FILESYSTEM_H
 #define PEQUODENGINE_FILESYSTEM_H
 
+#include <filesystem>
 namespace fs = std::filesystem;
 
 namespace Pequod::os {}

@@ -25,11 +25,17 @@ bool InputManager::IsJustPressed(Key k) {
 
 bool InputManager::IsPressed(MouseButton btn) {
   if (mouse_btn_status_.contains(btn)) {
-    return mouse_btn_status_[btn] == kJustPressed;
+    return mouse_btn_status_[btn] == kJustPressed ||
+           mouse_btn_status_[btn] == kContinuous;
   }
   return false;
 }
-bool InputManager::IsJustPressed(MouseButton btn) { return IsPressed(btn); }
+bool InputManager::IsJustPressed(MouseButton btn) {
+  if (mouse_btn_fresh_status_.contains(btn)) {
+    return mouse_btn_fresh_status_[btn] == kJustPressed;
+  }
+  return false;
+}
 
 glm::vec2 InputManager::GetCursorDelta() {
   return this->mouse_position_ - this->last_mouse_position_;
@@ -46,6 +52,7 @@ void InputManager::SetKeyUp(Key k) {
 }
 void InputManager::ResetFreshPresses() {
   fresh_presses_.clear();
+  mouse_btn_fresh_status_.clear();
   this->scroll_offset_ = glm::vec2(0.0f);
   this->last_mouse_position_ = GetCursorPos();
 }
@@ -67,15 +74,18 @@ void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
                                         double yoffset) {
   this->scroll_offset_ = glm::vec2(xoffset, yoffset);
 }
-#define GET_ACTION(a) a == GLFW_PRESS ? kJustPressed : kReleased
+#define GET_ACTION(a) \
+  a == GLFW_PRESS ? kJustPressed : a == GLFW_REPEAT ? kContinuous : kReleased
 void InputManager::HandleMouseButtonCallback(GLFWwindow* window, int button,
                                              int action, int mods) {
   switch (button) {
     case GLFW_MOUSE_BUTTON_LEFT:
       mouse_btn_status_[MouseButton::kLeft] = GET_ACTION(action);
+      mouse_btn_fresh_status_[MouseButton::kLeft] = GET_ACTION(action);
       break;
     case GLFW_MOUSE_BUTTON_MIDDLE:
       mouse_btn_status_[MouseButton::kMiddle] = GET_ACTION(action);
+      mouse_btn_fresh_status_[MouseButton::kMiddle] = GET_ACTION(action);
       break;
     default:
       break;

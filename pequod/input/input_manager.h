@@ -54,6 +54,7 @@ class InputManager {
   void SetKeyUp(Key k);
   std::map<int, bool> key_status_ = {};
   std::map<MouseButton, KeyStatus> mouse_btn_status_ = {};
+  std::map<MouseButton, KeyStatus> mouse_btn_fresh_status_ = {};
   std::map<int, bool> repeated_keys_ = {};
   std::map<int, bool> fresh_presses_ = {};
   glm::vec2 mouse_position_ = glm::vec2(0.0);

@@ -8,7 +8,6 @@ namespace Pequod {
 Mesh::Mesh() {
   this->vertices_ = {};
   this->indices_ = {};
-  this->scale = glm::vec3(1.0f);
 }
 
 Mesh::~Mesh() {}
@@ -23,10 +22,6 @@ void Mesh::SetIndices(const std::vector<UINT> &indices) {
   this->indices_ = indices;
 }
 
-void Mesh::SetScale(glm::vec3 scale) { this->scale = scale; }
-
-glm::vec3 Mesh::GetScale() const { return scale; }
-
 uint32_t Mesh::GetIndicesID() const { return indices_id; }
 void Mesh::SetAABB(glm::vec3 min, glm::vec3 max) {
   this->aabb_.min = min;
@@ -36,7 +31,7 @@ void Mesh::SetAABB(glm::vec3 min, glm::vec3 max) {
 mAABB Mesh::GetAABB() { return this->aabb_; }
 
 float Mesh::GetHeight() {
-  float local_height = (aabb_.max.y - aabb_.min.y) * scale.y;
+  float local_height = (aabb_.max.y - aabb_.min.y);
   return local_height;
 }
 

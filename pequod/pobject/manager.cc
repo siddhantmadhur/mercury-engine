@@ -45,15 +45,17 @@ std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
     Primitive primitive = {};
     primitive.indices_ = mesh.GetIndices();
     primitive.vertices_ = mesh.GetVertices();
-    primitive.scale_ = mesh.GetScale();
+
     primitive.opacity_ = mesh.opacity_;
     auto *transform = registry_.try_get<Transform>(entity);
     if (transform) {
       auto world_position = transform->GetInterpolatedPosition();
       primitive.world_position_ = world_position;
-      primitive.world_rotation_ = transform->GetRotate() * 360.0f;
+      primitive.world_rotation_ = transform->GetInterpolatedRotation() * 360.0f;
+      primitive.scale_ = transform->GetInterpolatedScale();
     } else {
       primitive.world_position_ = glm::vec3(0.0f);
+      primitive.scale_ = glm::vec3(1.0);
     }
 
     auto tex = registry_.try_get<Texture2D>(entity);
@@ -112,7 +114,7 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
       std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
 
   mesh.opacity_ = color[3];
-  mesh.SetScale(glm::vec3(size.x, size.y, 1.0f));
+  pos.SetScale(glm::vec3(size.x, size.y, 1.0f));
 
   AddProperty(id, pos);
   AddProperty(id, mesh);
@@ -145,7 +147,7 @@ kEntityId PObjectManager::NewPlane2D(glm::vec3 position, glm::vec2 size,
       std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
 
   mesh.opacity_ = color[3];
-  mesh.SetScale(glm::vec3(size.x, 0.0f, size.y));
+  pos.SetScale(glm::vec3(size.x, 0.0f, size.y));
 
   AddProperty(id, pos);
   AddProperty(id, mesh);
@@ -168,7 +170,8 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
   }
   kEntityId id = NewObject();
   auto mesh = Mesh();
-  mesh.SetScale(glm::vec3(scale));
+  auto transform = Transform(glm::vec3(0.0));
+  transform.SetScale(glm::vec3(scale));
   std::vector<Vertex> vertices = {};
   std::vector<UINT> indices = {};
 
@@ -234,6 +237,7 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
   mesh.SetIndices(indices);
 
   AddProperty<Mesh>(id, mesh);
+  AddProperty<Transform>(id, transform);
 
   return id;
 }
@@ -301,7 +305,7 @@ kEntityId PObjectManager::NewCube3D(glm::vec3 position, glm::vec3 size,
       std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
 
   mesh.opacity_ = color[3];
-  mesh.SetScale(glm::vec3(size.x, size.y, size.z));
+  pos.SetScale(glm::vec3(size.x, size.y, size.z));
 
   mesh.SetAABB(glm::vec3(-0.5), glm::vec3(0.5));
 
@@ -335,7 +339,7 @@ void PObjectManager::MakeStatic(kEntityId id) {
     auto pos = transform->GetPosition();
     auto vertices = mesh->GetVertices();
     auto indices = mesh->GetIndices();
-    auto scale = mesh->GetScale();
+    auto scale = transform->GetScale();
     auto offset = static_vertices_.size();
 
     auto tex = GetProperty<Texture2D>(id);

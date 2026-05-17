@@ -25,6 +25,8 @@ class Transform : public Property {
   glm::vec3 GetPosition() const;
   void SetPosition(glm::vec3);
   glm::vec3 GetInterpolatedPosition() const;
+  glm::vec3 GetScale() const;
+  void SetScale(glm::vec3);
 
   glm::vec3 GetVelocity() const;
   void SetVelocity(glm::vec3);
@@ -35,6 +37,7 @@ class Transform : public Property {
   void ChangeRotate(glm::vec3);
   glm::vec3 GetRotate() const;
   glm::vec3 GetInterpolatedRotation() const;
+  glm::vec3 GetInterpolatedScale() const;
   glm::mat4 GetRotationMatrix() const;
 
   void SetVelocityMagnitude(float);
@@ -56,6 +59,7 @@ class Transform : public Property {
   glm::vec3 position_;
   glm::vec3 velocity_{};
   glm::vec3 rotation_{};
+  glm::vec3 scale_ = glm::vec3(1.0);
   /*
    * Position only updates per tick (which can be significantly lower than fps)
    * so this makes sure its smoothed out
@@ -64,6 +68,8 @@ class Transform : public Property {
   glm::vec3 previous_position_{};
   glm::vec3 interpolated_rotation_{};
   glm::vec3 previous_rotation_{};
+  glm::vec3 interpolated_scale_{};
+  glm::vec3 previous_scale_{};
 
   /**
    * A queue of fixed transformations made (like position and velocity) so that

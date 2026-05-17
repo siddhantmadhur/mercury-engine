@@ -49,7 +49,10 @@ void Transform::ChangeRotate(glm::vec3 delta) {
   rotation_ += delta;
   transformations_.push_back(kTransformRotation);
 }
+
+void Transform::SetScale(glm::vec3 scale) { this->scale_ = scale; }
 glm::vec3 Transform::GetRotate() const { return this->rotation_; }
+glm::vec3 Transform::GetScale() const { return this->scale_; }
 glm::vec3 Transform::GetInterpolatedRotation() const {
   return this->interpolated_rotation_;
 }
@@ -74,15 +77,21 @@ glm::vec3 Transform::GetInterpolatedPosition() const {
   return this->interpolated_position_;
 }
 
+glm::vec3 Transform::GetInterpolatedScale() const {
+  return this->interpolated_scale_;
+}
+
 void Transform::Interpolate(float alpha) {
   float a = glm::clamp(alpha, 0.0f, 1.0f);
   interpolated_position_ = glm::mix(previous_position_, position_, a);
   interpolated_rotation_ = glm::mix(previous_rotation_, rotation_, a);
+  interpolated_scale_ = glm::mix(previous_scale_, scale_, a);
 }
 
 void Transform::CaptureTickSnapshot() {
   previous_position_ = position_;
   previous_rotation_ = rotation_;
+  previous_scale_ = scale_;
 }
 std::vector<TransformationType> Transform::GetTransformations() {
   auto transformations = transformations_;

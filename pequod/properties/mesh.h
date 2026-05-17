@@ -31,10 +31,6 @@ class Mesh : public Property {
 
   std::vector<UINT> GetIndices() const;
 
-  void SetScale(glm::vec3);
-
-  glm::vec3 GetScale() const;
-
   uint32_t GetIndicesID() const;
   void SetAABB(glm::vec3 min, glm::vec3 max);
   mAABB GetAABB();
@@ -48,7 +44,6 @@ class Mesh : public Property {
   UINT vertices_id = 0;  // the id to get this in the ECS vertex vector
   UINT indices_id = 0;   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices vector
  private:
-  glm::vec3 scale{};
   float height_ = 0.0;
 
   mAABB aabb_;
