@@ -15,9 +15,18 @@ cbuffer VS_MODEL_BUFFER : register(b1)
     float4 atlas_uv;
 };
 
+// Light-space view-projection — used to compute the per-vertex
+// shadow-map sample position. Lives in its own cbuffer so the shadow VS
+// can share it.
+cbuffer VS_LIGHT_BUFFER : register(b2)
+{
+    matrix mLightViewProj;
+};
+
 struct VSInput
 {
     float3 position : POSITION;
+    float3 normal : NORMAL;
     float3 color : COLOR0;
     float2 uv : TEXCOORD0;
 };
@@ -27,6 +36,9 @@ struct VSOutput
     float4 position : SV_Position;
     float4 color : COLOR0;
     float2 uv : TEXCOORD0;
+    float3 world_pos : TEXCOORD1;
+    float3 world_normal : TEXCOORD2;
+    float4 light_space_pos : TEXCOORD3;
 };
 
 float3 degToRad(float3 deg)
@@ -49,7 +61,6 @@ float4x4 RotateX(float angle) {
     );
 }
 
-// Rotation around Y axis
 float4x4 RotateY(float angle) {
     float s = sin(angle);
     float c = cos(angle);
@@ -61,7 +72,6 @@ float4x4 RotateY(float angle) {
     );
 }
 
-// Rotation around Z axis
 float4x4 RotateZ(float angle) {
     float s = sin(angle);
     float c = cos(angle);
@@ -91,7 +101,6 @@ float4x4 Translate(float3 t) {
 VSOutput Main(VSInput input)
 {
     VSOutput output = (VSOutput) 0;
-    // proj * view * model * pos
     float3 scaled_position = input.position * scale * 1.0;
     float4x4 model = {
        1, 0, 0, 0,
@@ -99,20 +108,22 @@ VSOutput Main(VSInput input)
        0, 0, 1, 0,
        0, 0, 0, 1
     };
-     model = Rotate(model, degToRad(object_rotation));
-     model = mul(Translate(object_position), model);
-
-
+    model = Rotate(model, degToRad(object_rotation));
+    model = mul(Translate(object_position), model);
 
     float4 world_pos = mul(model, float4(scaled_position, 1.0));
-
-    // Snap in world space (before WVP) so exact half-integer coords like
-    // ±638.5 don't get perturbed by the projection roundtrip and end up
-    // rounding asymmetrically across the origin. Round-half-toward-zero
-    // keeps odd-thickness primitives at their intended pixel width.
-    //world_pos.xy = sign(world_pos.xy) * ceil(abs(world_pos.xy) - 0.5);
-
     output.position = mul(mWorldViewProj, world_pos);
+
+    // TODO: switch to inverse-transpose of the upper 3x3 if non-uniform
+    // scale becomes a thing. For now the engine only applies uniform-ish
+    // scale + rotation so multiplying the rotation matrix is equivalent.
+    float4x4 rot_only = Rotate(float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1),
+                               degToRad(object_rotation));
+    float3 world_normal = normalize(mul((float3x3)rot_only, input.normal));
+
+    output.world_pos = world_pos.xyz;
+    output.world_normal = world_normal;
+    output.light_space_pos = mul(mLightViewProj, float4(world_pos.xyz, 1.0));
 
     output.color = float4(input.color, opacity);
     output.uv = atlas_uv.xy + input.uv * (atlas_uv.zw - atlas_uv.xy);

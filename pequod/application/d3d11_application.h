@@ -75,14 +75,20 @@ class D3D11Application : public Application {
 
   ComPtr<ID3D11Buffer> camera_c_buffer_ = nullptr;
   ComPtr<ID3D11Buffer> vs_model_buffer_ = nullptr;
+  ComPtr<ID3D11Buffer> vs_light_buffer_ = nullptr;
+  ComPtr<ID3D11Buffer> ps_light_buffer_ = nullptr;
+  ComPtr<ID3D11Buffer> ps_material_buffer_ = nullptr;
 
   ComPtr<ID3D11InputLayout> vertexLayout_ = nullptr;
   ComPtr<ID3D11InputLayout> static_vertex_layout_ = nullptr;
   ComPtr<ID3D11VertexShader> vertexShader_ = nullptr;
   ComPtr<ID3D11PixelShader> textured_pixel_shader_ = nullptr;
   ComPtr<ID3D11VertexShader> static_vertex_shader_ = nullptr;
+  ComPtr<ID3D11VertexShader> shadow_vertex_shader_ = nullptr;
+  ComPtr<ID3D11VertexShader> shadow_static_vertex_shader_ = nullptr;
   ComPtr<ID3D11BlendState> blendState_ = nullptr;
   ComPtr<ID3D11RasterizerState> rasterizer_state_ = nullptr;
+  ComPtr<ID3D11RasterizerState> shadow_rasterizer_state_ = nullptr;
   ComPtr<ID3D11Texture2D> depth_stencil_buffer_ = nullptr;
   ComPtr<ID3D11DepthStencilView> depth_stencil_view_ = nullptr;
   ComPtr<ID3D11DepthStencilState> depth_stencil_state_ = nullptr;
@@ -90,6 +96,13 @@ class D3D11Application : public Application {
 
   ComPtr<ID3D11Texture2D> atlas_texture_ = nullptr;
   ComPtr<ID3D11ShaderResourceView> atlas_srv_ = nullptr;
+
+  // Shadow map resources
+  static constexpr UINT kShadowMapSize = 2048;
+  ComPtr<ID3D11Texture2D> shadow_map_texture_ = nullptr;
+  ComPtr<ID3D11DepthStencilView> shadow_map_dsv_ = nullptr;
+  ComPtr<ID3D11ShaderResourceView> shadow_map_srv_ = nullptr;
+  ComPtr<ID3D11SamplerState> shadow_sampler_ = nullptr;
 };
 }  // namespace Pequod
 

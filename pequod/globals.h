@@ -60,15 +60,30 @@ using UINT = uint32_t;
 
 struct Vertex {
   PQ_FLOAT3 position;
+  PQ_FLOAT3 normal;
   PQ_FLOAT3 color;
   PQ_FLOAT2 uv;
 };
 
 struct StaticVertex {
   PQ_FLOAT3 position;
+  PQ_FLOAT3 normal;
   PQ_FLOAT4 color;
   PQ_FLOAT2 uv;
   PQ_FLOAT4 atlas_uv;
+};
+
+/**
+ * @brief Scalar PBR material parameters
+ *
+ * No texture maps yet. Defaults give a plain matte white surface so
+ * entities without an explicit material still render.
+ */
+struct Material {
+  glm::vec3 albedo = glm::vec3(1.0f);
+  float metallic = 0.0f;
+  float roughness = 0.7f;
+  float ao = 1.0f;
 };
 
 /**
@@ -86,6 +101,7 @@ struct Primitive {
   glm::vec3 world_rotation_ = glm::vec3(0.0f);
   float opacity_ = 1.0f;
   glm::vec4 atlas_uv_ = glm::vec4(0.0f);
+  Material material_ = {};
 };
 
 /**
@@ -102,6 +118,45 @@ struct VsModelBuffer {
   PQ_FLOAT3 object_rotation;
   float pad1_;
   PQ_FLOAT4 atlas_uv;
+};
+
+/**
+ * @brief Per-frame lighting data shared by every pixel-shader invocation.
+ *
+ * Layout matches the HLSL `PS_LIGHT_BUFFER` cbuffer (16-byte aligned).
+ * Slots for additional point/spot lights are intentionally left open as
+ * future extensions — extend via additional fields here and bump the
+ * HLSL counterpart together.
+ */
+struct PsLightCBuffer {
+  PQ_FLOAT3 sun_direction;
+  float sun_intensity;
+  PQ_FLOAT3 sun_color;
+  float _pad0;
+  PQ_FLOAT3 ambient;
+  float _pad1;
+  PQ_FLOAT3 camera_world_pos;
+  float _pad2;
+  PQ_MATRIX light_view_proj;
+  PQ_FLOAT4 shadow_params;  // x=texel_size y=bias z=enabled w=reserved
+};
+
+/**
+ * @brief Per-object PBR material parameters uploaded to the pixel shader.
+ */
+struct PsMaterialCBuffer {
+  PQ_FLOAT3 albedo;
+  float metallic;
+  float roughness;
+  float ao;
+  PQ_FLOAT2 _pad;
+};
+
+/**
+ * @brief Shadow pass per-frame VS buffer: just the light view-projection.
+ */
+struct VsLightCBuffer {
+  PQ_MATRIX light_view_proj;
 };
 
 #define PEQUOD_SAFE_FREE(pointer) \

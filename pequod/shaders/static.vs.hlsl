@@ -6,9 +6,15 @@ cbuffer VS_CAMERA_BUFFER : register(b0)
     float2 mResolution;
 };
 
+cbuffer VS_LIGHT_BUFFER : register(b2)
+{
+    matrix mLightViewProj;
+};
+
 struct VSInput
 {
     float3 position : POSITION;
+    float3 normal : NORMAL;
     float4 color : COLOR0;
     float2 uv : TEXCOORD0;
     float4 atlas_uv : TEXCOORD1;
@@ -19,19 +25,19 @@ struct VSOutput
     float4 position : SV_Position;
     float4 color : COLOR0;
     float2 uv : TEXCOORD0;
+    float3 world_pos : TEXCOORD1;
+    float3 world_normal : TEXCOORD2;
+    float4 light_space_pos : TEXCOORD3;
 };
 
 VSOutput Main(VSInput input)
 {
-    // Snap in world space (before WVP) so exact half-integer coords like
-    // ±638.5 don't get perturbed by the projection roundtrip and end up
-    // rounding asymmetrically across the origin. Round-half-toward-zero
-    // keeps odd-thickness primitives at their intended pixel width.
-    float3 snapped = input.position;
-    //snapped.xy = sign(snapped.xy) * ceil(abs(snapped.xy) - 0.5);
-
     VSOutput output = (VSOutput) 0;
-    output.position = mul(mWorldViewProj, float4(snapped, 1.0));
+    float3 world = input.position;
+    output.position = mul(mWorldViewProj, float4(world, 1.0));
+    output.world_pos = world;
+    output.world_normal = normalize(input.normal);
+    output.light_space_pos = mul(mLightViewProj, float4(world, 1.0));
 
     output.color = input.color;
     output.uv = input.atlas_uv.xy + input.uv * (input.atlas_uv.zw - input.atlas_uv.xy);

@@ -20,6 +20,7 @@
 #include <globals.h>
 
 #include "debugger/debugger.h"
+#include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "os/filesystem.h"
@@ -208,6 +209,9 @@ bool D3D11Application::OnLoad() {
       {"POSITION", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
        offsetof(Vertex, position),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
+      {"NORMAL", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       offsetof(Vertex, normal),
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
       {"COLOR", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
        offsetof(Vertex, color),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -235,6 +239,9 @@ bool D3D11Application::OnLoad() {
   constexpr D3D11_INPUT_ELEMENT_DESC staticVertexInputLayoutInfo[] = {
       {"POSITION", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
        offsetof(StaticVertex, position),
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
+      {"NORMAL", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       offsetof(StaticVertex, normal),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
       {"COLOR", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
        offsetof(StaticVertex, color),
@@ -302,6 +309,106 @@ bool D3D11Application::OnLoad() {
   if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &vs_model_buffer_))) {
     PDebug::error("D3D11: Failed to create model cbuffer");
     return false;
+  }
+
+  cbDesc.ByteWidth = sizeof(VsLightCBuffer);
+  if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &vs_light_buffer_))) {
+    PDebug::error("D3D11: Failed to create VS light cbuffer");
+    return false;
+  }
+
+  cbDesc.ByteWidth = sizeof(PsLightCBuffer);
+  if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &ps_light_buffer_))) {
+    PDebug::error("D3D11: Failed to create PS light cbuffer");
+    return false;
+  }
+
+  cbDesc.ByteWidth = sizeof(PsMaterialCBuffer);
+  if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &ps_material_buffer_))) {
+    PDebug::error("D3D11: Failed to create PS material cbuffer");
+    return false;
+  }
+
+  // Shadow vertex shaders (depth-only, no PS bound).
+  {
+    fs::path shadow_vs_path = shader_path / "shadow.vs.hlsl";
+    ComPtr<ID3DBlob> blob;
+    shadow_vertex_shader_ = CreateVertexShader(shadow_vs_path, blob);
+    if (shadow_vertex_shader_ == nullptr) return false;
+  }
+  {
+    fs::path shadow_static_vs_path = shader_path / "shadow_static.vs.hlsl";
+    ComPtr<ID3DBlob> blob;
+    shadow_static_vertex_shader_ =
+        CreateVertexShader(shadow_static_vs_path, blob);
+    if (shadow_static_vertex_shader_ == nullptr) return false;
+  }
+
+  // Shadow map texture, DSV, SRV, comparison sampler.
+  {
+    D3D11_TEXTURE2D_DESC sd = {};
+    sd.Width = kShadowMapSize;
+    sd.Height = kShadowMapSize;
+    sd.MipLevels = 1;
+    sd.ArraySize = 1;
+    sd.Format = DXGI_FORMAT_R32_TYPELESS;
+    sd.SampleDesc.Count = 1;
+    sd.Usage = D3D11_USAGE_DEFAULT;
+    sd.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+    if (FAILED(device_->CreateTexture2D(&sd, nullptr, &shadow_map_texture_))) {
+      PDebug::error("D3D11: Failed to create shadow map texture");
+      return false;
+    }
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc = {};
+    dsv_desc.Format = DXGI_FORMAT_D32_FLOAT;
+    dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+    if (FAILED(device_->CreateDepthStencilView(shadow_map_texture_.Get(),
+                                               &dsv_desc, &shadow_map_dsv_))) {
+      PDebug::error("D3D11: Failed to create shadow DSV");
+      return false;
+    }
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+    srv_desc.Format = DXGI_FORMAT_R32_FLOAT;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = 1;
+    if (FAILED(device_->CreateShaderResourceView(shadow_map_texture_.Get(),
+                                                 &srv_desc,
+                                                 &shadow_map_srv_))) {
+      PDebug::error("D3D11: Failed to create shadow SRV");
+      return false;
+    }
+    D3D11_SAMPLER_DESC ss = {};
+    ss.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+    ss.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+    ss.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+    ss.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+    ss.BorderColor[0] = 1.0f;
+    ss.BorderColor[1] = 1.0f;
+    ss.BorderColor[2] = 1.0f;
+    ss.BorderColor[3] = 1.0f;
+    ss.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+    if (FAILED(device_->CreateSamplerState(&ss, &shadow_sampler_))) {
+      PDebug::error("D3D11: Failed to create shadow sampler");
+      return false;
+    }
+  }
+
+  // Rasterizer state for the shadow pass — front-face cull plus slope-scaled
+  // depth bias to fight acne.
+  {
+    D3D11_RASTERIZER_DESC rd = {};
+    rd.FillMode = D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_FRONT;
+    rd.FrontCounterClockwise = TRUE;
+    rd.DepthClipEnable = TRUE;
+    rd.DepthBias = 1500;
+    rd.SlopeScaledDepthBias = 1.5f;
+    rd.DepthBiasClamp = 0.0f;
+    if (FAILED(device_->CreateRasterizerState(&rd,
+                                              &shadow_rasterizer_state_))) {
+      PDebug::error("D3D11: Failed to create shadow rasterizer state");
+      return false;
+    }
   }
 
   fs::path textured_ps_path = shader_path / "textured.ps.hlsl";
@@ -420,6 +527,131 @@ void D3D11Application::Render() {
 
   constexpr UINT indexStride = sizeof(UINT);
   constexpr UINT indexOffset = 0;
+
+  // ------------------------------------------------------------------
+  // Build per-frame lighting data + light view-projection matrix.
+  // ------------------------------------------------------------------
+  DirectionalLight sun = {};
+  glm::vec3 cam_world_pos(0.0f);
+  bool have_sun = false;
+  if (game_scene_) {
+    have_sun = game_scene_->GetDirectionalLight(sun);
+    game_scene_->GetCameraWorldPos(cam_world_pos);
+  }
+  // Orthographic frustum centered on (a snapped version of) the camera so
+  // shadows track the player. A fixed half-extent is "good enough" for a
+  // first cut; CSM is a clear follow-up.
+  constexpr float kShadowHalfExtent = 120.0f;
+  constexpr float kShadowDepth = 400.0f;
+  glm::vec3 sun_dir = glm::normalize(sun.direction);
+  glm::vec3 target = glm::vec3(std::floor(cam_world_pos.x),
+                               std::floor(cam_world_pos.y),
+                               std::floor(cam_world_pos.z));
+  glm::vec3 light_eye = target - sun_dir * (kShadowDepth * 0.5f);
+  glm::vec3 up = std::abs(sun_dir.y) > 0.95f ? glm::vec3(0, 0, 1)
+                                             : glm::vec3(0, 1, 0);
+  glm::mat4 light_view = glm::lookAtRH(light_eye, target, up);
+  glm::mat4 light_proj =
+      glm::orthoRH_ZO(-kShadowHalfExtent, kShadowHalfExtent,
+                      -kShadowHalfExtent, kShadowHalfExtent, 0.0f,
+                      kShadowDepth);
+  glm::mat4 light_vp = light_proj * light_view;
+
+  {
+    VsLightCBuffer vsl = {};
+    vsl.light_view_proj = PQ_MATRIX{&light_vp[0][0]};
+    MapBuffer(vs_light_buffer_, vsl);
+  }
+  {
+    PsLightCBuffer psl = {};
+    psl.sun_direction =
+        PQ_FLOAT3{sun_dir.x, sun_dir.y, sun_dir.z};
+    psl.sun_intensity = sun.intensity;
+    psl.sun_color = PQ_FLOAT3{sun.color.x, sun.color.y, sun.color.z};
+    psl.ambient = PQ_FLOAT3{sun.ambient.x, sun.ambient.y, sun.ambient.z};
+    psl.camera_world_pos =
+        PQ_FLOAT3{cam_world_pos.x, cam_world_pos.y, cam_world_pos.z};
+    psl.light_view_proj = PQ_MATRIX{&light_vp[0][0]};
+    psl.shadow_params = PQ_FLOAT4{1.0f / float(kShadowMapSize), 0.0015f,
+                                  (have_sun && sun.casts_shadow) ? 1.0f : 0.0f,
+                                  0.0f};
+    MapBuffer(ps_light_buffer_, psl);
+  }
+
+  // ------------------------------------------------------------------
+  // Pass 1: shadow map. Both static and dynamic geometry cast shadows.
+  // ------------------------------------------------------------------
+  if (game_scene_ && have_sun && sun.casts_shadow) {
+    ID3D11RenderTargetView *null_rtv[1] = {nullptr};
+    deviceContext_->OMSetRenderTargets(1, null_rtv, shadow_map_dsv_.Get());
+    deviceContext_->ClearDepthStencilView(shadow_map_dsv_.Get(),
+                                          D3D11_CLEAR_DEPTH, 1.0f, 0);
+    D3D11_VIEWPORT sv = {};
+    sv.Width = sv.Height = static_cast<float>(kShadowMapSize);
+    sv.MaxDepth = 1.0f;
+    deviceContext_->RSSetViewports(1, &sv);
+    deviceContext_->RSSetState(shadow_rasterizer_state_.Get());
+    deviceContext_->OMSetDepthStencilState(depth_stencil_state_.Get(), 0);
+    deviceContext_->IASetPrimitiveTopology(
+        D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    deviceContext_->PSSetShader(nullptr, nullptr, 0);
+
+    {
+      ID3D11Buffer *bufs[1] = {vs_light_buffer_.Get()};
+      deviceContext_->VSSetConstantBuffers(2, 1, bufs);
+    }
+
+    // Static geometry sub-pass.
+    auto shadow_static_vertices = game_scene_->GetStaticVertices();
+    auto shadow_static_indices = game_scene_->GetStaticIndices();
+    if (!shadow_static_vertices.empty()) {
+      deviceContext_->IASetInputLayout(static_vertex_layout_.Get());
+      deviceContext_->VSSetShader(shadow_static_vertex_shader_.Get(), nullptr,
+                                  0);
+      MapBuffer(static_vertices_, shadow_static_vertices);
+      MapBuffer(static_indices_buffer_, shadow_static_indices);
+      deviceContext_->IASetVertexBuffers(0, 1, static_vertices_.GetAddressOf(),
+                                         &staticVertexStride, &vertexOffset);
+      deviceContext_->IASetIndexBuffer(static_indices_buffer_.Get(),
+                                       DXGI_FORMAT_R32_UINT, 0);
+      deviceContext_->DrawIndexed(shadow_static_indices.size(), 0, 0);
+    }
+
+    // Dynamic geometry sub-pass.
+    if (!primitives_.empty()) {
+      deviceContext_->IASetInputLayout(vertexLayout_.Get());
+      deviceContext_->VSSetShader(shadow_vertex_shader_.Get(), nullptr, 0);
+      ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};
+      deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+      MapBuffer(triangleVertices_, vertex_buffer_);
+      MapBuffer(indices_buffer_, index_buffer_);
+      deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
+                                         &dynamicVertexStride, &vertexOffset);
+      deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
+                                       DXGI_FORMAT_R32_UINT, 0);
+      int index_offset = 0;
+      for (const auto &primitive : primitives_) {
+        VsModelBuffer m = {};
+        m.scale = PQ_FLOAT3{&primitive.scale_[0]};
+        m.opacity = primitive.opacity_;
+        m.object_position = PQ_FLOAT3{&primitive.world_position_[0]};
+        m.object_rotation = PQ_FLOAT3{&primitive.world_rotation_[0]};
+        m.atlas_uv = PQ_FLOAT4{primitive.atlas_uv_.x, primitive.atlas_uv_.y,
+                               primitive.atlas_uv_.z, primitive.atlas_uv_.w};
+        MapBuffer(vs_model_buffer_, m);
+        deviceContext_->DrawIndexed(primitive.indices_.size(), index_offset, 0);
+        index_offset += primitive.indices_.size();
+      }
+    }
+
+    // Unbind the shadow DSV before binding the SRV in the color pass.
+    ID3D11DepthStencilView *null_dsv = nullptr;
+    deviceContext_->OMSetRenderTargets(1, null_rtv, null_dsv);
+  }
+
+  // ------------------------------------------------------------------
+  // Pass 2: color pass.
+  // ------------------------------------------------------------------
   deviceContext_->ClearRenderTargetView(renderTarget_.Get(), clearColor);
   deviceContext_->ClearDepthStencilView(depth_stencil_view_.Get(),
                                         D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
@@ -435,6 +667,19 @@ void D3D11Application::Render() {
 
   ID3D11Buffer *constant_buffers[1] = {camera_c_buffer_.Get()};
   deviceContext_->VSSetConstantBuffers(0, 1, constant_buffers);
+  {
+    ID3D11Buffer *vs_light_buf[1] = {vs_light_buffer_.Get()};
+    deviceContext_->VSSetConstantBuffers(2, 1, vs_light_buf);
+  }
+  {
+    ID3D11Buffer *ps_buffers[2] = {ps_light_buffer_.Get(),
+                                   ps_material_buffer_.Get()};
+    deviceContext_->PSSetConstantBuffers(0, 2, ps_buffers);
+  }
+
+  // Shadow SRV + sampler are slot 1 in the pixel shader.
+  deviceContext_->PSSetShaderResources(1, 1, shadow_map_srv_.GetAddressOf());
+  deviceContext_->PSSetSamplers(1, 1, shadow_sampler_.GetAddressOf());
 
   float blendFactor[4] = {0, 0, 0, 0};
   deviceContext_->OMSetBlendState(blendState_.Get(), blendFactor, 0xFFFFFFFF);
@@ -470,7 +715,17 @@ void D3D11Application::Render() {
     auto static_vertices = game_scene_->GetStaticVertices();
     auto static_indices = game_scene_->GetStaticIndices();
     if (static_vertices.size() > 0) {
-      // Render static geometry here
+      // Static geometry uses the default material — could be promoted to a
+      // per-StaticRange material later.
+      PsMaterialCBuffer mat = {};
+      Material default_mat = {};
+      mat.albedo = PQ_FLOAT3{default_mat.albedo.x, default_mat.albedo.y,
+                             default_mat.albedo.z};
+      mat.metallic = default_mat.metallic;
+      mat.roughness = default_mat.roughness;
+      mat.ao = default_mat.ao;
+      MapBuffer(ps_material_buffer_, mat);
+
       deviceContext_->IASetInputLayout(static_vertex_layout_.Get());
       deviceContext_->VSSetShader(static_vertex_shader_.Get(), nullptr, 0);
 
@@ -524,6 +779,16 @@ void D3D11Application::Render() {
           // map and copy from it
           MapBuffer(vs_model_buffer_, vs_model_buffer);
           copies += 1;
+        }
+        {
+          PsMaterialCBuffer mat = {};
+          mat.albedo = PQ_FLOAT3{primitive.material_.albedo.x,
+                                 primitive.material_.albedo.y,
+                                 primitive.material_.albedo.z};
+          mat.metallic = primitive.material_.metallic;
+          mat.roughness = primitive.material_.roughness;
+          mat.ao = primitive.material_.ao;
+          MapBuffer(ps_material_buffer_, mat);
         }
         // Configure the buffers created
         ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};

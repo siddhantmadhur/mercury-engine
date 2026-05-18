@@ -16,6 +16,7 @@
 #include "input/input_manager.h"
 #include "physics_engine/physics_engine.h"
 #include "pobject/manager.h"
+#include "properties/light.h"
 
 namespace Pequod {
 
@@ -42,6 +43,9 @@ class GameScene {
   virtual void OnDestroy() = 0;
 
   bool GetCameraProj(glm::mat4x4&);
+  bool GetCameraWorldPos(glm::vec3&);
+  bool GetDirectionalLight(DirectionalLight&);
+  DirectionalLight* GetDirectionalLightPtr();
 
   std::vector<Primitive> GetPrimitives();
   std::vector<StaticVertex> GetStaticVertices();
@@ -68,6 +72,7 @@ class GameScene {
   std::shared_ptr<PObjectManager> object_manager_ = nullptr;
   std::shared_ptr<PhysicsEngine> physics_engine_ = nullptr;
   kEntityId player_camera_ = entt::null;
+  kEntityId sun_light_ = entt::null;
   InputManager* input_manager_ = nullptr;
 
  private:

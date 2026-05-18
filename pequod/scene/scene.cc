@@ -15,6 +15,9 @@ GameScene::GameScene() {
   this->player_camera_ = object_manager_->NewObject();
   object_manager_->AddProperty(player_camera_, Camera());
   object_manager_->AddProperty(player_camera_, Transform(glm::vec3(0.0)));
+
+  this->sun_light_ = object_manager_->NewObject();
+  object_manager_->AddProperty(sun_light_, DirectionalLight{});
 }
 
 bool GameScene::GetCameraProj(glm::mat4x4& proj) {
@@ -26,6 +29,24 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
   proj = cam->GetProjection(width_, height_) * cam->GetView(*pos);
 
   return true;
+}
+
+bool GameScene::GetCameraWorldPos(glm::vec3& out) {
+  auto pos = object_manager_->GetProperty<Transform>(player_camera_);
+  if (!pos) return false;
+  out = pos->GetPosition();
+  return true;
+}
+
+bool GameScene::GetDirectionalLight(DirectionalLight& out) {
+  auto* light = object_manager_->GetProperty<DirectionalLight>(sun_light_);
+  if (!light) return false;
+  out = *light;
+  return true;
+}
+
+DirectionalLight* GameScene::GetDirectionalLightPtr() {
+  return object_manager_->GetProperty<DirectionalLight>(sun_light_);
 }
 std::vector<Primitive> GameScene::GetPrimitives() {
   return object_manager_->GetPrimitives();

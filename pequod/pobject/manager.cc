@@ -62,6 +62,10 @@ std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
     if (tex) {
       atlas_.AddTexture(tex);
     }
+    auto *mat = registry_.try_get<Material>(entity);
+    if (mat) {
+      primitive.material_ = *mat;
+    }
     primitives.push_back(primitive);
   }
   atlas_.UpdateAtlas();
@@ -100,11 +104,12 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
 
   auto mesh = Mesh();
   PQ_FLOAT3 dx_color(color.r, color.g, color.b);
+  PQ_FLOAT3 n_box{0.0f, 0.0f, 1.0f};
   Vertex raw_vertices[4] = {
-      {PQ_FLOAT3{0.5f, 0.5f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
-      {PQ_FLOAT3{0.5f, -0.5f, 0.0f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
-      {PQ_FLOAT3{-0.5f, -0.5f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
-      {PQ_FLOAT3{-0.5f, 0.5f, 0.0f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.0f}, n_box, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, -0.5f, 0.0f}, n_box, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.0f}, n_box, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.0f}, n_box, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
   };
   mesh.SetVertices(
       std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
@@ -131,11 +136,12 @@ kEntityId PObjectManager::NewPlane2D(glm::vec3 position, glm::vec2 size,
 
   auto mesh = Mesh();
   PQ_FLOAT3 dx_color(color.r, color.g, color.b);
+  PQ_FLOAT3 n_up{0.0f, 1.0f, 0.0f};
   Vertex raw_vertices[4] = {
-      {PQ_FLOAT3{0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
-      {PQ_FLOAT3{0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
-      {PQ_FLOAT3{-0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
-      {PQ_FLOAT3{-0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, 0.0f, 0.5f}, n_up, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, 0.0f, -0.5f}, n_up, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, 0.0f, -0.5f}, n_up, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, 0.0f, 0.5f}, n_up, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
   };
   mesh.SetVertices(
       std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
@@ -214,6 +220,13 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
         dir_vertex.position = PQ_FLOAT3{original.x, original.y, original.z};
         dir_vertex.color = PQ_FLOAT3{color.x, color.y, color.z};
 
+        if (aiMesh->HasNormals()) {
+          auto n = aiMesh->mNormals[i];
+          dir_vertex.normal = PQ_FLOAT3{n.x, n.y, n.z};
+        } else {
+          dir_vertex.normal = PQ_FLOAT3{0.0f, 1.0f, 0.0f};
+        }
+
         if (aiMesh->HasTextureCoords(0)) {
           auto uv = aiMesh->mTextureCoords[0][i];
           dir_vertex.uv = PQ_FLOAT2{uv.x, uv.y};
@@ -256,36 +269,43 @@ kEntityId PObjectManager::NewCube3D(glm::vec3 position, glm::vec3 size,
   auto uv_2 = PQ_FLOAT2{1.0f, 0.0f};
   auto uv_3 = PQ_FLOAT2{0.0f, 0.0f};
 
+  PQ_FLOAT3 n_front{0, 0, 1};
+  PQ_FLOAT3 n_back{0, 0, -1};
+  PQ_FLOAT3 n_left{-1, 0, 0};
+  PQ_FLOAT3 n_right{1, 0, 0};
+  PQ_FLOAT3 n_top{0, 1, 0};
+  PQ_FLOAT3 n_bottom{0, -1, 0};
+
   Vertex raw_vertices[] = {
-      {PQ_FLOAT3{-0.5f, -0.5f, 0.5f}, dx_color, uv_0},
-      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, dx_color, uv_1},
-      {PQ_FLOAT3{0.5f, 0.5f, 0.5f}, dx_color, uv_2},
-      {PQ_FLOAT3{-0.5f, 0.5f, 0.5}, dx_color, uv_3},
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.5f}, n_front, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, n_front, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.5f}, n_front, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.5}, n_front, dx_color, uv_3},
 
-      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, dx_color, uv_0},
-      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, dx_color, uv_1},
-      {PQ_FLOAT3{-0.5f, 0.5f, -0.5f}, dx_color, uv_2},
-      {PQ_FLOAT3{0.5f, 0.5f, -0.5}, dx_color, uv_3},
+      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, n_back, dx_color, uv_0},
+      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, n_back, dx_color, uv_1},
+      {PQ_FLOAT3{-0.5f, 0.5f, -0.5f}, n_back, dx_color, uv_2},
+      {PQ_FLOAT3{0.5f, 0.5f, -0.5}, n_back, dx_color, uv_3},
 
-      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, dx_color, uv_0},
-      {PQ_FLOAT3{-0.5f, -0.5f, 0.5f}, dx_color, uv_1},
-      {PQ_FLOAT3{-0.5f, 0.5f, 0.5f}, dx_color, uv_2},
-      {PQ_FLOAT3{-0.5f, 0.5f, -0.5}, dx_color, uv_3},
+      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, n_left, dx_color, uv_0},
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.5f}, n_left, dx_color, uv_1},
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.5f}, n_left, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, 0.5f, -0.5}, n_left, dx_color, uv_3},
 
-      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, dx_color, uv_0},
-      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, dx_color, uv_1},
-      {PQ_FLOAT3{0.5f, 0.5f, -0.5f}, dx_color, uv_2},
-      {PQ_FLOAT3{0.5f, 0.5f, 0.5}, dx_color, uv_3},
+      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, n_right, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, n_right, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, 0.5f, -0.5f}, n_right, dx_color, uv_2},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.5}, n_right, dx_color, uv_3},
 
-      {PQ_FLOAT3{-0.5f, 0.5f, 0.5f}, dx_color, uv_0},
-      {PQ_FLOAT3{0.5f, 0.5f, 0.5f}, dx_color, uv_1},
-      {PQ_FLOAT3{0.5f, 0.5f, -0.5f}, dx_color, uv_2},
-      {PQ_FLOAT3{-0.5f, 0.5f, -0.5}, dx_color, uv_3},
+      {PQ_FLOAT3{-0.5f, 0.5f, 0.5f}, n_top, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, 0.5f, 0.5f}, n_top, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, 0.5f, -0.5f}, n_top, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, 0.5f, -0.5}, n_top, dx_color, uv_3},
 
-      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, dx_color, uv_0},
-      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, dx_color, uv_1},
-      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, dx_color, uv_2},
-      {PQ_FLOAT3{-0.5f, -0.5f, 0.5}, dx_color, uv_3},
+      {PQ_FLOAT3{-0.5f, -0.5f, -0.5f}, n_bottom, dx_color, uv_0},
+      {PQ_FLOAT3{0.5f, -0.5f, -0.5f}, n_bottom, dx_color, uv_1},
+      {PQ_FLOAT3{0.5f, -0.5f, 0.5f}, n_bottom, dx_color, uv_2},
+      {PQ_FLOAT3{-0.5f, -0.5f, 0.5}, n_bottom, dx_color, uv_3},
   };
 
   mesh.SetVertices(
@@ -361,6 +381,7 @@ void PObjectManager::MakeStatic(kEntityId id) {
       sv.position.x = (vertex.position.x * scale.x) + pos.x;
       sv.position.y = (vertex.position.y * scale.y) + pos.y;
       sv.position.z = (vertex.position.z * scale.z) + pos.z;
+      sv.normal = vertex.normal;
       sv.color = PQ_FLOAT4{vertex.color.x, vertex.color.y, vertex.color.z,
                            mesh->opacity_};
       sv.uv = vertex.uv;
