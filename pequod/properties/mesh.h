@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "globals.h"
+#include <string>
 
 namespace Pequod {
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw
@@ -19,6 +20,18 @@ typedef struct mAABB {
 class Mesh {
  public:
   Mesh();
+  /**
+   * Create mesh from a object file
+   */
+  Mesh(const std::string&);
+
+  /**
+   * @brief Add a "child" mesh to the body of the mesh
+   *
+   * @param mesh The "child" mesh to add to the body
+   * @return success status
+   */
+  bool AddMesh(const Mesh& mesh);
 
   ~Mesh();
 
