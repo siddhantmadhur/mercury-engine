@@ -132,10 +132,10 @@ kEntityId PObjectManager::NewPlane2D(glm::vec3 position, glm::vec2 size,
   auto mesh = Mesh();
   PQ_FLOAT3 dx_color(color.r, color.g, color.b);
   Vertex raw_vertices[4] = {
-      {PQ_FLOAT3{0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
-      {PQ_FLOAT3{0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
-      {PQ_FLOAT3{-0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
-      {PQ_FLOAT3{-0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{0.0f, 0.0f}},
+      {PQ_FLOAT3{0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{0.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, 0.0f, -0.5f}, dx_color, PQ_FLOAT2{1.0f, 1.0f}},
+      {PQ_FLOAT3{-0.5f, 0.0f, 0.5f}, dx_color, PQ_FLOAT2{1.0f, 0.0f}},
   };
   mesh.SetVertices(
       std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
