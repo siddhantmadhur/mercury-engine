@@ -212,6 +212,29 @@ bool D3D11Application::OnLoad() {
       {"TEXCOORD", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32_FLOAT, 0,
        offsetof(Vertex, uv),
        D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA, 0},
+
+      // Per-instance stream on input slot 1, layout matches VsModelBuffer.
+      {"INSTANCE_SCALE", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32_FLOAT, 1,
+       offsetof(VsModelBuffer, scale),
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_INSTANCE_DATA, 1},
+      {"INSTANCE_OPACITY", 0, DXGI_FORMAT::DXGI_FORMAT_R32_FLOAT, 1,
+       offsetof(VsModelBuffer, opacity),
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_INSTANCE_DATA, 1},
+      {"INSTANCE_WORLD", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, 1,
+       offsetof(VsModelBuffer, world_) + 0,
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_INSTANCE_DATA, 1},
+      {"INSTANCE_WORLD", 1, DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, 1,
+       offsetof(VsModelBuffer, world_) + 16,
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_INSTANCE_DATA, 1},
+      {"INSTANCE_WORLD", 2, DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, 1,
+       offsetof(VsModelBuffer, world_) + 32,
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_INSTANCE_DATA, 1},
+      {"INSTANCE_WORLD", 3, DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, 1,
+       offsetof(VsModelBuffer, world_) + 48,
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_INSTANCE_DATA, 1},
+      {"INSTANCE_ATLAS_UV", 0, DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT, 1,
+       offsetof(VsModelBuffer, atlas_uv),
+       D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_INSTANCE_DATA, 1},
   };
 
   if (FAILED(device_->CreateInputLayout(
@@ -296,9 +319,16 @@ bool D3D11Application::OnLoad() {
     return false;
   }
 
-  cbDesc.ByteWidth = sizeof(VsModelBuffer);
-  if (FAILED(device_->CreateBuffer(&cbDesc, nullptr, &vs_model_buffer_))) {
-    PDebug::error("D3D11: Failed to create model cbuffer");
+  // Per-instance data is now uploaded as a vertex buffer bound to slot 1,
+  // not a cbuffer. Sized for up to 8192 instances per frame.
+  D3D11_BUFFER_DESC instance_buffer_desc = {};
+  instance_buffer_desc.ByteWidth = sizeof(VsModelBuffer) * 8192;
+  instance_buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
+  instance_buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+  instance_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  if (FAILED(device_->CreateBuffer(&instance_buffer_desc, nullptr,
+                                   &instance_buffer_))) {
+    PDebug::error("D3D11: Failed to create instance buffer");
     return false;
   }
 
@@ -486,43 +516,67 @@ void D3D11Application::Render() {
 
     deviceContext_->IASetInputLayout(vertexLayout_.Get());
     deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
-    ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};
-    deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
     MapBuffer(triangleVertices_, vertex_buffer_);
     MapBuffer(indices_buffer_, index_buffer_);
-    deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
-                                       &dynamicVertexStride, &vertexOffset);
     deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
                                      DXGI_FORMAT_R32_UINT, 0);
 
+    // Build per-instance data plus a parallel record of per-mesh draw
+    // params (index count + starting index in the concatenated index
+    // buffer). One instance per mesh entity for now; MeshInstance will
+    // later append additional records against shared geometry.
     auto &registry = game_scene_->GetRegistry();
     auto mesh_view = registry.view<Mesh, Transform>();
+
+    struct InstancedDraw {
+      UINT index_count;
+      UINT start_index;
+    };
+    std::vector<VsModelBuffer> instance_data;
+    std::vector<InstancedDraw> draws;
+    instance_data.reserve(8);
+    draws.reserve(8);
+
     for (auto [entity, mesh, transform] : mesh_view.each()) {
-      VsModelBuffer vs_model_buffer = {};
+      VsModelBuffer record = {};
       auto scale = transform.GetInterpolatedScale();
-      vs_model_buffer.scale = PQ_FLOAT3{&scale[0]};
+      record.scale = PQ_FLOAT3{&scale[0]};
       auto position = transform.GetInterpolatedPosition();
       glm::mat4 model(1.0);
       model = glm::translate(model, position);
       model = model * transform.GetRotationMatrix();
-      vs_model_buffer.world_ = PQ_MATRIX{&model[0][0]};
-      vs_model_buffer.opacity = mesh.opacity_;
+      record.world_ = PQ_MATRIX{&model[0][0]};
+      record.opacity = mesh.opacity_;
 
       glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
       auto tex = registry.try_get<Texture2D>(entity);
       if (tex) {
         atlas_uv = tex->GetAtlasUV();
       }
-      vs_model_buffer.atlas_uv = PQ_FLOAT4{&atlas_uv[0]};
-      MapBuffer(vs_model_buffer_, vs_model_buffer);
-      copies += 1;
+      record.atlas_uv = PQ_FLOAT4{&atlas_uv[0]};
 
-      ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};
-      deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
-      deviceContext_->DrawIndexed(mesh.indices_.size(), index_offset, 0);
+      instance_data.push_back(record);
+      draws.push_back({static_cast<UINT>(mesh.indices_.size()),
+                       static_cast<UINT>(index_offset)});
 
       index_offset += mesh.indices_.size();
       vertex_offset += mesh.vertices_.size();
+    }
+
+    if (!instance_data.empty()) {
+      MapBuffer(instance_buffer_, instance_data);
+      copies += 1;
+
+      ID3D11Buffer *vbs[2] = {triangleVertices_.Get(), instance_buffer_.Get()};
+      constexpr UINT instanceStride = sizeof(VsModelBuffer);
+      const UINT strides[2] = {dynamicVertexStride, instanceStride};
+      const UINT offsets[2] = {vertexOffset, 0};
+      deviceContext_->IASetVertexBuffers(0, 2, vbs, strides, offsets);
+
+      for (UINT i = 0; i < draws.size(); ++i) {
+        deviceContext_->DrawIndexedInstanced(draws[i].index_count, 1,
+                                             draws[i].start_index, 0, i);
+      }
     }
   }
 

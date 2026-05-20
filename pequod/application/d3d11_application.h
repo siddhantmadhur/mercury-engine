@@ -74,7 +74,7 @@ class D3D11Application : public Application {
   ComPtr<ID3D11Buffer> static_indices_buffer_ = nullptr;
 
   ComPtr<ID3D11Buffer> camera_c_buffer_ = nullptr;
-  ComPtr<ID3D11Buffer> vs_model_buffer_ = nullptr;
+  ComPtr<ID3D11Buffer> instance_buffer_ = nullptr;
 
   ComPtr<ID3D11InputLayout> vertexLayout_ = nullptr;
   ComPtr<ID3D11InputLayout> static_vertex_layout_ = nullptr;
