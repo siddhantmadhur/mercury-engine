@@ -54,6 +54,15 @@ class Transform {
   std::vector<TransformationType> GetTransformations();
   void ClearTransformations();
 
+  bool IsDirty() const { return dirty_; }
+  void ClearDirty() {
+    dirty_ = false;
+    last_built_position_ = interpolated_position_;
+    last_built_rotation_ = interpolated_rotation_;
+    last_built_scale_ = interpolated_scale_;
+  }
+  void MarkDirty() { dirty_ = true; }
+
  private:
   glm::vec3 position_;
   glm::vec3 velocity_{};
@@ -70,12 +79,23 @@ class Transform {
   glm::vec3 interpolated_scale_{};
   glm::vec3 previous_scale_{};
 
+  glm::mat4 rotation_matrix_ = glm::mat4(1.0f);
+
   /**
    * A queue of fixed transformations made (like position and velocity) so that
    * the physics system knows whether to listen to the entities property or the
    * calculated physics property
    */
   std::vector<TransformationType> transformations_;
+
+  // Set whenever any value influencing the rendered world matrix changes
+  // (position, rotation, scale, or their interpolated counterparts). The
+  // renderer reads + clears this each frame to decide which instance slots
+  // need re-upload. Start dirty so the first frame seeds every slot.
+  bool dirty_ = true;
+  glm::vec3 last_built_position_{};
+  glm::vec3 last_built_rotation_{};
+  glm::vec3 last_built_scale_{};
 };
 }  // namespace Pequod
 

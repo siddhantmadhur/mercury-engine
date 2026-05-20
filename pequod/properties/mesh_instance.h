@@ -18,6 +18,8 @@ class MeshInstance {
  public:
   MeshInstance(kEntityId);
 
+  [[nodiscard]] kEntityId GetParentEntity() const { return parent_entity_; }
+
  private:
   kEntityId parent_entity_ = entt::null;
 };

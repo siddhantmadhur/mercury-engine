@@ -28,7 +28,10 @@ Texture2D::Texture2D(const std::string &file_path, int depth) {
 }
 
 std::string Texture2D::GetPath() const { return this->path_; }
-void Texture2D::SetAtlasUV(glm::vec4 atlas_uv) { this->atlas_uv_ = atlas_uv; }
+void Texture2D::SetAtlasUV(glm::vec4 atlas_uv) {
+  this->atlas_uv_ = atlas_uv;
+  dirty_ = true;
+}
 
 Texture2D::~Texture2D() {}
 }  // namespace Pequod

@@ -127,14 +127,6 @@ class PObjectManager {
   TextureAtlas atlas_;
   std::vector<Vertex> vertices_;
 
-  /**
-  std::tuple<PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Mesh),
-             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Transform),
-             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Camera),
-             PEQUOD_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Texture2D)>
-      properties_;
-      **/
-
   entt::registry registry_;
 };
 }  // namespace Pequod

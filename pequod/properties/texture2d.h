@@ -28,12 +28,16 @@ class Texture2D {
 
   glm::vec4 GetAtlasUV() const { return atlas_uv_; }
 
+  bool IsDirty() const { return dirty_; }
+  void ClearDirty() { dirty_ = false; }
+
  private:
   stbi_uc *raw_data = nullptr;
   int x, y, channels;
   std::string path_;
 
   glm::vec4 atlas_uv_;
+  bool dirty_ = true;
 };
 }  // namespace Pequod
 
