@@ -16,6 +16,7 @@ TextureAtlas::TextureAtlas() {
   stbrp_init_target(&ctx_, width_, height_, nodes_, 512);
   white_pixel_ = new Texture2D();
   AddTexture(white_pixel_);
+  UpdateAtlas();
 }
 
 void TextureAtlas::AddTexture(Texture2D* texture) {

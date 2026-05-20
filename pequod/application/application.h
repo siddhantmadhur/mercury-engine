@@ -116,7 +116,6 @@ class Application {
  protected:
   std::unique_ptr<GameScene> game_scene_ = nullptr;
   int average_fps_ = 0;
-  std::vector<Primitive> primitives_ = {};
 
  private:
   GLFWwindow* window_ = nullptr;

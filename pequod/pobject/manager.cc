@@ -6,13 +6,13 @@
 #include "manager.h"
 
 #include <stack>
-
+#include <glm/glm.hpp>
 #include "imgui.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
-#include "assimp/code/Common/StackAllocator.h"
 #include "debugger/debugger.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include "properties/mesh.h"
 #include "properties/texture2d.h"
 #include "properties/transform.h"
@@ -25,62 +25,17 @@
 
 namespace Pequod {
 
-void PObjectManager::UpdateAtlas(entt::registry &, const entt::entity) {
-  PDebug::log("Updated atlas");
+void PObjectManager::UpdateAtlas(entt::registry &reg, entt::entity entity) {
+  auto &tex = reg.get<Texture2D>(entity);
+  atlas_.AddTexture(&tex);
+  atlas_.UpdateAtlas();
+  RefreshStaticAtlasUVs();
 }
 
 PObjectManager::PObjectManager() {
-  registry_.on_construct<Texture2D>().connect<&PObjectManager::UpdateAtlas>();
+  registry_.on_construct<Texture2D>()
+      .connect<&PObjectManager::UpdateAtlas>(*this);
 };
-
-std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
-  //  ImGui::Begin("Rotations");
-  auto view = registry_.view<Mesh>();
-  std::vector<Primitive> primitives;
-  primitives.reserve(view.size());
-  std::unordered_map<kEntityId, uint32_t> primitive_id = {};
-  for (auto entity : view) {
-    primitive_id[entity] = primitives.size();
-    auto &mesh = registry_.get<Mesh>(entity);
-    Primitive primitive = {};
-    primitive.indices_ = mesh.GetIndices();
-    primitive.vertices_ = mesh.GetVertices();
-
-    primitive.opacity_ = mesh.opacity_;
-    auto *transform = registry_.try_get<Transform>(entity);
-    if (transform) {
-      auto world_position = transform->GetInterpolatedPosition();
-      primitive.world_position_ = world_position;
-      primitive.world_rotation_ = transform->GetInterpolatedRotation() * 360.0f;
-      primitive.scale_ = transform->GetInterpolatedScale();
-    } else {
-      primitive.world_position_ = glm::vec3(0.0f);
-      primitive.scale_ = glm::vec3(1.0);
-    }
-
-    auto tex = registry_.try_get<Texture2D>(entity);
-    if (tex) {
-      atlas_.AddTexture(tex);
-    }
-    primitives.push_back(primitive);
-  }
-  atlas_.UpdateAtlas();
-  RefreshStaticAtlasUVs();
-
-  view.each([this, &primitives, &primitive_id](auto entity, Mesh &mesh) {
-    auto tex = GetProperty<Texture2D>(entity);
-    auto pi = primitive_id[entity];
-    if (tex) {
-      primitives[pi].atlas_uv_ = tex->GetAtlasUV();
-    } else {
-      primitives[pi].atlas_uv_ = atlas_.GetWhitePixelUV();
-    }
-  });
-  return primitives;
-}
-
-void PObjectManager::GroupPrimitives(kEntityId primary, kEntityId begin,
-                                     kEntityId end) {}
 
 #define PEQUOD_MACRO_DO_NOT_USE_COPY_PROPERTY_FROM_NODE(PROPERTY_TYPE) \
   {                                                                    \

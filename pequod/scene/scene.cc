@@ -27,9 +27,6 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
 
   return true;
 }
-std::vector<Primitive> GameScene::GetPrimitives() {
-  return object_manager_->GetPrimitives();
-}
 std::vector<StaticVertex> GameScene::GetStaticVertices() {
   return object_manager_->GetStaticVertices();
 }
