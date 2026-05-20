@@ -17,12 +17,14 @@
 #include <filesystem>
 #include <format>
 #include <string>
+#include <unordered_map>
 #include <globals.h>
 
 #include "debugger/debugger.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "os/filesystem.h"
+#include "properties/mesh_instance.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -108,8 +110,12 @@ void D3D11Application::OnNewTick() {
   if (!game_scene_) return;
 
   auto &registry = game_scene_->GetRegistry();
-  auto mesh_view = registry.view<Mesh, Transform>();
-  for (auto [entity, mesh, transform] : mesh_view.each()) {
+  // Iterate every Mesh — a Mesh without a Transform is a geometry template
+  // referenced by MeshInstance entities and still needs its vertices/indices
+  // in the GPU buffers. The Render() pass uses the same view in the same
+  // order so per-mesh start_index lines up exactly.
+  auto mesh_view = registry.view<Mesh>();
+  for (auto [entity, mesh] : mesh_view.each()) {
     const auto offset = static_cast<UINT>(vertex_buffer_.size());
     for (UINT index : mesh.indices_) {
       index_buffer_.push_back(index + offset);
@@ -521,23 +527,25 @@ void D3D11Application::Render() {
     deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
                                      DXGI_FORMAT_R32_UINT, 0);
 
-    // Build per-instance data plus a parallel record of per-mesh draw
-    // params (index count + starting index in the concatenated index
-    // buffer). One instance per mesh entity for now; MeshInstance will
-    // later append additional records against shared geometry.
+    // Build per-mesh draw groups. Every Mesh entity owns a geometry slice
+    // and a draw group; if it also has a Transform it contributes a
+    // self-instance, otherwise it acts purely as a template referenced by
+    // MeshInstance entities. Each MeshInstance+Transform entity appends an
+    // additional record onto its parent mesh's group.
     auto &registry = game_scene_->GetRegistry();
-    auto mesh_view = registry.view<Mesh, Transform>();
+    auto mesh_view = registry.view<Mesh>();
 
-    struct InstancedDraw {
-      UINT index_count;
-      UINT start_index;
+    struct MeshDrawGroup {
+      UINT index_count = 0;
+      UINT start_index = 0;
+      std::vector<VsModelBuffer> instances;
     };
-    std::vector<VsModelBuffer> instance_data;
-    std::vector<InstancedDraw> draws;
-    instance_data.reserve(8);
-    draws.reserve(8);
+    std::unordered_map<entt::entity, MeshDrawGroup> mesh_groups;
+    std::vector<entt::entity> mesh_order;
+    mesh_order.reserve(8);
 
-    for (auto [entity, mesh, transform] : mesh_view.each()) {
+    auto build_record = [&](const Transform &transform, float opacity,
+                            const glm::vec4 &atlas_uv) {
       VsModelBuffer record = {};
       auto scale = transform.GetInterpolatedScale();
       record.scale = PQ_FLOAT3{&scale[0]};
@@ -546,21 +554,80 @@ void D3D11Application::Render() {
       model = glm::translate(model, position);
       model = model * transform.GetRotationMatrix();
       record.world_ = PQ_MATRIX{&model[0][0]};
-      record.opacity = mesh.opacity_;
-
-      glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
-      auto tex = registry.try_get<Texture2D>(entity);
-      if (tex) {
-        atlas_uv = tex->GetAtlasUV();
-      }
+      record.opacity = opacity;
       record.atlas_uv = PQ_FLOAT4{&atlas_uv[0]};
+      return record;
+    };
 
-      instance_data.push_back(record);
-      draws.push_back({static_cast<UINT>(mesh.indices_.size()),
-                       static_cast<UINT>(index_offset)});
+    // Pass 1: every Mesh entity registers a draw group (geometry slice in
+    // the concatenated vertex/index buffers). If it also has a Transform
+    // we add a self-instance; otherwise it's a pure template and only
+    // MeshInstance children will populate it in Pass 2.
+    for (auto [entity, mesh] : mesh_view.each()) {
+      MeshDrawGroup group;
+      group.index_count = static_cast<UINT>(mesh.indices_.size());
+      group.start_index = static_cast<UINT>(index_offset);
+
+      if (auto *transform = registry.try_get<Transform>(entity)) {
+        glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
+        if (auto *tex = registry.try_get<Texture2D>(entity)) {
+          atlas_uv = tex->GetAtlasUV();
+        }
+        group.instances.push_back(
+            build_record(*transform, mesh.opacity_, atlas_uv));
+      }
+
+      mesh_groups.emplace(entity, std::move(group));
+      mesh_order.push_back(entity);
 
       index_offset += mesh.indices_.size();
       vertex_offset += mesh.vertices_.size();
+    }
+
+    // Pass 2: each MeshInstance+Transform entity adds another instance
+    // record to its parent's draw group. Opacity is inherited from the
+    // parent Mesh; atlas UV from its own Texture2D if present, else the
+    // parent's Texture2D, else the atlas white pixel.
+    auto instance_view = registry.view<MeshInstance, Transform>();
+    for (auto [entity, mesh_instance, transform] : instance_view.each()) {
+      auto parent = mesh_instance.GetParentEntity();
+      auto group_it = mesh_groups.find(parent);
+      if (group_it == mesh_groups.end()) continue;
+      auto *parent_mesh = registry.try_get<Mesh>(parent);
+      if (!parent_mesh) continue;
+
+      glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
+      if (auto *tex = registry.try_get<Texture2D>(entity)) {
+        atlas_uv = tex->GetAtlasUV();
+      } else if (auto *parent_tex = registry.try_get<Texture2D>(parent)) {
+        atlas_uv = parent_tex->GetAtlasUV();
+      }
+
+      group_it->second.instances.push_back(
+          build_record(transform, parent_mesh->opacity_, atlas_uv));
+    }
+
+    // Flatten into a single instance buffer and remember each mesh's
+    // (start_instance, instance_count) slice.
+    struct DrawEmit {
+      UINT index_count;
+      UINT start_index;
+      UINT instance_count;
+      UINT start_instance;
+    };
+    std::vector<VsModelBuffer> instance_data;
+    std::vector<DrawEmit> emits;
+    instance_data.reserve(mesh_order.size());
+    emits.reserve(mesh_order.size());
+
+    for (auto entity : mesh_order) {
+      auto &group = mesh_groups[entity];
+      DrawEmit emit{group.index_count, group.start_index,
+                    static_cast<UINT>(group.instances.size()),
+                    static_cast<UINT>(instance_data.size())};
+      instance_data.insert(instance_data.end(), group.instances.begin(),
+                           group.instances.end());
+      emits.push_back(emit);
     }
 
     if (!instance_data.empty()) {
@@ -573,9 +640,9 @@ void D3D11Application::Render() {
       const UINT offsets[2] = {vertexOffset, 0};
       deviceContext_->IASetVertexBuffers(0, 2, vbs, strides, offsets);
 
-      for (UINT i = 0; i < draws.size(); ++i) {
-        deviceContext_->DrawIndexedInstanced(draws[i].index_count, 1,
-                                             draws[i].start_index, 0, i);
+      for (const auto &d : emits) {
+        deviceContext_->DrawIndexedInstanced(d.index_count, d.instance_count,
+                                             d.start_index, 0, d.start_instance);
       }
     }
   }
