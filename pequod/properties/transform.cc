@@ -34,6 +34,7 @@ glm::vec3 Transform::GetPosition() const { return this->position_; }
 void Transform::SetPosition(glm::vec3 position) {
   this->position_ = position;
   transformations_.push_back(kTransformPosition);
+  dirty_ = true;
 }
 
 glm::vec3 Transform::GetVelocity() const { return this->velocity_; }
@@ -44,13 +45,18 @@ void Transform::SetVelocity(glm::vec3 velocity) {
 void Transform::SetRotate(glm::vec3 new_value) {
   this->rotation_ = new_value;
   transformations_.push_back(kTransformRotation);
+  dirty_ = true;
 }
 void Transform::ChangeRotate(glm::vec3 delta) {
   rotation_ += delta;
   transformations_.push_back(kTransformRotation);
+  dirty_ = true;
 }
 
-void Transform::SetScale(glm::vec3 scale) { this->scale_ = scale; }
+void Transform::SetScale(glm::vec3 scale) {
+  this->scale_ = scale;
+  dirty_ = true;
+}
 glm::vec3 Transform::GetRotate() const { return this->rotation_; }
 glm::vec3 Transform::GetScale() const { return this->scale_; }
 glm::vec3 Transform::GetInterpolatedRotation() const {
@@ -71,7 +77,10 @@ void Transform::SetVelocityMagnitude(float) {
   transformations_.push_back(kTransformLinearMagnitude);
 }
 
-void Transform::Move(glm::vec3 movement) { this->position_ += movement; }
+void Transform::Move(glm::vec3 movement) {
+  this->position_ += movement;
+  dirty_ = true;
+}
 
 glm::vec3 Transform::GetInterpolatedPosition() const {
   return this->interpolated_position_;
@@ -86,6 +95,11 @@ void Transform::Interpolate(float alpha) {
   interpolated_position_ = glm::mix(previous_position_, position_, a);
   interpolated_rotation_ = glm::mix(previous_rotation_, rotation_, a);
   interpolated_scale_ = glm::mix(previous_scale_, scale_, a);
+  if (interpolated_position_ != last_built_position_ ||
+      interpolated_rotation_ != last_built_rotation_ ||
+      interpolated_scale_ != last_built_scale_) {
+    dirty_ = true;
+  }
 }
 
 void Transform::CaptureTickSnapshot() {
