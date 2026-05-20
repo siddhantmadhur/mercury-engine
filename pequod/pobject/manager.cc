@@ -33,17 +33,9 @@ void PObjectManager::UpdateAtlas(entt::registry &reg, entt::entity entity) {
 }
 
 PObjectManager::PObjectManager() {
-  registry_.on_construct<Texture2D>()
-      .connect<&PObjectManager::UpdateAtlas>(*this);
+  registry_.on_construct<Texture2D>().connect<&PObjectManager::UpdateAtlas>(
+      *this);
 };
-
-#define PEQUOD_MACRO_DO_NOT_USE_COPY_PROPERTY_FROM_NODE(PROPERTY_TYPE) \
-  {                                                                    \
-    auto property = node.GetProperty<PROPERTY_TYPE>();                 \
-    if (property) {                                                    \
-      AddProperty(id, PROPERTY_TYPE(*property));                       \
-    }                                                                  \
-  }
 
 kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
                                    glm::vec2 size = glm::vec2(0.0),
