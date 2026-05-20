@@ -82,8 +82,7 @@ struct Primitive {
   std::vector<Vertex> vertices_;
   std::vector<UINT> indices_;
   glm::vec3 scale_;
-  glm::vec3 world_position_;
-  glm::vec3 world_rotation_ = glm::vec3(0.0f);
+  glm::mat4 world_;
   float opacity_ = 1.0f;
   glm::vec4 atlas_uv_ = glm::vec4(0.0f);
 };
@@ -97,10 +96,7 @@ struct Primitive {
 struct VsModelBuffer {
   PQ_FLOAT3 scale;
   float opacity;
-  PQ_FLOAT3 object_position;
-  float pad0_;
-  PQ_FLOAT3 object_rotation;
-  float pad1_;
+  PQ_MATRIX world_;
   PQ_FLOAT4 atlas_uv;
 };
 

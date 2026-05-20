@@ -6,13 +6,13 @@
 #include "manager.h"
 
 #include <stack>
-
+#include <glm/glm.hpp>
 #include "imgui.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
-#include "assimp/code/Common/StackAllocator.h"
 #include "debugger/debugger.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include "properties/mesh.h"
 #include "properties/texture2d.h"
 #include "properties/transform.h"
@@ -35,46 +35,44 @@ PObjectManager::PObjectManager() {
 
 std::vector<Primitive> PObjectManager::GetPrimitives(bool refresh_vertices) {
   //  ImGui::Begin("Rotations");
-  auto view = registry_.view<Mesh>();
-  std::vector<Primitive> primitives;
-  primitives.reserve(view.size());
   std::unordered_map<kEntityId, uint32_t> primitive_id = {};
-  for (auto entity : view) {
-    primitive_id[entity] = primitives.size();
-    auto &mesh = registry_.get<Mesh>(entity);
-    Primitive primitive = {};
-    primitive.indices_ = mesh.GetIndices();
-    primitive.vertices_ = mesh.GetVertices();
 
-    primitive.opacity_ = mesh.opacity_;
-    auto *transform = registry_.try_get<Transform>(entity);
-    if (transform) {
-      auto world_position = transform->GetInterpolatedPosition();
-      primitive.world_position_ = world_position;
-      primitive.world_rotation_ = transform->GetInterpolatedRotation() * 360.0f;
-      primitive.scale_ = transform->GetInterpolatedScale();
-    } else {
-      primitive.world_position_ = glm::vec3(0.0f);
-      primitive.scale_ = glm::vec3(1.0);
-    }
-
-    auto tex = registry_.try_get<Texture2D>(entity);
-    if (tex) {
-      atlas_.AddTexture(tex);
-    }
-    primitives.push_back(primitive);
+  auto tex_view = registry_.view<Texture2D>();
+  for (auto entity : tex_view) {
+    auto &tex = registry_.get<Texture2D>(entity);
+    atlas_.AddTexture(&tex);
   }
   atlas_.UpdateAtlas();
   RefreshStaticAtlasUVs();
 
-  view.each([this, &primitives, &primitive_id](auto entity, Mesh &mesh) {
-    auto tex = GetProperty<Texture2D>(entity);
-    auto pi = primitive_id[entity];
-    if (tex) {
-      primitives[pi].atlas_uv_ = tex->GetAtlasUV();
+  auto view = registry_.view<Mesh>();
+  std::vector<Primitive> primitives;
+  primitives.reserve(view.size());
+
+  view.each([this, &primitives](auto entity, Mesh &mesh) {
+    Primitive primitive = {};
+    primitive.indices_ = mesh.GetIndices();
+    primitive.vertices_ = mesh.GetVertices();
+    primitive.opacity_ = mesh.opacity_;
+    Transform *transform = registry_.try_get<Transform>(entity);
+    if (transform) {
+      auto world_position = transform->GetInterpolatedPosition();
+      glm::mat4 model = glm::mat4(1.0);
+      model = glm::translate(model, world_position);
+      model = model * transform->GetRotationMatrix();
+      primitive.world_ = model;
+      primitive.scale_ = transform->GetInterpolatedScale();
     } else {
-      primitives[pi].atlas_uv_ = atlas_.GetWhitePixelUV();
+      return;
     }
+
+    auto tex = GetProperty<Texture2D>(entity);
+    if (tex) {
+      primitive.atlas_uv_ = tex->GetAtlasUV();
+    } else {
+      primitive.atlas_uv_ = atlas_.GetWhitePixelUV();
+    }
+    primitives.push_back(primitive);
   });
   return primitives;
 }
