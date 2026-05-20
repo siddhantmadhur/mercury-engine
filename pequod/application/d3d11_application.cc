@@ -17,12 +17,17 @@
 #include <filesystem>
 #include <format>
 #include <string>
+#include <unordered_map>
 #include <globals.h>
 
 #include "debugger/debugger.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "os/filesystem.h"
+#include "properties/mesh.h"
+#include "properties/mesh_instance.h"
+#include "properties/texture2d.h"
+#include "properties/transform.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -108,8 +113,12 @@ void D3D11Application::OnNewTick() {
   if (!game_scene_) return;
 
   auto &registry = game_scene_->GetRegistry();
-  auto mesh_view = registry.view<Mesh, Transform>();
-  for (auto [entity, mesh, transform] : mesh_view.each()) {
+  // Iterate every Mesh — a Mesh without a Transform is a geometry template
+  // referenced by MeshInstance entities and still needs its vertices/indices
+  // in the GPU buffers. The Render() pass uses the same view in the same
+  // order so per-mesh start_index lines up exactly.
+  auto mesh_view = registry.view<Mesh>();
+  for (auto [entity, mesh] : mesh_view.each()) {
     const auto offset = static_cast<UINT>(vertex_buffer_.size());
     for (UINT index : mesh.indices_) {
       index_buffer_.push_back(index + offset);
@@ -319,10 +328,11 @@ bool D3D11Application::OnLoad() {
     return false;
   }
 
-  // Per-instance data is now uploaded as a vertex buffer bound to slot 1,
-  // not a cbuffer. Sized for up to 8192 instances per frame.
+  // Persistent per-instance buffer, bound on slot 1. We patch dirty slots
+  // with WRITE_NO_OVERWRITE across frames instead of rebuilding it, so it
+  // must be sized for the worst-case live instance count.
   D3D11_BUFFER_DESC instance_buffer_desc = {};
-  instance_buffer_desc.ByteWidth = sizeof(VsModelBuffer) * 8192;
+  instance_buffer_desc.ByteWidth = sizeof(VsModelBuffer) * kMaxInstances;
   instance_buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
   instance_buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
   instance_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -418,6 +428,206 @@ bool D3D11Application::OnLoad() {
   return true;
 }
 
+VsModelBuffer D3D11Application::BuildInstanceRecord(
+    entt::registry &registry, TextureAtlas &atlas, entt::entity entity,
+    entt::entity parent_mesh_entity) {
+  VsModelBuffer record = {};
+  auto *transform = registry.try_get<Transform>(entity);
+  if (!transform) return record;
+
+  auto scale = transform->GetInterpolatedScale();
+  record.scale = PQ_FLOAT3{&scale[0]};
+  auto position = transform->GetInterpolatedPosition();
+  glm::mat4 model(1.0);
+  model = glm::translate(model, position);
+  model = model * transform->GetRotationMatrix();
+  record.world_ = PQ_MATRIX{&model[0][0]};
+
+  float opacity = 1.0f;
+  if (auto *parent_mesh = registry.try_get<Mesh>(parent_mesh_entity)) {
+    opacity = parent_mesh->opacity_;
+  }
+  record.opacity = opacity;
+
+  glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
+  if (auto *tex = registry.try_get<Texture2D>(entity)) {
+    atlas_uv = tex->GetAtlasUV();
+  } else if (entity != parent_mesh_entity) {
+    if (auto *parent_tex = registry.try_get<Texture2D>(parent_mesh_entity)) {
+      atlas_uv = parent_tex->GetAtlasUV();
+    }
+  }
+  record.atlas_uv = PQ_FLOAT4{&atlas_uv[0]};
+  return record;
+}
+
+void D3D11Application::EnsureRegistrySignalsHooked(entt::registry &registry) {
+  if (hooked_registry_ == &registry) return;
+  // (No need to detach from the old registry — when scenes are swapped the
+  // whole D3D11Application persists but the registry is owned by the scene
+  // and is destroyed with it, taking its sigh slots with it.)
+  registry.on_construct<Mesh>().connect<&D3D11Application::OnLayoutChanged>(
+      *this);
+  registry.on_destroy<Mesh>().connect<&D3D11Application::OnLayoutChanged>(
+      *this);
+  registry.on_construct<MeshInstance>()
+      .connect<&D3D11Application::OnLayoutChanged>(*this);
+  registry.on_destroy<MeshInstance>()
+      .connect<&D3D11Application::OnLayoutChanged>(*this);
+  registry.on_construct<Transform>()
+      .connect<&D3D11Application::OnLayoutChanged>(*this);
+  registry.on_destroy<Transform>().connect<&D3D11Application::OnLayoutChanged>(
+      *this);
+  hooked_registry_ = &registry;
+  layout_dirty_ = true;
+}
+
+void D3D11Application::RebuildInstanceLayout(entt::registry &registry,
+                                             TextureAtlas &atlas) {
+  mesh_layout_.clear();
+  mesh_order_.clear();
+  entity_slot_.clear();
+  slot_owner_.clear();
+  slot_parent_.clear();
+
+  std::vector<VsModelBuffer> instance_data;
+  instance_data.reserve(64);
+
+  UINT running_index = 0;
+  auto mesh_view = registry.view<Mesh>();
+  for (auto [entity, mesh] : mesh_view.each()) {
+    MeshLayoutEntry entry;
+    entry.index_count = static_cast<UINT>(mesh.indices_.size());
+    entry.start_index = running_index;
+    entry.start_instance = static_cast<UINT>(instance_data.size());
+    entry.instance_count = 0;
+
+    if (registry.try_get<Transform>(entity)) {
+      UINT slot = static_cast<UINT>(instance_data.size());
+      instance_data.push_back(
+          BuildInstanceRecord(registry, atlas, entity, entity));
+      entity_slot_.emplace(entity, slot);
+      slot_owner_.push_back(entity);
+      slot_parent_.push_back(entity);
+      entry.instance_count = 1;
+    }
+
+    mesh_layout_.emplace(entity, entry);
+    mesh_order_.push_back(entity);
+    running_index += entry.index_count;
+  }
+
+  auto instance_view = registry.view<MeshInstance, Transform>();
+  for (auto [entity, mesh_instance, transform] : instance_view.each()) {
+    auto parent = mesh_instance.GetParentEntity();
+    auto layout_it = mesh_layout_.find(parent);
+    if (layout_it == mesh_layout_.end()) continue;
+    if (!registry.try_get<Mesh>(parent)) continue;
+
+    // Append at end of this mesh's slice. Because we visit all MeshInstances
+    // in one pass, we must shift every later mesh's start_instance up by one
+    // and shift the actual instance_data accordingly.
+    UINT insert_slot =
+        layout_it->second.start_instance + layout_it->second.instance_count;
+    instance_data.insert(instance_data.begin() + insert_slot,
+                         BuildInstanceRecord(registry, atlas, entity, parent));
+    slot_owner_.insert(slot_owner_.begin() + insert_slot, entity);
+    slot_parent_.insert(slot_parent_.begin() + insert_slot, parent);
+    layout_it->second.instance_count += 1;
+
+    // Bump start_instance for every mesh whose slice comes after this one,
+    // and re-index entity_slot_ for entities whose slot >= insert_slot.
+    for (auto &kv : mesh_layout_) {
+      if (kv.first != parent && kv.second.start_instance >= insert_slot) {
+        kv.second.start_instance += 1;
+      }
+    }
+    for (auto &kv : entity_slot_) {
+      if (kv.second >= insert_slot) kv.second += 1;
+    }
+    entity_slot_.emplace(entity, insert_slot);
+  }
+
+  if (instance_data.size() > kMaxInstances) {
+    PDebug::error(
+        "D3D11: instance buffer overflow ({} > {}); truncating. Raise "
+        "kMaxInstances.",
+        instance_data.size(), kMaxInstances);
+    instance_data.resize(kMaxInstances);
+  }
+
+  if (!instance_data.empty()) {
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    if (SUCCEEDED(deviceContext_->Map(instance_buffer_.Get(), 0,
+                                      D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+      memcpy(mapped.pData, instance_data.data(),
+             sizeof(VsModelBuffer) * instance_data.size());
+      deviceContext_->Unmap(instance_buffer_.Get(), 0);
+    }
+  }
+
+  // Stamp every transform we wrote as clean so the next-frame fast path
+  // doesn't re-patch what we just uploaded.
+  auto transform_view = registry.view<Transform>();
+  for (auto [entity, transform] : transform_view.each()) {
+    transform.ClearDirty();
+  }
+  auto texture_view = registry.view<Texture2D>();
+  for (auto [entity, tex] : texture_view.each()) {
+    tex.ClearDirty();
+  }
+
+  layout_dirty_ = false;
+}
+
+void D3D11Application::UpdateDirtyInstances(entt::registry &registry,
+                                            TextureAtlas &atlas) {
+  // Collect dirty slots. An entity is in entity_slot_ only if it owns a
+  // live slot in the instance buffer; Transforms without Mesh/MeshInstance
+  // attachment have no slot to patch and are silently skipped.
+  struct PatchWrite {
+    UINT slot;
+    VsModelBuffer record;
+  };
+  std::vector<PatchWrite> writes;
+  writes.reserve(16);
+
+  auto transform_view = registry.view<Transform>();
+  for (auto [entity, transform] : transform_view.each()) {
+    bool dirty = transform.IsDirty();
+    if (!dirty) {
+      if (auto *tex = registry.try_get<Texture2D>(entity)) {
+        dirty = tex->IsDirty();
+      }
+    }
+    if (!dirty) continue;
+    auto slot_it = entity_slot_.find(entity);
+    if (slot_it == entity_slot_.end()) {
+      transform.ClearDirty();
+      continue;
+    }
+    entt::entity parent = slot_parent_[slot_it->second];
+    writes.push_back({slot_it->second,
+                      BuildInstanceRecord(registry, atlas, entity, parent)});
+    transform.ClearDirty();
+    if (auto *tex = registry.try_get<Texture2D>(entity)) tex->ClearDirty();
+  }
+
+  if (writes.empty()) return;
+
+  D3D11_MAPPED_SUBRESOURCE mapped = {};
+  if (FAILED(deviceContext_->Map(instance_buffer_.Get(), 0,
+                                 D3D11_MAP_WRITE_NO_OVERWRITE, 0, &mapped))) {
+    return;
+  }
+  auto *base = static_cast<uint8_t *>(mapped.pData);
+  for (const auto &w : writes) {
+    memcpy(base + w.slot * sizeof(VsModelBuffer), &w.record,
+           sizeof(VsModelBuffer));
+  }
+  deviceContext_->Unmap(instance_buffer_.Get(), 0);
+}
+
 void D3D11Application::Render() {
   if (game_scene_) {
     glm::mat4x4 camera_proj_view = {};
@@ -468,8 +678,6 @@ void D3D11Application::Render() {
   deviceContext_->OMSetBlendState(blendState_.Get(), blendFactor, 0xFFFFFFFF);
   int copies = 0;
 
-  int vertex_offset = 0;
-  int index_offset = 0;
   if (game_scene_) {
     // Re-upload the atlas only when a new image was added since the last
     // frame. UpdateAtlas() (called from GetPrimitives()) sets the flag; we
@@ -521,61 +729,34 @@ void D3D11Application::Render() {
     deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
                                      DXGI_FORMAT_R32_UINT, 0);
 
-    // Build per-instance data plus a parallel record of per-mesh draw
-    // params (index count + starting index in the concatenated index
-    // buffer). One instance per mesh entity for now; MeshInstance will
-    // later append additional records against shared geometry.
+    // Instance pipeline: layout (which mesh owns which slice of which
+    // instance buffer) is cached and only rebuilt when entities are added
+    // or removed; otherwise each frame patches just the slots whose
+    // Transform/Texture2D went dirty. See RebuildInstanceLayout /
+    // UpdateDirtyInstances.
     auto &registry = game_scene_->GetRegistry();
-    auto mesh_view = registry.view<Mesh, Transform>();
+    EnsureRegistrySignalsHooked(registry);
 
-    struct InstancedDraw {
-      UINT index_count;
-      UINT start_index;
-    };
-    std::vector<VsModelBuffer> instance_data;
-    std::vector<InstancedDraw> draws;
-    instance_data.reserve(8);
-    draws.reserve(8);
-
-    for (auto [entity, mesh, transform] : mesh_view.each()) {
-      VsModelBuffer record = {};
-      auto scale = transform.GetInterpolatedScale();
-      record.scale = PQ_FLOAT3{&scale[0]};
-      auto position = transform.GetInterpolatedPosition();
-      glm::mat4 model(1.0);
-      model = glm::translate(model, position);
-      model = model * transform.GetRotationMatrix();
-      record.world_ = PQ_MATRIX{&model[0][0]};
-      record.opacity = mesh.opacity_;
-
-      glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
-      auto tex = registry.try_get<Texture2D>(entity);
-      if (tex) {
-        atlas_uv = tex->GetAtlasUV();
-      }
-      record.atlas_uv = PQ_FLOAT4{&atlas_uv[0]};
-
-      instance_data.push_back(record);
-      draws.push_back({static_cast<UINT>(mesh.indices_.size()),
-                       static_cast<UINT>(index_offset)});
-
-      index_offset += mesh.indices_.size();
-      vertex_offset += mesh.vertices_.size();
+    if (layout_dirty_) {
+      RebuildInstanceLayout(registry, atlas);
+      copies += 1;
+    } else {
+      UpdateDirtyInstances(registry, atlas);
     }
 
-    if (!instance_data.empty()) {
-      MapBuffer(instance_buffer_, instance_data);
-      copies += 1;
-
+    if (!mesh_order_.empty()) {
       ID3D11Buffer *vbs[2] = {triangleVertices_.Get(), instance_buffer_.Get()};
       constexpr UINT instanceStride = sizeof(VsModelBuffer);
       const UINT strides[2] = {dynamicVertexStride, instanceStride};
       const UINT offsets[2] = {vertexOffset, 0};
       deviceContext_->IASetVertexBuffers(0, 2, vbs, strides, offsets);
 
-      for (UINT i = 0; i < draws.size(); ++i) {
-        deviceContext_->DrawIndexedInstanced(draws[i].index_count, 1,
-                                             draws[i].start_index, 0, i);
+      for (auto entity : mesh_order_) {
+        const auto &entry = mesh_layout_[entity];
+        if (entry.instance_count == 0) continue;
+        deviceContext_->DrawIndexedInstanced(
+            entry.index_count, entry.instance_count, entry.start_index, 0,
+            entry.start_instance);
       }
     }
   }
@@ -589,7 +770,7 @@ void D3D11Application::Render() {
                      ImGuiWindowFlags_NoTitleBar);
     ImGui::Text("FPS: %d", average_fps_);
     ImGui::Text("GPU Memory Copies: %d", copies);
-    ImGui::Text("Vertices: %d", vertex_offset);
+    // ImGui::Text("Vertices: %d", vertex_offset);
     ImGui::End();
   }
 
