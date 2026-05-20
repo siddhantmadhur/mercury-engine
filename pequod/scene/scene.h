@@ -43,7 +43,6 @@ class GameScene {
 
   bool GetCameraProj(glm::mat4x4&);
 
-  std::vector<Primitive> GetPrimitives();
   std::vector<StaticVertex> GetStaticVertices();
   std::vector<UINT> GetStaticIndices();
 
@@ -53,6 +52,8 @@ class GameScene {
   float GetHeight() const;
   void SetWidth(float);
   void SetHeight(float);
+
+  entt::registry& GetRegistry() { return object_manager_->GetRegistry(); }
 
   void SetInputManager(InputManager*);
 

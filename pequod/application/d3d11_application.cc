@@ -105,19 +105,17 @@ void D3D11Application::OnNewTick() {
   vertex_buffer_.clear();
   index_buffer_.clear();
 
-  for (const auto &primitive : primitives_) {
-    {
-      // Set index buffer
-      auto offset = vertex_buffer_.size();
-      for (UINT index : primitive.indices_) {
-        index_buffer_.push_back(index + offset);
-      }
+  if (!game_scene_) return;
+
+  auto &registry = game_scene_->GetRegistry();
+  auto mesh_view = registry.view<Mesh, Transform>();
+  for (auto [entity, mesh, transform] : mesh_view.each()) {
+    const auto offset = static_cast<UINT>(vertex_buffer_.size());
+    for (UINT index : mesh.indices_) {
+      index_buffer_.push_back(index + offset);
     }
-    {
-      // Set vertex buffer for object
-      vertex_buffer_.insert(vertex_buffer_.end(), primitive.vertices_.begin(),
-                            primitive.vertices_.end());
-    }
+    vertex_buffer_.insert(vertex_buffer_.end(), mesh.vertices_.begin(),
+                          mesh.vertices_.end());
   }
 }
 
@@ -440,6 +438,8 @@ void D3D11Application::Render() {
   deviceContext_->OMSetBlendState(blendState_.Get(), blendFactor, 0xFFFFFFFF);
   int copies = 0;
 
+  int vertex_offset = 0;
+  int index_offset = 0;
   if (game_scene_) {
     // Re-upload the atlas only when a new image was added since the last
     // frame. UpdateAtlas() (called from GetPrimitives()) sets the flag; we
@@ -484,55 +484,45 @@ void D3D11Application::Render() {
       deviceContext_->DrawIndexed(static_indices.size(), 0, 0);
     }
 
-    if (primitives_.size() > 0) {
-      deviceContext_->IASetInputLayout(vertexLayout_.Get());
-      deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
-      {
-        ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};
-        deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+    deviceContext_->IASetInputLayout(vertexLayout_.Get());
+    deviceContext_->VSSetShader(vertexShader_.Get(), nullptr, 0);
+    ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};
+    deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+    MapBuffer(triangleVertices_, vertex_buffer_);
+    MapBuffer(indices_buffer_, index_buffer_);
+    deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
+                                       &dynamicVertexStride, &vertexOffset);
+    deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
+                                     DXGI_FORMAT_R32_UINT, 0);
+
+    auto &registry = game_scene_->GetRegistry();
+    auto mesh_view = registry.view<Mesh, Transform>();
+    for (auto [entity, mesh, transform] : mesh_view.each()) {
+      VsModelBuffer vs_model_buffer = {};
+      auto scale = transform.GetInterpolatedScale();
+      vs_model_buffer.scale = PQ_FLOAT3{&scale[0]};
+      auto position = transform.GetInterpolatedPosition();
+      glm::mat4 model(1.0);
+      model = glm::translate(model, position);
+      model = model * transform.GetRotationMatrix();
+      vs_model_buffer.world_ = PQ_MATRIX{&model[0][0]};
+      vs_model_buffer.opacity = mesh.opacity_;
+
+      glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
+      auto tex = registry.try_get<Texture2D>(entity);
+      if (tex) {
+        atlas_uv = tex->GetAtlasUV();
       }
+      vs_model_buffer.atlas_uv = PQ_FLOAT4{&atlas_uv[0]};
+      MapBuffer(vs_model_buffer_, vs_model_buffer);
+      copies += 1;
 
-      MapBuffer(triangleVertices_, vertex_buffer_);
-      MapBuffer(indices_buffer_, index_buffer_);
+      ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};
+      deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
+      deviceContext_->DrawIndexed(mesh.indices_.size(), index_offset, 0);
 
-      deviceContext_->IASetVertexBuffers(0, 1, triangleVertices_.GetAddressOf(),
-                                         &dynamicVertexStride, &vertexOffset);
-      deviceContext_->IASetIndexBuffer(indices_buffer_.Get(),
-                                       DXGI_FORMAT_R32_UINT, 0);
-      int vertex_offset = 0;
-      int index_offset = 0;
-      for (const auto &primitive : primitives_) {
-        {
-          // Update model buffer per object
-          VsModelBuffer vs_model_buffer = {};
-          vs_model_buffer.scale = PQ_FLOAT3{&primitive.scale_[0]};
-          vs_model_buffer.opacity = primitive.opacity_;
-          /**
-          glm::mat4 model = glm::mat4(1.0f);
-          model = glm::translate(model, primitive.world_position_);
-          model = model * primitive.rotation_matrix_;
-          vs_model_buffer.world_position = PQ_MATRIX{&model[0][0]};
-          **/
-#define GLM_TO_DX(val) PQ_FLOAT3(&val[0])
-          vs_model_buffer.object_position =
-              GLM_TO_DX(primitive.world_position_);
-          vs_model_buffer.object_rotation =
-              GLM_TO_DX(primitive.world_rotation_);
-          vs_model_buffer.atlas_uv =
-              PQ_FLOAT4{primitive.atlas_uv_.x, primitive.atlas_uv_.y,
-                        primitive.atlas_uv_.z, primitive.atlas_uv_.w};
-          // map and copy from it
-          MapBuffer(vs_model_buffer_, vs_model_buffer);
-          copies += 1;
-        }
-        // Configure the buffers created
-        ID3D11Buffer *per_object_cbuffer[1] = {vs_model_buffer_.Get()};
-        deviceContext_->VSSetConstantBuffers(1, 1, per_object_cbuffer);
-        deviceContext_->DrawIndexed(primitive.indices_.size(), index_offset, 0);
-
-        index_offset += primitive.indices_.size();
-        vertex_offset += primitive.vertices_.size();
-      }
+      index_offset += mesh.indices_.size();
+      vertex_offset += mesh.vertices_.size();
     }
   }
 
@@ -545,7 +535,7 @@ void D3D11Application::Render() {
                      ImGuiWindowFlags_NoTitleBar);
     ImGui::Text("FPS: %d", average_fps_);
     ImGui::Text("GPU Memory Copies: %d", copies);
-    ImGui::Text("Primitives: %lu", primitives_.size());
+    ImGui::Text("Vertices: %d", vertex_offset);
     ImGui::End();
   }
 

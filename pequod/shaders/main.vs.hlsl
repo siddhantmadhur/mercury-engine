@@ -10,8 +10,7 @@ cbuffer VS_MODEL_BUFFER : register(b1)
 {
     float3 scale;
     float opacity;
-    float3 object_position;
-    float3 object_rotation;
+    matrix world;
     float4 atlas_uv;
 };
 
@@ -93,18 +92,9 @@ VSOutput Main(VSInput input)
     VSOutput output = (VSOutput) 0;
     // proj * view * model * pos
     float3 scaled_position = input.position * scale * 1.0;
-    float4x4 model = {
-       1, 0, 0, 0,
-       0, 1, 0, 0,
-       0, 0, 1, 0,
-       0, 0, 0, 1
-    };
-     model = Rotate(model, degToRad(object_rotation));
-     model = mul(Translate(object_position), model);
 
 
-
-    float4 world_pos = mul(model, float4(scaled_position, 1.0));
+    float4 world_pos = mul(world, float4(scaled_position, 1.0));
 
     // Snap in world space (before WVP) so exact half-integer coords like
     // ±638.5 don't get perturbed by the projection roundtrip and end up

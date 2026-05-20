@@ -163,7 +163,6 @@ int Application::Run() {
 
       float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
       game_scene_->ProcessOnFrame(alpha);
-      primitives_ = game_scene_->GetPrimitives();
       // Rebuild the per-frame vertex/index buffers to match the primitives_ we
       // are about to render. Doing this anywhere other than immediately after
       // GetPrimitives() lets the buffer and the list desync (e.g. when a new

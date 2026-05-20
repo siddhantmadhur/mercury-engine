@@ -72,23 +72,6 @@ struct StaticVertex {
 };
 
 /**
- * @brief Describes how a singular object can be drawn
- *
- * Primitives are the minimum basic requirement for a renderer to draw
- * something on the screen. It will thus contain things like vertices,
- * indices, textures, uv's etc.
- */
-struct Primitive {
-  std::vector<Vertex> vertices_;
-  std::vector<UINT> indices_;
-  glm::vec3 scale_;
-  glm::vec3 world_position_;
-  glm::vec3 world_rotation_ = glm::vec3(0.0f);
-  float opacity_ = 1.0f;
-  glm::vec4 atlas_uv_ = glm::vec4(0.0f);
-};
-
-/**
  * @brief Contains per-object information required to render
  *
  * These can be changing often and provide per-object required to render
@@ -97,10 +80,7 @@ struct Primitive {
 struct VsModelBuffer {
   PQ_FLOAT3 scale;
   float opacity;
-  PQ_FLOAT3 object_position;
-  float pad0_;
-  PQ_FLOAT3 object_rotation;
-  float pad1_;
+  PQ_MATRIX world_;
   PQ_FLOAT4 atlas_uv;
 };
 
