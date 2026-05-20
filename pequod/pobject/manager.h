@@ -49,29 +49,7 @@ class PObjectManager {
  public:
   PObjectManager();
 
-  /**
-   * @brief Returns a list of primitives to draw
-   *
-   * Primitive are the basic building block that instructs the Application on
-   * what to render. This function goes through every object it is managing and
-   * creates a list of primitives for the renderer to draw. Any optimization
-   * like batching vertices can be done here as well.
-   *
-   */
-  std::vector<Primitive> GetPrimitives(bool refresh_vertices = true);
-
-  /**
-   * @brief Combines a group of primitives so it returns as one instance to the
-   * GPU
-   *
-   * @param primary The main primitive for which the others will override their
-   * Position(), Texture() values with
-   * @param begin The first primitive to begin grouping with
-   * @param end The last primitive to end grouping with
-   */
-  void GroupPrimitives(kEntityId primary, kEntityId begin, kEntityId end);
-
-  static void UpdateAtlas(entt::registry &, const entt::entity);
+  void UpdateAtlas(entt::registry &, entt::entity);
 
   kEntityId NewObject();
 
@@ -111,6 +89,8 @@ class PObjectManager {
   void DeleteProperty(kEntityId self) {
     registry_.remove<T>(self);
   }
+
+  entt::registry &GetRegistry() { return registry_; }
 
   /**
    * Moves object to a static buffer which means while its data cannot be

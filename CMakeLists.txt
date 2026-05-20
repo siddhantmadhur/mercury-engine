@@ -62,6 +62,7 @@ add_library(pequod
         pequod/math/vector.h
         pequod/application/d3d11_renderer.cc
         pequod/application/d3d11_renderer.h
+        pequod/properties/mesh_instance.h
 )
 
 
