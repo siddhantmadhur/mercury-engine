@@ -16,6 +16,24 @@
       "message": "Not a fan of how this lighting looks but might be useful in implementing shaders",
       "revId": "1268c13d8348aad3e987b7c70bb6d8bfd9607111",
       "serverId": "dbcfc7f3-5bc3-4ef8-a312-0c1faa1fb4de"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2b50bf5d_25c00a00",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1000000
+      },
+      "writtenOn": "2026-05-21T00:44:29Z",
+      "side": 1,
+      "message": "Abandoning because it\u0027s irrelevant",
+      "parentUuid": "f9ffe5d3_c9baf7bb",
+      "revId": "1268c13d8348aad3e987b7c70bb6d8bfd9607111",
+      "serverId": "dbcfc7f3-5bc3-4ef8-a312-0c1faa1fb4de"
     }
   ]
 }
