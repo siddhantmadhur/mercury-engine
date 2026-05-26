@@ -70,6 +70,8 @@ class Transform {
   glm::vec3 interpolated_scale_{};
   glm::vec3 previous_scale_{};
 
+  glm::mat4 rotation_matrix_{};
+
   /**
    * A queue of fixed transformations made (like position and velocity) so that
    * the physics system knows whether to listen to the entities property or the
