@@ -1,15 +1,15 @@
 /*
  * application.h
  *
- * Refactoring of the engine where I've made a decision to make my own graphics
- * api wrapper. It will be simple and only targets Windows. This decision was
- * made so I can hyper-focus on one platform which means it will be easier to
- * debug any bugs
+ * Represents the game application. It does no
  *
  */
 
 #ifndef PEQUODENGINE_APPLICATION_H
 #define PEQUODENGINE_APPLICATION_H
+#include "globals.h"
+#include "../scene_manager/scene_manager.h"
+
 #include <input/input_manager.h>
 
 #include <queue>
@@ -18,12 +18,8 @@
 
 #include "GLFW/glfw3.h"
 #include "pobject/texture_atlas.h"
-#include "scene/scene.h"
-
-constexpr int kTicksPerSec = 60;
 
 namespace Pequod {
-static InputManager input_manager_;
 
 /**
  * @brief Create a new cross-platform application using GLFW
@@ -53,17 +49,8 @@ class Application {
    * @brief Quit application window
    */
   void Quit() const;
-
-  /**
-   * Changes the scene context being displayed. NOT thread-safe!
-   */
-  void SetGameScene(std::unique_ptr<GameScene>);
-
-  /**
-   * Set the cursor
-   * @param file_path Filepath to an image containing the cursor data
-   */
-  void SetPointer(std::string file_path);
+  SPtr<SceneManager> GetSceneManager();
+  SPtr<InputManager> GetInputManager();
 
  protected:
   /**
@@ -93,6 +80,8 @@ class Application {
 
   virtual void OnNewTick() = 0;
 
+  virtual void PrepareRenderPass() = 0;
+
   /**
    * @brief Callback that runs when an application is resized
    * @param width Width after resizing
@@ -106,16 +95,15 @@ class Application {
   virtual void ImGuiNewFrame() = 0;
 
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);
-  static void HandleKeyCallback(GLFWwindow* window, int key, int scancode,
-                                int action, int mods);
 
   int32_t GetWidth() const;
   int32_t GetHeight() const;
   GLFWwindow* GetWindow() const;
 
  protected:
-  std::unique_ptr<GameScene> game_scene_ = nullptr;
   int average_fps_ = 0;
+  SPtr<SceneManager> scene_manager_ = nullptr;
+  SPtr<InputManager> input_manager_ = nullptr;
 
  private:
   GLFWwindow* window_ = nullptr;

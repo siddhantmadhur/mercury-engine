@@ -16,7 +16,48 @@ namespace Pequod {
 
 constexpr int kFrametimeSlidingWindowSize = 50;
 
-static InputManager input_manager;
+// static InputManager input_manager;
+
+static void GLFWHandleCursorPositionCallback(GLFWwindow* window, double xpos,
+                                             double ypos) {
+  Application* application =
+      static_cast<Application*>(glfwGetWindowUserPointer(window));
+  if (application) {
+    // application->HandleCursorPositionCallback(xpos, ypos);
+    auto input_manager = application->GetInputManager();
+    input_manager->HandleCursorPositionCallback(xpos, ypos);
+  }
+}
+
+static void GLFWHandleScrollCallback(GLFWwindow* window, double xoffset,
+                                     double yoffset) {
+  Application* application =
+      static_cast<Application*>(glfwGetWindowUserPointer(window));
+  if (application) {
+    auto input_manager = application->GetInputManager();
+    input_manager->HandleScrollCallback(xoffset, yoffset);
+  }
+}
+
+static void GLFWHandleMouseButtonCallback(GLFWwindow* window, int button,
+                                          int action, int mods) {
+  Application* application =
+      static_cast<Application*>(glfwGetWindowUserPointer(window));
+  if (application) {
+    auto input_manager = application->GetInputManager();
+    input_manager->HandleMouseButtonCallback(button, action, mods);
+  }
+}
+
+static void GLFWHandleKeyboardCallback(GLFWwindow* window, int key,
+                                       int scancode, int action, int mods) {
+  Application* application =
+      static_cast<Application*>(glfwGetWindowUserPointer(window));
+  if (application) {
+    auto input_manager = application->GetInputManager();
+    input_manager->HandleKeyCallback(key, scancode, action, mods);
+  }
+}
 
 Application::Application(const std::string& window_title, float initial_width,
                          float initial_height) {
@@ -25,6 +66,16 @@ Application::Application(const std::string& window_title, float initial_width,
   title_ = window_title;
   width_ = initial_width;
   height_ = initial_height;
+
+  scene_manager_ = std::make_shared<SceneManager>(this);
+  input_manager_ = std::make_shared<InputManager>(this);
+}
+
+SPtr<InputManager> Application::GetInputManager() {
+  return this->input_manager_;
+}
+SPtr<SceneManager> Application::GetSceneManager() {
+  return this->scene_manager_;
 }
 
 bool Application::Initialize() {
@@ -37,12 +88,6 @@ bool Application::Initialize() {
   if (videoMode == nullptr) {
     PDebug::error("Could not create glfw video mode");
     return false;
-  }
-
-  if (game_scene_) {
-    game_scene_->SetWidth(width_);
-    game_scene_->SetHeight(height_);
-    game_scene_->SetInputManager(&input_manager);
   }
 
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
@@ -65,21 +110,10 @@ bool Application::Initialize() {
   glfwSetWindowUserPointer(window_, this);
   glfwSetFramebufferSizeCallback(window_, HandleResize);
 
-  glfwSetKeyCallback(window_, HandleKeyCallback);
-  glfwSetCursorPosCallback(
-      window_, [](GLFWwindow* window, double xpos, double ypos) {
-        input_manager.HandleCursorCallback(window, xpos, ypos);
-      });
-
-  glfwSetScrollCallback(
-      window_, [](GLFWwindow* window, double xoffset, double yoffset) {
-        input_manager.HandleScrollCallback(window, xoffset, yoffset);
-      });
-
-  glfwSetMouseButtonCallback(
-      window_, [](GLFWwindow* win, int button, int action, int mods) {
-        input_manager.HandleMouseButtonCallback(win, button, action, mods);
-      });
+  glfwSetKeyCallback(window_, GLFWHandleKeyboardCallback);
+  glfwSetCursorPosCallback(window_, GLFWHandleCursorPositionCallback);
+  glfwSetScrollCallback(window_, GLFWHandleScrollCallback);
+  glfwSetMouseButtonCallback(window_, GLFWHandleMouseButtonCallback);
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -100,28 +134,16 @@ int Application::Run() {
     PDebug::error("Could not load application");
     return 1;
   }
-  game_scene_->OnStart();
 
-  GLFWcursor* cursor = nullptr;
-  if (current_cursor) {
-    cursor = glfwCreateCursor(current_cursor, 10, 8);
-    if (cursor) {
-      glfwSetCursor(window_, cursor);
-
-    } else {
-      PDebug::error("Cursor could not be created");
-    }
-  }
-  while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
-    glfwMakeContextCurrent(window_);
-    glfwSwapInterval(0);
+  while ((!glfwWindowShouldClose(window_))) {
+    glfwPollEvents();
 
     double current_time = glfwGetTime() * 1000;
     auto frametime = current_time - time_elapsed_;
     delta_time_ = frametime;
     time_elapsed_ = current_time;
 
-    {  // FPS logic
+    if constexpr (kShowDebugStats) {  // FPS logic
       fps_sliding_window_.push_front(frametime);
 
       if (fps_sliding_window_.size() > kFrametimeSlidingWindowSize) {
@@ -136,50 +158,17 @@ int Application::Run() {
       average_fps_ = std::round(1000 / average);
     }
 
-    constexpr double kTickMs = 1000.0 / kTicksPerSec;
     time_since_last_tick_ += delta_time_;
 
     int ticks = int(time_elapsed_ / kTickMs);
 
-    if (game_scene_) {
-      glfwPollEvents();
-      ImGuiNewFrame();
-      ImGui_ImplGlfw_NewFrame();
-      ImGui::NewFrame();
+    float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
 
-      game_scene_->OnFrame(delta_time_);
-      if (ticks > last_tick_) {
-        game_scene_->OnTickBegin();
-        game_scene_->OnTick(time_since_last_tick_);
+    OnNewTick();
 
-        game_scene_->SimulatePhysics(
-            60 / kTicksPerSec);  // Only works as long as tps is 60
-
-        input_manager.ResetFreshPresses();
-
-        last_tick_ = ticks;
-        time_since_last_tick_ = 0.0;
-      }
-
-      float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
-      game_scene_->ProcessOnFrame(alpha);
-      // Rebuild the per-frame vertex/index buffers to match the primitives_ we
-      // are about to render. Doing this anywhere other than immediately after
-      // GetPrimitives() lets the buffer and the list desync (e.g. when a new
-      // entity is spawned mid-tick), which causes per-primitive draws to read
-      // the wrong slice of the buffer.
-      OnNewTick();
-    } else {
-      PDebug::warn("Game scene not set");
-    }
-
+    PrepareRenderPass();
     Render();
-
-    {
-      if (!input_manager.IsHoveringOnUI()) {
-        glfwSetCursor(window_, cursor);
-      }
-    }
+    glfwSwapBuffers(window_);
   }
 
   return 0;
@@ -198,30 +187,7 @@ void Application::HandleResize(GLFWwindow* window, int32_t width,
       static_cast<Application*>(glfwGetWindowUserPointer(window));
   application->OnResize(width, height);
 }
-void Application::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
-                                    int action, int mods) {
-  input_manager.HandleKeyCallback(window, key, scancode, action, mods);
-}
-void Application::SetPointer(std::string file_path) {
-  PDebug::info("Setting cursor...");
-
-  int x, y, channels;
-  auto* res = stbi_load(file_path.c_str(), &x, &y, &channels, 4);
-  if (res) {
-    GLFWimage* image = new GLFWimage();
-    image->width = x;
-    image->height = y;
-    image->pixels = res;
-    this->current_cursor = image;
-
-  } else {
-    PDebug::error("Could not read file: {}", file_path);
-  }
-}
 void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }
-void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {
-  this->game_scene_ = std::move(game_scene);
-}
 
 int32_t Application::GetHeight() const { return height_; }
 
@@ -232,9 +198,5 @@ GLFWwindow* Application::GetWindow() const { return window_; }
 void Application::OnResize(int32_t width, int32_t height) {
   width_ = width;
   height_ = height;
-  if (game_scene_) {
-    game_scene_->SetWidth(width);
-    game_scene_->SetHeight(height);
-  }
 }
 }  // namespace Pequod

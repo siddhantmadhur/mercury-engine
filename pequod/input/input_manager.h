@@ -4,12 +4,16 @@
 
 #ifndef PEQUODENGINE_INPUT_MANAGER_H
 #define PEQUODENGINE_INPUT_MANAGER_H
+#include "globals.h"
+
 #include <map>
 
 #include "GLFW/glfw3.h"
 #include "glm/vec2.hpp"
 
 namespace Pequod {
+
+class Application;
 
 using Key = int;
 
@@ -21,7 +25,7 @@ enum KeyStatus { kJustPressed = 0, kContinuous = 1, kReleased = 2 };
  */
 class InputManager {
  public:
-  InputManager();
+  InputManager(Application*);
   void Initialize(GLFWwindow* window);
   bool IsPressed(Key k);
   bool IsPressed(MouseButton btn);
@@ -31,15 +35,13 @@ class InputManager {
   glm::vec2 GetCursorPos();
   glm::vec2 GetCursorDelta();
 
-  void HandleKeyCallback(GLFWwindow* window, int key, int scancode, int action,
-                         int mods);
+  void HandleKeyCallback(int key, int scancode, int action, int mods);
 
-  void HandleCursorCallback(GLFWwindow* window, double xpos, double ypos);
+  void HandleCursorPositionCallback(double xpos, double ypos);
 
-  void HandleScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+  void HandleScrollCallback(double xoffset, double yoffset);
 
-  void HandleMouseButtonCallback(GLFWwindow* window, int button, int action,
-                                 int mods);
+  void HandleMouseButtonCallback(int button, int action, int mods);
 
   void ResetFreshPresses();
 
@@ -49,6 +51,7 @@ class InputManager {
   void SetHoveringOverUI(bool new_value);
 
  private:
+  Application* application_ = nullptr;
   void SetKeyRepeat(Key k);
   void SetKeyDown(Key k);
   void SetKeyUp(Key k);

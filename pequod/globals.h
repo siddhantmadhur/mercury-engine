@@ -27,6 +27,10 @@ using kEntityId = entt::entity;
 #define height_s (sapp_heightf() * (1.0f / ZOOM))
 #define width_s (sapp_widthf() * (1.0f / ZOOM))
 
+constexpr float kShowDebugStats = true;
+constexpr int kTicksPerSec = 60;
+constexpr double kTickMs = 1000.0 / kTicksPerSec;
+
 // The reason I'm wrapping basic memory functions so I can modify memory
 // management later without user code needing to be changed
 

@@ -7,7 +7,9 @@
 #include "imgui.h"
 
 namespace Pequod {
-InputManager::InputManager() {}
+InputManager::InputManager(Application* application) {
+  this->application_ = application;
+}
 bool InputManager::IsPressed(Key k) {
   if (key_status_.contains(k)) {
     return key_status_[k];
@@ -56,8 +58,8 @@ void InputManager::ResetFreshPresses() {
   this->scroll_offset_ = glm::vec2(0.0f);
   this->last_mouse_position_ = GetCursorPos();
 }
-void InputManager::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
-                                     int action, int mods) {
+void InputManager::HandleKeyCallback(int key, int scancode, int action,
+                                     int mods) {
   if (action == GLFW_PRESS) {
     SetKeyDown(key);
   } else if (action == GLFW_RELEASE) {
@@ -66,18 +68,15 @@ void InputManager::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
     SetKeyRepeat(key);
   }
 }
-void InputManager::HandleCursorCallback(GLFWwindow* window, double xpos,
-                                        double ypos) {
+void InputManager::HandleCursorPositionCallback(double xpos, double ypos) {
   this->mouse_position_ = glm::vec2(xpos, ypos);
 }
-void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
-                                        double yoffset) {
+void InputManager::HandleScrollCallback(double xoffset, double yoffset) {
   this->scroll_offset_ = glm::vec2(xoffset, yoffset);
 }
 #define GET_ACTION(a) \
   a == GLFW_PRESS ? kJustPressed : a == GLFW_REPEAT ? kContinuous : kReleased
-void InputManager::HandleMouseButtonCallback(GLFWwindow* window, int button,
-                                             int action, int mods) {
+void InputManager::HandleMouseButtonCallback(int button, int action, int mods) {
   switch (button) {
     case GLFW_MOUSE_BUTTON_LEFT:
       mouse_btn_status_[MouseButton::kLeft] = GET_ACTION(action);
