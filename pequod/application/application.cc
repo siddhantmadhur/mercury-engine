@@ -39,12 +39,6 @@ bool Application::Initialize() {
     return false;
   }
 
-  if (game_scene_) {
-    game_scene_->SetWidth(width_);
-    game_scene_->SetHeight(height_);
-    game_scene_->SetInputManager(&input_manager);
-  }
-
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -100,7 +94,6 @@ int Application::Run() {
     PDebug::error("Could not load application");
     return 1;
   }
-  game_scene_->OnStart();
 
   GLFWcursor* cursor = nullptr;
   if (current_cursor) {
@@ -112,7 +105,7 @@ int Application::Run() {
       PDebug::error("Cursor could not be created");
     }
   }
-  while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
+  while ((!glfwWindowShouldClose(window_))) {
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(0);
 
@@ -141,37 +134,14 @@ int Application::Run() {
 
     int ticks = int(time_elapsed_ / kTickMs);
 
-    if (game_scene_) {
-      glfwPollEvents();
-      ImGuiNewFrame();
-      ImGui_ImplGlfw_NewFrame();
-      ImGui::NewFrame();
-
-      game_scene_->OnFrame(delta_time_);
-      if (ticks > last_tick_) {
-        game_scene_->OnTickBegin();
-        game_scene_->OnTick(time_since_last_tick_);
-
-        game_scene_->SimulatePhysics(
-            60 / kTicksPerSec);  // Only works as long as tps is 60
-
-        input_manager.ResetFreshPresses();
-
-        last_tick_ = ticks;
-        time_since_last_tick_ = 0.0;
-      }
-
-      float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
-      game_scene_->ProcessOnFrame(alpha);
-      // Rebuild the per-frame vertex/index buffers to match the primitives_ we
-      // are about to render. Doing this anywhere other than immediately after
-      // GetPrimitives() lets the buffer and the list desync (e.g. when a new
-      // entity is spawned mid-tick), which causes per-primitive draws to read
-      // the wrong slice of the buffer.
-      OnNewTick();
-    } else {
-      PDebug::warn("Game scene not set");
-    }
+    float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
+    // game_scene_->ProcessOnFrame(alpha);
+    //  Rebuild the per-frame vertex/index buffers to match the primitives_ we
+    //  are about to render. Doing this anywhere other than immediately after
+    //  GetPrimitives() lets the buffer and the list desync (e.g. when a new
+    //  entity is spawned mid-tick), which causes per-primitive draws to read
+    //  the wrong slice of the buffer.
+    OnNewTick();
 
     Render();
 
@@ -202,26 +172,7 @@ void Application::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                     int action, int mods) {
   input_manager.HandleKeyCallback(window, key, scancode, action, mods);
 }
-void Application::SetPointer(std::string file_path) {
-  PDebug::info("Setting cursor...");
-
-  int x, y, channels;
-  auto* res = stbi_load(file_path.c_str(), &x, &y, &channels, 4);
-  if (res) {
-    GLFWimage* image = new GLFWimage();
-    image->width = x;
-    image->height = y;
-    image->pixels = res;
-    this->current_cursor = image;
-
-  } else {
-    PDebug::error("Could not read file: {}", file_path);
-  }
-}
 void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }
-void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {
-  this->game_scene_ = std::move(game_scene);
-}
 
 int32_t Application::GetHeight() const { return height_; }
 
@@ -232,9 +183,5 @@ GLFWwindow* Application::GetWindow() const { return window_; }
 void Application::OnResize(int32_t width, int32_t height) {
   width_ = width;
   height_ = height;
-  if (game_scene_) {
-    game_scene_->SetWidth(width);
-    game_scene_->SetHeight(height);
-  }
 }
 }  // namespace Pequod
