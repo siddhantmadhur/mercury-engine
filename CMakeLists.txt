@@ -60,10 +60,10 @@ add_library(pequod
         pequod/pipelines/renderer.h
         pequod/math/vector.cc
         pequod/math/vector.h
-        pequod/application/d3d11_renderer.cc
-        pequod/application/d3d11_renderer.h
         pequod/properties/mesh_instance.h
         pequod/properties/mesh_instance.cc
+        pequod/scene_manager.cc
+        pequod/scene_manager.h
 )
 
 

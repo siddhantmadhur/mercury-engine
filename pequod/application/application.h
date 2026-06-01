@@ -1,15 +1,15 @@
 /*
  * application.h
  *
- * Refactoring of the engine where I've made a decision to make my own graphics
- * api wrapper. It will be simple and only targets Windows. This decision was
- * made so I can hyper-focus on one platform which means it will be easier to
- * debug any bugs
+ * Represents the game application. It does no
  *
  */
 
 #ifndef PEQUODENGINE_APPLICATION_H
 #define PEQUODENGINE_APPLICATION_H
+#include "globals.h"
+#include "scene_manager.h"
+
 #include <input/input_manager.h>
 
 #include <queue>
@@ -18,7 +18,6 @@
 
 #include "GLFW/glfw3.h"
 #include "pobject/texture_atlas.h"
-#include "scene/scene.h"
 
 constexpr int kTicksPerSec = 60;
 
@@ -54,17 +53,6 @@ class Application {
    */
   void Quit() const;
 
-  /**
-   * Changes the scene context being displayed. NOT thread-safe!
-   */
-  void SetGameScene(std::unique_ptr<GameScene>);
-
-  /**
-   * Set the cursor
-   * @param file_path Filepath to an image containing the cursor data
-   */
-  void SetPointer(std::string file_path);
-
  protected:
   /**
    * @brief Runs when the application context is created
@@ -93,6 +81,8 @@ class Application {
 
   virtual void OnNewTick() = 0;
 
+  virtual void PrepareRenderPass() = 0;
+
   /**
    * @brief Callback that runs when an application is resized
    * @param width Width after resizing
@@ -113,8 +103,9 @@ class Application {
   int32_t GetHeight() const;
   GLFWwindow* GetWindow() const;
 
+  SPtr<SceneManager> scene_manager_ = nullptr;
+
  protected:
-  std::unique_ptr<GameScene> game_scene_ = nullptr;
   int average_fps_ = 0;
 
  private:
