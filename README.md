@@ -1,6 +1,6 @@
-# Pequod
+# Mercury
 
-Pequod is a game-engine built with C++ for performant games
+Mercury is a game-engine built with C++ for performant games
 
 ## Table of Contents
 
@@ -44,7 +44,7 @@ Any bugs related to the game engine can be reported at [issues.reocelot.com](htt
 
 ## Contributing
 
-Pequod is open-source but not open-contribution. Features part of this engine
+Mercury is open-source but not open-contribution. Features part of this engine
 are specifically for games **I** want to make and not to be generalized.
 In fact there are much better engines already out there that do most things
 better so I'd recommend using that if you cannot find a feature here.
@@ -57,14 +57,14 @@ a [git patch](https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-P
 Official repositories for the code:
 
 - https://oss.reocelot.com/pequod-engine
-- https://github.com/siddhantmadhur/pequod-engine [mirror]
+- https://github.com/siddhantmadhur/mercury-engine [mirror]
 
 ## Design
 
-Pequod is designed as a C++ library that can be used to produce games. This involves
+Mercury is designed as a C++ library that can be used to produce games. This involves
 tasks such as windowing, shaders, input, memory and more. There are two parts of
 its design. First is its implementation which is how you can get started with adding
-Pequod to your project, or building using it. And the other is it's internal design
+Mercury to your project, or building using it. And the other is it's internal design
 which is how I've decided to go about designing the program which you hopefully never
 see.
 
