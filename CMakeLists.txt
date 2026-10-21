@@ -249,6 +249,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGame.cmake)
 if (MERCURY_BUILD_EXAMPLES)
     add_subdirectory(examples/pong)
     add_subdirectory(examples/roll_a_ball)
+    add_subdirectory(examples/monkey_ball)
 
     # Older examples that still build their worlds in code
     add_executable(example_breakout examples/breakout/main.cc

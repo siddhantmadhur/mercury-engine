@@ -1,0 +1,12 @@
+[project]
+name = "Super Monkey Ball"
+main_map = "res://maps/main.mmap"
+engine_version = "dev"
+
+[window]
+title = "Super Monkey Ball"
+width = 1280
+height = 720
+
+[physics]
+gravity = Vector3(0, -15.0, 0)
