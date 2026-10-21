@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.30)
 
-project(PequodEngine LANGUAGES CXX C)
+project(MercuryEngine LANGUAGES CXX C)
 
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
 
@@ -17,53 +17,53 @@ find_package(Vulkan REQUIRED)
 find_package(Threads REQUIRED)
 set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
 
-add_library(pequod
-        pequod/physics_engine/physics_engine.cc
-        pequod/physics_engine/physics_engine.h
-        pequod/pobject/manager.cc
-        pequod/pobject/manager.h
-        pequod/debugger/debugger.h
-        pequod/properties/mesh.cc
-        pequod/properties/transform.h
-        pequod/properties/transform.cc
-        pequod/properties/transform.h
-        pequod/application/application.h
-        pequod/application/application.cc
-        pequod/application/vulkan_application.cc
-        pequod/application/vulkan_application.h
-        pequod/application/vulkan/vk_check.h
-        pequod/application/vulkan/vk_context.cc
-        pequod/application/vulkan/vk_context.h
-        pequod/application/vulkan/vk_swapchain.cc
-        pequod/application/vulkan/vk_swapchain.h
-        pequod/application/vulkan/vk_buffer.cc
-        pequod/application/vulkan/vk_buffer.h
-        pequod/application/vulkan/vma_impl.cc
-        pequod/os/filesystem.h
-        pequod/scene/scene.cc
-        pequod/input/input_manager.cc
-        pequod/input/input_manager.h
-        pequod/properties/texture2d.cc
-        pequod/properties/texture2d.h
-        pequod/pobject/texture_atlas.cc
-        pequod/pobject/texture_atlas.h
-        pequod/properties/camera.cc
-        pequod/properties/camera.h
-        pequod/ui/ui_system.cc
-        pequod/ui/ui_system.h
-        pequod/ui/ui_element.cc
-        pequod/ui/ui_element.h
-        pequod/algorithms/sparse_set.h
-        pequod/pipelines/renderer.cc
-        pequod/pipelines/renderer.h
-        pequod/math/vector.cc
-        pequod/math/vector.h
-        pequod/properties/mesh_instance.h
-        pequod/properties/mesh_instance.cc
+add_library(mercury
+        mercury/physics_engine/physics_engine.cc
+        mercury/physics_engine/physics_engine.h
+        mercury/pobject/manager.cc
+        mercury/pobject/manager.h
+        mercury/debugger/debugger.h
+        mercury/properties/mesh.cc
+        mercury/properties/transform.h
+        mercury/properties/transform.cc
+        mercury/properties/transform.h
+        mercury/application/application.h
+        mercury/application/application.cc
+        mercury/application/vulkan_application.cc
+        mercury/application/vulkan_application.h
+        mercury/application/vulkan/vk_check.h
+        mercury/application/vulkan/vk_context.cc
+        mercury/application/vulkan/vk_context.h
+        mercury/application/vulkan/vk_swapchain.cc
+        mercury/application/vulkan/vk_swapchain.h
+        mercury/application/vulkan/vk_buffer.cc
+        mercury/application/vulkan/vk_buffer.h
+        mercury/application/vulkan/vma_impl.cc
+        mercury/os/filesystem.h
+        mercury/scene/scene.cc
+        mercury/input/input_manager.cc
+        mercury/input/input_manager.h
+        mercury/properties/texture2d.cc
+        mercury/properties/texture2d.h
+        mercury/pobject/texture_atlas.cc
+        mercury/pobject/texture_atlas.h
+        mercury/properties/camera.cc
+        mercury/properties/camera.h
+        mercury/ui/ui_system.cc
+        mercury/ui/ui_system.h
+        mercury/ui/ui_element.cc
+        mercury/ui/ui_element.h
+        mercury/algorithms/sparse_set.h
+        mercury/pipelines/renderer.cc
+        mercury/pipelines/renderer.h
+        mercury/math/vector.cc
+        mercury/math/vector.h
+        mercury/properties/mesh_instance.h
+        mercury/properties/mesh_instance.cc
 )
 
 
-include_directories("pequod")
+include_directories("mercury")
 include_directories("editor")
 
 # link imgui
@@ -121,10 +121,10 @@ add_subdirectory("third_party/entt")
 include_directories("third_party/VulkanMemoryAllocator/include")
 
 
-target_compile_definitions(pequod PUBLIC
-        PEQUOD_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/pequod/shaders"
-        PEQUOD_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
-        PEQUOD_GRAPHICS_VULKAN=1
+target_compile_definitions(mercury PUBLIC
+        MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
+        MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+        MERCURY_GRAPHICS_VULKAN=1
         # Vulkan clip space has a [0, 1] depth range.
         GLM_FORCE_DEPTH_ZERO_TO_ONE
 )
@@ -132,10 +132,10 @@ target_compile_definitions(pequod PUBLIC
 if (WIN32)
     # Prevent <windows.h> from defining min/max macros, which collide with
     # std::numeric_limits<...>::max() inside EnTT's dense_hash_map/_set.
-    target_compile_definitions(pequod PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_compile_definitions(mercury PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 endif ()
 
-target_link_libraries(pequod imgui glm::glm joltphysics tinyxml2 glfw assimp
+target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 glfw assimp
         EnTT::EnTT Vulkan::Vulkan Threads::Threads)
 
 if (MSVC)
@@ -147,7 +147,7 @@ endif ()
 find_program(DXC dxc
         HINTS $ENV{VULKAN_SDK}/bin ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc/bin
         REQUIRED)
-set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/pequod/shaders)
+set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders)
 set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${SHADER_BIN})
 set(DXC_COMMON_FLAGS -spirv
@@ -177,33 +177,33 @@ foreach (JOB ${SHADER_JOBS})
             COMMAND_EXPAND_LISTS)
     list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})
 endforeach ()
-add_custom_target(pequod_shaders DEPENDS ${SPV_OUTS})
-add_dependencies(pequod pequod_shaders)
-target_compile_definitions(pequod PUBLIC PEQUOD_SPIRV_PATH="${SHADER_BIN}")
+add_custom_target(mercury_shaders DEPENDS ${SPV_OUTS})
+add_dependencies(mercury mercury_shaders)
+target_compile_definitions(mercury PUBLIC MERCURY_SPIRV_PATH="${SHADER_BIN}")
 
 
 # CREATE NEW BINARIES USING THIS
 
 
-add_executable(pequod_test tests/main.cc)
+add_executable(mercury_test tests/main.cc)
 add_executable(pong examples/pong/main.cc
         examples/pong/pong_scene.cc
         examples/pong/pong_scene.h
 )
-target_link_libraries(pong pequod)
+target_link_libraries(pong mercury)
 
 
 add_executable(example_breakout examples/breakout/main.cc
         examples/breakout/breakout_scene.cc
         examples/breakout/breakout_scene.h)
-target_link_libraries(example_breakout pequod)
+target_link_libraries(example_breakout mercury)
 
 add_executable(example_space_invaders examples/space_invaders/main.cc
         examples/space_invaders/space_invaders.cc
         examples/space_invaders/space_invaders.h)
-target_link_libraries(example_space_invaders pequod)
+target_link_libraries(example_space_invaders mercury)
 
-add_executable(pequod_editor editor/main.cc
+add_executable(mercury_editor editor/main.cc
         editor/ui_editor/scene.cc)
-target_link_libraries(pequod_editor pequod)
-target_compile_definitions(pequod_editor PRIVATE PEQUOD_EDITOR_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+target_link_libraries(mercury_editor mercury)
+target_compile_definitions(mercury_editor PRIVATE MERCURY_EDITOR_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets")

@@ -7,11 +7,11 @@
 
 #include <format>
 #include <memory>
-using namespace Pequod;
+using namespace Mercury;
 
 int main(void) {
   auto game_win = std::make_unique<DefaultApplication>(
-      std::format("Space Invaders [Pequod {}]", PEQUOD_ENGINE_VERSION),
+      std::format("Space Invaders [Mercury {}]", MERCURY_ENGINE_VERSION),
       224 * ZOOM, 256 * ZOOM);
 
   auto space_invaders = std::make_unique<SpaceInvaders>();

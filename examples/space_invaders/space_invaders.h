@@ -2,8 +2,8 @@
 // Created by smadhur on 4/25/2026.
 //
 
-#ifndef PEQUODENGINE_SPACE_INVADERS_H
-#define PEQUODENGINE_SPACE_INVADERS_H
+#ifndef MERCURYENGINE_SPACE_INVADERS_H
+#define MERCURYENGINE_SPACE_INVADERS_H
 
 #include <unordered_set>
 
@@ -12,7 +12,7 @@
 
 constexpr int ZOOM = 4;  // screen pixels per world unit
 
-using namespace Pequod;
+using namespace Mercury;
 
 class SpaceInvaders : public GameScene {
  public:
@@ -32,4 +32,4 @@ class SpaceInvaders : public GameScene {
   Examples::CollisionQueue collisions_;
 };
 
-#endif  // PEQUODENGINE_SPACE_INVADERS_H
+#endif  // MERCURYENGINE_SPACE_INVADERS_H

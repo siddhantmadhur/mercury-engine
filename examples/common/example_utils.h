@@ -3,8 +3,8 @@
  *
  * Small helpers shared by the example games.
  */
-#ifndef PEQUOD_EXAMPLES_EXAMPLE_UTILS_H
-#define PEQUOD_EXAMPLES_EXAMPLE_UTILS_H
+#ifndef MERCURY_EXAMPLES_EXAMPLE_UTILS_H
+#define MERCURY_EXAMPLES_EXAMPLE_UTILS_H
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
@@ -29,11 +29,11 @@ namespace Examples {
  * picked to make one world unit cover exactly height_px / view_height pixels
  * on the z = 0 plane. +X is right and +Y is up.
  */
-inline void SetupCamera2D(Pequod::PObjectManager& objects, kEntityId camera,
+inline void SetupCamera2D(Mercury::PObjectManager& objects, kEntityId camera,
                           float view_height) {
   constexpr float kHalfFovRadians = 30.0f * 3.14159265f / 180.0f;
   const float distance = (view_height / 2.0f) / std::tan(kHalfFovRadians);
-  Pequod::Transform transform(glm::vec3(0.0f, 0.0f, distance));
+  Mercury::Transform transform(glm::vec3(0.0f, 0.0f, distance));
   transform.SetRotate(glm::vec3(0.0f, -90.0f, 0.0f));  // yaw -90 -> look -Z
   objects.AddProperty(camera, transform);
 }
@@ -82,8 +82,8 @@ class CollisionQueue {
 };
 
 // An entity counts as alive until DestroyEntity removes its Transform.
-inline bool IsAlive(Pequod::PObjectManager& objects, kEntityId id) {
-  return objects.GetProperty<Pequod::Transform>(id) != nullptr;
+inline bool IsAlive(Mercury::PObjectManager& objects, kEntityId id) {
+  return objects.GetProperty<Mercury::Transform>(id) != nullptr;
 }
 
 /**
@@ -91,8 +91,8 @@ inline bool IsAlive(Pequod::PObjectManager& objects, kEntityId id) {
  *
  * Call from OnTick, never from a collision callback. Safe to call twice.
  */
-inline void DestroyEntity(Pequod::PhysicsEngine& physics,
-                          Pequod::PObjectManager& objects, kEntityId id) {
+inline void DestroyEntity(Mercury::PhysicsEngine& physics,
+                          Mercury::PObjectManager& objects, kEntityId id) {
   if (!IsAlive(objects, id)) return;
   physics.DisableBody(id);
   objects.DeleteObject(id);
@@ -100,4 +100,4 @@ inline void DestroyEntity(Pequod::PhysicsEngine& physics,
 
 }  // namespace Examples
 
-#endif  // PEQUOD_EXAMPLES_EXAMPLE_UTILS_H
+#endif  // MERCURY_EXAMPLES_EXAMPLE_UTILS_H

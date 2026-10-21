@@ -2,13 +2,13 @@
 // Created by smadhur on 4/20/2026.
 //
 
-#ifndef PEQUODENGINE_PONG_SCENE_H
-#define PEQUODENGINE_PONG_SCENE_H
+#ifndef MERCURYENGINE_PONG_SCENE_H
+#define MERCURYENGINE_PONG_SCENE_H
 
 #include "../common/example_utils.h"
 #include "scene/scene.h"
 
-using namespace Pequod;
+using namespace Mercury;
 
 class PongScene : public GameScene {
  public:
@@ -37,4 +37,4 @@ class PongScene : public GameScene {
   Examples::CollisionQueue goals_;
 };
 
-#endif  // PEQUODENGINE_PONG_SCENE_H
+#endif  // MERCURYENGINE_PONG_SCENE_H

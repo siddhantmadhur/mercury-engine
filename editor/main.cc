@@ -7,8 +7,8 @@
 
 int main(void) {
   auto application =
-      Pequod::DefaultApplication("Pequod Editor [alpha]", 1920, 1080);
-  auto entry_scene = std::make_unique<Pequod::UIEditorScene>();
+      Mercury::DefaultApplication("Mercury Editor [alpha]", 1920, 1080);
+  auto entry_scene = std::make_unique<Mercury::UIEditorScene>();
   application.SetGameScene(std::move(entry_scene));
   // application.SetPointer(path.string());
   return application.Run();

@@ -10,7 +10,7 @@
 
 int main() {
   auto application = DefaultApplication(
-      std::format("Breakout [Pequod {}]", PEQUOD_ENGINE_VERSION));
+      std::format("Breakout [Mercury {}]", MERCURY_ENGINE_VERSION));
   auto breakout_scene = std::make_unique<BreakoutScene>();
   application.SetGameScene(std::move(breakout_scene));
   return application.Run();

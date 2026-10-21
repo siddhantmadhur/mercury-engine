@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Installs everything needed to build Pequod on Linux (Vulkan backend):
+# Installs everything needed to build Mercury on Linux (Vulkan backend):
 # compilers/build tools, the Vulkan loader + headers + validation layers,
 # GLFW's X11/Wayland dependencies, and DXC (HLSL -> SPIR-V).
 #
