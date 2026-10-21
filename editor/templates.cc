@@ -1,0 +1,215 @@
+#include "templates.h"
+
+#include <cctype>
+#include <format>
+#include <fstream>
+
+#include "project/asset_database.h"
+#include "project/map.h"
+#include "project/project.h"
+#include "scripting/type_registry.h"
+
+namespace Mercury::Templates {
+
+namespace fs = std::filesystem;
+
+namespace {
+
+bool WriteText(const fs::path& file, const std::string& text,
+               std::string* error) {
+  std::error_code ec;
+  fs::create_directories(file.parent_path(), ec);
+  std::ofstream out(file, std::ios::binary);
+  out << text;
+  if (!out) {
+    if (error) *error = "could not write " + file.string();
+    return false;
+  }
+  return true;
+}
+
+std::string ToTargetName(const std::string& name) {
+  std::string out;
+  for (char c : name) {
+    if (std::isalnum(static_cast<unsigned char>(c))) {
+      out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    } else if (!out.empty() && out.back() != '_') {
+      out.push_back('_');
+    }
+  }
+  while (!out.empty() && out.back() == '_') out.pop_back();
+  if (out.empty() || std::isdigit(static_cast<unsigned char>(out[0]))) {
+    out = "game_" + out;
+  }
+  return out;
+}
+
+}  // namespace
+
+bool IsValidIdentifier(const std::string& name) {
+  if (name.empty()) return false;
+  if (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_') {
+    return false;
+  }
+  for (char c : name) {
+    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') return false;
+  }
+  return true;
+}
+
+std::string ToSnakeCase(const std::string& name) {
+  std::string out;
+  for (size_t i = 0; i < name.size(); i++) {
+    unsigned char c = static_cast<unsigned char>(name[i]);
+    if (std::isupper(c)) {
+      const bool prev_lower =
+          i > 0 && (std::islower(static_cast<unsigned char>(name[i - 1])) ||
+                    std::isdigit(static_cast<unsigned char>(name[i - 1])));
+      const bool next_lower =
+          i + 1 < name.size() &&
+          std::islower(static_cast<unsigned char>(name[i + 1]));
+      if (!out.empty() && out.back() != '_' &&
+          (prev_lower || (next_lower && i > 0))) {
+        out.push_back('_');
+      }
+      out.push_back(static_cast<char>(std::tolower(c)));
+    } else {
+      out.push_back(static_cast<char>(c));
+    }
+  }
+  return out;
+}
+
+std::string NewMapText(const std::string& root_name) {
+  Map map;
+  map.RenameNode(map.GetRoot(), root_name);
+  map.GetRoot()->components.push_back({"Transform", {}});
+  auto camera = map.AddNode(map.GetRoot(), "Camera");
+  camera->components.push_back({"Transform", {}});
+  ComponentData settings{"Camera", {}};
+  settings.properties.Set("fit_height", 90.0);
+  camera->components.push_back(std::move(settings));
+  return map.SaveToString();
+}
+
+fs::path CreateProject(const fs::path& parent, const std::string& name,
+                       std::string* error) {
+  if (name.empty()) {
+    if (error) *error = "the project needs a name";
+    return {};
+  }
+  const fs::path root = parent / name;
+  std::error_code ec;
+  if (fs::exists(root, ec) && !fs::is_empty(root, ec)) {
+    if (error) *error = root.string() + " already exists and is not empty";
+    return {};
+  }
+  fs::create_directories(root / "scripts", ec);
+  fs::create_directories(root / "assets", ec);
+  fs::create_directories(root / "maps", ec);
+  if (ec) {
+    if (error) *error = "could not create " + root.string();
+    return {};
+  }
+
+  const fs::path mproj = root / (ToTargetName(name) + std::string(kProjectExtension));
+  auto project = Project::Create(mproj, name);
+  if (!project->Save()) {
+    if (error) *error = "could not write " + mproj.string();
+    return {};
+  }
+
+  const std::string target = ToTargetName(name);
+  const std::string engine_dir = fs::path(MERCURY_ENGINE_DIR).generic_string();
+  const std::string cmake = std::format(
+      R"(# Builds the game executable. The editor runs this when you press Play.
+cmake_minimum_required(VERSION 3.30)
+project({0} LANGUAGES CXX C)
+
+set(MERCURY_ENGINE_DIR "{1}" CACHE PATH "Mercury engine checkout")
+add_subdirectory(${{MERCURY_ENGINE_DIR}} mercury-engine EXCLUDE_FROM_ALL)
+
+# Compiles every .cc file in scripts/ into the game.
+mercury_add_game({2} PROJECT ${{CMAKE_CURRENT_SOURCE_DIR}})
+)",
+      ToTargetName(name), engine_dir, target);
+  if (!WriteText(root / "CMakeLists.txt", cmake, error)) return {};
+  if (!WriteText(root / ".gitignore",
+                 "# Build output and editor caches\n.mercury/\n", error)) {
+    return {};
+  }
+  if (!WriteText(root / "maps" / "main.mmap", NewMapText(name), error)) {
+    return {};
+  }
+  if (!CreateAsset(root / "assets" / "default.masset", "Material")) {
+    if (error) *error = "could not write the default material";
+    return {};
+  }
+  return mproj;
+}
+
+fs::path CreateScript(const fs::path& project_root,
+                      const std::string& class_name, std::string* error) {
+  if (!IsValidIdentifier(class_name)) {
+    if (error) *error = "\"" + class_name + "\" is not a valid C++ class name";
+    return {};
+  }
+  const std::string file_name = ToSnakeCase(class_name);
+  const fs::path header = project_root / "scripts" / (file_name + ".h");
+  const fs::path source = project_root / "scripts" / (file_name + ".cc");
+  if (fs::exists(header) || fs::exists(source)) {
+    if (error) *error = header.filename().string() + " already exists";
+    return {};
+  }
+  std::string guard = file_name;
+  for (auto& c : guard) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
+  const std::string header_text = std::format(
+      R"(#ifndef {0}_H
+#define {0}_H
+
+#include "scripting/behaviour.h"
+
+class {1} : public Mercury::Behaviour {{
+ public:
+  // Fields listed here appear in the editor's Inspector and are saved in maps.
+  void Reflect(Mercury::Reflector& r) override {{
+    r.Field("speed", speed);
+  }}
+
+  void OnStart() override;
+  void OnTick(double dt) override;
+
+  float speed = 1.0f;
+}};
+
+#endif  // {0}_H
+)",
+      guard, class_name);
+  const std::string source_text = std::format(
+      R"(#include "{0}.h"
+
+MERCURY_SCRIPT({1});
+
+void {1}::OnStart() {{}}
+
+void {1}::OnTick(double dt) {{}}
+)",
+      file_name, class_name);
+  if (!WriteText(header, header_text, error)) return {};
+  if (!WriteText(source, source_text, error)) return {};
+  return source;
+}
+
+bool CreateAsset(const fs::path& file, const std::string& type) {
+  Asset asset;
+  asset.type = type;
+  if (auto info = TypeRegistry::Instance().FindAssetType(type)) {
+    for (const auto& field : info->fields) {
+      asset.properties.Set(field.name, field.default_value);
+    }
+  }
+  return SaveAssetFile(file, asset);
+}
+
+}  // namespace Mercury::Templates

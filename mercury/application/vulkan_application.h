@@ -39,6 +39,11 @@ class VulkanApplication : public Application {
                     float initial_width = 1280, float initial_height = 720);
   ~VulkanApplication() override;
 
+  void EnableSceneTexture(bool enabled) override;
+  void SetSceneViewportSize(int width, int height) override;
+  uint64_t GetSceneTexture() const override;
+  void SetShowRenderStats(bool show) override { show_render_stats_ = show; }
+
  protected:
   bool OnLoad() override;      // Runs when the application is created
   void Render() override;      // Renders objects
@@ -93,6 +98,22 @@ class VulkanApplication : public Application {
   // false if it does not fit.
   bool UploadToFrameBuffer(vk::Buffer& buffer, const void* data,
                            VkDeviceSize bytes, const char* name);
+
+  // Binds the pipelines and records every scene draw into the current
+  // rendering pass, with a viewport covering `extent`.
+  void RecordSceneDraws(VkCommandBuffer cmd, FrameData& frame,
+                        VkExtent2D extent, bool draw_static,
+                        UINT static_index_count, bool draw_instanced);
+
+  // (Re)creates the offscreen scene target at scene_requested_. Waits for the
+  // device to go idle, so it only runs between frames.
+  void RecreateSceneTarget();
+  void DestroySceneTarget();
+
+  // MERCURY_CAPTURE=<file.png> saves frame MERCURY_CAPTURE_FRAME (default
+  // 90) of the window; MERCURY_CAPTURE_QUIT=1 closes the window afterwards.
+  void ReadCaptureSettings();
+  void WriteCapture();
 
   void RecordAtlasUpload(FrameData& frame, TextureAtlas& atlas);
   void RecordInstanceUploads(FrameData& frame);
@@ -156,6 +177,24 @@ class VulkanApplication : public Application {
   std::vector<entt::entity> slot_parent_;  // slot index -> parent mesh entity
   bool layout_dirty_ = true;
   entt::registry* hooked_registry_ = nullptr;
+
+  // Offscreen scene target, shown by the editor inside an ImGui window.
+  bool scene_texture_enabled_ = false;
+  bool scene_target_dirty_ = false;
+  VkExtent2D scene_requested_ = {0, 0};
+  vk::Image scene_color_;
+  vk::Image scene_depth_;
+  VkSampler scene_sampler_ = VK_NULL_HANDLE;
+  VkDescriptorSet scene_texture_set_ = VK_NULL_HANDLE;
+
+  bool show_render_stats_ = true;
+
+  std::string capture_path_;
+  uint64_t capture_frame_ = 90;
+  bool capture_quit_ = false;
+  uint64_t frame_counter_ = 0;
+  vk::Buffer capture_buffer_;
+  VkExtent2D capture_extent_ = {};
 };
 }  // namespace Mercury
 

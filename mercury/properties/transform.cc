@@ -114,6 +114,12 @@ void Transform::CaptureTickSnapshot() {
   previous_rotation_ = rotation_;
   previous_scale_ = scale_;
 }
+void Transform::SnapInterpolation() {
+  CaptureTickSnapshot();
+  Interpolate(1.0f);
+  dirty_ = true;
+}
+
 std::vector<TransformationType> Transform::GetTransformations() {
   auto transformations = transformations_;
   return transformations;

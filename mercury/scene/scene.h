@@ -12,12 +12,35 @@
 #ifndef MERCURYENGINE_SCENE_H
 #define MERCURYENGINE_SCENE_H
 #include <memory>
+#include <string>
 
 #include "input/input_manager.h"
 #include "physics_engine/physics_engine.h"
 #include "pobject/manager.h"
 
 namespace Mercury {
+
+/**
+ * @brief What a scene may ask of the application that renders it
+ *
+ * The editor uses this to draw the scene into a texture shown inside an
+ * ImGui panel instead of straight to the window.
+ */
+class RenderHost {
+ public:
+  virtual ~RenderHost() = default;
+
+  // Render the scene into an offscreen texture instead of the window.
+  virtual void EnableSceneTexture(bool enabled) {}
+  // Size of the offscreen texture; takes effect from the next frame.
+  virtual void SetSceneViewportSize(int width, int height) {}
+  // ImTextureID of the offscreen texture, or 0 before it exists.
+  virtual uint64_t GetSceneTexture() const { return 0; }
+  // The FPS overlay drawn in the top-left corner.
+  virtual void SetShowRenderStats(bool show) {}
+  virtual int GetAverageFps() const { return 0; }
+  virtual void SetWindowTitle(const std::string& title) {}
+};
 
 /**
  * @brief Universal abstraction around how worlds are created and modified
@@ -41,6 +64,13 @@ class GameScene {
   virtual void OnTick(double delta_t) = 0;   // delta time in ms
   virtual void OnDestroy() = 0;
 
+  /**
+   * @brief Called when the user tries to close the window
+   * @return false to keep the window open (e.g. to ask about unsaved work);
+   * call QuitScene() later to close it
+   */
+  virtual bool OnCloseRequested() { return true; }
+
   bool GetCameraProj(glm::mat4x4&);
 
   std::vector<StaticVertex> GetStaticVertices();
@@ -56,6 +86,7 @@ class GameScene {
   entt::registry& GetRegistry() { return object_manager_->GetRegistry(); }
 
   void SetInputManager(InputManager*);
+  void SetRenderHost(RenderHost* host) { render_host_ = host; }
 
   void QuitScene();
   bool ShouldQuit() const;
@@ -70,6 +101,7 @@ class GameScene {
   std::shared_ptr<PhysicsEngine> physics_engine_ = nullptr;
   kEntityId player_camera_ = entt::null;
   InputManager* input_manager_ = nullptr;
+  RenderHost* render_host_ = nullptr;
 
  private:
   float width_ = 0.0;

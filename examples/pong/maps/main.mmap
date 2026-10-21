@@ -1,0 +1,150 @@
+[mmap format=1]
+
+[ext_resource type="Material" path="res://assets/white.masset" id="1"]
+[ext_resource type="PhysicsMaterial" path="res://assets/frictionless.masset" id="2"]
+[ext_resource type="PhysicsMaterial" path="res://assets/bouncy.masset" id="3"]
+
+[node name="Pong"]
+
+[component type="Transform" node="."]
+
+[component type="PongGame" node="."]
+ball = NodePath("Ball")
+show_debug = true
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+
+[component type="Camera" node="Camera"]
+fit_height = 90.0
+
+[node name="Player" parent="."]
+
+[component type="Transform" node="Player"]
+position = Vector3(-68, 0, 0)
+scale = Vector3(2, 10, 1)
+
+[component type="SpriteRenderer" node="Player"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Player"]
+motion_type = "kinematic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+[component type="BoxCollider" node="Player"]
+size = Vector3(1, 1, 10)
+material = ExtResource("2")
+
+[component type="Paddle" node="Player"]
+limit = 40.0
+
+[component type="PlayerController" node="Player"]
+speed = 70.0
+up_key = "W"
+down_key = "S"
+
+[node name="Enemy" parent="."]
+
+[component type="Transform" node="Enemy"]
+position = Vector3(68, 0, 0)
+scale = Vector3(2, 10, 1)
+
+[component type="SpriteRenderer" node="Enemy"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Enemy"]
+motion_type = "kinematic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+[component type="BoxCollider" node="Enemy"]
+size = Vector3(1, 1, 10)
+material = ExtResource("2")
+
+[component type="Paddle" node="Enemy"]
+limit = 40.0
+
+[component type="EnemyAI" node="Enemy"]
+ball = NodePath("Ball")
+speed = 45.0
+gain = 8.0
+
+[node name="Ball" parent="."]
+
+[component type="Transform" node="Ball"]
+scale = Vector3(2, 2, 1)
+
+[component type="SpriteRenderer" node="Ball"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Ball"]
+motion_type = "dynamic"
+allowed_dofs = "translation_xy"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+[component type="BoxCollider" node="Ball"]
+size = Vector3(1, 1, 10)
+material = ExtResource("3")
+
+[component type="Ball" node="Ball"]
+speed = 60.0
+min_horizontal = 0.45
+serve_angle = 35.0
+
+[node name="Walls" parent="."]
+
+[component type="Transform" node="Walls"]
+
+[node name="Top" parent="Walls"]
+
+[component type="Transform" node="Walls/Top"]
+position = Vector3(0, 45, 0)
+
+[component type="PlaneCollider" node="Walls/Top"]
+normal = Vector3(0, -1, 0)
+
+[node name="Bottom" parent="Walls"]
+
+[component type="Transform" node="Walls/Bottom"]
+position = Vector3(0, -45, 0)
+
+[component type="PlaneCollider" node="Walls/Bottom"]
+normal = Vector3(0, 1, 0)
+
+[node name="Left" parent="Walls"]
+
+[component type="Transform" node="Walls/Left"]
+position = Vector3(-80, 0, 0)
+
+[component type="PlaneCollider" node="Walls/Left"]
+normal = Vector3(1, 0, 0)
+
+[component type="Goal" node="Walls/Left"]
+scorer = "enemy"
+game = NodePath(".")
+
+[node name="Right" parent="Walls"]
+
+[component type="Transform" node="Walls/Right"]
+position = Vector3(80, 0, 0)
+
+[component type="PlaneCollider" node="Walls/Right"]
+normal = Vector3(-1, 0, 0)
+
+[component type="Goal" node="Walls/Right"]
+scorer = "player"
+game = NodePath(".")
