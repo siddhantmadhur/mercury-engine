@@ -48,6 +48,8 @@ class Mesh {
   mAABB GetAABB();
 
   float opacity_ = 1.0f;
+  float roughness_ = 0.5f;
+  float metallic_ = 0.0f;
 
   float GetHeight();
 

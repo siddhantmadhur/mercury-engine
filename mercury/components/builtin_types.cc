@@ -83,6 +83,8 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
       break;
   }
   if (!mesh) return;
+  mesh->roughness_ = material.roughness;
+  mesh->metallic_ = material.metallic;
   scene.Objects().AddProperty(entity, std::move(*mesh));
   if (material.texture.IsSet()) {
     if (auto texture = scene.GetTexture(material.texture.path)) {

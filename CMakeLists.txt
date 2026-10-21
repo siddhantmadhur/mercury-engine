@@ -201,6 +201,7 @@ set(DXC_COMMON_FLAGS -spirv
 set(SHADER_JOBS
         "main.vs.hlsl|vs_6_0|main.vs.spv"
         "static.vs.hlsl|vs_6_0|static.vs.spv"
+        "shadow.vs.hlsl|vs_6_0|shadow.vs.spv"
         "textured.ps.hlsl|ps_6_0|textured.ps.spv")
 set(SPV_OUTS "")
 foreach (JOB ${SHADER_JOBS})

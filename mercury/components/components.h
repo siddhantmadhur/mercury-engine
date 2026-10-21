@@ -125,12 +125,22 @@ struct DirectionalLight {
   glm::vec4 color = glm::vec4(1.0f);
   float intensity = 1.0f;
   glm::vec4 ambient = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
+  bool cast_shadows = true;
+  float shadow_bias = 0.0015f;
+  float shadow_normal_bias = 0.035f;
+  float shadow_distance = 120.0f;
 
   void Reflect(Reflector& r) {
     r.Field("color", color);
     r.Field("intensity", intensity);
     r.Field("ambient", ambient)
         .Tooltip("Light that reaches every surface, even facing away");
+    r.Field("cast_shadows", cast_shadows).Tooltip("Enable shadow casting");
+    r.Field("shadow_bias", shadow_bias).Tooltip("Depth bias against shadow acne");
+    r.Field("shadow_normal_bias", shadow_normal_bias)
+        .Tooltip("Normal offset bias for sloped geometry");
+    r.Field("shadow_distance", shadow_distance)
+        .Tooltip("Shadow coverage distance");
   }
 };
 
@@ -269,10 +279,16 @@ struct PlaneCollider {
 struct MaterialAsset {
   glm::vec4 color = glm::vec4(1.0f);
   AssetRef texture;
+  float roughness = 0.5f;
+  float metallic = 0.0f;
 
   void Reflect(Reflector& r) {
     r.Field("color", color);
     r.Field("texture", texture, "Texture").Tooltip("A .png or .jpg file");
+    r.Field("roughness", roughness)
+        .Tooltip("PBR surface roughness [0.0 = mirror, 1.0 = matte]");
+    r.Field("metallic", metallic)
+        .Tooltip("PBR metalness [0.0 = dielectric, 1.0 = pure metal]");
   }
 };
 

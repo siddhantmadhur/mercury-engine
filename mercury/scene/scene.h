@@ -49,6 +49,10 @@ struct SceneLighting {
   glm::vec3 direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f));
   glm::vec3 color = glm::vec3(1.0f);  // color * intensity
   glm::vec3 ambient = glm::vec3(0.2f);
+  bool cast_shadows = true;
+  float shadow_bias = 0.0015f;
+  float shadow_normal_bias = 0.035f;
+  float shadow_distance = 120.0f;
 };
 
 /**

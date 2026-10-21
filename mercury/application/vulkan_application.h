@@ -20,14 +20,16 @@ namespace Mercury {
 // starts on a 16-byte boundary).
 struct CameraCBuffer {
   PQ_MATRIX mWorldViewProj;
-  PQ_FLOAT2 mResolution;
-  PQ_FLOAT2 _pad;
+  PQ_MATRIX mLightViewProj;
   PQ_FLOAT4 mLightDirection;  // xyz: the way the light travels
   PQ_FLOAT4 mLightColor;      // rgb: color * intensity
   PQ_FLOAT4 mAmbientColor;
   PQ_FLOAT4 mCameraPosition;
+  PQ_FLOAT2 mResolution;
+  PQ_FLOAT2 mShadowParams;    // x: shadow map resolution, y: normal bias
 };
-static_assert(offsetof(CameraCBuffer, mLightDirection) == 80);
+static_assert(offsetof(CameraCBuffer, mLightDirection) == 128);
+static_assert(sizeof(CameraCBuffer) == 208);
 
 // Cached per-mesh draw-call info, rebuilt only when entities are added or
 // removed. instance_count counts how many instance slots in the persistent
@@ -75,8 +77,10 @@ class VulkanApplication : public Application {
     VkSemaphore image_available = VK_NULL_HANDLE;
     VkFence in_flight = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    VkDescriptorSet shadow_descriptor_set = VK_NULL_HANDLE;
 
     vk::Buffer camera_ubo;
+    vk::Buffer shadow_ubo;
     vk::Buffer vertices;
     vk::Buffer indices;
     vk::Buffer static_vertices;
@@ -91,11 +95,14 @@ class VulkanApplication : public Application {
   bool CreateFrameResources();
   bool CreateDescriptors();
   bool CreatePipelines();
+  bool CreateShadowResources();
   bool CreateAtlasImage(uint32_t width, uint32_t height);
   void WriteDescriptorSets();
   bool InitImGui();
   void RecreateSwapchain();
   VkShaderModule LoadShaderModule(const std::string& file_name) const;
+
+  void RecordShadowDraws(VkCommandBuffer cmd, FrameData& frame);
 
   // Records a one-off command buffer and waits for it to finish.
   template <typename F>
@@ -160,6 +167,13 @@ class VulkanApplication : public Application {
   VkPipeline instanced_pipeline_ = VK_NULL_HANDLE;
   VkPipeline static_pipeline_ = VK_NULL_HANDLE;
   VkSampler texture_sampler_ = VK_NULL_HANDLE;
+
+  static constexpr uint32_t kShadowMapResolution = 2048;
+  vk::Image shadow_image_;
+  VkSampler shadow_sampler_ = VK_NULL_HANDLE;
+  VkPipeline shadow_pipeline_ = VK_NULL_HANDLE;
+  VkPipelineLayout shadow_pipeline_layout_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout shadow_descriptor_set_layout_ = VK_NULL_HANDLE;
 
   vk::Buffer instance_buffer_;  // device-local, kMaxInstances records
   std::vector<VkBufferCopy> instance_copies_;  // staged this frame

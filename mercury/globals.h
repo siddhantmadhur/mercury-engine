@@ -71,6 +71,7 @@ struct VsModelBuffer {
   float opacity;
   PQ_MATRIX world_;
   PQ_FLOAT4 atlas_uv;
+  PQ_FLOAT4 material_params;  // x: roughness, y: metallic, z: reflectance, w: ao
 };
 
 // The Vulkan vertex input descriptions and the HLSL vertex shaders depend on
@@ -87,11 +88,12 @@ static_assert(offsetof(StaticVertex, color) == 12);
 static_assert(offsetof(StaticVertex, uv) == 28);
 static_assert(offsetof(StaticVertex, atlas_uv) == 36);
 
-static_assert(sizeof(VsModelBuffer) == 96);
+static_assert(sizeof(VsModelBuffer) == 112);
 static_assert(offsetof(VsModelBuffer, scale) == 0);
 static_assert(offsetof(VsModelBuffer, opacity) == 12);
 static_assert(offsetof(VsModelBuffer, world_) == 16);
 static_assert(offsetof(VsModelBuffer, atlas_uv) == 80);
+static_assert(offsetof(VsModelBuffer, material_params) == 96);
 
 #define MERCURY_SAFE_FREE(pointer) \
   {                               \
