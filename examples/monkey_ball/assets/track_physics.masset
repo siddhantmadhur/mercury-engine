@@ -1,0 +1,3 @@
+[masset type="PhysicsMaterial" format=1]
+friction = 0.85
+restitution = 0.05

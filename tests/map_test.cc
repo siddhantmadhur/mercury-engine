@@ -43,6 +43,17 @@ TEST(Map, RollABallMapRoundTripsByteForByte) {
   EXPECT_EQ(map.SaveToString(), original);
 }
 
+TEST(Map, MonkeyBallMapRoundTripsByteForByte) {
+  const auto path = std::filesystem::path(MERCURY_SOURCE_DIR) /
+                    "examples/monkey_ball/maps/main.mmap";
+  const std::string original = ReadFile(path);
+  ASSERT_FALSE(original.empty());
+  Map map;
+  std::string error;
+  ASSERT_TRUE(map.LoadFromString(original, &error)) << error;
+  EXPECT_EQ(map.SaveToString(), original);
+}
+
 TEST(Project, ReadsGravity) {
   std::string error;
   auto project = Project::Load(std::filesystem::path(MERCURY_SOURCE_DIR) /
