@@ -42,7 +42,8 @@ struct TransformComponent {
 
   void Reflect(Reflector& r) {
     r.Field("position", position);
-    r.Field("rotation", rotation).Tooltip("Euler angles in degrees");
+    r.Field("rotation", rotation)
+        .Tooltip("Euler angles in degrees, applied X, then Y, then Z");
     r.Field("scale", scale).Tooltip("Also the size of a sprite");
   }
 };
@@ -62,22 +63,74 @@ struct SpriteRenderer {
   }
 };
 
+enum class MeshShape { kCube, kSphere, kCapsule, kCylinder, kPlane, kQuad, kModel };
+
 /**
- * @brief Perspective camera looking down -Z (for 2D games) or along the
- * Transform's rotation
+ * @brief Draws a lit 3D shape, or a model file, sized by the Transform's scale
+ *
+ * See properties/primitives.h for each shape's size at scale 1.
+ */
+struct MeshRenderer {
+  MeshShape mesh = MeshShape::kCube;
+  AssetRef model;
+  glm::vec4 color = glm::vec4(1.0f);
+  AssetRef material;
+  bool visible = true;
+
+  void Reflect(Reflector& r) {
+    r.Enum("mesh", mesh,
+           {"cube", "sphere", "capsule", "cylinder", "plane", "quad", "model"})
+        .Tooltip("A built-in shape, or \"model\" to use the model file");
+    r.Field("model", model, "Model")
+        .Tooltip("A .obj, .gltf, .glb or .fbx file, used when mesh = model");
+    r.Field("color", color).Tooltip("Multiplied with the material color");
+    r.Field("material", material, "Material");
+    r.Field("visible", visible);
+  }
+};
+
+/**
+ * @brief Perspective camera looking along -Z of its Transform's rotation
  */
 struct CameraComponent {
   float fov = 60.0f;
   float fit_height = 0.0f;
+  float near_clip = 0.1f;
+  float far_clip = 1000.0f;
+  glm::vec4 background = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
   bool current = true;
 
   void Reflect(Reflector& r) {
     r.Field("fov", fov).Tooltip("Vertical field of view in degrees");
     r.Field("fit_height", fit_height)
         .Tooltip(
-            "If above 0, the camera looks down -Z from far enough away that "
-            "this many world units fit vertically on the z = 0 plane");
+            "For 2D games: if above 0, the camera ignores its rotation and "
+            "looks down -Z from far enough away that this many world units "
+            "fit vertically on the z = 0 plane");
+    r.Field("near_clip", near_clip).Tooltip("Closest distance drawn");
+    r.Field("far_clip", far_clip).Tooltip("Farthest distance drawn");
+    r.Field("background", background).Tooltip("Color behind everything");
     r.Field("current", current).Tooltip("Render the game from this camera");
+  }
+};
+
+/**
+ * @brief Sunlight: parallel rays along -Z of the Transform's rotation
+ *
+ * Lights every MeshRenderer in the map; sprites are never lit. A map uses
+ * its first DirectionalLight. Without one, a default light shines down from
+ * the front.
+ */
+struct DirectionalLight {
+  glm::vec4 color = glm::vec4(1.0f);
+  float intensity = 1.0f;
+  glm::vec4 ambient = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
+
+  void Reflect(Reflector& r) {
+    r.Field("color", color);
+    r.Field("intensity", intensity);
+    r.Field("ambient", ambient)
+        .Tooltip("Light that reaches every surface, even facing away");
   }
 };
 
@@ -99,6 +152,7 @@ enum class MotionQuality { kDiscrete, kLinearCast };
  */
 struct Rigidbody {
   MotionType motion_type = MotionType::kDynamic;
+  float mass = 1.0f;
   AllowedDofs allowed_dofs = AllowedDofs::kAll;
   MotionQuality motion_quality = MotionQuality::kDiscrete;
   float gravity_factor = 1.0f;
@@ -115,6 +169,7 @@ struct Rigidbody {
            {"all", "translation_xyz", "translation_xy", "plane_2d",
             "translation_x", "translation_y"})
         .Tooltip("Which axes the body may move or rotate along");
+    r.Field("mass", mass).Tooltip("In kilograms");
     r.Enum("motion_quality", motion_quality, {"discrete", "linear_cast"})
         .Tooltip("linear_cast stops fast bodies tunneling through others");
     r.Field("gravity_factor", gravity_factor);
@@ -134,6 +189,60 @@ struct BoxCollider {
 
   void Reflect(Reflector& r) {
     r.Field("size", size).Tooltip("Multiplied by the Transform's scale");
+    r.Field("material", material, "PhysicsMaterial");
+    r.Field("is_trigger", is_trigger)
+        .Tooltip("Reports collisions without pushing bodies apart");
+  }
+};
+
+/**
+ * @brief Sphere collision shape; the radius is multiplied by the largest of
+ * the Transform's scale axes
+ */
+struct SphereCollider {
+  float radius = 0.5f;
+  AssetRef material;
+  bool is_trigger = false;
+
+  void Reflect(Reflector& r) {
+    r.Field("radius", radius);
+    r.Field("material", material, "PhysicsMaterial");
+    r.Field("is_trigger", is_trigger)
+        .Tooltip("Reports collisions without pushing bodies apart");
+  }
+};
+
+/**
+ * @brief Capsule along Y. The radius is scaled by the larger of the X and Z
+ * scale, the height by the Y scale.
+ */
+struct CapsuleCollider {
+  float radius = 0.5f;
+  float height = 2.0f;
+  AssetRef material;
+  bool is_trigger = false;
+
+  void Reflect(Reflector& r) {
+    r.Field("radius", radius);
+    r.Field("height", height).Tooltip("Total height, including the round ends");
+    r.Field("material", material, "PhysicsMaterial");
+    r.Field("is_trigger", is_trigger)
+        .Tooltip("Reports collisions without pushing bodies apart");
+  }
+};
+
+/**
+ * @brief Cylinder along Y, scaled like a CapsuleCollider
+ */
+struct CylinderCollider {
+  float radius = 0.5f;
+  float height = 2.0f;
+  AssetRef material;
+  bool is_trigger = false;
+
+  void Reflect(Reflector& r) {
+    r.Field("radius", radius);
+    r.Field("height", height);
     r.Field("material", material, "PhysicsMaterial");
     r.Field("is_trigger", is_trigger)
         .Tooltip("Reports collisions without pushing bodies apart");

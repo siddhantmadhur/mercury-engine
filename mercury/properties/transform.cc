@@ -10,6 +10,8 @@
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/trigonometric.hpp"
 
+#include <cmath>
+
 namespace Mercury {
 Transform::Transform() : transformations_(0) {
   this->position_ = glm::vec3(0.0f);
@@ -85,21 +87,22 @@ void Transform::Interpolate(float alpha) {
   interpolated_position_ = glm::mix(previous_position_, position_, a);
   interpolated_rotation_ = glm::mix(previous_rotation_, rotation_, a);
   interpolated_scale_ = glm::mix(previous_scale_, scale_, a);
-  if (interpolated_rotation_ != last_built_rotation_) {
-    // Identity fast path — most entities don't rotate at all, skip three
-    // glm::rotate calls (each costs a sin/cos + 4x4 multiply).
-    if (interpolated_rotation_ == glm::vec3(0.0f)) {
-      rotation_matrix_ = glm::mat4(1.0f);
+  // Rebuild the matrix only when what it is built from changed.
+  const float matrix_alpha = previous_rotation_ == rotation_ ? 1.0f : a;
+  if (previous_rotation_ != matrix_previous_ || rotation_ != matrix_current_ ||
+      matrix_alpha != matrix_alpha_) {
+    matrix_previous_ = previous_rotation_;
+    matrix_current_ = rotation_;
+    matrix_alpha_ = matrix_alpha;
+    if (previous_rotation_ == glm::vec3(0.0f) &&
+        rotation_ == glm::vec3(0.0f)) {
+      rotation_matrix_ = glm::mat4(1.0f);  // most entities never rotate
     } else {
-      constexpr float kConv = 360.0f;
-      glm::mat4 m(1.0f);
-      m = glm::rotate(m, glm::radians(interpolated_rotation_.x * kConv),
-                      glm::vec3(1.0f, 0.0f, 0.0f));
-      m = glm::rotate(m, glm::radians(interpolated_rotation_.y * kConv),
-                      glm::vec3(0.0f, 1.0f, 0.0f));
-      m = glm::rotate(m, glm::radians(interpolated_rotation_.z * kConv),
-                      glm::vec3(0.0f, 0.0f, 1.0f));
-      rotation_matrix_ = m;
+      // Slerp rather than mixing angles, so a body whose angle wraps from
+      // 179 to -179 degrees turns 2 degrees instead of spinning back.
+      rotation_matrix_ = glm::mat4_cast(
+          glm::slerp(EulerToQuat(previous_rotation_), EulerToQuat(rotation_),
+                     matrix_alpha));
     }
   }
   if (interpolated_position_ != last_built_position_ ||
@@ -107,6 +110,19 @@ void Transform::Interpolate(float alpha) {
       interpolated_scale_ != last_built_scale_) {
     dirty_ = true;
   }
+}
+
+glm::quat Transform::EulerToQuat(glm::vec3 degrees) {
+  return glm::quat(glm::radians(degrees));
+}
+
+glm::vec3 Transform::QuatToEuler(glm::quat rotation) {
+  glm::vec3 degrees = glm::degrees(glm::eulerAngles(rotation));
+  // Tidy values that are 0 up to rounding, so saved maps stay readable.
+  for (int i = 0; i < 3; i++) {
+    if (std::abs(degrees[i]) < 1e-4f) degrees[i] = 0.0f;
+  }
+  return degrees;
 }
 
 void Transform::CaptureTickSnapshot() {

@@ -4,6 +4,7 @@
 
 #include "camera.h"
 
+#include <algorithm>
 #include <glm/glm.hpp>
 
 #include "imgui.h"
@@ -23,7 +24,7 @@ glm::mat4 Camera::GetProjection(float width, float height) {
   float size = 40.0f;
   float aspect = width / height;
 
-  glm::mat4 proj = glm::perspective(glm::radians(fov_), aspect, 0.1f, 1000.0f);
+  glm::mat4 proj = glm::perspective(glm::radians(fov_), aspect, near_, far_);
 
 #endif
 
@@ -44,16 +45,27 @@ static glm::vec3 DirectionFromEuler(float pitch_deg, float yaw_deg) {
 }
 
 glm::vec3 Camera::GetDirection(const Transform& t) const {
+  if (use_object_rotation_) {
+    return t.GetRotationQuat() * glm::vec3(0.0f, 0.0f, -1.0f);
+  }
   auto rot = t.GetRotate();
   return DirectionFromEuler(rot.x, rot.y);
 }
 
 glm::vec3 Camera::GetInterpolatedDirection(const Transform& t) const {
+  if (use_object_rotation_) {
+    return glm::mat3(t.GetRotationMatrix()) * glm::vec3(0.0f, 0.0f, -1.0f);
+  }
   auto rot = t.GetInterpolatedRotation();
   return DirectionFromEuler(rot.x, rot.y);
 }
 
 void Camera::SetFOV(float fov) { this->fov_ = fov; }
+
+void Camera::SetClipPlanes(float near_plane, float far_plane) {
+  near_ = std::max(near_plane, 1e-4f);
+  far_ = std::max(far_plane, near_ * 2.0f);
+}
 
 glm::vec3 Camera::GetRayFromScreen(glm::vec2 cursor, glm::vec2 res,
                                    const Transform& t) {
@@ -88,6 +100,9 @@ glm::mat4 Camera::GetView(const Transform& t) {
 
   glm::vec3 cameraPos(position);
   glm::vec3 cameraUp(0.0, 1.0, 0.0);
+  if (use_object_rotation_) {
+    cameraUp = glm::mat3(t.GetRotationMatrix()) * glm::vec3(0.0f, 1.0f, 0.0f);
+  }
 
   glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 #endif

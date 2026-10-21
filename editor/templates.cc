@@ -80,20 +80,53 @@ std::string ToSnakeCase(const std::string& name) {
   return out;
 }
 
-std::string NewMapText(const std::string& root_name) {
+std::string NewMapText(const std::string& root_name, bool is_3d) {
   Map map;
   map.RenameNode(map.GetRoot(), root_name);
   map.GetRoot()->components.push_back({"Transform", {}});
-  auto camera = map.AddNode(map.GetRoot(), "Camera");
-  camera->components.push_back({"Transform", {}});
-  ComponentData settings{"Camera", {}};
-  settings.properties.Set("fit_height", 90.0);
-  camera->components.push_back(std::move(settings));
+
+  auto add_node = [&](const char* name, glm::vec3 position,
+                      glm::vec3 rotation = glm::vec3(0.0f),
+                      glm::vec3 scale = glm::vec3(1.0f)) {
+    MapNode* node = map.AddNode(map.GetRoot(), name);
+    ComponentData transform{"Transform", {}};
+    if (position != glm::vec3(0.0f)) transform.properties.Set("position", position);
+    if (rotation != glm::vec3(0.0f)) transform.properties.Set("rotation", rotation);
+    if (scale != glm::vec3(1.0f)) transform.properties.Set("scale", scale);
+    node->components.push_back(std::move(transform));
+    return node;
+  };
+
+  if (!is_3d) {
+    MapNode* camera = add_node("Camera", glm::vec3(0.0f));
+    ComponentData settings{"Camera", {}};
+    settings.properties.Set("fit_height", 90.0);
+    camera->components.push_back(std::move(settings));
+    return map.SaveToString();
+  }
+
+  add_node("Camera", {0, 3, 8}, {-15, 0, 0})->components.push_back({"Camera", {}});
+  add_node("Sun", {0, 6, 0}, {-50, -30, 0})
+      ->components.push_back({"DirectionalLight", {}});
+
+  MapNode* ground = add_node("Ground", glm::vec3(0.0f), glm::vec3(0.0f),
+                             {20, 1, 20});
+  ComponentData plane{"MeshRenderer", {}};
+  plane.properties.Set("mesh", std::string("plane"));
+  plane.properties.Set("color", mtext::Color{glm::vec4(0.55f, 0.58f, 0.62f, 1.0f)});
+  ground->components.push_back(std::move(plane));
+  ComponentData ground_collider{"BoxCollider", {}};
+  ground_collider.properties.Set("size", glm::vec3(1.0f, 0.01f, 1.0f));
+  ground->components.push_back(std::move(ground_collider));
+
+  MapNode* cube = add_node("Cube", {0, 0.5f, 0});
+  cube->components.push_back({"MeshRenderer", {}});
+  cube->components.push_back({"BoxCollider", {}});
   return map.SaveToString();
 }
 
 fs::path CreateProject(const fs::path& parent, const std::string& name,
-                       std::string* error) {
+                       bool is_3d, std::string* error) {
   if (name.empty()) {
     if (error) *error = "the project needs a name";
     return {};
@@ -138,7 +171,7 @@ mercury_add_game({2} PROJECT ${{CMAKE_CURRENT_SOURCE_DIR}})
                  "# Build output and editor caches\n.mercury/\n", error)) {
     return {};
   }
-  if (!WriteText(root / "maps" / "main.mmap", NewMapText(name), error)) {
+  if (!WriteText(root / "maps" / "main.mmap", NewMapText(name, is_3d), error)) {
     return {};
   }
   if (!CreateAsset(root / "assets" / "default.masset", "Material")) {

@@ -59,6 +59,13 @@ class EditorScene : public MapScene {
   MapNode* GetSelectedNode();
   void Select(const MapNode* node);
   MapNode* CreateNode(MapNode* parent, const std::string& name);
+  // Things the Create menus can add, like Unity's GameObject menu.
+  enum class Preset {
+    kEmpty, kCube, kSphere, kCapsule, kCylinder, kPlane, kQuad,
+    kSprite, kDirectionalLight, kCamera,
+  };
+  MapNode* CreatePreset(MapNode* parent, Preset preset);
+  void DrawCreateMenuItems(MapNode* parent);
   void DeleteSelected();
   void DuplicateSelected();
 
@@ -74,7 +81,6 @@ class EditorScene : public MapScene {
   void DrawNodeInspector(MapNode& node);
   void DrawAssetInspector(const std::string& res_path);
   void DrawScene();
-  void DrawSceneGizmos(ImDrawList* draw, ImVec2 origin, ImVec2 size);
   void DrawProjectBrowser();
   void DrawProjectDirectory(const std::filesystem::path& dir);
   void DrawConsole();
@@ -89,13 +95,49 @@ class EditorScene : public MapScene {
   bool DrawNodePicker(const char* label, std::string& path);
 
   // ----------------------------------------------------------- scene view
+  struct Ray {
+    glm::vec3 origin;
+    glm::vec3 direction;
+  };
+  enum class Tool { kMove, kRotate, kScale };
+  // What a left-drag in the Scene view is changing.
+  enum class Drag { kNone, kBody, kAxis, kPlane, kRotate, kScale, kUniformScale, kOrbit };
+
   void UpdateEditorCamera();
+  glm::vec3 CameraForward() const;
+  glm::vec3 CameraPosition() const;
   glm::mat4 GetViewProjection() const;
-  std::optional<glm::vec3> ScreenToWorld(ImVec2 pixel) const;  // on z = 0
-  ImVec2 WorldToScreen(glm::vec3 world) const;
-  MapNode* PickNode(glm::vec3 world_point);
-  // World-space bounds used for picking and the selection outline.
-  bool GetNodeBounds(kEntityId entity, glm::vec3& min, glm::vec3& max);
+  Ray ScreenRay(ImVec2 pixel) const;
+  // false if the point is behind the camera
+  bool WorldToScreen(glm::vec3 world, ImVec2& pixel) const;
+  // World units covered by one pixel at the depth of `point`
+  float WorldPerPixel(glm::vec3 point) const;
+  void DrawLine3D(ImDrawList* draw, glm::vec3 a, glm::vec3 b, ImU32 color,
+                  float thickness = 1.0f) const;
+  void DrawCircle3D(ImDrawList* draw, glm::vec3 center, glm::vec3 axis,
+                    float radius, ImU32 color, float thickness = 1.0f) const;
+  void DrawBox3D(ImDrawList* draw, const glm::mat4& model, glm::vec3 min,
+                 glm::vec3 max, ImU32 color, float thickness = 1.0f) const;
+  void DrawGrid(ImDrawList* draw);
+  void DrawNodeGizmos(ImDrawList* draw, const MapNode& node);
+  void DrawToolHandles(ImDrawList* draw);
+  void DrawSceneToolbar();
+  void DrawAxisIndicator(ImDrawList* draw);
+  void HandleSceneCamera(bool hovered, bool active);
+  // Starts a handle drag if the mouse is over one of the selection's handles.
+  bool BeginHandleDrag(ImVec2 mouse);
+  void UpdateDrag(ImVec2 mouse);
+  void SetSelectedTransform(const char* key, glm::vec3 value);
+  MapNode* PickNode(ImVec2 pixel);
+  // Model matrix (position, rotation, scale) and local bounds of what the
+  // node draws or collides with, for picking and outlines.
+  bool GetNodeBounds(kEntityId entity, glm::mat4& model, glm::vec3& min,
+                     glm::vec3& max);
+  glm::mat4 GetNodeMatrix(kEntityId entity, bool with_scale = true);
+  void FrameSelected();
+  void FrameMap();
+  // Guess from the map's contents whether the 2D or 3D view suits it.
+  bool MapLooks3D() const;
 
   // -------------------------------------------------------------- assets
   std::vector<std::string> ListProjectFiles(
@@ -124,19 +166,36 @@ class EditorScene : public MapScene {
   std::string selected_asset_;  // res:// path shown in the Inspector
   uint64_t rename_uid_ = 0;     // node being renamed in the Hierarchy
 
-  // Scene view state
+  // Scene view state. The editor camera looks at camera_target_ from
+  // camera_distance_ away; in 2D it looks straight down -Z.
+  bool view_2d_ = true;
+  Tool tool_ = Tool::kMove;
   glm::vec3 camera_target_ = glm::vec3(0.0f);
   float camera_distance_ = 120.0f;
+  float camera_yaw_ = 35.0f;     // degrees, 3D only
+  float camera_pitch_ = -25.0f;  // degrees, 3D only
   ImVec2 scene_origin_ = {0, 0};
   ImVec2 scene_size_ = {1, 1};
-  bool dragging_node_ = false;
+  Drag drag_ = Drag::kNone;
+  int drag_axis_ = 0;
+  glm::vec3 drag_axis_dir_ = glm::vec3(1, 0, 0);
+  glm::vec3 drag_origin_ = glm::vec3(0.0f);  // the node's world position
+  glm::vec3 drag_plane_normal_ = glm::vec3(0, 0, 1);
   glm::vec3 drag_start_world_ = glm::vec3(0.0f);
   glm::vec3 drag_start_local_ = glm::vec3(0.0f);
+  glm::vec3 drag_start_rotation_ = glm::vec3(0.0f);
+  glm::vec3 drag_start_scale_ = glm::vec3(1.0f);
+  float drag_start_param_ = 0.0f;
+  float drag_length_ = 1.0f;  // world length of the dragged handle
+  float drag_accum_ = 0.0f;   // radians turned so far by a rotate drag
+  ImVec2 drag_start_mouse_ = {0, 0};
+  int hovered_handle_ = -1;  // highlighted handle under the mouse
   float game_aspect_ = 16.0f / 9.0f;
 
   // Launcher / dialogs
   char open_path_[1024] = "";
   char new_project_name_[128] = "MyGame";
+  bool new_project_3d_ = false;
   char new_project_dir_[1024] = "";
   char new_name_[128] = "";
   std::filesystem::path new_item_dir_;

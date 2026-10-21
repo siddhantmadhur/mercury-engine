@@ -321,7 +321,7 @@ bool VulkanApplication::CreateDescriptors() {
 
   const VkDescriptorSetLayoutBinding bindings[] = {
       {kCameraBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-       VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
       {kAtlasBinding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
        VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
       {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
@@ -521,6 +521,7 @@ bool VulkanApplication::CreatePipelines() {
       {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
       {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, color)},
       {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)},
+      {10, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
       {3, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VsModelBuffer, scale)},
       {4, 1, VK_FORMAT_R32_SFLOAT, offsetof(VsModelBuffer, opacity)},
       {5, 1, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(VsModelBuffer, world_)},
@@ -945,6 +946,13 @@ void VulkanApplication::Render() {
       camera_.mResolution =
           PQ_FLOAT2{game_scene_->GetWidth(), game_scene_->GetHeight()};
     }
+    const SceneLighting &lighting = game_scene_->GetLighting();
+    camera_.mLightDirection = PQ_FLOAT4(lighting.direction, 0.0f);
+    camera_.mLightColor = PQ_FLOAT4(lighting.color, 1.0f);
+    camera_.mAmbientColor = PQ_FLOAT4(lighting.ambient, 1.0f);
+    glm::vec3 camera_position(0.0f);
+    game_scene_->GetCameraPosition(camera_position);
+    camera_.mCameraPosition = PQ_FLOAT4(camera_position, 1.0f);
   }
   frame.camera_ubo.Write(&camera_, sizeof(camera_));
 
@@ -1042,7 +1050,7 @@ void VulkanApplication::Render() {
     color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color.clearValue.color = kClearColor;
+    color.clearValue.color = SceneClearColor();
     VkRenderingAttachmentInfo depth = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
     depth.imageView = scene_depth_.View();
@@ -1095,7 +1103,8 @@ void VulkanApplication::Render() {
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  color_attachment.clearValue.color = kClearColor;
+  color_attachment.clearValue.color =
+      scene_texture_enabled_ ? kClearColor : SceneClearColor();
 
   VkRenderingAttachmentInfo depth_attachment = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
@@ -1216,6 +1225,12 @@ void VulkanApplication::Render() {
   // Resizing between frames means this frame's ImGui draw data (which may
   // reference the old target) has already been submitted.
   if (scene_texture_enabled_ && scene_target_dirty_) RecreateSceneTarget();
+}
+
+VkClearColorValue VulkanApplication::SceneClearColor() const {
+  if (!game_scene_) return kClearColor;
+  const glm::vec4 c = game_scene_->GetClearColor();
+  return {{c.r, c.g, c.b, c.a}};
 }
 
 void VulkanApplication::RecordSceneDraws(VkCommandBuffer cmd, FrameData &frame,

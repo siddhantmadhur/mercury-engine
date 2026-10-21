@@ -30,6 +30,8 @@ add_library(mercury
         mercury/pobject/manager.h
         mercury/debugger/debugger.h
         mercury/properties/mesh.cc
+        mercury/properties/primitives.cc
+        mercury/properties/primitives.h
         mercury/properties/transform.h
         mercury/properties/transform.cc
         mercury/properties/transform.h
@@ -233,7 +235,8 @@ add_subdirectory(third_party/googletest EXCLUDE_FROM_ALL)
 add_executable(mercury_test
         tests/mtext_test.cc
         tests/map_test.cc
-        tests/reflection_test.cc)
+        tests/reflection_test.cc
+        tests/primitives_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -245,6 +248,7 @@ endif ()
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGame.cmake)
 if (MERCURY_BUILD_EXAMPLES)
     add_subdirectory(examples/pong)
+    add_subdirectory(examples/roll_a_ball)
 
     # Older examples that still build their worlds in code
     add_executable(example_breakout examples/breakout/main.cc

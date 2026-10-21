@@ -5,6 +5,9 @@
 #ifndef MERCURYENGINE_TRANSFORM_H
 #define MERCURYENGINE_TRANSFORM_H
 #include "glm/detail/func_packing_simd.inl"
+#include <vector>
+
+#include "glm/gtc/quaternion.hpp"
 #include "glm/mat4x4.hpp"
 #include "glm/vec3.hpp"
 
@@ -31,13 +34,19 @@ class Transform {
   void SetVelocity(glm::vec3);
 
   // Rotation is stored as Euler angles in degrees, vec3 = (pitch, yaw, roll)
-  // around the X, Y, and Z axes respectively.
+  // around the X, Y, and Z axes respectively. Meshes and physics bodies apply
+  // X first, then Y, then Z (R = Rz * Ry * Rx), the order glm::quat uses.
   void SetRotate(glm::vec3);
   void ChangeRotate(glm::vec3);
   glm::vec3 GetRotate() const;
   glm::vec3 GetInterpolatedRotation() const;
   glm::vec3 GetInterpolatedScale() const;
   glm::mat4 GetRotationMatrix() const;
+  glm::quat GetRotationQuat() const { return EulerToQuat(rotation_); }
+
+  // Degrees <-> quaternion with the rotation order described above.
+  static glm::quat EulerToQuat(glm::vec3 degrees);
+  static glm::vec3 QuatToEuler(glm::quat rotation);
 
   void SetVelocityMagnitude(float);
 
@@ -84,6 +93,10 @@ class Transform {
   glm::vec3 previous_scale_{};
 
   glm::mat4 rotation_matrix_ = glm::mat4(1.0f);
+  // What rotation_matrix_ was built from.
+  glm::vec3 matrix_previous_{};
+  glm::vec3 matrix_current_{};
+  float matrix_alpha_ = 1.0f;
 
   /**
    * A queue of fixed transformations made (like position and velocity) so that

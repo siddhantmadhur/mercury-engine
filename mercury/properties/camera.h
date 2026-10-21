@@ -24,6 +24,14 @@ class Camera {
   glm::vec3 GetInterpolatedDirection(const Transform& t) const;
 
   void SetFOV(float);
+  float GetFOV() const { return fov_; }
+  void SetClipPlanes(float near_plane, float far_plane);
+
+  // Off (the default, used by the hand-written examples): pitch and yaw
+  // point the camera and yaw 0 looks down +X. On (maps and the editor): the
+  // camera turns like any other object, so rotation (0, 0, 0) looks down -Z
+  // with +Y up, and roll is applied too.
+  void SetUseObjectRotation(bool enabled) { use_object_rotation_ = enabled; }
 
   glm::vec3 GetRayFromScreen(glm::vec2 cursor, glm::vec2 res,
                              const Transform& t);
@@ -35,6 +43,9 @@ class Camera {
   float fov_ = 60.0f;
 
   float zoom_ = 1.0f;
+  float near_ = 0.1f;
+  float far_ = 1000.0f;
+  bool use_object_rotation_ = false;
 };
 }  // namespace Mercury
 

@@ -25,6 +25,7 @@
 #include "debugger/debugger.h"
 #include "editor_scene.h"
 #include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
 
 namespace {
 
@@ -59,12 +60,20 @@ class ScriptedEditor : public Mercury::EditorScene {
     ImGuiIO& io = ImGui::GetIO();
     for (ImGuiKey key : held_) io.AddKeyEvent(key, false);
     held_.clear();
+    // While the real pointer is outside the window, the GLFW backend asks
+    // GLFW for the cursor position every frame, which would undo the
+    // scripted one. Telling it the cursor is inside turns that off.
+    if (has_mouse_) {
+      auto window = static_cast<GLFWwindow*>(ImGui::GetMainViewport()->PlatformHandle);
+      if (window) ImGui_ImplGlfw_CursorEnterCallback(window, GLFW_TRUE);
+      io.AddMousePosEvent(mouse_.x, mouse_.y);
+    }
     for (const auto& step : steps_) {
       if (step.frame != frame_) continue;
       if (step.command == "move" || step.command == "drag") {
-        io.AddMousePosEvent(std::stof(step.args[0]), std::stof(step.args[1]));
+        SetMouse(std::stof(step.args[0]), std::stof(step.args[1]));
       } else if (step.command == "click") {
-        io.AddMousePosEvent(std::stof(step.args[0]), std::stof(step.args[1]));
+        SetMouse(std::stof(step.args[0]), std::stof(step.args[1]));
         io.AddMouseButtonEvent(0, true);
         release_at_ = frame_ + 2;
       } else if (step.command == "down") {
@@ -90,6 +99,12 @@ class ScriptedEditor : public Mercury::EditorScene {
   bool OnCloseRequested() override { return true; }
 
  private:
+  void SetMouse(float x, float y) {
+    mouse_ = ImVec2(x, y);
+    has_mouse_ = true;
+    ImGui::GetIO().AddMousePosEvent(x, y);
+  }
+
   void PressKey(const std::string& chord) {
     ImGuiIO& io = ImGui::GetIO();
     std::stringstream parts(chord);
@@ -111,6 +126,8 @@ class ScriptedEditor : public Mercury::EditorScene {
   int frame_ = 0;
   int release_at_ = -1;
   std::vector<ImGuiKey> held_;
+  ImVec2 mouse_ = {0, 0};
+  bool has_mouse_ = false;
 };
 
 }  // namespace

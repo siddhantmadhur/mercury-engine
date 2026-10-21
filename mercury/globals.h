@@ -49,6 +49,8 @@ struct Vertex {
   PQ_FLOAT3 position;
   PQ_FLOAT3 color;
   PQ_FLOAT2 uv;
+  // Zero means unlit: sprites and 2D shapes ignore scene lighting.
+  PQ_FLOAT3 normal = PQ_FLOAT3(0.0f);
 };
 
 struct StaticVertex {
@@ -73,10 +75,11 @@ struct VsModelBuffer {
 
 // The Vulkan vertex input descriptions and the HLSL vertex shaders depend on
 // these exact layouts.
-static_assert(sizeof(Vertex) == 32);
+static_assert(sizeof(Vertex) == 44);
 static_assert(offsetof(Vertex, position) == 0);
 static_assert(offsetof(Vertex, color) == 12);
 static_assert(offsetof(Vertex, uv) == 24);
+static_assert(offsetof(Vertex, normal) == 32);
 
 static_assert(sizeof(StaticVertex) == 52);
 static_assert(offsetof(StaticVertex, position) == 0);

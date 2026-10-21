@@ -16,11 +16,18 @@
 
 namespace Mercury {
 
+// Matches VS_CAMERA_BUFFER in the shaders (std140-style: every float4
+// starts on a 16-byte boundary).
 struct CameraCBuffer {
   PQ_MATRIX mWorldViewProj;
   PQ_FLOAT2 mResolution;
   PQ_FLOAT2 _pad;
+  PQ_FLOAT4 mLightDirection;  // xyz: the way the light travels
+  PQ_FLOAT4 mLightColor;      // rgb: color * intensity
+  PQ_FLOAT4 mAmbientColor;
+  PQ_FLOAT4 mCameraPosition;
 };
+static_assert(offsetof(CameraCBuffer, mLightDirection) == 80);
 
 // Cached per-mesh draw-call info, rebuilt only when entities are added or
 // removed. instance_count counts how many instance slots in the persistent
@@ -56,9 +63,9 @@ class VulkanApplication : public Application {
  private:
   static constexpr uint32_t kFramesInFlight = 2;
   static constexpr UINT kMaxInstances = 8192;
-  static constexpr size_t kMaxVertices = 64000;
+  static constexpr size_t kMaxVertices = 1 << 19;
   static constexpr size_t kMaxStaticVertices = 640000;
-  static constexpr size_t kMaxIndices = 64000;
+  static constexpr size_t kMaxIndices = 1 << 20;
   static constexpr VkDeviceSize kInstanceBufferBytes =
       sizeof(VsModelBuffer) * kMaxInstances;
 
@@ -101,6 +108,7 @@ class VulkanApplication : public Application {
 
   // Binds the pipelines and records every scene draw into the current
   // rendering pass, with a viewport covering `extent`.
+  VkClearColorValue SceneClearColor() const;
   void RecordSceneDraws(VkCommandBuffer cmd, FrameData& frame,
                         VkExtent2D extent, bool draw_static,
                         UINT static_index_count, bool draw_instanced);
