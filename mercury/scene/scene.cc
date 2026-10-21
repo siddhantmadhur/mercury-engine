@@ -27,6 +27,13 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
 
   return true;
 }
+bool GameScene::GetCameraPosition(glm::vec3& position) {
+  auto transform = object_manager_->GetProperty<Transform>(player_camera_);
+  if (!transform) return false;
+  position = transform->GetInterpolatedPosition();
+  return true;
+}
+
 std::vector<StaticVertex> GameScene::GetStaticVertices() {
   return object_manager_->GetStaticVertices();
 }

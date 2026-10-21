@@ -53,6 +53,10 @@ class GameObject {
   template <typename B>
   B* GetBehaviour() const;
 
+  // Removes the object and its children at the end of the current tick or
+  // frame. Their scripts get OnDestroy.
+  void Destroy() const;
+
   bool operator==(const GameObject& other) const {
     return scene_ == other.scene_ && entity_ == other.entity_;
   }
@@ -119,6 +123,11 @@ class MapScene : public GameScene {
 
   // Loads (once) a texture owned by the scene; nullptr if it can't be read.
   Texture2D* GetTexture(std::string_view res_path);
+  // Loads (once) a model file; nullptr if it can't be read.
+  const Mesh* GetModel(std::string_view res_path);
+
+  // See GameObject::Destroy.
+  void Destroy(GameObject object);
 
   kEntityId GetActiveCamera() const { return player_camera_; }
 
@@ -138,8 +147,10 @@ class MapScene : public GameScene {
                              glm::vec3 parent_position);
   void DestroyNodeEntity(kEntityId entity);
   void CreatePhysicsBodies();
+  void ApplyEnvironment();
   void DispatchCollisions();
   void StartBehaviours();
+  void DestroyPending();
 
   std::shared_ptr<Project> project_;
   std::unique_ptr<AssetDatabase> assets_;
@@ -156,6 +167,8 @@ class MapScene : public GameScene {
   bool running_ = false;
 
   std::map<std::string, std::unique_ptr<Texture2D>, std::less<>> textures_;
+  std::map<std::string, std::unique_ptr<Mesh>, std::less<>> models_;
+  std::vector<kEntityId> pending_destroy_;
 
   std::mutex collision_mutex_;
   std::vector<PendingCollision> collisions_;

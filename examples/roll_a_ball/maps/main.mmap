@@ -1,0 +1,283 @@
+[mmap format=1]
+
+[ext_resource type="Material" path="res://assets/ground.masset" id="1"]
+[ext_resource type="PhysicsMaterial" path="res://assets/grippy.masset" id="2"]
+[ext_resource type="Material" path="res://assets/wall.masset" id="3"]
+[ext_resource type="Material" path="res://assets/player.masset" id="4"]
+[ext_resource type="Material" path="res://assets/pickup.masset" id="5"]
+
+[node name="RollABall"]
+
+[component type="Transform" node="."]
+
+[component type="GameManager" node="."]
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(0, 10, 10)
+rotation = Vector3(-45, 0, 0)
+
+[component type="Camera" node="Camera"]
+background = Color(0.53, 0.68, 0.85, 1)
+
+[component type="CameraFollow" node="Camera"]
+target = NodePath("Player")
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+position = Vector3(0, 8, 0)
+rotation = Vector3(-50, -30, 0)
+
+[component type="DirectionalLight" node="Sun"]
+ambient = Color(0.35, 0.38, 0.45, 1)
+
+[node name="Ground" parent="."]
+
+[component type="Transform" node="Ground"]
+position = Vector3(0, -0.5, 0)
+scale = Vector3(20, 1, 20)
+
+[component type="MeshRenderer" node="Ground"]
+material = ExtResource("1")
+
+[component type="BoxCollider" node="Ground"]
+material = ExtResource("2")
+
+[node name="Walls" parent="."]
+
+[component type="Transform" node="Walls"]
+
+[node name="North" parent="Walls"]
+
+[component type="Transform" node="Walls/North"]
+position = Vector3(0, 0.5, -10.25)
+scale = Vector3(21, 1, 0.5)
+
+[component type="MeshRenderer" node="Walls/North"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Walls/North"]
+
+[node name="South" parent="Walls"]
+
+[component type="Transform" node="Walls/South"]
+position = Vector3(0, 0.5, 10.25)
+scale = Vector3(21, 1, 0.5)
+
+[component type="MeshRenderer" node="Walls/South"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Walls/South"]
+
+[node name="East" parent="Walls"]
+
+[component type="Transform" node="Walls/East"]
+position = Vector3(10.25, 0.5, 0)
+scale = Vector3(0.5, 1, 20)
+
+[component type="MeshRenderer" node="Walls/East"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Walls/East"]
+
+[node name="West" parent="Walls"]
+
+[component type="Transform" node="Walls/West"]
+position = Vector3(-10.25, 0.5, 0)
+scale = Vector3(0.5, 1, 20)
+
+[component type="MeshRenderer" node="Walls/West"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Walls/West"]
+
+[node name="Player" parent="."]
+
+[component type="Transform" node="Player"]
+position = Vector3(0, 0.5, 0)
+
+[component type="MeshRenderer" node="Player"]
+mesh = "sphere"
+material = ExtResource("4")
+
+[component type="SphereCollider" node="Player"]
+material = ExtResource("2")
+
+[component type="Rigidbody" node="Player"]
+
+[component type="PlayerController" node="Player"]
+
+[node name="Pickups" parent="."]
+
+[component type="Transform" node="Pickups"]
+position = Vector3(0, 0.5, 0)
+
+[node name="Pickup1" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup1"]
+position = Vector3(6, 0, 0)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup1"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup1"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup1"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup1"]
+
+[component type="Pickup" node="Pickups/Pickup1"]
+
+[node name="Pickup2" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup2"]
+position = Vector3(4.25, 0, 4.25)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup2"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup2"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup2"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup2"]
+
+[component type="Pickup" node="Pickups/Pickup2"]
+
+[node name="Pickup3" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup3"]
+position = Vector3(0, 0, 6)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup3"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup3"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup3"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup3"]
+
+[component type="Pickup" node="Pickups/Pickup3"]
+
+[node name="Pickup4" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup4"]
+position = Vector3(-4.25, 0, 4.25)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup4"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup4"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup4"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup4"]
+
+[component type="Pickup" node="Pickups/Pickup4"]
+
+[node name="Pickup5" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup5"]
+position = Vector3(-6, 0, 0)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup5"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup5"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup5"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup5"]
+
+[component type="Pickup" node="Pickups/Pickup5"]
+
+[node name="Pickup6" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup6"]
+position = Vector3(-4.25, 0, -4.25)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup6"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup6"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup6"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup6"]
+
+[component type="Pickup" node="Pickups/Pickup6"]
+
+[node name="Pickup7" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup7"]
+position = Vector3(0, 0, -6)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup7"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup7"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup7"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup7"]
+
+[component type="Pickup" node="Pickups/Pickup7"]
+
+[node name="Pickup8" parent="Pickups"]
+
+[component type="Transform" node="Pickups/Pickup8"]
+position = Vector3(4.25, 0, -4.25)
+rotation = Vector3(45, 0, 45)
+scale = Vector3(0.5, 0.5, 0.5)
+
+[component type="MeshRenderer" node="Pickups/Pickup8"]
+material = ExtResource("5")
+
+[component type="Rigidbody" node="Pickups/Pickup8"]
+motion_type = "kinematic"
+gravity_factor = 0.0
+
+[component type="BoxCollider" node="Pickups/Pickup8"]
+is_trigger = true
+
+[component type="Rotator" node="Pickups/Pickup8"]
+
+[component type="Pickup" node="Pickups/Pickup8"]

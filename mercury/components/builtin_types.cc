@@ -2,9 +2,11 @@
 // TypeRegistry, along with how MapScene attaches each one to an entity.
 
 #include <cmath>
+#include <optional>
 
 #include "components/components.h"
 #include "properties/camera.h"
+#include "properties/primitives.h"
 #include "scene/map_scene.h"
 #include "scripting/type_registry.h"
 
@@ -53,6 +55,42 @@ void AttachSprite(MapScene& scene, kEntityId entity,
   }
 }
 
+void AttachMeshRenderer(MapScene& scene, kEntityId entity,
+                        const mtext::PropertyList& properties) {
+  const std::string path = scene.GetGameObject(entity).GetPath();
+  auto renderer = ReadFields<MeshRenderer>(properties, path + ".MeshRenderer");
+  scene.Objects().AddProperty(entity, renderer);
+  if (!renderer.visible) return;
+
+  const auto material =
+      scene.Assets().LoadAs<MaterialAsset>(renderer.material.path);
+  const glm::vec4 color = renderer.color * material.color;
+  std::optional<Mesh> mesh;
+  switch (renderer.mesh) {
+    case MeshShape::kCube: mesh = Primitives::Cube(color); break;
+    case MeshShape::kSphere: mesh = Primitives::Sphere(color); break;
+    case MeshShape::kCapsule: mesh = Primitives::Capsule(color); break;
+    case MeshShape::kCylinder: mesh = Primitives::Cylinder(color); break;
+    case MeshShape::kPlane: mesh = Primitives::Plane(color); break;
+    case MeshShape::kQuad: mesh = Primitives::Quad(color); break;
+    case MeshShape::kModel:
+      if (!renderer.model.IsSet()) return;
+      if (const Mesh* model = scene.GetModel(renderer.model.path)) {
+        mesh = *model;
+        for (auto& vertex : mesh->vertices_) vertex.color = glm::vec3(color);
+        mesh->opacity_ = color.a;
+      }
+      break;
+  }
+  if (!mesh) return;
+  scene.Objects().AddProperty(entity, std::move(*mesh));
+  if (material.texture.IsSet()) {
+    if (auto texture = scene.GetTexture(material.texture.path)) {
+      scene.Objects().AddProperty(entity, TextureRef{texture});
+    }
+  }
+}
+
 void AttachCamera(MapScene& scene, kEntityId entity,
                   const mtext::PropertyList& properties) {
   auto settings = ReadFields<CameraComponent>(
@@ -61,6 +99,8 @@ void AttachCamera(MapScene& scene, kEntityId entity,
 
   Camera camera;
   camera.SetFOV(settings.fov);
+  camera.SetClipPlanes(settings.near_clip, settings.far_clip);
+  camera.SetUseObjectRotation(true);
   scene.Objects().AddProperty(entity, camera);
 
   if (settings.fit_height > 0.0f) {
@@ -71,7 +111,7 @@ void AttachCamera(MapScene& scene, kEntityId entity,
     const float distance = (settings.fit_height / 2.0f) / std::tan(half_fov);
     auto position = transform->GetPosition();
     transform->SetPosition(glm::vec3(position.x, position.y, position.z + distance));
-    transform->SetRotate(glm::vec3(0.0f, -90.0f, 0.0f));
+    transform->SetRotate(glm::vec3(0.0f));
     transform->SnapInterpolation();
     transform->ClearTransformations();
   }
@@ -102,9 +142,23 @@ void RegisterBuiltinTypes() {
     registry.RegisterComponent(std::move(info));
   }
   {
+    auto info = MakeInfo<MeshRenderer>(
+        "MeshRenderer", "Rendering",
+        "Draws a lit 3D shape or model sized by the Transform's scale");
+    info.attach = AttachMeshRenderer;
+    registry.RegisterComponent(std::move(info));
+  }
+  {
     auto info = MakeInfo<CameraComponent>("Camera", "Rendering",
                                           "Renders the game");
     info.attach = AttachCamera;
+    registry.RegisterComponent(std::move(info));
+  }
+  {
+    auto info = MakeInfo<DirectionalLight>(
+        "DirectionalLight", "Rendering",
+        "Sunlight along the node's forward (-Z) direction, plus ambient light");
+    info.attach = StoreAsProperty<DirectionalLight>("DirectionalLight");
     registry.RegisterComponent(std::move(info));
   }
   {
@@ -121,6 +175,25 @@ void RegisterBuiltinTypes() {
     registry.RegisterComponent(std::move(info));
   }
   {
+    auto info = MakeInfo<SphereCollider>("SphereCollider", "Physics",
+                                         "Sphere shape for collisions");
+    info.attach = StoreAsProperty<SphereCollider>("SphereCollider");
+    registry.RegisterComponent(std::move(info));
+  }
+  {
+    auto info = MakeInfo<CapsuleCollider>(
+        "CapsuleCollider", "Physics",
+        "Capsule shape for collisions, good for characters");
+    info.attach = StoreAsProperty<CapsuleCollider>("CapsuleCollider");
+    registry.RegisterComponent(std::move(info));
+  }
+  {
+    auto info = MakeInfo<CylinderCollider>("CylinderCollider", "Physics",
+                                           "Cylinder shape for collisions");
+    info.attach = StoreAsProperty<CylinderCollider>("CylinderCollider");
+    registry.RegisterComponent(std::move(info));
+  }
+  {
     auto info = MakeInfo<PlaneCollider>("PlaneCollider", "Physics",
                                         "Infinite static plane for walls");
     info.attach = StoreAsProperty<PlaneCollider>("PlaneCollider");
@@ -128,7 +201,7 @@ void RegisterBuiltinTypes() {
   }
 
   registry.RegisterAssetType(AssetTypeInfo{
-      "Material", "Color and texture for a SpriteRenderer",
+      "Material", "Color and texture for a SpriteRenderer or MeshRenderer",
       DescribeFields<MaterialAsset>()});
   registry.RegisterAssetType(AssetTypeInfo{
       "PhysicsMaterial", "Friction and bounciness for a collider",

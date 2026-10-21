@@ -86,6 +86,16 @@ int Project::GetWindowHeight() const {
                  : 720;
 }
 
+glm::vec3 Project::GetGravity() const {
+  constexpr glm::vec3 kDefault(0.0f, -9.81f, 0.0f);
+  auto section = document_.Find("physics");
+  if (!section) return kDefault;
+  auto value = section->properties.Get("gravity");
+  if (!value) return kDefault;
+  auto gravity = value->Get<glm::vec3>();
+  return gravity ? *gravity : kDefault;
+}
+
 fs::path Project::Resolve(std::string_view path) const {
   if (IsResPath(path)) {
     path.remove_prefix(kResPrefix.size());

@@ -66,6 +66,8 @@ class Behaviour {
   // Find another object by its path from the map root, e.g. "Walls/Left".
   GameObject Find(std::string_view path) const { return scene_->Find(path); }
   GameObject Get(const NodeRef& ref) const;
+  // Removes an object (and its children) at the end of this tick or frame.
+  void Destroy(GameObject object) const { scene_->Destroy(object); }
 
   bool IsKeyPressed(Key key) const;
   bool IsKeyJustPressed(Key key) const;

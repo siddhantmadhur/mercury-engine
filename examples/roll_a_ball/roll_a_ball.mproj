@@ -1,0 +1,12 @@
+[project]
+name = "Roll a Ball"
+main_map = "res://maps/main.mmap"
+engine_version = "dev"
+
+[window]
+title = "Roll a Ball"
+width = 1280
+height = 720
+
+[physics]
+gravity = Vector3(0, -9.81, 0)

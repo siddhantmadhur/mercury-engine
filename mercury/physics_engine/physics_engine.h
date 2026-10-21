@@ -174,6 +174,40 @@ class PhysicsEngine {
           [](JPH::BodyCreationSettings&) {});
 
   /**
+   * @brief Create a sphere body; see CreateBox3D
+   */
+  bool CreateSphere(
+      kEntityId self, float radius,
+      std::function<void(JPH::BodyCreationSettings&)> override_function =
+          [](JPH::BodyCreationSettings&) {});
+
+  /**
+   * @brief Create a capsule body standing along Y; see CreateBox3D
+   * @param half_height Half the height of the straight part, without the caps
+   */
+  bool CreateCapsule(
+      kEntityId self, float half_height, float radius,
+      std::function<void(JPH::BodyCreationSettings&)> override_function =
+          [](JPH::BodyCreationSettings&) {});
+
+  /**
+   * @brief Create a cylinder body standing along Y; see CreateBox3D
+   */
+  bool CreateCylinder(
+      kEntityId self, float half_height, float radius,
+      std::function<void(JPH::BodyCreationSettings&)> override_function =
+          [](JPH::BodyCreationSettings&) {});
+
+  void SetGravity(glm::vec3 gravity);
+
+  // Forces and impulses act on dynamic bodies at the next physics step.
+  void AddForce(kEntityId self, glm::vec3 force);
+  void AddImpulse(kEntityId self, glm::vec3 impulse);
+  void AddTorque(kEntityId self, glm::vec3 torque);
+  void SetAngularVelocity(kEntityId self, glm::vec3 radians_per_second);
+  glm::vec3 GetAngularVelocity(kEntityId self);
+
+  /**
    * @brief Create a static infinite plane
    * @param self The object id it is being applied to
    * @param normal The normal of the plane
@@ -269,6 +303,12 @@ class PhysicsEngine {
   ObjectLayerPairFilterImpl object_layer_pair_filter_impl_;
 
   std::vector<kEntityId> disable_queue_;
+
+  // Shared by the Create* functions: places the shape at the entity's
+  // Transform (position and rotation) and registers the body.
+  bool CreateBodyFromShape(
+      kEntityId self, const JPH::ShapeSettings& shape_settings,
+      const std::function<void(JPH::BodyCreationSettings&)>& override_function);
 
   PObjectManager& object_manager_;
 };

@@ -19,6 +19,8 @@ constexpr const char* kAssetPayload = "MERCURY_ASSET";
 
 const std::vector<std::string> kImageExtensions = {".png", ".jpg", ".jpeg",
                                                    ".bmp", ".tga"};
+const std::vector<std::string> kModelExtensions = {".obj", ".gltf", ".glb",
+                                                   ".fbx", ".dae", ".ply"};
 
 std::string Lower(std::string text) {
   std::transform(text.begin(), text.end(), text.begin(),
@@ -42,8 +44,12 @@ void EditorScene::DrawHierarchy() {
     ImGui::End();
     return;
   }
-  if (ImGui::Button("+ Node")) CreateNode(GetSelectedNode(), "Node");
-  ImGui::SetItemTooltip("Add a node under the selection");
+  if (ImGui::Button("+ Create")) ImGui::OpenPopup("create");
+  ImGui::SetItemTooltip("Add a node to the map; right-click a node to add a child");
+  if (ImGui::BeginPopup("create")) {
+    DrawCreateMenuItems(nullptr);
+    ImGui::EndPopup();
+  }
   ImGui::SameLine();
   ImGui::TextDisabled("%s", MapDisplayName().c_str());
   ImGui::Separator();
@@ -64,7 +70,7 @@ void EditorScene::DrawHierarchy() {
   }
   if (ImGui::IsItemClicked()) Select(nullptr);
   if (ImGui::BeginPopupContextItem("empty_space")) {
-    if (ImGui::MenuItem("New Node")) CreateNode(nullptr, "Node");
+    DrawCreateMenuItems(nullptr);
     ImGui::EndPopup();
   }
   ImGui::EndChild();
@@ -122,7 +128,10 @@ void EditorScene::DrawHierarchyNode(MapNode& node) {
     }
     if (ImGui::BeginPopupContextItem()) {
       Select(&node);
-      if (ImGui::MenuItem("New Child")) CreateNode(&node, "Node");
+      if (ImGui::BeginMenu("Create Child")) {
+        DrawCreateMenuItems(&node);
+        ImGui::EndMenu();
+      }
       if (ImGui::MenuItem("Rename", "F2")) rename_uid_ = node.uid;
       if (!node.IsRoot()) {
         if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateSelected();
@@ -488,11 +497,15 @@ bool EditorScene::DrawAssetPicker(const char* label, std::string& path,
       path.clear();
       changed = true;
     }
+    // Textures and models are plain files; other types are .masset files.
     const bool images = asset_type == "Texture";
-    const auto files = images ? ListProjectFiles(kImageExtensions)
-                              : ListProjectFiles({std::string(kAssetExtension)});
+    const bool models = asset_type == "Model";
+    const auto files = images   ? ListProjectFiles(kImageExtensions)
+                       : models ? ListProjectFiles(kModelExtensions)
+                                : ListProjectFiles({std::string(kAssetExtension)});
     for (const auto& file : files) {
-      if (!images && !asset_type.empty() && Assets().TypeOf(file) != asset_type) {
+      if (!images && !models && !asset_type.empty() &&
+          Assets().TypeOf(file) != asset_type) {
         continue;
       }
       if (ImGui::Selectable(file.c_str(), file == path)) {

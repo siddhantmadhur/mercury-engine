@@ -32,6 +32,30 @@ TEST(Map, PongMapRoundTripsByteForByte) {
   EXPECT_EQ(map.SaveToString(), original);
 }
 
+TEST(Map, RollABallMapRoundTripsByteForByte) {
+  const auto path = std::filesystem::path(MERCURY_SOURCE_DIR) /
+                    "examples/roll_a_ball/maps/main.mmap";
+  const std::string original = ReadFile(path);
+  ASSERT_FALSE(original.empty());
+  Map map;
+  std::string error;
+  ASSERT_TRUE(map.LoadFromString(original, &error)) << error;
+  EXPECT_EQ(map.SaveToString(), original);
+}
+
+TEST(Project, ReadsGravity) {
+  std::string error;
+  auto project = Project::Load(std::filesystem::path(MERCURY_SOURCE_DIR) /
+                                   "examples/roll_a_ball/roll_a_ball.mproj",
+                               &error);
+  ASSERT_TRUE(project) << error;
+  EXPECT_FLOAT_EQ(project->GetGravity().y, -9.81f);
+  // Projects without a [physics] section get Earth gravity too.
+  auto pong = Project::Load(kPong / "pong.mproj", &error);
+  ASSERT_TRUE(pong) << error;
+  EXPECT_FLOAT_EQ(pong->GetGravity().y, -9.81f);
+}
+
 TEST(Map, PongMapStructure) {
   Map map;
   std::string error;

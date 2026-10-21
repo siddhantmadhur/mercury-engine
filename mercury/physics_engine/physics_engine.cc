@@ -1,6 +1,7 @@
 #include "physics_engine.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "Jolt/Core/Factory.h"
 #include "Jolt/RegisterTypes.h"
@@ -8,6 +9,9 @@
 #include "Jolt/Physics/Collision/CastResult.h"
 #include "Jolt/Physics/Collision/RayCast.h"
 #include "Jolt/Physics/Collision/Shape/BoxShape.h"
+#include "Jolt/Physics/Collision/Shape/CapsuleShape.h"
+#include "Jolt/Physics/Collision/Shape/CylinderShape.h"
+#include "Jolt/Physics/Collision/Shape/SphereShape.h"
 #include "Jolt/Physics/Collision/Shape/PlaneShape.h"
 #include "properties/transform.h"
 
@@ -132,35 +136,46 @@ void PhysicsEngine::Initialize() {
   PDebug::info("Initialized Jolt Physics System");
 }
 
-bool PhysicsEngine::CreateBox3D(
-    kEntityId self, glm::vec3 dimensions,
-    std::function<void(JPH::BodyCreationSettings&)> override_function) {
-  PDebug::info("Registering body to physics engine...");
+namespace {
+JPH::Quat ToJolt(glm::quat q) { return JPH::Quat(q.x, q.y, q.z, q.w); }
+glm::quat FromJolt(JPH::Quat q) {
+  return glm::quat(q.GetW(), q.GetX(), q.GetY(), q.GetZ());
+}
+}  // namespace
+
+bool PhysicsEngine::CreateBodyFromShape(
+    kEntityId self, const JPH::ShapeSettings& shape_settings,
+    const std::function<void(JPH::BodyCreationSettings&)>& override_function) {
   auto transform = object_manager_.GetProperty<Transform>(self);
   if (transform == nullptr) {
     PDebug::error("Physics body needs transform property to register");
     return false;
   }
+  JPH::ShapeSettings::ShapeResult shape_result = shape_settings.Create();
+  if (shape_result.HasError()) {
+    PDebug::error("Physics: could not create shape: {}",
+                  shape_result.GetError().c_str());
+    return false;
+  }
 
   auto position = transform->GetPosition();
-  dimensions /= 2;
-  JPH::BoxShapeSettings box_shape_settings(
-      JPH::Vec3(dimensions.x, dimensions.y, dimensions.z));
-  box_shape_settings.SetEmbedded();
-
-  JPH::ShapeSettings::ShapeResult box_shape_result =
-      box_shape_settings.Create();
-  auto shape_ref = box_shape_result.Get();
-
   auto creation_settings = JPH::BodyCreationSettings(
-      shape_ref, JPH::RVec3(position.x, position.y, position.z),
-      JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::MOVING);
+      shape_result.Get(), JPH::RVec3(position.x, position.y, position.z),
+      ToJolt(transform->GetRotationQuat()), JPH::EMotionType::Static,
+      Layers::MOVING);
 
   override_function(creation_settings);
+  // Static bodies never need to be tested against each other.
+  if (creation_settings.mMotionType == JPH::EMotionType::Static) {
+    creation_settings.mObjectLayer = Layers::NON_MOVING;
+  }
 
   auto& body_interface = physics_system_.GetBodyInterface();
-
   auto body = body_interface.CreateBody(creation_settings);
+  if (body == nullptr) {
+    PDebug::error("Physics: out of bodies");
+    return false;
+  }
 
   auto body_id = body->GetID();
   this->jolt_bodies_ref_[body_id] = self;
@@ -168,6 +183,90 @@ bool PhysicsEngine::CreateBox3D(
 
   body_interface.AddBody(body_id, JPH::EActivation::Activate);
   return true;
+}
+
+bool PhysicsEngine::CreateBox3D(
+    kEntityId self, glm::vec3 dimensions,
+    std::function<void(JPH::BodyCreationSettings&)> override_function) {
+  // Jolt needs every half extent to be at least the convex radius (the
+  // rounding of the edges), so thin boxes get sharper edges.
+  glm::vec3 half = glm::max(glm::abs(dimensions) / 2.0f, glm::vec3(1e-3f));
+  const float convex_radius =
+      std::min(JPH::cDefaultConvexRadius, std::min({half.x, half.y, half.z}));
+  JPH::BoxShapeSettings box_shape_settings(JPH::Vec3(half.x, half.y, half.z),
+                                           convex_radius);
+  box_shape_settings.SetEmbedded();
+  return CreateBodyFromShape(self, box_shape_settings, override_function);
+}
+
+bool PhysicsEngine::CreateSphere(
+    kEntityId self, float radius,
+    std::function<void(JPH::BodyCreationSettings&)> override_function) {
+  JPH::SphereShapeSettings settings(std::max(std::abs(radius), 1e-3f));
+  settings.SetEmbedded();
+  return CreateBodyFromShape(self, settings, override_function);
+}
+
+bool PhysicsEngine::CreateCapsule(
+    kEntityId self, float half_height, float radius,
+    std::function<void(JPH::BodyCreationSettings&)> override_function) {
+  radius = std::max(std::abs(radius), 1e-3f);
+  // A capsule with no straight part is a sphere.
+  if (half_height <= 1e-4f) return CreateSphere(self, radius, override_function);
+  JPH::CapsuleShapeSettings settings(half_height, radius);
+  settings.SetEmbedded();
+  return CreateBodyFromShape(self, settings, override_function);
+}
+
+bool PhysicsEngine::CreateCylinder(
+    kEntityId self, float half_height, float radius,
+    std::function<void(JPH::BodyCreationSettings&)> override_function) {
+  half_height = std::max(std::abs(half_height), 1e-3f);
+  radius = std::max(std::abs(radius), 1e-3f);
+  const float convex_radius =
+      std::min(JPH::cDefaultConvexRadius, std::min(half_height, radius));
+  JPH::CylinderShapeSettings settings(half_height, radius, convex_radius);
+  settings.SetEmbedded();
+  return CreateBodyFromShape(self, settings, override_function);
+}
+
+void PhysicsEngine::SetGravity(glm::vec3 gravity) {
+  physics_system_.SetGravity(JPH::Vec3(gravity.x, gravity.y, gravity.z));
+}
+
+void PhysicsEngine::AddForce(kEntityId self, glm::vec3 force) {
+  auto it = entity_bodies_ref_.find(self);
+  if (it == entity_bodies_ref_.end()) return;
+  physics_system_.GetBodyInterface().AddForce(
+      it->second, JPH::Vec3(force.x, force.y, force.z));
+}
+
+void PhysicsEngine::AddImpulse(kEntityId self, glm::vec3 impulse) {
+  auto it = entity_bodies_ref_.find(self);
+  if (it == entity_bodies_ref_.end()) return;
+  physics_system_.GetBodyInterface().AddImpulse(
+      it->second, JPH::Vec3(impulse.x, impulse.y, impulse.z));
+}
+
+void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque) {
+  auto it = entity_bodies_ref_.find(self);
+  if (it == entity_bodies_ref_.end()) return;
+  physics_system_.GetBodyInterface().AddTorque(
+      it->second, JPH::Vec3(torque.x, torque.y, torque.z));
+}
+
+void PhysicsEngine::SetAngularVelocity(kEntityId self, glm::vec3 velocity) {
+  auto it = entity_bodies_ref_.find(self);
+  if (it == entity_bodies_ref_.end()) return;
+  physics_system_.GetBodyInterface().SetAngularVelocity(
+      it->second, JPH::Vec3(velocity.x, velocity.y, velocity.z));
+}
+
+glm::vec3 PhysicsEngine::GetAngularVelocity(kEntityId self) {
+  auto it = entity_bodies_ref_.find(self);
+  if (it == entity_bodies_ref_.end()) return glm::vec3(0.0f);
+  auto v = physics_system_.GetBodyInterface().GetAngularVelocity(it->second);
+  return glm::vec3(v.GetX(), v.GetY(), v.GetZ());
 }
 
 bool PhysicsEngine::CreatePlane(
@@ -231,11 +330,13 @@ void PhysicsEngine::SynchronizePObjects() {
             break;
           }
           case kTransformRotation: {
-            auto rot = transform->GetRotate();
-            // body_interface.SetRotation(jolt_id, JPH::QuatArg{rot.x, rot.y,
-            // rot.z});
+            body_interface.SetRotation(jolt_id,
+                                       ToJolt(transform->GetRotationQuat()),
+                                       JPH::EActivation::Activate);
             break;
           }
+          default:
+            break;
         }
       }
     }
@@ -312,9 +413,14 @@ void PhysicsEngine::Compute(int steps) {
           phys_velocity.GetX(), phys_velocity.GetY(), phys_velocity.GetZ()));
     }
     if (!was_set(kTransformRotation)) {
-      auto phys_position = body_interface.GetRotation(body_id);
-      transform->SetRotate(glm::vec3(phys_position.GetX(), phys_position.GetY(),
-                                     phys_position.GetZ()));
+      // Only write back real turns (over ~0.2 degrees from the Transform),
+      // so the angles a map set survive while a body is still instead of
+      // becoming Jolt's equivalent ones.
+      const glm::quat rotation = FromJolt(body_interface.GetRotation(body_id));
+      if (std::abs(glm::dot(rotation, transform->GetRotationQuat())) <
+          1.0f - 1e-6f) {
+        transform->SetRotate(Transform::QuatToEuler(rotation));
+      }
     }
     transform->ClearTransformations();
   }

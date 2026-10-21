@@ -7,6 +7,7 @@
 
 #include "debugger/debugger.h"
 #include "properties/camera.h"
+#include "properties/primitives.h"
 #include "scripting/behaviour.h"
 #include "scripting/type_registry.h"
 
@@ -31,6 +32,10 @@ std::string GameObject::GetPath() const {
 
 Transform* GameObject::GetTransform() const {
   return GetComponent<Transform>();
+}
+
+void GameObject::Destroy() const {
+  if (IsValid()) scene_->Destroy(*this);
 }
 
 // -------------------------------------------------------------- Behaviour ---
@@ -72,6 +77,7 @@ MapScene::MapScene(std::shared_ptr<Project> project, Mode mode)
 void MapScene::SetProject(std::shared_ptr<Project> project) {
   ClearMap();
   textures_.clear();
+  models_.clear();
   project_ = std::move(project);
   assets_ = std::make_unique<AssetDatabase>(project_);
 }
@@ -107,6 +113,7 @@ void MapScene::Instantiate(const Map& map) {
       PDebug::warn("Map has no Camera with current = true; using a default");
     }
   }
+  ApplyEnvironment();
   if (running_) StartBehaviours();
 }
 
@@ -116,7 +123,32 @@ void MapScene::SyncFromMap(const Map& map) {
   Instantiate(map);
 }
 
+void MapScene::ApplyEnvironment() {
+  lighting_ = SceneLighting{};
+  for (kEntityId entity : entities_) {
+    auto light = object_manager_->GetProperty<DirectionalLight>(entity);
+    if (!light) continue;
+    auto transform = object_manager_->GetProperty<Transform>(entity);
+    lighting_.direction =
+        glm::normalize(transform->GetRotationQuat() * glm::vec3(0, 0, -1));
+    lighting_.color = glm::vec3(light->color) * light->intensity;
+    lighting_.ambient = glm::vec3(light->ambient);
+    break;
+  }
+
+  clear_color_ = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+  for (kEntityId entity : entities_) {
+    auto camera = object_manager_->GetProperty<CameraComponent>(entity);
+    if (camera && camera->current) {
+      clear_color_ = camera->background;
+      break;
+    }
+  }
+  if (project_) physics_engine_->SetGravity(project_->GetGravity());
+}
+
 void MapScene::ClearMap() {
+  pending_destroy_.clear();
   for (auto& behaviour : behaviours_) behaviour->OnDestroy();
   behaviours_.clear();
   behaviours_by_entity_.clear();
@@ -188,18 +220,40 @@ void MapScene::DestroyNodeEntity(kEntityId entity) {
 
 void MapScene::CreatePhysicsBodies() {
   for (kEntityId entity : entities_) {
+    // One collider per node; the first one found in this order is used.
     auto box = object_manager_->GetProperty<BoxCollider>(entity);
+    auto sphere = object_manager_->GetProperty<SphereCollider>(entity);
+    auto capsule = object_manager_->GetProperty<CapsuleCollider>(entity);
+    auto cylinder = object_manager_->GetProperty<CylinderCollider>(entity);
     auto plane = object_manager_->GetProperty<PlaneCollider>(entity);
-    if (!box && !plane) continue;
-    if (box && plane) {
-      PDebug::warn("{}: has both a BoxCollider and a PlaneCollider; using the box",
+    const int count = (box != nullptr) + (sphere != nullptr) +
+                      (capsule != nullptr) + (cylinder != nullptr) +
+                      (plane != nullptr);
+    if (count == 0) continue;
+    if (count > 1) {
+      PDebug::warn("{}: has more than one collider; only the first is used",
                    GetGameObject(entity).GetPath());
     }
 
-    const AssetRef& material_ref = box ? box->material : plane->material;
-    const auto material =
-        assets_->LoadAs<PhysicsMaterialAsset>(material_ref.path);
-    const bool is_trigger = box ? box->is_trigger : plane->is_trigger;
+    const AssetRef* material_ref = nullptr;
+    bool is_trigger = false;
+    if (box) {
+      material_ref = &box->material;
+      is_trigger = box->is_trigger;
+    } else if (sphere) {
+      material_ref = &sphere->material;
+      is_trigger = sphere->is_trigger;
+    } else if (capsule) {
+      material_ref = &capsule->material;
+      is_trigger = capsule->is_trigger;
+    } else if (cylinder) {
+      material_ref = &cylinder->material;
+      is_trigger = cylinder->is_trigger;
+    } else {
+      material_ref = &plane->material;
+      is_trigger = plane->is_trigger;
+    }
+    const auto material = assets_->LoadAs<PhysicsMaterialAsset>(material_ref->path);
     std::optional<Rigidbody> body;
     if (auto rb = object_manager_->GetProperty<Rigidbody>(entity)) body = *rb;
 
@@ -235,12 +289,33 @@ void MapScene::CreatePhysicsBodies() {
       settings.mLinearDamping = body->linear_damping;
       settings.mAngularDamping = body->angular_damping;
       settings.mAllowSleeping = body->allow_sleeping;
+      if (body->mass > 0.0f) {
+        settings.mOverrideMassProperties =
+            JPH::EOverrideMassProperties::CalculateInertia;
+        settings.mMassPropertiesOverride.mMass = body->mass;
+      }
     };
 
+    const glm::vec3 scale =
+        glm::abs(object_manager_->GetProperty<Transform>(entity)->GetScale());
+    const float radial_scale = std::max(scale.x, scale.z);
     bool created = false;
     if (box) {
-      auto scale = object_manager_->GetProperty<Transform>(entity)->GetScale();
       created = physics_engine_->CreateBox3D(entity, box->size * scale, configure);
+    } else if (sphere) {
+      const float largest = std::max({scale.x, scale.y, scale.z});
+      created = physics_engine_->CreateSphere(entity, sphere->radius * largest,
+                                              configure);
+    } else if (capsule) {
+      const float radius = capsule->radius * radial_scale;
+      const float half_height =
+          std::max(capsule->height * scale.y / 2.0f - radius, 0.0f);
+      created = physics_engine_->CreateCapsule(entity, half_height, radius,
+                                               configure);
+    } else if (cylinder) {
+      created = physics_engine_->CreateCylinder(
+          entity, cylinder->height * scale.y / 2.0f,
+          cylinder->radius * radial_scale, configure);
     } else {
       glm::vec3 normal = plane->normal;
       if (glm::length(normal) < 1e-6f) normal = glm::vec3(0, 1, 0);
@@ -305,6 +380,7 @@ void MapScene::OnFrame(double delta_t) {
   for (size_t i = 0; i < behaviours_.size(); i++) {
     behaviours_[i]->OnFrame(seconds);
   }
+  DestroyPending();
 }
 
 void MapScene::OnTick(double delta_t) {
@@ -314,6 +390,7 @@ void MapScene::OnTick(double delta_t) {
   for (size_t i = 0; i < behaviours_.size(); i++) {
     behaviours_[i]->OnTick(seconds);
   }
+  DestroyPending();
 }
 
 void MapScene::OnDestroy() {
@@ -355,6 +432,80 @@ const std::vector<Behaviour*>& MapScene::GetBehaviours(kEntityId entity) const {
   static const std::vector<Behaviour*> kNone;
   auto it = behaviours_by_entity_.find(entity);
   return it == behaviours_by_entity_.end() ? kNone : it->second;
+}
+
+void MapScene::Destroy(GameObject object) {
+  if (object.GetScene() != this || !object.IsValid()) return;
+  if (std::find(pending_destroy_.begin(), pending_destroy_.end(),
+                object.GetEntity()) == pending_destroy_.end()) {
+    pending_destroy_.push_back(object.GetEntity());
+  }
+}
+
+void MapScene::DestroyPending() {
+  while (!pending_destroy_.empty()) {
+    const kEntityId root = pending_destroy_.back();
+    pending_destroy_.pop_back();
+    auto info = object_manager_->GetProperty<NodeInfo>(root);
+    if (!info) continue;
+    const std::string prefix = info->path == "." ? "" : info->path + "/";
+
+    // The object and everything below it, deepest first.
+    std::vector<kEntityId> doomed;
+    for (kEntityId entity : entities_) {
+      auto node = object_manager_->GetProperty<NodeInfo>(entity);
+      if (entity == root || (node && (prefix.empty() ||
+                                      node->path.starts_with(prefix)))) {
+        doomed.push_back(entity);
+      }
+    }
+    std::reverse(doomed.begin(), doomed.end());
+
+    for (kEntityId entity : doomed) {
+      auto it = behaviours_by_entity_.find(entity);
+      if (it != behaviours_by_entity_.end()) {
+        for (Behaviour* behaviour : it->second) behaviour->OnDestroy();
+        for (Behaviour* behaviour : it->second) {
+          auto owned = std::find_if(
+              behaviours_.begin(), behaviours_.end(),
+              [&](const auto& b) { return b.get() == behaviour; });
+          if (owned == behaviours_.end()) continue;
+          if (static_cast<size_t>(owned - behaviours_.begin()) <
+              started_behaviours_) {
+            started_behaviours_--;
+          }
+          behaviours_.erase(owned);
+        }
+        behaviours_by_entity_.erase(it);
+      }
+      if (auto node = object_manager_->GetProperty<NodeInfo>(entity)) {
+        by_path_.erase(node->path);
+        by_uid_.erase(node->uid);
+      }
+      if (player_camera_ == entity) SetActiveCamera(default_camera_);
+      DestroyNodeEntity(entity);
+      std::erase(entities_, entity);
+    }
+  }
+}
+
+const Mesh* MapScene::GetModel(std::string_view res_path) {
+  if (res_path.empty() || !project_) return nullptr;
+  auto it = models_.find(res_path);
+  if (it != models_.end()) return it->second.get();
+
+  std::string error;
+  std::unique_ptr<Mesh> model;
+  if (auto mesh = Primitives::LoadModel(project_->Resolve(res_path).string(),
+                                        glm::vec4(1.0f), &error)) {
+    model = std::make_unique<Mesh>(std::move(*mesh));
+  } else {
+    // Remember the failure so it is only logged once.
+    PDebug::warn("Could not load model {}: {}", res_path, error);
+  }
+  const Mesh* raw = model.get();
+  models_.emplace(std::string(res_path), std::move(model));
+  return raw;
 }
 
 Texture2D* MapScene::GetTexture(std::string_view res_path) {

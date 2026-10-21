@@ -239,17 +239,9 @@ bool EditorScene::OpenMap(const std::string& res_path) {
   scene_dirty_ = true;
   selected_uid_ = 0;
 
-  // Start the view framed like the game camera.
-  camera_target_ = glm::vec3(0.0f);
-  camera_distance_ = 120.0f;
-  map_.Visit([&](const MapNode& node) {
-    auto camera = node.FindComponent("Camera");
-    if (!camera) return;
-    const double fit = camera->properties.GetFloat("fit_height", 0.0);
-    if (fit <= 0.0) return;
-    camera_distance_ = static_cast<float>(fit * 1.15 / 2.0 /
-                                          std::tan(glm::radians(30.0)));
-  });
+  // Start in the view that suits the map, framed around its contents.
+  view_2d_ = !MapLooks3D();
+  FrameMap();
   console_.Info("Opened " + res_path);
   return true;
 }
@@ -258,8 +250,9 @@ void EditorScene::NewMap(const std::string& res_path) {
   auto project = GetProject();
   Map map;
   std::string error;
-  map.LoadFromString(Templates::NewMapText(project ? project->GetName() : "Root"),
-                     &error);
+  map.LoadFromString(
+      Templates::NewMapText(project ? project->GetName() : "Root", !view_2d_),
+      &error);
   map_ = std::move(map);
   map_path_ = res_path;
   last_committed_ = map_;
@@ -359,6 +352,129 @@ MapNode* EditorScene::CreateNode(MapNode* parent, const std::string& name) {
   return node;
 }
 
+void EditorScene::DrawCreateMenuItems(MapNode* parent) {
+  if (ImGui::MenuItem("Empty")) CreatePreset(parent, Preset::kEmpty);
+  if (ImGui::BeginMenu("3D Object")) {
+    if (ImGui::MenuItem("Cube")) CreatePreset(parent, Preset::kCube);
+    if (ImGui::MenuItem("Sphere")) CreatePreset(parent, Preset::kSphere);
+    if (ImGui::MenuItem("Capsule")) CreatePreset(parent, Preset::kCapsule);
+    if (ImGui::MenuItem("Cylinder")) CreatePreset(parent, Preset::kCylinder);
+    if (ImGui::MenuItem("Plane")) CreatePreset(parent, Preset::kPlane);
+    if (ImGui::MenuItem("Quad")) CreatePreset(parent, Preset::kQuad);
+    ImGui::EndMenu();
+  }
+  if (ImGui::BeginMenu("2D Object")) {
+    if (ImGui::MenuItem("Sprite")) CreatePreset(parent, Preset::kSprite);
+    ImGui::EndMenu();
+  }
+  if (ImGui::BeginMenu("Light")) {
+    if (ImGui::MenuItem("Directional Light")) {
+      CreatePreset(parent, Preset::kDirectionalLight);
+    }
+    ImGui::EndMenu();
+  }
+  if (ImGui::MenuItem("Camera")) CreatePreset(parent, Preset::kCamera);
+}
+
+MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
+  static constexpr const char* kNames[] = {
+      "Node", "Cube",   "Sphere", "Capsule",          "Cylinder",
+      "Plane", "Quad", "Sprite", "DirectionalLight", "Camera",
+  };
+  if (!parent) parent = map_.GetRoot();
+  MapNode* node = map_.AddNode(parent, kNames[static_cast<int>(preset)]);
+
+  // New things appear where the Scene view is looking. Positions in the map
+  // are relative to the parent.
+  glm::vec3 world = camera_target_;
+  if (view_2d_) world.z = 0.0f;
+  glm::vec3 parent_world(0.0f);
+  if (auto transform =
+          Objects().GetProperty<Transform>(GetEntityForNode(parent->uid))) {
+    parent_world = transform->GetPosition();
+  }
+  glm::vec3 position = glm::round((world - parent_world) * 100.0f) / 100.0f;
+  glm::vec3 rotation(0.0f);
+  // In the 2D view one unit can be a few pixels, so size new things to the
+  // view (a power of ten about 80 pixels across).
+  float size = 1.0f;
+  if (view_2d_) {
+    size = std::pow(10.0f, std::round(std::log10(WorldPerPixel(world) * 80.0f)));
+  }
+  glm::vec3 scale(size);
+
+  auto mesh = [&](const char* shape) {
+    ComponentData renderer{"MeshRenderer", {}};
+    if (shape) renderer.properties.Set("mesh", std::string(shape));
+    node->components.push_back(std::move(renderer));
+  };
+  switch (preset) {
+    case Preset::kEmpty: break;
+    case Preset::kCube:
+      mesh(nullptr);
+      node->components.push_back({"BoxCollider", {}});
+      break;
+    case Preset::kSphere:
+      mesh("sphere");
+      node->components.push_back({"SphereCollider", {}});
+      break;
+    case Preset::kCapsule:
+      mesh("capsule");
+      node->components.push_back({"CapsuleCollider", {}});
+      break;
+    case Preset::kCylinder:
+      mesh("cylinder");
+      node->components.push_back({"CylinderCollider", {}});
+      break;
+    case Preset::kPlane: {
+      mesh("plane");
+      ComponentData collider{"BoxCollider", {}};
+      collider.properties.Set("size", glm::vec3(1.0f, 0.01f, 1.0f));
+      node->components.push_back(std::move(collider));
+      scale = glm::vec3(10.0f * size, 1.0f, 10.0f * size);
+      break;
+    }
+    case Preset::kQuad: mesh("quad"); break;
+    case Preset::kSprite: node->components.push_back({"SpriteRenderer", {}}); break;
+    case Preset::kDirectionalLight:
+      rotation = glm::vec3(-50.0f, -30.0f, 0.0f);
+      scale = glm::vec3(1.0f);
+      node->components.push_back({"DirectionalLight", {}});
+      break;
+    case Preset::kCamera: {
+      ComponentData camera{"Camera", {}};
+      scale = glm::vec3(1.0f);
+      if (view_2d_) {
+        // Frame what the Scene view shows now.
+        const float fit = WorldPerPixel(world) * scene_size_.y;
+        camera.properties.Set("fit_height", static_cast<double>(std::round(fit)));
+      } else {
+        // Like Unity's "Align With View".
+        position = glm::round((CameraPosition() - parent_world) * 100.0f) / 100.0f;
+        rotation = glm::round(glm::vec3(camera_pitch_, camera_yaw_, 0.0f));
+      }
+      // A second camera should not take over from the existing one.
+      bool has_camera = false;
+      map_.Visit([&](const MapNode& other) {
+        if (&other != node && other.FindComponent("Camera")) has_camera = true;
+      });
+      if (has_camera) camera.properties.Set("current", false);
+      node->components.push_back(std::move(camera));
+      break;
+    }
+  }
+
+  ComponentData transform{"Transform", {}};
+  if (position != glm::vec3(0.0f)) transform.properties.Set("position", position);
+  if (rotation != glm::vec3(0.0f)) transform.properties.Set("rotation", rotation);
+  if (scale != glm::vec3(1.0f)) transform.properties.Set("scale", scale);
+  node->components.insert(node->components.begin(), std::move(transform));
+
+  Select(node);
+  MarkChanged();
+  return node;
+}
+
 void EditorScene::DeleteSelected() {
   MapNode* node = GetSelectedNode();
   if (!node || node->IsRoot()) return;
@@ -405,14 +521,9 @@ void EditorScene::HandleShortcuts() {
   if (ImGui::IsKeyPressed(ImGuiKey_F2, false) && GetSelectedNode()) {
     rename_uid_ = selected_uid_;
   }
-  if (ImGui::IsKeyPressed(ImGuiKey_F, false) && !io.KeyCtrl) {
-    if (auto node = GetSelectedNode()) {
-      if (auto transform =
-              Objects().GetProperty<Transform>(GetEntityForNode(node->uid))) {
-        auto position = transform->GetPosition();
-        camera_target_ = glm::vec3(position.x, position.y, 0.0f);
-      }
-    }
+  if (ImGui::IsKeyPressed(ImGuiKey_F, false) && !io.KeyCtrl &&
+      !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+    FrameSelected();
   }
 }
 
@@ -485,7 +596,6 @@ void EditorScene::DrawMenuBar() {
     if (ImGui::MenuItem("Undo", "Ctrl+Z", false, !undo_.empty())) Undo();
     if (ImGui::MenuItem("Redo", "Ctrl+Y", false, !redo_.empty())) Redo();
     ImGui::Separator();
-    if (ImGui::MenuItem("New Node")) CreateNode(GetSelectedNode(), "Node");
     if (ImGui::MenuItem("Duplicate", "Ctrl+D", false,
                         GetSelectedNode() != nullptr)) {
       DuplicateSelected();
@@ -494,6 +604,10 @@ void EditorScene::DrawMenuBar() {
                         GetSelectedNode() && !GetSelectedNode()->IsRoot())) {
       DeleteSelected();
     }
+    ImGui::EndMenu();
+  }
+  if (ImGui::BeginMenu("GameObject")) {
+    DrawCreateMenuItems(nullptr);
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Project")) {
@@ -733,13 +847,17 @@ void EditorScene::DrawLauncher() {
   ImGui::SeparatorText("New project");
   ImGui::SetNextItemWidth(200);
   ImGui::InputText("Name", new_project_name_, sizeof(new_project_name_));
+  ImGui::SameLine();
+  if (ImGui::RadioButton("2D", !new_project_3d_)) new_project_3d_ = false;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("3D", new_project_3d_)) new_project_3d_ = true;
   ImGui::SetNextItemWidth(-90);
   ImGui::InputText("##location", new_project_dir_, sizeof(new_project_dir_));
   ImGui::SameLine();
   if (ImGui::Button("Create", ImVec2(-1, 0))) {
     std::string error;
     auto mproj = Templates::CreateProject(new_project_dir_, new_project_name_,
-                                          &error);
+                                          new_project_3d_, &error);
     if (mproj.empty()) {
       console_.Error("Could not create project: " + error);
     } else {

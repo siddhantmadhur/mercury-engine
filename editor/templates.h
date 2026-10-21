@@ -17,7 +17,7 @@ namespace Mercury::Templates {
  * @return The .mproj path, or empty with `error` filled
  */
 std::filesystem::path CreateProject(const std::filesystem::path& parent,
-                                    const std::string& name,
+                                    const std::string& name, bool is_3d,
                                     std::string* error);
 
 /**
@@ -31,8 +31,9 @@ std::filesystem::path CreateScript(const std::filesystem::path& project_root,
 // Writes a .masset of `type` with every field at its default value.
 bool CreateAsset(const std::filesystem::path& file, const std::string& type);
 
-// A map with a root node and a 2D camera.
-std::string NewMapText(const std::string& root_name);
+// A map with a root node and a 2D camera, or for 3D a camera, a light, a
+// ground plane and a cube.
+std::string NewMapText(const std::string& root_name, bool is_3d);
 
 bool IsValidIdentifier(const std::string& name);
 std::string ToSnakeCase(const std::string& name);

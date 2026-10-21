@@ -18,6 +18,7 @@
 #define MERCURY_PROJECT_PROJECT_H
 
 #include <filesystem>
+#include <glm/glm.hpp>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -63,6 +64,8 @@ class Project {
   std::string GetWindowTitle() const;
   int GetWindowWidth() const;
   int GetWindowHeight() const;
+  // [physics] gravity, in units per second squared
+  glm::vec3 GetGravity() const;
 
   /**
    * @brief Turn "res://a/b.mmap" into an absolute path inside the project

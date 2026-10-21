@@ -43,6 +43,15 @@ class RenderHost {
 };
 
 /**
+ * @brief One directional light plus ambient light, used by lit meshes
+ */
+struct SceneLighting {
+  glm::vec3 direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f));
+  glm::vec3 color = glm::vec3(1.0f);  // color * intensity
+  glm::vec3 ambient = glm::vec3(0.2f);
+};
+
+/**
  * @brief Universal abstraction around how worlds are created and modified
  *
  * Game scenes contain everything a renderer can need to draw to the screen.
@@ -72,6 +81,11 @@ class GameScene {
   virtual bool OnCloseRequested() { return true; }
 
   bool GetCameraProj(glm::mat4x4&);
+  bool GetCameraPosition(glm::vec3&);
+
+  SceneLighting& GetLighting() { return lighting_; }
+  glm::vec4 GetClearColor() const { return clear_color_; }
+  void SetClearColor(glm::vec4 color) { clear_color_ = color; }
 
   std::vector<StaticVertex> GetStaticVertices();
   std::vector<UINT> GetStaticIndices();
@@ -102,6 +116,8 @@ class GameScene {
   kEntityId player_camera_ = entt::null;
   InputManager* input_manager_ = nullptr;
   RenderHost* render_host_ = nullptr;
+  SceneLighting lighting_;
+  glm::vec4 clear_color_ = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
 
  private:
   float width_ = 0.0;

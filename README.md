@@ -123,7 +123,8 @@ and don't implement platform specific features like drawing or windowing.
 ### Projects and the editor
 
 Games are made as projects, the way Unity and Godot work, instead of by hand-writing a
-`GameScene`. `examples/pong` is a complete example:
+`GameScene`. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are
+complete examples:
 
 ```
 pong.mproj              project settings (name, main map, window size)
@@ -139,9 +140,18 @@ Open it with the editor:
 ./build/mercury_editor examples/pong/pong.mproj    # or no argument for the project launcher
 ```
 
-The editor has a Hierarchy, an Inspector, a Scene view (drag to move, right/middle drag to pan,
-scroll to zoom), a Project browser and a Console. It has no code editor; write scripts in any
-IDE and set the command it opens them with under Project > External editor command. **Play**
+The editor has a Hierarchy, an Inspector, a Scene view, a Project browser and a Console. It has no
+code editor; write scripts in any IDE and set the command it opens them with under Project >
+External editor command. **GameObject** (or **+ Create** in the Hierarchy, or right-click a node
+for a child) adds empty nodes, 3D objects (cube, sphere, capsule, cylinder, plane, quad, each with
+a matching collider), 2D sprites, directional lights and cameras. New projects from the launcher
+start from a 2D or a 3D template.
+
+The Scene view opens in 2D or 3D to suit the map; the **2D** button switches. Click to select,
+drag to move (along the ground in 3D), and use the **Move / Rotate / Scale** handles (W / E / R);
+hold Ctrl to snap. In 2D, right or middle drag pans and the wheel zooms. In 3D, right drag looks
+around (add W/A/S/D/Q/E to fly, Shift to go faster), Alt + left drag orbits, middle drag pans and
+the wheel zooms. F frames the selection. **Play**
 saves the map, builds the game with CMake, and runs it as its own process, with its output in the
 Console. **Build** only compiles, which refreshes the script list the Inspector uses. New projects
 made from the launcher build against this engine checkout.
@@ -182,9 +192,22 @@ speed = 60.0
 - `res://` paths are relative to the folder that holds the `.mproj`.
 - Fields left at their default value are omitted.
 
-Built-in components are `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `BoxCollider` and
-`PlaneCollider`. Asset types are `Material` and `PhysicsMaterial`. A node's position is relative
-to its parent; maps are flattened to world positions when loaded, and rotation and scale are not
+Built-in components:
+
+| Component | What it does |
+|---|---|
+| `Transform` | `position`, `rotation` (Euler degrees, applied X, then Y, then Z) and `scale` |
+| `SpriteRenderer` | An unlit quad on the XY plane, sized by the scale (2D) |
+| `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file |
+| `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background` |
+| `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity` and `ambient` |
+| `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity factor |
+| `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider` | Collision shapes, scaled by the Transform; `is_trigger` reports contacts without pushing |
+
+Shapes have unit size at scale 1 (a 1 x 1 x 1 cube, a sphere 1 across, a capsule 1 across and 2
+tall), like Unity's. Asset types are `Material` and `PhysicsMaterial`. Gravity is set in the
+`.mproj` with `[physics] gravity = Vector3(0, -9.81, 0)`. A node's position is relative to its
+parent; maps are flattened to world positions when loaded, and rotation and scale are not
 inherited.
 
 #### Scripts
@@ -204,6 +227,10 @@ class Ball : public Mercury::Behaviour {
 MERCURY_SCRIPT(Ball);
 ```
 
+Scripts can push bodies with `Physics().AddForce(GetEntity(), force)` (also `AddImpulse`,
+`AddTorque`, `SetAngularVelocity`), turn things with `GetTransform().SetRotate(...)`, and remove
+objects with `Destroy(object)`.
+
 Fields listed in `Reflect` appear in the Inspector and are saved in maps. Supported field types are
 bool, int, float, std::string, glm::vec2/vec3, glm::vec4 (a color), `NodeRef`, `AssetRef` and
 enums (`r.Enum(...)`). The editor never loads game code. After each build it runs
@@ -212,7 +239,8 @@ generated files and should not be committed.
 
 #### Testing
 
-`ctest --test-dir build` runs the unit tests for the formats, maps and reflection.
+`ctest --test-dir build` runs the unit tests for the formats, maps, reflection, primitive
+meshes and rotations.
 `mercury_editor_smoke <project> <script>` replays scripted input into the editor. Set
 `MERCURY_CAPTURE=frame.png` (plus `MERCURY_CAPTURE_FRAME=n` and `MERCURY_CAPTURE_QUIT=1`) on any
 Mercury program to save a screenshot of a frame.
