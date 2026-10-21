@@ -5,6 +5,7 @@
 #include "application/default_application.h"
 #include "space_invaders.h"
 
+#include <format>
 #include <memory>
 using namespace Pequod;
 

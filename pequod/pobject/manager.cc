@@ -56,7 +56,9 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
   mesh.SetVertices(
       std::vector<Vertex>(std::begin(raw_vertices), std::end(raw_vertices)));
 
-  uint16_t raw_indices[6] = {0, 1, 3, 1, 2, 3};
+  // Counter-clockwise seen from +Z, so the box faces a camera looking down -Z
+  // (same front-face convention as NewCube3D and NewPlane2D).
+  uint16_t raw_indices[6] = {0, 3, 1, 1, 3, 2};
   mesh.SetIndices(
       std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
 

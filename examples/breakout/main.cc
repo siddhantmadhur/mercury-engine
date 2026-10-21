@@ -2,8 +2,12 @@
 // Created by smadhur on 4/25/2026.
 //
 
+#include <format>
+#include <memory>
+
 #include "application/default_application.h"
 #include "breakout_scene.h"
+
 int main() {
   auto application = DefaultApplication(
       std::format("Breakout [Pequod {}]", PEQUOD_ENGINE_VERSION));
