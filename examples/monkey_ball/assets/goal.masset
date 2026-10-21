@@ -1,2 +1,4 @@
 [masset type="Material" format=1]
 color = Color(0.18, 0.92, 0.45, 1)
+roughness = 0.2
+metallic = 0.9

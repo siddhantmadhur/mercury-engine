@@ -2,7 +2,9 @@
 // the HLSL registers through the -fvk-*-shift flags in CMakeLists.txt:
 //   b0 -> binding 0   camera and light uniform buffer (vertex + fragment)
 //   t0 -> binding 10  atlas sampled image           (fragment stage)
+//   t1 -> binding 11  shadow map depth image        (fragment stage)
 //   s0 -> binding 20  atlas sampler                 (fragment stage)
+//   s1 -> binding 21  shadow sampler                (fragment stage)
 // Keep this in sync with the descriptor set layout in vulkan_application.cc.
 
 // Static vertex shader: positions are pre-baked into world space and atlas
@@ -10,11 +12,13 @@
 cbuffer VS_CAMERA_BUFFER : register(b0)
 {
     matrix mWorldViewProj;
-    float2 mResolution;
+    matrix mLightViewProj;
     float4 mLightDirection;  // xyz: the way the light travels
     float4 mLightColor;      // rgb: color * intensity
     float4 mAmbientColor;
     float4 mCameraPosition;
+    float2 mResolution;
+    float2 mShadowParams;    // x: shadow map resolution, y: normal bias
 };
 
 struct VSInput
@@ -33,23 +37,18 @@ struct VSOutput
     [[vk::location(1)]] float2 uv : TEXCOORD0;
     [[vk::location(2)]] float3 normal : NORMAL;
     [[vk::location(3)]] float3 world_position : POSITION1;
+    [[vk::location(4)]] float2 material_params : TEXCOORD1;
 };
 
 VSOutput Main(VSInput input)
 {
-    // Snap in world space (before WVP) so exact half-integer coords like
-    // ±638.5 don't get perturbed by the projection roundtrip and end up
-    // rounding asymmetrically across the origin. Round-half-toward-zero
-    // keeps odd-thickness primitives at their intended pixel width.
-    float3 snapped = input.position;
-    //snapped.xy = sign(snapped.xy) * ceil(abs(snapped.xy) - 0.5);
-
     VSOutput output = (VSOutput) 0;
-    output.position = mul(mWorldViewProj, float4(snapped, 1.0));
+    output.position = mul(mWorldViewProj, float4(input.position, 1.0));
 
     output.color = input.color;
     output.normal = float3(0.0, 0.0, 0.0);  // static geometry is unlit
-    output.world_position = snapped;
+    output.world_position = input.position;
     output.uv = input.atlas_uv.xy + input.uv * (input.atlas_uv.zw - input.atlas_uv.xy);
+    output.material_params = float2(0.5, 0.0);
     return output;
 }

@@ -133,6 +133,10 @@ void MapScene::ApplyEnvironment() {
         glm::normalize(transform->GetRotationQuat() * glm::vec3(0, 0, -1));
     lighting_.color = glm::vec3(light->color) * light->intensity;
     lighting_.ambient = glm::vec3(light->ambient);
+    lighting_.cast_shadows = light->cast_shadows;
+    lighting_.shadow_bias = light->shadow_bias;
+    lighting_.shadow_normal_bias = light->shadow_normal_bias;
+    lighting_.shadow_distance = light->shadow_distance;
     break;
   }
 

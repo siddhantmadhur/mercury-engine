@@ -40,8 +40,8 @@ target = NodePath("Player")
 [node name="Sun" parent="."]
 
 [component type="Transform" node="Sun"]
-position = Vector3(-7.849, 9.041, 6.679)
-rotation = Vector3(-55, -25, 0)
+position = Vector3(-7.849, 25.728, 6.679)
+rotation = Vector3(125, 54.67, 180)
 
 [component type="DirectionalLight" node="Sun"]
 ambient = Color(0.35, 0.38, 0.44, 1)
@@ -486,7 +486,7 @@ game_manager = NodePath("GameManager")
 [node name="Banana4" parent="Pickups"]
 
 [component type="Transform" node="Pickups/Banana4"]
-position = Vector3(0, 2.2, -36.645)
+position = Vector3(0, 3.66, -40.854)
 rotation = Vector3(0, 0, 30)
 scale = Vector3(0.4, 0.6, 0.4)
 

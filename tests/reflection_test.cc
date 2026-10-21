@@ -127,3 +127,44 @@ TEST(TypeRegistry, BuiltinsAndSchemaRoundTrip) {
   std::filesystem::remove(file);
   registry.ClearSchemaScripts();
 }
+
+TEST(Lighting, MaterialAssetPbrPropertiesReflectAndSerialize) {
+  MaterialAsset mat;
+  mat.color = glm::vec4(0.8f, 0.4f, 0.2f, 1.0f);
+  mat.roughness = 0.25f;
+  mat.metallic = 0.85f;
+
+  mtext::PropertyList properties;
+  auto writer = Reflector::Write(properties);
+  mat.Reflect(writer);
+
+  MaterialAsset loaded = ReadFields<MaterialAsset>(properties, "Material");
+  EXPECT_EQ(loaded.color, glm::vec4(0.8f, 0.4f, 0.2f, 1.0f));
+  EXPECT_FLOAT_EQ(loaded.roughness, 0.25f);
+  EXPECT_FLOAT_EQ(loaded.metallic, 0.85f);
+}
+
+TEST(Lighting, DirectionalLightShadowPropertiesReflectAndSerialize) {
+  DirectionalLight light;
+  light.color = glm::vec4(1.0f, 0.95f, 0.9f, 1.0f);
+  light.intensity = 1.8f;
+  light.ambient = glm::vec4(0.2f, 0.25f, 0.3f, 1.0f);
+  light.cast_shadows = true;
+  light.shadow_bias = 0.002f;
+  light.shadow_normal_bias = 0.004f;
+  light.shadow_distance = 75.0f;
+
+  mtext::PropertyList properties;
+  auto writer = Reflector::Write(properties);
+  light.Reflect(writer);
+
+  DirectionalLight loaded =
+      ReadFields<DirectionalLight>(properties, "DirectionalLight");
+  EXPECT_EQ(loaded.color, glm::vec4(1.0f, 0.95f, 0.9f, 1.0f));
+  EXPECT_FLOAT_EQ(loaded.intensity, 1.8f);
+  EXPECT_EQ(loaded.ambient, glm::vec4(0.2f, 0.25f, 0.3f, 1.0f));
+  EXPECT_TRUE(loaded.cast_shadows);
+  EXPECT_FLOAT_EQ(loaded.shadow_bias, 0.002f);
+  EXPECT_FLOAT_EQ(loaded.shadow_normal_bias, 0.004f);
+  EXPECT_FLOAT_EQ(loaded.shadow_distance, 75.0f);
+}
