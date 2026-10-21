@@ -2,12 +2,12 @@
 // Created by smadhur on 5/10/2026.
 //
 
-#ifndef PEQUOD_ENGINE_SCENE_H
-#define PEQUOD_ENGINE_SCENE_H
+#ifndef MERCURY_ENGINE_SCENE_H
+#define MERCURY_ENGINE_SCENE_H
 
 #include <scene/scene.h>
 
-namespace Pequod {
+namespace Mercury {
 class UIEditorScene : public GameScene {
  public:
   void OnStart() override;
@@ -24,6 +24,6 @@ class UIEditorScene : public GameScene {
   float horizontal_ratio = 0.33;
   float vertical_ratio = 0.33;
 };
-}  // namespace Pequod
+}  // namespace Mercury
 
-#endif  // PEQUOD_ENGINE_SCENE_H
+#endif  // MERCURY_ENGINE_SCENE_H

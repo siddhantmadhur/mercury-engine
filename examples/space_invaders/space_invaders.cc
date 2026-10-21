@@ -27,7 +27,7 @@ void SpaceInvaders::OnStart() {
                                         glm::vec2(player_size),
                                         glm::vec4(1.0f));
     auto texture_path =
-        std::filesystem::path(PEQUOD_ASSET_PATH) / "space_invaders/player.png";
+        std::filesystem::path(MERCURY_ASSET_PATH) / "space_invaders/player.png";
     object_manager_->AddProperty(player_, Texture2D(texture_path.string()));
     physics_engine_->CreateBox3D(
         player_, glm::vec3(glm::vec2(player_size), BODY_DEPTH),
@@ -57,7 +57,7 @@ void SpaceInvaders::OnStart() {
 
   {  // Enemies: 5 rows of 8, centered horizontally
     auto texture_path =
-        std::filesystem::path(PEQUOD_ASSET_PATH) / "space_invaders/enemy1.png";
+        std::filesystem::path(MERCURY_ASSET_PATH) / "space_invaders/enemy1.png";
     auto size = glm::vec2(16.0f);
     const float column_step = size.x + 4;
     auto pos = glm::vec2(column_step * 3.5f, offset.y);

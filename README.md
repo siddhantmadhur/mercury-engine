@@ -83,13 +83,13 @@ In fact there are much better engines already out there that do most things
 better so I'd recommend using that if you cannot find a feature here.
 
 That being said, there are many instances where you might want a change urgently (bugs, vulnerabilities)
-and perhaps already fixed it, in which case email [maintainer@pequodengine.com](mailto:maintainer@pequodengine.com) with
+and perhaps already fixed it, in which case email [maintainer@mercuryengine.com](mailto:maintainer@mercuryengine.com) with
 more information or with
 a [git patch](https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-Project#_project_over_email).
 
 Official repositories for the code:
 
-- https://oss.reocelot.com/pequod-engine
+- https://oss.reocelot.com/mercury-engine
 - https://github.com/siddhantmadhur/mercury-engine [mirror]
 
 ## Design
@@ -101,13 +101,13 @@ Mercury to your project, or building using it. And the other is it's internal de
 which is how I've decided to go about designing the program which you hopefully never
 see.
 
-You can find detailed documentation at: [docs.pequodengine.com](https://docs.pequodengine.com)
+You can find detailed documentation at: [docs.mercuryengine.com](https://docs.mercuryengine.com)
 
 Some important design features to better understand the engine:
 
 ### Application
 
-Pequod::Application is responsible for handling cross-platform application level
+Mercury::Application is responsible for handling cross-platform application level
 features such as creating a window, taking in user-input like mouse, keyboard or
 controller.
 
@@ -116,7 +116,7 @@ possible. This is why the next branch of the engine are Scenes and Primitives.
 
 ### Scenes
 
-Pequod::GameScene are a state of the game that should be extended to create the world.
+Mercury::GameScene are a state of the game that should be extended to create the world.
 They only implement higher level functions like managing object properties, or the physics system
 and don't implement platform specific features like drawing or windowing.
 

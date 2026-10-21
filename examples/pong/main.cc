@@ -3,7 +3,7 @@
 #include "application/default_application.h"
 #include "pong_scene.h"
 
-using namespace Pequod;
+using namespace Mercury;
 
 int main(void) {
   auto pong_win = std::make_unique<DefaultApplication>("Pong");

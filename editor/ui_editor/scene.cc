@@ -14,7 +14,7 @@
 
 constexpr int icon_size = 200;
 
-namespace Pequod {
+namespace Mercury {
 void UIEditorScene::OnDestroy() {}
 void UIEditorScene::OnFrame(double delta_t) {
   ImGui::Begin("9-Slice");
@@ -29,7 +29,7 @@ void UIEditorScene::OnStart() {
     auto button = object_manager_->NewBox2D(glm::vec2(0.0), glm::vec2(200, 200),
                                             glm::vec4(1.0));
     auto file_path =
-        fs::path(PEQUOD_EDITOR_ASSET_PATH) / "button_square_flat.png";
+        fs::path(MERCURY_EDITOR_ASSET_PATH) / "button_square_flat.png";
     auto tex = Texture2D(file_path.string());
     object_manager_->AddProperty(button, tex);
   }
@@ -94,4 +94,4 @@ void UIEditorScene::OnTick(double delta_t) {
   }
 }
 
-}  // namespace Pequod
+}  // namespace Mercury
