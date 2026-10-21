@@ -1,0 +1,104 @@
+#ifndef PEQUOD_ENGINE_VK_BUFFER_H
+#define PEQUOD_ENGINE_VK_BUFFER_H
+
+#include <vk_mem_alloc.h>
+#include <vulkan/vulkan.h>
+
+#include <cstddef>
+#include <utility>
+
+namespace Pequod::vk {
+
+/**
+ * @brief VMA-backed VkBuffer that frees itself when destroyed or reset
+ *
+ * Host-visible buffers are persistently mapped; write through Mapped() and
+ * call Flush() afterwards (a no-op on host-coherent memory).
+ */
+class Buffer {
+ public:
+  enum class Memory {
+    kDeviceLocal,  // GPU-only; filled with transfer commands
+    kHostVisible,  // persistently mapped, written sequentially by the CPU
+  };
+
+  Buffer() = default;
+  ~Buffer() { Reset(); }
+  Buffer(const Buffer&) = delete;
+  Buffer& operator=(const Buffer&) = delete;
+  Buffer(Buffer&& other) noexcept { *this = std::move(other); }
+  Buffer& operator=(Buffer&& other) noexcept;
+
+  bool Create(VmaAllocator allocator, VkDeviceSize size,
+              VkBufferUsageFlags usage, Memory memory);
+  void Reset();
+
+  // Copies `bytes` bytes to `offset` in the mapped memory and flushes them.
+  // Returns false (and copies nothing) if the write would overrun the buffer.
+  bool Write(const void* data, VkDeviceSize bytes, VkDeviceSize offset = 0);
+  void Flush(VkDeviceSize offset, VkDeviceSize bytes);
+
+  VkBuffer Get() const { return buffer_; }
+  void* Mapped() const { return mapped_; }
+  VkDeviceSize Size() const { return size_; }
+  bool Valid() const { return buffer_ != VK_NULL_HANDLE; }
+
+ private:
+  VmaAllocator allocator_ = VK_NULL_HANDLE;
+  VkBuffer buffer_ = VK_NULL_HANDLE;
+  VmaAllocation allocation_ = VK_NULL_HANDLE;
+  void* mapped_ = nullptr;
+  VkDeviceSize size_ = 0;
+};
+
+/**
+ * @brief VMA-backed 2D VkImage with a single-mip view
+ */
+class Image {
+ public:
+  Image() = default;
+  ~Image() { Reset(); }
+  Image(const Image&) = delete;
+  Image& operator=(const Image&) = delete;
+
+  bool Create(VmaAllocator allocator, VkDevice device, uint32_t width,
+              uint32_t height, VkFormat format, VkImageUsageFlags usage,
+              VkImageAspectFlags aspect);
+  void Reset();
+
+  VkImage Get() const { return image_; }
+  VkImageView View() const { return view_; }
+  VkExtent2D Extent() const { return extent_; }
+  VkFormat Format() const { return format_; }
+
+ private:
+  VmaAllocator allocator_ = VK_NULL_HANDLE;
+  VkDevice device_ = VK_NULL_HANDLE;
+  VkImage image_ = VK_NULL_HANDLE;
+  VkImageView view_ = VK_NULL_HANDLE;
+  VmaAllocation allocation_ = VK_NULL_HANDLE;
+  VkExtent2D extent_ = {};
+  VkFormat format_ = VK_FORMAT_UNDEFINED;
+};
+
+/**
+ * @brief Records a single-subresource image layout transition (sync2)
+ */
+void TransitionImage(VkCommandBuffer cmd, VkImage image,
+                     VkImageAspectFlags aspect, VkImageLayout old_layout,
+                     VkImageLayout new_layout,
+                     VkPipelineStageFlags2 src_stage,
+                     VkAccessFlags2 src_access,
+                     VkPipelineStageFlags2 dst_stage,
+                     VkAccessFlags2 dst_access);
+
+/**
+ * @brief Records a global memory barrier (sync2)
+ */
+void GlobalBarrier(VkCommandBuffer cmd, VkPipelineStageFlags2 src_stage,
+                   VkAccessFlags2 src_access, VkPipelineStageFlags2 dst_stage,
+                   VkAccessFlags2 dst_access);
+
+}  // namespace Pequod::vk
+
+#endif  // PEQUOD_ENGINE_VK_BUFFER_H

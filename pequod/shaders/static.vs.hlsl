@@ -1,3 +1,10 @@
+// Vulkan resource mapping (descriptor set 0). DXC derives the bindings from
+// the HLSL registers through the -fvk-*-shift flags in CMakeLists.txt:
+//   b0 -> binding 0   camera uniform buffer         (vertex stage)
+//   t0 -> binding 10  atlas sampled image           (fragment stage)
+//   s0 -> binding 20  atlas sampler                 (fragment stage)
+// Keep this in sync with the descriptor set layout in vulkan_application.cc.
+
 // Static vertex shader: positions are pre-baked into world space and atlas
 // UVs ride per-vertex, so no per-object cbuffer is needed.
 cbuffer VS_CAMERA_BUFFER : register(b0)
@@ -8,17 +15,18 @@ cbuffer VS_CAMERA_BUFFER : register(b0)
 
 struct VSInput
 {
-    float3 position : POSITION;
-    float4 color : COLOR0;
-    float2 uv : TEXCOORD0;
-    float4 atlas_uv : TEXCOORD1;
+    // Vertex buffer binding 0, layout matches StaticVertex
+    [[vk::location(0)]] float3 position : POSITION;
+    [[vk::location(1)]] float4 color : COLOR0;
+    [[vk::location(2)]] float2 uv : TEXCOORD0;
+    [[vk::location(3)]] float4 atlas_uv : TEXCOORD1;
 };
 
 struct VSOutput
 {
     float4 position : SV_Position;
-    float4 color : COLOR0;
-    float2 uv : TEXCOORD0;
+    [[vk::location(0)]] float4 color : COLOR0;
+    [[vk::location(1)]] float2 uv : TEXCOORD0;
 };
 
 VSOutput Main(VSInput input)

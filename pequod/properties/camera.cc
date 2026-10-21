@@ -60,7 +60,8 @@ glm::vec3 Camera::GetRayFromScreen(glm::vec2 cursor, glm::vec2 res,
   auto mouse = glm::vec2((2.0f * cursor.x) / res.x - 1.0f,
                          1.0 - (2.0f * cursor.y) / res.y);
 
-  glm::vec4 ray_start_ndc(mouse.x, mouse.y, -1.0f, 1.0f);
+  // GLM_FORCE_DEPTH_ZERO_TO_ONE: the near plane sits at NDC z = 0.
+  glm::vec4 ray_start_ndc(mouse.x, mouse.y, 0.0f, 1.0f);
   glm::vec4 ray_end_ndc(mouse.x, mouse.y, 1.0f, 1.0f);
 
   glm::mat4 inv_vp = glm::inverse(GetProjection(res.x, res.y) * GetView(t));

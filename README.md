@@ -12,6 +12,7 @@ https://github.com/user-attachments/assets/fb179440-1d15-4767-967c-cbbb4eb99759
 
 - [Goal](#goal)
 - [Support](#support)
+- [Building](#building)
 - [Issues](#issues)
 - [Contributing](#contributing)
 - [Design](#design)
@@ -36,13 +37,39 @@ If a platform is not on the list then that means supporting is not a goal of thi
 
 | Platform      | Renderer | Support |
 |---------------|----------|---------|
-| Windows 10/11 | D3D11    | Yes     |
-| SteamOS       | DXVK     | No [^1] |
-| Linux         | Vulkan   | None    |
+| Windows 10/11 | Vulkan   | Yes     |
+| Linux         | Vulkan   | Yes     |
+| SteamOS       | Vulkan   | No [^1] |
 | MacOS         | MoltenVK | None    |
+
+Rendering requires a GPU and driver with Vulkan 1.3 (dynamic rendering). Shaders are
+written in HLSL and compiled to SPIR-V with DXC at build time.
 
 [^1]: The goal is to have SteamOS specific features like support for those touchpads on the
 SteamDeck or the controllers. Along with support for controller layouts, battery modes and more.
+
+## Building
+
+### Linux (X11 and Wayland)
+
+```sh
+./scripts/setup_project_linux.sh        # apt or pacman; installs Vulkan, GLFW deps and DXC
+git submodule update --init --recursive
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+```
+
+Debian/Ubuntu don't package DXC, so the setup script downloads the official release into
+`bin/dxc/`, which CMake finds automatically. If you use the
+[LunarG Vulkan SDK](https://vulkan.lunarg.com) instead, set `VULKAN_SDK` and its `dxc` is used.
+
+Debug builds enable `VK_LAYER_KHRONOS_validation` when it is installed.
+
+### Windows
+
+Install the [LunarG Vulkan SDK](https://vulkan.lunarg.com) (it provides the loader, validation
+layers and DXC, and sets `VULKAN_SDK`), then configure with CMake or open the folder in Visual
+Studio (`CMakeSettings.json`).
 
 ## Issues
 

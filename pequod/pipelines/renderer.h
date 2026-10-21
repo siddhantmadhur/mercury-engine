@@ -7,16 +7,16 @@
 #ifndef PEQUOD_ENGINE_RENDERER_H
 #define PEQUOD_ENGINE_RENDERER_H
 
-#include <intsafe.h>
+#include <cstdint>
 
 #include <vector>
 
 typedef struct VertexBuffer {
 } VertexBuffer;
 
-using IndexBuffer = std::vector<UINT>;
+using IndexBuffer = std::vector<uint32_t>;
 
-typedef struct Shader {};
+struct Shader {};
 
 /**
  * @brief This should be everything a renderer needs to complete a render
