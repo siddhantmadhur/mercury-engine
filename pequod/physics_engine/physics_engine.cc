@@ -1,5 +1,7 @@
 #include "physics_engine.h"
 
+#include <algorithm>
+
 #include "Jolt/Core/Factory.h"
 #include "Jolt/RegisterTypes.h"
 #include "Jolt/Physics/Body/BodyCreationSettings.h"
@@ -289,15 +291,27 @@ void PhysicsEngine::Compute(int steps) {
     auto entity_id = pair.second;
 
     auto transform = object_manager_.GetProperty<Transform>(entity_id);
+    if (transform == nullptr) continue;
     auto transformations = transform->GetTransformations();
-    if (!std::binary_search(transformations.begin(), transformations.end(),
-                            kTransformPosition)) {
+    // The list is in call order, not sorted, so it has to be searched
+    // linearly.
+    auto was_set = [&](TransformationType type) {
+      return std::find(transformations.begin(), transformations.end(), type) !=
+             transformations.end();
+    };
+    if (!was_set(kTransformPosition)) {
       auto phys_position = body_interface.GetPosition(body_id);
       transform->SetPosition(glm::vec3(
           phys_position.GetX(), phys_position.GetY(), phys_position.GetZ()));
     }
-    if (!std::binary_search(transformations.begin(), transformations.end(),
-                            kTransformRotation)) {
+    // Report Jolt's velocity back so Transform::GetVelocity() reflects
+    // collisions, gravity and damping rather than the last value set.
+    if (!was_set(kTransformLinearVelocity)) {
+      auto phys_velocity = body_interface.GetLinearVelocity(body_id);
+      transform->SetVelocity(glm::vec3(
+          phys_velocity.GetX(), phys_velocity.GetY(), phys_velocity.GetZ()));
+    }
+    if (!was_set(kTransformRotation)) {
       auto phys_position = body_interface.GetRotation(body_id);
       transform->SetRotate(glm::vec3(phys_position.GetX(), phys_position.GetY(),
                                      phys_position.GetZ()));
@@ -307,10 +321,13 @@ void PhysicsEngine::Compute(int steps) {
 }
 
 void PhysicsEngine::DisableBody(kEntityId id) {
-  auto body_id = entity_bodies_ref_[id];
+  // operator[] here would insert an invalid BodyID that the deletion queue
+  // later hands to Jolt.
+  if (!entity_bodies_ref_.contains(id)) return;
   PDebug::log("Disabling body: {}", static_cast<uint32_t>(id));
 
-  if (std::binary_search(disable_queue_.begin(), disable_queue_.end(), id)) {
+  if (std::find(disable_queue_.begin(), disable_queue_.end(), id) !=
+      disable_queue_.end()) {
     return;
   }
 

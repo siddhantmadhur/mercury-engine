@@ -4,9 +4,13 @@
 
 #ifndef PEQUODENGINE_SPACE_INVADERS_H
 #define PEQUODENGINE_SPACE_INVADERS_H
+
+#include <unordered_set>
+
+#include "../common/example_utils.h"
 #include "scene/scene.h"
 
-constexpr int ZOOM = 4;
+constexpr int ZOOM = 4;  // screen pixels per world unit
 
 using namespace Pequod;
 
@@ -20,7 +24,12 @@ class SpaceInvaders : public GameScene {
   void ShootPellet();
 
  protected:
-  std::shared_ptr<PObject> player_ = nullptr;
+  kEntityId player_ = entt::null;
+  kEntityId roof_ = entt::null;
+  std::unordered_set<kEntityId> enemies_;
+  std::unordered_set<kEntityId> pellets_;
+  int score_ = 0;
+  Examples::CollisionQueue collisions_;
 };
 
 #endif  // PEQUODENGINE_SPACE_INVADERS_H

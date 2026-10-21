@@ -4,6 +4,10 @@
 
 #ifndef PEQUODENGINE_BREAKOUT_SCENE_H
 #define PEQUODENGINE_BREAKOUT_SCENE_H
+
+#include <unordered_set>
+
+#include "../common/example_utils.h"
 #include "scene/scene.h"
 
 using namespace Pequod;
@@ -16,8 +20,15 @@ class BreakoutScene : public GameScene {
   void OnTick(double delta_t) override;
 
  protected:
-  kEntityId bricks_[5][10] = {};
-  std::shared_ptr<PObject> player_ = nullptr;
-  std::shared_ptr<PObject> ball_ = nullptr;
+  void ResetBall();
+
+  std::unordered_set<kEntityId> bricks_;
+  kEntityId player_ = entt::null;
+  kEntityId ball_ = entt::null;
+  kEntityId floor_ = entt::null;
+  float player_limit_ = 0.0f;  // max |x| of the paddle's center
+  float player_y_ = 0.0f;
+  int balls_lost_ = 0;
+  Examples::CollisionQueue collisions_;
 };
 #endif  // PEQUODENGINE_BREAKOUT_SCENE_H

@@ -1,9 +1,5 @@
-#include <Jolt/Jolt.h>
+#include <memory>
 
-#include <iostream>
-#include <thread>
-
-#include "application/application.h"
 #include "application/default_application.h"
 #include "pong_scene.h"
 

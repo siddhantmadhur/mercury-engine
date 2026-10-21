@@ -4,8 +4,8 @@
 
 #ifndef PEQUODENGINE_PONG_SCENE_H
 #define PEQUODENGINE_PONG_SCENE_H
-#include <input/input_manager.h>
 
+#include "../common/example_utils.h"
 #include "scene/scene.h"
 
 using namespace Pequod;
@@ -17,21 +17,24 @@ class PongScene : public GameScene {
   void OnTick(double delta_t) override;
   void OnDestroy() override;
 
-  void DestroyBrick();
-
  protected:
   void StartNewRound();
+  // Drives a kinematic paddle vertically, stopping it at the top and bottom
+  // edges (kinematic bodies do not collide with the static walls).
+  void MovePaddle(kEntityId paddle, float velocity_y);
+
   int player_wins_ = 0;
   int enemy_wins_ = 0;
 
-  kEntityId left_wall_ = -1;
-  kEntityId right_wall_ = -1;
+  kEntityId left_wall_ = entt::null;
+  kEntityId right_wall_ = entt::null;
 
  private:
-  std::shared_ptr<PObject> player_ = nullptr;
-  std::shared_ptr<PObject> enemy_ = nullptr;
-  std::shared_ptr<PObject> ball_ = nullptr;
-  std::map<kEntityId, std::function<void()>> on_collisions_ = {};
+  kEntityId player_ = entt::null;
+  kEntityId enemy_ = entt::null;
+  kEntityId ball_ = entt::null;
+  float paddle_limit_ = 0.0f;  // max |y| of a paddle's center
+  Examples::CollisionQueue goals_;
 };
 
 #endif  // PEQUODENGINE_PONG_SCENE_H
