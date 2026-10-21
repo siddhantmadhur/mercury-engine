@@ -1,3 +1,10 @@
+// Vulkan resource mapping (descriptor set 0). DXC derives the bindings from
+// the HLSL registers through the -fvk-*-shift flags in CMakeLists.txt:
+//   b0 -> binding 0   camera uniform buffer         (vertex stage)
+//   t0 -> binding 10  atlas sampled image           (fragment stage)
+//   s0 -> binding 20  atlas sampler                 (fragment stage)
+// Keep this in sync with the descriptor set layout in vulkan_application.cc.
+
 // Handles frame data like camera information
 cbuffer VS_CAMERA_BUFFER : register(b0)
 {
@@ -7,25 +14,26 @@ cbuffer VS_CAMERA_BUFFER : register(b0)
 
 struct VSInput
 {
-    float3 position : POSITION;
-    float3 color : COLOR0;
-    float2 uv : TEXCOORD0;
+    // Per-vertex data (vertex buffer binding 0, layout matches Vertex)
+    [[vk::location(0)]] float3 position : POSITION;
+    [[vk::location(1)]] float3 color : COLOR0;
+    [[vk::location(2)]] float2 uv : TEXCOORD0;
 
-    // Per-instance data (input slot 1)
-    float3 inst_scale     : INSTANCE_SCALE;
-    float  inst_opacity   : INSTANCE_OPACITY;
-    float4 inst_world0    : INSTANCE_WORLD0;
-    float4 inst_world1    : INSTANCE_WORLD1;
-    float4 inst_world2    : INSTANCE_WORLD2;
-    float4 inst_world3    : INSTANCE_WORLD3;
-    float4 inst_atlas_uv  : INSTANCE_ATLAS_UV;
+    // Per-instance data (vertex buffer binding 1, layout matches VsModelBuffer)
+    [[vk::location(3)]] float3 inst_scale     : INSTANCE_SCALE;
+    [[vk::location(4)]] float  inst_opacity   : INSTANCE_OPACITY;
+    [[vk::location(5)]] float4 inst_world0    : INSTANCE_WORLD0;
+    [[vk::location(6)]] float4 inst_world1    : INSTANCE_WORLD1;
+    [[vk::location(7)]] float4 inst_world2    : INSTANCE_WORLD2;
+    [[vk::location(8)]] float4 inst_world3    : INSTANCE_WORLD3;
+    [[vk::location(9)]] float4 inst_atlas_uv  : INSTANCE_ATLAS_UV;
 };
 
 struct VSOutput
 {
     float4 position : SV_Position;
-    float4 color : COLOR0;
-    float2 uv : TEXCOORD0;
+    [[vk::location(0)]] float4 color : COLOR0;
+    [[vk::location(1)]] float2 uv : TEXCOORD0;
 };
 
 VSOutput Main(VSInput input)
@@ -33,11 +41,10 @@ VSOutput Main(VSInput input)
     VSOutput output = (VSOutput) 0;
 
     // Reconstruct the per-instance world matrix from four float4 inputs.
-    // Each input is 16 consecutive bytes from the instance buffer, which
-    // holds a DirectX::XMFLOAT4X4 (row-major). Because glm is column-major
-    // and was memcpy'd directly into XMFLOAT4X4, those bytes are actually
-    // the glm *columns*. float4x4(a,b,c,d) places each argument as a row,
-    // so `world` ends up as the transpose of the original logical matrix.
+    // Each input is 16 consecutive bytes of the glm::mat4 stored in the
+    // instance buffer. glm is column-major, so those bytes are the glm
+    // *columns*. float4x4(a,b,c,d) places each argument as a row, so
+    // `world` ends up as the transpose of the original logical matrix.
     // We compensate by multiplying with the vector on the left
     // (mul(v, world) == world^T * v), which restores glm * v.
     matrix world = matrix(input.inst_world0,

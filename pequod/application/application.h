@@ -1,10 +1,9 @@
 /*
  * application.h
  *
- * Refactoring of the engine where I've made a decision to make my own graphics
- * api wrapper. It will be simple and only targets Windows. This decision was
- * made so I can hyper-focus on one platform which means it will be easier to
- * debug any bugs
+ * Platform layer of the engine: GLFW windowing, input and the frame/tick loop.
+ * A graphics backend (currently Vulkan, on Windows and Linux) derives from
+ * Application and implements the rendering hooks.
  *
  */
 
@@ -30,7 +29,7 @@ static InputManager input_manager_;
  *
  * Abstraction to create cross-platform windowing and event handling. In order
  * to actually support every platform this class needs to be extended with the
- * renderer of choice (eg. d3d11, vulkan)
+ * renderer of choice (eg. vulkan)
  *
  * This is easier to do because of the engine relying on a simple Primitive
  * data structure that defines the types of objects needed to be rendered along
@@ -102,7 +101,7 @@ class Application {
    */
   virtual void OnResize(int32_t width, int32_t height);
 
-  // Per-backend ImGui frame begin (e.g. ImGui_ImplDX11_NewFrame).
+  // Per-backend ImGui frame begin (e.g. ImGui_ImplVulkan_NewFrame).
   virtual void ImGuiNewFrame() = 0;
 
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);

@@ -18,10 +18,20 @@ constexpr int kFrametimeSlidingWindowSize = 50;
 
 static InputManager input_manager;
 
+#if defined(_WIN32)
+constexpr const char* kPlatformName = "Windows";
+#elif defined(__linux__)
+constexpr const char* kPlatformName = "Linux";
+#elif defined(__APPLE__)
+constexpr const char* kPlatformName = "macOS";
+#else
+constexpr const char* kPlatformName = "Unknown";
+#endif
+
 Application::Application(const std::string& window_title, float initial_width,
                          float initial_height) {
-  PDebug::info("==================[ Pequod | {} | Windows ]==================",
-               window_title);
+  PDebug::info("==================[ Pequod | {} | {} ]==================",
+               window_title, kPlatformName);
   title_ = window_title;
   width_ = initial_width;
   height_ = initial_height;
@@ -83,9 +93,8 @@ bool Application::Initialize() {
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO();
-
-  ImGui_ImplGlfw_InitForOther(window_, true);
+  // The backend initializes the ImGui GLFW platform layer (e.g.
+  // ImGui_ImplGlfw_InitForVulkan) once its device exists.
 
   return true;
 }
@@ -113,9 +122,6 @@ int Application::Run() {
     }
   }
   while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
-    glfwMakeContextCurrent(window_);
-    glfwSwapInterval(0);
-
     double current_time = glfwGetTime() * 1000;
     auto frametime = current_time - time_elapsed_;
     delta_time_ = frametime;
@@ -171,6 +177,18 @@ int Application::Run() {
       OnNewTick();
     } else {
       PDebug::warn("Game scene not set");
+    }
+
+    // A minimized window has a 0x0 framebuffer, which most backends (Vulkan
+    // included) cannot create a swapchain for. Close out the ImGui frame
+    // without drawing and idle briefly instead of spinning.
+    int framebuffer_width = 0;
+    int framebuffer_height = 0;
+    glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
+    if (framebuffer_width == 0 || framebuffer_height == 0) {
+      if (game_scene_) ImGui::EndFrame();
+      glfwWaitEventsTimeout(0.05);
+      continue;
     }
 
     Render();

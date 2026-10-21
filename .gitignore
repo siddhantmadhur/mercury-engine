@@ -2,8 +2,6 @@ build/
 build-*/
 bin/
 .cache/
-sokol-shdc
-*.shader.hh
 .todolist
 /.vs
 /.idea
