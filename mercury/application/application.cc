@@ -53,6 +53,7 @@ bool Application::Initialize() {
     game_scene_->SetWidth(width_);
     game_scene_->SetHeight(height_);
     game_scene_->SetInputManager(&input_manager);
+    game_scene_->SetRenderHost(this);
   }
 
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
@@ -121,7 +122,11 @@ int Application::Run() {
       PDebug::error("Cursor could not be created");
     }
   }
-  while ((!glfwWindowShouldClose(window_)) && (!game_scene_->ShouldQuit())) {
+  while (!game_scene_->ShouldQuit()) {
+    if (glfwWindowShouldClose(window_)) {
+      if (game_scene_->OnCloseRequested()) break;
+      glfwSetWindowShouldClose(window_, GLFW_FALSE);
+    }
     double current_time = glfwGetTime() * 1000;
     auto frametime = current_time - time_elapsed_;
     delta_time_ = frametime;
@@ -237,6 +242,10 @@ void Application::SetPointer(std::string file_path) {
   }
 }
 void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }
+void Application::SetWindowTitle(const std::string& title) {
+  title_ = title;
+  if (window_) glfwSetWindowTitle(window_, title.c_str());
+}
 void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {
   this->game_scene_ = std::move(game_scene);
 }

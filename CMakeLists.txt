@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.30)
 
 project(MercuryEngine LANGUAGES CXX C)
 
+# Examples, tests and the editor are only built when this is the top-level
+# project, not when a game pulls the engine in with add_subdirectory().
+option(MERCURY_BUILD_EXAMPLES "Build the example games" ${PROJECT_IS_TOP_LEVEL})
+option(MERCURY_BUILD_TESTS "Build the unit tests" ${PROJECT_IS_TOP_LEVEL})
+option(MERCURY_BUILD_EDITOR "Build mercury_editor" ${PROJECT_IS_TOP_LEVEL})
+
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
 
 include_directories("third_party")
@@ -60,17 +66,38 @@ add_library(mercury
         mercury/math/vector.h
         mercury/properties/mesh_instance.h
         mercury/properties/mesh_instance.cc
+        mercury/serialization/mtext.cc
+        mercury/serialization/mtext.h
+        mercury/project/project.cc
+        mercury/project/project.h
+        mercury/project/map.cc
+        mercury/project/map.h
+        mercury/project/asset_database.cc
+        mercury/project/asset_database.h
+        mercury/scripting/reflection.cc
+        mercury/scripting/reflection.h
+        mercury/scripting/type_registry.cc
+        mercury/scripting/type_registry.h
+        mercury/scripting/behaviour.h
+        mercury/components/components.h
+        mercury/components/builtin_types.cc
+        mercury/scene/map_scene.cc
+        mercury/scene/map_scene.h
+        mercury/player/player.cc
+        mercury/player/player.h
+        mercury/os/process.cc
+        mercury/os/process.h
 )
 
 
 include_directories("mercury")
-include_directories("editor")
 
 # link imgui
 
 file(GLOB IMGUI_SOURCES
         "${IMGUI_BACKEND_SRC}"
         "third_party/imgui/backends/imgui_impl_glfw.cpp"
+        "third_party/imgui/misc/cpp/imgui_stdlib.cpp"
         "third_party/imgui/backends/*.h"
         "third_party/imgui/*.cpp"
         "third_party/imgui/*.h"
@@ -137,6 +164,18 @@ endif ()
 
 target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 glfw assimp
         EnTT::EnTT Vulkan::Vulkan Threads::Threads)
+# Games built outside this folder (see cmake/MercuryGame.cmake) need the same
+# language level and include paths the engine uses.
+target_compile_features(mercury PUBLIC cxx_std_20)
+target_include_directories(mercury PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/mercury"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/JoltPhysics"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glfw/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/entt/single_include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/VulkanMemoryAllocator/include")
 
 if (MSVC)
     message(STATUS "Using Visual Studio Compiler")
@@ -185,25 +224,67 @@ target_compile_definitions(mercury PUBLIC MERCURY_SPIRV_PATH="${SHADER_BIN}")
 # CREATE NEW BINARIES USING THIS
 
 
-add_executable(mercury_test tests/main.cc)
-add_executable(pong examples/pong/main.cc
-        examples/pong/pong_scene.cc
-        examples/pong/pong_scene.h
-)
-target_link_libraries(pong mercury)
+# Unit tests (ctest --test-dir build)
+if (MERCURY_BUILD_TESTS)
+enable_testing()
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+add_subdirectory(third_party/googletest EXCLUDE_FROM_ALL)
+add_executable(mercury_test
+        tests/mtext_test.cc
+        tests/map_test.cc
+        tests/reflection_test.cc)
+target_link_libraries(mercury_test mercury GTest::gtest_main)
+target_compile_definitions(mercury_test PRIVATE
+        MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+include(GoogleTest)
+gtest_discover_tests(mercury_test)
+endif ()
 
+# Games made of a .mproj project (maps, assets and C++ scripts)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGame.cmake)
+if (MERCURY_BUILD_EXAMPLES)
+    add_subdirectory(examples/pong)
 
-add_executable(example_breakout examples/breakout/main.cc
-        examples/breakout/breakout_scene.cc
-        examples/breakout/breakout_scene.h)
-target_link_libraries(example_breakout mercury)
+    # Older examples that still build their worlds in code
+    add_executable(example_breakout examples/breakout/main.cc
+            examples/breakout/breakout_scene.cc
+            examples/breakout/breakout_scene.h)
+    target_link_libraries(example_breakout mercury)
 
-add_executable(example_space_invaders examples/space_invaders/main.cc
-        examples/space_invaders/space_invaders.cc
-        examples/space_invaders/space_invaders.h)
-target_link_libraries(example_space_invaders mercury)
+    add_executable(example_space_invaders examples/space_invaders/main.cc
+            examples/space_invaders/space_invaders.cc
+            examples/space_invaders/space_invaders.h)
+    target_link_libraries(example_space_invaders mercury)
+endif ()
 
-add_executable(mercury_editor editor/main.cc
-        editor/ui_editor/scene.cc)
-target_link_libraries(mercury_editor mercury)
-target_compile_definitions(mercury_editor PRIVATE MERCURY_EDITOR_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+if (MERCURY_BUILD_EDITOR)
+    # Everything but main(), so the smoke test can drive the same editor.
+    add_library(mercury_editor_lib STATIC
+            editor/editor_scene.cc
+            editor/editor_scene.h
+            editor/panels.cc
+            editor/scene_view.cc
+            editor/console.cc
+            editor/console.h
+            editor/editor_settings.cc
+            editor/editor_settings.h
+            editor/play_session.cc
+            editor/play_session.h
+            editor/templates.cc
+            editor/templates.h)
+    target_link_libraries(mercury_editor_lib PUBLIC mercury)
+    target_include_directories(mercury_editor_lib PUBLIC editor)
+    # New projects build against this checkout of the engine.
+    target_compile_definitions(mercury_editor_lib PRIVATE
+            MERCURY_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_executable(mercury_editor editor/main.cc)
+    target_link_libraries(mercury_editor mercury_editor_lib)
+
+    if (MERCURY_BUILD_TESTS)
+        # Replays scripted input into the editor; see the file for the format.
+        add_executable(mercury_editor_smoke tests/editor_smoke.cc)
+        target_link_libraries(mercury_editor_smoke mercury_editor_lib)
+    endif ()
+endif ()

@@ -55,6 +55,13 @@ class PObjectManager {
 
   kEntityId NewBox2D(glm::vec2, glm::vec2, glm::vec4);
 
+  /**
+   * @brief A 1x1 quad on the XY plane facing +Z, the mesh NewBox2D uses
+   *
+   * Size it with the Transform's scale.
+   */
+  static Mesh MakeQuadMesh(glm::vec4 color = glm::vec4(1.0f));
+
   kEntityId NewPlane2D(glm::vec3 position, glm::vec2 size,
                        glm::vec4 color = glm::vec4(1.0));
 
@@ -79,10 +86,11 @@ class PObjectManager {
     registry_.emplace_or_replace<T>(self, property);
   };
 
+  // nullptr if the entity lacks T, or is null or destroyed.
   template <typename T>
   T *GetProperty(kEntityId self) {
-    auto property = registry_.try_get<T>(self);
-    return property;
+    if (!registry_.valid(self)) return nullptr;
+    return registry_.try_get<T>(self);
   }
 
   template <class T>
@@ -109,6 +117,9 @@ class PObjectManager {
   std::vector<Vertex> GetVertices() const;
 
   void DeleteObject(kEntityId id);
+
+  // Removes the entity and every property it has.
+  void DestroyObject(kEntityId id);
 
   TextureAtlas &GetAtlas() { return atlas_; }
 

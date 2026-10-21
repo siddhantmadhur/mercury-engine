@@ -51,6 +51,10 @@ class Transform {
   // tick before any per-tick updates run.
   void CaptureTickSnapshot();
 
+  // Make the interpolated (rendered) state equal the current state, so a
+  // freshly placed object does not blend in from the origin or from scale 0.
+  void SnapInterpolation();
+
   std::vector<TransformationType> GetTransformations();
   void ClearTransformations();
 

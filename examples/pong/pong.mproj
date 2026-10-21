@@ -1,0 +1,9 @@
+[project]
+name = "Pong"
+main_map = "res://maps/main.mmap"
+engine_version = "dev"
+
+[window]
+title = "Pong"
+width = 1280
+height = 720

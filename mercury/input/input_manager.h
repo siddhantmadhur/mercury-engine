@@ -5,6 +5,7 @@
 #ifndef MERCURYENGINE_INPUT_MANAGER_H
 #define MERCURYENGINE_INPUT_MANAGER_H
 #include <map>
+#include <string_view>
 
 #include "GLFW/glfw3.h"
 #include "glm/vec2.hpp"
@@ -47,6 +48,13 @@ class InputManager {
 
   bool IsHoveringOnUI();
   void SetHoveringOverUI(bool new_value);
+
+  /**
+   * @brief Key code for a name such as "W", "Space", "Up" or "Escape"
+   *
+   * Case-insensitive. Returns GLFW_KEY_UNKNOWN for names it does not know.
+   */
+  static Key KeyFromName(std::string_view name);
 
  private:
   void SetKeyRepeat(Key k);

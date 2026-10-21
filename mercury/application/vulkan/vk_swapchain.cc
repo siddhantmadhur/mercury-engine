@@ -89,6 +89,10 @@ bool Swapchain::Create(Context& context, uint32_t framebuffer_width,
   create_info.imageExtent = extent_;
   create_info.imageArrayLayers = 1;
   create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  // Lets frames be copied out for MERCURY_CAPTURE screenshots.
+  if (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
+    create_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  }
   create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   create_info.preTransform = capabilities.currentTransform;
   create_info.compositeAlpha = composite_alpha;

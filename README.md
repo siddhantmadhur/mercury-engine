@@ -120,6 +120,103 @@ Mercury::GameScene are a state of the game that should be extended to create the
 They only implement higher level functions like managing object properties, or the physics system
 and don't implement platform specific features like drawing or windowing.
 
+### Projects and the editor
+
+Games are made as projects, the way Unity and Godot work, instead of by hand-writing a
+`GameScene`. `examples/pong` is a complete example:
+
+```
+pong.mproj              project settings (name, main map, window size)
+maps/main.mmap          the map: nodes and their components
+assets/*.masset         materials and physics materials
+scripts/*.h, *.cc       game logic as C++ components
+CMakeLists.txt          mercury_add_game(pong PROJECT ${CMAKE_CURRENT_SOURCE_DIR})
+```
+
+Open it with the editor:
+
+```sh
+./build/mercury_editor examples/pong/pong.mproj    # or no argument for the project launcher
+```
+
+The editor has a Hierarchy, an Inspector, a Scene view (drag to move, right/middle drag to pan,
+scroll to zoom), a Project browser and a Console. It has no code editor; write scripts in any
+IDE and set the command it opens them with under Project > External editor command. **Play**
+saves the map, builds the game with CMake, and runs it as its own process, with its output in the
+Console. **Build** only compiles, which refreshes the script list the Inspector uses. New projects
+made from the launcher build against this engine checkout.
+
+Each game is its own executable, such as `./build/examples/pong/pong`. With no arguments it opens
+the project it was built from; it also takes `[project.mproj] [--map res://maps/x.mmap]`.
+
+#### File formats
+
+`.mproj`, `.mmap` and `.masset` share one text format, modeled on Godot's `.tscn` so that people
+and LLMs can read, diff and edit it by hand. A file is a list of `[sections]`, each followed by
+`key = value` lines:
+
+```ini
+[mmap format=1]
+
+[ext_resource type="Material" path="res://assets/white.masset" id="1"]
+
+[node name="Pong"]
+
+[node name="Ball" parent="."]
+
+[component type="Transform" node="Ball"]
+scale = Vector3(2, 2, 1)
+
+[component type="SpriteRenderer" node="Ball"]
+material = ExtResource("1")
+
+[component type="Ball" node="Ball"]
+speed = 60.0
+```
+
+- `parent=` and `node=` are paths from the root node: `.` is the root, `Ball` is a child of the
+  root, and `Walls/Left` is a grandchild. Parents come before their children.
+- Values are `true`, `3`, `1.5`, `"text"`, `Vector2(x, y)`, `Vector3(x, y, z)`,
+  `Color(r, g, b, a)`, `NodePath("Walls/Left")`, `ExtResource("id")`, `Resource("res://...")`
+  or `[arrays]`. Comments start with `;`, but they are not kept when the editor saves.
+- `res://` paths are relative to the folder that holds the `.mproj`.
+- Fields left at their default value are omitted.
+
+Built-in components are `Transform`, `SpriteRenderer`, `Camera`, `Rigidbody`, `BoxCollider` and
+`PlaneCollider`. Asset types are `Material` and `PhysicsMaterial`. A node's position is relative
+to its parent; maps are flattened to world positions when loaded, and rotation and scale are not
+inherited.
+
+#### Scripts
+
+A script is a C++ class deriving from `Mercury::Behaviour`, registered with `MERCURY_SCRIPT`:
+
+```cpp
+class Ball : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override { r.Field("speed", speed); }
+  void OnStart() override;                          // all objects exist
+  void OnTick(double dt) override;                  // 60 times a second, before physics
+  void OnFrame(double dt) override;                 // every frame; ImGui allowed
+  void OnCollisionEnter(Mercury::GameObject other) override;
+  float speed = 60.0f;
+};
+MERCURY_SCRIPT(Ball);
+```
+
+Fields listed in `Reflect` appear in the Inspector and are saved in maps. Supported field types are
+bool, int, float, std::string, glm::vec2/vec3, glm::vec4 (a color), `NodeRef`, `AssetRef` and
+enums (`r.Enum(...)`). The editor never loads game code. After each build it runs
+`game --dump-schema .mercury/scripts.mschema` to learn the scripts' fields. `.mercury/` holds
+generated files and should not be committed.
+
+#### Testing
+
+`ctest --test-dir build` runs the unit tests for the formats, maps and reflection.
+`mercury_editor_smoke <project> <script>` replays scripted input into the editor. Set
+`MERCURY_CAPTURE=frame.png` (plus `MERCURY_CAPTURE_FRAME=n` and `MERCURY_CAPTURE_QUIT=1`) on any
+Mercury program to save a screenshot of a frame.
+
 ### Primitives
 
 Primitive is a basic struct that is the minimum requirement to render an object to the screen.

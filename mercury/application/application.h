@@ -36,7 +36,7 @@ static InputManager input_manager_;
  * with the types of shaders required for each backend.
  *
  */
-class Application {
+class Application : public RenderHost {
  public:
   Application(const std::string& window_title, float initial_width = 1280,
               float initial_height = 720);
@@ -111,6 +111,12 @@ class Application {
   int32_t GetWidth() const;
   int32_t GetHeight() const;
   GLFWwindow* GetWindow() const;
+
+ public:
+  int GetAverageFps() const override { return average_fps_; }
+  void SetWindowTitle(const std::string& title) override;
+
+ protected:
 
  protected:
   std::unique_ptr<GameScene> game_scene_ = nullptr;

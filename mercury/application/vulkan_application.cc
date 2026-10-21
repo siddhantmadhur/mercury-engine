@@ -5,9 +5,14 @@
 #include <imgui/backends/imgui_impl_vulkan.h>
 #include <imgui/imgui.h>
 
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <string>
 
+#include <stb/stb_image_write.h>
+
+#include "components/components.h"
 #include "debugger/debugger.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "os/filesystem.h"
@@ -64,6 +69,9 @@ VulkanApplication::~VulkanApplication() {
     }
     instance_buffer_.Reset();
     atlas_image_.Reset();
+    DestroySceneTarget();
+    capture_buffer_.Reset();
+    vkDestroySampler(device, scene_sampler_, nullptr);
 
     vkDestroySampler(device, texture_sampler_, nullptr);
     vkDestroyPipeline(device, instanced_pipeline_, nullptr);
@@ -104,6 +112,7 @@ bool VulkanApplication::Initialize() {
 
   if (!CreateFrameResources()) return false;
   if (!InitImGui()) return false;
+  ReadCaptureSettings();
   return true;
 }
 
@@ -197,7 +206,10 @@ bool VulkanApplication::InitImGui() {
   init_info.Device = context_.device;
   init_info.QueueFamily = context_.queue_family;
   init_info.Queue = context_.queue;
-  init_info.DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE;
+  // Room for the font atlas plus user textures such as the editor's scene
+  // view.
+  init_info.DescriptorPoolSize =
+      IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE + 16;
   init_info.MinImageCount = swapchain_.MinImageCount();
   init_info.ImageCount = swapchain_.ImageCount();
   init_info.UseDynamicRendering = true;
@@ -654,6 +666,9 @@ VsModelBuffer VulkanApplication::BuildInstanceRecord(
   glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
   if (auto *tex = registry.try_get<Texture2D>(entity)) {
     atlas_uv = tex->GetAtlasUV();
+  } else if (auto *ref = registry.try_get<TextureRef>(entity);
+             ref && ref->texture) {
+    atlas_uv = ref->texture->GetAtlasUV();
   } else if (entity != parent_mesh_entity) {
     if (auto *parent_tex = registry.try_get<Texture2D>(parent_mesh_entity)) {
       atlas_uv = parent_tex->GetAtlasUV();
@@ -950,7 +965,12 @@ void VulkanApplication::Render() {
     // frame. UpdateAtlas() (called from GetPrimitives()) sets the flag; it is
     // cleared once the copy is recorded.
     TextureAtlas &atlas = game_scene_->GetAtlas();
-    if (atlas.NeedsGpuUpload()) RecordAtlasUpload(frame, atlas);
+    if (atlas.NeedsGpuUpload()) {
+      RecordAtlasUpload(frame, atlas);
+      // Repacking moves every image, and TextureRef users have no dirty flag
+      // of their own, so re-stage every instance's atlas UV.
+      layout_dirty_ = true;
+    }
 
     auto static_vertices = game_scene_->GetStaticVertices();
     auto static_indices = game_scene_->GetStaticIndices();
@@ -990,6 +1010,67 @@ void VulkanApplication::Render() {
     RecordInstanceUploads(frame);
   }
 
+  constexpr VkPipelineStageFlags2 kDepthStages =
+      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+      VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+
+  // Editor: draw the scene into the offscreen target first; the window pass
+  // then only draws ImGui, which shows that target inside a panel.
+  const bool offscreen =
+      scene_texture_enabled_ && scene_color_.Get() != VK_NULL_HANDLE;
+  if (offscreen) {
+    const VkExtent2D scene_extent = scene_color_.Extent();
+    // Earlier frames may still be sampling the target in their ImGui pass.
+    vk::TransitionImage(cmd, scene_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+                            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    vk::TransitionImage(cmd, scene_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                        kDepthStages,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+
+    VkRenderingAttachmentInfo color = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    color.imageView = scene_color_.View();
+    color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color.clearValue.color = kClearColor;
+    VkRenderingAttachmentInfo depth = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    depth.imageView = scene_depth_.View();
+    depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth.clearValue.depthStencil = {1.0f, 0};
+    VkRenderingInfo scene_rendering = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+    scene_rendering.renderArea = {{0, 0}, scene_extent};
+    scene_rendering.layerCount = 1;
+    scene_rendering.colorAttachmentCount = 1;
+    scene_rendering.pColorAttachments = &color;
+    scene_rendering.pDepthAttachment = &depth;
+    vkCmdBeginRendering(cmd, &scene_rendering);
+    RecordSceneDraws(cmd, frame, scene_extent, draw_static, static_index_count,
+                     draw_instanced);
+    vkCmdEndRendering(cmd);
+
+    vk::TransitionImage(cmd, scene_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  }
+
   const VkImage swapchain_image = swapchain_.ImageAt(image_index);
   vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
                       VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1000,9 +1081,6 @@ void VulkanApplication::Render() {
                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
   // One depth image is shared by all frames in flight, so wait for the
   // previous frame's depth writes before clearing it.
-  constexpr VkPipelineStageFlags2 kDepthStages =
-      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-      VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
   vk::TransitionImage(cmd, swapchain_.Depth().Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
                       VK_IMAGE_LAYOUT_UNDEFINED,
                       VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
@@ -1035,6 +1113,115 @@ void VulkanApplication::Render() {
   rendering_info.pDepthAttachment = &depth_attachment;
   vkCmdBeginRendering(cmd, &rendering_info);
 
+  if (!scene_texture_enabled_) {
+    RecordSceneDraws(cmd, frame, extent, draw_static, static_index_count,
+                     draw_instanced);
+  }
+
+  if (show_render_stats_) {
+    ImGui::SetNextWindowBgAlpha(0.3);
+    ImGui::SetNextWindowPos(ImVec2{10.0, 10.0});
+    ImGui::Begin("Render Stats", nullptr,
+                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoTitleBar |
+                     ImGuiWindowFlags_NoDocking);
+    ImGui::Text("FPS: %d", average_fps_);
+    ImGui::Text("GPU Memory Copies: %d", copies);
+    ImGui::End();
+  }
+
+  ImGui::Render();
+  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+  vkCmdEndRendering(cmd);
+
+  const bool capture_now = !capture_path_.empty() &&
+                           frame_counter_ == capture_frame_ &&
+                           capture_buffer_.Create(
+                               context_.allocator,
+                               VkDeviceSize{extent.width} * extent.height * 4,
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                               vk::Buffer::Memory::kHostVisible);
+  if (capture_now) {
+    vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_COPY_BIT,
+                        VK_ACCESS_2_TRANSFER_READ_BIT);
+    VkBufferImageCopy region = {};
+    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageExtent = {extent.width, extent.height, 1};
+    vkCmdCopyImageToBuffer(cmd, swapchain_image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           capture_buffer_.Get(), 1, &region);
+    capture_extent_ = extent;
+    vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                        VK_PIPELINE_STAGE_2_COPY_BIT,
+                        VK_ACCESS_2_TRANSFER_READ_BIT,
+                        VK_PIPELINE_STAGE_2_NONE, 0);
+  } else {
+    vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_NONE, 0);
+  }
+  vkEndCommandBuffer(cmd);
+
+  VkSemaphoreSubmitInfo wait_info = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
+  wait_info.semaphore = frame.image_available;
+  wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  VkSemaphoreSubmitInfo signal_info = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
+  signal_info.semaphore = swapchain_.RenderFinished(image_index);
+  signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  VkCommandBufferSubmitInfo cmd_info = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
+  cmd_info.commandBuffer = cmd;
+
+  VkSubmitInfo2 submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
+  submit.waitSemaphoreInfoCount = 1;
+  submit.pWaitSemaphoreInfos = &wait_info;
+  submit.commandBufferInfoCount = 1;
+  submit.pCommandBufferInfos = &cmd_info;
+  submit.signalSemaphoreInfoCount = 1;
+  submit.pSignalSemaphoreInfos = &signal_info;
+  VK_CHECK(vkQueueSubmit2(context_.queue, 1, &submit, frame.in_flight));
+
+  VkSwapchainKHR swapchain = swapchain_.Get();
+  VkPresentInfoKHR present = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+  present.waitSemaphoreCount = 1;
+  present.pWaitSemaphores = &signal_info.semaphore;
+  present.swapchainCount = 1;
+  present.pSwapchains = &swapchain;
+  present.pImageIndices = &image_index;
+  const VkResult present_result = vkQueuePresentKHR(context_.queue, &present);
+  if (present_result == VK_ERROR_OUT_OF_DATE_KHR ||
+      present_result == VK_SUBOPTIMAL_KHR) {
+    swapchain_dirty_ = true;
+  } else {
+    VK_CHECK(present_result);
+  }
+
+  frame_index_ = (frame_index_ + 1) % kFramesInFlight;
+
+  if (capture_now) WriteCapture();
+  frame_counter_++;
+  // Resizing between frames means this frame's ImGui draw data (which may
+  // reference the old target) has already been submitted.
+  if (scene_texture_enabled_ && scene_target_dirty_) RecreateSceneTarget();
+}
+
+void VulkanApplication::RecordSceneDraws(VkCommandBuffer cmd, FrameData &frame,
+                                         VkExtent2D extent, bool draw_static,
+                                         UINT static_index_count,
+                                         bool draw_instanced) {
   // Negative height flips Y so clip space matches D3D (+Y up), letting the
   // projection matrices and triangle winding stay as they were.
   VkViewport viewport = {};
@@ -1083,68 +1270,137 @@ void VulkanApplication::Render() {
                        entry.start_index, 0, entry.start_instance);
     }
   }
+}
 
-  {
-    // Debug stats
-    ImGui::SetNextWindowBgAlpha(0.3);
-    ImGui::SetNextWindowPos(ImVec2{10.0, 10.0});
-    ImGui::Begin("Render Stats", nullptr,
-                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoTitleBar);
-    ImGui::Text("FPS: %d", average_fps_);
-    ImGui::Text("GPU Memory Copies: %d", copies);
-    ImGui::End();
+void VulkanApplication::EnableSceneTexture(bool enabled) {
+  scene_texture_enabled_ = enabled;
+  if (enabled) {
+    scene_target_dirty_ = true;
+  } else if (game_scene_) {
+    game_scene_->SetWidth(static_cast<float>(GetWidth()));
+    game_scene_->SetHeight(static_cast<float>(GetHeight()));
+  }
+}
+
+void VulkanApplication::SetSceneViewportSize(int width, int height) {
+  const uint32_t w = static_cast<uint32_t>(std::max(width, 1));
+  const uint32_t h = static_cast<uint32_t>(std::max(height, 1));
+  if (w == scene_requested_.width && h == scene_requested_.height) return;
+  scene_requested_ = {w, h};
+  scene_target_dirty_ = true;
+}
+
+uint64_t VulkanApplication::GetSceneTexture() const {
+  return reinterpret_cast<uint64_t>(scene_texture_set_);
+}
+
+void VulkanApplication::DestroySceneTarget() {
+  if (scene_texture_set_ != VK_NULL_HANDLE) {
+    ImGui_ImplVulkan_RemoveTexture(scene_texture_set_);
+    scene_texture_set_ = VK_NULL_HANDLE;
+  }
+  scene_color_.Reset();
+  scene_depth_.Reset();
+}
+
+void VulkanApplication::RecreateSceneTarget() {
+  scene_target_dirty_ = false;
+  if (scene_requested_.width == 0 || scene_requested_.height == 0) return;
+  const VkExtent2D current = scene_color_.Extent();
+  if (scene_color_.Get() != VK_NULL_HANDLE &&
+      current.width == scene_requested_.width &&
+      current.height == scene_requested_.height) {
+    return;
   }
 
-  ImGui::Render();
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+  vkDeviceWaitIdle(context_.device);
+  DestroySceneTarget();
 
-  vkCmdEndRendering(cmd);
-  vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                      VK_PIPELINE_STAGE_2_NONE, 0);
-  vkEndCommandBuffer(cmd);
+  if (scene_sampler_ == VK_NULL_HANDLE) {
+    VkSamplerCreateInfo sampler_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sampler_info.magFilter = VK_FILTER_LINEAR;
+    sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.maxLod = 1.0f;
+    if (!VK_CHECK(vkCreateSampler(context_.device, &sampler_info, nullptr,
+                                  &scene_sampler_))) {
+      return;
+    }
+  }
 
-  VkSemaphoreSubmitInfo wait_info = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
-  wait_info.semaphore = frame.image_available;
-  wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  VkSemaphoreSubmitInfo signal_info = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
-  signal_info.semaphore = swapchain_.RenderFinished(image_index);
-  signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-  VkCommandBufferSubmitInfo cmd_info = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
-  cmd_info.commandBuffer = cmd;
+  // Same formats as the window, so the scene pipelines work for both.
+  const bool ok =
+      scene_color_.Create(
+          context_.allocator, context_.device, scene_requested_.width,
+          scene_requested_.height, swapchain_.ColorFormat(),
+          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+          VK_IMAGE_ASPECT_COLOR_BIT) &&
+      scene_depth_.Create(context_.allocator, context_.device,
+                          scene_requested_.width, scene_requested_.height,
+                          vk::Swapchain::kDepthFormat,
+                          VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                          VK_IMAGE_ASPECT_DEPTH_BIT);
+  if (!ok) {
+    PDebug::error("Vulkan: could not create {}x{} scene target",
+                  scene_requested_.width, scene_requested_.height);
+    DestroySceneTarget();
+    return;
+  }
 
-  VkSubmitInfo2 submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
-  submit.waitSemaphoreInfoCount = 1;
-  submit.pWaitSemaphoreInfos = &wait_info;
-  submit.commandBufferInfoCount = 1;
-  submit.pCommandBufferInfos = &cmd_info;
-  submit.signalSemaphoreInfoCount = 1;
-  submit.pSignalSemaphoreInfos = &signal_info;
-  VK_CHECK(vkQueueSubmit2(context_.queue, 1, &submit, frame.in_flight));
+  // ImGui samples the image in SHADER_READ_ONLY layout; give it defined
+  // contents in that layout before the first scene pass.
+  SubmitImmediate([&](VkCommandBuffer cmd) {
+    vk::TransitionImage(cmd, scene_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_NONE, 0,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  });
+  scene_texture_set_ = ImGui_ImplVulkan_AddTexture(
+      scene_sampler_, scene_color_.View(),
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-  VkSwapchainKHR swapchain = swapchain_.Get();
-  VkPresentInfoKHR present = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
-  present.waitSemaphoreCount = 1;
-  present.pWaitSemaphores = &signal_info.semaphore;
-  present.swapchainCount = 1;
-  present.pSwapchains = &swapchain;
-  present.pImageIndices = &image_index;
-  const VkResult present_result = vkQueuePresentKHR(context_.queue, &present);
-  if (present_result == VK_ERROR_OUT_OF_DATE_KHR ||
-      present_result == VK_SUBOPTIMAL_KHR) {
-    swapchain_dirty_ = true;
+  if (game_scene_) {
+    game_scene_->SetWidth(static_cast<float>(scene_requested_.width));
+    game_scene_->SetHeight(static_cast<float>(scene_requested_.height));
+  }
+}
+
+void VulkanApplication::ReadCaptureSettings() {
+  if (const char *path = std::getenv("MERCURY_CAPTURE")) capture_path_ = path;
+  if (const char *frame = std::getenv("MERCURY_CAPTURE_FRAME")) {
+    capture_frame_ = std::strtoull(frame, nullptr, 10);
+  }
+  if (const char *quit = std::getenv("MERCURY_CAPTURE_QUIT")) {
+    capture_quit_ = std::string(quit) == "1";
+  }
+}
+
+void VulkanApplication::WriteCapture() {
+  vkQueueWaitIdle(context_.queue);
+  const uint32_t w = capture_extent_.width;
+  const uint32_t h = capture_extent_.height;
+  std::vector<uint8_t> pixels(size_t{w} * h * 4);
+  std::memcpy(pixels.data(), capture_buffer_.Mapped(), pixels.size());
+  const VkFormat format = swapchain_.ColorFormat();
+  if (format == VK_FORMAT_B8G8R8A8_SRGB || format == VK_FORMAT_B8G8R8A8_UNORM) {
+    for (size_t i = 0; i < pixels.size(); i += 4) std::swap(pixels[i], pixels[i + 2]);
+  }
+  for (size_t i = 3; i < pixels.size(); i += 4) pixels[i] = 255;
+  if (stbi_write_png(capture_path_.c_str(), static_cast<int>(w),
+                     static_cast<int>(h), 4, pixels.data(),
+                     static_cast<int>(w) * 4)) {
+    PDebug::info("Saved capture to {}", capture_path_);
   } else {
-    VK_CHECK(present_result);
+    PDebug::error("Could not write capture to {}", capture_path_);
   }
-
-  frame_index_ = (frame_index_ + 1) % kFramesInFlight;
+  capture_buffer_.Reset();
+  capture_path_.clear();
+  if (capture_quit_) Quit();
 }
 
 void VulkanApplication::RecreateSwapchain() {
@@ -1170,6 +1426,12 @@ void VulkanApplication::RecreateSwapchain() {
 void VulkanApplication::OnResize(int32_t width, int32_t height) {
   Application::OnResize(width, height);
   swapchain_dirty_ = true;
+  // The scene keeps the size of its offscreen target, not of the window.
+  const VkExtent2D target = scene_color_.Extent();
+  if (scene_texture_enabled_ && game_scene_ && target.width > 0) {
+    game_scene_->SetWidth(static_cast<float>(target.width));
+    game_scene_->SetHeight(static_cast<float>(target.height));
+  }
 }
 
 }  // namespace Mercury

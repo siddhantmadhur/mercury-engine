@@ -44,7 +44,16 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
 
   auto pos = Transform();
   pos.SetPosition(glm::vec3(position, 0.0f));
+  auto mesh = MakeQuadMesh(color);
+  pos.SetScale(glm::vec3(size.x, size.y, 1.0f));
 
+  AddProperty(id, pos);
+  AddProperty(id, mesh);
+
+  return id;
+}
+
+Mesh PObjectManager::MakeQuadMesh(glm::vec4 color) {
   auto mesh = Mesh();
   PQ_FLOAT3 dx_color(color.r, color.g, color.b);
   Vertex raw_vertices[4] = {
@@ -61,14 +70,10 @@ kEntityId PObjectManager::NewBox2D(glm::vec2 position = glm::vec2(0.0),
   uint16_t raw_indices[6] = {0, 3, 1, 1, 3, 2};
   mesh.SetIndices(
       std::vector<UINT>(std::begin(raw_indices), std::end(raw_indices)));
+  mesh.SetAABB(glm::vec3(-0.5f, -0.5f, 0.0f), glm::vec3(0.5f, 0.5f, 0.0f));
 
   mesh.opacity_ = color[3];
-  pos.SetScale(glm::vec3(size.x, size.y, 1.0f));
-
-  AddProperty(id, pos);
-  AddProperty(id, mesh);
-
-  return id;
+  return mesh;
 }
 
 kEntityId PObjectManager::NewPlane2D(glm::vec3 position, glm::vec2 size,
@@ -355,6 +360,10 @@ std::vector<UINT> PObjectManager::GetStaticIndices() const {
 }
 
 void PObjectManager::GenerateVertices() {}
+
+void PObjectManager::DestroyObject(kEntityId id) {
+  if (registry_.valid(id)) registry_.destroy(id);
+}
 
 void PObjectManager::DeleteObject(kEntityId id) {
   DeleteProperty<Mesh>(id);

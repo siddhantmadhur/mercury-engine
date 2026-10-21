@@ -6,8 +6,40 @@
 
 #include "imgui.h"
 
+#include <algorithm>
+#include <cctype>
+#include <string>
+
 namespace Mercury {
 InputManager::InputManager() {}
+
+Key InputManager::KeyFromName(std::string_view name) {
+  std::string key(name);
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return std::toupper(c); });
+  if (key.size() == 1) {
+    char c = key[0];
+    if (c >= 'A' && c <= 'Z') return GLFW_KEY_A + (c - 'A');
+    if (c >= '0' && c <= '9') return GLFW_KEY_0 + (c - '0');
+  }
+  if (key.size() >= 2 && key[0] == 'F') {
+    int n = std::atoi(key.c_str() + 1);
+    if (n >= 1 && n <= 25) return GLFW_KEY_F1 + (n - 1);
+  }
+  static const std::map<std::string, Key> kNamed = {
+      {"SPACE", GLFW_KEY_SPACE},          {"ESCAPE", GLFW_KEY_ESCAPE},
+      {"ESC", GLFW_KEY_ESCAPE},           {"ENTER", GLFW_KEY_ENTER},
+      {"RETURN", GLFW_KEY_ENTER},         {"TAB", GLFW_KEY_TAB},
+      {"BACKSPACE", GLFW_KEY_BACKSPACE},  {"UP", GLFW_KEY_UP},
+      {"DOWN", GLFW_KEY_DOWN},            {"LEFT", GLFW_KEY_LEFT},
+      {"RIGHT", GLFW_KEY_RIGHT},          {"SHIFT", GLFW_KEY_LEFT_SHIFT},
+      {"LEFT_SHIFT", GLFW_KEY_LEFT_SHIFT}, {"RIGHT_SHIFT", GLFW_KEY_RIGHT_SHIFT},
+      {"CTRL", GLFW_KEY_LEFT_CONTROL},    {"LEFT_CTRL", GLFW_KEY_LEFT_CONTROL},
+      {"RIGHT_CTRL", GLFW_KEY_RIGHT_CONTROL}, {"ALT", GLFW_KEY_LEFT_ALT},
+  };
+  auto it = kNamed.find(key);
+  return it == kNamed.end() ? GLFW_KEY_UNKNOWN : it->second;
+}
 bool InputManager::IsPressed(Key k) {
   if (key_status_.contains(k)) {
     return key_status_[k];
