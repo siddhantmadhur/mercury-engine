@@ -25,6 +25,9 @@ struct VertexOutput {
     @location(2) normal: vec3<f32>,
     @location(3) world_position: vec3<f32>,
     @location(4) material_params: vec2<f32>,
+    // The texture's rectangle in the atlas (x0, y0, x1, y1); uv repeats
+    // inside it, so tiling never bleeds into neighbouring images.
+    @location(5) @interpolate(flat) atlas_rect: vec4<f32>,
 };
 
 @vertex
@@ -32,7 +35,8 @@ fn vs_main(input: StaticVertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.position = camera.world_view_proj * vec4<f32>(input.position, 1.0);
     out.color = input.color;
-    out.uv = input.atlas_uv.xy + input.uv * input.atlas_uv.zw;
+    out.uv = input.uv;
+    out.atlas_rect = input.atlas_uv;
     out.normal = vec3<f32>(0.0, 0.0, 0.0);
     out.world_position = input.position;
     out.material_params = vec2<f32>(0.5, 0.0);

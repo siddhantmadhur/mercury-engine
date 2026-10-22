@@ -46,8 +46,9 @@ void AttachSprite(MapScene& scene, kEntityId entity,
 
   const auto material =
       scene.Assets().LoadAs<MaterialAsset>(sprite.material.path);
-  scene.Objects().AddProperty(
-      entity, PObjectManager::MakeQuadMesh(sprite.color * material.color));
+  Mesh quad = PObjectManager::MakeQuadMesh(sprite.color * material.color);
+  quad.tiling_ = material.tiling;
+  scene.Objects().AddProperty(entity, std::move(quad));
   if (material.texture.IsSet()) {
     if (auto texture = scene.GetTexture(material.texture.path)) {
       scene.Objects().AddProperty(entity, TextureRef{texture});
@@ -85,6 +86,7 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
   if (!mesh) return;
   mesh->roughness_ = material.roughness;
   mesh->metallic_ = material.metallic;
+  mesh->tiling_ = material.tiling;
   scene.Objects().AddProperty(entity, std::move(*mesh));
   if (material.texture.IsSet()) {
     if (auto texture = scene.GetTexture(material.texture.path)) {

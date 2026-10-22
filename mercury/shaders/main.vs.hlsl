@@ -39,7 +39,7 @@ struct VSInput
     // Zero for unlit meshes (sprites); see Vertex in globals.h
     [[vk::location(10)]] float3 normal : NORMAL;
 
-    // Material parameters (roughness, metallic, reflectance, ao)
+    // Material parameters (roughness, metallic, tiling columns, tiling rows)
     [[vk::location(11)]] float4 inst_material : INSTANCE_MATERIAL;
 };
 
@@ -51,6 +51,9 @@ struct VSOutput
     [[vk::location(2)]] float3 normal : NORMAL;
     [[vk::location(3)]] float3 world_position : POSITION1;
     [[vk::location(4)]] float2 material_params : TEXCOORD1;
+    // The texture's rectangle in the atlas (x0, y0, x1, y1); uv repeats
+    // inside it, so tiling never bleeds into neighbouring images.
+    [[vk::location(5)]] nointerpolation float4 atlas_rect : TEXCOORD2;
 };
 
 VSOutput Main(VSInput input)
@@ -76,8 +79,8 @@ VSOutput Main(VSInput input)
     output.normal = mul(float4(scaled_normal, 0.0), world).xyz;
 
     output.color = float4(input.color, input.inst_opacity);
-    output.uv = input.inst_atlas_uv.xy
-              + input.uv * (input.inst_atlas_uv.zw - input.inst_atlas_uv.xy);
+    output.uv = input.uv * input.inst_material.zw;
+    output.atlas_rect = input.inst_atlas_uv;
     output.material_params = input.inst_material.xy;
     return output;
 }

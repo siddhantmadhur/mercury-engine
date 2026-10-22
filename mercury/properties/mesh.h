@@ -50,6 +50,7 @@ class Mesh {
   float opacity_ = 1.0f;
   float roughness_ = 0.5f;
   float metallic_ = 0.0f;
+  glm::vec2 tiling_ = glm::vec2(1.0f);  // texture repeats: columns, rows
 
   float GetHeight();
 

@@ -284,12 +284,17 @@ struct PlaneCollider {
 struct MaterialAsset {
   glm::vec4 color = glm::vec4(1.0f);
   AssetRef texture;
+  glm::vec2 tiling = glm::vec2(1.0f);
   float roughness = 0.5f;
   float metallic = 0.0f;
 
   void Reflect(Reflector& r) {
     r.Field("color", color);
     r.Field("texture", texture, "Texture").Tooltip("A .png or .jpg file");
+    r.Field("tiling", tiling)
+        .Tooltip(
+            "How many times the texture repeats across each face: x = "
+            "columns, y = rows");
     r.Field("roughness", roughness)
         .Tooltip("PBR surface roughness [0.0 = mirror, 1.0 = matte]");
     r.Field("metallic", metallic)
