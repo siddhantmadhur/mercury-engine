@@ -4,6 +4,8 @@
 #include <cmath>
 
 #include "Jolt/Core/Factory.h"
+#include "Jolt/Core/JobSystemSingleThreaded.h"
+#include "Jolt/Core/JobSystemThreadPool.h"
 #include "Jolt/RegisterTypes.h"
 #include "Jolt/Physics/Body/BodyCreationSettings.h"
 #include "Jolt/Physics/Collision/CastResult.h"
@@ -104,9 +106,14 @@ PhysicsEngine::PhysicsEngine(PObjectManager& object_manager)
   JPH::RegisterTypes();
   temp_allocator_ = new JPH::TempAllocatorImpl(10 * 1024 * 1024);  // 10MB
 
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+  job_system_thread_pool_ =
+      new JPH::JobSystemSingleThreaded(JPH::cMaxPhysicsJobs);
+#else
   job_system_thread_pool_ = new JPH::JobSystemThreadPool(
       JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers,
       JPH::thread::hardware_concurrency() - 1);
+#endif
 }
 PhysicsEngine::~PhysicsEngine() {
   PDebug::info("Deleting physics engine...");

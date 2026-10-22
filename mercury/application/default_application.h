@@ -6,6 +6,11 @@
 namespace Mercury {
 using DefaultApplication = VulkanApplication;
 }
+#elif defined(MERCURY_GRAPHICS_WEBGPU)
+#include "application/webgpu_application.h"
+namespace Mercury {
+using DefaultApplication = WebGpuApplication;
+}
 #else
 #error "No MERCURY_GRAPHICS_* backend selected"
 #endif

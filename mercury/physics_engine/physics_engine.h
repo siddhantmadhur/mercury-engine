@@ -295,7 +295,7 @@ class PhysicsEngine {
 
  private:
   JPH::TempAllocator* temp_allocator_ = nullptr;
-  JPH::JobSystemThreadPool* job_system_thread_pool_ = nullptr;
+  JPH::JobSystem* job_system_thread_pool_ = nullptr;
   JPH::PhysicsSystem physics_system_;
 
   BPLayerInterfaceImpl broad_phase_layer_interface_;

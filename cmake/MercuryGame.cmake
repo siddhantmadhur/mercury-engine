@@ -31,6 +31,16 @@ function(mercury_add_game TARGET)
     target_include_directories(${TARGET} PRIVATE "${GAME_PROJECT}/scripts")
     target_link_libraries(${TARGET} PRIVATE mercury)
 
+    if (EMSCRIPTEN)
+        set_target_properties(${TARGET} PROPERTIES SUFFIX ".html")
+        target_link_options(${TARGET} PRIVATE
+                "--shell-file" "${CMAKE_SOURCE_DIR}/web/shell.html"
+                "--preload-file" "${GAME_PROJECT}@${GAME_PROJECT}"
+                "-sALLOW_MEMORY_GROWTH=1"
+                "-sNO_EXIT_RUNTIME=1"
+        )
+    endif ()
+
     # Multi-config generators (Visual Studio) get one file per configuration.
     get_property(MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
     if (MULTI_CONFIG)
