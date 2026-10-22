@@ -1171,13 +1171,15 @@ VsModelBuffer VulkanApplication::BuildInstanceRecord(
   float opacity = 1.0f;
   float roughness = 0.5f;
   float metallic = 0.0f;
+  glm::vec2 tiling(1.0f);
   if (auto *parent_mesh = registry.try_get<Mesh>(parent_mesh_entity)) {
     opacity = parent_mesh->opacity_;
     roughness = parent_mesh->roughness_;
     metallic = parent_mesh->metallic_;
+    tiling = parent_mesh->tiling_;
   }
   record.opacity = opacity;
-  record.material_params = glm::vec4(roughness, metallic, 0.5f, 1.0f);
+  record.material_params = glm::vec4(roughness, metallic, tiling);
 
   glm::vec4 atlas_uv = atlas.GetWhitePixelUV();
   if (auto *tex = registry.try_get<Texture2D>(entity)) {

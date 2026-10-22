@@ -33,6 +33,7 @@ struct PSInput
     [[vk::location(2)]] float3 normal : NORMAL;
     [[vk::location(3)]] float3 world_position : POSITION1;
     [[vk::location(4)]] float2 material_params : TEXCOORD1; // x: roughness, y: metallic
+    [[vk::location(5)]] nointerpolation float4 atlas_rect : TEXCOORD2;
 };
 
 struct PSOutput
@@ -145,7 +146,10 @@ float CalculateShadow(float3 world_pos, float3 normal, float3 to_light)
 PSOutput Main(PSInput input)
 {
     PSOutput output = (PSOutput) 0;
-    float4 base = diffuse_texture.Sample(texture_sampler, input.uv) * input.color;
+    // uv counts tiles; wrap it into the texture's rectangle in the atlas.
+    float2 atlas_uv = input.atlas_rect.xy
+                    + frac(input.uv) * (input.atlas_rect.zw - input.atlas_rect.xy);
+    float4 base = diffuse_texture.Sample(texture_sampler, atlas_uv) * input.color;
 
     // Meshes without normals (sprites, 2D shapes, text) are drawn unlit.
     float normal_length = length(input.normal);

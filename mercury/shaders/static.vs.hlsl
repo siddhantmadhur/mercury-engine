@@ -38,6 +38,9 @@ struct VSOutput
     [[vk::location(2)]] float3 normal : NORMAL;
     [[vk::location(3)]] float3 world_position : POSITION1;
     [[vk::location(4)]] float2 material_params : TEXCOORD1;
+    // The texture's rectangle in the atlas (x0, y0, x1, y1); uv repeats
+    // inside it, so tiling never bleeds into neighbouring images.
+    [[vk::location(5)]] nointerpolation float4 atlas_rect : TEXCOORD2;
 };
 
 VSOutput Main(VSInput input)
@@ -48,7 +51,8 @@ VSOutput Main(VSInput input)
     output.color = input.color;
     output.normal = float3(0.0, 0.0, 0.0);  // static geometry is unlit
     output.world_position = input.position;
-    output.uv = input.atlas_uv.xy + input.uv * (input.atlas_uv.zw - input.atlas_uv.xy);
+    output.uv = input.uv;
+    output.atlas_rect = input.atlas_uv;
     output.material_params = float2(0.5, 0.0);
     return output;
 }

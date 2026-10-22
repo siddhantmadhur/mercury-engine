@@ -40,6 +40,9 @@ struct VertexOutput {
     @location(2) normal: vec3<f32>,
     @location(3) world_position: vec3<f32>,
     @location(4) material_params: vec2<f32>,
+    // The texture's rectangle in the atlas (x0, y0, x1, y1); uv repeats
+    // inside it, so tiling never bleeds into neighbouring images.
+    @location(5) @interpolate(flat) atlas_rect: vec4<f32>,
 };
 
 @vertex
@@ -59,7 +62,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     out.position = camera.world_view_proj * world_pos;
     out.world_position = world_pos.xyz;
     out.color = vec4<f32>(input.color, input.inst_opacity);
-    out.uv = input.inst_atlas_uv.xy + input.uv * input.inst_atlas_uv.zw;
+    out.uv = input.uv * input.inst_material.zw;
+    out.atlas_rect = input.inst_atlas_uv;
     out.material_params = input.inst_material.xy;
 
     let norm_len = length(input.normal);
@@ -167,7 +171,10 @@ fn CalculateShadow(world_pos: vec3<f32>, normal: vec3<f32>, to_light: vec3<f32>)
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let base = textureSample(diffuse_texture, diffuse_sampler, input.uv) * input.color;
+    // uv counts tiles; wrap it into the texture's rectangle in the atlas.
+    let atlas_uv = input.atlas_rect.xy
+                 + fract(input.uv) * (input.atlas_rect.zw - input.atlas_rect.xy);
+    let base = textureSample(diffuse_texture, diffuse_sampler, atlas_uv) * input.color;
 
     let normal_len = length(input.normal);
     if (normal_len < 0.001) {

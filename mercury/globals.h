@@ -71,7 +71,7 @@ struct VsModelBuffer {
   float opacity;
   PQ_MATRIX world_;
   PQ_FLOAT4 atlas_uv;
-  PQ_FLOAT4 material_params;  // x: roughness, y: metallic, z: reflectance, w: ao
+  PQ_FLOAT4 material_params;  // x: roughness, y: metallic, zw: texture tiling
 };
 
 // The Vulkan vertex input descriptions and the HLSL vertex shaders depend on
