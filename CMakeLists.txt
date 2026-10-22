@@ -15,6 +15,9 @@ include_directories("shaders")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# No C++20 modules are used. Scanning for them only slows the build and adds
+# GCC-only flags (-fmodules-ts, -fdeps-format) that break clangd.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
