@@ -1,0 +1,16 @@
+<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="scoreboard.uss" />
+    <ui:VisualElement class="scoreboard" picking-mode="Ignore">
+        <ui:Label name="player-score" class="score">
+            <Bindings>
+                <ui:DataBinding property="text" data-source-path="player_wins" />
+            </Bindings>
+        </ui:Label>
+        <ui:VisualElement class="divider" />
+        <ui:Label name="enemy-score" class="score">
+            <Bindings>
+                <ui:DataBinding property="text" data-source-path="enemy_wins" />
+            </Bindings>
+        </ui:Label>
+    </ui:VisualElement>
+</ui:UXML>

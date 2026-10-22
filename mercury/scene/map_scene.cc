@@ -10,6 +10,7 @@
 #include "properties/primitives.h"
 #include "scripting/behaviour.h"
 #include "scripting/type_registry.h"
+#include "ui/ui_document.h"
 
 namespace Mercury {
 
@@ -72,6 +73,10 @@ MapScene::MapScene(std::shared_ptr<Project> project, Mode mode)
   RegisterBuiltinTypes();
   assets_ = std::make_unique<AssetDatabase>(project_);
   default_camera_ = player_camera_;
+  ui_.resources().SetResolver([this](std::string_view path) {
+    return project_ ? project_->Resolve(path) : fs::path(std::string(path));
+  });
+  GetRegistry().on_destroy<UIDocument>().connect<&MapScene::OnUIDocumentDestroyed>(this);
 }
 
 void MapScene::SetProject(std::shared_ptr<Project> project) {
@@ -80,12 +85,28 @@ void MapScene::SetProject(std::shared_ptr<Project> project) {
   models_.clear();
   project_ = std::move(project);
   assets_ = std::make_unique<AssetDatabase>(project_);
+  ui_.resources().Reload();
 }
 
 MapScene::~MapScene() {
+  // The registry outlives ui_, so stop hearing about its UIDocuments.
+  GetRegistry().on_destroy<UIDocument>().disconnect(this);
   // Behaviours may touch the scene from OnDestroy, so tear them down first.
   for (auto& behaviour : behaviours_) behaviour->OnDestroy();
   behaviours_.clear();
+}
+
+void MapScene::OnUIDocumentDestroyed(entt::registry& registry, kEntityId entity) {
+  if (auto* document = registry.try_get<UIDocument>(entity)) {
+    if (document->root) ui_.RemoveDocument(document->root);
+    document->root = nullptr;
+    document->panel = nullptr;
+  }
+}
+
+const UI::UIDrawData* MapScene::GetUIDrawData() const {
+  const auto& data = ui_.GetDrawData();
+  return data.empty() ? nullptr : &data;
 }
 
 void MapScene::Instantiate(const Map& map) {
@@ -172,6 +193,7 @@ void MapScene::ClearMap() {
   by_path_.clear();
   by_uid_.clear();
   SetActiveCamera(default_camera_);
+  ui_.Clear();
 
   std::lock_guard lock(collision_mutex_);
   collisions_.clear();
@@ -387,10 +409,18 @@ void MapScene::OnStart() {
 
 void MapScene::OnFrame(double delta_t) {
   const double seconds = delta_t / 1000.0;
+  const bool ui = mode_ == Mode::kPlay && !ui_.empty();
+  // UI callbacks (clicked, value changes) run before the scripts' OnFrame...
+  if (ui && input_manager_) ui_.ProcessInput(*input_manager_);
   for (size_t i = 0; i < behaviours_.size(); i++) {
     behaviours_[i]->OnFrame(seconds);
   }
   DestroyPending();
+  // ...and bindings pick up what the scripts changed before drawing.
+  if (ui) {
+    const float dpi = input_manager_ ? input_manager_->GetContentScale() : 1.0f;
+    ui_.Update(seconds, glm::vec2(GetWidth(), GetHeight()), dpi);
+  }
 }
 
 void MapScene::OnTick(double delta_t) {

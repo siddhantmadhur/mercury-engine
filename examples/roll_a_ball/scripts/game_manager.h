@@ -3,13 +3,20 @@
 
 #include "scripting/behaviour.h"
 
-// Keeps the score and shows it. Escape quits, R restarts after a win.
+// Keeps the score and shows it (ui/score.uxml). Escape quits.
 class GameManager : public Mercury::Behaviour {
  public:
   void Reflect(Mercury::Reflector& r) override {
     r.Field("player", player).Tooltip("Node with the PlayerController");
     r.Field("fall_limit", fall_limit)
         .Tooltip("Below this height the player is put back at the start");
+  }
+
+  void ReflectData(Mercury::Reflector& r) override {
+    r.Property("score_text", [this] {
+      return Mercury::mtext::Variant("Score: " + std::to_string(score_) + " / " +
+                                     std::to_string(total_));
+    });
   }
 
   void OnStart() override;

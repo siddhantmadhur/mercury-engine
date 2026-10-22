@@ -64,6 +64,18 @@ Reflector& Reflector::Visit(const char* name, FieldType type, T& member,
     case Mode::kWrite:
       properties_->Set(name, to_variant(member));
       break;
+    case Mode::kGet:
+      if (!found_ && lookup_ == name) {
+        *out_ = to_variant(member);
+        found_ = true;
+      }
+      break;
+    case Mode::kSet:
+      if (!found_ && lookup_ == name) {
+        found_ = true;
+        if (std::optional<T> converted = from_variant(*in_)) member = std::move(*converted);
+      }
+      break;
     case Mode::kRead:
       if (auto value = properties_->Get(name)) {
         std::optional<T> converted = from_variant(*value);
@@ -186,6 +198,24 @@ void Reflector::EnumImpl(const char* name, int& index,
     case Mode::kWrite:
       properties_->Set(name, name_of(index));
       break;
+    case Mode::kGet:
+      if (!found_ && lookup_ == name) {
+        *out_ = name_of(index);
+        found_ = true;
+      }
+      break;
+    case Mode::kSet:
+      if (!found_ && lookup_ == name) {
+        found_ = true;
+        if (auto text = in_->ToString()) {
+          for (size_t i = 0; i < values.size(); i++) {
+            if (values[i] == *text) index = static_cast<int>(i);
+          }
+        } else if (auto i = in_->ToInt()) {
+          index = static_cast<int>(*i);
+        }
+      }
+      break;
     case Mode::kRead:
       if (auto value = properties_->Get(name)) {
         auto text = value->ToString();
@@ -207,6 +237,20 @@ void Reflector::EnumImpl(const char* name, int& index,
       }
       break;
   }
+}
+
+Reflector& Reflector::Property(const char* name,
+                               const std::function<mtext::Variant()>& get,
+                               const std::function<void(const mtext::Variant&)>& set) {
+  if (found_ || lookup_ != name) return *this;
+  if (mode_ == Mode::kGet && get) {
+    *out_ = get();
+    found_ = true;
+  } else if (mode_ == Mode::kSet && set) {
+    set(*in_);
+    found_ = true;
+  }
+  return *this;
 }
 
 Reflector& Reflector::Tooltip(const char* text) {

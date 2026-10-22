@@ -33,6 +33,9 @@ constexpr std::string_view kResPrefix = "res://";
 constexpr std::string_view kProjectExtension = ".mproj";
 constexpr std::string_view kMapExtension = ".mmap";
 constexpr std::string_view kAssetExtension = ".masset";
+// UI Toolkit documents and style sheets.
+constexpr std::string_view kUxmlExtension = ".uxml";
+constexpr std::string_view kUssExtension = ".uss";
 // Generated per-project data (build info, script schema); never committed.
 constexpr std::string_view kProjectCacheDir = ".mercury";
 

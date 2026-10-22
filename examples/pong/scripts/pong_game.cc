@@ -8,6 +8,9 @@ MERCURY_SCRIPT(PongGame);
 void PongGame::OnStart() {
   ball_ = Get(ball).GetBehaviour<Ball>();
   if (!ball_) PDebug::error("PongGame: \"{}\" has no Ball script", ball.path);
+  if (auto* document = GetDocument(); document && document->rootVisualElement()) {
+    document->rootVisualElement()->SetDataSource(AsDataSource());
+  }
 }
 
 void PongGame::Score(Side scorer) {
@@ -30,6 +33,7 @@ void PongGame::OnTick(double dt) {
 }
 
 void PongGame::OnFrame(double dt) {
+  // A developer window, so it stays in ImGui; the scoreboard is UI Toolkit.
   if (show_debug && ball_) {
     auto& transform = ball_->GetTransform();
     auto pos = transform.GetPosition();
@@ -40,10 +44,4 @@ void PongGame::OnFrame(double dt) {
     ImGui::Text("VELOCITY X: %f, Y: %f", vel.x, vel.y);
     ImGui::End();
   }
-
-  ImGui::SetNextWindowPos(ImVec2(10, 140), ImGuiCond_FirstUseEver);
-  ImGui::Begin("Scores");
-  ImGui::Text("Player: %d", player_wins_);
-  ImGui::Text("Enemy: %d", enemy_wins_);
-  ImGui::End();
 }

@@ -28,6 +28,8 @@
 #include "scene/map_scene.h"
 #include "scripting/reflection.h"
 #include "scripting/type_registry.h"
+#include "ui/data_source.h"
+#include "ui/ui_document.h"
 
 namespace Mercury {
 
@@ -37,10 +39,16 @@ class Behaviour {
 
   // List the fields the editor can change. Called before OnStart.
   virtual void Reflect(Reflector&) {}
+  // Extra values UI bindings may read or write, without saving them or
+  // showing them in the Inspector (Unity's [CreateProperty]):
+  //   r.Field("score", score_);
+  //   r.Property("time", [this] { return mtext::Variant(FormatTime()); });
+  virtual void ReflectData(Reflector&) {}
 
   // After every object in the map exists, before the first tick.
   virtual void OnStart() {}
-  // Every rendered frame; ImGui calls are allowed here. dt in seconds.
+  // Every rendered frame. dt in seconds. ImGui calls are allowed here for
+  // developer/debug windows; player-facing UI belongs in a UIDocument.
   virtual void OnFrame(double dt) {}
   // Every fixed tick (60 per second), before physics runs. dt in seconds.
   virtual void OnTick(double dt) {}
@@ -71,6 +79,22 @@ class Behaviour {
 
   bool IsKeyPressed(Key key) const;
   bool IsKeyJustPressed(Key key) const;
+
+  // The UIDocument on this object, if it has one.
+  UIDocument* GetDocument() const { return GetComponent<UIDocument>(); }
+  // True while the pointer is over in-game UI (so clicks are meant for it).
+  bool IsPointerOverUI() const { return scene_->GetUI().IsPointerOverUI(); }
+  // This script as a data source for UI bindings: fields from Reflect()
+  // and ReflectData() become binding paths.
+  //   GetDocument()->rootVisualElement()->SetDataSource(AsDataSource());
+  std::shared_ptr<UI::IDataSource> AsDataSource() {
+    return std::make_shared<UI::ReflectedDataSource>(
+        [this](Reflector& r) {
+          Reflect(r);
+          ReflectData(r);
+        },
+        lifetime_);
+  }
   PhysicsEngine& Physics() const { return scene_->Physics(); }
   AssetDatabase& Assets() const { return scene_->Assets(); }
   void Quit() const { scene_->QuitScene(); }
@@ -79,6 +103,9 @@ class Behaviour {
   friend class MapScene;
   MapScene* scene_ = nullptr;
   kEntityId entity_ = entt::null;
+  // Expires with the script so data sources made by AsDataSource() stop
+  // reading it.
+  std::shared_ptr<char> lifetime_ = std::make_shared<char>(0);
 };
 
 template <typename B>

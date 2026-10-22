@@ -21,6 +21,7 @@ const std::vector<std::string> kImageExtensions = {".png", ".jpg", ".jpeg",
                                                    ".bmp", ".tga"};
 const std::vector<std::string> kModelExtensions = {".obj", ".gltf", ".glb",
                                                    ".fbx", ".dae", ".ply"};
+const std::vector<std::string> kFontExtensions = {".ttf", ".otf"};
 
 std::string Lower(std::string text) {
   std::transform(text.begin(), text.end(), text.begin(),
@@ -244,6 +245,15 @@ void EditorScene::DrawNodeInspector(MapNode& node) {
           if (DrawField(field, component.properties)) MarkChanged();
           ImGui::PopID();
         }
+      }
+      if (component.type == "UIDocument") {
+        const auto* source = component.properties.Get("source_asset");
+        const auto* resource = source ? source->Get<mtext::Resource>() : nullptr;
+        ImGui::BeginDisabled(!resource || resource->path.empty());
+        if (ImGui::Button("Edit in UI Builder", ImVec2(-1, 0))) {
+          OpenInUIBuilder(resource->path);
+        }
+        ImGui::EndDisabled();
       }
       // Properties no field describes (old or misspelled names) stay
       // editable as raw values so nothing is silently lost.
@@ -497,15 +507,22 @@ bool EditorScene::DrawAssetPicker(const char* label, std::string& path,
       path.clear();
       changed = true;
     }
-    // Textures and models are plain files; other types are .masset files.
+    // Textures, models, fonts and UI files are plain files; other types
+    // are .masset files.
     const bool images = asset_type == "Texture";
     const bool models = asset_type == "Model";
+    const bool fonts = asset_type == "Font";
+    const bool uxml = asset_type == "UXML";
+    const bool uss = asset_type == "StyleSheet";
+    const bool plain = images || models || fonts || uxml || uss;
     const auto files = images   ? ListProjectFiles(kImageExtensions)
                        : models ? ListProjectFiles(kModelExtensions)
+                       : fonts  ? ListProjectFiles(kFontExtensions)
+                       : uxml   ? ListProjectFiles({std::string(kUxmlExtension)})
+                       : uss    ? ListProjectFiles({std::string(kUssExtension)})
                                 : ListProjectFiles({std::string(kAssetExtension)});
     for (const auto& file : files) {
-      if (!images && !models && !asset_type.empty() &&
-          Assets().TypeOf(file) != asset_type) {
+      if (!plain && !asset_type.empty() && Assets().TypeOf(file) != asset_type) {
         continue;
       }
       if (ImGui::Selectable(file.c_str(), file == path)) {
@@ -593,6 +610,23 @@ void EditorScene::DrawProjectBrowser() {
     }
     if (ImGui::MenuItem("Material")) CreateAsset(dir, "Material");
     if (ImGui::MenuItem("Physics Material")) CreateAsset(dir, "PhysicsMaterial");
+    ImGui::SeparatorText("UI Toolkit");
+    const fs::path ui_dir = project->GetRoot() / "ui";
+    if (ImGui::MenuItem("UI Document (.uxml)")) {
+      std::error_code ec;
+      fs::create_directories(ui_dir, ec);
+      CreateUIFile(ui_dir, "uxml");
+    }
+    if (ImGui::MenuItem("Style Sheet (.uss)")) {
+      std::error_code ec;
+      fs::create_directories(ui_dir, ec);
+      CreateUIFile(ui_dir, "uss");
+    }
+    if (ImGui::MenuItem("Panel Settings")) {
+      std::error_code ec;
+      fs::create_directories(ui_dir, ec);
+      CreateAsset(ui_dir, "PanelSettings");
+    }
     ImGui::EndPopup();
   }
   ImGui::SameLine();
@@ -640,6 +674,11 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
       if (ImGui::MenuItem("New Physics Material")) {
         CreateAsset(folder.path(), "PhysicsMaterial");
       }
+      if (ImGui::MenuItem("New UI Document")) CreateUIFile(folder.path(), "uxml");
+      if (ImGui::MenuItem("New Style Sheet")) CreateUIFile(folder.path(), "uss");
+      if (ImGui::MenuItem("New Panel Settings")) {
+        CreateAsset(folder.path(), "PanelSettings");
+      }
       if (ImGui::MenuItem("New Map...")) {
         modal_ = Modal::kNewMap;
         open_modal_ = true;
@@ -671,6 +710,8 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
     ImVec4 color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
     if (extension == kMapExtension) color = ImVec4(0.55f, 0.8f, 1.0f, 1.0f);
     else if (extension == kAssetExtension) color = ImVec4(0.75f, 0.9f, 0.55f, 1.0f);
+    else if (extension == kUxmlExtension) color = ImVec4(0.95f, 0.6f, 0.85f, 1.0f);
+    else if (extension == kUssExtension) color = ImVec4(0.7f, 0.65f, 1.0f, 1.0f);
     else if (extension == ".cc" || extension == ".h" || extension == ".cpp") {
       color = ImVec4(0.95f, 0.8f, 0.5f, 1.0f);
     }
@@ -702,6 +743,8 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
           if (dirty_) SaveMap();
           OpenMap(res_path);
         }
+      } else if (extension == kUxmlExtension) {
+        OpenInUIBuilder(res_path);
       } else if (extension != kAssetExtension) {
         OpenInExternalEditor(path);
       }
@@ -710,6 +753,9 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
       if (extension == kMapExtension && ImGui::MenuItem("Open Map")) {
         if (dirty_) SaveMap();
         OpenMap(res_path);
+      }
+      if (extension == kUxmlExtension && ImGui::MenuItem("Open in UI Builder")) {
+        OpenInUIBuilder(res_path);
       }
       if (ImGui::MenuItem("Open in External Editor")) OpenInExternalEditor(path);
       if (ImGui::MenuItem("Copy res:// Path")) ImGui::SetClipboardText(res_path.c_str());

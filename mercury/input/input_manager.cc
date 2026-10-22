@@ -90,6 +90,12 @@ void InputManager::ResetFreshPresses() {
 }
 void InputManager::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                      int action, int mods) {
+  InputEvent event;
+  event.type = InputEvent::Type::kKey;
+  event.key = key;
+  event.action = action;
+  event.mods = mods;
+  frame_events_.push_back(event);
   if (action == GLFW_PRESS) {
     SetKeyDown(key);
   } else if (action == GLFW_RELEASE) {
@@ -105,15 +111,52 @@ void InputManager::HandleCursorCallback(GLFWwindow* window, double xpos,
 void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
                                         double yoffset) {
   this->scroll_offset_ = glm::vec2(xoffset, yoffset);
+  InputEvent event;
+  event.type = InputEvent::Type::kScroll;
+  event.scroll = glm::vec2(xoffset, yoffset);
+  frame_events_.push_back(event);
+}
+
+void InputManager::HandleCharCallback(GLFWwindow* window, unsigned int codepoint) {
+  InputEvent event;
+  event.type = InputEvent::Type::kChar;
+  event.codepoint = static_cast<char32_t>(codepoint);
+  frame_events_.push_back(event);
+}
+
+void InputManager::HandleCursorEnterCallback(GLFWwindow* window, int entered) {
+  cursor_inside_ = entered != 0;
+}
+
+std::string InputManager::GetClipboard() {
+  const char* text = glfwGetClipboardString(nullptr);
+  return text ? text : "";
+}
+
+void InputManager::SetClipboard(const std::string& text) {
+  glfwSetClipboardString(nullptr, text.c_str());
 }
 #define GET_ACTION(a) \
   a == GLFW_PRESS ? kJustPressed : a == GLFW_REPEAT ? kContinuous : kReleased
 void InputManager::HandleMouseButtonCallback(GLFWwindow* window, int button,
                                              int action, int mods) {
+  if (button <= GLFW_MOUSE_BUTTON_MIDDLE) {
+    InputEvent event;
+    event.type = InputEvent::Type::kMouseButton;
+    // GLFW numbers buttons left, right, middle.
+    event.button = button;
+    event.action = action;
+    event.mods = mods;
+    frame_events_.push_back(event);
+  }
   switch (button) {
     case GLFW_MOUSE_BUTTON_LEFT:
       mouse_btn_status_[MouseButton::kLeft] = GET_ACTION(action);
       mouse_btn_fresh_status_[MouseButton::kLeft] = GET_ACTION(action);
+      break;
+    case GLFW_MOUSE_BUTTON_RIGHT:
+      mouse_btn_status_[MouseButton::kRight] = GET_ACTION(action);
+      mouse_btn_fresh_status_[MouseButton::kRight] = GET_ACTION(action);
       break;
     case GLFW_MOUSE_BUTTON_MIDDLE:
       mouse_btn_status_[MouseButton::kMiddle] = GET_ACTION(action);

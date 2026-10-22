@@ -38,10 +38,16 @@ function(mercury_add_game TARGET)
             CXX_SCAN_FOR_MODULES OFF)
 
     if (EMSCRIPTEN)
+        # The engine's UI resources (default font and theme) are read from
+        # MERCURY_UI_RESOURCE_PATH, so ship them at the same path.
+        get_target_property(MERCURY_SOURCE mercury SOURCE_DIR)
+        set(MERCURY_UI_RESOURCES "${MERCURY_SOURCE}/mercury/ui/resources")
         set_target_properties(${TARGET} PROPERTIES SUFFIX ".html")
         target_link_options(${TARGET} PRIVATE
                 "--shell-file" "${CMAKE_SOURCE_DIR}/web/shell.html"
-                "--preload-file" "${GAME_PROJECT}@${GAME_PROJECT}"
+                # SHELL: keeps CMake from merging the repeated flag.
+                "SHELL:--preload-file ${GAME_PROJECT}@${GAME_PROJECT}"
+                "SHELL:--preload-file ${MERCURY_UI_RESOURCES}@${MERCURY_UI_RESOURCES}"
                 "-sALLOW_MEMORY_GROWTH=1"
                 "-sNO_EXIT_RUNTIME=1"
         )

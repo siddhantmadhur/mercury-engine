@@ -1,0 +1,195 @@
+:root {
+    --hud-text: #F2F6FF;
+    --hud-accent: #33CCFF;
+    --hud-banana: #FFE433;
+    --hud-panel: rgba(8, 18, 40, 0.72);
+}
+
+.hud {
+    flex-grow: 1;
+    color: var(--hud-text);
+    font-size: 16px;
+}
+
+.panel {
+    background-color: var(--hud-panel);
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.15);
+    padding: 12px 16px;
+}
+
+.stats {
+    position: absolute;
+    left: 16px;
+    top: 50px;
+    width: 260px;
+}
+
+.title {
+    color: var(--hud-accent);
+    -unity-font-style: bold;
+    font-size: 20px;
+    margin-bottom: 8px;
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgba(0, 0, 0, 0.6);
+}
+
+.stat {
+    flex-direction: row;
+    justify-content: space-between;
+    margin: 1px 0;
+}
+
+.stat__name {
+    color: rgba(242, 246, 255, 0.7);
+}
+
+.stat__value {
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    transition: color 0.3s ease-out, scale 0.15s ease-out;
+}
+
+.stat__value--banana {
+    color: var(--hud-banana);
+}
+
+.stat__value--low {
+    color: #FF4040;
+    scale: 1.15 1.15;
+}
+
+.time-bar {
+    margin: 2px 0 8px 0;
+}
+
+.time-bar .unity-progress-bar__background {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-width: 0;
+    border-radius: 4px;
+    min-height: 8px;
+}
+
+.time-bar .unity-progress-bar__progress {
+    background-color: var(--hud-accent);
+    border-radius: 4px;
+}
+
+.hint {
+    margin-top: 10px;
+    font-size: 12px;
+    color: rgba(242, 246, 255, 0.55);
+    white-space: normal;
+}
+
+.hint--hidden {
+    display: none;
+}
+
+.banner {
+    position: absolute;
+    left: 50%;
+    top: 34%;
+    translate: -50% -50%;
+    align-items: center;
+    padding: 20px 40px;
+    border-radius: 14px;
+    background-color: var(--hud-panel);
+    transition: opacity 0.25s ease-out, scale 0.35s ease-out-back;
+}
+
+.banner--hidden {
+    opacity: 0;
+    scale: 0.7 0.7;
+    visibility: hidden;
+}
+
+.banner__title {
+    font-size: 48px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    -unity-text-outline-width: 3px;
+    -unity-text-outline-color: rgba(0, 0, 0, 0.75);
+    text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.5);
+}
+
+.banner--fall .banner__title {
+    color: #FF5533;
+}
+
+.banner--goal .banner__title {
+    color: #33FF77;
+}
+
+.banner__text {
+    -unity-text-align: middle-center;
+    font-size: 18px;
+    margin-top: 6px;
+}
+
+.buttons {
+    flex-direction: row;
+    margin-top: 14px;
+}
+
+.overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.45);
+    align-items: center;
+    justify-content: center;
+}
+
+.hidden {
+    display: none;
+}
+
+.menu {
+    width: 300px;
+    align-items: stretch;
+    padding: 20px;
+}
+
+.menu-button {
+    min-height: 40px;
+    margin: 5px 0;
+    font-size: 18px;
+    border-radius: 8px;
+    border-width: 0;
+    background-color: rgba(51, 204, 255, 0.85);
+    color: #061226;
+    -unity-font-style: bold;
+    transition: background-color 0.12s ease-out, scale 0.12s ease-out;
+}
+
+.menu-button:hover {
+    background-color: #66DDFF;
+    scale: 1.04 1.04;
+}
+
+.menu-button:active {
+    background-color: #2299CC;
+    scale: 0.97 0.97;
+}
+
+.buttons .menu-button {
+    min-width: 140px;
+    margin: 0 6px;
+}
+
+.menu-button--danger {
+    background-color: rgba(255, 85, 51, 0.85);
+}
+
+.menu-button--danger:hover {
+    background-color: #FF7755;
+}
+
+.menu-toggle {
+    margin: 8px 0;
+    color: var(--hud-text);
+}

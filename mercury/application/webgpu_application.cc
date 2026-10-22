@@ -518,6 +518,11 @@ void WebGpuApplication::OnDeviceReady() {
     PDebug::error("WebGPU: failed to create pipelines");
     return;
   }
+  if (!ui_renderer_.Init(device_, queue_, surface_format_,
+                         wgpu::TextureFormat::Depth32Float)) {
+    PDebug::error("WebGPU: failed to create UI pipeline");
+    return;
+  }
 
   // ImGui WGPU backend setup
   ImGui_ImplWGPU_InitInfo init_info = {};
@@ -1389,6 +1394,9 @@ void WebGpuApplication::RecordScenePass(wgpu::CommandEncoder& encoder,
   pass_desc.depthStencilAttachment = &depth_att;
 
   UpdateSkyboxTexture();
+  if (const UI::UIDrawData* ui = game_scene_->GetUIDrawData()) {
+    ui_renderer_.Prepare(*ui, static_cast<uint32_t>(GetWidth()), static_cast<uint32_t>(GetHeight()));
+  }
   glm::mat4 sky_matrix;
   const bool draw_skybox =
       skybox_bind_group_ && game_scene_->GetSkyboxMatrix(sky_matrix);
@@ -1435,6 +1443,9 @@ void WebGpuApplication::RecordScenePass(wgpu::CommandEncoder& encoder,
                        entry.start_instance);
     }
   }
+
+  // The game's UI goes over the scene and under ImGui (dev windows).
+  ui_renderer_.Record(pass, static_cast<uint32_t>(GetWidth()), static_cast<uint32_t>(GetHeight()));
 
   // Draw ImGui overlay
   ImGui::Render();

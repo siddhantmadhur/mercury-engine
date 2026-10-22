@@ -44,6 +44,9 @@ void EditorSettings::Load() {
   if (auto editor = document.Find("editor")) {
     external_editor = editor->properties.GetString("external_editor");
   }
+  if (auto windows = document.Find("windows")) {
+    show_ui_builder = windows->properties.GetBool("ui_builder", false);
+  }
   if (auto recent = document.Find("recent")) {
     if (auto list = recent->properties.Get("projects")) {
       if (auto array = list->Get<mtext::Array>()) {
@@ -61,6 +64,7 @@ void EditorSettings::Save() const {
   mtext::Array projects;
   for (const auto& path : recent_projects) projects.emplace_back(path);
   document.Add("recent").properties.Set("projects", projects);
+  document.Add("windows").properties.Set("ui_builder", show_ui_builder);
   mtext::SaveFile(ConfigDir() / "editor.cfg", document);
 }
 

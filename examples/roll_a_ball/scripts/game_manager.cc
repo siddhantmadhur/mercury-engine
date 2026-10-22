@@ -1,6 +1,5 @@
 #include "game_manager.h"
 
-#include "imgui.h"
 #include "pickup.h"
 
 MERCURY_SCRIPT(GameManager);
@@ -15,6 +14,10 @@ void GameManager::OnStart() {
   }
   if (auto object = Get(player)) {
     start_position_ = object.GetTransform()->GetPosition();
+  }
+  // The score label in score.uxml binds to score_text (see ReflectData).
+  if (auto* document = GetDocument(); document && document->rootVisualElement()) {
+    document->rootVisualElement()->SetDataSource(AsDataSource());
   }
 }
 
@@ -35,12 +38,8 @@ void GameManager::OnTick(double dt) {
 }
 
 void GameManager::OnFrame(double dt) {
-  ImGui::SetNextWindowPos(ImVec2(16, 70));
-  ImGui::Begin("Score", nullptr,
-               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar |
-                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking);
-  ImGui::Text("Score: %d / %d", score_, total_);
-  ImGui::TextDisabled("WASD / arrows: roll   Space: jump   Esc: quit");
-  if (total_ > 0 && score_ >= total_) ImGui::Text("You win!");
-  ImGui::End();
+  auto* document = GetDocument();
+  if (!document || !document->rootVisualElement()) return;
+  document->rootVisualElement()->Q("win")->EnableInClassList(
+      "win--hidden", total_ == 0 || score_ < total_);
 }

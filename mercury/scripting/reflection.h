@@ -16,8 +16,10 @@
 #define MERCURY_SCRIPTING_REFLECTION_H
 
 #include <glm/glm.hpp>
+#include <functional>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -79,6 +81,8 @@ class Reflector {
     kDescribe,  // record each field and its current value as the default
     kRead,      // assign fields from properties (missing ones are left alone)
     kWrite,     // store every field into properties
+    kGet,       // read one field as a Variant (UI data binding)
+    kSet,       // assign one field from a Variant (UI data binding)
   };
 
   static Reflector Describe() { return Reflector(Mode::kDescribe, nullptr); }
@@ -88,6 +92,20 @@ class Reflector {
   static Reflector Write(mtext::PropertyList& properties) {
     return Reflector(Mode::kWrite, &properties);
   }
+  // Looks up one field by name; check Found() afterwards.
+  static Reflector Get(std::string_view field, mtext::Variant* out) {
+    Reflector r(Mode::kGet, nullptr);
+    r.lookup_ = std::string(field);
+    r.out_ = out;
+    return r;
+  }
+  static Reflector Set(std::string_view field, const mtext::Variant& value) {
+    Reflector r(Mode::kSet, nullptr);
+    r.lookup_ = std::string(field);
+    r.in_ = &value;
+    return r;
+  }
+  bool Found() const { return found_; }
 
   Mode GetMode() const { return mode_; }
 
@@ -118,6 +136,13 @@ class Reflector {
   // Adds a tooltip to the field described just before.
   Reflector& Tooltip(const char* text);
 
+  /**
+   * @brief A computed value that UI bindings can read (and optionally write),
+   * like Unity's [CreateProperty]. Not saved or shown in the Inspector.
+   */
+  Reflector& Property(const char* name, const std::function<mtext::Variant()>& get,
+                      const std::function<void(const mtext::Variant&)>& set = {});
+
   const std::vector<FieldInfo>& GetFields() const { return fields_; }
   // Problems found while reading, e.g. a property with the wrong type.
   const std::vector<std::string>& GetWarnings() const { return warnings_; }
@@ -139,6 +164,11 @@ class Reflector {
   mtext::PropertyList* properties_;
   std::vector<FieldInfo> fields_;
   std::vector<std::string> warnings_;
+  // kGet / kSet
+  std::string lookup_;
+  mtext::Variant* out_ = nullptr;
+  const mtext::Variant* in_ = nullptr;
+  bool found_ = false;
 };
 
 }  // namespace Mercury

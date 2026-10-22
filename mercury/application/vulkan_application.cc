@@ -60,6 +60,9 @@ VulkanApplication::~VulkanApplication() {
   if (device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(device);
 
+    ui_renderer_.Shutdown();
+    DestroyOffscreenTarget(ui_preview_color_, ui_preview_depth_,
+                           ui_preview_texture_set_);
     if (imgui_vulkan_initialized_) ImGui_ImplVulkan_Shutdown();
 
     for (FrameData &frame : frames_) {
@@ -767,6 +770,20 @@ bool VulkanApplication::OnLoad() {
   if (!CreateSkyboxResources()) {
     PDebug::error("Vulkan: failed to create skybox resources");
     return false;
+  }
+  {
+    VkShaderModule ui_vs = LoadShaderModule("ui.vs.spv");
+    VkShaderModule ui_ps = LoadShaderModule("ui.ps.spv");
+    const bool ui_ok = ui_vs && ui_ps &&
+                       ui_renderer_.Init(context_, swapchain_.ColorFormat(),
+                                         vk::Swapchain::kDepthFormat, ui_vs,
+                                         ui_ps, kFramesInFlight);
+    vkDestroyShaderModule(context_.device, ui_vs, nullptr);
+    vkDestroyShaderModule(context_.device, ui_ps, nullptr);
+    if (!ui_ok) {
+      PDebug::error("Vulkan: failed to create UI resources");
+      return false;
+    }
   }
 
   WriteDescriptorSets();
@@ -1677,6 +1694,18 @@ void VulkanApplication::Render() {
                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   }
 
+  // UI Toolkit draw lists: upload them (and their textures) before any pass.
+  ui_renderer_.BeginFrame(frame_index_);
+  vk::UIRenderer::Batch game_ui;
+  if (game_scene_ && !scene_texture_enabled_) {
+    if (const UI::UIDrawData* ui = game_scene_->GetUIDrawData()) {
+      game_ui = ui_renderer_.Prepare(cmd, *ui);
+    }
+  }
+  if (ui_preview_data_ && ui_preview_color_.Get() != VK_NULL_HANDLE) {
+    RecordUIPreviewPass(cmd, ui_renderer_.Prepare(cmd, *ui_preview_data_));
+  }
+
   // Editor: draw the scene into the offscreen target first; the window pass
   // then only draws ImGui, which shows that target inside a panel.
   glm::mat4x4 sky_matrix;
@@ -1742,6 +1771,8 @@ void VulkanApplication::Render() {
     RecordSceneDraws(cmd, frame, frame.descriptor_set, sky, extent,
                      draw_static, static_index_count, draw_instanced);
   }
+  // The game's UI goes over the scene and under ImGui (dev windows).
+  ui_renderer_.Record(cmd, game_ui, extent);
 
   if (show_render_stats_) {
     ImGui::SetNextWindowBgAlpha(0.3);
@@ -1842,8 +1873,80 @@ void VulkanApplication::Render() {
   // reference the old target) has already been submitted.
   if (scene_texture_enabled_ && scene_target_dirty_) RecreateSceneTarget();
   if (preview_target_dirty_) RecreatePreviewTarget();
-  // The editor asks again every frame it still shows the preview.
+  if (ui_preview_target_dirty_) {
+    ui_preview_target_dirty_ = false;
+    CreateOffscreenTarget(ui_preview_requested_, ui_preview_color_,
+                          ui_preview_depth_, ui_preview_texture_set_);
+  }
+  // The editor asks again every frame it still shows the previews.
   preview_camera_ = entt::null;
+  ui_preview_data_ = nullptr;
+}
+
+void VulkanApplication::RecordUIPreviewPass(VkCommandBuffer cmd,
+                                            const vk::UIRenderer::Batch &batch) {
+  const VkExtent2D extent = ui_preview_color_.Extent();
+  vk::TransitionImage(cmd, ui_preview_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                      VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+  vk::TransitionImage(cmd, ui_preview_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                      VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
+                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      kDepthStages,
+                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+  VkRenderingAttachmentInfo color_attachment = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  color_attachment.imageView = ui_preview_color_.View();
+  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  const glm::vec4 bg = ui_preview_background_;
+  color_attachment.clearValue.color = {{bg.r, bg.g, bg.b, bg.a}};
+  VkRenderingAttachmentInfo depth_attachment = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  depth_attachment.imageView = ui_preview_depth_.View();
+  depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  depth_attachment.clearValue.depthStencil = {1.0f, 0};
+  VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+  rendering.renderArea = {{0, 0}, extent};
+  rendering.layerCount = 1;
+  rendering.colorAttachmentCount = 1;
+  rendering.pColorAttachments = &color_attachment;
+  rendering.pDepthAttachment = &depth_attachment;
+  vkCmdBeginRendering(cmd, &rendering);
+  ui_renderer_.Record(cmd, batch, extent);
+  vkCmdEndRendering(cmd);
+  vk::TransitionImage(cmd, ui_preview_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+}
+
+void VulkanApplication::SetUIPreview(const UI::UIDrawData *draw_data, int width,
+                                     int height, glm::vec4 background) {
+  ui_preview_data_ = draw_data;
+  ui_preview_background_ = background;
+  if (!draw_data) return;
+  const uint32_t w = static_cast<uint32_t>(std::clamp(width, 1, 8192));
+  const uint32_t h = static_cast<uint32_t>(std::clamp(height, 1, 8192));
+  if (w == ui_preview_requested_.width && h == ui_preview_requested_.height) return;
+  ui_preview_requested_ = {w, h};
+  ui_preview_target_dirty_ = true;
+}
+
+uint64_t VulkanApplication::GetUIPreviewTexture() const {
+  return reinterpret_cast<uint64_t>(ui_preview_texture_set_);
 }
 
 void VulkanApplication::RecordOffscreenPass(

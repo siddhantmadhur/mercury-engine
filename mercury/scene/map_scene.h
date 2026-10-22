@@ -21,6 +21,7 @@
 #include "project/map.h"
 #include "project/project.h"
 #include "scene/scene.h"
+#include "ui/ui_system.h"
 
 namespace Mercury {
 
@@ -131,6 +132,10 @@ class MapScene : public GameScene {
 
   kEntityId GetActiveCamera() const { return player_camera_; }
 
+  // Every UIDocument's panels (play mode only).
+  UI::UISystem& GetUI() { return ui_; }
+  const UI::UIDrawData* GetUIDrawData() const override;
+
  protected:
   void SetActiveCamera(kEntityId camera) { player_camera_ = camera; }
   // Entity of the default camera GameScene creates; the editor drives it.
@@ -151,6 +156,7 @@ class MapScene : public GameScene {
   void DispatchCollisions();
   void StartBehaviours();
   void DestroyPending();
+  void OnUIDocumentDestroyed(entt::registry& registry, kEntityId entity);
 
   std::shared_ptr<Project> project_;
   std::unique_ptr<AssetDatabase> assets_;
@@ -172,6 +178,8 @@ class MapScene : public GameScene {
 
   std::mutex collision_mutex_;
   std::vector<PendingCollision> collisions_;
+
+  UI::UISystem ui_;
 };
 
 template <typename T>
