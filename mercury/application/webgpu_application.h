@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 
 #include <map>
+#include <string>
 #include <vector>
 
 #include "globals.h"
@@ -46,6 +47,8 @@ class WebGpuApplication : public Application {
   bool CreateShadowResources();
   bool CreateAtlasTexture(uint32_t width, uint32_t height);
   void UpdateAtlasTexture();
+  // Loads the scene's skybox panorama when its path changed.
+  void UpdateSkyboxTexture();
 
   void EnsureRegistrySignalsHooked(entt::registry& registry);
   void OnLayoutChanged(entt::registry&, entt::entity) { layout_dirty_ = true; }
@@ -83,6 +86,15 @@ class WebGpuApplication : public Application {
   wgpu::Sampler atlas_sampler_;
   uint32_t atlas_width_ = 0;
   uint32_t atlas_height_ = 0;
+
+  // Skybox resources; no bind group = draw the clear color only
+  wgpu::Texture skybox_texture_;
+  wgpu::Sampler skybox_sampler_;
+  wgpu::Buffer skybox_ubo_;
+  wgpu::BindGroupLayout skybox_bind_group_layout_;
+  wgpu::BindGroup skybox_bind_group_;
+  wgpu::RenderPipeline skybox_pipeline_;
+  std::string skybox_loaded_path_;
 
   // Uniform Buffers & Layouts
   CameraCBuffer camera_ = {};

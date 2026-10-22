@@ -82,6 +82,10 @@ class VulkanApplication : public Application {
   bool CreateDescriptors();
   bool CreatePipelines();
   bool CreateShadowResources();
+  bool CreateSkyboxResources();
+  // Loads the scene's skybox panorama when its path changed. Waits for the
+  // device to go idle, so it only runs between frames.
+  void UpdateSkyboxImage();
   bool CreateAtlasImage(uint32_t width, uint32_t height);
   void WriteDescriptorSets();
   bool InitImGui();
@@ -160,6 +164,15 @@ class VulkanApplication : public Application {
   VkPipeline shadow_pipeline_ = VK_NULL_HANDLE;
   VkPipelineLayout shadow_pipeline_layout_ = VK_NULL_HANDLE;
   VkDescriptorSetLayout shadow_descriptor_set_layout_ = VK_NULL_HANDLE;
+
+  // Equirectangular panorama drawn behind the scene; no image = clear color.
+  vk::Image skybox_image_;
+  std::string skybox_loaded_path_;
+  VkSampler skybox_sampler_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout skybox_set_layout_ = VK_NULL_HANDLE;
+  VkDescriptorSet skybox_set_ = VK_NULL_HANDLE;
+  VkPipelineLayout skybox_pipeline_layout_ = VK_NULL_HANDLE;
+  VkPipeline skybox_pipeline_ = VK_NULL_HANDLE;
 
   vk::Buffer instance_buffer_;  // device-local, kMaxInstances records
   std::vector<VkBufferCopy> instance_copies_;  // staged this frame

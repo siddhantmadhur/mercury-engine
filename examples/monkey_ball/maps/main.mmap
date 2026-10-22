@@ -1,16 +1,17 @@
 [mmap format=1]
 
-[ext_resource type="Material" path="res://assets/player.masset" id="1"]
-[ext_resource type="PhysicsMaterial" path="res://assets/ball_physics.masset" id="2"]
-[ext_resource type="Material" path="res://assets/track.masset" id="3"]
-[ext_resource type="PhysicsMaterial" path="res://assets/track_physics.masset" id="4"]
-[ext_resource type="Material" path="res://assets/track_accent.masset" id="5"]
-[ext_resource type="Material" path="res://assets/curved_obstacle.masset" id="6"]
-[ext_resource type="PhysicsMaterial" path="res://assets/bouncy_physics.masset" id="7"]
-[ext_resource type="Material" path="res://assets/obstacle.masset" id="8"]
-[ext_resource type="Material" path="res://assets/hazard_arm.masset" id="9"]
-[ext_resource type="Material" path="res://assets/goal.masset" id="10"]
-[ext_resource type="Material" path="res://assets/pickup.masset" id="11"]
+[ext_resource type="Texture" path="res://assets/skybox-day.png" id="1"]
+[ext_resource type="Material" path="res://assets/player.masset" id="2"]
+[ext_resource type="PhysicsMaterial" path="res://assets/ball_physics.masset" id="3"]
+[ext_resource type="Material" path="res://assets/track.masset" id="4"]
+[ext_resource type="PhysicsMaterial" path="res://assets/track_physics.masset" id="5"]
+[ext_resource type="Material" path="res://assets/track_accent.masset" id="6"]
+[ext_resource type="Material" path="res://assets/curved_obstacle.masset" id="7"]
+[ext_resource type="PhysicsMaterial" path="res://assets/bouncy_physics.masset" id="8"]
+[ext_resource type="Material" path="res://assets/obstacle.masset" id="9"]
+[ext_resource type="Material" path="res://assets/hazard_arm.masset" id="10"]
+[ext_resource type="Material" path="res://assets/goal.masset" id="11"]
+[ext_resource type="Material" path="res://assets/pickup.masset" id="12"]
 
 [node name="SuperMonkeyBall"]
 
@@ -33,6 +34,7 @@ rotation = Vector3(-22, 0, 0)
 
 [component type="Camera" node="Camera"]
 background = Color(0.42, 0.68, 0.92, 1)
+skybox = ExtResource("1")
 
 [component type="MonkeyCamera" node="Camera"]
 target = NodePath("Player")
@@ -52,12 +54,12 @@ ambient = Color(0.35, 0.38, 0.44, 1)
 position = Vector3(0, 1.2, 0)
 
 [component type="MeshRenderer" node="Player"]
-material = ExtResource("1")
+material = ExtResource("2")
 mesh = "sphere"
 
 [component type="SphereCollider" node="Player"]
 radius = 0.5
-material = ExtResource("2")
+material = ExtResource("3")
 
 [component type="Rigidbody" node="Player"]
 linear_damping = 0.05
@@ -73,10 +75,10 @@ position = Vector3(0, -0.5, 0)
 scale = Vector3(10, 1, 10)
 
 [component type="MeshRenderer" node="StartPlatform"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="StartPlatform"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="StartCurbs" parent="."]
 
@@ -89,7 +91,7 @@ position = Vector3(-4.75, 0.35, 0)
 scale = Vector3(0.5, 0.7, 10)
 
 [component type="MeshRenderer" node="StartCurbs/Left"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="BoxCollider" node="StartCurbs/Left"]
 
@@ -100,7 +102,7 @@ position = Vector3(4.75, 0.35, 0)
 scale = Vector3(0.5, 0.7, 10)
 
 [component type="MeshRenderer" node="StartCurbs/Right"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="BoxCollider" node="StartCurbs/Right"]
 
@@ -111,7 +113,7 @@ position = Vector3(0, 0.35, 4.75)
 scale = Vector3(10, 0.7, 0.5)
 
 [component type="MeshRenderer" node="StartCurbs/Back"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="BoxCollider" node="StartCurbs/Back"]
 
@@ -122,10 +124,10 @@ position = Vector3(0, -0.5, -14)
 scale = Vector3(3.2, 1, 18)
 
 [component type="MeshRenderer" node="NarrowBridge"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="NarrowBridge"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="HurdlePad" parent="."]
 
@@ -134,10 +136,10 @@ position = Vector3(0, -0.5, -25)
 scale = Vector3(4.5, 1, 4)
 
 [component type="MeshRenderer" node="HurdlePad"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="HurdlePad"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="CurvedHurdle" parent="."]
 
@@ -148,12 +150,12 @@ scale = Vector3(0.75, 2.2, 0.75)
 
 [component type="MeshRenderer" node="CurvedHurdle"]
 mesh = "cylinder"
-material = ExtResource("6")
+material = ExtResource("7")
 
 [component type="CylinderCollider" node="CurvedHurdle"]
 radius = 0.38
 height = 2.0
-material = ExtResource("7")
+material = ExtResource("8")
 
 [node name="RampPad" parent="."]
 
@@ -162,23 +164,23 @@ position = Vector3(0, -0.5, -29)
 scale = Vector3(4, 1, 4)
 
 [component type="MeshRenderer" node="RampPad"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="RampPad"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="LaunchRamp" parent="."]
 
 [component type="Transform" node="LaunchRamp"]
-position = Vector3(0, 1.441, -40.73)
+position = Vector3(0, 0.363, -40.73)
 rotation = Vector3(19.21, -12.38, 0)
 scale = Vector3(3.6, 1, 13.791)
 
 [component type="MeshRenderer" node="LaunchRamp"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="BoxCollider" node="LaunchRamp"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="IslandPlatform" parent="."]
 
@@ -187,10 +189,10 @@ position = Vector3(0, 2.1, -60)
 scale = Vector3(10, 1, 14)
 
 [component type="MeshRenderer" node="IslandPlatform"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="IslandPlatform"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="SweeperPivot" parent="."]
 
@@ -200,7 +202,7 @@ scale = Vector3(1.2, 1, 1.2)
 
 [component type="MeshRenderer" node="SweeperPivot"]
 mesh = "cylinder"
-material = ExtResource("8")
+material = ExtResource("9")
 
 [component type="CylinderCollider" node="SweeperPivot"]
 
@@ -212,12 +214,12 @@ scale = Vector3(8, 0.6, 0.6)
 
 [component type="MeshRenderer" node="SweeperArm"]
 mesh = "capsule"
-material = ExtResource("9")
+material = ExtResource("10")
 
 [component type="CapsuleCollider" node="SweeperArm"]
 radius = 0.3
 height = 8.0
-material = ExtResource("7")
+material = ExtResource("8")
 
 [component type="Rigidbody" node="SweeperArm"]
 motion_type = "kinematic"
@@ -233,10 +235,10 @@ position = Vector3(0, 2.1, -79)
 scale = Vector3(5, 1, 22)
 
 [component type="MeshRenderer" node="MogulTrack"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="MogulTrack"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="MogulBump1" parent="."]
 
@@ -246,11 +248,11 @@ scale = Vector3(1.8, 1.8, 1.8)
 
 [component type="MeshRenderer" node="MogulBump1"]
 mesh = "sphere"
-material = ExtResource("6")
+material = ExtResource("7")
 
 [component type="SphereCollider" node="MogulBump1"]
 radius = 0.9
-material = ExtResource("7")
+material = ExtResource("8")
 
 [node name="MogulRidge" parent="."]
 
@@ -261,12 +263,12 @@ scale = Vector3(1.4, 2.4, 1.4)
 
 [component type="MeshRenderer" node="MogulRidge"]
 mesh = "cylinder"
-material = ExtResource("6")
+material = ExtResource("7")
 
 [component type="CylinderCollider" node="MogulRidge"]
 radius = 0.7
 height = 2.0
-material = ExtResource("7")
+material = ExtResource("8")
 
 [node name="MogulBump2" parent="."]
 
@@ -276,11 +278,11 @@ scale = Vector3(1.8, 1.8, 1.8)
 
 [component type="MeshRenderer" node="MogulBump2"]
 mesh = "sphere"
-material = ExtResource("6")
+material = ExtResource("7")
 
 [component type="SphereCollider" node="MogulBump2"]
 radius = 0.9
-material = ExtResource("7")
+material = ExtResource("8")
 
 [node name="SteppingStone1" parent="."]
 
@@ -289,10 +291,10 @@ position = Vector3(0, 2.2, -94)
 scale = Vector3(4, 1, 4)
 
 [component type="MeshRenderer" node="SteppingStone1"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="SteppingStone1"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="SteppingStone2" parent="."]
 
@@ -301,10 +303,10 @@ position = Vector3(1.2, 2.7, -102)
 scale = Vector3(3.5, 1, 3.5)
 
 [component type="MeshRenderer" node="SteppingStone2"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="SteppingStone2"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="SteppingStone3" parent="."]
 
@@ -313,10 +315,10 @@ position = Vector3(-1, 3.2, -110)
 scale = Vector3(3.5, 1, 3.5)
 
 [component type="MeshRenderer" node="SteppingStone3"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="SteppingStone3"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="GoalPlatform" parent="."]
 
@@ -325,10 +327,10 @@ position = Vector3(0, 3.2, -125)
 scale = Vector3(10, 1, 14)
 
 [component type="MeshRenderer" node="GoalPlatform"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="GoalPlatform"]
-material = ExtResource("4")
+material = ExtResource("5")
 
 [node name="GoalCurbs" parent="."]
 
@@ -341,7 +343,7 @@ position = Vector3(-4.75, 4.15, -125)
 scale = Vector3(0.5, 0.9, 14)
 
 [component type="MeshRenderer" node="GoalCurbs/Left"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="BoxCollider" node="GoalCurbs/Left"]
 
@@ -352,7 +354,7 @@ position = Vector3(4.75, 4.15, -125)
 scale = Vector3(0.5, 0.9, 14)
 
 [component type="MeshRenderer" node="GoalCurbs/Right"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="BoxCollider" node="GoalCurbs/Right"]
 
@@ -363,7 +365,7 @@ position = Vector3(0, 4.15, -131.75)
 scale = Vector3(10, 0.9, 0.5)
 
 [component type="MeshRenderer" node="GoalCurbs/Back"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="BoxCollider" node="GoalCurbs/Back"]
 
@@ -375,7 +377,7 @@ scale = Vector3(0.8, 3, 0.8)
 
 [component type="MeshRenderer" node="GoalPillarLeft"]
 mesh = "cylinder"
-material = ExtResource("10")
+material = ExtResource("11")
 
 [component type="CylinderCollider" node="GoalPillarLeft"]
 
@@ -387,7 +389,7 @@ scale = Vector3(0.8, 3, 0.8)
 
 [component type="MeshRenderer" node="GoalPillarRight"]
 mesh = "cylinder"
-material = ExtResource("10")
+material = ExtResource("11")
 
 [component type="CylinderCollider" node="GoalPillarRight"]
 
@@ -400,7 +402,7 @@ scale = Vector3(0.7, 3.4, 0.7)
 
 [component type="MeshRenderer" node="GoalCrossbar"]
 mesh = "cylinder"
-material = ExtResource("10")
+material = ExtResource("11")
 
 [component type="CylinderCollider" node="GoalCrossbar"]
 
@@ -429,7 +431,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana1"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana1"]
 motion_type = "kinematic"
@@ -450,7 +452,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana2"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana2"]
 motion_type = "kinematic"
@@ -471,7 +473,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana3"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana3"]
 motion_type = "kinematic"
@@ -492,7 +494,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana4"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana4"]
 motion_type = "kinematic"
@@ -513,7 +515,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana5"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana5"]
 motion_type = "kinematic"
@@ -534,7 +536,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana6"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana6"]
 motion_type = "kinematic"
@@ -555,7 +557,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana7"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana7"]
 motion_type = "kinematic"
@@ -576,7 +578,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana8"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana8"]
 motion_type = "kinematic"
@@ -597,7 +599,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana9"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana9"]
 motion_type = "kinematic"
@@ -618,7 +620,7 @@ scale = Vector3(0.4, 0.6, 0.4)
 
 [component type="MeshRenderer" node="Pickups/Banana10"]
 mesh = "capsule"
-material = ExtResource("11")
+material = ExtResource("12")
 
 [component type="Rigidbody" node="Pickups/Banana10"]
 motion_type = "kinematic"

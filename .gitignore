@@ -8,3 +8,4 @@ bin/
 /sdk
 out/
 imgui.ini
+GOAL.md

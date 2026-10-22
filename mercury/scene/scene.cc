@@ -27,6 +27,16 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
 
   return true;
 }
+bool GameScene::GetSkyboxMatrix(glm::mat4x4& matrix) {
+  auto cam = object_manager_->GetProperty<Camera>(player_camera_);
+  auto pos = object_manager_->GetProperty<Transform>(player_camera_);
+  if (!cam || !pos) {
+    return false;
+  }
+  const glm::mat4 rotation = glm::mat4(glm::mat3(cam->GetView(*pos)));
+  matrix = glm::inverse(cam->GetProjection(width_, height_) * rotation);
+  return true;
+}
 bool GameScene::GetCameraPosition(glm::vec3& position) {
   auto transform = object_manager_->GetProperty<Transform>(player_camera_);
   if (!transform) return false;

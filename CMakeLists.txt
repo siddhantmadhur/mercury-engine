@@ -231,6 +231,8 @@ if (NOT EMSCRIPTEN)
             "main.vs.hlsl|vs_6_0|main.vs.spv"
             "static.vs.hlsl|vs_6_0|static.vs.spv"
             "shadow.vs.hlsl|vs_6_0|shadow.vs.spv"
+            "skybox.vs.hlsl|vs_6_0|skybox.vs.spv"
+            "skybox.ps.hlsl|ps_6_0|skybox.ps.spv"
             "textured.ps.hlsl|ps_6_0|textured.ps.spv")
     set(SPV_OUTS "")
     foreach (JOB ${SHADER_JOBS})
