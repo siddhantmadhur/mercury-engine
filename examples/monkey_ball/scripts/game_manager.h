@@ -17,6 +17,9 @@ class GameManager : public Mercury::Behaviour {
     r.Field("time_limit", time_limit).Tooltip("Stage countdown time limit in seconds");
   }
 
+  // Values the HUD (ui/hud.uxml) binds to.
+  void ReflectData(Mercury::Reflector& r) override;
+
   void OnStart() override;
   void OnTick(double dt) override;
   void OnFrame(double dt) override;
@@ -24,6 +27,7 @@ class GameManager : public Mercury::Behaviour {
   void CollectBanana(int points);
   void OnGoalReached();
   void RestartStage();
+  bool IsPaused() const { return paused_; }
 
   Mercury::NodeRef player{"Player"};
   float fall_limit = -12.0f;
@@ -39,6 +43,11 @@ class GameManager : public Mercury::Behaviour {
   int fall_count_ = 0;
   float message_timer_ = 0.0f;
   glm::vec3 start_position_{0.0f, 1.2f, 0.0f};
+  bool paused_ = false;
+
+  void SetupHud();
+  void SetPaused(bool paused);
+  Mercury::UI::VisualElement* hud_ = nullptr;
 };
 
 #endif  // MONKEY_BALL_GAME_MANAGER_H

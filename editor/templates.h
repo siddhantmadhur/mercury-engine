@@ -28,6 +28,10 @@ std::filesystem::path CreateScript(const std::filesystem::path& project_root,
                                    const std::string& class_name,
                                    std::string* error);
 
+// A UI document with a root VisualElement, and an empty style sheet.
+bool CreateUxml(const std::filesystem::path& file);
+bool CreateUss(const std::filesystem::path& file);
+
 // Writes a .masset of `type` with every field at its default value.
 bool CreateAsset(const std::filesystem::path& file, const std::string& type);
 

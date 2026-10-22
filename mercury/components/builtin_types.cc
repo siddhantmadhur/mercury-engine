@@ -9,6 +9,7 @@
 #include "properties/primitives.h"
 #include "scene/map_scene.h"
 #include "scripting/type_registry.h"
+#include "ui/ui_document.h"
 
 namespace Mercury {
 
@@ -121,6 +122,29 @@ void AttachCamera(MapScene& scene, kEntityId entity,
   }
 }
 
+void AttachUIDocument(MapScene& scene, kEntityId entity,
+                      const mtext::PropertyList& properties) {
+  auto document = ReadFields<UIDocument>(
+      properties, scene.GetGameObject(entity).GetPath() + ".UIDocument");
+  // The editor shows UI in the UI Builder, not in the scene view.
+  if (!scene.IsEditMode()) {
+    auto& ui = scene.GetUI();
+    UI::PanelSettings settings;
+    if (document.panel_settings.IsSet()) {
+      settings = scene.Assets()
+                     .LoadAs<PanelSettingsAsset>(document.panel_settings.path)
+                     .ToSettings();
+    }
+    UI::Panel* panel = ui.GetPanel(document.panel_settings.path, settings);
+    auto tree = document.source_asset.IsSet()
+                    ? ui.resources().LoadUxml(document.source_asset.path)
+                    : nullptr;
+    document.root = ui.AddDocument(panel, tree, document.sort_order);
+    document.panel = panel;
+  }
+  scene.Objects().AddProperty(entity, document);
+}
+
 }  // namespace
 
 void RegisterBuiltinTypes() {
@@ -204,6 +228,17 @@ void RegisterBuiltinTypes() {
     registry.RegisterComponent(std::move(info));
   }
 
+  {
+    auto info = MakeInfo<UIDocument>(
+        "UIDocument", "UI Toolkit",
+        "Shows a .uxml document on screen, styled by .uss style sheets");
+    info.attach = AttachUIDocument;
+    registry.RegisterComponent(std::move(info));
+  }
+
+  registry.RegisterAssetType(AssetTypeInfo{
+      "PanelSettings", "How UI documents scale to the screen, and their theme",
+      DescribeFields<PanelSettingsAsset>()});
   registry.RegisterAssetType(AssetTypeInfo{
       "Material", "Color and texture for a SpriteRenderer or MeshRenderer",
       DescribeFields<MaterialAsset>()});

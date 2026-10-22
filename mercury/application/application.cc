@@ -136,6 +136,14 @@ bool Application::Initialize() {
         input_manager.HandleMouseButtonCallback(win, button, action, mods);
       });
 
+  glfwSetCharCallback(window_, [](GLFWwindow* win, unsigned int codepoint) {
+    input_manager.HandleCharCallback(win, codepoint);
+  });
+
+  glfwSetCursorEnterCallback(window_, [](GLFWwindow* win, int entered) {
+    input_manager.HandleCursorEnterCallback(win, entered);
+  });
+
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   // The backend initializes the ImGui GLFW platform layer (e.g.
@@ -177,10 +185,29 @@ void Application::StepFrame() {
 
   int ticks = int(time_elapsed_ / kTickMs);
 
+  input_manager.BeginFrame();
   glfwPollEvents();
+  {
+    int window_w = 0, window_h = 0, fb_w = 0, fb_h = 0;
+    glfwGetWindowSize(window_, &window_w, &window_h);
+    glfwGetFramebufferSize(window_, &fb_w, &fb_h);
+    if (window_w > 0 && window_h > 0) {
+      input_manager.SetFramebufferScale(
+          glm::vec2(float(fb_w) / window_w, float(fb_h) / window_h));
+    }
+#if !defined(__EMSCRIPTEN__)
+    float content_x = 1.0f, content_y = 1.0f;
+    glfwGetWindowContentScale(window_, &content_x, &content_y);
+    input_manager.SetContentScale(content_x);
+#endif
+  }
   ImGuiNewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+  {
+    const ImGuiIO& io = ImGui::GetIO();
+    input_manager.SetImGuiCapture(io.WantCaptureMouse, io.WantCaptureKeyboard);
+  }
 
   game_scene_->OnFrame(delta_time_);
   if (ticks > last_tick_) {

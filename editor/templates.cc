@@ -241,6 +241,18 @@ void {1}::OnTick(double dt) {{}}
   return source;
 }
 
+bool CreateUxml(const fs::path& file) {
+  const std::string text = R"(<ui:UXML xmlns:ui="Mercury.UI">
+    <ui:VisualElement name="root" style="flex-grow: 1;" />
+</ui:UXML>
+)";
+  return WriteText(file, text, nullptr);
+}
+
+bool CreateUss(const fs::path& file) {
+  return WriteText(file, "/* Style sheet for UI Toolkit (USS). */\n", nullptr);
+}
+
 bool CreateAsset(const fs::path& file, const std::string& type) {
   Asset asset;
   asset.type = type;

@@ -46,6 +46,9 @@ void ForEachValue(const mtext::PropertyList& properties,
 // Peeks at a .masset/.mmap header to find its type for [ext_resource].
 std::string GuessResourceType(const std::string& path) {
   if (path.ends_with(".mmap")) return "Map";
+  if (path.ends_with(".uxml")) return "UXML";
+  if (path.ends_with(".uss")) return "StyleSheet";
+  if (path.ends_with(".ttf") || path.ends_with(".otf")) return "Font";
   if (path.ends_with(".png") || path.ends_with(".jpg") ||
       path.ends_with(".jpeg") || path.ends_with(".bmp") ||
       path.ends_with(".tga")) {

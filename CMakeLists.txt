@@ -28,7 +28,9 @@ if (EMSCRIPTEN)
     set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_wgpu.cpp)
     set(MERCURY_GRAPHICS_SOURCES
             mercury/application/webgpu_application.cc
-            mercury/application/webgpu_application.h)
+            mercury/application/webgpu_application.h
+            mercury/application/webgpu/wgpu_ui_renderer.cc
+            mercury/application/webgpu/wgpu_ui_renderer.h)
     add_compile_options(--use-port=emdawnwebgpu)
     add_link_options(--use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1)
 else ()
@@ -46,6 +48,8 @@ else ()
             mercury/application/vulkan/vk_swapchain.h
             mercury/application/vulkan/vk_buffer.cc
             mercury/application/vulkan/vk_buffer.h
+            mercury/application/vulkan/vk_ui_renderer.cc
+            mercury/application/vulkan/vk_ui_renderer.h
             mercury/application/vulkan/vma_impl.cc)
 endif ()
 
@@ -74,10 +78,40 @@ add_library(mercury STATIC
         mercury/pobject/texture_atlas.h
         mercury/properties/camera.cc
         mercury/properties/camera.h
+        mercury/ui/binding.cc
+        mercury/ui/binding.h
+        mercury/ui/controls.cc
+        mercury/ui/controls.h
+        mercury/ui/data_source.h
+        mercury/ui/draw_data.h
+        mercury/ui/events.h
+        mercury/ui/font.cc
+        mercury/ui/font.h
+        mercury/ui/input.h
+        mercury/ui/layout.cc
+        mercury/ui/layout.h
+        mercury/ui/mesh_generator.cc
+        mercury/ui/mesh_generator.h
+        mercury/ui/panel.cc
+        mercury/ui/panel.h
+        mercury/ui/query.h
+        mercury/ui/resources.cc
+        mercury/ui/resources.h
+        mercury/ui/style.cc
+        mercury/ui/style.h
+        mercury/ui/style_resolver.cc
+        mercury/ui/style_resolver.h
+        mercury/ui/style_sheet.h
+        mercury/ui/ui_document.h
         mercury/ui/ui_system.cc
         mercury/ui/ui_system.h
-        mercury/ui/ui_element.cc
-        mercury/ui/ui_element.h
+        mercury/ui/ui_texture.cc
+        mercury/ui/ui_texture.h
+        mercury/ui/uss_parser.cc
+        mercury/ui/uxml.cc
+        mercury/ui/uxml.h
+        mercury/ui/visual_element.cc
+        mercury/ui/visual_element.h
         mercury/algorithms/sparse_set.h
         mercury/pipelines/renderer.cc
         mercury/pipelines/renderer.h
@@ -154,6 +188,12 @@ include_directories("third_party/JoltPhysics")
 
 # END OF JOLT PHYSICS
 
+# Yoga (flexbox layout for the UI, as in Unity UI Toolkit)
+file(GLOB_RECURSE YOGA_SOURCES "third_party/yoga/yoga/*.cpp")
+add_library(yoga STATIC ${YOGA_SOURCES})
+target_include_directories(yoga PUBLIC "third_party/yoga")
+# End of Yoga
+
 # TinyXML2
 add_subdirectory(third_party/tinyxml2)
 include_directories("third_party/tinyxml2")
@@ -183,18 +223,20 @@ if (EMSCRIPTEN)
     target_compile_definitions(mercury PUBLIC
             MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
             MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+            MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
             MERCURY_GRAPHICS_WEBGPU=1
             GLM_FORCE_DEPTH_ZERO_TO_ONE
     )
-    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 assimp EnTT::EnTT)
+    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 yoga assimp EnTT::EnTT)
 else ()
     target_compile_definitions(mercury PUBLIC
             MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
             MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+            MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
             MERCURY_GRAPHICS_VULKAN=1
             GLM_FORCE_DEPTH_ZERO_TO_ONE
     )
-    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 glfw assimp
+    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 yoga glfw assimp
             EnTT::EnTT Vulkan::Vulkan Threads::Threads)
 endif ()
 # Games built outside this folder (see cmake/MercuryGame.cmake) need the same
@@ -208,6 +250,7 @@ target_include_directories(mercury PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/JoltPhysics"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glfw/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/entt/single_include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/yoga"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/VulkanMemoryAllocator/include")
 
 if (MSVC)
@@ -236,7 +279,9 @@ if (NOT EMSCRIPTEN)
             "shadow.vs.hlsl|vs_6_0|shadow.vs.spv"
             "skybox.vs.hlsl|vs_6_0|skybox.vs.spv"
             "skybox.ps.hlsl|ps_6_0|skybox.ps.spv"
-            "textured.ps.hlsl|ps_6_0|textured.ps.spv")
+            "textured.ps.hlsl|ps_6_0|textured.ps.spv"
+            "ui.vs.hlsl|vs_6_0|ui.vs.spv"
+            "ui.ps.hlsl|ps_6_0|ui.ps.spv")
     set(SPV_OUTS "")
     foreach (JOB ${SHADER_JOBS})
         string(REPLACE "|" ";" JOB_PARTS "${JOB}")
@@ -272,7 +317,8 @@ add_executable(mercury_test
         tests/mtext_test.cc
         tests/map_test.cc
         tests/reflection_test.cc
-        tests/primitives_test.cc)
+        tests/primitives_test.cc
+        tests/ui_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -315,7 +361,9 @@ if (MERCURY_BUILD_EDITOR AND NOT EMSCRIPTEN)
             editor/play_session.cc
             editor/play_session.h
             editor/templates.cc
-            editor/templates.h)
+            editor/templates.h
+            editor/ui_builder.cc
+            editor/ui_builder.h)
     target_link_libraries(mercury_editor_lib PUBLIC mercury)
     target_include_directories(mercury_editor_lib PUBLIC editor)
     # New projects build against this checkout of the engine.

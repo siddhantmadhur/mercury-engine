@@ -20,6 +20,10 @@
 
 namespace Mercury {
 
+namespace UI {
+struct UIDrawData;
+}
+
 /**
  * @brief What a scene may ask of the application that renders it
  *
@@ -42,6 +46,13 @@ class RenderHost {
   virtual void SetPreviewCamera(kEntityId camera, int width, int height) {}
   // ImTextureID of the preview texture, or 0 before it exists.
   virtual uint64_t GetPreviewTexture() const { return 0; }
+  // Also render a UI draw list into a separate width x height texture over
+  // `background` (the editor's UI Builder canvas). Call every frame it is
+  // shown; the draw data must stay alive until the frame is rendered.
+  virtual void SetUIPreview(const UI::UIDrawData* draw_data, int width, int height,
+                            glm::vec4 background) {}
+  // ImTextureID of the UI preview texture, or 0 before it exists.
+  virtual uint64_t GetUIPreviewTexture() const { return 0; }
   // The FPS overlay drawn in the top-left corner.
   virtual void SetShowRenderStats(bool show) {}
   virtual int GetAverageFps() const { return 0; }
@@ -107,6 +118,10 @@ class GameScene {
   // Absolute path of the skybox panorama, or "" to use the clear color.
   const std::string& GetSkyboxPath() const { return skybox_path_; }
   void SetSkyboxPath(std::string path) { skybox_path_ = std::move(path); }
+
+  // The game's UI Toolkit triangles for this frame (drawn over the scene,
+  // under ImGui), or null when there is none.
+  virtual const UI::UIDrawData* GetUIDrawData() const { return nullptr; }
 
   std::vector<StaticVertex> GetStaticVertices();
   std::vector<UINT> GetStaticIndices();

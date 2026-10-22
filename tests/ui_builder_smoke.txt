@@ -1,0 +1,26 @@
+# Opens monkey_ball's HUD in the UI Builder, selects the title label and
+# sets its font size inline, for mercury_editor_smoke:
+#
+#   cp -r examples/monkey_ball /tmp/mb   # the script saves (Ctrl+S)
+#   XDG_CONFIG_HOME=/tmp/cfg MERCURY_CAPTURE=builder.png MERCURY_CAPTURE_FRAME=230 \
+#     ./build/mercury_editor_smoke /tmp/mb/monkey_ball.mproj tests/ui_builder_smoke.txt
+#
+# Positions assume the default 1600x900 layout with Window > UI Builder on
+# (/tmp/cfg/mercury/editor.cfg containing "[windows] ui_builder = true").
+
+# Project panel: open ui/, double-click hud.uxml
+20 click 331 752
+40 click 360 788
+44 click 360 788
+# Hierarchy: Label .title
+80 click 410 314
+# Inspector: collapse Attributes, open Text, edit font-size
+100 click 970 130
+120 click 963 458
+140 click 1150 536
+143 click 1150 536
+160 key ctrl+a
+165 type 40
+170 key enter
+200 key ctrl+s
+260 quit

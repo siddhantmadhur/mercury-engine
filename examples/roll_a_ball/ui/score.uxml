@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="score.uss" />
+    <ui:VisualElement class="score-box">
+        <ui:Label name="score" class="score">
+            <Bindings>
+                <ui:DataBinding property="text" data-source-path="score_text" />
+            </Bindings>
+        </ui:Label>
+        <ui:Label class="help" text="WASD / arrows: roll · Space: jump · Esc: quit" />
+    </ui:VisualElement>
+    <ui:Label name="win" class="win win--hidden" text="You win!" />
+</ui:UXML>

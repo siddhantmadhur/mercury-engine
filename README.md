@@ -199,9 +199,10 @@ Built-in components:
 | `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity` and `ambient` |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity factor |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider` | Collision shapes, scaled by the Transform; `is_trigger` reports contacts without pushing |
+| `UIDocument` | Shows a `.uxml` document on screen (see UI Toolkit below) |
 
 Shapes have unit size at scale 1 (a 1 x 1 x 1 cube, a sphere 1 across, a capsule 1 across and 2
-tall), like Unity's. Asset types are `Material` and `PhysicsMaterial`. Gravity is set in the
+tall), like Unity's. Asset types are `Material`, `PhysicsMaterial` and `PanelSettings`. Gravity is set in the
 `.mproj` with `[physics] gravity = Vector3(0, -9.81, 0)`. A node's position is relative to its
 parent; maps are flattened to world positions when loaded, and rotation and scale are not
 inherited.
@@ -216,7 +217,7 @@ class Ball : public Mercury::Behaviour {
   void Reflect(Mercury::Reflector& r) override { r.Field("speed", speed); }
   void OnStart() override;                          // all objects exist
   void OnTick(double dt) override;                  // 60 times a second, before physics
-  void OnFrame(double dt) override;                 // every frame; ImGui allowed
+  void OnFrame(double dt) override;                 // every frame; ImGui dev windows allowed
   void OnCollisionEnter(Mercury::GameObject other) override;
   float speed = 60.0f;
 };
@@ -233,10 +234,64 @@ enums (`r.Enum(...)`). The editor never loads game code. After each build it run
 `game --dump-schema .mercury/scripts.mschema` to learn the scripts' fields. `.mercury/` holds
 generated files and should not be committed.
 
+#### UI Toolkit
+
+In-game UI (HUDs, menus, inventories, scores) is built with Mercury's UI Toolkit, a copy of
+Unity's: layouts in **UXML**, styles in **USS**, a tree of `VisualElement`s laid out with flexbox
+(Yoga, the engine Unity uses) and drawn by the engine's own renderer, with SDF text. Dear ImGui is
+for the editor and for developer/debug windows only; don't use it for what players see.
+
+```xml
+<!-- ui/hud.uxml -->
+<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="hud.uss" />
+    <ui:Label name="score" class="score">
+        <Bindings><ui:DataBinding property="text" data-source-path="score" /></Bindings>
+    </ui:Label>
+    <ui:Button name="pause" text="Pause" />
+</ui:UXML>
+```
+
+```css
+/* ui/hud.uss */
+.score { font-size: 32px; color: #FFE433; -unity-font-style: bold; }
+.unity-button:hover { scale: 1.05 1.05; transition: scale 0.15s ease-out; }
+```
+
+Add a `UIDocument` component to a node (`source_asset` is the `.uxml`, `panel_settings` an
+optional `PanelSettings` asset that sets the scaling and theme), then in a script:
+
+```cpp
+void ReflectData(Mercury::Reflector& r) override {  // bindable, not saved
+  r.Field("score", score_);
+  r.Property("time", [this] { return Mercury::mtext::Variant(FormatTime()); });
+}
+void OnStart() override {
+  auto* root = GetDocument()->rootVisualElement();
+  root->SetDataSource(AsDataSource());              // bindings read ReflectData/Reflect
+  root->Q<Mercury::UI::Button>("pause")->clicked += [this] { Pause(); };
+  root->Q("banner")->EnableInClassList("hidden", false);
+}
+```
+
+It has the controls Unity has (Label, Button, Toggle, RadioButton, Slider, SliderInt,
+ProgressBar, TextField, IntegerField, FloatField, ScrollView, ListView, Foldout, GroupBox, Image),
+`Q<T>()`/`Query<T>()`, events that trickle down and bubble up (`RegisterCallback<ClickEvent>`,
+`ChangeEvent<T>`, pointer, keyboard, navigation and focus events), USS selectors with
+`:hover`/`:active`/`:focus`/`:checked`/`:disabled`, variables, transitions, 9-slicing, rich text
+and `generateVisualContent` with a `Painter2D` for custom drawing. The default look is
+`mercury/ui/resources/default_theme.uss`, after Unity's runtime theme.
+
+**Window > UI Builder** (or double-clicking a `.uxml`) edits documents visually like Unity's UI
+Builder: style sheets and selectors, the element hierarchy, a library to drag controls from, a live
+canvas drawn by the game's renderer (with a Preview mode to click through it), and an Inspector
+for attributes, classes, bindings and inline or selector styles. **+ Create** in the Project panel
+makes new UI documents, style sheets and panel settings.
+
 #### Testing
 
 `ctest --test-dir build` runs the unit tests for the formats, maps, reflection, primitive
-meshes and rotations.
+meshes, rotations and the UI Toolkit (USS, UXML, cascade, layout, events, bindings, drawing).
 `mercury_editor_smoke <project> <script>` replays scripted input into the editor. Set
 `MERCURY_CAPTURE=frame.png` (plus `MERCURY_CAPTURE_FRAME=n` and `MERCURY_CAPTURE_QUIT=1`) on any
 Mercury program to save a screenshot of a frame.

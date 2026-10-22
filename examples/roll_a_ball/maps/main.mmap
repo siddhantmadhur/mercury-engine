@@ -1,16 +1,20 @@
 [mmap format=1]
 
-[ext_resource type="Material" path="res://assets/ground.masset" id="1"]
-[ext_resource type="PhysicsMaterial" path="res://assets/grippy.masset" id="2"]
-[ext_resource type="Material" path="res://assets/wall.masset" id="3"]
-[ext_resource type="Material" path="res://assets/player.masset" id="4"]
-[ext_resource type="Material" path="res://assets/pickup.masset" id="5"]
+[ext_resource type="UXML" path="res://ui/score.uxml" id="1"]
+[ext_resource type="Material" path="res://assets/ground.masset" id="2"]
+[ext_resource type="PhysicsMaterial" path="res://assets/grippy.masset" id="3"]
+[ext_resource type="Material" path="res://assets/wall.masset" id="4"]
+[ext_resource type="Material" path="res://assets/player.masset" id="5"]
+[ext_resource type="Material" path="res://assets/pickup.masset" id="6"]
 
 [node name="RollABall"]
 
 [component type="Transform" node="."]
 
 [component type="GameManager" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
 
 [node name="Camera" parent="."]
 
@@ -40,10 +44,10 @@ position = Vector3(0, -0.5, 0)
 scale = Vector3(20, 1, 20)
 
 [component type="MeshRenderer" node="Ground"]
-material = ExtResource("1")
+material = ExtResource("2")
 
 [component type="BoxCollider" node="Ground"]
-material = ExtResource("2")
+material = ExtResource("3")
 
 [node name="Walls" parent="."]
 
@@ -56,7 +60,7 @@ position = Vector3(0, 0.5, -10.25)
 scale = Vector3(21, 1, 0.5)
 
 [component type="MeshRenderer" node="Walls/North"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="Walls/North"]
 
@@ -67,7 +71,7 @@ position = Vector3(0, 0.5, 10.25)
 scale = Vector3(21, 1, 0.5)
 
 [component type="MeshRenderer" node="Walls/South"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="Walls/South"]
 
@@ -78,7 +82,7 @@ position = Vector3(10.25, 0.5, 0)
 scale = Vector3(0.5, 1, 20)
 
 [component type="MeshRenderer" node="Walls/East"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="Walls/East"]
 
@@ -89,7 +93,7 @@ position = Vector3(-10.25, 0.5, 0)
 scale = Vector3(0.5, 1, 20)
 
 [component type="MeshRenderer" node="Walls/West"]
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="BoxCollider" node="Walls/West"]
 
@@ -100,10 +104,10 @@ position = Vector3(0, 0.5, 0)
 
 [component type="MeshRenderer" node="Player"]
 mesh = "sphere"
-material = ExtResource("4")
+material = ExtResource("5")
 
 [component type="SphereCollider" node="Player"]
-material = ExtResource("2")
+material = ExtResource("3")
 
 [component type="Rigidbody" node="Player"]
 
@@ -122,7 +126,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup1"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup1"]
 motion_type = "kinematic"
@@ -143,7 +147,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup2"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup2"]
 motion_type = "kinematic"
@@ -164,7 +168,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup3"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup3"]
 motion_type = "kinematic"
@@ -185,7 +189,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup4"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup4"]
 motion_type = "kinematic"
@@ -206,7 +210,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup5"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup5"]
 motion_type = "kinematic"
@@ -227,7 +231,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup6"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup6"]
 motion_type = "kinematic"
@@ -248,7 +252,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup7"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup7"]
 motion_type = "kinematic"
@@ -269,7 +273,7 @@ rotation = Vector3(45, 0, 45)
 scale = Vector3(0.5, 0.5, 0.5)
 
 [component type="MeshRenderer" node="Pickups/Pickup8"]
-material = ExtResource("5")
+material = ExtResource("6")
 
 [component type="Rigidbody" node="Pickups/Pickup8"]
 motion_type = "kinematic"

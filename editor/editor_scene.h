@@ -4,6 +4,8 @@
  * The Mercury editor, modeled on Unity's: a project launcher, then a docked
  * workspace with Hierarchy, Inspector, Scene, Project and Console panels.
  *
+ * In-game UI is edited in the UI Builder window (ui_builder.h).
+ *
  * The editor edits a Map (the data in a .mmap file) and mirrors it into an
  * edit-mode MapScene for drawing. Game code is never loaded here: Play builds
  * the project with CMake and runs the game as its own process.
@@ -24,6 +26,7 @@
 #include "project/map.h"
 #include "project/project.h"
 #include "scene/map_scene.h"
+#include "ui_builder.h"
 
 namespace Mercury {
 
@@ -147,11 +150,15 @@ class EditorScene : public MapScene {
       const std::vector<std::string>& extensions) const;
   void CreateAsset(const std::filesystem::path& dir, const std::string& type);
   void OpenInExternalEditor(const std::filesystem::path& file);
+  void OpenInUIBuilder(const std::string& res_path);
+  // A new file in `dir` from `make` (name, extension); selects it.
+  void CreateUIFile(const std::filesystem::path& dir, const std::string& kind);
 
   std::filesystem::path initial_project_;
   EditorSettings settings_;
   Console console_;
   PlaySession play_;
+  UIBuilder ui_builder_{console_};
 
   // The open project is MapScene::GetProject().
   Map map_;

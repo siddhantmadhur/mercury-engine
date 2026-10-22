@@ -1,0 +1,26 @@
+/* Classic pong scores at the top of the screen. */
+.scoreboard {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 24px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.score {
+    width: 120px;
+    font-size: 72px;
+    color: white;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    opacity: 0.85;
+}
+
+.divider {
+    width: 4px;
+    height: 64px;
+    margin: 0 24px;
+    background-color: rgba(255, 255, 255, 0.5);
+}

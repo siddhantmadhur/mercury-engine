@@ -14,6 +14,7 @@
 #include "vulkan/vk_context.h"
 #include "camera_buffer.h"
 #include "vulkan/vk_swapchain.h"
+#include "vulkan/vk_ui_renderer.h"
 
 namespace Mercury {
 
@@ -39,6 +40,9 @@ class VulkanApplication : public Application {
   uint64_t GetSceneTexture() const override;
   void SetPreviewCamera(kEntityId camera, int width, int height) override;
   uint64_t GetPreviewTexture() const override;
+  void SetUIPreview(const UI::UIDrawData* draw_data, int width, int height,
+                    glm::vec4 background) override;
+  uint64_t GetUIPreviewTexture() const override;
   void SetShowRenderStats(bool show) override { show_render_stats_ = show; }
 
  protected:
@@ -138,6 +142,8 @@ class VulkanApplication : public Application {
   void DestroySceneTarget();
   // (Re)creates the camera preview target at preview_requested_.
   void RecreatePreviewTarget();
+  // Clears the UI preview target to its background and draws `batch`.
+  void RecordUIPreviewPass(VkCommandBuffer cmd, const vk::UIRenderer::Batch& batch);
 
   // MERCURY_CAPTURE=<file.png> saves frame MERCURY_CAPTURE_FRAME (default
   // 90) of the window; MERCURY_CAPTURE_QUIT=1 closes the window afterwards.
@@ -240,6 +246,17 @@ class VulkanApplication : public Application {
   vk::Image preview_color_;
   vk::Image preview_depth_;
   VkDescriptorSet preview_texture_set_ = VK_NULL_HANDLE;
+
+  // UI Toolkit: the game's UI over the scene, and the editor's UI Builder
+  // canvas drawn into its own target (reset after each frame).
+  vk::UIRenderer ui_renderer_;
+  const UI::UIDrawData* ui_preview_data_ = nullptr;
+  glm::vec4 ui_preview_background_ = glm::vec4(0.0f);
+  bool ui_preview_target_dirty_ = false;
+  VkExtent2D ui_preview_requested_ = {0, 0};
+  vk::Image ui_preview_color_;
+  vk::Image ui_preview_depth_;
+  VkDescriptorSet ui_preview_texture_set_ = VK_NULL_HANDLE;
 
   bool show_render_stats_ = true;
 

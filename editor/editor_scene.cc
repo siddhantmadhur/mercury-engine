@@ -22,6 +22,7 @@ constexpr const char* kInspectorWindow = "Inspector";
 constexpr const char* kSceneWindow = "Scene";
 constexpr const char* kProjectWindow = "Project";
 constexpr const char* kConsoleWindow = "Console";
+constexpr const char* kUIBuilderWindow = UIBuilder::kWindowName;
 constexpr size_t kMaxUndoSteps = 200;
 
 void ApplyEditorStyle() {
@@ -60,6 +61,9 @@ EditorScene::EditorScene(fs::path initial_project)
   });
   std::snprintf(new_project_dir_, sizeof(new_project_dir_), "%s",
                 EditorSettings::HomeDir().string().c_str());
+  ui_builder_.list_files = [this](const std::vector<std::string>& extensions) {
+    return ListProjectFiles(extensions);
+  };
 }
 
 EditorScene::~EditorScene() { PDebug::SetSink(nullptr); }
@@ -97,7 +101,7 @@ void EditorScene::OnDestroy() {
 void EditorScene::OnTick(double delta_t) {}
 
 bool EditorScene::OnCloseRequested() {
-  if (!dirty_) return true;
+  if (!dirty_ && !ui_builder_.IsDirty()) return true;
   modal_ = Modal::kUnsaved;
   open_modal_ = true;
   after_unsaved_ = AfterSave::kQuit;
@@ -127,6 +131,10 @@ void EditorScene::OnFrame(double delta_t) {
     DrawScene();
     DrawProjectBrowser();
     DrawConsole();
+    if (settings_.show_ui_builder) {
+      ui_builder_.Draw(render_host_, &settings_.show_ui_builder);
+      if (!settings_.show_ui_builder) settings_.Save();
+    }
   }
   DrawModals();
 
@@ -168,6 +176,7 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   }
   play_.Stop();
   SetProject(project);
+  ui_builder_.SetProject(project);
   settings_.AddRecentProject(project->GetFile());
   settings_.Save();
   game_aspect_ = static_cast<float>(project->GetWindowWidth()) /
@@ -192,6 +201,7 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
 void EditorScene::CloseProject() {
   play_.Stop();
   SetProject(nullptr);
+  ui_builder_.SetProject(nullptr);
   map_ = Map();
   map_path_.clear();
   undo_.clear();
@@ -500,6 +510,17 @@ void EditorScene::HandleShortcuts() {
   auto chord = [](ImGuiKeyChord c) {
     return ImGui::IsKeyChordPressed(c);
   };
+  // The UI Builder has its own document and undo history.
+  if (settings_.show_ui_builder && ui_builder_.HasFocus()) {
+    if (chord(ImGuiMod_Ctrl | ImGuiKey_S)) ui_builder_.Save();
+    if (typing) return;
+    if (chord(ImGuiMod_Ctrl | ImGuiKey_Z)) ui_builder_.Undo();
+    if (chord(ImGuiMod_Ctrl | ImGuiKey_Y) ||
+        chord(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z)) {
+      ui_builder_.Redo();
+    }
+    return;
+  }
   if (chord(ImGuiMod_Ctrl | ImGuiKey_S)) SaveMap();
   if (chord(ImGuiMod_Ctrl | ImGuiKey_P)) {
     if (play_.IsBusy()) {
@@ -556,6 +577,7 @@ void EditorScene::BuildDefaultLayout(ImGuiID dockspace) {
   ImGui::DockBuilderDockWindow(kProjectWindow, bottom);
   ImGui::DockBuilderDockWindow(kConsoleWindow, bottom);
   ImGui::DockBuilderDockWindow(kSceneWindow, center);
+  ImGui::DockBuilderDockWindow(kUIBuilderWindow, center);
   ImGui::DockBuilderFinish(dockspace);
 }
 
@@ -579,7 +601,7 @@ void EditorScene::DrawMenuBar() {
     }
     ImGui::Separator();
     if (ImGui::MenuItem("Close Project")) {
-      if (dirty_) {
+      if (dirty_ || ui_builder_.IsDirty()) {
         modal_ = Modal::kUnsaved;
         open_modal_ = true;
         after_unsaved_ = AfterSave::kCloseProject;
@@ -629,6 +651,10 @@ void EditorScene::DrawMenuBar() {
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Window")) {
+    if (ImGui::MenuItem("UI Builder", nullptr, &settings_.show_ui_builder)) {
+      settings_.Save();
+    }
+    ImGui::Separator();
     if (ImGui::MenuItem("Reset Layout")) reset_layout_ = true;
     ImGui::EndMenu();
   }
@@ -762,18 +788,25 @@ void EditorScene::DrawModals() {
       break;
     }
     case Modal::kUnsaved: {
-      ImGui::Text("%s has unsaved changes.", MapDisplayName().c_str());
+      if (dirty_) ImGui::Text("%s has unsaved changes.", MapDisplayName().c_str());
+      if (ui_builder_.IsDirty()) {
+        ImGui::Text("%s has unsaved changes (UI Builder).",
+                    fs::path(ui_builder_.path()).filename().string().c_str());
+      }
       auto proceed = [&] {
         close();
         if (after_unsaved_ == AfterSave::kQuit) QuitScene();
         if (after_unsaved_ == AfterSave::kCloseProject) CloseProject();
       };
       if (ImGui::Button("Save")) {
-        if (SaveMap()) proceed();
+        const bool map_ok = !dirty_ || SaveMap();
+        const bool ui_ok = !ui_builder_.IsDirty() || ui_builder_.Save();
+        if (map_ok && ui_ok) proceed();
       }
       ImGui::SameLine();
       if (ImGui::Button("Discard")) {
         dirty_ = false;
+        ui_builder_.Close();
         proceed();
       }
       ImGui::SameLine();
@@ -924,7 +957,9 @@ std::vector<std::string> EditorScene::ListProjectFiles(
 }
 
 void EditorScene::CreateAsset(const fs::path& dir, const std::string& type) {
-  std::string base = type == "PhysicsMaterial" ? "physics_material" : "material";
+  std::string base = type == "PhysicsMaterial" ? "physics_material"
+                     : type == "PanelSettings" ? "panel_settings"
+                                               : "material";
   fs::path file = dir / (base + std::string(kAssetExtension));
   for (int i = 2; fs::exists(file); i++) {
     file = dir / (base + std::to_string(i) + std::string(kAssetExtension));
@@ -935,6 +970,40 @@ void EditorScene::CreateAsset(const fs::path& dir, const std::string& type) {
   } else {
     console_.Error("Could not create " + file.string());
   }
+}
+
+void EditorScene::OpenInUIBuilder(const std::string& res_path) {
+  if (ui_builder_.IsOpen() && ui_builder_.path() == res_path) {
+    settings_.show_ui_builder = true;
+    ImGui::SetWindowFocus(UIBuilder::kWindowName);
+    return;
+  }
+  if (ui_builder_.IsDirty()) ui_builder_.Save();
+  if (ui_builder_.Open(res_path)) {
+    if (!settings_.show_ui_builder) {
+      settings_.show_ui_builder = true;
+      settings_.Save();
+    }
+    ImGui::SetWindowFocus(UIBuilder::kWindowName);
+  }
+}
+
+void EditorScene::CreateUIFile(const fs::path& dir, const std::string& kind) {
+  const bool uxml = kind == "uxml";
+  const std::string base = uxml ? "new_document" : "new_style";
+  const std::string extension = uxml ? std::string(kUxmlExtension) : std::string(kUssExtension);
+  fs::path file = dir / (base + extension);
+  for (int i = 2; fs::exists(file); i++) {
+    file = dir / (base + std::to_string(i) + extension);
+  }
+  const bool ok = uxml ? Templates::CreateUxml(file) : Templates::CreateUss(file);
+  if (!ok) {
+    console_.Error("Could not create " + file.string());
+    return;
+  }
+  const std::string res_path = GetProject()->ToResPath(file);
+  console_.Info("Created " + res_path);
+  if (uxml) OpenInUIBuilder(res_path);
 }
 
 void EditorScene::OpenInExternalEditor(const fs::path& file) {

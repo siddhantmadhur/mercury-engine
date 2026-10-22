@@ -1,8 +1,9 @@
 [mmap format=1]
 
-[ext_resource type="Material" path="res://assets/white.masset" id="1"]
-[ext_resource type="PhysicsMaterial" path="res://assets/frictionless.masset" id="2"]
-[ext_resource type="PhysicsMaterial" path="res://assets/bouncy.masset" id="3"]
+[ext_resource type="UXML" path="res://ui/scoreboard.uxml" id="1"]
+[ext_resource type="Material" path="res://assets/white.masset" id="2"]
+[ext_resource type="PhysicsMaterial" path="res://assets/frictionless.masset" id="3"]
+[ext_resource type="PhysicsMaterial" path="res://assets/bouncy.masset" id="4"]
 
 [node name="Pong"]
 
@@ -11,6 +12,9 @@
 [component type="PongGame" node="."]
 ball = NodePath("Ball")
 show_debug = true
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
 
 [node name="Camera" parent="."]
 
@@ -26,7 +30,7 @@ position = Vector3(-68, 0, 0)
 scale = Vector3(2, 10, 1)
 
 [component type="SpriteRenderer" node="Player"]
-material = ExtResource("1")
+material = ExtResource("2")
 
 [component type="Rigidbody" node="Player"]
 motion_type = "kinematic"
@@ -39,7 +43,7 @@ allow_sleeping = false
 
 [component type="BoxCollider" node="Player"]
 size = Vector3(1, 1, 10)
-material = ExtResource("2")
+material = ExtResource("3")
 
 [component type="Paddle" node="Player"]
 limit = 40.0
@@ -56,7 +60,7 @@ position = Vector3(68, 0, 0)
 scale = Vector3(2, 10, 1)
 
 [component type="SpriteRenderer" node="Enemy"]
-material = ExtResource("1")
+material = ExtResource("2")
 
 [component type="Rigidbody" node="Enemy"]
 motion_type = "kinematic"
@@ -69,7 +73,7 @@ allow_sleeping = false
 
 [component type="BoxCollider" node="Enemy"]
 size = Vector3(1, 1, 10)
-material = ExtResource("2")
+material = ExtResource("3")
 
 [component type="Paddle" node="Enemy"]
 limit = 40.0
@@ -85,7 +89,7 @@ gain = 8.0
 scale = Vector3(2, 2, 1)
 
 [component type="SpriteRenderer" node="Ball"]
-material = ExtResource("1")
+material = ExtResource("2")
 
 [component type="Rigidbody" node="Ball"]
 motion_type = "dynamic"
@@ -98,7 +102,7 @@ allow_sleeping = false
 
 [component type="BoxCollider" node="Ball"]
 size = Vector3(1, 1, 10)
-material = ExtResource("3")
+material = ExtResource("4")
 
 [component type="Ball" node="Ball"]
 speed = 60.0

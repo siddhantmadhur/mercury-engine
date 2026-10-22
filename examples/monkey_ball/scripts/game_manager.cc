@@ -1,12 +1,61 @@
 #include "game_manager.h"
 
 #include <algorithm>
+#include <format>
 
 #include "banana_pickup.h"
-#include "imgui.h"
 #include "player_ball.h"
+#include "ui/controls.h"
 
 MERCURY_SCRIPT(GameManager);
+
+using namespace Mercury::UI;
+
+void GameManager::ReflectData(Mercury::Reflector& r) {
+  r.Field("score", score_);
+  r.Field("falls", fall_count_);
+  r.Field("time_remaining", time_remaining_);
+  r.Property("time_text", [this] {
+    return Mercury::mtext::Variant(std::format("{:.2f} s", time_remaining_));
+  });
+  r.Property("bananas_text", [this] {
+    return Mercury::mtext::Variant(
+        std::format("{} / {}", bananas_collected_, total_bananas_));
+  });
+}
+
+void GameManager::SetupHud() {
+  auto* document = GetDocument();
+  hud_ = document ? document->rootVisualElement() : nullptr;
+  if (!hud_) return;
+  // Labels in hud.uxml bind to the fields listed in ReflectData.
+  hud_->SetDataSource(AsDataSource());
+
+  hud_->Q<Button>("resume")->clicked += [this] { SetPaused(false); };
+  hud_->Q<Button>("restart")->clicked += [this] {
+    SetPaused(false);
+    RestartStage();
+  };
+  hud_->Q<Button>("play-again")->clicked += [this] { RestartStage(); };
+  hud_->Q<Button>("quit")->clicked += [this] { Quit(); };
+  hud_->Q<Button>("goal-quit")->clicked += [this] { Quit(); };
+  hud_->Q<Toggle>("show-hints")->RegisterValueChangedCallback<bool>(
+      [this](ChangeEvent<bool>& e) {
+        hud_->Q<Label>({}, "hint")->EnableInClassList("hint--hidden", !e.newValue);
+      });
+}
+
+void GameManager::SetPaused(bool paused) {
+  paused_ = paused;
+  if (!hud_) return;
+  hud_->Q("pause")->EnableInClassList("hidden", !paused);
+  if (paused) {
+    hud_->Q<Button>("resume")->Focus();
+  } else if (auto* focused = hud_->panel()->focusedElement()) {
+    // So Enter/arrow keys go back to the game.
+    focused->Blur();
+  }
+}
 
 void GameManager::OnStart() {
   score_ = 0;
@@ -27,6 +76,7 @@ void GameManager::OnStart() {
   if (auto p = Get(player)) {
     start_position_ = p.GetTransform()->GetPosition();
   }
+  SetupHud();
 }
 
 void GameManager::CollectBanana(int points) {
@@ -58,7 +108,8 @@ void GameManager::RestartStage() {
 }
 
 void GameManager::OnTick(double dt) {
-  if (IsKeyPressed(GLFW_KEY_ESCAPE)) Quit();
+  if (IsKeyJustPressed(GLFW_KEY_ESCAPE)) SetPaused(!paused_);
+  if (paused_) return;
   if (IsKeyJustPressed(GLFW_KEY_R)) RestartStage();
 
   if (state_ == StageState::kPlaying) {
@@ -85,65 +136,21 @@ void GameManager::OnTick(double dt) {
 }
 
 void GameManager::OnFrame(double dt) {
-  // Top HUD window
-  ImGui::SetNextWindowPos(ImVec2(16, 70), ImGuiCond_Always);
-  ImGui::Begin("Super Monkey Ball HUD", nullptr,
-               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar |
-                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking);
-
-  ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "SUPER MONKEY BALL");
-  ImGui::Separator();
-
-  // Time display
-  if (time_remaining_ < 10.0f) {
-    ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "TIME:  %.2f s",
-                       time_remaining_);
-  } else {
-    ImGui::Text("TIME:  %.2f s", time_remaining_);
+  if (!hud_) return;
+  // Values update through bindings; only classes are toggled here, and
+  // hud.uss animates the changes.
+  hud_->Q<Label>("time")->EnableInClassList("stat__value--low",
+                                            time_remaining_ < 10.0f);
+  hud_->Q("fall-out")->EnableInClassList("banner--hidden",
+                                         state_ != StageState::kFallOut);
+  auto* goal = hud_->Q("goal");
+  const bool cleared = state_ == StageState::kGoal;
+  if (cleared && goal->ClassListContains("banner--hidden")) {
+    hud_->Q<Label>("goal-summary")
+        ->SetText(std::format(
+            "Time <b>{:.2f}s</b>   Bananas <color=#FFE433><b>{} / {}</b></color>\n"
+            "Score <b>{}</b>   Falls <b>{}</b>",
+            elapsed_time_, bananas_collected_, total_bananas_, score_, fall_count_));
   }
-
-  // Bananas & Score
-  ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.2f, 1.0f), "BANANAS: %d / %d",
-                     bananas_collected_, total_bananas_);
-  ImGui::Text("SCORE:   %d", score_);
-  ImGui::Text("FALLS:   %d", fall_count_);
-
-  ImGui::Separator();
-  ImGui::TextDisabled("WASD / Arrows: Roll");
-  ImGui::TextDisabled("Space: Jump over obstacles");
-  ImGui::TextDisabled("Q / E: Rotate Camera View");
-  ImGui::TextDisabled("R: Restart Stage | Esc: Quit");
-
-  ImGui::End();
-
-  // Fall Out banner
-  if (state_ == StageState::kFallOut) {
-    ImGui::SetNextWindowPos(ImVec2(540, 260), ImGuiCond_Always);
-    ImGui::Begin("FallOutBanner", nullptr,
-                 ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove);
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.2f, 1.0f),
-                       "=== FALL OUT! ===");
-    ImGui::Text("Respawning at start...");
-    ImGui::End();
-  }
-
-  // Stage Cleared banner
-  if (state_ == StageState::kGoal) {
-    ImGui::SetNextWindowPos(ImVec2(500, 220), ImGuiCond_Always);
-    ImGui::Begin("GoalBanner", nullptr,
-                 ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove);
-    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f),
-                       "=== GOAL! STAGE CLEARED! ===");
-    ImGui::Separator();
-    ImGui::Text("Time Cleared:     %.2f seconds", elapsed_time_);
-    ImGui::Text("Bananas Picked:   %d of %d", bananas_collected_, total_bananas_);
-    ImGui::Text("Final Score:      %d", score_);
-    ImGui::Text("Falls:            %d", fall_count_);
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.3f, 1.0f),
-                       "Press 'R' to Play Again or 'Esc' to Quit");
-    ImGui::End();
-  }
+  goal->EnableInClassList("banner--hidden", !cleared);
 }

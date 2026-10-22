@@ -79,6 +79,9 @@ bool AssetDatabase::Save(const Asset& asset) {
 
 std::string AssetDatabase::TypeOf(std::string_view res_path) {
   if (res_path.ends_with(kMapExtension)) return "Map";
+  if (res_path.ends_with(kUxmlExtension)) return "UXML";
+  if (res_path.ends_with(kUssExtension)) return "StyleSheet";
+  if (res_path.ends_with(".ttf") || res_path.ends_with(".otf")) return "Font";
   if (!res_path.ends_with(kAssetExtension)) return "Texture";
   if (auto asset = Load(res_path)) return asset->type;
   return "";

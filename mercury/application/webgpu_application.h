@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "globals.h"
+#include "webgpu/wgpu_ui_renderer.h"
 
 namespace Mercury {
 
@@ -137,6 +138,9 @@ class WebGpuApplication : public Application {
   std::vector<entt::entity> slot_owner_;
   std::vector<entt::entity> slot_parent_;
   std::vector<VsModelBuffer> instance_cpu_cache_;
+
+  // The game's UI Toolkit draw list, over the scene and under ImGui.
+  wgpu_ui::UIRenderer ui_renderer_;
 };
 
 }  // namespace Mercury

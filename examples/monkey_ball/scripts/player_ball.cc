@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "banana_pickup.h"
+#include "game_manager.h"
 #include "goal_trigger.h"
 
 MERCURY_SCRIPT(PlayerBall);
@@ -23,6 +24,10 @@ void PlayerBall::ResetPhysics() {
 }
 
 void PlayerBall::OnTick(double dt) {
+  // No rolling while the pause menu is open.
+  if (auto manager = Find("GameManager").GetBehaviour<GameManager>()) {
+    if (manager->IsPaused()) return;
+  }
   jump_cooldown_ = std::max(0.0f, jump_cooldown_ - static_cast<float>(dt));
 
   const auto& transform = GetTransform();

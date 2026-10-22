@@ -6,12 +6,18 @@
 
 class Ball;
 
-// Keeps the score, shows it, and quits on Escape.
+// Keeps the score (shown by ui/scoreboard.uxml) and quits on Escape.
 class PongGame : public Mercury::Behaviour {
  public:
   void Reflect(Mercury::Reflector& r) override {
     r.Field("ball", ball);
     r.Field("show_debug", show_debug).Tooltip("Show the ball's position and velocity");
+  }
+
+  // The scoreboard binds to these.
+  void ReflectData(Mercury::Reflector& r) override {
+    r.Field("player_wins", player_wins_);
+    r.Field("enemy_wins", enemy_wins_);
   }
 
   void OnStart() override;

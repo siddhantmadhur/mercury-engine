@@ -1,0 +1,68 @@
+<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="hud.uss" />
+    <ui:VisualElement name="hud" class="hud" picking-mode="Ignore" style="align-content: flex-start; justify-content: center;">
+        <ui:VisualElement name="stats" class="panel stats" style="top: auto;">
+            <ui:Label class="title" text="SUPER MONKEY BALL" />
+            <ui:VisualElement class="stat">
+                <ui:Label class="stat__name" text="TIME" />
+                <ui:Label name="time" class="stat__value" text="0.00 s">
+                    <Bindings>
+                        <ui:DataBinding property="text" data-source-path="time_text" />
+                    </Bindings>
+                </ui:Label>
+            </ui:VisualElement>
+            <ui:ProgressBar name="time-bar" class="time-bar" high-value="65">
+                <Bindings>
+                    <ui:DataBinding property="value" data-source-path="time_remaining" />
+                    <ui:DataBinding property="high-value" data-source-path="time_limit" />
+                </Bindings>
+            </ui:ProgressBar>
+            <ui:VisualElement class="stat">
+                <ui:Label class="stat__name" text="BANANAS" />
+                <ui:Label name="bananas" class="stat__value stat__value--banana" text="0 / 0">
+                    <Bindings>
+                        <ui:DataBinding property="text" data-source-path="bananas_text" />
+                    </Bindings>
+                </ui:Label>
+            </ui:VisualElement>
+            <ui:VisualElement class="stat">
+                <ui:Label class="stat__name" text="SCORE" />
+                <ui:Label name="score" class="stat__value" text="0">
+                    <Bindings>
+                        <ui:DataBinding property="text" data-source-path="score" />
+                    </Bindings>
+                </ui:Label>
+            </ui:VisualElement>
+            <ui:VisualElement class="stat">
+                <ui:Label class="stat__name" text="FALLS" />
+                <ui:Label name="falls" class="stat__value" text="0">
+                    <Bindings>
+                        <ui:DataBinding property="text" data-source-path="falls" />
+                    </Bindings>
+                </ui:Label>
+            </ui:VisualElement>
+            <ui:Label class="hint" text="WASD / Arrows: roll&#10;Space: jump · Q / E: camera&#10;R: restart · Esc: menu" />
+        </ui:VisualElement>
+        <ui:VisualElement name="fall-out" class="banner banner--fall banner--hidden" picking-mode="Ignore">
+            <ui:Label class="banner__title" text="FALL OUT!" />
+            <ui:Label class="banner__text" text="Respawning at start..." />
+        </ui:VisualElement>
+        <ui:VisualElement name="goal" class="banner banner--goal banner--hidden">
+            <ui:Label class="banner__title" text="GOAL!" />
+            <ui:Label name="goal-summary" class="banner__text" />
+            <ui:VisualElement class="buttons">
+                <ui:Button name="play-again" class="menu-button" text="Play again" />
+                <ui:Button name="goal-quit" class="menu-button" text="Quit" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="pause" class="overlay hidden">
+            <ui:VisualElement class="panel menu">
+                <ui:Label class="banner__title" text="PAUSED" />
+                <ui:Button name="resume" class="menu-button" text="Resume" />
+                <ui:Button name="restart" class="menu-button" text="Restart stage" />
+                <ui:Toggle name="show-hints" class="menu-toggle" text="Show controls" value="true" />
+                <ui:Button name="quit" class="menu-button menu-button--danger" text="Quit" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
