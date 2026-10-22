@@ -4,7 +4,8 @@
 #   - every .cc/.cpp under <dir>/scripts is compiled in (new script files are
 #     picked up on the next build thanks to CONFIGURE_DEPENDS),
 #   - main() opens <dir>/<name>.mproj by default,
-#   - <dir>/.mercury/player.mcfg tells the editor how to build and run it.
+#   - <dir>/.mercury/player.mcfg tells the editor how to build and run it,
+#   - the scripts land in compile_commands.json, for clangd.
 function(mercury_add_game TARGET)
     cmake_parse_arguments(GAME "" "PROJECT" "SOURCES" ${ARGN})
     if (NOT GAME_PROJECT)
@@ -30,6 +31,11 @@ function(mercury_add_game TARGET)
     add_executable(${TARGET} ${GAME_MAIN} ${GAME_SCRIPTS} ${GAME_SOURCES})
     target_include_directories(${TARGET} PRIVATE "${GAME_PROJECT}/scripts")
     target_link_libraries(${TARGET} PRIVATE mercury)
+    # The engine's CMAKE_* settings stay in its own directory, but a game
+    # target is made in the game's CMakeLists.txt, so set them here.
+    set_target_properties(${TARGET} PROPERTIES
+            EXPORT_COMPILE_COMMANDS ON
+            CXX_SCAN_FOR_MODULES OFF)
 
     if (EMSCRIPTEN)
         set_target_properties(${TARGET} PROPERTIES SUFFIX ".html")

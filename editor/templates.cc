@@ -171,6 +171,13 @@ mercury_add_game({2} PROJECT ${{CMAKE_CURRENT_SOURCE_DIR}})
                  "# Build output and editor caches\n.mercury/\n", error)) {
     return {};
   }
+  // clangd only looks for compile_commands.json next to the sources and in
+  // build/, so point it at the build the editor configures.
+  if (!WriteText(root / ".clangd",
+                 "CompileFlags:\n  CompilationDatabase: .mercury/build\n",
+                 error)) {
+    return {};
+  }
   if (!WriteText(root / "maps" / "main.mmap", NewMapText(name, is_3d), error)) {
     return {};
   }
