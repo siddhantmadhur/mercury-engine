@@ -141,10 +141,16 @@ void MapScene::ApplyEnvironment() {
   }
 
   clear_color_ = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+  skybox_path_.clear();
   for (kEntityId entity : entities_) {
     auto camera = object_manager_->GetProperty<CameraComponent>(entity);
     if (camera && camera->current) {
       clear_color_ = camera->background;
+      // Loaded by the renderer into its own texture: a panorama is far too
+      // big for the sprite atlas that GetTexture() packs into.
+      if (camera->skybox.IsSet() && project_) {
+        skybox_path_ = project_->Resolve(camera->skybox.path).string();
+      }
       break;
     }
   }

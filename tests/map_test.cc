@@ -6,6 +6,7 @@
 
 #include "project/map.h"
 #include "project/project.h"
+#include "scene/map_scene.h"
 
 using namespace Mercury;
 
@@ -152,4 +153,35 @@ TEST(Project, ResolvesResPaths) {
   EXPECT_TRUE(std::filesystem::exists(map_file));
   EXPECT_EQ(project->ToResPath(map_file), "res://maps/main.mmap");
   EXPECT_EQ(project->ToResPath("/definitely/outside"), "");
+}
+
+TEST(MapScene, CurrentCameraSetsSkyboxPath) {
+  std::string error;
+  auto project = Project::Load(kPong / "pong.mproj", &error);
+  ASSERT_TRUE(project) << error;
+
+  Map map;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+
+[ext_resource type="Texture" path="res://assets/sky.png" id="1"]
+
+[node name="Root"]
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+
+[component type="Camera" node="Camera"]
+skybox = ExtResource("1")
+)",
+                                 &error))
+      << error;
+
+  MapScene scene(project, MapScene::Mode::kEdit);
+  scene.Instantiate(map);
+  EXPECT_EQ(scene.GetSkyboxPath(), project->Resolve("res://assets/sky.png"));
+
+  // Without a skybox the renderer falls back to the background color.
+  scene.Instantiate(Map());
+  EXPECT_EQ(scene.GetSkyboxPath(), "");
 }

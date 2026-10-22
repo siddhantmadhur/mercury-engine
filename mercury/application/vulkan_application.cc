@@ -20,6 +20,7 @@
 #include "properties/mesh_instance.h"
 #include "properties/texture2d.h"
 #include "properties/transform.h"
+#include "stb/stb_image.h"
 #include "vulkan/vk_check.h"
 
 namespace Mercury {
@@ -73,6 +74,7 @@ VulkanApplication::~VulkanApplication() {
     instance_buffer_.Reset();
     atlas_image_.Reset();
     shadow_image_.Reset();
+    skybox_image_.Reset();
     DestroySceneTarget();
     capture_buffer_.Reset();
     vkDestroySampler(device, scene_sampler_, nullptr);
@@ -89,6 +91,11 @@ VulkanApplication::~VulkanApplication() {
     if (shadow_descriptor_set_layout_ != VK_NULL_HANDLE) {
       vkDestroyDescriptorSetLayout(device, shadow_descriptor_set_layout_, nullptr);
     }
+
+    vkDestroySampler(device, skybox_sampler_, nullptr);
+    vkDestroyPipeline(device, skybox_pipeline_, nullptr);
+    vkDestroyPipelineLayout(device, skybox_pipeline_layout_, nullptr);
+    vkDestroyDescriptorSetLayout(device, skybox_set_layout_, nullptr);
 
     vkDestroySampler(device, texture_sampler_, nullptr);
     vkDestroyPipeline(device, instanced_pipeline_, nullptr);
@@ -374,14 +381,15 @@ bool VulkanApplication::CreateDescriptors() {
     return false;
   }
 
+  // The extra image, sampler and set are the skybox's.
   const VkDescriptorPoolSize pool_sizes[] = {
       {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight * 2},
-      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kFramesInFlight * 2},
-      {VK_DESCRIPTOR_TYPE_SAMPLER, kFramesInFlight * 2},
+      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kFramesInFlight * 2 + 1},
+      {VK_DESCRIPTOR_TYPE_SAMPLER, kFramesInFlight * 2 + 1},
   };
   VkDescriptorPoolCreateInfo pool_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  pool_info.maxSets = kFramesInFlight * 2;
+  pool_info.maxSets = kFramesInFlight * 2 + 1;
   pool_info.poolSizeCount = static_cast<uint32_t>(std::size(pool_sizes));
   pool_info.pPoolSizes = pool_sizes;
   if (!VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr,
@@ -735,6 +743,10 @@ bool VulkanApplication::OnLoad() {
     PDebug::error("Vulkan: failed to create shadow resources");
     return false;
   }
+  if (!CreateSkyboxResources()) {
+    PDebug::error("Vulkan: failed to create skybox resources");
+    return false;
+  }
 
   WriteDescriptorSets();
   return true;
@@ -878,6 +890,231 @@ bool VulkanApplication::CreateShadowResources() {
                                                &shadow_pipeline_));
   vkDestroyShaderModule(device, shadow_vs, nullptr);
   return ok;
+}
+
+bool VulkanApplication::CreateSkyboxResources() {
+  VkDevice device = context_.device;
+
+  // Wrap around horizontally so the panorama's seam is invisible.
+  VkSamplerCreateInfo sampler_info = {
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+  sampler_info.magFilter = VK_FILTER_LINEAR;
+  sampler_info.minFilter = VK_FILTER_LINEAR;
+  sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  if (!VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr,
+                                &skybox_sampler_))) {
+    return false;
+  }
+
+  // Same binding numbers as the main set; see skybox.ps.hlsl.
+  const VkDescriptorSetLayoutBinding bindings[] = {
+      {kAtlasBinding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
+       VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+      {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
+       VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+  };
+  VkDescriptorSetLayoutCreateInfo layout_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  layout_info.bindingCount = static_cast<uint32_t>(std::size(bindings));
+  layout_info.pBindings = bindings;
+  if (!VK_CHECK(vkCreateDescriptorSetLayout(device, &layout_info, nullptr,
+                                            &skybox_set_layout_))) {
+    return false;
+  }
+
+  VkDescriptorSetAllocateInfo alloc_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  alloc_info.descriptorPool = descriptor_pool_;
+  alloc_info.descriptorSetCount = 1;
+  alloc_info.pSetLayouts = &skybox_set_layout_;
+  if (!VK_CHECK(vkAllocateDescriptorSets(device, &alloc_info, &skybox_set_))) {
+    return false;
+  }
+
+  const VkPushConstantRange push_range = {VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                                          sizeof(glm::mat4x4)};
+  VkPipelineLayoutCreateInfo pipeline_layout_info = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+  pipeline_layout_info.setLayoutCount = 1;
+  pipeline_layout_info.pSetLayouts = &skybox_set_layout_;
+  pipeline_layout_info.pushConstantRangeCount = 1;
+  pipeline_layout_info.pPushConstantRanges = &push_range;
+  if (!VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr,
+                                       &skybox_pipeline_layout_))) {
+    return false;
+  }
+
+  VkShaderModule skybox_vs = LoadShaderModule("skybox.vs.spv");
+  VkShaderModule skybox_ps = LoadShaderModule("skybox.ps.spv");
+  if (!skybox_vs || !skybox_ps) {
+    vkDestroyShaderModule(device, skybox_vs, nullptr);
+    vkDestroyShaderModule(device, skybox_ps, nullptr);
+    return false;
+  }
+
+  // The triangle is generated from the vertex index, drawn first, and never
+  // touches depth, so the scene simply draws over it.
+  VkPipelineVertexInputStateCreateInfo vertex_input = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+  VkPipelineInputAssemblyStateCreateInfo input_assembly = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+  input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  VkPipelineViewportStateCreateInfo viewport_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+  viewport_state.viewportCount = 1;
+  viewport_state.scissorCount = 1;
+  VkPipelineRasterizationStateCreateInfo rasterizer = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+  rasterizer.cullMode = VK_CULL_MODE_NONE;
+  rasterizer.lineWidth = 1.0f;
+  VkPipelineMultisampleStateCreateInfo multisample = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+  multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  VkPipelineDepthStencilStateCreateInfo depth_stencil = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+  VkPipelineColorBlendAttachmentState blend_attachment = {};
+  blend_attachment.colorWriteMask =
+      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  VkPipelineColorBlendStateCreateInfo color_blend = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+  color_blend.attachmentCount = 1;
+  color_blend.pAttachments = &blend_attachment;
+  const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
+                                           VK_DYNAMIC_STATE_SCISSOR};
+  VkPipelineDynamicStateCreateInfo dynamic_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+  dynamic_state.dynamicStateCount = 2;
+  dynamic_state.pDynamicStates = dynamic_states;
+
+  const VkFormat color_format = swapchain_.ColorFormat();
+  VkPipelineRenderingCreateInfo rendering_info = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+  rendering_info.colorAttachmentCount = 1;
+  rendering_info.pColorAttachmentFormats = &color_format;
+  rendering_info.depthAttachmentFormat = vk::Swapchain::kDepthFormat;
+
+  VkPipelineShaderStageCreateInfo stages[2] = {};
+  stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+  stages[0].module = skybox_vs;
+  stages[0].pName = "Main";
+  stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  stages[1].module = skybox_ps;
+  stages[1].pName = "Main";
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+  create_info.pNext = &rendering_info;
+  create_info.stageCount = 2;
+  create_info.pStages = stages;
+  create_info.pVertexInputState = &vertex_input;
+  create_info.pInputAssemblyState = &input_assembly;
+  create_info.pViewportState = &viewport_state;
+  create_info.pRasterizationState = &rasterizer;
+  create_info.pMultisampleState = &multisample;
+  create_info.pDepthStencilState = &depth_stencil;
+  create_info.pColorBlendState = &color_blend;
+  create_info.pDynamicState = &dynamic_state;
+  create_info.layout = skybox_pipeline_layout_;
+  const bool ok = VK_CHECK(vkCreateGraphicsPipelines(
+      device, VK_NULL_HANDLE, 1, &create_info, nullptr, &skybox_pipeline_));
+  vkDestroyShaderModule(device, skybox_vs, nullptr);
+  vkDestroyShaderModule(device, skybox_ps, nullptr);
+  return ok;
+}
+
+void VulkanApplication::UpdateSkyboxImage() {
+  const std::string &path = game_scene_->GetSkyboxPath();
+  if (path == skybox_loaded_path_) return;
+  // Set first, so a file that fails to load is only reported once.
+  skybox_loaded_path_ = path;
+
+  // The frames in flight may still sample the old image.
+  vkDeviceWaitIdle(context_.device);
+  skybox_image_.Reset();
+  if (path.empty()) return;
+
+  int width = 0, height = 0, channels = 0;
+  stbi_uc *pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+  if (!pixels) {
+    PDebug::error("Could not load skybox image: {}", path);
+    return;
+  }
+
+  const VkDeviceSize bytes = VkDeviceSize(width) * height * 4;
+  vk::Buffer staging;
+  const bool staged =
+      staging.Create(context_.allocator, bytes,
+                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                     vk::Buffer::Memory::kHostVisible) &&
+      staging.Write(pixels, bytes);
+  stbi_image_free(pixels);
+  if (!staged) {
+    PDebug::error("Vulkan: failed to stage skybox upload");
+    return;
+  }
+
+  if (!skybox_image_.Create(
+          context_.allocator, context_.device, static_cast<uint32_t>(width),
+          static_cast<uint32_t>(height), VK_FORMAT_R8G8B8A8_UNORM,
+          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+          VK_IMAGE_ASPECT_COLOR_BIT)) {
+    PDebug::error("Vulkan: failed to create {}x{} skybox image", width,
+                  height);
+    return;
+  }
+
+  VkImage image = skybox_image_.Get();
+  const bool uploaded = SubmitImmediate([&](VkCommandBuffer cmd) {
+    vk::TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_NONE, 0,
+                        VK_PIPELINE_STAGE_2_COPY_BIT,
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    VkBufferImageCopy region = {};
+    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageExtent = {static_cast<uint32_t>(width),
+                          static_cast<uint32_t>(height), 1};
+    vkCmdCopyBufferToImage(cmd, staging.Get(), image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vk::TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_COPY_BIT,
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  });
+  if (!uploaded) {
+    skybox_image_.Reset();
+    return;
+  }
+
+  VkDescriptorImageInfo image_info = {VK_NULL_HANDLE, skybox_image_.View(),
+                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkDescriptorImageInfo sampler_info = {skybox_sampler_, VK_NULL_HANDLE,
+                                        VK_IMAGE_LAYOUT_UNDEFINED};
+  VkWriteDescriptorSet writes[2] = {};
+  for (auto &write : writes) {
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = skybox_set_;
+    write.descriptorCount = 1;
+  }
+  writes[0].dstBinding = kAtlasBinding;
+  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  writes[0].pImageInfo = &image_info;
+  writes[1].dstBinding = kSamplerBinding;
+  writes[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+  writes[1].pImageInfo = &sampler_info;
+  vkUpdateDescriptorSets(context_.device, 2, writes, 0, nullptr);
+  PDebug::log("Loaded skybox: {} [{}x{}]", path, width, height);
 }
 
 void VulkanApplication::RecordShadowDraws(VkCommandBuffer cmd,
@@ -1190,6 +1427,8 @@ void VulkanApplication::Render() {
       return;
     }
   }
+
+  if (game_scene_) UpdateSkyboxImage();
 
   FrameData &frame = frames_[frame_index_];
   VkDevice device = context_.device;
@@ -1612,6 +1851,19 @@ void VulkanApplication::RecordSceneDraws(VkCommandBuffer cmd, FrameData &frame,
   vkCmdSetViewport(cmd, 0, 1, &viewport);
   const VkRect2D scissor = {{0, 0}, extent};
   vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+  glm::mat4x4 sky_matrix;
+  if (skybox_image_.Get() != VK_NULL_HANDLE && game_scene_ &&
+      game_scene_->GetSkyboxMatrix(sky_matrix)) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            skybox_pipeline_layout_, 0, 1, &skybox_set_, 0,
+                            nullptr);
+    vkCmdPushConstants(cmd, skybox_pipeline_layout_,
+                       VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(sky_matrix),
+                       &sky_matrix);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+  }
 
   if (draw_static) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, static_pipeline_);

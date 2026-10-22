@@ -86,10 +86,16 @@ class GameScene {
 
   bool GetCameraProj(glm::mat4x4&);
   bool GetCameraPosition(glm::vec3&);
+  // Inverse of the camera's projection * rotation-only view: maps an NDC
+  // point to a world-space view direction, for drawing the skybox.
+  bool GetSkyboxMatrix(glm::mat4x4&);
 
   SceneLighting& GetLighting() { return lighting_; }
   glm::vec4 GetClearColor() const { return clear_color_; }
   void SetClearColor(glm::vec4 color) { clear_color_ = color; }
+  // Absolute path of the skybox panorama, or "" to use the clear color.
+  const std::string& GetSkyboxPath() const { return skybox_path_; }
+  void SetSkyboxPath(std::string path) { skybox_path_ = std::move(path); }
 
   std::vector<StaticVertex> GetStaticVertices();
   std::vector<UINT> GetStaticIndices();
@@ -122,6 +128,7 @@ class GameScene {
   RenderHost* render_host_ = nullptr;
   SceneLighting lighting_;
   glm::vec4 clear_color_ = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+  std::string skybox_path_;
 
  private:
   float width_ = 0.0;

@@ -23,6 +23,7 @@
 #include "properties/mesh_instance.h"
 #include "properties/texture2d.h"
 #include "properties/transform.h"
+#include "stb/stb_image.h"
 
 namespace Mercury {
 
@@ -331,6 +332,47 @@ fn vs_main(input: StaticVertexInput) -> VertexOutput {
 }
 )";
 
+// Mirrors shaders/webgpu/skybox.wgsl.
+constexpr const char* kSkyboxShaderWGSL = R"(
+struct SkyboxUniforms {
+    inv_view_proj: mat4x4<f32>,
+};
+
+@group(0) @binding(0) var<uniform> skybox: SkyboxUniforms;
+@group(0) @binding(1) var panorama: texture_2d<f32>;
+@group(0) @binding(2) var panorama_sampler: sampler;
+
+const PI: f32 = 3.14159265;
+
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) ndc: vec2<f32>,
+};
+
+// One triangle covering the screen, built from the vertex index.
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
+    let ndc = vec2<f32>(f32((vertex_index << 1u) & 2u),
+                        f32(vertex_index & 2u)) * 2.0 - 1.0;
+    var out: VertexOutput;
+    out.position = vec4<f32>(ndc, 1.0, 1.0);
+    out.ndc = ndc;
+    return out;
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    let far_point = skybox.inv_view_proj * vec4<f32>(input.ndc, 1.0, 1.0);
+    let dir = normalize(far_point.xyz / far_point.w);
+
+    // Longitude around +Y (the image centre faces -Z), latitude from the top.
+    let uv = vec2<f32>(atan2(dir.x, -dir.z) / (2.0 * PI) + 0.5,
+                       acos(clamp(dir.y, -1.0, 1.0)) / PI);
+    // Explicit LOD: the derivative of uv.x jumps across the seam.
+    return vec4<f32>(textureSampleLevel(panorama, panorama_sampler, uv, 0.0).rgb, 1.0);
+}
+)";
+
 }  // namespace
 
 WebGpuApplication::WebGpuApplication(const std::string& window_title,
@@ -582,6 +624,53 @@ void WebGpuApplication::UpdateAtlasTexture() {
   atlas.ClearGpuUploadFlag();
 }
 
+void WebGpuApplication::UpdateSkyboxTexture() {
+  const std::string& path = game_scene_->GetSkyboxPath();
+  if (path == skybox_loaded_path_) return;
+  // Set first, so a file that fails to load is only reported once.
+  skybox_loaded_path_ = path;
+  skybox_bind_group_ = nullptr;
+  skybox_texture_ = nullptr;
+  if (path.empty()) return;
+
+  int width = 0, height = 0, channels = 0;
+  stbi_uc* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+  if (!pixels) {
+    PDebug::error("Could not load skybox image: {}", path);
+    return;
+  }
+
+  wgpu::TextureDescriptor desc = {};
+  desc.format = wgpu::TextureFormat::RGBA8Unorm;
+  desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+  desc.size = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+  skybox_texture_ = device_.CreateTexture(&desc);
+
+  wgpu::TexelCopyTextureInfo dst = {};
+  dst.texture = skybox_texture_;
+  wgpu::TexelCopyBufferLayout layout = {};
+  layout.bytesPerRow = desc.size.width * 4;
+  layout.rowsPerImage = desc.size.height;
+  queue_.WriteTexture(&dst, pixels, size_t(width) * height * 4, &layout,
+                      &desc.size);
+  stbi_image_free(pixels);
+
+  wgpu::BindGroupEntry entries[3];
+  entries[0].binding = 0;
+  entries[0].buffer = skybox_ubo_;
+  entries[0].size = sizeof(glm::mat4);
+  entries[1].binding = 1;
+  entries[1].textureView = skybox_texture_.CreateView();
+  entries[2].binding = 2;
+  entries[2].sampler = skybox_sampler_;
+  wgpu::BindGroupDescriptor bg_desc = {};
+  bg_desc.layout = skybox_bind_group_layout_;
+  bg_desc.entryCount = 3;
+  bg_desc.entries = entries;
+  skybox_bind_group_ = device_.CreateBindGroup(&bg_desc);
+  PDebug::log("Loaded skybox: {} [{}x{}]", path, width, height);
+}
+
 bool WebGpuApplication::CreateBuffers() {
   // Uniform buffers
   wgpu::BufferDescriptor ubo_desc = {};
@@ -593,6 +682,11 @@ bool WebGpuApplication::CreateBuffers() {
   shadow_ubo_desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
   shadow_ubo_desc.size = sizeof(glm::mat4);
   shadow_ubo_ = device_.CreateBuffer(&shadow_ubo_desc);
+
+  wgpu::BufferDescriptor skybox_ubo_desc = {};
+  skybox_ubo_desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
+  skybox_ubo_desc.size = sizeof(glm::mat4);
+  skybox_ubo_ = device_.CreateBuffer(&skybox_ubo_desc);
 
   // Geometry buffers
   wgpu::BufferDescriptor vbo_desc = {};
@@ -866,6 +960,67 @@ bool WebGpuApplication::CreatePipelines() {
   static_pipe_desc.primitive.cullMode = wgpu::CullMode::Back;
   static_pipe_desc.primitive.frontFace = wgpu::FrontFace::CCW;
   static_pipeline_ = device_.CreateRenderPipeline(&static_pipe_desc);
+
+  // Skybox pipeline: a fullscreen triangle from the vertex index, drawn
+  // first without touching depth. The bind group is made per image in
+  // UpdateSkyboxTexture().
+  wgpu::ShaderSourceWGSL skybox_wgsl = {};
+  skybox_wgsl.code = kSkyboxShaderWGSL;
+  wgpu::ShaderModuleDescriptor skybox_module_desc = {};
+  skybox_module_desc.nextInChain = &skybox_wgsl;
+  auto skybox_module = device_.CreateShaderModule(&skybox_module_desc);
+
+  wgpu::BindGroupLayoutEntry skybox_entries[3];
+  skybox_entries[0].binding = 0;
+  skybox_entries[0].visibility = wgpu::ShaderStage::Fragment;
+  skybox_entries[0].buffer.type = wgpu::BufferBindingType::Uniform;
+  skybox_entries[0].buffer.minBindingSize = sizeof(glm::mat4);
+  skybox_entries[1].binding = 1;
+  skybox_entries[1].visibility = wgpu::ShaderStage::Fragment;
+  skybox_entries[1].texture.sampleType = wgpu::TextureSampleType::Float;
+  skybox_entries[1].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+  skybox_entries[2].binding = 2;
+  skybox_entries[2].visibility = wgpu::ShaderStage::Fragment;
+  skybox_entries[2].sampler.type = wgpu::SamplerBindingType::Filtering;
+  wgpu::BindGroupLayoutDescriptor skybox_bgl_desc = {};
+  skybox_bgl_desc.entryCount = 3;
+  skybox_bgl_desc.entries = skybox_entries;
+  skybox_bind_group_layout_ = device_.CreateBindGroupLayout(&skybox_bgl_desc);
+
+  wgpu::PipelineLayoutDescriptor skybox_pl_desc = {};
+  skybox_pl_desc.bindGroupLayoutCount = 1;
+  skybox_pl_desc.bindGroupLayouts = &skybox_bind_group_layout_;
+  auto skybox_pipeline_layout = device_.CreatePipelineLayout(&skybox_pl_desc);
+
+  // Wrap around horizontally so the panorama's seam is invisible.
+  wgpu::SamplerDescriptor skybox_sampler_desc = {};
+  skybox_sampler_desc.magFilter = wgpu::FilterMode::Linear;
+  skybox_sampler_desc.minFilter = wgpu::FilterMode::Linear;
+  skybox_sampler_desc.addressModeU = wgpu::AddressMode::Repeat;
+  skybox_sampler_ = device_.CreateSampler(&skybox_sampler_desc);
+
+  wgpu::ColorTargetState skybox_target = {};
+  skybox_target.format = surface_format_;
+  wgpu::FragmentState skybox_fragment = {};
+  skybox_fragment.module = skybox_module;
+  skybox_fragment.entryPoint = "fs_main";
+  skybox_fragment.targetCount = 1;
+  skybox_fragment.targets = &skybox_target;
+
+  wgpu::DepthStencilState skybox_depth_state = {};
+  skybox_depth_state.format = wgpu::TextureFormat::Depth32Float;
+  skybox_depth_state.depthWriteEnabled = false;
+  skybox_depth_state.depthCompare = wgpu::CompareFunction::Always;
+
+  wgpu::RenderPipelineDescriptor skybox_pipe_desc = {};
+  skybox_pipe_desc.layout = skybox_pipeline_layout;
+  skybox_pipe_desc.vertex.module = skybox_module;
+  skybox_pipe_desc.vertex.entryPoint = "vs_main";
+  skybox_pipe_desc.fragment = &skybox_fragment;
+  skybox_pipe_desc.depthStencil = &skybox_depth_state;
+  skybox_pipe_desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+  skybox_pipe_desc.primitive.cullMode = wgpu::CullMode::None;
+  skybox_pipeline_ = device_.CreateRenderPipeline(&skybox_pipe_desc);
 
   return true;
 }
@@ -1206,7 +1361,8 @@ void WebGpuApplication::RecordScenePass(wgpu::CommandEncoder& encoder,
   color_att.view = current_view;
   color_att.loadOp = wgpu::LoadOp::Clear;
   color_att.storeOp = wgpu::StoreOp::Store;
-  color_att.clearValue = {0.1f, 0.1f, 0.1f, 1.0f};
+  const glm::vec4 clear = game_scene_->GetClearColor();
+  color_att.clearValue = {clear.r, clear.g, clear.b, clear.a};
 
   wgpu::RenderPassDepthStencilAttachment depth_att = {};
   depth_att.view = depth_view_;
@@ -1219,7 +1375,22 @@ void WebGpuApplication::RecordScenePass(wgpu::CommandEncoder& encoder,
   pass_desc.colorAttachments = &color_att;
   pass_desc.depthStencilAttachment = &depth_att;
 
+  UpdateSkyboxTexture();
+  glm::mat4 sky_matrix;
+  const bool draw_skybox =
+      skybox_bind_group_ && game_scene_->GetSkyboxMatrix(sky_matrix);
+  if (draw_skybox) {
+    queue_.WriteBuffer(skybox_ubo_, 0, &sky_matrix, sizeof(sky_matrix));
+  }
+
   wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&pass_desc);
+
+  // Draw Skybox
+  if (draw_skybox) {
+    pass.SetPipeline(skybox_pipeline_);
+    pass.SetBindGroup(0, skybox_bind_group_);
+    pass.Draw(3);
+  }
 
   // Draw Static Geometry
   auto static_inds = game_scene_->GetStaticIndices();

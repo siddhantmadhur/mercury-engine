@@ -98,6 +98,7 @@ struct CameraComponent {
   float near_clip = 0.1f;
   float far_clip = 1000.0f;
   glm::vec4 background = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+  AssetRef skybox;
   bool current = true;
 
   void Reflect(Reflector& r) {
@@ -110,6 +111,10 @@ struct CameraComponent {
     r.Field("near_clip", near_clip).Tooltip("Closest distance drawn");
     r.Field("far_clip", far_clip).Tooltip("Farthest distance drawn");
     r.Field("background", background).Tooltip("Color behind everything");
+    r.Field("skybox", skybox, "Texture")
+        .Tooltip(
+            "A 2:1 panorama (.png or .jpg) drawn behind everything; replaces "
+            "the background color");
     r.Field("current", current).Tooltip("Render the game from this camera");
   }
 };
