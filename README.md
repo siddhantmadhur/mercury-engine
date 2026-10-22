@@ -1,12 +1,8 @@
-
-
-
-
 # Mercury
 
 Mercury is a game-engine built with C++ for performant games
 
-https://github.com/user-attachments/assets/fb179440-1d15-4767-967c-cbbb4eb99759
+<img width="854" height="508" alt="mercury_engine_example" src="https://github.com/user-attachments/assets/dc234997-66ed-462a-9bb8-d86c7bafa2c5">
 
 ## Table of Contents
 
