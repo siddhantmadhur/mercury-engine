@@ -37,6 +37,8 @@ class VulkanApplication : public Application {
   void EnableSceneTexture(bool enabled) override;
   void SetSceneViewportSize(int width, int height) override;
   uint64_t GetSceneTexture() const override;
+  void SetPreviewCamera(kEntityId camera, int width, int height) override;
+  uint64_t GetPreviewTexture() const override;
   void SetShowRenderStats(bool show) override { show_render_stats_ = show; }
 
  protected:
@@ -64,8 +66,11 @@ class VulkanApplication : public Application {
     VkFence in_flight = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
     VkDescriptorSet shadow_descriptor_set = VK_NULL_HANDLE;
+    // Same layout as descriptor_set, but bound to preview_camera_ubo.
+    VkDescriptorSet preview_descriptor_set = VK_NULL_HANDLE;
 
     vk::Buffer camera_ubo;
+    vk::Buffer preview_camera_ubo;
     vk::Buffer shadow_ubo;
     vk::Buffer vertices;
     vk::Buffer indices;
@@ -104,16 +109,35 @@ class VulkanApplication : public Application {
                            VkDeviceSize bytes, const char* name);
 
   // Binds the pipelines and records every scene draw into the current
-  // rendering pass, with a viewport covering `extent`.
+  // rendering pass, with a viewport covering `extent`. `camera_set` is a set
+  // with the main layout; the skybox is drawn when `sky_matrix` is given.
   VkClearColorValue SceneClearColor() const;
   void RecordSceneDraws(VkCommandBuffer cmd, FrameData& frame,
-                        VkExtent2D extent, bool draw_static,
-                        UINT static_index_count, bool draw_instanced);
+                        VkDescriptorSet camera_set,
+                        const glm::mat4x4* sky_matrix, VkExtent2D extent,
+                        bool draw_static, UINT static_index_count,
+                        bool draw_instanced);
 
-  // (Re)creates the offscreen scene target at scene_requested_. Waits for the
-  // device to go idle, so it only runs between frames.
+  // Records a whole pass into an offscreen color + depth target and leaves
+  // the color image ready for ImGui to sample.
+  void RecordOffscreenPass(VkCommandBuffer cmd, FrameData& frame,
+                           vk::Image& color, vk::Image& depth,
+                           VkClearColorValue clear, VkDescriptorSet camera_set,
+                           const glm::mat4x4* sky_matrix, bool draw_static,
+                           UINT static_index_count, bool draw_instanced);
+
+  // (Re)creates an offscreen color + depth target and its ImGui texture.
+  // Waits for the device to go idle, so it only runs between frames.
+  bool CreateOffscreenTarget(VkExtent2D extent, vk::Image& color,
+                             vk::Image& depth, VkDescriptorSet& imgui_set);
+  void DestroyOffscreenTarget(vk::Image& color, vk::Image& depth,
+                              VkDescriptorSet& imgui_set);
+
+  // (Re)creates the offscreen scene target at scene_requested_.
   void RecreateSceneTarget();
   void DestroySceneTarget();
+  // (Re)creates the camera preview target at preview_requested_.
+  void RecreatePreviewTarget();
 
   // MERCURY_CAPTURE=<file.png> saves frame MERCURY_CAPTURE_FRAME (default
   // 90) of the window; MERCURY_CAPTURE_QUIT=1 closes the window afterwards.
@@ -205,8 +229,17 @@ class VulkanApplication : public Application {
   VkExtent2D scene_requested_ = {0, 0};
   vk::Image scene_color_;
   vk::Image scene_depth_;
-  VkSampler scene_sampler_ = VK_NULL_HANDLE;
+  VkSampler scene_sampler_ = VK_NULL_HANDLE;  // also samples the preview
   VkDescriptorSet scene_texture_set_ = VK_NULL_HANDLE;
+
+  // Editor camera preview: the scene seen from preview_camera_, which the
+  // editor sets every frame it shows the preview (reset after each frame).
+  kEntityId preview_camera_ = entt::null;
+  bool preview_target_dirty_ = false;
+  VkExtent2D preview_requested_ = {0, 0};
+  vk::Image preview_color_;
+  vk::Image preview_depth_;
+  VkDescriptorSet preview_texture_set_ = VK_NULL_HANDLE;
 
   bool show_render_stats_ = true;
 

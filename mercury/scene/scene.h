@@ -36,6 +36,12 @@ class RenderHost {
   virtual void SetSceneViewportSize(int width, int height) {}
   // ImTextureID of the offscreen texture, or 0 before it exists.
   virtual uint64_t GetSceneTexture() const { return 0; }
+  // Also render this frame from `camera` (an entity with a Camera and a
+  // Transform) into a separate width x height texture; entt::null skips it.
+  // Call every frame the preview is shown.
+  virtual void SetPreviewCamera(kEntityId camera, int width, int height) {}
+  // ImTextureID of the preview texture, or 0 before it exists.
+  virtual uint64_t GetPreviewTexture() const { return 0; }
   // The FPS overlay drawn in the top-left corner.
   virtual void SetShowRenderStats(bool show) {}
   virtual int GetAverageFps() const { return 0; }
@@ -89,6 +95,11 @@ class GameScene {
   // Inverse of the camera's projection * rotation-only view: maps an NDC
   // point to a world-space view direction, for drawing the skybox.
   bool GetSkyboxMatrix(glm::mat4x4&);
+  // Matrices for rendering from any camera entity at the given size: its
+  // projection * view, the skybox matrix (as above), and its position.
+  bool GetCameraMatrices(kEntityId camera, float width, float height,
+                         glm::mat4x4& view_proj, glm::mat4x4& skybox,
+                         glm::vec3& position);
 
   SceneLighting& GetLighting() { return lighting_; }
   glm::vec4 GetClearColor() const { return clear_color_; }

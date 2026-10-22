@@ -123,6 +123,9 @@ class EditorScene : public MapScene {
   void DrawToolHandles(ImDrawList* draw);
   void DrawSceneToolbar();
   void DrawAxisIndicator(ImDrawList* draw);
+  // When a camera is selected, a small view of what it sees in the bottom
+  // right corner of the Scene panel.
+  void DrawCameraPreview(ImDrawList* draw);
   void HandleSceneCamera(bool hovered, bool active);
   // Starts a handle drag if the mouse is over one of the selection's handles.
   bool BeginHandleDrag(ImVec2 mouse);
@@ -176,6 +179,10 @@ class EditorScene : public MapScene {
   float camera_pitch_ = -25.0f;  // degrees, 3D only
   ImVec2 scene_origin_ = {0, 0};
   ImVec2 scene_size_ = {1, 1};
+  // Screen rect of the camera preview from the last frame (min, max); empty
+  // when hidden. Clicks there do not reach the scene.
+  ImVec2 preview_min_ = {0, 0};
+  ImVec2 preview_max_ = {0, 0};
   Drag drag_ = Drag::kNone;
   int drag_axis_ = 0;
   glm::vec3 drag_axis_dir_ = glm::vec3(1, 0, 0);

@@ -37,6 +37,10 @@ constexpr uint32_t kShadowSamplerBinding = 21;  // s1
 
 constexpr VkClearColorValue kClearColor = {{0.1f, 0.1f, 0.1f, 1.0f}};
 
+constexpr VkPipelineStageFlags2 kDepthStages =
+    VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+    VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+
 void CheckImGuiVkResult(VkResult result) {
   if (result != VK_SUCCESS) {
     PDebug::error("ImGui Vulkan backend: {}", vk::ResultToString(result));
@@ -60,6 +64,7 @@ VulkanApplication::~VulkanApplication() {
 
     for (FrameData &frame : frames_) {
       frame.camera_ubo.Reset();
+      frame.preview_camera_ubo.Reset();
       frame.shadow_ubo.Reset();
       frame.vertices.Reset();
       frame.indices.Reset();
@@ -76,6 +81,8 @@ VulkanApplication::~VulkanApplication() {
     shadow_image_.Reset();
     skybox_image_.Reset();
     DestroySceneTarget();
+    DestroyOffscreenTarget(preview_color_, preview_depth_,
+                           preview_texture_set_);
     capture_buffer_.Reset();
     vkDestroySampler(device, scene_sampler_, nullptr);
 
@@ -181,6 +188,9 @@ bool VulkanApplication::CreateFrameResources() {
         frame.camera_ubo.Create(allocator, sizeof(CameraCBuffer),
                                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                 Memory::kHostVisible) &&
+        frame.preview_camera_ubo.Create(allocator, sizeof(CameraCBuffer),
+                                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                        Memory::kHostVisible) &&
         frame.shadow_ubo.Create(allocator, sizeof(PQ_MATRIX),
                                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                 Memory::kHostVisible) &&
@@ -381,15 +391,16 @@ bool VulkanApplication::CreateDescriptors() {
     return false;
   }
 
-  // The extra image, sampler and set are the skybox's.
+  // Per frame: the main set (1 buffer, 2 images, 2 samplers), the preview
+  // set (the same) and the shadow set (1 buffer). Plus the skybox set.
   const VkDescriptorPoolSize pool_sizes[] = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight * 2},
-      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kFramesInFlight * 2 + 1},
-      {VK_DESCRIPTOR_TYPE_SAMPLER, kFramesInFlight * 2 + 1},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight * 3},
+      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kFramesInFlight * 4 + 1},
+      {VK_DESCRIPTOR_TYPE_SAMPLER, kFramesInFlight * 4 + 1},
   };
   VkDescriptorPoolCreateInfo pool_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  pool_info.maxSets = kFramesInFlight * 2 + 1;
+  pool_info.maxSets = kFramesInFlight * 3 + 1;
   pool_info.poolSizeCount = static_cast<uint32_t>(std::size(pool_sizes));
   pool_info.pPoolSizes = pool_sizes;
   if (!VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr,
@@ -410,6 +421,12 @@ bool VulkanApplication::CreateDescriptors() {
   }
   for (uint32_t i = 0; i < kFramesInFlight; ++i) {
     frames_[i].descriptor_set = sets[i];
+  }
+  if (!VK_CHECK(vkAllocateDescriptorSets(device, &alloc_info, sets.data()))) {
+    return false;
+  }
+  for (uint32_t i = 0; i < kFramesInFlight; ++i) {
+    frames_[i].preview_descriptor_set = sets[i];
   }
 
   std::array<VkDescriptorSetLayout, kFramesInFlight> shadow_layouts;
@@ -443,47 +460,51 @@ bool VulkanApplication::CreateDescriptors() {
 
 void VulkanApplication::WriteDescriptorSets() {
   for (FrameData &frame : frames_) {
-    VkDescriptorBufferInfo camera_info = {frame.camera_ubo.Get(), 0,
-                                          sizeof(CameraCBuffer)};
-    VkDescriptorImageInfo atlas_info = {
-        VK_NULL_HANDLE, atlas_image_.View(),
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkDescriptorImageInfo shadow_info = {
-        VK_NULL_HANDLE, shadow_image_.View(),
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkDescriptorImageInfo sampler_info = {texture_sampler_, VK_NULL_HANDLE,
-                                          VK_IMAGE_LAYOUT_UNDEFINED};
-    VkDescriptorImageInfo shadow_sampler_info = {shadow_sampler_,
-                                                 VK_NULL_HANDLE,
-                                                 VK_IMAGE_LAYOUT_UNDEFINED};
+    for (const bool preview : {false, true}) {
+      VkDescriptorBufferInfo camera_info = {
+          preview ? frame.preview_camera_ubo.Get() : frame.camera_ubo.Get(), 0,
+          sizeof(CameraCBuffer)};
+      VkDescriptorImageInfo atlas_info = {
+          VK_NULL_HANDLE, atlas_image_.View(),
+          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+      VkDescriptorImageInfo shadow_info = {
+          VK_NULL_HANDLE, shadow_image_.View(),
+          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+      VkDescriptorImageInfo sampler_info = {texture_sampler_, VK_NULL_HANDLE,
+                                            VK_IMAGE_LAYOUT_UNDEFINED};
+      VkDescriptorImageInfo shadow_sampler_info = {shadow_sampler_,
+                                                   VK_NULL_HANDLE,
+                                                   VK_IMAGE_LAYOUT_UNDEFINED};
 
-    VkWriteDescriptorSet writes[5] = {};
-    for (auto &write : writes) {
-      write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      write.dstSet = frame.descriptor_set;
-      write.descriptorCount = 1;
+      VkWriteDescriptorSet writes[5] = {};
+      for (auto &write : writes) {
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet =
+            preview ? frame.preview_descriptor_set : frame.descriptor_set;
+        write.descriptorCount = 1;
+      }
+      writes[0].dstBinding = kCameraBinding;
+      writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      writes[0].pBufferInfo = &camera_info;
+
+      writes[1].dstBinding = kAtlasBinding;
+      writes[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+      writes[1].pImageInfo = &atlas_info;
+
+      writes[2].dstBinding = kShadowMapBinding;
+      writes[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+      writes[2].pImageInfo = &shadow_info;
+
+      writes[3].dstBinding = kSamplerBinding;
+      writes[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+      writes[3].pImageInfo = &sampler_info;
+
+      writes[4].dstBinding = kShadowSamplerBinding;
+      writes[4].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+      writes[4].pImageInfo = &shadow_sampler_info;
+
+      vkUpdateDescriptorSets(context_.device, 5, writes, 0, nullptr);
     }
-    writes[0].dstBinding = kCameraBinding;
-    writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    writes[0].pBufferInfo = &camera_info;
-
-    writes[1].dstBinding = kAtlasBinding;
-    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    writes[1].pImageInfo = &atlas_info;
-
-    writes[2].dstBinding = kShadowMapBinding;
-    writes[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    writes[2].pImageInfo = &shadow_info;
-
-    writes[3].dstBinding = kSamplerBinding;
-    writes[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-    writes[3].pImageInfo = &sampler_info;
-
-    writes[4].dstBinding = kShadowSamplerBinding;
-    writes[4].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-    writes[4].pImageInfo = &shadow_sampler_info;
-
-    vkUpdateDescriptorSets(context_.device, 5, writes, 0, nullptr);
 
     // Update shadow descriptor set
     VkDescriptorBufferInfo shadow_ubo_info = {frame.shadow_ubo.Get(), 0,
@@ -1519,6 +1540,39 @@ void VulkanApplication::Render() {
   }
   frame.camera_ubo.Write(&camera_, sizeof(camera_));
 
+  // Editor camera preview: same lighting and shadows, other camera.
+  bool draw_preview = false;
+  bool preview_has_sky = false;
+  glm::mat4x4 preview_sky;
+  VkClearColorValue preview_clear = kClearColor;
+  if (game_scene_ && preview_camera_ != entt::null &&
+      preview_color_.Get() != VK_NULL_HANDLE) {
+    const VkExtent2D size = preview_color_.Extent();
+    CameraCBuffer preview = camera_;
+    glm::mat4x4 view_proj;
+    glm::vec3 position;
+    if (game_scene_->GetCameraMatrices(
+            preview_camera_, static_cast<float>(size.width),
+            static_cast<float>(size.height), view_proj, preview_sky,
+            position)) {
+      preview.mWorldViewProj = view_proj;
+      preview.mCameraPosition = PQ_FLOAT4(position, 1.0f);
+      preview.mResolution = PQ_FLOAT2{static_cast<float>(size.width),
+                                      static_cast<float>(size.height)};
+      frame.preview_camera_ubo.Write(&preview, sizeof(preview));
+      draw_preview = true;
+      // There is one skybox image per scene, so a camera with any skybox
+      // shows the scene's.
+      if (auto *settings = game_scene_->GetRegistry().try_get<CameraComponent>(
+              preview_camera_)) {
+        const glm::vec4 c = settings->background;
+        preview_clear = {{c.r, c.g, c.b, c.a}};
+        preview_has_sky = settings->skybox.IsSet() &&
+                          skybox_image_.Get() != VK_NULL_HANDLE;
+      }
+    }
+  }
+
   vkResetCommandPool(device, frame.command_pool, 0);
   VkCommandBuffer cmd = frame.command_buffer;
   VkCommandBufferBeginInfo begin_info = {
@@ -1581,9 +1635,6 @@ void VulkanApplication::Render() {
     RecordInstanceUploads(frame);
   }
 
-  constexpr VkPipelineStageFlags2 kDepthStages =
-      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-      VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
 
   // Shadow depth pre-pass (directional light shadow map)
   if (game_scene_ && shadow_image_.Get() != VK_NULL_HANDLE &&
@@ -1628,59 +1679,20 @@ void VulkanApplication::Render() {
 
   // Editor: draw the scene into the offscreen target first; the window pass
   // then only draws ImGui, which shows that target inside a panel.
-  const bool offscreen =
-      scene_texture_enabled_ && scene_color_.Get() != VK_NULL_HANDLE;
-  if (offscreen) {
-    const VkExtent2D scene_extent = scene_color_.Extent();
-    // Earlier frames may still be sampling the target in their ImGui pass.
-    vk::TransitionImage(cmd, scene_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
-                        VK_IMAGE_LAYOUT_UNDEFINED,
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
-                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
-                            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-    vk::TransitionImage(cmd, scene_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
-                        VK_IMAGE_LAYOUT_UNDEFINED,
-                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
-                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                        kDepthStages,
-                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-
-    VkRenderingAttachmentInfo color = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-    color.imageView = scene_color_.View();
-    color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color.clearValue.color = SceneClearColor();
-    VkRenderingAttachmentInfo depth = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-    depth.imageView = scene_depth_.View();
-    depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth.clearValue.depthStencil = {1.0f, 0};
-    VkRenderingInfo scene_rendering = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
-    scene_rendering.renderArea = {{0, 0}, scene_extent};
-    scene_rendering.layerCount = 1;
-    scene_rendering.colorAttachmentCount = 1;
-    scene_rendering.pColorAttachments = &color;
-    scene_rendering.pDepthAttachment = &depth;
-    vkCmdBeginRendering(cmd, &scene_rendering);
-    RecordSceneDraws(cmd, frame, scene_extent, draw_static, static_index_count,
-                     draw_instanced);
-    vkCmdEndRendering(cmd);
-
-    vk::TransitionImage(cmd, scene_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  glm::mat4x4 sky_matrix;
+  const bool has_sky = skybox_image_.Get() != VK_NULL_HANDLE && game_scene_ &&
+                       game_scene_->GetSkyboxMatrix(sky_matrix);
+  const glm::mat4x4 *sky = has_sky ? &sky_matrix : nullptr;
+  if (scene_texture_enabled_ && scene_color_.Get() != VK_NULL_HANDLE) {
+    RecordOffscreenPass(cmd, frame, scene_color_, scene_depth_,
+                        SceneClearColor(), frame.descriptor_set, sky,
+                        draw_static, static_index_count, draw_instanced);
+  }
+  if (draw_preview) {
+    RecordOffscreenPass(cmd, frame, preview_color_, preview_depth_,
+                        preview_clear, frame.preview_descriptor_set,
+                        preview_has_sky ? &preview_sky : nullptr, draw_static,
+                        static_index_count, draw_instanced);
   }
 
   const VkImage swapchain_image = swapchain_.ImageAt(image_index);
@@ -1727,8 +1739,8 @@ void VulkanApplication::Render() {
   vkCmdBeginRendering(cmd, &rendering_info);
 
   if (!scene_texture_enabled_) {
-    RecordSceneDraws(cmd, frame, extent, draw_static, static_index_count,
-                     draw_instanced);
+    RecordSceneDraws(cmd, frame, frame.descriptor_set, sky, extent,
+                     draw_static, static_index_count, draw_instanced);
   }
 
   if (show_render_stats_) {
@@ -1829,6 +1841,66 @@ void VulkanApplication::Render() {
   // Resizing between frames means this frame's ImGui draw data (which may
   // reference the old target) has already been submitted.
   if (scene_texture_enabled_ && scene_target_dirty_) RecreateSceneTarget();
+  if (preview_target_dirty_) RecreatePreviewTarget();
+  // The editor asks again every frame it still shows the preview.
+  preview_camera_ = entt::null;
+}
+
+void VulkanApplication::RecordOffscreenPass(
+    VkCommandBuffer cmd, FrameData &frame, vk::Image &color, vk::Image &depth,
+    VkClearColorValue clear, VkDescriptorSet camera_set,
+    const glm::mat4x4 *sky_matrix, bool draw_static, UINT static_index_count,
+    bool draw_instanced) {
+  const VkExtent2D extent = color.Extent();
+  // Earlier frames may still be sampling the target in their ImGui pass.
+  vk::TransitionImage(cmd, color.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                      VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+  vk::TransitionImage(cmd, depth.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                      VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
+                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      kDepthStages,
+                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+
+  VkRenderingAttachmentInfo color_attachment = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  color_attachment.imageView = color.View();
+  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  color_attachment.clearValue.color = clear;
+  VkRenderingAttachmentInfo depth_attachment = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  depth_attachment.imageView = depth.View();
+  depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  depth_attachment.clearValue.depthStencil = {1.0f, 0};
+  VkRenderingInfo scene_rendering = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+  scene_rendering.renderArea = {{0, 0}, extent};
+  scene_rendering.layerCount = 1;
+  scene_rendering.colorAttachmentCount = 1;
+  scene_rendering.pColorAttachments = &color_attachment;
+  scene_rendering.pDepthAttachment = &depth_attachment;
+  vkCmdBeginRendering(cmd, &scene_rendering);
+  RecordSceneDraws(cmd, frame, camera_set, sky_matrix, extent, draw_static,
+                   static_index_count, draw_instanced);
+  vkCmdEndRendering(cmd);
+
+  vk::TransitionImage(cmd, color.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
 VkClearColorValue VulkanApplication::SceneClearColor() const {
@@ -1838,6 +1910,8 @@ VkClearColorValue VulkanApplication::SceneClearColor() const {
 }
 
 void VulkanApplication::RecordSceneDraws(VkCommandBuffer cmd, FrameData &frame,
+                                         VkDescriptorSet camera_set,
+                                         const glm::mat4x4 *sky_matrix,
                                          VkExtent2D extent, bool draw_static,
                                          UINT static_index_count,
                                          bool draw_instanced) {
@@ -1854,24 +1928,21 @@ void VulkanApplication::RecordSceneDraws(VkCommandBuffer cmd, FrameData &frame,
   const VkRect2D scissor = {{0, 0}, extent};
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-  glm::mat4x4 sky_matrix;
-  if (skybox_image_.Get() != VK_NULL_HANDLE && game_scene_ &&
-      game_scene_->GetSkyboxMatrix(sky_matrix)) {
+  if (sky_matrix) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             skybox_pipeline_layout_, 0, 1, &skybox_set_, 0,
                             nullptr);
     vkCmdPushConstants(cmd, skybox_pipeline_layout_,
-                       VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(sky_matrix),
-                       &sky_matrix);
+                       VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(*sky_matrix),
+                       sky_matrix);
     vkCmdDraw(cmd, 3, 1, 0, 0);
   }
 
   if (draw_static) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, static_pipeline_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipeline_layout_, 0, 1, &frame.descriptor_set, 0,
-                            nullptr);
+                            pipeline_layout_, 0, 1, &camera_set, 0, nullptr);
     const VkBuffer vertex_buffer = frame.static_vertices.Get();
     const VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer, &offset);
@@ -1884,8 +1955,7 @@ void VulkanApplication::RecordSceneDraws(VkCommandBuffer cmd, FrameData &frame,
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       instanced_pipeline_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipeline_layout_, 0, 1, &frame.descriptor_set, 0,
-                            nullptr);
+                            pipeline_layout_, 0, 1, &camera_set, 0, nullptr);
     const VkBuffer vertex_buffers[2] = {frame.vertices.Get(),
                                         instance_buffer_.Get()};
     const VkDeviceSize offsets[2] = {0, 0};
@@ -1926,27 +1996,45 @@ uint64_t VulkanApplication::GetSceneTexture() const {
   return reinterpret_cast<uint64_t>(scene_texture_set_);
 }
 
-void VulkanApplication::DestroySceneTarget() {
-  if (scene_texture_set_ != VK_NULL_HANDLE) {
-    ImGui_ImplVulkan_RemoveTexture(scene_texture_set_);
-    scene_texture_set_ = VK_NULL_HANDLE;
-  }
-  scene_color_.Reset();
-  scene_depth_.Reset();
+void VulkanApplication::SetPreviewCamera(kEntityId camera, int width,
+                                         int height) {
+  preview_camera_ = camera;
+  if (camera == entt::null) return;
+  const uint32_t w = static_cast<uint32_t>(std::max(width, 1));
+  const uint32_t h = static_cast<uint32_t>(std::max(height, 1));
+  if (w == preview_requested_.width && h == preview_requested_.height) return;
+  preview_requested_ = {w, h};
+  preview_target_dirty_ = true;
 }
 
-void VulkanApplication::RecreateSceneTarget() {
-  scene_target_dirty_ = false;
-  if (scene_requested_.width == 0 || scene_requested_.height == 0) return;
-  const VkExtent2D current = scene_color_.Extent();
-  if (scene_color_.Get() != VK_NULL_HANDLE &&
-      current.width == scene_requested_.width &&
-      current.height == scene_requested_.height) {
-    return;
+uint64_t VulkanApplication::GetPreviewTexture() const {
+  return reinterpret_cast<uint64_t>(preview_texture_set_);
+}
+
+void VulkanApplication::DestroyOffscreenTarget(vk::Image &color,
+                                               vk::Image &depth,
+                                               VkDescriptorSet &imgui_set) {
+  if (imgui_set != VK_NULL_HANDLE) {
+    ImGui_ImplVulkan_RemoveTexture(imgui_set);
+    imgui_set = VK_NULL_HANDLE;
+  }
+  color.Reset();
+  depth.Reset();
+}
+
+bool VulkanApplication::CreateOffscreenTarget(VkExtent2D extent,
+                                              vk::Image &color,
+                                              vk::Image &depth,
+                                              VkDescriptorSet &imgui_set) {
+  if (extent.width == 0 || extent.height == 0) return false;
+  const VkExtent2D current = color.Extent();
+  if (color.Get() != VK_NULL_HANDLE && current.width == extent.width &&
+      current.height == extent.height) {
+    return true;
   }
 
   vkDeviceWaitIdle(context_.device);
-  DestroySceneTarget();
+  DestroyOffscreenTarget(color, depth, imgui_set);
 
   if (scene_sampler_ == VK_NULL_HANDLE) {
     VkSamplerCreateInfo sampler_info = {
@@ -1959,47 +2047,64 @@ void VulkanApplication::RecreateSceneTarget() {
     sampler_info.maxLod = 1.0f;
     if (!VK_CHECK(vkCreateSampler(context_.device, &sampler_info, nullptr,
                                   &scene_sampler_))) {
-      return;
+      return false;
     }
   }
 
   // Same formats as the window, so the scene pipelines work for both.
   const bool ok =
-      scene_color_.Create(
-          context_.allocator, context_.device, scene_requested_.width,
-          scene_requested_.height, swapchain_.ColorFormat(),
+      color.Create(
+          context_.allocator, context_.device, extent.width, extent.height,
+          swapchain_.ColorFormat(),
           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
           VK_IMAGE_ASPECT_COLOR_BIT) &&
-      scene_depth_.Create(context_.allocator, context_.device,
-                          scene_requested_.width, scene_requested_.height,
-                          vk::Swapchain::kDepthFormat,
-                          VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                          VK_IMAGE_ASPECT_DEPTH_BIT);
+      depth.Create(context_.allocator, context_.device, extent.width,
+                   extent.height, vk::Swapchain::kDepthFormat,
+                   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                   VK_IMAGE_ASPECT_DEPTH_BIT);
   if (!ok) {
-    PDebug::error("Vulkan: could not create {}x{} scene target",
-                  scene_requested_.width, scene_requested_.height);
-    DestroySceneTarget();
-    return;
+    PDebug::error("Vulkan: could not create {}x{} offscreen target",
+                  extent.width, extent.height);
+    DestroyOffscreenTarget(color, depth, imgui_set);
+    return false;
   }
 
   // ImGui samples the image in SHADER_READ_ONLY layout; give it defined
-  // contents in that layout before the first scene pass.
+  // contents in that layout before the first pass.
+  VkImage image = color.Get();
   SubmitImmediate([&](VkCommandBuffer cmd) {
-    vk::TransitionImage(cmd, scene_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+    vk::TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
                         VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                         VK_PIPELINE_STAGE_2_NONE, 0,
                         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   });
-  scene_texture_set_ = ImGui_ImplVulkan_AddTexture(
-      scene_sampler_, scene_color_.View(),
-      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  imgui_set = ImGui_ImplVulkan_AddTexture(
+      scene_sampler_, color.View(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  return true;
+}
 
+void VulkanApplication::DestroySceneTarget() {
+  DestroyOffscreenTarget(scene_color_, scene_depth_, scene_texture_set_);
+}
+
+void VulkanApplication::RecreateSceneTarget() {
+  scene_target_dirty_ = false;
+  if (!CreateOffscreenTarget(scene_requested_, scene_color_, scene_depth_,
+                             scene_texture_set_)) {
+    return;
+  }
   if (game_scene_) {
     game_scene_->SetWidth(static_cast<float>(scene_requested_.width));
     game_scene_->SetHeight(static_cast<float>(scene_requested_.height));
   }
+}
+
+void VulkanApplication::RecreatePreviewTarget() {
+  preview_target_dirty_ = false;
+  CreateOffscreenTarget(preview_requested_, preview_color_, preview_depth_,
+                        preview_texture_set_);
 }
 
 void VulkanApplication::ReadCaptureSettings() {

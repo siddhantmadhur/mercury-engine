@@ -28,13 +28,24 @@ bool GameScene::GetCameraProj(glm::mat4x4& proj) {
   return true;
 }
 bool GameScene::GetSkyboxMatrix(glm::mat4x4& matrix) {
-  auto cam = object_manager_->GetProperty<Camera>(player_camera_);
-  auto pos = object_manager_->GetProperty<Transform>(player_camera_);
-  if (!cam || !pos) {
+  glm::mat4x4 view_proj;
+  glm::vec3 position;
+  return GetCameraMatrices(player_camera_, width_, height_, view_proj, matrix,
+                           position);
+}
+bool GameScene::GetCameraMatrices(kEntityId camera, float width, float height,
+                                  glm::mat4x4& view_proj, glm::mat4x4& skybox,
+                                  glm::vec3& position) {
+  auto cam = object_manager_->GetProperty<Camera>(camera);
+  auto transform = object_manager_->GetProperty<Transform>(camera);
+  if (!cam || !transform) {
     return false;
   }
-  const glm::mat4 rotation = glm::mat4(glm::mat3(cam->GetView(*pos)));
-  matrix = glm::inverse(cam->GetProjection(width_, height_) * rotation);
+  const glm::mat4 view = cam->GetView(*transform);
+  const glm::mat4 proj = cam->GetProjection(width, height);
+  view_proj = proj * view;
+  skybox = glm::inverse(proj * glm::mat4(glm::mat3(view)));
+  position = transform->GetInterpolatedPosition();
   return true;
 }
 bool GameScene::GetCameraPosition(glm::vec3& position) {

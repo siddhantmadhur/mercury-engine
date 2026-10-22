@@ -1175,6 +1175,60 @@ void EditorScene::DrawSceneToolbar() {
   }
 }
 
+void EditorScene::DrawCameraPreview(ImDrawList* draw) {
+  if (!render_host_) return;
+  const MapNode* node = GetSelectedNode();
+  const kEntityId entity = node ? GetEntityForNode(node->uid) : entt::null;
+  if (entity == entt::null ||
+      !Objects().GetProperty<CameraComponent>(entity)) {
+    render_host_->SetPreviewCamera(entt::null, 0, 0);
+    preview_min_ = preview_max_ = ImVec2(0, 0);
+    return;
+  }
+
+  // Shaped like the game window, about a quarter of the panel wide.
+  float aspect = 16.0f / 9.0f;
+  if (auto project = GetProject();
+      project && project->GetWindowWidth() > 0 &&
+      project->GetWindowHeight() > 0) {
+    aspect = static_cast<float>(project->GetWindowWidth()) /
+             static_cast<float>(project->GetWindowHeight());
+  }
+  float width = std::clamp(scene_size_.x * 0.25f, 160.0f, 360.0f);
+  float height = width / aspect;
+  // Leave room for the hint line and the axis indicator in tall/narrow panels.
+  const float max_height = scene_size_.y * 0.4f;
+  if (height > max_height) {
+    height = max_height;
+    width = height * aspect;
+  }
+  render_host_->SetPreviewCamera(entity, static_cast<int>(width),
+                                 static_cast<int>(height));
+
+  const float margin = 12.0f;
+  const float title_height = ImGui::GetTextLineHeight() + 6.0f;
+  const ImVec2 image_max(
+      scene_origin_.x + scene_size_.x - margin,
+      scene_origin_.y + scene_size_.y - ImGui::GetTextLineHeight() - 18.0f);
+  const ImVec2 image_min(image_max.x - width, image_max.y - height);
+  const ImVec2 frame_min(image_min.x - 2.0f, image_min.y - title_height);
+  const ImVec2 frame_max(image_max.x + 2.0f, image_max.y + 2.0f);
+  preview_min_ = frame_min;
+  preview_max_ = frame_max;
+
+  draw->AddRectFilled(frame_min, frame_max, Rgba(0.08f, 0.08f, 0.09f, 0.92f),
+                      4.0f);
+  draw->AddText(ImVec2(frame_min.x + 6.0f, frame_min.y + 3.0f),
+                Rgba(1, 1, 1, 0.8f), node->name.c_str());
+  const uint64_t texture = render_host_->GetPreviewTexture();
+  if (texture) {
+    draw->AddImage(static_cast<ImTextureID>(texture), image_min, image_max);
+  } else {
+    draw->AddRectFilled(image_min, image_max, Rgba(0.1f, 0.1f, 0.1f, 1.0f));
+  }
+  draw->AddRect(frame_min, frame_max, Rgba(1, 1, 1, 0.15f), 4.0f);
+}
+
 void EditorScene::DrawScene() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
   const bool visible = ImGui::Begin("Scene");
@@ -1238,7 +1292,11 @@ void EditorScene::DrawScene() {
   // Left click: with Alt (3D) orbit; on a handle, drag it; anywhere else,
   // select what is under the mouse and drag it along the ground (3D) or the
   // z = 0 plane (2D).
-  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+  const bool over_preview =
+      io.MousePos.x >= preview_min_.x && io.MousePos.x < preview_max_.x &&
+      io.MousePos.y >= preview_min_.y && io.MousePos.y < preview_max_.y;
+  if (hovered && !over_preview &&
+      ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     if (io.KeyAlt && !view_2d_) {
       drag_ = Drag::kOrbit;
     } else if (!BeginHandleDrag(io.MousePos)) {
@@ -1276,6 +1334,7 @@ void EditorScene::DrawScene() {
   if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) drag_ = Drag::kNone;
 
   DrawAxisIndicator(draw);
+  DrawCameraPreview(draw);
   const char* hint =
       view_2d_ ? "Drag: move   Ctrl: snap   Right/middle drag: pan   Scroll: zoom"
                  "   F: focus   W/E/R: move/rotate/scale"
