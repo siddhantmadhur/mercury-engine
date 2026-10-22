@@ -68,6 +68,15 @@ class Application : public RenderHost {
   void SetGameScene(std::unique_ptr<GameScene>);
 
   /**
+   * @brief Let ImGui windows be dragged out of the main window into their
+   * own OS windows (other monitors etc). Call before Run().
+   *
+   * Native Wayland can't place windows, so on Linux this runs the app
+   * through XWayland (X11) when it is available.
+   */
+  void EnableImGuiViewports(bool enable) { imgui_viewports_ = enable; }
+
+  /**
    * Set the cursor
    * @param file_path Filepath to an image containing the cursor data
    */
@@ -112,6 +121,8 @@ class Application : public RenderHost {
 
   // Per-backend ImGui frame begin (e.g. ImGui_ImplVulkan_NewFrame).
   virtual void ImGuiNewFrame() = 0;
+  // Draws ImGui windows that live outside the main window, if enabled.
+  void RenderImGuiPlatformWindows();
 
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);
   static void HandleKeyCallback(GLFWwindow* window, int key, int scancode,
@@ -137,6 +148,7 @@ class Application : public RenderHost {
   int32_t height_ = 0;
   std::string title_ = "Mercury";
   bool is_loaded_ = false;
+  bool imgui_viewports_ = false;
 
   GLFWimage* current_cursor = nullptr;
   bool default_arrow_ = false;

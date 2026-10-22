@@ -43,6 +43,11 @@ void ApplyEditorStyle() {
   colors[ImGuiCol_HeaderHovered] = ImVec4(0.26f, 0.39f, 0.58f, 0.80f);
   colors[ImGuiCol_Tab] = ImVec4(0.16f, 0.16f, 0.18f, 1.0f);
   colors[ImGuiCol_TabSelected] = ImVec4(0.22f, 0.32f, 0.48f, 1.0f);
+  // Panels popped out into their own OS windows look like normal windows.
+  if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    style.WindowRounding = 0.0f;
+    colors[ImGuiCol_WindowBg].w = 1.0f;
+  }
 }
 
 }  // namespace

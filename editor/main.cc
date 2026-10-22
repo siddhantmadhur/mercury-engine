@@ -13,6 +13,8 @@ int main(int argc, char** argv) {
 
   auto application = std::make_unique<Mercury::DefaultApplication>(
       "Mercury Editor", 1600, 900);
+  // Panels (e.g. the UI Builder) can be dragged onto other monitors.
+  application->EnableImGuiViewports(true);
   application->SetGameScene(std::make_unique<Mercury::EditorScene>(project));
   return application->Run();
 }

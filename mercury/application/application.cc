@@ -43,6 +43,12 @@ Application::Application(const std::string& window_title, float initial_width,
 }
 
 bool Application::Initialize() {
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+  // ImGui can't create platform windows under native Wayland.
+  if (imgui_viewports_ && glfwPlatformSupported(GLFW_PLATFORM_X11)) {
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+  }
+#endif
   if (!glfwInit()) {
     PDebug::error("Could not initialize glfw");
     return false;
@@ -146,6 +152,9 @@ bool Application::Initialize() {
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  if (imgui_viewports_) {
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+  }
   // The backend initializes the ImGui GLFW platform layer (e.g.
   // ImGui_ImplGlfw_InitForVulkan) once its device exists.
 
@@ -236,6 +245,7 @@ void Application::StepFrame() {
   glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
   if (framebuffer_width == 0 || framebuffer_height == 0) {
     ImGui::EndFrame();
+    RenderImGuiPlatformWindows();
 #if !defined(__EMSCRIPTEN__)
     glfwWaitEventsTimeout(0.05);
 #endif
@@ -243,6 +253,17 @@ void Application::StepFrame() {
   }
 
   Render();
+  RenderImGuiPlatformWindows();
+}
+
+void Application::RenderImGuiPlatformWindows() {
+  // Windows dragged out of the main window are drawn by the ImGui backends
+  // into their own OS windows.
+  if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    ImGui::UpdatePlatformWindows();
+    // Frames that ended without rendering (minimized) have no draw data.
+    if (ImGui::GetDrawData()) ImGui::RenderPlatformWindowsDefault();
+  }
 }
 
 int Application::Run() {

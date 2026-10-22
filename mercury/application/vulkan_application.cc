@@ -61,8 +61,13 @@ VulkanApplication::~VulkanApplication() {
     vkDeviceWaitIdle(device);
 
     ui_renderer_.Shutdown();
+    // The offscreen targets hold ImGui textures; free them while the ImGui
+    // backend still exists.
     DestroyOffscreenTarget(ui_preview_color_, ui_preview_depth_,
                            ui_preview_texture_set_);
+    DestroySceneTarget();
+    DestroyOffscreenTarget(preview_color_, preview_depth_,
+                           preview_texture_set_);
     if (imgui_vulkan_initialized_) ImGui_ImplVulkan_Shutdown();
 
     for (FrameData &frame : frames_) {
@@ -83,9 +88,6 @@ VulkanApplication::~VulkanApplication() {
     atlas_image_.Reset();
     shadow_image_.Reset();
     skybox_image_.Reset();
-    DestroySceneTarget();
-    DestroyOffscreenTarget(preview_color_, preview_depth_,
-                           preview_texture_set_);
     capture_buffer_.Reset();
     vkDestroySampler(device, scene_sampler_, nullptr);
 
