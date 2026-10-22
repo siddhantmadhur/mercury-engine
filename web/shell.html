@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Mercury Engine</title>
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #111;
+        color: #eee;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      #canvas {
+        position: absolute;
+        top: 0px;
+        left: 0px;
+        margin: 0px;
+        width: 100% !important;
+        height: 100% !important;
+        border: 0;
+        display: block;
+        outline: none;
+      }
+      #status-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        background: rgba(20, 20, 25, 0.85);
+        padding: 24px 36px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        z-index: 100;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+      }
+      #status-overlay.hidden {
+        opacity: 0;
+      }
+      .spinner {
+        height: 36px;
+        width: 36px;
+        margin: 0px auto 16px;
+        animation: rotation 0.8s linear infinite;
+        border-left: 4px solid rgba(80, 180, 255, 0.2);
+        border-right: 4px solid rgba(80, 180, 255, 0.2);
+        border-bottom: 4px solid rgba(80, 180, 255, 0.2);
+        border-top: 4px solid #50b4ff;
+        border-radius: 100%;
+      }
+      @keyframes rotation {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      #status-text {
+        font-size: 15px;
+        color: #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status-overlay">
+      <div class="spinner" id="spinner"></div>
+      <div id="status-text">Initializing WebGPU...</div>
+    </div>
+    <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    <script type='text/javascript'>
+      var canvas = document.getElementById('canvas');
+      function clearCanvasInlineStyles() {
+        if (canvas) {
+          canvas.style.removeProperty('width');
+          canvas.style.removeProperty('height');
+        }
+      }
+      window.addEventListener('resize', clearCanvasInlineStyles);
+      window.addEventListener('orientationchange', clearCanvasInlineStyles);
+      if (window.MutationObserver && canvas) {
+        var observer = new MutationObserver(function(mutations) {
+          for (var i = 0; i < mutations.length; i++) {
+            if (mutations[i].attributeName === 'style') {
+              if (canvas.style.width || canvas.style.height) {
+                canvas.style.removeProperty('width');
+                canvas.style.removeProperty('height');
+              }
+            }
+          }
+        });
+        observer.observe(canvas, { attributes: true, attributeFilter: ['style'] });
+      }
+
+      var statusElement = document.getElementById('status-text');
+      var spinnerElement = document.getElementById('spinner');
+      var overlayElement = document.getElementById('status-overlay');
+
+      var Module = {
+        preRun: [],
+        postRun: [function() {
+          clearCanvasInlineStyles();
+          if (overlayElement) overlayElement.classList.add('hidden');
+        }],
+        print: function(text) {
+          console.log(text);
+        },
+        printErr: function(text) {
+          console.error(text);
+        },
+        canvas: (function() {
+          var canvas = document.getElementById('canvas');
+          canvas.addEventListener("webglcontextlost", function(e) {
+            alert('WebGL/WebGPU context lost. You will need to reload the page.');
+            e.preventDefault();
+          }, false);
+          return canvas;
+        })(),
+        setStatus: function(text) {
+          if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
+          if (text === Module.setStatus.last.text) return;
+          var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+          var now = Date.now();
+          if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip if too soon
+          Module.setStatus.last.time = now;
+          Module.setStatus.last.text = text;
+          if (m) {
+            text = m[1];
+            if (spinnerElement) spinnerElement.style.display = 'block';
+          } else {
+            if (!text && spinnerElement) {
+              spinnerElement.style.display = 'none';
+              if (overlayElement) overlayElement.classList.add('hidden');
+            }
+          }
+          if (statusElement) statusElement.innerHTML = text;
+        },
+        totalDependencies: 0,
+        monitorRunDependencies: function(left) {
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads clear.');
+        }
+      };
+      Module.setStatus('Downloading...');
+      if (!('gpu' in navigator)) {
+        statusElement.innerHTML = '<span style="color:#ff6b6b;font-weight:bold;">WebGPU is not supported by your browser.</span><br><br><span style="font-size:13px;color:#aaa;">Please open this in Chrome 113+, Edge 113+, or a WebGPU-enabled browser.</span>';
+        if (spinnerElement) spinnerElement.style.display = 'none';
+      }
+      window.onerror = function(event) {
+        var msg = (typeof event === 'string') ? event : (event && event.message ? event.message : 'Unknown error');
+        Module.setStatus('Error: ' + msg);
+        if (spinnerElement) spinnerElement.style.display = 'none';
+        Module.setStatus = function(text) {
+          if (text) console.error('[post-exception status] ' + text);
+        };
+      };
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

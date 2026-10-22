@@ -16,14 +16,37 @@ include_directories("shaders")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Vulkan is the only graphics backend, on every platform.
-find_package(Vulkan REQUIRED)
-find_package(Threads REQUIRED)
-set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
+if (EMSCRIPTEN)
+    set(MERCURY_GRAPHICS_WEBGPU ON)
+    set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_wgpu.cpp)
+    set(MERCURY_GRAPHICS_SOURCES
+            mercury/application/webgpu_application.cc
+            mercury/application/webgpu_application.h)
+    add_compile_options(--use-port=emdawnwebgpu)
+    add_link_options(--use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1)
+else ()
+    set(MERCURY_GRAPHICS_VULKAN ON)
+    find_package(Vulkan REQUIRED)
+    find_package(Threads REQUIRED)
+    set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
+    set(MERCURY_GRAPHICS_SOURCES
+            mercury/application/vulkan_application.cc
+            mercury/application/vulkan_application.h
+            mercury/application/vulkan/vk_check.h
+            mercury/application/vulkan/vk_context.cc
+            mercury/application/vulkan/vk_context.h
+            mercury/application/vulkan/vk_swapchain.cc
+            mercury/application/vulkan/vk_swapchain.h
+            mercury/application/vulkan/vk_buffer.cc
+            mercury/application/vulkan/vk_buffer.h
+            mercury/application/vulkan/vma_impl.cc)
+endif ()
 
-add_library(mercury
+add_library(mercury STATIC
         mercury/physics_engine/physics_engine.cc
         mercury/physics_engine/physics_engine.h
         mercury/pobject/manager.cc
@@ -37,16 +60,7 @@ add_library(mercury
         mercury/properties/transform.h
         mercury/application/application.h
         mercury/application/application.cc
-        mercury/application/vulkan_application.cc
-        mercury/application/vulkan_application.h
-        mercury/application/vulkan/vk_check.h
-        mercury/application/vulkan/vk_context.cc
-        mercury/application/vulkan/vk_context.h
-        mercury/application/vulkan/vk_swapchain.cc
-        mercury/application/vulkan/vk_swapchain.h
-        mercury/application/vulkan/vk_buffer.cc
-        mercury/application/vulkan/vk_buffer.h
-        mercury/application/vulkan/vma_impl.cc
+        ${MERCURY_GRAPHICS_SOURCES}
         mercury/os/filesystem.h
         mercury/scene/scene.cc
         mercury/input/input_manager.cc
@@ -109,7 +123,11 @@ add_library(imgui STATIC
 )
 
 target_include_directories(imgui PUBLIC "third_party/imgui")
-target_link_libraries(imgui glfw Vulkan::Vulkan)
+if (EMSCRIPTEN)
+    target_link_libraries(imgui)
+else ()
+    target_link_libraries(imgui glfw Vulkan::Vulkan)
+endif ()
 
 
 add_subdirectory(third_party/glm)
@@ -124,7 +142,9 @@ file(GLOB_RECURSE JOLT_SOURCE "third_party/JoltPhysics/Jolt/*.cpp")
 
 
 add_library(joltphysics STATIC ${JOLT_SOURCE})
-target_link_libraries(joltphysics Threads::Threads)
+if (NOT EMSCRIPTEN)
+    target_link_libraries(joltphysics Threads::Threads)
+endif ()
 
 include_directories("third_party/JoltPhysics")
 
@@ -136,10 +156,16 @@ add_subdirectory(third_party/tinyxml2)
 include_directories("third_party/tinyxml2")
 # End of TinyXML2
 
-include_directories("third_party/glfw/include")
-add_subdirectory("third_party/glfw")
+if (NOT EMSCRIPTEN)
+    include_directories("third_party/glfw/include")
+    add_subdirectory("third_party/glfw")
+endif ()
 
-
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_INSTALL_PDB OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 include_directories("third_party/assimp/include")
 add_subdirectory("third_party/assimp")
 
@@ -150,22 +176,24 @@ add_subdirectory("third_party/entt")
 include_directories("third_party/VulkanMemoryAllocator/include")
 
 
-target_compile_definitions(mercury PUBLIC
-        MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
-        MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
-        MERCURY_GRAPHICS_VULKAN=1
-        # Vulkan clip space has a [0, 1] depth range.
-        GLM_FORCE_DEPTH_ZERO_TO_ONE
-)
-
-if (WIN32)
-    # Prevent <windows.h> from defining min/max macros, which collide with
-    # std::numeric_limits<...>::max() inside EnTT's dense_hash_map/_set.
-    target_compile_definitions(mercury PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+if (EMSCRIPTEN)
+    target_compile_definitions(mercury PUBLIC
+            MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
+            MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+            MERCURY_GRAPHICS_WEBGPU=1
+            GLM_FORCE_DEPTH_ZERO_TO_ONE
+    )
+    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 assimp EnTT::EnTT)
+else ()
+    target_compile_definitions(mercury PUBLIC
+            MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
+            MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+            MERCURY_GRAPHICS_VULKAN=1
+            GLM_FORCE_DEPTH_ZERO_TO_ONE
+    )
+    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 glfw assimp
+            EnTT::EnTT Vulkan::Vulkan Threads::Threads)
 endif ()
-
-target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 glfw assimp
-        EnTT::EnTT Vulkan::Vulkan Threads::Threads)
 # Games built outside this folder (see cmake/MercuryGame.cmake) need the same
 # language level and include paths the engine uses.
 target_compile_features(mercury PUBLIC cxx_std_20)
@@ -183,52 +211,54 @@ if (MSVC)
     message(STATUS "Using Visual Studio Compiler")
 endif ()
 
-# Compile HLSL -> SPIR-V via DXC at build time. The Y flip is done with a
-# negative viewport height at draw time, so no -fvk-invert-y here.
-find_program(DXC dxc
-        HINTS $ENV{VULKAN_SDK}/bin ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc/bin
-        REQUIRED)
-set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders)
-set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/shaders)
-file(MAKE_DIRECTORY ${SHADER_BIN})
-set(DXC_COMMON_FLAGS -spirv
-        -fvk-b-shift 0 0    # cbuffer bN -> binding N
-        -fvk-t-shift 10 0   # texture tN -> binding N+10
-        -fvk-s-shift 20 0   # sampler sN -> binding N+20
-        $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Od>
-        $<$<NOT:$<CONFIG:Debug>>:-O3>)
-# job: src|profile|out
-set(SHADER_JOBS
-        "main.vs.hlsl|vs_6_0|main.vs.spv"
-        "static.vs.hlsl|vs_6_0|static.vs.spv"
-        "shadow.vs.hlsl|vs_6_0|shadow.vs.spv"
-        "textured.ps.hlsl|ps_6_0|textured.ps.spv")
-set(SPV_OUTS "")
-foreach (JOB ${SHADER_JOBS})
-    string(REPLACE "|" ";" JOB_PARTS "${JOB}")
-    list(GET JOB_PARTS 0 SRC)
-    list(GET JOB_PARTS 1 PROFILE)
-    list(GET JOB_PARTS 2 OUT)
-    add_custom_command(
-            OUTPUT ${SHADER_BIN}/${OUT}
-            COMMAND ${DXC} ${DXC_COMMON_FLAGS}
-            -T ${PROFILE} -E Main
-            ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
-            DEPENDS ${SHADER_SRC}/${SRC}
-            COMMENT "DXC ${SRC} -> ${OUT}"
-            COMMAND_EXPAND_LISTS)
-    list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})
-endforeach ()
-add_custom_target(mercury_shaders DEPENDS ${SPV_OUTS})
-add_dependencies(mercury mercury_shaders)
-target_compile_definitions(mercury PUBLIC MERCURY_SPIRV_PATH="${SHADER_BIN}")
+if (NOT EMSCRIPTEN)
+    # Compile HLSL -> SPIR-V via DXC at build time. The Y flip is done with a
+    # negative viewport height at draw time, so no -fvk-invert-y here.
+    find_program(DXC dxc
+            HINTS $ENV{VULKAN_SDK}/bin ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc/bin
+            REQUIRED)
+    set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders)
+    set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+    file(MAKE_DIRECTORY ${SHADER_BIN})
+    set(DXC_COMMON_FLAGS -spirv
+            -fvk-b-shift 0 0    # cbuffer bN -> binding N
+            -fvk-t-shift 10 0   # texture tN -> binding N+10
+            -fvk-s-shift 20 0   # sampler sN -> binding N+20
+            $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Od>
+            $<$<NOT:$<CONFIG:Debug>>:-O3>)
+    # job: src|profile|out
+    set(SHADER_JOBS
+            "main.vs.hlsl|vs_6_0|main.vs.spv"
+            "static.vs.hlsl|vs_6_0|static.vs.spv"
+            "shadow.vs.hlsl|vs_6_0|shadow.vs.spv"
+            "textured.ps.hlsl|ps_6_0|textured.ps.spv")
+    set(SPV_OUTS "")
+    foreach (JOB ${SHADER_JOBS})
+        string(REPLACE "|" ";" JOB_PARTS "${JOB}")
+        list(GET JOB_PARTS 0 SRC)
+        list(GET JOB_PARTS 1 PROFILE)
+        list(GET JOB_PARTS 2 OUT)
+        add_custom_command(
+                OUTPUT ${SHADER_BIN}/${OUT}
+                COMMAND ${DXC} ${DXC_COMMON_FLAGS}
+                -T ${PROFILE} -E Main
+                ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
+                DEPENDS ${SHADER_SRC}/${SRC}
+                COMMENT "DXC ${SRC} -> ${OUT}"
+                COMMAND_EXPAND_LISTS)
+        list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})
+    endforeach ()
+    add_custom_target(mercury_shaders DEPENDS ${SPV_OUTS})
+    add_dependencies(mercury mercury_shaders)
+    target_compile_definitions(mercury PUBLIC MERCURY_SPIRV_PATH="${SHADER_BIN}")
+endif ()
 
 
 # CREATE NEW BINARIES USING THIS
 
 
 # Unit tests (ctest --test-dir build)
-if (MERCURY_BUILD_TESTS)
+if (MERCURY_BUILD_TESTS AND NOT EMSCRIPTEN)
 enable_testing()
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
@@ -253,18 +283,20 @@ if (MERCURY_BUILD_EXAMPLES)
     add_subdirectory(examples/monkey_ball)
 
     # Older examples that still build their worlds in code
-    add_executable(example_breakout examples/breakout/main.cc
-            examples/breakout/breakout_scene.cc
-            examples/breakout/breakout_scene.h)
-    target_link_libraries(example_breakout mercury)
+    if (NOT EMSCRIPTEN)
+        add_executable(example_breakout examples/breakout/main.cc
+                examples/breakout/breakout_scene.cc
+                examples/breakout/breakout_scene.h)
+        target_link_libraries(example_breakout mercury)
 
-    add_executable(example_space_invaders examples/space_invaders/main.cc
-            examples/space_invaders/space_invaders.cc
-            examples/space_invaders/space_invaders.h)
-    target_link_libraries(example_space_invaders mercury)
+        add_executable(example_space_invaders examples/space_invaders/main.cc
+                examples/space_invaders/space_invaders.cc
+                examples/space_invaders/space_invaders.h)
+        target_link_libraries(example_space_invaders mercury)
+    endif ()
 endif ()
 
-if (MERCURY_BUILD_EDITOR)
+if (MERCURY_BUILD_EDITOR AND NOT EMSCRIPTEN)
     # Everything but main(), so the smoke test can drive the same editor.
     add_library(mercury_editor_lib STATIC
             editor/editor_scene.cc

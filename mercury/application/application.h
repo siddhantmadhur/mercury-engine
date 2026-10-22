@@ -49,6 +49,15 @@ class Application : public RenderHost {
   int Run();
 
   /**
+   * @brief Advances simulation and renders a single frame
+   */
+  void StepFrame();
+
+  void CheckCanvasResize();
+
+  virtual bool IsDeviceReady() const { return true; }
+
+  /**
    * @brief Quit application window
    */
   void Quit() const;

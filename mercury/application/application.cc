@@ -10,6 +10,11 @@
 
 #include <format>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
+
 #include "debugger/debugger.h"
 
 namespace Mercury {
@@ -40,14 +45,38 @@ Application::Application(const std::string& window_title, float initial_width,
 bool Application::Initialize() {
   if (!glfwInit()) {
     PDebug::error("Could not initialize glfw");
-  }
-
-  GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
-  const GLFWvidmode* videoMode = glfwGetVideoMode(primaryMonitor);
-  if (videoMode == nullptr) {
-    PDebug::error("Could not create glfw video mode");
     return false;
   }
+
+#if defined(__EMSCRIPTEN__)
+  double css_width = EM_ASM_DOUBLE({
+    var c = document.getElementById('canvas');
+    if (c) {
+      c.style.removeProperty('width');
+      c.style.removeProperty('height');
+    }
+    return window.innerWidth || 1280.0;
+  });
+  double css_height = EM_ASM_DOUBLE({
+    return window.innerHeight || 720.0;
+  });
+  if (css_width > 0.0 && css_height > 0.0) {
+    double dpr = EM_ASM_DOUBLE({
+      return Math.min(window.devicePixelRatio || 1.0, 2.0);
+    });
+    width_ = static_cast<float>(std::round(css_width * dpr));
+    height_ = static_cast<float>(std::round(css_height * dpr));
+    emscripten_set_canvas_element_size("#canvas", static_cast<int>(width_),
+                                       static_cast<int>(height_));
+  }
+#else
+  GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+  const GLFWvidmode* videoMode =
+      primaryMonitor ? glfwGetVideoMode(primaryMonitor) : nullptr;
+  if (videoMode == nullptr) {
+    PDebug::warn("Could not query glfw video mode");
+  }
+#endif
 
   if (game_scene_) {
     game_scene_->SetWidth(width_);
@@ -69,9 +98,24 @@ bool Application::Initialize() {
     return false;
   }
 
-  const int32_t windowLeft = videoMode->width / 2 - width_ / 2;
-  const int32_t windowTop = videoMode->height / 2 - height_ / 2;
-  glfwSetWindowPos(window_, windowLeft, windowTop);
+#if defined(__EMSCRIPTEN__)
+  EM_ASM({
+    var c = document.getElementById('canvas');
+    if (c) {
+      c.style.removeProperty('width');
+      c.style.removeProperty('height');
+    }
+    if (typeof Browser !== 'undefined') {
+      Browser.resizeCanvas = true;
+    }
+  });
+#else
+  if (videoMode != nullptr) {
+    const int32_t windowLeft = videoMode->width / 2 - width_ / 2;
+    const int32_t windowTop = videoMode->height / 2 - height_ / 2;
+    glfwSetWindowPos(window_, windowLeft, windowTop);
+  }
+#endif
 
   glfwSetWindowUserPointer(window_, this);
   glfwSetFramebufferSizeCallback(window_, HandleResize);
@@ -100,6 +144,80 @@ bool Application::Initialize() {
   return true;
 }
 
+void Application::StepFrame() {
+  CheckCanvasResize();
+  if (!game_scene_) return;
+  if (!IsDeviceReady()) {
+    glfwPollEvents();
+    return;
+  }
+
+  double current_time = glfwGetTime() * 1000;
+  auto frametime = current_time - time_elapsed_;
+  delta_time_ = frametime;
+  time_elapsed_ = current_time;
+
+  {  // FPS logic
+    fps_sliding_window_.push_front(frametime);
+
+    if (fps_sliding_window_.size() > kFrametimeSlidingWindowSize) {
+      fps_sliding_window_.pop_back();
+    }
+
+    double total = 0;
+    for (int i = 0; i < fps_sliding_window_.size(); i++) {
+      total += fps_sliding_window_[i];
+    }
+    double average = total / fps_sliding_window_.size();
+    average_fps_ = std::round(1000 / average);
+  }
+
+  constexpr double kTickMs = 1000.0 / kTicksPerSec;
+  time_since_last_tick_ += delta_time_;
+
+  int ticks = int(time_elapsed_ / kTickMs);
+
+  glfwPollEvents();
+  ImGuiNewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+
+  game_scene_->OnFrame(delta_time_);
+  if (ticks > last_tick_) {
+    game_scene_->OnTickBegin();
+    game_scene_->OnTick(time_since_last_tick_);
+
+    game_scene_->SimulatePhysics(
+        60 / kTicksPerSec);  // Only works as long as tps is 60
+
+    input_manager.ResetFreshPresses();
+
+    last_tick_ = ticks;
+    time_since_last_tick_ = 0.0;
+  }
+
+  float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
+  game_scene_->ProcessOnFrame(alpha);
+  // Rebuild the per-frame vertex/index buffers to match the primitives_ we
+  // are about to render.
+  OnNewTick();
+
+  // A minimized window has a 0x0 framebuffer, which most backends cannot create
+  // swapchains or targets for. Close out the ImGui frame without drawing.
+  int framebuffer_width = 0;
+  int framebuffer_height = 0;
+  glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
+  if (framebuffer_width == 0 || framebuffer_height == 0) {
+    ImGui::EndFrame();
+#if !defined(__EMSCRIPTEN__)
+    glfwWaitEventsTimeout(0.05);
+#endif
+    return;
+  }
+
+  Render();
+}
+
 int Application::Run() {
   if (!Initialize()) {
     PDebug::error("Could not initialize application");
@@ -112,100 +230,30 @@ int Application::Run() {
   }
   game_scene_->OnStart();
 
-  GLFWcursor* cursor = nullptr;
   if (current_cursor) {
-    cursor = glfwCreateCursor(current_cursor, 10, 8);
+    GLFWcursor* cursor = glfwCreateCursor(current_cursor, 10, 8);
     if (cursor) {
       glfwSetCursor(window_, cursor);
-
     } else {
       PDebug::error("Cursor could not be created");
     }
   }
+
+#if defined(__EMSCRIPTEN__)
+  emscripten_set_main_loop_arg(
+      [](void* arg) { static_cast<Application*>(arg)->StepFrame(); }, this, 0,
+      1);
+  return 0;
+#else
   while (!game_scene_->ShouldQuit()) {
     if (glfwWindowShouldClose(window_)) {
       if (game_scene_->OnCloseRequested()) break;
       glfwSetWindowShouldClose(window_, GLFW_FALSE);
     }
-    double current_time = glfwGetTime() * 1000;
-    auto frametime = current_time - time_elapsed_;
-    delta_time_ = frametime;
-    time_elapsed_ = current_time;
-
-    {  // FPS logic
-      fps_sliding_window_.push_front(frametime);
-
-      if (fps_sliding_window_.size() > kFrametimeSlidingWindowSize) {
-        fps_sliding_window_.pop_back();
-      }
-
-      double total = 0;
-      for (int i = 0; i < fps_sliding_window_.size(); i++) {
-        total += fps_sliding_window_[i];
-      }
-      double average = total / fps_sliding_window_.size();
-      average_fps_ = std::round(1000 / average);
-    }
-
-    constexpr double kTickMs = 1000.0 / kTicksPerSec;
-    time_since_last_tick_ += delta_time_;
-
-    int ticks = int(time_elapsed_ / kTickMs);
-
-    if (game_scene_) {
-      glfwPollEvents();
-      ImGuiNewFrame();
-      ImGui_ImplGlfw_NewFrame();
-      ImGui::NewFrame();
-
-      game_scene_->OnFrame(delta_time_);
-      if (ticks > last_tick_) {
-        game_scene_->OnTickBegin();
-        game_scene_->OnTick(time_since_last_tick_);
-
-        game_scene_->SimulatePhysics(
-            60 / kTicksPerSec);  // Only works as long as tps is 60
-
-        input_manager.ResetFreshPresses();
-
-        last_tick_ = ticks;
-        time_since_last_tick_ = 0.0;
-      }
-
-      float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
-      game_scene_->ProcessOnFrame(alpha);
-      // Rebuild the per-frame vertex/index buffers to match the primitives_ we
-      // are about to render. Doing this anywhere other than immediately after
-      // GetPrimitives() lets the buffer and the list desync (e.g. when a new
-      // entity is spawned mid-tick), which causes per-primitive draws to read
-      // the wrong slice of the buffer.
-      OnNewTick();
-    } else {
-      PDebug::warn("Game scene not set");
-    }
-
-    // A minimized window has a 0x0 framebuffer, which most backends (Vulkan
-    // included) cannot create a swapchain for. Close out the ImGui frame
-    // without drawing and idle briefly instead of spinning.
-    int framebuffer_width = 0;
-    int framebuffer_height = 0;
-    glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
-    if (framebuffer_width == 0 || framebuffer_height == 0) {
-      if (game_scene_) ImGui::EndFrame();
-      glfwWaitEventsTimeout(0.05);
-      continue;
-    }
-
-    Render();
-
-    {
-      if (!input_manager.IsHoveringOnUI()) {
-        glfwSetCursor(window_, cursor);
-      }
-    }
+    StepFrame();
   }
-
   return 0;
+#endif
 }
 
 Application::~Application() {
@@ -264,4 +312,61 @@ void Application::OnResize(int32_t width, int32_t height) {
     game_scene_->SetHeight(height);
   }
 }
+
+void Application::CheckCanvasResize() {
+#if defined(__EMSCRIPTEN__)
+  double css_width = EM_ASM_DOUBLE({
+    var c = document.getElementById('canvas');
+    if (c) {
+      c.style.removeProperty('width');
+      c.style.removeProperty('height');
+    }
+    return window.innerWidth || (c ? c.clientWidth : 0);
+  });
+  double css_height = EM_ASM_DOUBLE({
+    return window.innerHeight || (document.getElementById('canvas') ? document.getElementById('canvas').clientHeight : 0);
+  });
+
+  if (css_width <= 0.0 || css_height <= 0.0) {
+    return;
+  }
+
+  double dpr = EM_ASM_DOUBLE({
+    return Math.min(window.devicePixelRatio || 1.0, 2.0);
+  });
+
+  int target_width = static_cast<int>(std::round(css_width * dpr));
+  int target_height = static_cast<int>(std::round(css_height * dpr));
+
+  int cur_canvas_w = EM_ASM_INT({
+    var c = document.getElementById('canvas');
+    return c ? c.width : 0;
+  });
+  int cur_canvas_h = EM_ASM_INT({
+    var c = document.getElementById('canvas');
+    return c ? c.height : 0;
+  });
+
+  if (target_width > 0 && target_height > 0 &&
+      (target_width != cur_canvas_w || target_height != cur_canvas_h ||
+       target_width != static_cast<int>(width_) ||
+       target_height != static_cast<int>(height_))) {
+    emscripten_set_canvas_element_size("#canvas", target_width, target_height);
+    EM_ASM({
+      if (typeof GLFW !== 'undefined' && GLFW.active) {
+        GLFW.active.framebufferWidth = $0;
+        GLFW.active.framebufferHeight = $1;
+        GLFW.active.width = $2;
+        GLFW.active.height = $3;
+      }
+      if (typeof Browser !== 'undefined' && Browser.updateResizeListeners) {
+        Browser.updateResizeListeners();
+      }
+    }, target_width, target_height, static_cast<int>(std::round(css_width)), static_cast<int>(std::round(css_height)));
+
+    OnResize(target_width, target_height);
+  }
+#endif
+}
+
 }  // namespace Mercury
