@@ -60,6 +60,9 @@ class AssetDatabase {
 
   // The type in the file's header, or "" if the file cannot be read.
   std::string TypeOf(std::string_view res_path);
+  // The type of a file that is not a .masset, from its extension ("Model",
+  // "AudioClip", "Prefab", ...); "" for a .masset or an unknown file.
+  static std::string TypeFromExtension(std::string_view res_path);
 
   void Forget(std::string_view res_path);
   void Clear() { cache_.clear(); }

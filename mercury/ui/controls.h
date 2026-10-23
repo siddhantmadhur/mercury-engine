@@ -579,6 +579,18 @@ class ListView : public VisualElement {
 
   int itemCount() const { return count_; }
   void SetItemCount(int count);
+  // Shows one item per element of `items` (Unity's itemsSource): every
+  // RefreshItems reads its size again. The vector must outlive the list or
+  // be replaced first; null goes back to SetItemCount.
+  template <typename T>
+  void SetItemsSource(const std::vector<T>* items) {
+    items_source_ = items;
+    items_source_size_ = items ? std::function<int()>([items] {
+      return static_cast<int>(items->size());
+    }) : std::function<int()>();
+    RefreshItems();
+  }
+  const void* itemsSource() const { return items_source_; }
   // Rebuilds every item (call after the data changed).
   void RefreshItems();
   void Rebuild() { RefreshItems(); }
@@ -605,7 +617,12 @@ class ListView : public VisualElement {
  private:
   void UpdateSelectionClasses();
   int count_ = 0;
+  const void* items_source_ = nullptr;
+  std::function<int()> items_source_size_;
   float item_height_ = 22.0f;
+  // A .uxml each item is made from when makeItem is not set (Unity's
+  // item-template).
+  std::string item_template_;
   SelectionType selection_type_ = SelectionType::kSingle;
   std::vector<int> selected_;
   ScrollView* scroll_ = nullptr;

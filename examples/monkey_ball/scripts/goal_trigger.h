@@ -9,7 +9,7 @@ class GoalTrigger : public Mercury::Behaviour {
     r.Field("game_manager", game_manager).Tooltip("Node with GameManager script");
   }
 
-  void OnCollisionEnter(Mercury::GameObject other) override;
+  void OnTriggerEnter(Mercury::GameObject other) override;
 
   Mercury::NodeRef game_manager{"GameManager"};
 

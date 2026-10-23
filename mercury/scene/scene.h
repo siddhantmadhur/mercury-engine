@@ -13,6 +13,7 @@
 #define MERCURYENGINE_SCENE_H
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "input/input_manager.h"
 #include "physics_engine/physics_engine.h"
@@ -65,11 +66,58 @@ class RenderHost {
 struct SceneLighting {
   glm::vec3 direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f));
   glm::vec3 color = glm::vec3(1.0f);  // color * intensity
-  glm::vec3 ambient = glm::vec3(0.2f);
+  glm::vec3 ambient = glm::vec3(0.2f);         // from above
+  glm::vec3 ambient_ground = glm::vec3(0.07f);  // from below
   bool cast_shadows = true;
   float shadow_bias = 0.0015f;
   float shadow_normal_bias = 0.035f;
   float shadow_distance = 120.0f;
+};
+
+/**
+ * @brief Post-processing and renderer features for the frame (a URP volume
+ * profile plus the renderer's features)
+ */
+struct RenderSettings {
+  // Off: the scene renders as before post-processing existed (tonemapped in
+  // the lit shader).
+  bool post_processing = false;
+  int tonemap = 1;  // 0 none, 1 neutral, 2 ACES
+  float exposure = 1.0f;
+  float bloom_intensity = 0.0f;
+  float bloom_threshold = 1.0f;
+  float bloom_scatter = 0.7f;
+  float vignette_intensity = 0.0f;
+  float vignette_smoothness = 0.2f;
+  glm::vec2 vignette_center = glm::vec2(0.5f);
+  float ssao_intensity = 0.0f;
+  float ssao_radius = 0.3f;
+  int ssao_samples = 12;
+  bool fxaa = false;
+  // Linework's wide outline around objects on these rendering layers.
+  uint32_t outline_layers = 0;
+  glm::vec4 outline_color = glm::vec4(1.0f);
+  float outline_width = 3.0f;
+};
+
+/**
+ * @brief A camera the renderer draws this frame, in drawing order
+ */
+struct RenderCamera {
+  kEntityId entity = entt::null;
+  glm::mat4 view = glm::mat4(1.0f);
+  glm::mat4 projection = glm::mat4(1.0f);
+  glm::vec3 position = glm::vec3(0.0f);
+  float near_clip = 0.1f;
+  float far_clip = 1000.0f;
+  uint32_t culling_mask = 0xffffffffu;
+  int clear = 0;  // CameraClear: 0 skybox, 1 color, 2 depth only, 3 nothing
+  glm::vec4 background = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+  bool overlay = false;
+  std::string target_texture;  // res:// RenderTexture; "" = the screen
+  int target_width = 0;
+  int target_height = 0;
+  bool post_processing = true;
 };
 
 /**
@@ -90,6 +138,8 @@ class GameScene {
   GameScene();
 
   virtual void OnStart() = 0;
+  // Fixed ticks per second the application runs OnTick (and physics) at.
+  virtual int GetTicksPerSecond() const { return 60; }
   virtual void OnFrame(double delta_t) = 0;  // delta time in ms
   virtual void OnTick(double delta_t) = 0;   // delta time in ms
   virtual void OnDestroy() = 0;
@@ -113,6 +163,8 @@ class GameScene {
                          glm::vec3& position);
 
   SceneLighting& GetLighting() { return lighting_; }
+  // The entity the game is rendered from (it has a Camera and a Transform).
+  kEntityId GetPlayerCamera() const { return player_camera_; }
   glm::vec4 GetClearColor() const { return clear_color_; }
   void SetClearColor(glm::vec4 color) { clear_color_ = color; }
   // Absolute path of the skybox panorama, or "" to use the clear color.
@@ -122,6 +174,15 @@ class GameScene {
   // The game's UI Toolkit triangles for this frame (drawn over the scene,
   // under ImGui), or null when there is none.
   virtual const UI::UIDrawData* GetUIDrawData() const { return nullptr; }
+
+  // Post-processing for the frame.
+  virtual RenderSettings GetRenderSettings() const { return RenderSettings{}; }
+  // Every camera to draw this frame at the given output size, in order:
+  // RenderTexture cameras, then the main camera, then overlays. Empty means
+  // only the current camera (GetCameraProj).
+  virtual std::vector<RenderCamera> GetRenderCameras(float width, float height) {
+    return {};
+  }
 
   std::vector<StaticVertex> GetStaticVertices();
   std::vector<UINT> GetStaticIndices();

@@ -16,6 +16,7 @@
 #include <string_view>
 
 #include "GLFW/glfw3.h"
+#include "input/input_script.h"
 #include "pobject/texture_atlas.h"
 #include "scene/scene.h"
 
@@ -113,6 +114,10 @@ class Application : public RenderHost {
   // Per-backend ImGui frame begin (e.g. ImGui_ImplVulkan_NewFrame).
   virtual void ImGuiNewFrame() = 0;
 
+  // Saves the frame being rendered now to a PNG, for scripted input
+  // (MERCURY_INPUT_SCRIPT). Backends without readback log a warning.
+  virtual void RequestCapture(const std::string& file);
+
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);
   static void HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                 int action, int mods);
@@ -137,6 +142,9 @@ class Application : public RenderHost {
   int32_t height_ = 0;
   std::string title_ = "Mercury";
   bool is_loaded_ = false;
+  InputScript input_script_;
+  uint64_t script_frame_ = 0;
+  bool quit_after_frame_ = false;
 
   GLFWimage* current_cursor = nullptr;
   bool default_arrow_ = false;

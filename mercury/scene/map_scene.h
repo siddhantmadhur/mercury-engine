@@ -17,8 +17,14 @@
 #include <vector>
 
 #include "components/components.h"
+#include "properties/model.h"
+#include "properties/render_mesh.h"
+#include "animation/animator_controller.h"
+#include "audio/audio_system.h"
+#include "input/input_actions.h"
 #include "project/asset_database.h"
 #include "project/map.h"
+#include "project/prefab_cache.h"
 #include "project/project.h"
 #include "scene/scene.h"
 #include "ui/ui_system.h"
@@ -60,10 +66,25 @@ class GameObject {
 
   GameObject GetParent() const;
   std::vector<GameObject> GetChildren() const;
+  // A direct child by name, or a descendant by "A/B" path (Transform.Find).
+  GameObject FindChild(std::string_view path) const;
   void SetParent(GameObject new_parent, bool keep_world_transform = true);
+
+  // Unity's tag, layer and SetActive.
+  std::string GetTag() const;
+  void SetTag(std::string tag) const;
+  bool CompareTag(std::string_view tag) const { return GetTag() == tag; }
+  int GetLayer() const;
+  void SetLayer(int layer, bool include_children = false) const;
+  bool IsActiveSelf() const;
+  bool IsActiveInHierarchy() const;
+  void SetActive(bool active) const;
 
   void AddForce(glm::vec3 force, ForceMode mode = ForceMode::kForce) const;
   void AddTorque(glm::vec3 torque, ForceMode mode = ForceMode::kForce) const;
+  // Rigidbody.linearVelocity
+  glm::vec3 GetVelocity() const;
+  void SetVelocity(glm::vec3 velocity) const;
 
   bool operator==(const GameObject& other) const {
     return scene_ == other.scene_ && entity_ == other.entity_;
@@ -74,7 +95,15 @@ class GameObject {
   kEntityId entity_ = entt::null;
 };
 
-enum class CollisionEvent { kEnter, kLeave };
+enum class CollisionEvent { kEnter, kStay, kLeave, kTriggerEnter, kTriggerStay, kTriggerExit };
+
+/**
+ * @brief Every collider on a node, unscaled; MapScene builds the node's
+ * physics bodies from it
+ */
+struct ColliderSet {
+  std::vector<ColliderShape> shapes;  // sizes before the Transform's scale
+};
 
 class MapScene : public GameScene {
  public:
@@ -123,8 +152,64 @@ class MapScene : public GameScene {
   Mode GetMode() const { return mode_; }
   bool IsEditMode() const { return mode_ == Mode::kEdit; }
 
+  // By path from the map root ("Walls/Left"). A bare name that is not a
+  // root child finds the first object with that name anywhere, like Unity's
+  // GameObject.Find.
   GameObject Find(std::string_view path);
+  GameObject FindWithTag(std::string_view tag);
+  std::vector<GameObject> FindGameObjectsWithTag(std::string_view tag);
+  // Every script of type B on active objects.
+  template <typename B>
+  std::vector<B*> FindObjectsOfType();
   GameObject GetGameObject(kEntityId entity) { return {this, entity}; }
+
+  /**
+   * @brief Create a copy of a .mprefab (Unity's Object.Instantiate)
+   *
+   * Scripts on it get Awake and OnEnable straight away and OnStart before
+   * their next tick or frame.
+   * @param parent Parent object, or none for the map root
+   * @param world_space position/rotation are world space (else local)
+   */
+  GameObject InstantiatePrefab(std::string_view res_path, glm::vec3 position,
+                               glm::quat rotation, GameObject parent = {},
+                               bool world_space = true);
+  // Copy the nodes of a map subtree (e.g. a loaded prefab's root).
+  GameObject InstantiateNode(const MapNode& node, GameObject parent,
+                             std::string_view name = "");
+  // A new empty object (Unity's new GameObject(name)).
+  GameObject CreateGameObject(std::string_view name, GameObject parent = {});
+
+  /**
+   * @brief Add a built-in component or script by type name, with fields read
+   * from `properties`, and set up its rendering and physics right away
+   * @return False if no such component type exists
+   */
+  bool AddComponent(GameObject object, std::string_view type,
+                    const mtext::PropertyList& properties = {});
+  // Typed form: `value`'s fields (via Reflect) become the properties.
+  template <typename T>
+  bool AddComponent(GameObject object, std::string_view type, T value) {
+    mtext::PropertyList properties;
+    auto writer = Reflector::Write(properties);
+    value.Reflect(writer);
+    return AddComponent(object, type, properties);
+  }
+  // Remove a built-in component (rendering/physics included).
+  void RemoveComponent(GameObject object, std::string_view type);
+
+  // Loads (once) a prefab; nullptr if it cannot be read.
+  const Map* GetPrefab(std::string_view res_path) { return prefabs_.Get(res_path); }
+  // Pass to Map::Load so the map's prefab instances are expanded.
+  PrefabCache& GetPrefabCache() { return prefabs_; }
+
+  void SetActive(kEntityId entity, bool active);
+  void SetLayer(kEntityId entity, int layer);
+  bool IsActiveInHierarchy(kEntityId entity) const;
+
+  // Layer index for a name from the project's [layers], -1 if unknown.
+  int LayerFromName(std::string_view name) const;
+  std::string LayerToName(int layer) const;
   kEntityId GetEntityForNode(uint64_t uid) const;
   uint64_t GetNodeUid(kEntityId entity) const;
 
@@ -134,18 +219,61 @@ class MapScene : public GameScene {
   AssetDatabase& Assets() { return *assets_; }
   std::shared_ptr<Project> GetProject() const { return project_; }
 
-  void AddBehaviour(kEntityId entity, std::unique_ptr<Behaviour> behaviour);
+  void AddBehaviour(kEntityId entity, std::unique_ptr<Behaviour> behaviour,
+                    std::string type_name = "");
+  // Calls Awake and OnEnable on behaviours added since the last call.
+  void AwakeBehaviours();
+  // Called by Behaviour::SetEnabled.
+  void OnBehaviourEnabledChanged(Behaviour& behaviour);
   const std::vector<Behaviour*>& GetBehaviours(kEntityId entity) const;
 
   // Loads (once) a texture owned by the scene; nullptr if it can't be read.
   Texture2D* GetTexture(std::string_view res_path);
   // Loads (once) a model file; nullptr if it can't be read.
   const Mesh* GetModel(std::string_view res_path);
+  // Loads (once) a model with its hierarchy, materials and clips.
+  std::shared_ptr<const Model> GetModelAsset(std::string_view res_path);
+  // Loads (once) an image for the model renderer; null if unreadable.
+  std::shared_ptr<ImageData> GetImage(std::string_view res_path);
+  // Shared geometry of a built-in shape, scaled by mesh_scale.
+  std::shared_ptr<const MeshGeometry> GetPrimitive(MeshShape shape,
+                                                   glm::vec3 mesh_scale = glm::vec3(1.0f));
+  // Triangles of a model (or one of its nodes, with children) for a
+  // MeshCollider. False if the model cannot be loaded.
+  bool GetModelTriangles(std::string_view res_path, std::string_view node,
+                         std::vector<glm::vec3>& vertices,
+                         std::vector<uint32_t>& indices);
+  // (Re)builds the RenderMesh of a TextMesh.
+  void BuildTextMesh(kEntityId entity);
+  // A RenderMaterial from a Material asset, tinted by `color`.
+  RenderMaterial MakeRenderMaterial(const MaterialAsset& material, glm::vec4 color);
+  // Rebuilds the entity's physics bodies from its ColliderSet, Rigidbody and
+  // CharacterController (after AddComponent, or a scale change).
+  void CreatePhysicsBody(kEntityId entity);
 
   // See GameObject::Destroy.
   void Destroy(GameObject object);
 
   kEntityId GetActiveCamera() const { return player_camera_; }
+  // Render the game from another camera (Camera.main changes).
+  void SetCurrentCamera(GameObject camera);
+
+  // Fixed ticks per second, from the project's [physics] tick_rate.
+  int GetTicksPerSecond() const override;
+
+  // The project's [render] settings with the first active
+  // PostProcessVolume's profile.
+  RenderSettings GetRenderSettings() const override;
+  // Picks the current camera (the enabled one with the highest depth) and
+  // lists it with RenderTexture and overlay cameras.
+  std::vector<RenderCamera> GetRenderCameras(float width, float height) override;
+  // Size of a RenderTexture asset (1024x1024 when it cannot be read).
+  void GetRenderTextureSize(std::string_view res_path, int& width, int& height);
+
+  // The project's input actions, or null if it has none.
+  InputActionAsset* GetInputActions() { return input_actions_.get(); }
+  // Sound (play mode only, and when a device is available).
+  AudioSystem* GetAudio() { return audio_ && audio_->IsAvailable() ? audio_.get() : nullptr; }
 
   // Every UIDocument's panels (play mode only).
   UI::UISystem& GetUI() { return ui_; }
@@ -164,7 +292,20 @@ class MapScene : public GameScene {
   };
 
   kEntityId CreateNodeEntity(const MapNode& node, kEntityId parent,
-                             glm::vec3 parent_position);
+                             const std::string& path);
+  void ApplyProjectSettings();
+  // Per-frame engine systems (animation, audio) after the scripts ran.
+  void UpdateFrameSystems(float dt);
+  // Builds `node`'s subtree under `parent` at `path` (entities only; no
+  // physics or Awake).
+  kEntityId BuildSubtree(const MapNode& node, kEntityId parent, const std::string& path,
+                         std::vector<kEntityId>& created);
+  void FinishCreated(const std::vector<kEntityId>& created);
+  std::string UniqueChildPath(kEntityId parent, std::string_view name) const;
+  void UpdatePaths(kEntityId entity);
+  void RefreshActive(kEntityId entity, bool parent_active);
+  void ApplyEnvironmentFrom(kEntityId entity);
+  void StartPendingBehaviours();
   void DestroyNodeEntity(kEntityId entity);
   void CreatePhysicsBodies();
   void ApplyEnvironment();
@@ -185,11 +326,17 @@ class MapScene : public GameScene {
 
   std::vector<std::unique_ptr<Behaviour>> behaviours_;
   std::unordered_map<kEntityId, std::vector<Behaviour*>> behaviours_by_entity_;
-  size_t started_behaviours_ = 0;
+  size_t awoken_behaviours_ = 0;
   bool running_ = false;
+  PrefabCache prefabs_;
 
   std::map<std::string, std::unique_ptr<Texture2D>, std::less<>> textures_;
   std::map<std::string, std::unique_ptr<Mesh>, std::less<>> models_;
+  std::map<std::string, std::shared_ptr<const Model>, std::less<>> model_assets_;
+  std::map<std::string, std::shared_ptr<ImageData>, std::less<>> images_;
+  std::map<std::string, std::shared_ptr<const MeshGeometry>> primitives_;
+  // Font atlas snapshots for TextMesh, by atlas id and version.
+  std::map<std::pair<uint32_t, uint64_t>, std::shared_ptr<ImageData>> text_atlases_;
   std::vector<kEntityId> pending_destroy_;
 
   std::mutex collision_mutex_;
@@ -198,6 +345,12 @@ class MapScene : public GameScene {
   bool in_hierarchy_update_ = false;
 
   UI::UISystem ui_;
+  std::unique_ptr<InputActionAsset> input_actions_;
+  std::unique_ptr<AudioSystem> audio_;
+  void OnAudioSourceDestroyed(entt::registry& registry, kEntityId entity);
+  // Connects an Animator to the model it animates.
+  void SetupAnimator(kEntityId entity);
+  std::map<std::string, std::shared_ptr<const AnimatorController>, std::less<>> controllers_;
 };
 
 template <typename T>

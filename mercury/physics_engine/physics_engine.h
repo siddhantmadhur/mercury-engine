@@ -14,13 +14,18 @@
 #ifndef MERCURY_PHYSICS_ENGINE_H_
 #define MERCURY_PHYSICS_ENGINE_H_
 #include <Jolt/Jolt.h>
+#include <glm/gtc/quaternion.hpp>
 #include <map>
+#include <optional>
+#include <set>
 #include <stack>
+#include <vector>
 #include "Jolt/Core/Core.h"
 #include "Jolt/Core/JobSystem.h"
 #include "Jolt/Core/JobSystemThreadPool.h"
 #include "Jolt/Core/TempAllocator.h"
 #include "Jolt/Physics/Body/Body.h"
+#include "Jolt/Physics/Character/CharacterVirtual.h"
 #include "Jolt/Physics/PhysicsSystem.h"
 #include "debugger/debugger.h"
 #include "globals.h"
@@ -29,9 +34,9 @@
 namespace Mercury {
 
 /**
- * Empty namespace to register Jolt-specific classes
+ * Jolt's layer setup, internal to the physics engine
  */
-namespace {
+namespace physics_detail {
 
 namespace Layers {
 static constexpr JPH::ObjectLayer NON_MOVING = 0;
@@ -98,13 +103,87 @@ class ObjectVsBroadPhaseLayerFilterImpl
   }
 };
 
-}  // namespace
+}  // namespace physics_detail
+
+using namespace physics_detail;
 
 /**
  * [1]: The entity id of the body it is connecting with
  * [2]: The point at which the raycast hits
  */
 using RayCastResult = std::pair<kEntityId, glm::vec3>;
+
+/**
+ * @brief What a ray hit (Unity's RaycastHit)
+ */
+struct RaycastHit {
+  kEntityId entity = entt::null;
+  glm::vec3 point = glm::vec3(0.0f);
+  glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
+  float distance = 0.0f;
+  bool is_trigger = false;
+};
+
+// Unity's Physics.DefaultRaycastLayers: everything but "Ignore Raycast" (2).
+constexpr uint32_t kDefaultRaycastLayers = ~(1u << 2);
+
+/**
+ * @brief One collision shape of a body, already scaled to world size
+ */
+struct ColliderShape {
+  enum class Kind { kBox, kSphere, kCapsule, kCylinder, kMesh, kConvexHull };
+  Kind kind = Kind::kBox;
+  glm::vec3 size = glm::vec3(1.0f);  // kBox: full extents
+  float radius = 0.5f;               // kSphere, kCapsule, kCylinder
+  float height = 2.0f;               // kCapsule (total), kCylinder
+  glm::vec3 center = glm::vec3(0.0f);  // offset from the body origin
+  glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+  // kMesh: triangles; kConvexHull: points (indices unused)
+  std::vector<glm::vec3> vertices;
+  std::vector<uint32_t> indices;
+  bool is_trigger = false;
+  float friction = 0.2f;
+  float restitution = 0.0f;
+};
+
+/**
+ * @brief How a body built with CreateBody moves
+ */
+struct BodyDesc {
+  enum class Motion { kStatic, kKinematic, kDynamic };
+  Motion motion = Motion::kStatic;
+  float mass = 1.0f;  // <= 0: from the shape's volume
+  bool linear_cast = false;
+  float gravity_factor = 1.0f;
+  float linear_damping = 0.05f;
+  float angular_damping = 0.05f;
+  bool allow_sleeping = true;
+  uint8_t allowed_dofs = 0b111111;  // JPH::EAllowedDOFs bits
+};
+
+/**
+ * @brief A capsule character moved by Move() (Unity's CharacterController)
+ */
+struct CharacterDesc {
+  float height = 2.0f;
+  float radius = 0.5f;
+  glm::vec3 center = glm::vec3(0.0f);
+  float slope_limit = 45.0f;  // degrees
+  float step_offset = 0.3f;
+  float skin_width = 0.08f;
+  float min_move_distance = 0.001f;
+};
+
+// Unity's CollisionFlags, returned by CharacterController.Move.
+enum CharacterCollisionFlags : uint32_t {
+  kCollidedNone = 0,
+  kCollidedSides = 1,
+  kCollidedAbove = 2,
+  kCollidedBelow = 4,
+};
+
+enum class TriggerEvent { kEnter, kStay, kExit };
+enum class ContactEvent { kEnter, kStay, kExit };
 
 /**
  * @brief Describes a type of collision
@@ -206,6 +285,98 @@ class PhysicsEngine {
           [](JPH::BodyCreationSettings&) {});
 
   void SetGravity(glm::vec3 gravity);
+  glm::vec3 GetGravity();
+
+  // Fixed steps per second Compute() simulates (60 by default).
+  void SetTickRate(int ticks_per_second);
+  int GetTickRate() const { return tick_rate_; }
+
+  /**
+   * @brief Create the body (or bodies) of an entity from any number of shapes
+   *
+   * Solid shapes share one body; trigger shapes go on a second sensor body
+   * that follows it. The body is placed at the entity's Transform.
+   * @param layer The node's layer, used by layer-masked raycasts
+   */
+  bool CreateBody(kEntityId self, const std::vector<ColliderShape>& shapes,
+                  const BodyDesc& desc, int layer = 0);
+
+  // The node layer stored for an entity's bodies (see CreateBody).
+  void SetLayer(kEntityId self, int layer);
+
+  // Remove an entity's bodies from the world (or add them back) without
+  // destroying them, e.g. for SetActive(false).
+  void SetBodyEnabled(kEntityId self, bool enabled);
+
+  glm::vec3 GetLinearVelocity(kEntityId self);
+  void SetLinearVelocity(kEntityId self, glm::vec3 velocity);
+  // Switches a body between dynamic and kinematic (Rigidbody.isKinematic).
+  void SetKinematic(kEntityId self, bool kinematic);
+  bool IsKinematic(kEntityId self);
+  // Moves a kinematic body so it arrives at the pose by the next step.
+  void MoveKinematic(kEntityId self, glm::vec3 position, glm::quat rotation);
+  // Stop the entity from colliding (Rigidbody.detectCollisions = false).
+  void SetCollisionsEnabled(kEntityId self, bool enabled);
+
+  /**
+   * @brief Closest hit along a ray, like Unity's Physics.Raycast
+   * @param layer_mask Bit N set: hit nodes on layer N
+   * @param query_triggers Also hit trigger colliders
+   */
+  std::optional<RaycastHit> Raycast(glm::vec3 origin, glm::vec3 direction,
+                                    float max_distance = 1e30f,
+                                    uint32_t layer_mask = kDefaultRaycastLayers,
+                                    bool query_triggers = true);
+  // Every hit along a ray, nearest first.
+  std::vector<RaycastHit> RaycastAll(glm::vec3 origin, glm::vec3 direction,
+                                     float max_distance = 1e30f,
+                                     uint32_t layer_mask = kDefaultRaycastLayers,
+                                     bool query_triggers = true);
+  // Entities whose colliders overlap a sphere (Physics.OverlapSphere).
+  std::vector<kEntityId> OverlapSphere(glm::vec3 center, float radius,
+                                       uint32_t layer_mask = kDefaultRaycastLayers,
+                                       bool query_triggers = true);
+
+  // Whether raycasts hit triggers when not told (Physics.queriesHitTriggers).
+  void SetQueriesHitTriggers(bool hit) { queries_hit_triggers_ = hit; }
+  bool GetQueriesHitTriggers() const { return queries_hit_triggers_; }
+
+  // ---- Characters (Unity's CharacterController) ----
+  bool CreateCharacter(kEntityId self, const CharacterDesc& desc, int layer = 0);
+  bool HasCharacter(kEntityId self) const { return characters_.contains(self); }
+  /**
+   * @brief Move the character right away, sliding along what it hits
+   * @return CharacterCollisionFlags bits for this move
+   */
+  uint32_t MoveCharacter(kEntityId self, glm::vec3 displacement);
+  bool IsCharacterGrounded(kEntityId self) const;
+  glm::vec3 GetCharacterVelocity(kEntityId self) const;
+  // Change the capsule; false (and nothing changes) if the new shape would
+  // overlap something.
+  bool SetCharacterShape(kEntityId self, float height, float radius,
+                         glm::vec3 center);
+  void RemoveCharacter(kEntityId self);
+
+  /**
+   * @brief Receives trigger enter/stay/exit pairs after each step (main
+   * thread). `trigger` is the entity with the trigger collider.
+   */
+  using TriggerCallback = std::function<void(TriggerEvent event, kEntityId trigger,
+                                             kEntityId other)>;
+  void SetTriggerCallback(TriggerCallback callback) {
+    trigger_callback_ = std::move(callback);
+  }
+  /**
+   * @brief Receives collision enter/stay/exit for every pair of entities
+   * touching, after each step (main thread)
+   */
+  using ContactCallback = std::function<void(ContactEvent event, kEntityId a,
+                                             kEntityId b)>;
+  void SetContactCallback(ContactCallback callback) {
+    contact_callback_ = std::move(callback);
+  }
+  // Called by the contact listener from Jolt's threads.
+  void RecordContact(kEntityId a, kEntityId b, bool added);
 
   // Forces and impulses act on dynamic bodies at the next physics step.
   void AddForce(kEntityId self, glm::vec3 force, ForceMode mode = ForceMode::kForce);
@@ -235,6 +406,10 @@ class PhysicsEngine {
    * function because it does not modify any data between ticks.
    */
   void DisableBody(kEntityId id);
+
+  // Destroys an entity's bodies (and character) immediately. Only call
+  // between steps, never from a collision callback.
+  void RemoveBodyNow(kEntityId id);
 
   /**
    * @brief Add a callback to trigger when bodies collide
@@ -310,6 +485,41 @@ class PhysicsEngine {
   ObjectLayerPairFilterImpl object_layer_pair_filter_impl_;
 
   std::vector<kEntityId> disable_queue_;
+
+  struct CharacterData {
+    JPH::Ref<JPH::CharacterVirtual> character;
+    CharacterDesc desc;
+    int layer = 0;
+    glm::vec3 last_position = glm::vec3(0.0f);
+    glm::vec3 velocity = glm::vec3(0.0f);
+    bool grounded = false;
+  };
+  std::map<kEntityId, CharacterData> characters_;
+  // Character inner bodies and trigger bodies that share an entity with a
+  // solid body; looked up by Get() but never written back to Transforms.
+  std::map<JPH::BodyID, kEntityId> secondary_bodies_;
+  std::map<kEntityId, JPH::BodyID> sensor_bodies_;  // entity -> its sensor
+  std::map<kEntityId, int> layers_;
+  std::set<kEntityId> disabled_;
+  std::set<kEntityId> no_collisions_;
+
+  // Trigger overlaps found in the last step: (trigger, other).
+  std::set<std::pair<kEntityId, kEntityId>> trigger_pairs_;
+  TriggerCallback trigger_callback_;
+  void UpdateTriggers();
+
+  // Touching pairs (a < b) with how many sub-shape contacts each has.
+  std::mutex contact_mutex_;
+  std::map<std::pair<kEntityId, kEntityId>, int> contact_counts_;
+  std::set<std::pair<kEntityId, kEntityId>> contact_pairs_;
+  ContactCallback contact_callback_;
+  void UpdateContacts();
+
+  int tick_rate_ = 60;
+  bool queries_hit_triggers_ = true;
+
+  JPH::Ref<JPH::Shape> BuildShape(const std::vector<const ColliderShape*>& shapes);
+  bool BodyMatches(JPH::BodyID body, uint32_t layer_mask, bool query_triggers);
 
   // Shared by the Create* functions: places the shape at the entity's
   // Transform (position and rotation) and registers the body.

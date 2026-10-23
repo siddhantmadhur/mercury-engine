@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "os/filesystem.h"
+#include "project/asset_database.h"
 
 namespace Mercury {
 
@@ -43,18 +44,10 @@ void ForEachValue(const mtext::PropertyList& properties,
   for (const auto& property : properties) visit(property.value);
 }
 
-// Peeks at a .masset/.mmap header to find its type for [ext_resource].
+// The [ext_resource] type of a file, from its extension.
 std::string GuessResourceType(const std::string& path) {
-  if (path.ends_with(".mmap")) return "Map";
-  if (path.ends_with(".uxml")) return "UXML";
-  if (path.ends_with(".uss")) return "StyleSheet";
-  if (path.ends_with(".ttf") || path.ends_with(".otf")) return "Font";
-  if (path.ends_with(".png") || path.ends_with(".jpg") ||
-      path.ends_with(".jpeg") || path.ends_with(".bmp") ||
-      path.ends_with(".tga")) {
-    return "Texture";
-  }
-  return "Resource";
+  std::string type = AssetDatabase::TypeFromExtension(path);
+  return type.empty() ? "Resource" : type;
 }
 
 }  // namespace
@@ -72,16 +65,23 @@ std::string SanitizeNodeName(std::string_view name) {
 
 // ---------------------------------------------------------------- MapNode ---
 
-ComponentData* MapNode::FindComponent(std::string_view type) {
-  for (auto& component : components) {
-    if (component.type == type) return &component;
+ComponentData* MapNode::FindComponent(std::string_view type, int index) {
+  return const_cast<ComponentData*>(
+      std::as_const(*this).FindComponent(type, index));
+}
+
+const ComponentData* MapNode::FindComponent(std::string_view type,
+                                            int index) const {
+  for (const auto& component : components) {
+    if (component.type == type && index-- == 0) return &component;
   }
   return nullptr;
 }
 
-const ComponentData* MapNode::FindComponent(std::string_view type) const {
-  for (const auto& component : components) {
-    if (component.type == type) return &component;
+const MapNode* MapNode::GetPrefabInstanceRoot() const {
+  for (const MapNode* node = this; node; node = node->parent) {
+    if (!node->prefab.empty()) return node;
+    if (!node->from_prefab) return nullptr;
   }
   return nullptr;
 }
@@ -129,6 +129,15 @@ std::unique_ptr<MapNode> Map::CloneNode(const MapNode& node, MapNode* parent) {
   copy->name = node.name;
   copy->parent = parent;
   copy->components = node.components;
+  copy->tag = node.tag;
+  copy->layer = node.layer;
+  copy->active = node.active;
+  copy->prefab = node.prefab;
+  copy->from_prefab = node.from_prefab;
+  copy->prefab_base = node.prefab_base;
+  copy->prefab_base_tag = node.prefab_base_tag;
+  copy->prefab_base_layer = node.prefab_base_layer;
+  copy->prefab_base_active = node.prefab_base_active;
   // Copies keep their uids so editor state (selection, entity links) carries
   // over between snapshots of the same map.
   copy->uid = node.uid;
@@ -143,7 +152,50 @@ void Map::AssignUids(MapNode& node) {
   for (auto& child : node.children) AssignUids(*child);
 }
 
-bool Map::LoadFromString(std::string_view source, std::string* error) {
+namespace {
+
+// Index of `component` among the node's components of the same type.
+int IndexAmongType(const MapNode& node, const ComponentData* component) {
+  int index = 0;
+  for (const auto& c : node.components) {
+    if (&c == component) return index;
+    if (c.type == component->type) index++;
+  }
+  return index;
+}
+
+void ReadNodeAttributes(const mtext::PropertyList& attributes, MapNode& node) {
+  if (attributes.Has("tag")) node.tag = attributes.GetString("tag");
+  if (attributes.Has("layer")) node.layer = static_cast<int>(attributes.GetInt("layer"));
+  if (attributes.Has("active")) node.active = attributes.GetBool("active", true);
+}
+
+// Marks a node (and its subtree) as created by a prefab.
+void MarkFromPrefab(MapNode& node) {
+  node.from_prefab = true;
+  for (auto& child : node.children) MarkFromPrefab(*child);
+}
+
+// Remembers the prefab's values for an instance root and the nodes the
+// prefab created, so saving can write only what differs.
+void RememberPrefabBase(MapNode& node) {
+  node.prefab_base = node.components;
+  node.prefab_base_tag = node.tag;
+  node.prefab_base_layer = node.layer;
+  node.prefab_base_active = node.active;
+  for (auto& child : node.children) {
+    if (child->from_prefab) RememberPrefabBase(*child);
+  }
+}
+
+bool HasPrefabBase(const MapNode& node) {
+  return node.from_prefab || !node.prefab.empty();
+}
+
+}  // namespace
+
+bool Map::LoadFromString(std::string_view source, std::string* error,
+                         const PrefabLoaderFn& prefabs) {
   auto fail = [&](int line, std::string message) {
     if (error) *error = std::format("{}: {}", line, message);
     return false;
@@ -155,7 +207,8 @@ bool Map::LoadFromString(std::string_view source, std::string* error) {
     if (error) *error = parse_error.ToString();
     return false;
   }
-  if (document.sections.empty() || document.sections[0].tag != "mmap") {
+  if (document.sections.empty() || (document.sections[0].tag != "mmap" &&
+                                    document.sections[0].tag != "mprefab")) {
     return fail(1, "a map must start with an [mmap format=1] header");
   }
   const auto format = document.sections[0].attributes.GetInt("format", 1);
@@ -168,8 +221,50 @@ bool Map::LoadFromString(std::string_view source, std::string* error) {
   std::map<std::string, std::string> resource_types;
   std::unique_ptr<MapNode> root;
 
+  auto resolve_ext = [&](mtext::PropertyList& properties) -> std::string {
+    std::string missing;
+    ForEachValue(properties, [&](mtext::Variant& value) {
+      if (auto ext = value.Get<mtext::ExtResource>()) {
+        auto it = ext_paths.find(ext->id);
+        if (it == ext_paths.end()) {
+          missing = ext->id;
+          return;
+        }
+        value = mtext::Variant(mtext::Resource{it->second});
+      }
+    });
+    return missing;
+  };
+
+  // Fills `node` (already named and parented) from the prefab at `path`.
+  auto expand_prefab = [&](MapNode& node, const std::string& path,
+                           int line) -> bool {
+    node.prefab = path;
+    const Map* prefab = prefabs ? prefabs(path) : nullptr;
+    if (!prefab) {
+      // Without the prefab the node stays empty but keeps its link, so the
+      // file still saves back unchanged.
+      if (prefabs) {
+        if (error) *error = std::format("{}: could not load prefab {}", line, path);
+      }
+      return !prefabs;
+    }
+    const MapNode& source_root = *prefab->GetRoot();
+    node.components = source_root.components;
+    node.tag = source_root.tag;
+    node.layer = source_root.layer;
+    node.active = source_root.active;
+    for (const auto& child : source_root.children) {
+      node.children.push_back(CloneNode(*child, &node));
+    }
+    for (auto& child : node.children) MarkFromPrefab(*child);
+    RebaseNodePaths(node, node.GetPath());
+    RememberPrefabBase(node);
+    return true;
+  };
+
   for (size_t i = 1; i < document.sections.size(); i++) {
-    const auto& section = document.sections[i];
+    auto& section = document.sections[i];
     if (section.tag == "ext_resource") {
       auto id = section.attributes.GetString("id");
       auto path = section.attributes.GetString("path");
@@ -179,10 +274,28 @@ bool Map::LoadFromString(std::string_view source, std::string* error) {
     } else if (section.tag == "node") {
       auto name = section.attributes.GetString("name");
       if (name.empty()) return fail(section.line, "node needs a name");
+      std::string instance;
+      if (auto value = section.attributes.Get("instance")) {
+        if (auto ext = value->Get<mtext::ExtResource>()) {
+          auto it = ext_paths.find(ext->id);
+          if (it == ext_paths.end()) {
+            return fail(section.line, std::format("ExtResource(\"{}\") is not declared", ext->id));
+          }
+          instance = it->second;
+        } else if (auto res = value->Get<mtext::Resource>()) {
+          instance = res->path;
+        } else if (auto text = value->Get<std::string>()) {
+          instance = *text;
+        }
+      }
       if (!section.attributes.Has("parent")) {
         if (root) return fail(section.line, "only one node may omit parent");
         root = std::make_unique<MapNode>();
         root->name = name;
+        if (!instance.empty() && !expand_prefab(*root, instance, section.line)) {
+          return false;
+        }
+        ReadNodeAttributes(section.attributes, *root);
         continue;
       }
       if (!root) return fail(section.line, "the root node must come first");
@@ -194,16 +307,28 @@ bool Map::LoadFromString(std::string_view source, std::string* error) {
                                 "(parents must come before children)",
                                 parent_path, name));
       }
+      MapNode* existing = nullptr;
       for (const auto& sibling : parent->children) {
-        if (sibling->name == name) {
-          return fail(section.line,
-                      std::format("duplicate node name \"{}\"", name));
+        if (sibling->name == name) existing = sibling.get();
+      }
+      if (existing) {
+        // A node that came from a prefab can have its attributes overridden.
+        if (existing->from_prefab && instance.empty()) {
+          ReadNodeAttributes(section.attributes, *existing);
+          continue;
         }
+        return fail(section.line,
+                    std::format("duplicate node name \"{}\"", name));
       }
       auto node = std::make_unique<MapNode>();
       node->name = name;
       node->parent = parent;
+      MapNode* raw = node.get();
       parent->children.push_back(std::move(node));
+      if (!instance.empty() && !expand_prefab(*raw, instance, section.line)) {
+        return false;
+      }
+      ReadNodeAttributes(section.attributes, *raw);
     } else if (section.tag == "component") {
       if (!root) return fail(section.line, "component before any node");
       auto type = section.attributes.GetString("type");
@@ -216,20 +341,26 @@ bool Map::LoadFromString(std::string_view source, std::string* error) {
                                 type, node_path));
       }
       ComponentData component{type, section.properties};
-      std::string missing;
-      ForEachValue(component.properties, [&](mtext::Variant& value) {
-        if (auto ext = value.Get<mtext::ExtResource>()) {
-          auto it = ext_paths.find(ext->id);
-          if (it == ext_paths.end()) {
-            missing = ext->id;
-            return;
-          }
-          value = mtext::Variant(mtext::Resource{it->second});
-        }
-      });
-      if (!missing.empty()) {
+      if (auto missing = resolve_ext(component.properties); !missing.empty()) {
         return fail(section.line,
                     std::format("ExtResource(\"{}\") is not declared", missing));
+      }
+      // Inside a prefab instance a component section overrides the prefab's
+      // component of that type (the index-th one) instead of adding one.
+      if (HasPrefabBase(*node)) {
+        const int index = static_cast<int>(section.attributes.GetInt("index", 0));
+        if (ComponentData* target = node->FindComponent(type, index)) {
+          if (section.attributes.GetBool("removed", false)) {
+            std::erase_if(node->components,
+                          [&](const ComponentData& c) { return &c == target; });
+            continue;
+          }
+          for (auto& property : component.properties) {
+            target->properties.Set(property.key, property.value);
+          }
+          continue;
+        }
+        if (section.attributes.GetBool("removed", false)) continue;
       }
       node->components.push_back(std::move(component));
     }
@@ -243,14 +374,15 @@ bool Map::LoadFromString(std::string_view source, std::string* error) {
   return true;
 }
 
-bool Map::Load(const std::filesystem::path& path, std::string* error) {
+bool Map::Load(const std::filesystem::path& path, std::string* error,
+               const PrefabLoaderFn& prefabs) {
   auto text = os::ReadText(path);
   if (!text) {
     if (error) *error = "could not open " + path.string();
     return false;
   }
   std::string inner_error;
-  if (!LoadFromString(*text, &inner_error)) {
+  if (!LoadFromString(*text, &inner_error, prefabs)) {
     if (error) *error = path.string() + ":" + inner_error;
     return false;
   }
@@ -258,23 +390,117 @@ bool Map::Load(const std::filesystem::path& path, std::string* error) {
 }
 
 std::string Map::SaveToString(const ResourceTypeFn& resource_type) const {
+  // Build the node and component sections first, then number the resources
+  // they use.
+  struct PendingSection {
+    std::string tag;
+    mtext::PropertyList attributes;
+    mtext::PropertyList properties;
+  };
+  std::vector<PendingSection> pending;
+
+  auto write_node_attributes = [](const MapNode& node, mtext::PropertyList& attributes,
+                                  bool only_changes) {
+    const bool has_base = only_changes && HasPrefabBase(node);
+    const std::string base_tag = has_base ? node.prefab_base_tag : "";
+    const int base_layer = has_base ? node.prefab_base_layer : 0;
+    const bool base_active = has_base ? node.prefab_base_active : true;
+    if (node.tag != base_tag) attributes.Set("tag", node.tag);
+    if (node.layer != base_layer) attributes.Set("layer", node.layer);
+    if (node.active != base_active) attributes.Set("active", node.active);
+  };
+
+  Visit([&](const MapNode& node) {
+    const std::string path = node.GetPath();
+    if (!node.from_prefab) {
+      PendingSection section{"node"};
+      section.attributes.Set("name", node.name);
+      if (node.parent) section.attributes.Set("parent", node.parent->GetPath());
+      if (!node.prefab.empty()) {
+        section.attributes.Set("instance", mtext::Resource{node.prefab});
+      }
+      write_node_attributes(node, section.attributes, true);
+      pending.push_back(std::move(section));
+    } else {
+      // Created by a prefab: only attribute overrides need a header.
+      PendingSection section{"node"};
+      section.attributes.Set("name", node.name);
+      section.attributes.Set("parent", node.parent->GetPath());
+      write_node_attributes(node, section.attributes, true);
+      if (section.attributes.size() > 2) pending.push_back(std::move(section));
+    }
+
+    if (!HasPrefabBase(node)) {
+      for (const auto& component : node.components) {
+        PendingSection section{"component"};
+        section.attributes.Set("type", component.type);
+        section.attributes.Set("node", path);
+        section.properties = component.properties;
+        pending.push_back(std::move(section));
+      }
+      return;
+    }
+
+    // Overrides of a prefab's components: changed keys only.
+    std::map<std::string, int> seen;  // type -> count so far
+    for (const auto& component : node.components) {
+      const int index = seen[component.type]++;
+      const ComponentData* base = nullptr;
+      int base_index = 0;
+      for (const auto& candidate : node.prefab_base) {
+        if (candidate.type == component.type && base_index++ == index) {
+          base = &candidate;
+          break;
+        }
+      }
+      PendingSection section{"component"};
+      section.attributes.Set("type", component.type);
+      section.attributes.Set("node", path);
+      if (index > 0) section.attributes.Set("index", index);
+      if (!base) {
+        section.properties = component.properties;
+        pending.push_back(std::move(section));
+        continue;
+      }
+      for (const auto& property : component.properties) {
+        const mtext::Variant* old = base->properties.Get(property.key);
+        if (!old || !(*old == property.value)) {
+          section.properties.Set(property.key, property.value);
+        }
+      }
+      if (!section.properties.empty()) pending.push_back(std::move(section));
+    }
+    // Prefab components that were removed.
+    std::map<std::string, int> base_seen;
+    for (const auto& base : node.prefab_base) {
+      const int index = base_seen[base.type]++;
+      if (index < seen[base.type]) continue;
+      PendingSection section{"component"};
+      section.attributes.Set("type", base.type);
+      section.attributes.Set("node", path);
+      if (index > 0) section.attributes.Set("index", index);
+      section.attributes.Set("removed", true);
+      pending.push_back(std::move(section));
+    }
+  });
+
   mtext::Document document;
   document.Add("mmap").attributes.Set("format", kMapFormatVersion);
 
   // Number the referenced resources in the order they first appear.
   std::vector<std::string> resource_order;
   std::map<std::string, std::string> resource_ids;
-  Visit([&](const MapNode& node) {
-    for (const auto& component : node.components) {
-      ForEachValue(component.properties, [&](const mtext::Variant& value) {
-        auto resource = value.Get<mtext::Resource>();
-        if (!resource || resource->path.empty()) return;
-        if (resource_ids.contains(resource->path)) return;
-        resource_ids[resource->path] = std::to_string(resource_order.size() + 1);
-        resource_order.push_back(resource->path);
-      });
-    }
-  });
+  auto note_resource = [&](const mtext::Variant& value) {
+    auto resource = value.Get<mtext::Resource>();
+    if (!resource || resource->path.empty()) return;
+    if (resource_ids.contains(resource->path)) return;
+    resource_ids[resource->path] = std::to_string(resource_order.size() + 1);
+    resource_order.push_back(resource->path);
+  };
+  for (const auto& section : pending) {
+    if (auto instance = section.attributes.Get("instance")) note_resource(*instance);
+    ForEachValue(section.properties, note_resource);
+  }
   for (const auto& path : resource_order) {
     std::string type;
     if (resource_type) type = resource_type(path);
@@ -288,23 +514,18 @@ std::string Map::SaveToString(const ResourceTypeFn& resource_type) const {
     section.attributes.Set("id", resource_ids[path]);
   }
 
-  Visit([&](const MapNode& node) {
-    auto& node_section = document.Add("node");
-    node_section.attributes.Set("name", node.name);
-    if (node.parent) node_section.attributes.Set("parent", node.parent->GetPath());
-    const std::string path = node.GetPath();
-    for (const auto& component : node.components) {
-      auto& section = document.Add("component");
-      section.attributes.Set("type", component.type);
-      section.attributes.Set("node", path);
-      section.properties = component.properties;
-      ForEachValue(section.properties, [&](mtext::Variant& value) {
-        auto resource = value.Get<mtext::Resource>();
-        if (!resource || resource->path.empty()) return;
-        value = mtext::Variant(mtext::ExtResource{resource_ids[resource->path]});
-      });
-    }
-  });
+  auto to_ext = [&](mtext::Variant& value) {
+    auto resource = value.Get<mtext::Resource>();
+    if (!resource || resource->path.empty()) return;
+    value = mtext::Variant(mtext::ExtResource{resource_ids[resource->path]});
+  };
+  for (auto& item : pending) {
+    auto& section = document.Add(item.tag);
+    section.attributes = std::move(item.attributes);
+    if (auto instance = section.attributes.Get("instance")) to_ext(*instance);
+    section.properties = std::move(item.properties);
+    ForEachValue(section.properties, to_ext);
+  }
   return mtext::Write(document);
 }
 
@@ -454,19 +675,66 @@ std::string Map::RenameNode(MapNode* node, std::string_view new_name) {
 void Map::RewriteNodePaths(const std::string& old_prefix,
                            const std::string& new_prefix) {
   if (old_prefix == new_prefix || old_prefix == ".") return;
+  auto rewrite = [&](mtext::Variant& value) {
+    auto path = value.Get<mtext::NodePath>();
+    if (!path) return;
+    if (path->path == old_prefix) {
+      path->path = new_prefix;
+    } else if (path->path.starts_with(old_prefix + "/")) {
+      path->path = new_prefix + path->path.substr(old_prefix.size());
+    }
+  };
   Visit([&](MapNode& node) {
     for (auto& component : node.components) {
-      ForEachValue(component.properties, [&](mtext::Variant& value) {
-        auto path = value.Get<mtext::NodePath>();
-        if (!path) return;
-        if (path->path == old_prefix) {
-          path->path = new_prefix;
-        } else if (path->path.starts_with(old_prefix + "/")) {
-          path->path = new_prefix + path->path.substr(old_prefix.size());
-        }
-      });
+      ForEachValue(component.properties, rewrite);
+    }
+    for (auto& component : node.prefab_base) {
+      ForEachValue(component.properties, rewrite);
     }
   });
+}
+
+std::unique_ptr<MapNode> Map::CloneTree(const MapNode& node, MapNode* parent) {
+  Map scratch;
+  return scratch.CloneNode(node, parent);
+}
+
+void Map::RebaseNodePaths(MapNode& node, const std::string& instance_path) {
+  auto rebase = [&](mtext::Variant& value) {
+    auto path = value.Get<mtext::NodePath>();
+    if (!path || path->path.empty()) return;
+    if (path->path == ".") {
+      path->path = instance_path;
+    } else if (instance_path != ".") {
+      path->path = instance_path + "/" + path->path;
+    }
+  };
+  std::function<void(MapNode&)> walk = [&](MapNode& n) {
+    for (auto& component : n.components) ForEachValue(component.properties, rebase);
+    for (auto& child : n.children) walk(*child);
+  };
+  walk(node);
+}
+
+MapNode* Map::AddPrefabInstance(MapNode* parent, std::string_view name,
+                                const std::string& prefab_path,
+                                const Map& prefab) {
+  MapNode* node = AddNode(parent, name);
+  const MapNode& source_root = *prefab.GetRoot();
+  node->prefab = prefab_path;
+  node->components = source_root.components;
+  node->tag = source_root.tag;
+  node->layer = source_root.layer;
+  node->active = source_root.active;
+  for (const auto& child : source_root.children) {
+    auto copy = CloneNode(*child, node);
+    AssignUids(*copy);
+    node->children.push_back(std::move(copy));
+  }
+  for (auto& child : node->children) MarkFromPrefab(*child);
+  RebaseNodePaths(*node, node->GetPath());
+  RememberPrefabBase(*node);
+  return node;
 }
 
 void Map::Visit(const std::function<void(MapNode&)>& fn) {
