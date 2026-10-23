@@ -4,6 +4,10 @@
 
 #include "application.h"
 
+#if defined(MERCURY_GRAPHICS_VULKAN)
+#include <vulkan/vulkan.h>
+#endif
+
 #include <GLFW/glfw3.h>
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui_impl_glfw.h>
@@ -45,6 +49,9 @@ Application::Application(const std::string& window_title, float initial_width,
 }
 
 bool Application::Initialize() {
+#if defined(MERCURY_GRAPHICS_VULKAN)
+  glfwInitVulkanLoader(vkGetInstanceProcAddr);
+#endif
   if (!glfwInit()) {
     PDebug::error("Could not initialize glfw");
     return false;

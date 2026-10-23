@@ -69,6 +69,15 @@ bool HasDeviceExtension(VkPhysicalDevice device, const char* name) {
 
 }  // namespace
 
+PFN_vkCmdBeginRenderingKHR pfn_vkCmdBeginRendering = nullptr;
+PFN_vkCmdEndRenderingKHR pfn_vkCmdEndRendering = nullptr;
+PFN_vkCmdPipelineBarrier2KHR pfn_vkCmdPipelineBarrier2 = nullptr;
+PFN_vkQueueSubmit2KHR pfn_vkQueueSubmit2 = nullptr;
+
+}  // namespace Mercury::vk
+
+namespace Mercury::vk {
+
 Context::~Context() { Destroy(); }
 
 bool Context::Init(GLFWwindow* window) {
@@ -88,11 +97,28 @@ bool Context::Init(GLFWwindow* window) {
 bool Context::CreateInstance() {
   uint32_t loader_version = VK_API_VERSION_1_0;
   vkEnumerateInstanceVersion(&loader_version);
-  if (loader_version < kApiVersion) {
-    PDebug::error("Vulkan: loader supports {}.{}, but 1.3 is required",
+  if (loader_version < kMinApiVersion) {
+    PDebug::error("Vulkan: loader supports {}.{}, but 1.2 is required",
                   VK_API_VERSION_MAJOR(loader_version),
                   VK_API_VERSION_MINOR(loader_version));
     return false;
+  }
+
+  uint32_t instance_extension_count = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count,
+                                         nullptr);
+  std::vector<VkExtensionProperties> available_instance_extensions(
+      instance_extension_count);
+  vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count,
+                                         available_instance_extensions.data());
+
+  bool has_portability_enumeration = false;
+  for (const auto& ext : available_instance_extensions) {
+    if (std::strcmp(ext.extensionName,
+                    VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0) {
+      has_portability_enumeration = true;
+      break;
+    }
   }
 
   uint32_t glfw_extension_count = 0;
@@ -104,6 +130,12 @@ bool Context::CreateInstance() {
   }
   std::vector<const char*> extensions(glfw_extensions,
                                       glfw_extensions + glfw_extension_count);
+
+  VkInstanceCreateFlags create_flags = 0;
+  if (has_portability_enumeration) {
+    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    create_flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+  }
 
   std::vector<const char*> layers;
   if (kWantValidation) {
@@ -125,6 +157,7 @@ bool Context::CreateInstance() {
 
   VkInstanceCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+  create_info.flags = create_flags;
   create_info.pApplicationInfo = &app_info;
   create_info.enabledLayerCount = static_cast<uint32_t>(layers.size());
   create_info.ppEnabledLayerNames = layers.data();
@@ -162,22 +195,55 @@ bool Context::PickPhysicalDevice() {
   for (VkPhysicalDevice candidate : devices) {
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(candidate, &properties);
-    if (properties.apiVersion < kApiVersion) continue;
+    if (properties.apiVersion < kMinApiVersion) continue;
     if (!HasDeviceExtension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
       continue;
     }
 
-    VkPhysicalDeviceVulkan13Features features13 = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    bool has_dynamic_rendering = false;
+    bool has_sync2 = false;
+    bool has_demote = false;
+
     VkPhysicalDeviceVulkan12Features features12 = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext = &features13};
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     VkPhysicalDeviceFeatures2 features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &features12};
-    vkGetPhysicalDeviceFeatures2(candidate, &features);
-    if (!features13.dynamicRendering || !features13.synchronization2 ||
-        !features13.shaderDemoteToHelperInvocation ||
+
+    if (properties.apiVersion >= VK_API_VERSION_1_3) {
+      VkPhysicalDeviceVulkan13Features features13 = {
+          .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+      features12.pNext = &features13;
+      vkGetPhysicalDeviceFeatures2(candidate, &features);
+      has_dynamic_rendering = features13.dynamicRendering;
+      has_sync2 = features13.synchronization2;
+      has_demote = features13.shaderDemoteToHelperInvocation;
+    } else if (HasDeviceExtension(candidate,
+                                  VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) &&
+               HasDeviceExtension(candidate,
+                                  VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) &&
+               HasDeviceExtension(
+                   candidate,
+                   VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME)) {
+      VkPhysicalDeviceShaderDemoteToHelperInvocationFeaturesEXT demote = {
+          .sType =
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT};
+      VkPhysicalDeviceDynamicRenderingFeaturesKHR dyn_rendering = {
+          .sType =
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
+          .pNext = &demote};
+      VkPhysicalDeviceSynchronization2FeaturesKHR sync2 = {
+          .sType =
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR,
+          .pNext = &dyn_rendering};
+      features12.pNext = &sync2;
+      vkGetPhysicalDeviceFeatures2(candidate, &features);
+      has_dynamic_rendering = dyn_rendering.dynamicRendering;
+      has_sync2 = sync2.synchronization2;
+      has_demote = demote.shaderDemoteToHelperInvocation;
+    }
+
+    if (!has_dynamic_rendering || !has_sync2 || !has_demote ||
         !features.features.independentBlend) {
       continue;
     }
@@ -222,8 +288,8 @@ bool Context::PickPhysicalDevice() {
 
   if (physical_device == VK_NULL_HANDLE) {
     PDebug::error(
-        "Vulkan: no GPU supports Vulkan 1.3 with dynamic rendering and can "
-        "present to this window");
+        "Vulkan: no GPU supports dynamic rendering and synchronization2 "
+        "and can present to this window");
     return false;
   }
 
@@ -244,22 +310,27 @@ bool Context::CreateDevice() {
   queue_info.queueCount = 1;
   queue_info.pQueuePriorities = &priority;
 
+  VkPhysicalDeviceProperties properties;
+  vkGetPhysicalDeviceProperties(physical_device, &properties);
+
+  std::vector<const char*> extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  if (HasDeviceExtension(physical_device, "VK_KHR_portability_subset")) {
+    extensions.push_back("VK_KHR_portability_subset");
+  }
+
+  VkPhysicalDeviceFeatures2 features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+
   VkPhysicalDeviceVulkan13Features features13 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-  features13.dynamicRendering = VK_TRUE;
-  features13.synchronization2 = VK_TRUE;
-  // HLSL's discard compiles to demote-to-helper for Vulkan 1.3 targets.
-  features13.shaderDemoteToHelperInvocation = VK_TRUE;
   VkPhysicalDeviceVulkan12Features features12 = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-      .pNext = &features13};
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
   features12.runtimeDescriptorArray = VK_TRUE;
   features12.descriptorBindingPartiallyBound = VK_TRUE;
   features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
   features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-  VkPhysicalDeviceFeatures2 features = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-      .pNext = &features12};
+  features.pNext = &features12;
+
   VkPhysicalDeviceFeatures supported = {};
   vkGetPhysicalDeviceFeatures(physical_device, &supported);
   features.features.samplerAnisotropy = supported.samplerAnisotropy;
@@ -267,27 +338,83 @@ bool Context::CreateDevice() {
   features.features.independentBlend = VK_TRUE;
   sampler_anisotropy = supported.samplerAnisotropy == VK_TRUE;
 
-  const char* extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  VkPhysicalDeviceDynamicRenderingFeaturesKHR dyn_rendering = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
+  VkPhysicalDeviceSynchronization2FeaturesKHR sync2 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
+  VkPhysicalDeviceShaderDemoteToHelperInvocationFeaturesEXT demote = {
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT};
+
+  if (properties.apiVersion >= VK_API_VERSION_1_3) {
+    features13.dynamicRendering = VK_TRUE;
+    features13.synchronization2 = VK_TRUE;
+    // HLSL's discard compiles to demote-to-helper for Vulkan 1.3 targets.
+    features13.shaderDemoteToHelperInvocation = VK_TRUE;
+    features12.pNext = &features13;
+  } else {
+    extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    extensions.push_back(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME);
+    dyn_rendering.dynamicRendering = VK_TRUE;
+    sync2.synchronization2 = VK_TRUE;
+    demote.shaderDemoteToHelperInvocation = VK_TRUE;
+    dyn_rendering.pNext = &demote;
+    sync2.pNext = &dyn_rendering;
+    features12.pNext = &sync2;
+  }
 
   VkDeviceCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
   create_info.pNext = &features;
   create_info.queueCreateInfoCount = 1;
   create_info.pQueueCreateInfos = &queue_info;
-  create_info.enabledExtensionCount = 1;
-  create_info.ppEnabledExtensionNames = extensions;
+  create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+  create_info.ppEnabledExtensionNames = extensions.data();
 
   if (!VK_CHECK(
           vkCreateDevice(physical_device, &create_info, nullptr, &device))) {
     return false;
   }
   vkGetDeviceQueue(device, queue_family, 0, &queue);
+
+  pfn_vkCmdBeginRendering = reinterpret_cast<PFN_vkCmdBeginRenderingKHR>(
+      vkGetDeviceProcAddr(device, "vkCmdBeginRendering"));
+  if (!pfn_vkCmdBeginRendering) {
+    pfn_vkCmdBeginRendering = reinterpret_cast<PFN_vkCmdBeginRenderingKHR>(
+        vkGetDeviceProcAddr(device, "vkCmdBeginRenderingKHR"));
+  }
+
+  pfn_vkCmdEndRendering = reinterpret_cast<PFN_vkCmdEndRenderingKHR>(
+      vkGetDeviceProcAddr(device, "vkCmdEndRendering"));
+  if (!pfn_vkCmdEndRendering) {
+    pfn_vkCmdEndRendering = reinterpret_cast<PFN_vkCmdEndRenderingKHR>(
+        vkGetDeviceProcAddr(device, "vkCmdEndRenderingKHR"));
+  }
+
+  pfn_vkCmdPipelineBarrier2 = reinterpret_cast<PFN_vkCmdPipelineBarrier2KHR>(
+      vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2"));
+  if (!pfn_vkCmdPipelineBarrier2) {
+    pfn_vkCmdPipelineBarrier2 = reinterpret_cast<PFN_vkCmdPipelineBarrier2KHR>(
+        vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR"));
+  }
+
+  pfn_vkQueueSubmit2 = reinterpret_cast<PFN_vkQueueSubmit2KHR>(
+      vkGetDeviceProcAddr(device, "vkQueueSubmit2"));
+  if (!pfn_vkQueueSubmit2) {
+    pfn_vkQueueSubmit2 = reinterpret_cast<PFN_vkQueueSubmit2KHR>(
+        vkGetDeviceProcAddr(device, "vkQueueSubmit2KHR"));
+  }
+
   return true;
 }
 
 bool Context::CreateAllocator() {
+  VkPhysicalDeviceProperties properties;
+  vkGetPhysicalDeviceProperties(physical_device, &properties);
+
   VmaAllocatorCreateInfo create_info = {};
-  create_info.vulkanApiVersion = kApiVersion;
+  create_info.vulkanApiVersion = std::min(properties.apiVersion, kApiVersion);
   create_info.instance = instance;
   create_info.physicalDevice = physical_device;
   create_info.device = device;
@@ -302,6 +429,10 @@ void Context::Destroy() {
   if (device != VK_NULL_HANDLE) {
     vkDestroyDevice(device, nullptr);
     device = VK_NULL_HANDLE;
+    pfn_vkCmdBeginRendering = nullptr;
+    pfn_vkCmdEndRendering = nullptr;
+    pfn_vkCmdPipelineBarrier2 = nullptr;
+    pfn_vkQueueSubmit2 = nullptr;
   }
   if (surface != VK_NULL_HANDLE) {
     vkDestroySurfaceKHR(instance, surface, nullptr);

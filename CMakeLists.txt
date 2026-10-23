@@ -35,6 +35,9 @@ if (EMSCRIPTEN)
     add_link_options(--use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1)
 else ()
     set(MERCURY_GRAPHICS_VULKAN ON)
+    if (APPLE)
+        list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew" "/usr/local")
+    endif ()
     find_package(Vulkan REQUIRED)
     find_package(Threads REQUIRED)
     set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
@@ -248,6 +251,9 @@ set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 include_directories("third_party/assimp/include")
 add_subdirectory("third_party/assimp")
+if (APPLE AND TARGET zlibstatic)
+    target_compile_definitions(zlibstatic PRIVATE fdopen=fdopen)
+endif ()
 
 include_directories("third_party/entt/single_include")
 add_subdirectory("third_party/entt")
@@ -277,10 +283,18 @@ else ()
             MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
             MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
             MERCURY_GRAPHICS_VULKAN=1
+            GLFW_INCLUDE_VULKAN=1
             GLM_FORCE_DEPTH_ZERO_TO_ONE
     )
     target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 yoga glfw assimp
             EnTT::EnTT Vulkan::Vulkan Threads::Threads)
+    if (APPLE)
+        target_link_libraries(mercury
+                "-framework Cocoa"
+                "-framework IOKit"
+                "-framework CoreFoundation"
+                "-framework QuartzCore")
+    endif ()
 endif ()
 # Games built outside this folder (see cmake/MercuryGame.cmake) need the same
 # language level and include paths the engine uses.
@@ -304,7 +318,10 @@ if (NOT EMSCRIPTEN)
     # Compile HLSL -> SPIR-V via DXC at build time. The Y flip is done with a
     # negative viewport height at draw time, so no -fvk-invert-y here.
     find_program(DXC dxc
-            HINTS $ENV{VULKAN_SDK}/bin ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc/bin
+            HINTS $ENV{VULKAN_SDK}/bin
+                  ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc/bin
+                  ${CMAKE_CURRENT_SOURCE_DIR}/bin/vulkansdk/macOS/bin
+                  /opt/homebrew/bin
             REQUIRED)
     set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders)
     set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/shaders)
