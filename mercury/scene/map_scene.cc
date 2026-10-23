@@ -345,8 +345,21 @@ void MapScene::ApplyEnvironment() {
     lighting_.shadow_distance = light->shadow_distance;
     break;
   }
+  GatherPointLights();
   ApplyEnvironmentFrom(player_camera_);
   if (project_) physics_engine_->SetGravity(project_->GetGravity());
+}
+
+void MapScene::GatherPointLights() {
+  lighting_.point_lights.clear();
+  for (auto [entity, light, transform] : GetRegistry().view<PointLight, Transform>().each()) {
+    if (light.range <= 0.0f || !IsActiveInHierarchy(entity)) continue;
+    PointLightData data;
+    data.position = transform.GetInterpolatedPosition();
+    data.color = glm::vec3(light.color) * light.intensity;
+    data.range = light.range;
+    lighting_.point_lights.push_back(data);
+  }
 }
 
 void MapScene::ApplyEnvironmentFrom(kEntityId camera_entity) {
@@ -717,8 +730,26 @@ void MapScene::OnStart() {
   StartPendingBehaviours();
 }
 
+void MapScene::LoadPendingMap() {
+  const std::string path = std::move(pending_map_);
+  pending_map_.clear();
+  if (!project_) return;
+  Map map;
+  std::string error;
+  if (!map.Load(project_->Resolve(path), &error, prefabs_.Loader())) {
+    PDebug::warn("Could not load map {}: {}", path, error);
+    return;
+  }
+  ClearMap();
+  // The old map's models and images (often hundreds of MB) go with it.
+  model_assets_.clear();
+  images_.clear();
+  Instantiate(map);
+}
+
 void MapScene::OnFrame(double delta_t) {
   const double seconds = delta_t / 1000.0;
+  if (mode_ == Mode::kPlay && !pending_map_.empty()) LoadPendingMap();
   if (mode_ == Mode::kPlay) {
     Time::BeginFrame(seconds);
     if (input_actions_ && input_manager_) input_actions_->Update(*input_manager_);
@@ -740,6 +771,8 @@ void MapScene::OnFrame(double delta_t) {
   }
   DestroyPending();
   if (mode_ == Mode::kPlay) UpdateFrameSystems(dt);
+  // Lights may have moved.
+  GatherPointLights();
   // ...and bindings pick up what the scripts changed before drawing.
   if (ui) {
     const float dpi = input_manager_ ? input_manager_->GetContentScale() : 1.0f;
@@ -1564,12 +1597,15 @@ std::shared_ptr<const Model> MapScene::GetModelAsset(std::string_view res_path) 
   return model;
 }
 
-std::shared_ptr<ImageData> MapScene::GetImage(std::string_view res_path) {
+std::shared_ptr<ImageData> MapScene::GetImage(std::string_view res_path, bool srgb) {
   if (res_path.empty() || !project_) return nullptr;
-  if (auto it = images_.find(res_path); it != images_.end()) return it->second;
+  // Data textures (normal maps) are decoded separately from color ones.
+  const std::string key = srgb ? std::string(res_path) : "linear:" + std::string(res_path);
+  if (auto it = images_.find(key); it != images_.end()) return it->second;
   auto image = ImageData::Load(project_->Resolve(res_path).string());
   if (!image) PDebug::warn("Could not load image {}", res_path);
-  images_.emplace(std::string(res_path), image);
+  if (image) image->srgb = srgb;
+  images_.emplace(key, image);
   return image;
 }
 
@@ -1600,6 +1636,7 @@ std::shared_ptr<const MeshGeometry> MapScene::GetPrimitive(MeshShape shape,
     vertices.push_back(vertex);
   }
   auto geometry = MeshGeometry::Create(std::move(vertices), mesh->indices_);
+  geometry->ComputeTangents();
   primitives_.emplace(key, geometry);
   return geometry;
 }
@@ -1725,6 +1762,9 @@ RenderMaterial MapScene::MakeRenderMaterial(const MaterialAsset& material, glm::
   result.metallic = material.metallic;
   result.smoothness = 1.0f - material.roughness;
   result.emission = glm::vec3(material.emission);
+  if (material.emission_map.IsSet()) result.emission_texture = GetImage(material.emission_map.path);
+  if (material.normal_map.IsSet()) result.normal_texture = GetImage(material.normal_map.path, false);
+  result.normal_scale = material.normal_scale;
   result.transparent = material.surface == SurfaceType::kTransparent;
   result.double_sided = material.cull == CullMode::kOff;
   result.unlit = material.unlit;

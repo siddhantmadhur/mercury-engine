@@ -219,6 +219,25 @@ struct DirectionalLight {
   }
 };
 
+/**
+ * @brief Light given off in every direction from the node's position
+ *
+ * Like Unity's point light: brightness falls off with the square of the
+ * distance and reaches 0 at `range`. No shadows. The renderer uses the first
+ * 16 active point lights of a map.
+ */
+struct PointLight {
+  glm::vec4 color = glm::vec4(1.0f);
+  float intensity = 1.0f;
+  float range = 10.0f;
+
+  void Reflect(Reflector& r) {
+    r.Field("color", color);
+    r.Field("intensity", intensity);
+    r.Field("range", range).Tooltip("Distance at which the light fades out");
+  }
+};
+
 enum class MotionType { kStatic, kKinematic, kDynamic };
 enum class AllowedDofs {
   kAll,
@@ -653,6 +672,9 @@ struct MaterialAsset {
   float roughness = 0.5f;
   float metallic = 0.0f;
   glm::vec4 emission = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+  AssetRef emission_map;
+  AssetRef normal_map;
+  float normal_scale = 1.0f;
   SurfaceType surface = SurfaceType::kOpaque;
   CullMode cull = CullMode::kBack;
   bool unlit = false;
@@ -672,6 +694,11 @@ struct MaterialAsset {
         .Tooltip("PBR metalness [0.0 = dielectric, 1.0 = pure metal]");
     r.Field("offset", offset).Tooltip("Texture offset, in tiles");
     r.Field("emission", emission).Tooltip("Light the surface gives off (rgb)");
+    r.Field("emission_map", emission_map, "Texture")
+        .Tooltip("Multiplies emission (a .png or .jpg file)");
+    r.Field("normal_map", normal_map, "Texture")
+        .Tooltip("Tangent-space normal map (OpenGL convention, green up)");
+    r.Field("normal_scale", normal_scale).Tooltip("Strength of the normal map");
     r.Enum("surface", surface, {"opaque", "transparent"})
         .Tooltip("transparent blends with what is behind by the color's alpha");
     r.Enum("cull", cull, {"back", "front", "off"})

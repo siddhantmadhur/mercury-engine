@@ -120,7 +120,9 @@ and don't implement platform specific features like drawing or windowing.
 
 Games are made as projects, the way Unity and Godot work, instead of by hand-writing a
 `GameScene`. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are
-complete examples:
+complete examples, and `examples/model_viewer` loads scenes from the McGuire Computer Graphics
+Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through
+benchmark cameras that report per-lap frame rates:
 
 ```
 pong.mproj              project settings (name, main map, window size)
@@ -219,6 +221,7 @@ Built-in components:
 | `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file (its node tree, materials, skin and clips; `node` draws one part, `materials` overrides them) |
 | `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture` and `post_processing` |
 | `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity`, `ambient` and `ground_ambient` |
+| `PointLight` | Light in every direction from the node, with `color`, `intensity` and `range` (Unity's falloff, no shadows; up to 16 per map) |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps (`OnTriggerEnter/Stay/Exit`) without pushing |
 | `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |
@@ -249,7 +252,12 @@ Other files:
   with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"`, and 2D vector
   `composites`. The `.mproj` names it in `[input] actions`.
 - `.mimport` next to a model: `convention = "unity"` imports it the way Unity does (180 degrees
-  about Y, file units); `[import] model_convention` in the `.mproj` sets the default.
+  about Y, file units); `[import] model_convention` in the `.mproj` sets the default. `scale`
+  resizes it and `max_texture_size` (default 8192) scales larger textures down.
+
+Models bring their own materials: base color and texture, opacity, emission (`Ke`, `map_Ke`),
+normal maps (or `bump` height maps, turned into normal maps on import), and for OBJ files
+glossiness from `Ns`/`Ks`. Texture names are matched without regard to case.
 
 #### Scripts
 
@@ -277,7 +285,9 @@ Scripts can push bodies with `Physics().AddForce(GetEntity(), force)` (also `Add
 distance, layer_mask)`, turn things with `GetTransform().SetRotate(...)`, find objects with
 `Find`, `FindWithTag` and `FindObjectsOfType<T>()`, make them with `Instantiate(prefab, ...)`,
 `CreateGameObject` and `AddComponent`, switch them with `SetActive`/`SetLayer`, and remove them
-with `Destroy(object)`. `Mathf`, `Random` and `Time` match Unity's.
+with `Destroy(object)`. `LoadMap("res://maps/level2.mmap")` replaces the scene with another map
+at the start of the next frame (Unity's `SceneManager.LoadScene`). `Mathf`, `Random` and `Time`
+match Unity's.
 
 An `Event` field is a UnityEvent: the map saves calls to other scripts' methods, which those
 scripts list in `ReflectMethods`, and code can `AddListener`:
