@@ -58,6 +58,13 @@ class GameObject {
   // frame. Their scripts get OnDestroy.
   void Destroy() const;
 
+  GameObject GetParent() const;
+  std::vector<GameObject> GetChildren() const;
+  void SetParent(GameObject new_parent, bool keep_world_transform = true);
+
+  void AddForce(glm::vec3 force, ForceMode mode = ForceMode::kForce) const;
+  void AddTorque(glm::vec3 torque, ForceMode mode = ForceMode::kForce) const;
+
   bool operator==(const GameObject& other) const {
     return scene_ == other.scene_ && entity_ == other.entity_;
   }
@@ -104,6 +111,14 @@ class MapScene : public GameScene {
   void OnFrame(double delta_t) override;
   void OnTick(double delta_t) override;
   void OnDestroy() override;
+  void ProcessOnFrame(float alpha) override;
+
+  void UpdateEntityTransformHierarchy(kEntityId entity);
+  void UpdateInterpolatedHierarchy();
+  void OnWorldTransformChanged(kEntityId entity);
+  void OnLocalTransformChanged(kEntityId entity);
+  bool HasParent(kEntityId entity) const;
+  void SetEntityParent(kEntityId entity, kEntityId new_parent, bool keep_world_transform = true);
 
   Mode GetMode() const { return mode_; }
   bool IsEditMode() const { return mode_ == Mode::kEdit; }
@@ -162,6 +177,7 @@ class MapScene : public GameScene {
   std::unique_ptr<AssetDatabase> assets_;
   Mode mode_;
   kEntityId default_camera_ = entt::null;
+  kEntityId root_entity_ = entt::null;
 
   std::vector<kEntityId> entities_;  // in map (pre-)order
   std::unordered_map<std::string, kEntityId> by_path_;
@@ -178,6 +194,8 @@ class MapScene : public GameScene {
 
   std::mutex collision_mutex_;
   std::vector<PendingCollision> collisions_;
+
+  bool in_hierarchy_update_ = false;
 
   UI::UISystem ui_;
 };

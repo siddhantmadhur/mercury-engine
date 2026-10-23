@@ -77,6 +77,16 @@ class Behaviour {
   // Removes an object (and its children) at the end of this tick or frame.
   void Destroy(GameObject object) const { scene_->Destroy(object); }
 
+  GameObject GetParent() const { return GetGameObject().GetParent(); }
+  std::vector<GameObject> GetChildren() const { return GetGameObject().GetChildren(); }
+
+  void AddForce(glm::vec3 force, ForceMode mode = ForceMode::kForce) const {
+    GetGameObject().AddForce(force, mode);
+  }
+  void AddTorque(glm::vec3 torque, ForceMode mode = ForceMode::kForce) const {
+    GetGameObject().AddTorque(torque, mode);
+  }
+
   bool IsKeyPressed(Key key) const;
   bool IsKeyJustPressed(Key key) const;
 
@@ -142,8 +152,8 @@ bool RegisterScript(const char* name) {
     auto behaviour = std::make_unique<T>();
     auto reflector = Reflector::Read(properties);
     behaviour->Reflect(reflector);
-    LogReflectionWarnings(reflector, scene.GetGameObject(entity).GetPath() +
-                                         "." + name);
+    LogReflectionWarnings(reflector,
+                          scene.GetGameObject(entity).GetPath() + "." + name);
     scene.AddBehaviour(entity, std::move(behaviour));
   };
   TypeRegistry::Instance().RegisterComponent(std::move(info));
@@ -152,7 +162,7 @@ bool RegisterScript(const char* name) {
 
 }  // namespace Mercury
 
-#define MERCURY_SCRIPT(Type)                                     \
+#define MERCURY_SCRIPT(Type)                                    \
   [[maybe_unused]] static const bool mercury_script_##Type##_ = \
       ::Mercury::RegisterScript<Type>(#Type)
 

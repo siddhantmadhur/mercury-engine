@@ -39,6 +39,45 @@ void GameObject::Destroy() const {
   if (IsValid()) scene_->Destroy(*this);
 }
 
+GameObject GameObject::GetParent() const {
+  if (!IsValid()) return {};
+  if (scene_->HasParent(entity_)) {
+    if (auto info = GetComponent<NodeInfo>()) {
+      return {scene_, info->parent};
+    }
+  }
+  return {};
+}
+
+std::vector<GameObject> GameObject::GetChildren() const {
+  if (!IsValid()) return {};
+  std::vector<GameObject> result;
+  if (auto info = GetComponent<NodeInfo>()) {
+    result.reserve(info->children.size());
+    for (kEntityId child_id : info->children) {
+      if (scene_->GetRegistry().valid(child_id)) {
+        result.emplace_back(scene_, child_id);
+      }
+    }
+  }
+  return result;
+}
+
+void GameObject::SetParent(GameObject new_parent, bool keep_world_transform) {
+  if (!IsValid()) return;
+  scene_->SetEntityParent(entity_, new_parent.GetEntity(), keep_world_transform);
+}
+
+void GameObject::AddForce(glm::vec3 force, ForceMode mode) const {
+  if (!IsValid()) return;
+  scene_->Physics().AddForce(entity_, force, mode);
+}
+
+void GameObject::AddTorque(glm::vec3 torque, ForceMode mode) const {
+  if (!IsValid()) return;
+  scene_->Physics().AddTorque(entity_, torque, mode);
+}
+
 // -------------------------------------------------------------- Behaviour ---
 
 Transform& Behaviour::GetTransform() const {
@@ -112,14 +151,15 @@ const UI::UIDrawData* MapScene::GetUIDrawData() const {
 void MapScene::Instantiate(const Map& map) {
   ClearMap();
 
-  std::function<void(const MapNode&, kEntityId, glm::vec3)> build =
+  std::function<kEntityId(const MapNode&, kEntityId, glm::vec3)> build =
       [&](const MapNode& node, kEntityId parent, glm::vec3 parent_position) {
         kEntityId entity = CreateNodeEntity(node, parent, parent_position);
         glm::vec3 position =
             object_manager_->GetProperty<Transform>(entity)->GetPosition();
         for (const auto& child : node.children) build(*child, entity, position);
+        return entity;
       };
-  build(*map.GetRoot(), entt::null, glm::vec3(0.0f));
+  root_entity_ = build(*map.GetRoot(), entt::null, glm::vec3(0.0f));
 
   if (mode_ == Mode::kPlay) {
     CreatePhysicsBodies();
@@ -192,6 +232,7 @@ void MapScene::ClearMap() {
   entities_.clear();
   by_path_.clear();
   by_uid_.clear();
+  root_entity_ = entt::null;
   SetActiveCamera(default_camera_);
   ui_.Clear();
 
@@ -207,17 +248,49 @@ kEntityId MapScene::CreateNodeEntity(const MapNode& node, kEntityId parent,
   object_manager_->AddProperty(entity, NodeInfo{node.name, path, parent,
                                                 node.uid});
 
+  if (parent != entt::null && GetRegistry().valid(parent)) {
+    if (auto p_info = object_manager_->GetProperty<NodeInfo>(parent)) {
+      p_info->children.push_back(entity);
+    }
+  }
+
   // Transform comes first so every other component can rely on it.
   TransformComponent transform_data;
   if (auto data = node.FindComponent("Transform")) {
     transform_data =
         ReadFields<TransformComponent>(data->properties, path + ".Transform");
   }
-  Transform transform(parent_position + transform_data.position);
-  transform.SetRotate(transform_data.rotation);
-  transform.SetScale(transform_data.scale);
+
+  glm::vec3 world_pos = transform_data.position;
+  glm::quat world_rot = Transform::EulerToQuat(transform_data.rotation);
+  glm::vec3 world_scale = transform_data.scale;
+
+  if (parent != entt::null && GetRegistry().valid(parent)) {
+    if (auto p_trans = object_manager_->GetProperty<Transform>(parent)) {
+      const glm::vec3 p_pos = p_trans->GetPosition();
+      const glm::quat p_rot = p_trans->GetRotationQuat();
+      const glm::vec3 p_scale = p_trans->GetScale();
+      world_pos = p_pos + p_rot * (p_scale * transform_data.position);
+      world_rot = p_rot * world_rot;
+      world_scale = p_scale * world_scale;
+    } else {
+      world_pos = parent_position + transform_data.position;
+    }
+  }
+
+  Transform transform(world_pos);
+  transform.SetRotate(Transform::QuatToEuler(world_rot));
+  transform.SetScale(world_scale);
+  transform.SetLocalPosition(transform_data.position);
+  transform.SetLocalRotate(transform_data.rotation);
+  transform.SetLocalScale(transform_data.scale);
   transform.SnapInterpolation();
   transform.ClearTransformations();
+
+  transform.SetOnWorldChanged(
+      [this, entity] { OnWorldTransformChanged(entity); });
+  transform.SetOnLocalChanged(
+      [this, entity] { OnLocalTransformChanged(entity); });
   object_manager_->AddProperty(entity, transform);
 
   entities_.push_back(entity);
@@ -441,6 +514,225 @@ void MapScene::OnDestroy() {
   running_ = false;
 }
 
+bool MapScene::HasParent(kEntityId entity) const {
+  if (!GetRegistry().valid(entity)) return false;
+  if (auto node_info = object_manager_->GetProperty<NodeInfo>(entity)) {
+    return node_info->parent != entt::null && node_info->parent != root_entity_ &&
+           GetRegistry().valid(node_info->parent);
+  }
+  return false;
+}
+
+void MapScene::OnWorldTransformChanged(kEntityId entity) {
+  if (in_hierarchy_update_) return;
+  in_hierarchy_update_ = true;
+
+  auto transform = object_manager_->GetProperty<Transform>(entity);
+  auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
+
+  if (transform && node_info) {
+    if (HasParent(entity)) {
+      if (auto parent_transform =
+              object_manager_->GetProperty<Transform>(node_info->parent)) {
+        const glm::vec3 p_pos = parent_transform->GetPosition();
+        const glm::quat p_rot = parent_transform->GetRotationQuat();
+        const glm::vec3 p_scale = parent_transform->GetScale();
+        const glm::quat p_rot_inv = glm::inverse(p_rot);
+
+        const glm::vec3 safe_scale = glm::vec3(
+            std::abs(p_scale.x) < 1e-6f ? 1.0f : p_scale.x,
+            std::abs(p_scale.y) < 1e-6f ? 1.0f : p_scale.y,
+            std::abs(p_scale.z) < 1e-6f ? 1.0f : p_scale.z);
+
+        const glm::vec3 local_pos =
+            (p_rot_inv * (transform->GetPosition() - p_pos)) / safe_scale;
+        const glm::quat local_rot_q = p_rot_inv * transform->GetRotationQuat();
+        const glm::vec3 local_scale = transform->GetScale() / safe_scale;
+
+        transform->SetLocalPosition(local_pos);
+        transform->SetLocalRotate(Transform::QuatToEuler(local_rot_q));
+        transform->SetLocalScale(local_scale);
+      }
+    } else {
+      transform->SetLocalPosition(transform->GetPosition());
+      transform->SetLocalRotate(transform->GetRotate());
+      transform->SetLocalScale(transform->GetScale());
+    }
+
+    UpdateEntityTransformHierarchy(entity);
+  }
+
+  in_hierarchy_update_ = false;
+}
+
+void MapScene::OnLocalTransformChanged(kEntityId entity) {
+  if (in_hierarchy_update_) return;
+  in_hierarchy_update_ = true;
+
+  auto transform = object_manager_->GetProperty<Transform>(entity);
+  auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
+
+  if (transform && node_info) {
+    if (HasParent(entity)) {
+      if (auto parent_transform =
+              object_manager_->GetProperty<Transform>(node_info->parent)) {
+        const glm::vec3 p_pos = parent_transform->GetPosition();
+        const glm::quat p_rot = parent_transform->GetRotationQuat();
+        const glm::vec3 p_scale = parent_transform->GetScale();
+
+        const glm::vec3 world_pos =
+            p_pos + p_rot * (p_scale * transform->GetLocalPosition());
+        const glm::quat world_rot = p_rot * transform->GetLocalRotationQuat();
+        const glm::vec3 world_scale = p_scale * transform->GetLocalScale();
+
+        transform->SetWorldTransformInternal(
+            world_pos, Transform::QuatToEuler(world_rot), world_scale);
+      }
+    } else {
+      transform->SetWorldTransformInternal(
+          transform->GetLocalPosition(), transform->GetLocalRotate(),
+          transform->GetLocalScale());
+    }
+
+    UpdateEntityTransformHierarchy(entity);
+  }
+
+  in_hierarchy_update_ = false;
+}
+
+void MapScene::UpdateEntityTransformHierarchy(kEntityId entity) {
+  auto transform = object_manager_->GetProperty<Transform>(entity);
+  auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
+  if (!transform || !node_info) return;
+
+  const glm::vec3 parent_pos = transform->GetPosition();
+  const glm::quat parent_rot = transform->GetRotationQuat();
+  const glm::vec3 parent_scale = transform->GetScale();
+
+  for (kEntityId child_id : node_info->children) {
+    if (!GetRegistry().valid(child_id)) continue;
+    auto child_transform = object_manager_->GetProperty<Transform>(child_id);
+    if (!child_transform) continue;
+
+    const glm::vec3 child_local_pos = child_transform->GetLocalPosition();
+    const glm::quat child_local_rot = child_transform->GetLocalRotationQuat();
+    const glm::vec3 child_local_scale = child_transform->GetLocalScale();
+
+    const glm::vec3 world_pos =
+        parent_pos + parent_rot * (parent_scale * child_local_pos);
+    const glm::quat world_rot = parent_rot * child_local_rot;
+    const glm::vec3 world_scale = parent_scale * child_local_scale;
+
+    child_transform->SetWorldTransformInternal(
+        world_pos, Transform::QuatToEuler(world_rot), world_scale);
+
+    UpdateEntityTransformHierarchy(child_id);
+  }
+}
+
+void MapScene::UpdateInterpolatedHierarchy() {
+  for (kEntityId entity : entities_) {
+    if (!HasParent(entity)) continue;
+    auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
+    auto parent_transform =
+        object_manager_->GetProperty<Transform>(node_info->parent);
+    auto child_transform = object_manager_->GetProperty<Transform>(entity);
+    if (!parent_transform || !child_transform) continue;
+
+    const glm::vec3 p_pos = parent_transform->GetInterpolatedPosition();
+    const glm::quat p_rot = Transform::EulerToQuat(
+        parent_transform->GetInterpolatedRotation());
+    const glm::vec3 p_scale = parent_transform->GetInterpolatedScale();
+
+    const glm::vec3 child_local_pos = child_transform->GetLocalPosition();
+    const glm::quat child_local_rot = child_transform->GetLocalRotationQuat();
+    const glm::vec3 child_local_scale = child_transform->GetLocalScale();
+
+    const glm::vec3 interp_pos =
+        p_pos + p_rot * (p_scale * child_local_pos);
+    const glm::quat interp_rot = p_rot * child_local_rot;
+    const glm::vec3 interp_scale = p_scale * child_local_scale;
+
+    child_transform->SetInterpolatedTransformInternal(
+        interp_pos, Transform::QuatToEuler(interp_rot), interp_scale);
+  }
+}
+
+void MapScene::ProcessOnFrame(float alpha) {
+  GameScene::ProcessOnFrame(alpha);
+  UpdateInterpolatedHierarchy();
+}
+
+void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
+                              bool keep_world_transform) {
+  if (!GetRegistry().valid(entity)) return;
+  auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
+  auto transform = object_manager_->GetProperty<Transform>(entity);
+  if (!node_info || !transform) return;
+
+  if (node_info->parent == new_parent) return;
+
+  // Remove from old parent's children
+  if (node_info->parent != entt::null && GetRegistry().valid(node_info->parent)) {
+    if (auto old_p_info =
+            object_manager_->GetProperty<NodeInfo>(node_info->parent)) {
+      std::erase(old_p_info->children, entity);
+    }
+  }
+
+  node_info->parent = new_parent;
+
+  // Add to new parent's children
+  if (new_parent != entt::null && GetRegistry().valid(new_parent)) {
+    if (auto new_p_info = object_manager_->GetProperty<NodeInfo>(new_parent)) {
+      if (std::find(new_p_info->children.begin(), new_p_info->children.end(),
+                    entity) == new_p_info->children.end()) {
+        new_p_info->children.push_back(entity);
+      }
+    }
+  }
+
+  if (keep_world_transform) {
+    if (new_parent != entt::null && GetRegistry().valid(new_parent)) {
+      if (auto p_trans = object_manager_->GetProperty<Transform>(new_parent)) {
+        const glm::vec3 p_pos = p_trans->GetPosition();
+        const glm::quat p_rot_inv = glm::inverse(p_trans->GetRotationQuat());
+        const glm::vec3 p_scale = p_trans->GetScale();
+        const glm::vec3 safe_scale = glm::vec3(
+            std::abs(p_scale.x) < 1e-6f ? 1.0f : p_scale.x,
+            std::abs(p_scale.y) < 1e-6f ? 1.0f : p_scale.y,
+            std::abs(p_scale.z) < 1e-6f ? 1.0f : p_scale.z);
+        transform->SetLocalPosition(
+            (p_rot_inv * (transform->GetPosition() - p_pos)) / safe_scale);
+        transform->SetLocalRotate(
+            Transform::QuatToEuler(p_rot_inv * transform->GetRotationQuat()));
+        transform->SetLocalScale(transform->GetScale() / safe_scale);
+      }
+    } else {
+      transform->SetLocalPosition(transform->GetPosition());
+      transform->SetLocalRotate(transform->GetRotate());
+      transform->SetLocalScale(transform->GetScale());
+    }
+  } else {
+    if (new_parent != entt::null && GetRegistry().valid(new_parent)) {
+      if (auto p_trans = object_manager_->GetProperty<Transform>(new_parent)) {
+        const glm::vec3 world_pos =
+            p_trans->GetPosition() +
+            p_trans->GetRotationQuat() *
+                (p_trans->GetScale() * transform->GetLocalPosition());
+        const glm::quat world_rot =
+            p_trans->GetRotationQuat() * transform->GetLocalRotationQuat();
+        const glm::vec3 world_scale =
+            p_trans->GetScale() * transform->GetLocalScale();
+        transform->SetWorldTransformInternal(
+            world_pos, Transform::QuatToEuler(world_rot), world_scale);
+      }
+    }
+  }
+
+  UpdateEntityTransformHierarchy(entity);
+}
+
 GameObject MapScene::Find(std::string_view path) {
   if (path.empty()) path = ".";
   auto it = by_path_.find(std::string(path));
@@ -519,6 +811,11 @@ void MapScene::DestroyPending() {
         behaviours_by_entity_.erase(it);
       }
       if (auto node = object_manager_->GetProperty<NodeInfo>(entity)) {
+        if (node->parent != entt::null && GetRegistry().valid(node->parent)) {
+          if (auto p_info = object_manager_->GetProperty<NodeInfo>(node->parent)) {
+            std::erase(p_info->children, entity);
+          }
+        }
         by_path_.erase(node->path);
         by_uid_.erase(node->uid);
       }

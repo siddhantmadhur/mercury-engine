@@ -111,6 +111,13 @@ using RayCastResult = std::pair<kEntityId, glm::vec3>;
  */
 enum CollisionType { kCollisionEnter, kCollisionPersisted, kCollisionLeave };
 
+enum class ForceMode {
+  kForce,          // Continuous force, using mass (F = m * a)
+  kImpulse,        // Instantaneous impulse, using mass
+  kVelocityChange, // Instantaneous velocity change, ignoring mass
+  kAcceleration,   // Continuous acceleration, ignoring mass
+};
+
 enum PhysicsProperty {
   kFriction,
   kRestitution,
@@ -201,9 +208,9 @@ class PhysicsEngine {
   void SetGravity(glm::vec3 gravity);
 
   // Forces and impulses act on dynamic bodies at the next physics step.
-  void AddForce(kEntityId self, glm::vec3 force);
+  void AddForce(kEntityId self, glm::vec3 force, ForceMode mode = ForceMode::kForce);
   void AddImpulse(kEntityId self, glm::vec3 impulse);
-  void AddTorque(kEntityId self, glm::vec3 torque);
+  void AddTorque(kEntityId self, glm::vec3 torque, ForceMode mode = ForceMode::kForce);
   void SetAngularVelocity(kEntityId self, glm::vec3 radians_per_second);
   glm::vec3 GetAngularVelocity(kEntityId self);
 

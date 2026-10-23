@@ -316,6 +316,7 @@ add_subdirectory(third_party/googletest EXCLUDE_FROM_ALL)
 add_executable(mercury_test
         tests/mtext_test.cc
         tests/map_test.cc
+        tests/hierarchy_test.cc
         tests/reflection_test.cc
         tests/primitives_test.cc
         tests/ui_test.cc)

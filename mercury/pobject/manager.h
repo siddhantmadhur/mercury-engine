@@ -99,6 +99,7 @@ class PObjectManager {
   }
 
   entt::registry &GetRegistry() { return registry_; }
+  const entt::registry &GetRegistry() const { return registry_; }
 
   /**
    * Moves object to a static buffer which means while its data cannot be

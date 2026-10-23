@@ -15,6 +15,7 @@
 #include "Jolt/Physics/Collision/Shape/CylinderShape.h"
 #include "Jolt/Physics/Collision/Shape/SphereShape.h"
 #include "Jolt/Physics/Collision/Shape/PlaneShape.h"
+#include "components/components.h"
 #include "properties/transform.h"
 
 namespace Mercury {
@@ -241,25 +242,66 @@ void PhysicsEngine::SetGravity(glm::vec3 gravity) {
   physics_system_.SetGravity(JPH::Vec3(gravity.x, gravity.y, gravity.z));
 }
 
-void PhysicsEngine::AddForce(kEntityId self, glm::vec3 force) {
+void PhysicsEngine::AddForce(kEntityId self, glm::vec3 force, ForceMode mode) {
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return;
-  physics_system_.GetBodyInterface().AddForce(
-      it->second, JPH::Vec3(force.x, force.y, force.z));
+  auto& bi = physics_system_.GetBodyInterface();
+  const JPH::BodyID body_id = it->second;
+
+  float mass = 1.0f;
+  if (auto rb = object_manager_.GetProperty<Rigidbody>(self)) {
+    if (rb->mass > 0.0f) mass = rb->mass;
+  }
+
+  switch (mode) {
+    case ForceMode::kForce:
+      bi.AddForce(body_id, JPH::Vec3(force.x, force.y, force.z));
+      break;
+    case ForceMode::kImpulse:
+      bi.AddImpulse(body_id, JPH::Vec3(force.x, force.y, force.z));
+      break;
+    case ForceMode::kAcceleration:
+      bi.AddForce(body_id,
+                  JPH::Vec3(force.x * mass, force.y * mass, force.z * mass));
+      break;
+    case ForceMode::kVelocityChange:
+      bi.AddImpulse(body_id,
+                    JPH::Vec3(force.x * mass, force.y * mass, force.z * mass));
+      break;
+  }
 }
 
 void PhysicsEngine::AddImpulse(kEntityId self, glm::vec3 impulse) {
-  auto it = entity_bodies_ref_.find(self);
-  if (it == entity_bodies_ref_.end()) return;
-  physics_system_.GetBodyInterface().AddImpulse(
-      it->second, JPH::Vec3(impulse.x, impulse.y, impulse.z));
+  AddForce(self, impulse, ForceMode::kImpulse);
 }
 
-void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque) {
+void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque, ForceMode mode) {
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return;
-  physics_system_.GetBodyInterface().AddTorque(
-      it->second, JPH::Vec3(torque.x, torque.y, torque.z));
+  auto& bi = physics_system_.GetBodyInterface();
+  const JPH::BodyID body_id = it->second;
+
+  float mass = 1.0f;
+  if (auto rb = object_manager_.GetProperty<Rigidbody>(self)) {
+    if (rb->mass > 0.0f) mass = rb->mass;
+  }
+
+  switch (mode) {
+    case ForceMode::kForce:
+      bi.AddTorque(body_id, JPH::Vec3(torque.x, torque.y, torque.z));
+      break;
+    case ForceMode::kImpulse:
+      bi.AddAngularImpulse(body_id, JPH::Vec3(torque.x, torque.y, torque.z));
+      break;
+    case ForceMode::kAcceleration:
+      bi.AddTorque(body_id,
+                   JPH::Vec3(torque.x * mass, torque.y * mass, torque.z * mass));
+      break;
+    case ForceMode::kVelocityChange:
+      bi.AddAngularImpulse(body_id,
+                           JPH::Vec3(torque.x * mass, torque.y * mass, torque.z * mass));
+      break;
+  }
 }
 
 void PhysicsEngine::SetAngularVelocity(kEntityId self, glm::vec3 velocity) {

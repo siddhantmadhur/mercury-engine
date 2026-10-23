@@ -5,6 +5,7 @@
 #ifndef MERCURYENGINE_TRANSFORM_H
 #define MERCURYENGINE_TRANSFORM_H
 #include "glm/detail/func_packing_simd.inl"
+#include <functional>
 #include <vector>
 
 #include "glm/gtc/quaternion.hpp"
@@ -29,6 +30,30 @@ class Transform {
   glm::vec3 GetInterpolatedPosition() const;
   glm::vec3 GetScale() const;
   void SetScale(glm::vec3);
+
+  // Local transform relative to parent.
+  glm::vec3 GetLocalPosition() const { return local_position_; }
+  void SetLocalPosition(glm::vec3);
+  glm::vec3 GetLocalRotate() const { return local_rotation_; }
+  void SetLocalRotate(glm::vec3);
+  glm::quat GetLocalRotationQuat() const { return EulerToQuat(local_rotation_); }
+  glm::vec3 GetLocalScale() const { return local_scale_; }
+  void SetLocalScale(glm::vec3);
+
+  void SetOnWorldChanged(std::function<void()> callback) {
+    on_world_changed_ = std::move(callback);
+  }
+  void SetOnLocalChanged(std::function<void()> callback) {
+    on_local_changed_ = std::move(callback);
+  }
+  void SetOnChanged(std::function<void()> callback) {
+    on_world_changed_ = std::move(callback);
+  }
+  void SetWorldTransformInternal(glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
+  void SetWorldPositionInternal(glm::vec3 pos);
+  void SetWorldRotationInternal(glm::vec3 rot);
+  void SetWorldScaleInternal(glm::vec3 scale);
+  void SetInterpolatedTransformInternal(glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
 
   glm::vec3 GetVelocity() const;
   void SetVelocity(glm::vec3);
@@ -81,6 +106,12 @@ class Transform {
   glm::vec3 velocity_{};
   glm::vec3 rotation_{};
   glm::vec3 scale_ = glm::vec3(1.0);
+
+  glm::vec3 local_position_ = glm::vec3(0.0f);
+  glm::vec3 local_rotation_ = glm::vec3(0.0f);
+  glm::vec3 local_scale_ = glm::vec3(1.0f);
+  std::function<void()> on_world_changed_;
+  std::function<void()> on_local_changed_;
   /*
    * Position only updates per tick (which can be significantly lower than fps)
    * so this makes sure its smoothed out

@@ -65,4 +65,7 @@
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
+    <ui:VisualElement style="position: absolute; flex-grow: 1; justify-content: center; align-self: center; top: 16px;">
+        <ui:Label text="dev release" style="color: rgba(255, 255, 255, 0.577); font-size: 24.9px;" />
+    </ui:VisualElement>
 </ui:UXML>
