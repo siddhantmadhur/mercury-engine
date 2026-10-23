@@ -242,7 +242,19 @@ void PhysicsEngine::SetGravity(glm::vec3 gravity) {
   physics_system_.SetGravity(JPH::Vec3(gravity.x, gravity.y, gravity.z));
 }
 
+namespace {
+// Jolt asserts (SIGTRAP, exit 133) on NaN/inf vectors; e.g. glm::normalize of
+// a zero-length vector yields NaN.
+bool IsFiniteVec(const glm::vec3& v) {
+  return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+}  // namespace
+
 void PhysicsEngine::AddForce(kEntityId self, glm::vec3 force, ForceMode mode) {
+  if (!IsFiniteVec(force)) {
+    PDebug::error("AddForce ignored: non-finite force (normalized a zero vector?)");
+    return;
+  }
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return;
   auto& bi = physics_system_.GetBodyInterface();
@@ -276,6 +288,10 @@ void PhysicsEngine::AddImpulse(kEntityId self, glm::vec3 impulse) {
 }
 
 void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque, ForceMode mode) {
+  if (!IsFiniteVec(torque)) {
+    PDebug::error("AddTorque ignored: non-finite torque (normalized a zero vector?)");
+    return;
+  }
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return;
   auto& bi = physics_system_.GetBodyInterface();
@@ -305,6 +321,7 @@ void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque, ForceMode mode) 
 }
 
 void PhysicsEngine::SetAngularVelocity(kEntityId self, glm::vec3 velocity) {
+  if (!IsFiniteVec(velocity)) return;
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return;
   physics_system_.GetBodyInterface().SetAngularVelocity(
