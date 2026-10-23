@@ -13,6 +13,12 @@
 namespace Mercury {
 InputManager::InputManager() {}
 
+void InputManager::Initialize(GLFWwindow* window) {
+  window_ = window;
+  // Apply a cursor mode requested before the window existed.
+  if (cursor_locked_ || !cursor_visible_) SetCursorLocked(cursor_locked_);
+}
+
 Key InputManager::KeyFromName(std::string_view name) {
   std::string key(name);
   std::transform(key.begin(), key.end(), key.begin(),
@@ -106,11 +112,57 @@ void InputManager::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
 }
 void InputManager::HandleCursorCallback(GLFWwindow* window, double xpos,
                                         double ypos) {
-  this->mouse_position_ = glm::vec2(xpos, ypos);
+  const glm::vec2 position(xpos, ypos);
+  if (have_mouse_position_) frame_mouse_delta_ += position - mouse_position_;
+  have_mouse_position_ = true;
+  this->mouse_position_ = position;
+}
+
+void InputManager::SetCursorLocked(bool locked) {
+  cursor_locked_ = locked;
+  if (!window_) window_ = glfwGetCurrentContext();
+  if (!window_) return;
+  if (locked) {
+    glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+#if !defined(__EMSCRIPTEN__)
+    if (glfwRawMouseMotionSupported()) {
+      glfwSetInputMode(window_, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+    }
+#endif
+  } else {
+    glfwSetInputMode(window_, GLFW_CURSOR,
+                     cursor_visible_ ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+  }
+}
+
+void InputManager::SetCursorVisible(bool visible) {
+  cursor_visible_ = visible;
+  if (!cursor_locked_) SetCursorLocked(false);
+}
+
+void InputManager::PollGamepads() {
+  gamepad_ = GamepadState{};
+#if !defined(__EMSCRIPTEN__)
+  for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; jid++) {
+    if (!glfwJoystickIsGamepad(jid)) continue;
+    GLFWgamepadstate state;
+    if (!glfwGetGamepadState(jid, &state)) continue;
+    gamepad_.connected = true;
+    for (int i = 0; i < 15; i++) gamepad_.buttons[i] = state.buttons[i] == GLFW_PRESS;
+    for (int i = 0; i < 6; i++) gamepad_.axes[i] = state.axes[i];
+    // Triggers report -1..1; Unity reports 0..1.
+    gamepad_.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] =
+        (gamepad_.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] + 1.0f) * 0.5f;
+    gamepad_.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] =
+        (gamepad_.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] + 1.0f) * 0.5f;
+    break;
+  }
+#endif
 }
 void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
                                         double yoffset) {
   this->scroll_offset_ = glm::vec2(xoffset, yoffset);
+  frame_scroll_ += glm::vec2(xoffset, yoffset);
   InputEvent event;
   event.type = InputEvent::Type::kScroll;
   event.scroll = glm::vec2(xoffset, yoffset);

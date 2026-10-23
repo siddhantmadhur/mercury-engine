@@ -216,18 +216,40 @@ Built-in components:
 |---|---|
 | `Transform` | `position`, `rotation` (Euler degrees, applied X, then Y, then Z) and `scale` |
 | `SpriteRenderer` | An unlit quad on the XY plane, sized by the scale (2D) |
-| `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file |
-| `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background` |
-| `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity` and `ambient` |
-| `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity factor |
-| `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider` | Collision shapes, scaled by the Transform; `is_trigger` reports contacts without pushing |
+| `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file (its node tree, materials, skin and clips; `node` draws one part, `materials` overrides them) |
+| `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture` and `post_processing` |
+| `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity`, `ambient` and `ground_ambient` |
+| `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
+| `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps (`OnTriggerEnter/Stay/Exit`) without pushing |
+| `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |
+| `Animator` | Plays a `.manim` controller (parameters, blend trees, transitions, layers) on the node's model |
+| `AudioSource`, `AudioListener` | Sound playback (miniaudio) with 3D attenuation; `Play`, `Stop`, `PlayOneShot` |
+| `TextMesh` | SDF text in the world (TextMeshPro 3D) |
+| `PostProcessVolume` | Picks a `PostProcessProfile` asset (bloom, vignette, tonemapping) |
 | `UIDocument` | Shows a `.uxml` document on screen (see UI Toolkit below) |
 
 Shapes have unit size at scale 1 (a 1 x 1 x 1 cube, a sphere 1 across, a capsule 1 across and 2
-tall), like Unity's. Asset types are `Material`, `PhysicsMaterial` and `PanelSettings`. Gravity is set in the
-`.mproj` with `[physics] gravity = Vector3(0, -9.81, 0)`. A node's position is relative to its
-parent; maps are flattened to world positions when loaded, and rotation and scale are not
-inherited.
+tall), like Unity's. Asset types are `Material`, `PhysicsMaterial`, `PanelSettings`,
+`RenderTexture`, `PostProcessProfile` and the data assets scripts declare. Gravity and the tick
+rate are set in the `.mproj` with `[physics] gravity = Vector3(0, -9.81, 0)` and
+`tick_rate = 50`; `[layers] names` and `[tags] names` list the node layers and tags (set on a
+node with `layer=` and `tag=`), and `[render]` holds the SSAO and outline settings. A node's
+position is relative to its parent; maps are flattened to world positions when loaded, and
+rotation and scale are not inherited.
+
+Other files:
+
+- `.mprefab`: a node tree in the map format. A map node with
+  `instance="res://gun.mprefab"` copies it; component sections for the instance (or its
+  children) override single values, and `removed=true` drops a component. Scripts make copies
+  with `Instantiate(...)`.
+- `.manim`: an animator controller (`[parameter]`, `[layer]`, `[state]` with a clip or a 1D/2D
+  blend tree, `[transition]` with conditions and exit time).
+- `.minput`: input actions (Unity's Input System): `[action name="Player/Jump" type="button"]`
+  with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"`, and 2D vector
+  `composites`. The `.mproj` names it in `[input] actions`.
+- `.mimport` next to a model: `convention = "unity"` imports it the way Unity does (180 degrees
+  about Y, file units); `[import] model_convention` in the `.mproj` sets the default.
 
 #### Scripts
 
@@ -246,9 +268,32 @@ class Ball : public Mercury::Behaviour {
 MERCURY_SCRIPT(Ball);
 ```
 
+The other callbacks follow Unity: `Awake`, `OnEnable`/`OnDisable`, `OnLateFrame` (LateUpdate),
+`OnTriggerEnter/Stay/Exit`, `OnCollisionEnter/Stay/Leave` and `OnDestroy`. Inside `OnTick`,
+`Time::GetDeltaTime()` is the fixed step, as in FixedUpdate.
+
 Scripts can push bodies with `Physics().AddForce(GetEntity(), force)` (also `AddImpulse`,
-`AddTorque`, `SetAngularVelocity`), turn things with `GetTransform().SetRotate(...)`, and remove
-objects with `Destroy(object)`.
+`AddTorque`, `SetAngularVelocity`), cast rays with `Physics().Raycast(origin, direction,
+distance, layer_mask)`, turn things with `GetTransform().SetRotate(...)`, find objects with
+`Find`, `FindWithTag` and `FindObjectsOfType<T>()`, make them with `Instantiate(prefab, ...)`,
+`CreateGameObject` and `AddComponent`, switch them with `SetActive`/`SetLayer`, and remove them
+with `Destroy(object)`. `Mathf`, `Random` and `Time` match Unity's.
+
+An `Event` field is a UnityEvent: the map saves calls to other scripts' methods, which those
+scripts list in `ReflectMethods`, and code can `AddListener`:
+
+```cpp
+void Reflect(Mercury::Reflector& r) override { r.Field("entered", entered); }
+void ReflectMethods(Mercury::MethodReflector& m) override {
+  m.Method("TakeDamage", [this](float amount) { TakeDamage(amount); });
+}
+Mercury::Event entered;  // entered = [[NodePath("Player"), "Health", "TakeDamage", 15.0]]
+```
+
+`MERCURY_DATA_ASSET(Type)` registers a reflected struct as a `.masset` type (a
+ScriptableObject); load one with `Assets().LoadAs<Type>(path)`. `GetInputActions()` returns the
+project's input actions: `Find("Player/Jump")`, the `performed`/`started`/`canceled` signals
+and `ReadValue<glm::vec2>()`.
 
 Fields listed in `Reflect` appear in the Inspector and are saved in maps. Supported field types are
 bool, int, float, std::string, glm::vec2/vec3, glm::vec4 (a color), `NodeRef`, `AssetRef` and
@@ -310,12 +355,26 @@ canvas drawn by the game's renderer (with a Preview mode to click through it), a
 for attributes, classes, bindings and inline or selector styles. **+ Create** in the Project panel
 makes new UI documents, style sheets and panel settings.
 
+#### Importing a Unity project
+
+`scripts/unity_import/unity_import.py` converts a Unity project's scenes, prefabs, materials,
+ScriptableObjects, animator controllers, input actions, UXML/USS, panel settings and volume
+profiles to Mercury files, and copies the models, textures, sounds and fonts. Unity's left-handed
+axes become Mercury's by mirroring Z. Scripts are ported by hand; a script map (Python) tells the
+importer which C++ script takes each C# script and how to convert its fields.
+`project-iso-mercury/import/run_import.sh` is a complete example, and
+`python3 -m unittest discover -s scripts/unity_import` tests the conversions.
+
 #### Testing
 
 `ctest --test-dir build` runs the unit tests for the formats, maps, reflection, primitive
 meshes, rotations, `.mpack` archives and the UI Toolkit (USS, UXML, cascade, layout, events,
-bindings, drawing).
-`mercury_editor_smoke <project> <script>` replays scripted input into the editor. Set
+bindings, drawing), and gameplay (events, triggers, raycasts, CharacterController, prefabs,
+models, animator controllers, input scripts).
+`mercury_editor_smoke <project> <script>` replays scripted input into the editor, and
+`MERCURY_INPUT_SCRIPT=walk.txt` does the same for a game (`120 press w`, `200 look 30 0`,
+`240 tap f`, `260 capture shot.png`, `300 quit`; see `mercury/input/input_script.h`), stepping
+exactly 1/60 s per frame so runs repeat. Set
 `MERCURY_CAPTURE=frame.png` (plus `MERCURY_CAPTURE_FRAME=n` and `MERCURY_CAPTURE_QUIT=1`) on any
 Mercury program to save a screenshot of a frame.
 

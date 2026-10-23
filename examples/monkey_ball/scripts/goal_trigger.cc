@@ -5,7 +5,7 @@
 
 MERCURY_SCRIPT(GoalTrigger);
 
-void GoalTrigger::OnCollisionEnter(Mercury::GameObject other) {
+void GoalTrigger::OnTriggerEnter(Mercury::GameObject other) {
   if (triggered_) return;
   if (!other.GetBehaviour<PlayerBall>()) return;
 

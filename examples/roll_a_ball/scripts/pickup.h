@@ -11,7 +11,7 @@ class Pickup : public Mercury::Behaviour {
     r.Field("points", points);
   }
 
-  void OnCollisionEnter(Mercury::GameObject other) override;
+  void OnTriggerEnter(Mercury::GameObject other) override;
 
   Mercury::NodeRef game{"."};
   int points = 1;

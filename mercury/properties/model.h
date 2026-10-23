@@ -1,0 +1,204 @@
+/*
+ * model.h
+ *
+ * A 3D model file (FBX, glTF, OBJ, ...) loaded through assimp, keeping what
+ * Unity keeps from an imported model: the node hierarchy, one mesh per
+ * material, the materials, skins (bones and weights) and animation clips.
+ *
+ * Import settings live next to the file in "<file>.mimport" (Unity's .meta):
+ *
+ *   [mimport]
+ *   convention = "unity"   ; "native" (default) or "unity"
+ *   scale = 1.0            ; extra uniform scale
+ *   use_file_scale = true  ; convert the file's units to meters
+ *
+ * "unity" lays the model out the way Unity's importer does (axis conversion
+ * on the top nodes, the file's units converted to meters, a single top node
+ * becoming the model root), expressed in Mercury's coordinates, so scenes
+ * converted from Unity line up with their models.
+ */
+#ifndef MERCURY_PROPERTIES_MODEL_H
+#define MERCURY_PROPERTIES_MODEL_H
+
+#include <cstdint>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace Mercury {
+
+/**
+ * @brief Vertex of the model renderer
+ */
+struct ModelVertex {
+  glm::vec3 position = glm::vec3(0.0f);
+  glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
+  glm::vec2 uv = glm::vec2(0.0f);
+  glm::vec4 color = glm::vec4(1.0f);
+  glm::uvec4 joints = glm::uvec4(0);  // bone indices into the mesh's skin
+  glm::vec4 weights = glm::vec4(0.0f);
+};
+static_assert(sizeof(ModelVertex) == 80);
+
+/**
+ * @brief Decoded RGBA8 image shared by everything that uses it
+ */
+struct ImageData {
+  int width = 0;
+  int height = 0;
+  std::vector<uint8_t> pixels;  // width * height * 4
+  bool srgb = true;             // color data (false: masks, normals)
+  uint64_t id = 0;              // unique per image, for GPU caches
+  std::string source;           // file it came from, for messages
+
+  static std::shared_ptr<ImageData> Load(const std::string& path);
+  static std::shared_ptr<ImageData> FromMemory(const uint8_t* data, size_t size,
+                                               std::string source);
+  static std::shared_ptr<ImageData> FromPixels(int width, int height,
+                                               std::vector<uint8_t> pixels,
+                                               std::string source);
+  static uint64_t NextId();
+};
+
+/**
+ * @brief Immutable triangle geometry, uploaded once and shared by every node
+ * that draws it
+ */
+struct MeshGeometry {
+  std::vector<ModelVertex> vertices;
+  std::vector<uint32_t> indices;
+  glm::vec3 bounds_min = glm::vec3(0.0f);
+  glm::vec3 bounds_max = glm::vec3(0.0f);
+  bool skinned = false;
+  uint64_t id = 0;  // unique, for GPU caches
+
+  void ComputeBounds();
+  static std::shared_ptr<MeshGeometry> Create(std::vector<ModelVertex> vertices,
+                                              std::vector<uint32_t> indices);
+};
+
+struct ModelMaterial {
+  std::string name;
+  glm::vec4 color = glm::vec4(1.0f);  // sRGB, like Unity's material colors
+  std::shared_ptr<ImageData> texture;
+  float metallic = 0.0f;
+  float smoothness = 0.5f;
+  bool transparent = false;
+};
+
+struct ModelBone {
+  int node = -1;                  // node the bone follows
+  glm::mat4 offset = glm::mat4(1.0f);  // mesh space -> bone space (bind)
+};
+
+struct ModelMesh {
+  std::string name;
+  int node = -1;  // node that owns the mesh
+  int material = 0;
+  std::shared_ptr<MeshGeometry> geometry;
+  std::vector<ModelBone> bones;  // empty for rigid meshes
+};
+
+struct ModelNode {
+  std::string name;
+  int parent = -1;
+  std::vector<int> children;
+  std::vector<int> meshes;
+  glm::vec3 position = glm::vec3(0.0f);
+  glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+  glm::vec3 scale = glm::vec3(1.0f);
+
+  glm::mat4 LocalMatrix() const;
+};
+
+/**
+ * @brief Keyframes of one node
+ */
+struct AnimationChannel {
+  int node = -1;
+  std::vector<float> position_times;
+  std::vector<glm::vec3> positions;
+  std::vector<float> rotation_times;
+  std::vector<glm::quat> rotations;
+  std::vector<float> scale_times;
+  std::vector<glm::vec3> scales;
+};
+
+struct AnimationClip {
+  std::string name;   // e.g. "Armature|Jog_Fwd_Loop"
+  float duration = 0.0f;  // seconds
+  std::vector<AnimationChannel> channels;
+
+  // Samples node `channel` at time t (seconds, clamped) into position,
+  // rotation and scale; values the clip does not animate are left alone.
+  void Sample(const AnimationChannel& channel, float t, glm::vec3& position,
+              glm::quat& rotation, glm::vec3& scale) const;
+};
+
+enum class ModelConvention { kNative, kUnity };
+
+struct ModelImportSettings {
+  ModelConvention convention = ModelConvention::kNative;
+  float scale = 1.0f;
+  bool use_file_scale = true;
+
+  // Reads "<model path>.mimport" if it exists; otherwise `defaults`.
+  static ModelImportSettings ForFile(const std::string& model_path,
+                                     const ModelImportSettings& defaults);
+};
+
+class Model {
+ public:
+  static std::shared_ptr<Model> Load(const std::string& path,
+                                     const ModelImportSettings& settings,
+                                     std::string* error = nullptr);
+
+  const std::vector<ModelNode>& Nodes() const { return nodes_; }
+  const std::vector<ModelMesh>& Meshes() const { return meshes_; }
+  const std::vector<ModelMaterial>& Materials() const { return materials_; }
+  const std::vector<AnimationClip>& Clips() const { return clips_; }
+  const std::string& GetPath() const { return path_; }
+  // The root node's transform is the drawing object's (Unity convention),
+  // so drawing starts below it.
+  bool RootOnObject() const { return root_on_object_; }
+
+  int FindNode(std::string_view name) const;
+  // Clip by full name, or by the part after "|" (Armature|Run -> Run).
+  const AnimationClip* FindClip(std::string_view name) const;
+
+  // Model-space matrix of every node in the bind (rest) pose.
+  const std::vector<glm::mat4>& BindGlobals() const { return bind_globals_; }
+
+  // Every triangle of a node's meshes (with its children's when asked), in
+  // that node's space, for collision.
+  void CollectTriangles(int node, bool include_children,
+                        std::vector<glm::vec3>& vertices,
+                        std::vector<uint32_t>& indices) const;
+
+  glm::vec3 BoundsMin() const { return bounds_min_; }
+  glm::vec3 BoundsMax() const { return bounds_max_; }
+
+  // Computes model-space matrices for node local matrices given in `locals`.
+  void ComputeGlobals(const std::vector<glm::mat4>& locals,
+                      std::vector<glm::mat4>& globals) const;
+
+ private:
+  std::string path_;
+  std::vector<ModelNode> nodes_;  // parents before children; 0 is the root
+  std::vector<ModelMesh> meshes_;
+  std::vector<ModelMaterial> materials_;
+  std::vector<AnimationClip> clips_;
+  std::vector<glm::mat4> bind_globals_;
+  glm::vec3 bounds_min_ = glm::vec3(0.0f);
+  glm::vec3 bounds_max_ = glm::vec3(0.0f);
+  bool root_on_object_ = false;
+};
+
+}  // namespace Mercury
+
+#endif  // MERCURY_PROPERTIES_MODEL_H

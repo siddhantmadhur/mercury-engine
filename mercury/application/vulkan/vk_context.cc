@@ -202,36 +202,58 @@ bool Context::PickPhysicalDevice() {
 
     bool has_dynamic_rendering = false;
     bool has_sync2 = false;
+    bool has_demote = false;
+
+    VkPhysicalDeviceVulkan12Features features12 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceFeatures2 features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &features12};
 
     if (properties.apiVersion >= VK_API_VERSION_1_3) {
       VkPhysicalDeviceVulkan13Features features13 = {
           .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-      VkPhysicalDeviceFeatures2 features = {
-          .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-          .pNext = &features13};
+      features12.pNext = &features13;
       vkGetPhysicalDeviceFeatures2(candidate, &features);
       has_dynamic_rendering = features13.dynamicRendering;
       has_sync2 = features13.synchronization2;
+      has_demote = features13.shaderDemoteToHelperInvocation;
     } else if (HasDeviceExtension(candidate,
                                   VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) &&
                HasDeviceExtension(candidate,
-                                  VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)) {
+                                  VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) &&
+               HasDeviceExtension(
+                   candidate,
+                   VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME)) {
+      VkPhysicalDeviceShaderDemoteToHelperInvocationFeaturesEXT demote = {
+          .sType =
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT};
       VkPhysicalDeviceDynamicRenderingFeaturesKHR dyn_rendering = {
           .sType =
-              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
+              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
+          .pNext = &demote};
       VkPhysicalDeviceSynchronization2FeaturesKHR sync2 = {
           .sType =
               VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR,
           .pNext = &dyn_rendering};
-      VkPhysicalDeviceFeatures2 features = {
-          .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-          .pNext = &sync2};
+      features12.pNext = &sync2;
       vkGetPhysicalDeviceFeatures2(candidate, &features);
       has_dynamic_rendering = dyn_rendering.dynamicRendering;
       has_sync2 = sync2.synchronization2;
+      has_demote = demote.shaderDemoteToHelperInvocation;
     }
 
-    if (!has_dynamic_rendering || !has_sync2) continue;
+    if (!has_dynamic_rendering || !has_sync2 || !has_demote ||
+        !features.features.independentBlend) {
+      continue;
+    }
+    // Bindless textures for the model renderer.
+    if (!features12.runtimeDescriptorArray ||
+        !features12.descriptorBindingPartiallyBound ||
+        !features12.descriptorBindingSampledImageUpdateAfterBind ||
+        !features12.shaderSampledImageArrayNonUniformIndexing) {
+      continue;
+    }
 
     uint32_t family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(candidate, &family_count,
@@ -301,22 +323,45 @@ bool Context::CreateDevice() {
 
   VkPhysicalDeviceVulkan13Features features13 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+  VkPhysicalDeviceVulkan12Features features12 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+  features12.runtimeDescriptorArray = VK_TRUE;
+  features12.descriptorBindingPartiallyBound = VK_TRUE;
+  features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+  features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+  features.pNext = &features12;
+
+  VkPhysicalDeviceFeatures supported = {};
+  vkGetPhysicalDeviceFeatures(physical_device, &supported);
+  features.features.samplerAnisotropy = supported.samplerAnisotropy;
+  // The model renderer's main pass blends color but not its normal target.
+  features.features.independentBlend = VK_TRUE;
+  sampler_anisotropy = supported.samplerAnisotropy == VK_TRUE;
+
   VkPhysicalDeviceDynamicRenderingFeaturesKHR dyn_rendering = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
   VkPhysicalDeviceSynchronization2FeaturesKHR sync2 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
+  VkPhysicalDeviceShaderDemoteToHelperInvocationFeaturesEXT demote = {
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT};
 
   if (properties.apiVersion >= VK_API_VERSION_1_3) {
     features13.dynamicRendering = VK_TRUE;
     features13.synchronization2 = VK_TRUE;
-    features.pNext = &features13;
+    // HLSL's discard compiles to demote-to-helper for Vulkan 1.3 targets.
+    features13.shaderDemoteToHelperInvocation = VK_TRUE;
+    features12.pNext = &features13;
   } else {
     extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    extensions.push_back(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME);
     dyn_rendering.dynamicRendering = VK_TRUE;
     sync2.synchronization2 = VK_TRUE;
+    demote.shaderDemoteToHelperInvocation = VK_TRUE;
+    dyn_rendering.pNext = &demote;
     sync2.pNext = &dyn_rendering;
-    features.pNext = &sync2;
+    features12.pNext = &sync2;
   }
 
   VkDeviceCreateInfo create_info = {

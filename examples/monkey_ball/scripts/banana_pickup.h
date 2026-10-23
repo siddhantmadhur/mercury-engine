@@ -12,7 +12,7 @@ class BananaPickup : public Mercury::Behaviour {
   }
 
   void OnTick(double dt) override;
-  void OnCollisionEnter(Mercury::GameObject other) override;
+  void OnTriggerEnter(Mercury::GameObject other) override;
 
   int points = 100;
   float rotate_speed = 90.0f;

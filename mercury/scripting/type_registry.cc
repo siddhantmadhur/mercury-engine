@@ -101,15 +101,37 @@ bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {
         for (const auto& v : field.enum_values) values.emplace_back(v);
         details.Set("enum", values);
       }
-      if (field.type == FieldType::kAsset && !field.asset_type.empty()) {
+      if ((field.type == FieldType::kAsset || field.type == FieldType::kList) &&
+          !field.asset_type.empty()) {
         details.Set("asset_type", field.asset_type);
       }
+      if (field.type == FieldType::kList) {
+        details.Set("element", FieldTypeName(field.element_type));
+      }
+      if (field.type == FieldType::kEvent) details.Set("event", true);
       if (!field.tooltip.empty()) details.Set("tooltip", field.tooltip);
       if (details.empty()) continue;
       auto& section = document.Add("field");
       section.attributes.Set("script", info->name);
       section.attributes.Set("name", field.name);
       section.properties = std::move(details);
+    }
+    for (const auto& method : info->methods) {
+      auto& section = document.Add("method");
+      section.attributes.Set("script", info->name);
+      section.attributes.Set("name", method.name);
+      section.attributes.Set("arg", method.arg);
+    }
+  }
+  for (const auto& asset : asset_types_) {
+    if (!asset.from_game) continue;
+    auto& section = document.Add("asset");
+    section.attributes.Set("name", asset.name);
+    if (!asset.description.empty()) {
+      section.attributes.Set("description", asset.description);
+    }
+    for (const auto& field : asset.fields) {
+      section.properties.Set(field.name, field.default_value);
     }
   }
   return mtext::SaveFile(path, document);
@@ -167,6 +189,41 @@ bool TypeRegistry::LoadSchema(const std::filesystem::path& path,
     }
     field->asset_type = section.properties.GetString("asset_type");
     field->tooltip = section.properties.GetString("tooltip");
+    if (section.properties.GetBool("event", false)) field->type = FieldType::kEvent;
+    if (auto element = section.properties.Get("element")) {
+      field->type = FieldType::kList;
+      const std::string name = element->ToString().value_or("");
+      for (FieldType t : {FieldType::kBool, FieldType::kInt, FieldType::kFloat,
+                          FieldType::kString, FieldType::kVector2, FieldType::kVector3,
+                          FieldType::kColor, FieldType::kNodeRef, FieldType::kAsset}) {
+        if (name == FieldTypeName(t)) field->element_type = t;
+      }
+    }
+  }
+  for (const auto& section : document.sections) {
+    if (section.tag == "method") {
+      auto script = section.attributes.GetString("script");
+      auto it = std::find_if(components_.begin(), components_.end(),
+                             [&](auto& c) { return c.name == script; });
+      if (it == components_.end() || it->attach) continue;
+      it->methods.push_back({section.attributes.GetString("name"),
+                             section.attributes.GetString("arg")});
+    } else if (section.tag == "asset") {
+      auto name = section.attributes.GetString("name");
+      if (auto existing = FindAssetType(name); existing && !existing->from_game) continue;
+      AssetTypeInfo info;
+      info.name = name;
+      info.description = section.attributes.GetString("description");
+      info.from_game = true;
+      for (const auto& property : section.properties) {
+        FieldInfo field;
+        field.name = property.key;
+        field.type = FieldTypeOf(property.value);
+        field.default_value = property.value;
+        info.fields.push_back(std::move(field));
+      }
+      RegisterAssetType(std::move(info));
+    }
   }
   return true;
 }

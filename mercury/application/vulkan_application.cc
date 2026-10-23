@@ -61,6 +61,7 @@ VulkanApplication::~VulkanApplication() {
     vkDeviceWaitIdle(device);
 
     ui_renderer_.Shutdown();
+    scene_renderer_.Shutdown();
     DestroyOffscreenTarget(ui_preview_color_, ui_preview_depth_,
                            ui_preview_texture_set_);
     DestroySceneTarget();
@@ -583,10 +584,13 @@ bool VulkanApplication::CreatePipelines() {
       VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
       VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
+  // These draw inside the model renderer's main pass, which also writes a
+  // normal target; leave that one alone.
+  VkPipelineColorBlendAttachmentState blend_attachments[2] = {blend_attachment, {}};
   VkPipelineColorBlendStateCreateInfo color_blend = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-  color_blend.attachmentCount = 1;
-  color_blend.pAttachments = &blend_attachment;
+  color_blend.attachmentCount = 2;
+  color_blend.pAttachments = blend_attachments;
 
   const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
                                            VK_DYNAMIC_STATE_SCISSOR};
@@ -595,12 +599,14 @@ bool VulkanApplication::CreatePipelines() {
   dynamic_state.dynamicStateCount = 2;
   dynamic_state.pDynamicStates = dynamic_states;
 
-  const VkFormat color_format = swapchain_.ColorFormat();
+  VkFormat color_formats[2];
+  VkFormat depth_format;
+  vk::SceneRenderer::MainPassFormats(color_formats, depth_format);
   VkPipelineRenderingCreateInfo rendering_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-  rendering_info.colorAttachmentCount = 1;
-  rendering_info.pColorAttachmentFormats = &color_format;
-  rendering_info.depthAttachmentFormat = vk::Swapchain::kDepthFormat;
+  rendering_info.colorAttachmentCount = 2;
+  rendering_info.pColorAttachmentFormats = color_formats;
+  rendering_info.depthAttachmentFormat = depth_format;
 
   auto build = [&](VkShaderModule vs,
                    const VkPipelineVertexInputStateCreateInfo &vertex_input,
@@ -785,6 +791,12 @@ bool VulkanApplication::OnLoad() {
       PDebug::error("Vulkan: failed to create UI resources");
       return false;
     }
+  }
+
+  if (!scene_renderer_.Init(context_, kFramesInFlight, [this](const std::string& name) {
+        return LoadShaderModule(name);
+      })) {
+    return false;
   }
 
   WriteDescriptorSets();
@@ -1019,10 +1031,11 @@ bool VulkanApplication::CreateSkyboxResources() {
   blend_attachment.colorWriteMask =
       VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
       VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  VkPipelineColorBlendAttachmentState blend_attachments[2] = {blend_attachment, {}};
   VkPipelineColorBlendStateCreateInfo color_blend = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-  color_blend.attachmentCount = 1;
-  color_blend.pAttachments = &blend_attachment;
+  color_blend.attachmentCount = 2;
+  color_blend.pAttachments = blend_attachments;
   const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
                                            VK_DYNAMIC_STATE_SCISSOR};
   VkPipelineDynamicStateCreateInfo dynamic_state = {
@@ -1030,12 +1043,14 @@ bool VulkanApplication::CreateSkyboxResources() {
   dynamic_state.dynamicStateCount = 2;
   dynamic_state.pDynamicStates = dynamic_states;
 
-  const VkFormat color_format = swapchain_.ColorFormat();
+  VkFormat color_formats[2];
+  VkFormat depth_format;
+  vk::SceneRenderer::MainPassFormats(color_formats, depth_format);
   VkPipelineRenderingCreateInfo rendering_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-  rendering_info.colorAttachmentCount = 1;
-  rendering_info.pColorAttachmentFormats = &color_format;
-  rendering_info.depthAttachmentFormat = vk::Swapchain::kDepthFormat;
+  rendering_info.colorAttachmentCount = 2;
+  rendering_info.pColorAttachmentFormats = color_formats;
+  rendering_info.depthAttachmentFormat = depth_format;
 
   VkPipelineShaderStageCreateInfo stages[2] = {};
   stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1497,6 +1512,23 @@ void VulkanApplication::Render() {
   vkResetFences(device, 1, &frame.in_flight);
 
   const VkExtent2D extent = swapchain_.Extent();
+  const VkExtent2D view_extent =
+      scene_texture_enabled_ && scene_color_.Get() != VK_NULL_HANDLE ? scene_color_.Extent()
+                                                                     : extent;
+  // Picking the cameras also picks the current one, which the older
+  // draws' camera buffer below follows.
+  std::vector<RenderCamera> cameras;
+  if (game_scene_) cameras = FrameCameras(view_extent);
+  RenderCamera main_camera;
+  for (const auto& camera : cameras) {
+    if (camera.target_texture.empty() && !camera.overlay) {
+      main_camera = camera;
+      break;
+    }
+  }
+
+  glm::mat4 light_view_proj(1.0f);
+  bool cast_shadows = false;
   if (game_scene_) {
     glm::mat4x4 camera_proj_view = {};
     if (game_scene_->GetCameraProj(camera_proj_view)) {
@@ -1519,7 +1551,8 @@ void VulkanApplication::Render() {
       }
       float shadow_dist =
           lighting.shadow_distance > 0.0f ? lighting.shadow_distance : 60.0f;
-      glm::vec3 light_target = camera_position;
+      glm::vec3 light_target = main_camera.entity != entt::null ? main_camera.position
+                                                                : camera_position;
       glm::vec3 light_pos = light_target - light_dir * shadow_dist;
       glm::vec3 up = std::abs(light_dir.y) > 0.99f
                          ? glm::vec3(0.0f, 0.0f, 1.0f)
@@ -1539,7 +1572,8 @@ void VulkanApplication::Render() {
       light_view[3][0] -= snap_x;
       light_view[3][1] -= snap_y;
 
-      glm::mat4 light_view_proj = light_proj * light_view;
+      light_view_proj = light_proj * light_view;
+      cast_shadows = true;
       camera_.mLightViewProj = light_view_proj;
       camera_.mShadowParams = PQ_FLOAT2{
           static_cast<float>(kShadowMapResolution), lighting.shadow_normal_bias};
@@ -1560,14 +1594,13 @@ void VulkanApplication::Render() {
 
   // Editor camera preview: same lighting and shadows, other camera.
   bool draw_preview = false;
-  bool preview_has_sky = false;
-  glm::mat4x4 preview_sky;
-  VkClearColorValue preview_clear = kClearColor;
+  RenderCamera preview_view;
   if (game_scene_ && preview_camera_ != entt::null &&
       preview_color_.Get() != VK_NULL_HANDLE) {
     const VkExtent2D size = preview_color_.Extent();
     CameraCBuffer preview = camera_;
     glm::mat4x4 view_proj;
+    glm::mat4x4 preview_sky;
     glm::vec3 position;
     if (game_scene_->GetCameraMatrices(
             preview_camera_, static_cast<float>(size.width),
@@ -1579,14 +1612,23 @@ void VulkanApplication::Render() {
                                       static_cast<float>(size.height)};
       frame.preview_camera_ubo.Write(&preview, sizeof(preview));
       draw_preview = true;
-      // There is one skybox image per scene, so a camera with any skybox
-      // shows the scene's.
-      if (auto *settings = game_scene_->GetRegistry().try_get<CameraComponent>(
-              preview_camera_)) {
-        const glm::vec4 c = settings->background;
-        preview_clear = {{c.r, c.g, c.b, c.a}};
-        preview_has_sky = settings->skybox.IsSet() &&
-                          skybox_image_.Get() != VK_NULL_HANDLE;
+      auto &registry = game_scene_->GetRegistry();
+      auto *cam = registry.try_get<Camera>(preview_camera_);
+      auto *transform = registry.try_get<Transform>(preview_camera_);
+      preview_view.entity = preview_camera_;
+      if (cam && transform) {
+        preview_view.view = cam->GetView(*transform);
+        preview_view.projection = cam->GetProjection(static_cast<float>(size.width),
+                                                     static_cast<float>(size.height));
+      }
+      preview_view.position = position;
+      if (auto *settings = registry.try_get<CameraComponent>(preview_camera_)) {
+        preview_view.background = settings->background;
+        preview_view.clear = static_cast<int>(settings->clear);
+        if (settings->skybox.IsSet()) preview_view.clear = static_cast<int>(CameraClear::kSkybox);
+        preview_view.culling_mask = static_cast<uint32_t>(settings->culling_mask);
+        preview_view.near_clip = settings->near_clip;
+        preview_view.far_clip = settings->far_clip;
       }
     }
   }
@@ -1603,6 +1645,7 @@ void VulkanApplication::Render() {
   UINT static_index_count = 0;
   bool draw_instanced = false;
 
+  scene_renderer_.BeginFrame(frame_index_);
   if (game_scene_) {
     // Re-upload the atlas only when a new image was added since the last
     // frame. UpdateAtlas() (called from GetPrimitives()) sets the flag; it is
@@ -1651,10 +1694,11 @@ void VulkanApplication::Render() {
       UpdateDirtyInstances(registry, atlas, frame);
     }
     RecordInstanceUploads(frame);
+    scene_renderer_.Prepare(cmd, *game_scene_);
   }
 
-
-  // Shadow depth pre-pass (directional light shadow map)
+  // Shadow depth pre-pass (directional light shadow map) for the older
+  // draws, and the model renderer's own.
   if (game_scene_ && shadow_image_.Get() != VK_NULL_HANDLE &&
       game_scene_->GetLighting().cast_shadows) {
     vk::TransitionImage(cmd, shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -1694,6 +1738,9 @@ void VulkanApplication::Render() {
                         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   }
+  if (game_scene_) {
+    scene_renderer_.RenderShadows(cmd, light_view_proj, main_camera, cast_shadows);
+  }
 
   // UI Toolkit draw lists: upload them (and their textures) before any pass.
   ui_renderer_.BeginFrame(frame_index_);
@@ -1709,30 +1756,47 @@ void VulkanApplication::Render() {
 
   // Editor: draw the scene into the offscreen target first; the window pass
   // then only draws ImGui, which shows that target inside a panel.
-  glm::mat4x4 sky_matrix;
-  const bool has_sky = skybox_image_.Get() != VK_NULL_HANDLE && game_scene_ &&
-                       game_scene_->GetSkyboxMatrix(sky_matrix);
-  const glm::mat4x4 *sky = has_sky ? &sky_matrix : nullptr;
-  if (scene_texture_enabled_ && scene_color_.Get() != VK_NULL_HANDLE) {
-    RecordOffscreenPass(cmd, frame, scene_color_, scene_depth_,
-                        SceneClearColor(), frame.descriptor_set, sky,
-                        draw_static, static_index_count, draw_instanced);
+  if (game_scene_ && scene_texture_enabled_ && scene_color_.Get() != VK_NULL_HANDLE) {
+    RenderSceneTo(cmd, frame, cameras, scene_color_.Get(), scene_color_.View(),
+                  scene_color_.Extent(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  frame.descriptor_set, draw_static, static_index_count, draw_instanced);
+    vk::TransitionImage(cmd, scene_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   }
   if (draw_preview) {
-    RecordOffscreenPass(cmd, frame, preview_color_, preview_depth_,
-                        preview_clear, frame.preview_descriptor_set,
-                        preview_has_sky ? &preview_sky : nullptr, draw_static,
-                        static_index_count, draw_instanced);
+    RenderSceneTo(cmd, frame, {preview_view}, preview_color_.Get(), preview_color_.View(),
+                  preview_color_.Extent(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  frame.preview_descriptor_set, draw_static, static_index_count,
+                  draw_instanced);
+    vk::TransitionImage(cmd, preview_color_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   }
 
   const VkImage swapchain_image = swapchain_.ImageAt(image_index);
-  vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
-                      VK_IMAGE_LAYOUT_UNDEFINED,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
-                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
-                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+  const bool scene_on_window = game_scene_ && !scene_texture_enabled_;
+  if (scene_on_window) {
+    RenderSceneTo(cmd, frame, cameras, swapchain_image, swapchain_.ImageView(image_index),
+                  extent, VK_IMAGE_LAYOUT_UNDEFINED, frame.descriptor_set, draw_static,
+                  static_index_count, draw_instanced);
+  } else {
+    vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+                            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+  }
   // One depth image is shared by all frames in flight, so wait for the
   // previous frame's depth writes before clearing it.
   vk::TransitionImage(cmd, swapchain_.Depth().Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -1747,10 +1811,10 @@ void VulkanApplication::Render() {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
   color_attachment.imageView = swapchain_.ImageView(image_index);
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  color_attachment.loadOp =
+      scene_on_window ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  color_attachment.clearValue.color =
-      scene_texture_enabled_ ? kClearColor : SceneClearColor();
+  color_attachment.clearValue.color = kClearColor;
 
   VkRenderingAttachmentInfo depth_attachment = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
@@ -1768,10 +1832,6 @@ void VulkanApplication::Render() {
   rendering_info.pDepthAttachment = &depth_attachment;
   vkCmdBeginRendering(cmd, &rendering_info);
 
-  if (!scene_texture_enabled_) {
-    RecordSceneDraws(cmd, frame, frame.descriptor_set, sky, extent,
-                     draw_static, static_index_count, draw_instanced);
-  }
   // The game's UI goes over the scene and under ImGui (dev windows).
   ui_renderer_.Record(cmd, game_ui, extent);
 
@@ -2007,6 +2067,55 @@ void VulkanApplication::RecordOffscreenPass(
                       VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
+std::vector<RenderCamera> VulkanApplication::FrameCameras(VkExtent2D extent) {
+  std::vector<RenderCamera> cameras = game_scene_->GetRenderCameras(
+      static_cast<float>(extent.width), static_cast<float>(extent.height));
+  if (!cameras.empty()) return cameras;
+
+  // The editor's camera, or a scene built in code: the current camera.
+  RenderCamera camera;
+  glm::mat4x4 view_proj, sky;
+  glm::vec3 position(0.0f);
+  const kEntityId entity = game_scene_->GetPlayerCamera();
+  auto &registry = game_scene_->GetRegistry();
+  auto *cam = registry.try_get<Camera>(entity);
+  auto *transform = registry.try_get<Transform>(entity);
+  if (cam && transform) {
+    camera.view = cam->GetView(*transform);
+    camera.projection = cam->GetProjection(static_cast<float>(extent.width),
+                                           static_cast<float>(extent.height));
+    camera.position = transform->GetInterpolatedPosition();
+  } else if (game_scene_->GetCameraMatrices(entity, static_cast<float>(extent.width),
+                                            static_cast<float>(extent.height), view_proj,
+                                            sky, position)) {
+    camera.projection = view_proj;
+    camera.position = position;
+  }
+  camera.entity = entity;
+  camera.background = game_scene_->GetClearColor();
+  camera.clear = game_scene_->GetSkyboxPath().empty() ? static_cast<int>(CameraClear::kColor)
+                                                      : static_cast<int>(CameraClear::kSkybox);
+  cameras.push_back(camera);
+  return cameras;
+}
+
+void VulkanApplication::RenderSceneTo(VkCommandBuffer cmd, FrameData &frame,
+                                      const std::vector<RenderCamera> &cameras, VkImage image,
+                                      VkImageView view, VkExtent2D extent,
+                                      VkImageLayout layout, VkDescriptorSet legacy_set,
+                                      bool draw_static, UINT static_index_count,
+                                      bool draw_instanced) {
+  const vk::SceneRenderer::LegacyDraws legacy = [&](VkCommandBuffer pass_cmd,
+                                                    VkExtent2D pass_extent) {
+    RecordSceneDraws(pass_cmd, frame, legacy_set, nullptr, pass_extent, draw_static,
+                     static_index_count, draw_instanced);
+  };
+  const VkImageView sky =
+      skybox_image_.Get() != VK_NULL_HANDLE ? skybox_image_.View() : VK_NULL_HANDLE;
+  scene_renderer_.RenderView(cmd, *game_scene_, cameras, image, view, extent,
+                             swapchain_.ColorFormat(), layout, legacy, sky, skybox_sampler_);
+}
+
 VkClearColorValue VulkanApplication::SceneClearColor() const {
   if (!game_scene_) return kClearColor;
   const glm::vec4 c = game_scene_->GetClearColor();
@@ -2221,6 +2330,12 @@ void VulkanApplication::ReadCaptureSettings() {
   if (const char *quit = std::getenv("MERCURY_CAPTURE_QUIT")) {
     capture_quit_ = std::string(quit) == "1";
   }
+}
+
+void VulkanApplication::RequestCapture(const std::string& file) {
+  capture_path_ = file;
+  capture_frame_ = frame_counter_;
+  capture_quit_ = false;
 }
 
 void VulkanApplication::WriteCapture() {

@@ -1364,7 +1364,6 @@ ScrollView::ScrollView(ScrollViewMode mode) : mode_(mode) {
   viewport_ = r->Add(std::move(viewport));
   auto content = std::make_unique<VisualElement>();
   content->AddToClassList("unity-scroll-view__content-container");
-  content->style().position = Position::kAbsolute;
   content->style().left = content->style().top = Length::Px(0);
   content_ = viewport_->Add(std::move(content));
   vertical_ = static_cast<Scroller*>(
@@ -1386,7 +1385,12 @@ void ScrollView::SetMode(ScrollViewMode mode) {
   EnableInClassList("unity-scroll-view--vertical-horizontal",
                     mode == ScrollViewMode::kVerticalAndHorizontal);
   // Vertical content is as wide as the view; horizontal content as tall.
+  // Vertical content also takes part in layout, so a scroll view without a
+  // set height grows to fit it (as Unity's does).
   auto& content = content_->style();
+  const bool vertical = mode == ScrollViewMode::kVertical;
+  content.position = vertical ? Position::kRelative : Position::kAbsolute;
+  content.flexShrink = vertical ? std::optional(0.0f) : std::nullopt;
   content.right = mode == ScrollViewMode::kVertical ? std::optional(Length::Px(0)) : std::nullopt;
   content.bottom =
       mode == ScrollViewMode::kHorizontal ? std::optional(Length::Px(0)) : std::nullopt;
@@ -1569,13 +1573,25 @@ void ListView::SetFixedItemHeight(float height) {
 }
 
 void ListView::RefreshItems() {
+  if (items_source_size_) {
+    count_ = std::max(0, items_source_size_());
+    std::erase_if(selected_, [this](int i) { return i >= count_; });
+  }
   for (size_t i = 0; i < items_.size(); i++) {
     if (unbindItem) unbindItem(items_[i], static_cast<int>(i));
   }
   scroll_->Clear();
   items_.clear();
   for (int i = 0; i < count_; i++) {
-    std::unique_ptr<VisualElement> item = makeItem ? makeItem() : std::make_unique<Label>();
+    std::unique_ptr<VisualElement> item;
+    if (makeItem) {
+      item = makeItem();
+    } else if (!item_template_.empty() && panel()) {
+      if (auto tree = panel()->resources().LoadUxml(item_template_)) {
+        item = tree->Instantiate(panel()->resources());
+      }
+    }
+    if (!item) item = std::make_unique<Label>();
     item->AddToClassList("unity-list-view__item");
     item->AddToClassList("unity-collection-view__item");
     item->EnableInClassList("unity-collection-view__item--alternative-background", i % 2);
@@ -1670,6 +1686,10 @@ void ListView::HandleEventBubbleUp(EventBase& event) {
 }
 
 bool ListView::SetProperty(std::string_view name, const mtext::Variant& value) {
+  if (name == "item-template") {
+    item_template_ = value.ToString().value_or("");
+    return true;
+  }
   if (name == "fixed-item-height") {
     if (auto f = VariantToFloat(value)) SetFixedItemHeight(static_cast<float>(*f));
   } else if (name == "selection-type") {

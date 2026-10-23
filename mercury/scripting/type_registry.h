@@ -29,6 +29,12 @@ class MapScene;
 using AttachFn = std::function<void(MapScene& scene, kEntityId entity,
                                     const mtext::PropertyList& properties)>;
 
+// A method an Event can call (Behaviour::ReflectMethods).
+struct MethodDesc {
+  std::string name;
+  std::string arg;  // "", "bool", "int", "float" or "string"
+};
+
 struct ComponentInfo {
   std::string name;
   std::string category;  // groups the editor's Add Component menu
@@ -36,6 +42,7 @@ struct ComponentInfo {
   bool is_script = false;
   bool removable = true;  // Transform is always there
   std::vector<FieldInfo> fields;
+  std::vector<MethodDesc> methods;
   // Null for scripts known only from a schema file (inside the editor).
   AttachFn attach;
 
@@ -46,6 +53,8 @@ struct AssetTypeInfo {
   std::string name;
   std::string description;
   std::vector<FieldInfo> fields;
+  // Declared by game code (MERCURY_DATA_ASSET), so saved in the schema.
+  bool from_game = false;
 
   const FieldInfo* FindField(std::string_view field) const;
 };
