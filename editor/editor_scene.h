@@ -95,6 +95,11 @@ class EditorScene : public MapScene {
 
   // Draws the editor for one field; returns true if `properties` changed.
   bool DrawField(const FieldInfo& field, mtext::PropertyList& properties);
+  // The widget for one value of `type` (the field's own type, or a list's
+  // element type); true if it changed.
+  bool DrawValue(const FieldInfo& field, FieldType type, mtext::Variant& value);
+  bool DrawList(const FieldInfo& field, mtext::Variant& value);
+  bool DrawEventCalls(mtext::Variant& value);
   bool DrawLockGroup(const char* label, const std::string& prefix,
                      mtext::PropertyList& properties);
   bool DrawRawProperty(mtext::Property& property);

@@ -25,6 +25,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "serialization/mtext.h"
 
@@ -66,6 +67,8 @@ class Project {
   std::string GetName() const;
   void SetName(std::string name);
   std::string GetMainMap() const;
+  // [project] version, Unity's Application.version ("dev" if unset)
+  std::string GetVersion() const;
   void SetMainMap(std::string res_path);
   std::string GetWindowTitle() const;
   int GetWindowWidth() const;
@@ -75,6 +78,26 @@ class Project {
   void SetBuildOutput(std::string path);
   // [physics] gravity, in units per second squared
   glm::vec3 GetGravity() const;
+  // [physics] tick_rate: fixed ticks (OnTick + physics steps) per second
+  int GetTickRate() const;
+  // [physics] queries_hit_triggers: raycasts hit triggers unless told not to
+  bool GetQueriesHitTriggers() const;
+  // [import] model_convention: "native" (default) or "unity"; see
+  // properties/model.h
+  std::string GetModelConvention() const;
+  // [input] actions: res:// path of the project's .minput, or ""
+  std::string GetInputActionsPath() const;
+
+  /**
+   * @brief Layer names from [layers] names = ["Default", ...] (index = layer)
+   *
+   * Without that section: Unity's built-in layers.
+   */
+  std::vector<std::string> GetLayerNames() const;
+  std::string LayerName(int layer) const;
+  int LayerFromName(std::string_view name) const;  // -1 if unknown
+  // Tags from [tags] names = [...], always including Unity's built-ins.
+  std::vector<std::string> GetTags() const;
 
   /**
    * @brief Turn "res://a/b.mmap" into an absolute path inside the project

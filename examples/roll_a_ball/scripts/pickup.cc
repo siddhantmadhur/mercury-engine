@@ -5,7 +5,7 @@
 
 MERCURY_SCRIPT(Pickup);
 
-void Pickup::OnCollisionEnter(Mercury::GameObject other) {
+void Pickup::OnTriggerEnter(Mercury::GameObject other) {
   if (collected_ || !other.GetBehaviour<PlayerController>()) return;
   collected_ = true;
   if (auto manager = Get(game).GetBehaviour<GameManager>()) {

@@ -51,6 +51,7 @@ constexpr int kMapFormatVersion = 1;
 struct ComponentData {
   std::string type;
   mtext::PropertyList properties;
+  bool operator==(const ComponentData&) const = default;
 };
 
 struct MapNode {
@@ -62,8 +63,27 @@ struct MapNode {
   // keep editor selection and entities attached across edits.
   uint64_t uid = 0;
 
-  ComponentData* FindComponent(std::string_view type);
-  const ComponentData* FindComponent(std::string_view type) const;
+  // Unity's tag, layer (0-31) and GameObject.activeSelf. Saved as header
+  // attributes when they differ from the defaults.
+  std::string tag;
+  int layer = 0;
+  bool active = true;
+
+  // Prefabs. An instance node names its .mprefab in `prefab`; it and every
+  // node copied from the prefab have `from_prefab` set, and keep the
+  // prefab's components in `prefab_base` so saving writes only overrides.
+  std::string prefab;
+  bool from_prefab = false;
+  std::vector<ComponentData> prefab_base;
+  std::string prefab_base_tag;
+  int prefab_base_layer = 0;
+  bool prefab_base_active = true;
+
+  // `index` picks among several components of the same type.
+  ComponentData* FindComponent(std::string_view type, int index = 0);
+  const ComponentData* FindComponent(std::string_view type, int index = 0) const;
+  // The nearest ancestor (or this node) that is a prefab instance.
+  const MapNode* GetPrefabInstanceRoot() const;
   bool IsRoot() const { return parent == nullptr; }
   bool IsAncestorOf(const MapNode* node) const;
   int IndexInParent() const;
@@ -72,17 +92,24 @@ struct MapNode {
   std::string GetPath() const;
 };
 
+constexpr std::string_view kPrefabExtension = ".mprefab";
+
 class Map {
  public:
   // Given a res:// path, returns the asset type to write in [ext_resource].
   using ResourceTypeFn = std::function<std::string(const std::string&)>;
+  // Given a .mprefab res:// path, returns the loaded prefab (nullptr if it
+  // cannot be read). Used to expand prefab instances while loading.
+  using PrefabLoaderFn = std::function<const Map*(const std::string&)>;
 
   Map();  // a map with a single root node called "Root"
   Map(const Map& other);
   Map& operator=(const Map& other);
 
-  bool LoadFromString(std::string_view source, std::string* error = nullptr);
-  bool Load(const std::filesystem::path& path, std::string* error = nullptr);
+  bool LoadFromString(std::string_view source, std::string* error = nullptr,
+                      const PrefabLoaderFn& prefabs = {});
+  bool Load(const std::filesystem::path& path, std::string* error = nullptr,
+            const PrefabLoaderFn& prefabs = {});
 
   std::string SaveToString(const ResourceTypeFn& resource_type = {}) const;
   bool Save(const std::filesystem::path& path,
@@ -131,6 +158,22 @@ class Map {
   void Visit(const std::function<void(const MapNode&)>& fn) const;
 
   size_t NodeCount() const;
+
+  /**
+   * @brief Copy `prefab`'s root (and its children) under `parent` as an
+   * instance: NodePath values inside it are made relative to the new node
+   * @return The new instance node
+   */
+  MapNode* AddPrefabInstance(MapNode* parent, std::string_view name,
+                             const std::string& prefab_path, const Map& prefab);
+
+  // A deep copy of a node and its children (uids included).
+  static std::unique_ptr<MapNode> CloneTree(const MapNode& node,
+                                            MapNode* parent = nullptr);
+
+  // Rewrites prefab-relative NodePaths ("." and "A/B") in `node`'s subtree
+  // so they start at `instance_path`.
+  static void RebaseNodePaths(MapNode& node, const std::string& instance_path);
 
  private:
   static const MapNode* FindFrom(const MapNode* root, std::string_view path);

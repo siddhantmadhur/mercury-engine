@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <utility>
+#include <vector>
 
 namespace Mercury::vk {
 
@@ -60,18 +61,26 @@ class Image {
   ~Image() { Reset(); }
   Image(const Image&) = delete;
   Image& operator=(const Image&) = delete;
+  Image(Image&& other) noexcept { *this = std::move(other); }
+  Image& operator=(Image&& other) noexcept;
 
   bool Create(VmaAllocator allocator, VkDevice device, uint32_t width,
               uint32_t height, VkFormat format, VkImageUsageFlags usage,
-              VkImageAspectFlags aspect);
+              VkImageAspectFlags aspect, uint32_t mip_levels = 1);
   void Reset();
 
   VkImage Get() const { return image_; }
   VkImageView View() const { return view_; }
   VkExtent2D Extent() const { return extent_; }
   VkFormat Format() const { return format_; }
+  uint32_t MipLevels() const { return mip_levels_; }
+  // A view of one mip level (created on first use).
+  VkImageView MipView(uint32_t level);
 
  private:
+  std::vector<VkImageView> mip_views_;
+  VkImageAspectFlags aspect_ = VK_IMAGE_ASPECT_COLOR_BIT;
+  uint32_t mip_levels_ = 1;
   VmaAllocator allocator_ = VK_NULL_HANDLE;
   VkDevice device_ = VK_NULL_HANDLE;
   VkImage image_ = VK_NULL_HANDLE;
@@ -91,6 +100,13 @@ void TransitionImage(VkCommandBuffer cmd, VkImage image,
                      VkAccessFlags2 src_access,
                      VkPipelineStageFlags2 dst_stage,
                      VkAccessFlags2 dst_access);
+
+// The same for a range of mip levels.
+void TransitionImageMips(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags aspect,
+                         uint32_t base_mip, uint32_t mip_count,
+                         VkImageLayout old_layout, VkImageLayout new_layout,
+                         VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,
+                         VkPipelineStageFlags2 dst_stage, VkAccessFlags2 dst_access);
 
 /**
  * @brief Records a global memory barrier (sync2)

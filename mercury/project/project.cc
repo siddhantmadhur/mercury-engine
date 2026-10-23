@@ -1,5 +1,6 @@
 #include "project.h"
 
+#include <algorithm>
 #include <system_error>
 
 namespace Mercury {
@@ -59,6 +60,11 @@ void Project::SetName(std::string name) {
   GetOrAddSection("project").properties.Set("name", std::move(name));
 }
 
+std::string Project::GetVersion() const {
+  auto section = document_.Find("project");
+  return section ? section->properties.GetString("version", "dev") : "dev";
+}
+
 std::string Project::GetMainMap() const {
   auto section = document_.Find("project");
   return section ? section->properties.GetString("main_map") : "";
@@ -103,6 +109,73 @@ glm::vec3 Project::GetGravity() const {
   if (!value) return kDefault;
   auto gravity = value->Get<glm::vec3>();
   return gravity ? *gravity : kDefault;
+}
+
+int Project::GetTickRate() const {
+  auto section = document_.Find("physics");
+  if (!section) return 60;
+  const int64_t rate = section->properties.GetInt("tick_rate", 60);
+  return rate > 0 && rate <= 1000 ? static_cast<int>(rate) : 60;
+}
+
+bool Project::GetQueriesHitTriggers() const {
+  auto section = document_.Find("physics");
+  return section ? section->properties.GetBool("queries_hit_triggers", true) : true;
+}
+
+std::string Project::GetModelConvention() const {
+  auto section = document_.Find("import");
+  return section ? section->properties.GetString("model_convention", "native") : "native";
+}
+
+std::string Project::GetInputActionsPath() const {
+  auto section = document_.Find("input");
+  return section ? section->properties.GetString("actions") : "";
+}
+
+namespace {
+std::vector<std::string> ReadNames(const mtext::Section* section) {
+  std::vector<std::string> names;
+  if (!section) return names;
+  auto value = section->properties.Get("names");
+  if (!value) return names;
+  if (auto array = value->Get<mtext::Array>()) {
+    for (const auto& item : *array) names.push_back(item.ToString().value_or(""));
+  }
+  return names;
+}
+}  // namespace
+
+std::vector<std::string> Project::GetLayerNames() const {
+  std::vector<std::string> names = ReadNames(document_.Find("layers"));
+  if (names.empty()) {
+    names = {"Default", "TransparentFX", "Ignore Raycast", "", "Water", "UI"};
+  }
+  names.resize(32);
+  return names;
+}
+
+std::string Project::LayerName(int layer) const {
+  if (layer < 0 || layer >= 32) return "";
+  return GetLayerNames()[layer];
+}
+
+int Project::LayerFromName(std::string_view name) const {
+  const auto names = GetLayerNames();
+  for (size_t i = 0; i < names.size(); i++) {
+    if (!names[i].empty() && names[i] == name) return static_cast<int>(i);
+  }
+  return -1;
+}
+
+std::vector<std::string> Project::GetTags() const {
+  std::vector<std::string> tags = {"Untagged", "Respawn",    "Finish",
+                                   "EditorOnly", "MainCamera", "Player",
+                                   "GameController"};
+  for (auto& tag : ReadNames(document_.Find("tags"))) {
+    if (std::find(tags.begin(), tags.end(), tag) == tags.end()) tags.push_back(tag);
+  }
+  return tags;
 }
 
 fs::path Project::Resolve(std::string_view path) const {

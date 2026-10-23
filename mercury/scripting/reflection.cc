@@ -1,5 +1,7 @@
 #include "reflection.h"
 
+#include "scripting/event.h"
+
 #include <format>
 #include <optional>
 
@@ -17,6 +19,8 @@ const char* FieldTypeName(FieldType type) {
     case FieldType::kNodeRef: return "NodePath";
     case FieldType::kAsset: return "Resource";
     case FieldType::kEnum: return "enum";
+    case FieldType::kList: return "list";
+    case FieldType::kEvent: return "event";
   }
   return "unknown";
 }
@@ -33,6 +37,8 @@ mtext::Variant EmptyValueFor(FieldType type) {
     case FieldType::kColor: return mtext::Color{};
     case FieldType::kNodeRef: return mtext::NodePath{};
     case FieldType::kAsset: return mtext::Resource{};
+    case FieldType::kList:
+    case FieldType::kEvent: return mtext::Array{};
   }
   return {};
 }
@@ -50,6 +56,7 @@ FieldType FieldTypeOf(const mtext::Variant& value) {
     case T::kNodePath: return FieldType::kNodeRef;
     case T::kResource:
     case T::kExtResource: return FieldType::kAsset;
+    case T::kArray: return FieldType::kList;
     default: return FieldType::kString;
   }
 }
@@ -88,7 +95,37 @@ Reflector& Reflector::Visit(const char* name, FieldType type, T& member,
         }
       }
       break;
+    case Mode::kEvents:
+      break;
   }
+  return *this;
+}
+
+template <typename T, typename ToVariant, typename FromVariant>
+Reflector& Reflector::VisitList(const char* name, FieldType element,
+                                std::vector<T>& member, ToVariant to_variant,
+                                FromVariant from_variant) {
+  auto to_array = [&](const std::vector<T>& items) {
+    mtext::Array array;
+    array.reserve(items.size());
+    for (const auto& item : items) array.push_back(to_variant(item));
+    return mtext::Variant(std::move(array));
+  };
+  auto from_array =
+      [&](const mtext::Variant& value) -> std::optional<std::vector<T>> {
+    const auto* array = value.Get<mtext::Array>();
+    if (!array) return std::nullopt;
+    std::vector<T> items;
+    items.reserve(array->size());
+    for (const auto& item : *array) {
+      std::optional<T> converted = from_variant(item);
+      if (!converted) return std::nullopt;
+      items.push_back(std::move(*converted));
+    }
+    return items;
+  };
+  Visit(name, FieldType::kList, member, to_array, from_array);
+  if (mode_ == Mode::kDescribe) fields_.back().element_type = element;
   return *this;
 }
 
@@ -182,6 +219,74 @@ Reflector& Reflector::Field(const char* name, AssetRef& value,
   return *this;
 }
 
+namespace {
+std::optional<int> ToIntValue(const mtext::Variant& v) {
+  if (auto i = v.ToInt()) return static_cast<int>(*i);
+  return std::nullopt;
+}
+std::optional<float> ToFloatValue(const mtext::Variant& v) {
+  if (auto f = v.ToFloat()) return static_cast<float>(*f);
+  return std::nullopt;
+}
+std::optional<NodeRef> ToNodeRef(const mtext::Variant& v) {
+  if (auto p = v.Get<mtext::NodePath>()) return NodeRef{p->path};
+  if (auto s = v.Get<std::string>()) return NodeRef{*s};
+  return std::nullopt;
+}
+std::optional<AssetRef> ToAssetRef(const mtext::Variant& v) {
+  if (auto p = v.Get<mtext::Resource>()) return AssetRef{p->path};
+  if (auto s = v.Get<std::string>()) return AssetRef{*s};
+  if (v.IsNil()) return AssetRef{};
+  return std::nullopt;
+}
+}  // namespace
+
+Reflector& Reflector::Field(const char* name, std::vector<int>& value) {
+  return VisitList(
+      name, FieldType::kInt, value, [](int v) { return mtext::Variant(v); },
+      ToIntValue);
+}
+
+Reflector& Reflector::Field(const char* name, std::vector<float>& value) {
+  return VisitList(
+      name, FieldType::kFloat, value, [](float v) { return mtext::Variant(v); },
+      ToFloatValue);
+}
+
+Reflector& Reflector::Field(const char* name, std::vector<std::string>& value) {
+  return VisitList(
+      name, FieldType::kString, value,
+      [](const std::string& v) { return mtext::Variant(v); },
+      [](const mtext::Variant& v) { return v.ToString(); });
+}
+
+Reflector& Reflector::Field(const char* name, std::vector<NodeRef>& value) {
+  return VisitList(
+      name, FieldType::kNodeRef, value,
+      [](const NodeRef& v) { return mtext::Variant(mtext::NodePath{v.path}); },
+      ToNodeRef);
+}
+
+Reflector& Reflector::Field(const char* name, std::vector<AssetRef>& value,
+                            const char* asset_type) {
+  VisitList(
+      name, FieldType::kAsset, value,
+      [](const AssetRef& v) { return mtext::Variant(mtext::Resource{v.path}); },
+      ToAssetRef);
+  if (mode_ == Mode::kDescribe) fields_.back().asset_type = asset_type;
+  return *this;
+}
+
+Reflector& Reflector::Field(const char* name, Event& value) {
+  if (mode_ == Mode::kEvents) {
+    if (event_fn_) event_fn_(value);
+    return *this;
+  }
+  Visit(name, FieldType::kEvent, value.calls, Event::ToVariant,
+        Event::FromVariant);
+  return *this;
+}
+
 void Reflector::EnumImpl(const char* name, int& index,
                          std::initializer_list<const char*> names) {
   std::vector<std::string> values(names.begin(), names.end());
@@ -235,6 +340,8 @@ void Reflector::EnumImpl(const char* name, int& index,
               std::format("\"{}\" must be one of {}", name, options));
         }
       }
+      break;
+    case Mode::kEvents:
       break;
   }
 }

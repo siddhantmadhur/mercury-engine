@@ -53,6 +53,8 @@ else ()
             mercury/application/vulkan/vk_buffer.h
             mercury/application/vulkan/vk_ui_renderer.cc
             mercury/application/vulkan/vk_ui_renderer.h
+            mercury/application/vulkan/vk_scene_renderer.cc
+            mercury/application/vulkan/vk_scene_renderer.h
             mercury/application/vulkan/vma_impl.cc)
 endif ()
 
@@ -147,6 +149,27 @@ add_library(mercury STATIC
         mercury/player/player.h
         mercury/os/process.cc
         mercury/os/process.h
+        mercury/math/time.cc
+        mercury/math/time.h
+        mercury/math/mathf.cc
+        mercury/math/mathf.h
+        mercury/scripting/event.cc
+        mercury/scripting/event.h
+        mercury/input/input_actions.cc
+        mercury/input/input_script.cc
+        mercury/input/input_actions.h
+        mercury/project/prefab_cache.cc
+        mercury/project/prefab_cache.h
+        mercury/properties/model.cc
+        mercury/properties/model.h
+        mercury/properties/render_mesh.cc
+        mercury/properties/render_mesh.h
+        mercury/audio/audio_system.cc
+        mercury/audio/audio_system.h
+        mercury/animation/animator_controller.cc
+        mercury/animation/animator_controller.h
+        mercury/animation/animator.cc
+        mercury/animation/animator.h
 )
 
 
@@ -200,6 +223,16 @@ file(GLOB_RECURSE YOGA_SOURCES "third_party/yoga/yoga/*.cpp")
 add_library(yoga STATIC ${YOGA_SOURCES})
 target_include_directories(yoga PUBLIC "third_party/yoga")
 # End of Yoga
+
+# miniaudio (sound playback and decoding)
+add_library(miniaudio STATIC third_party/miniaudio/miniaudio.c)
+target_include_directories(miniaudio PUBLIC "third_party/miniaudio")
+target_compile_definitions(miniaudio PRIVATE MA_NO_ENCODING MA_NO_GENERATION)
+if (NOT EMSCRIPTEN)
+    target_link_libraries(miniaudio Threads::Threads ${CMAKE_DL_LIBS} m)
+endif ()
+target_link_libraries(mercury miniaudio)
+# End of miniaudio
 
 # TinyXML2
 add_subdirectory(third_party/tinyxml2)
@@ -308,7 +341,19 @@ if (NOT EMSCRIPTEN)
             "skybox.ps.hlsl|ps_6_0|skybox.ps.spv"
             "textured.ps.hlsl|ps_6_0|textured.ps.spv"
             "ui.vs.hlsl|vs_6_0|ui.vs.spv"
-            "ui.ps.hlsl|ps_6_0|ui.ps.spv")
+            "ui.ps.hlsl|ps_6_0|ui.ps.spv"
+            "model.vs.hlsl|vs_6_0|model.vs.spv"
+            "model.ps.hlsl|ps_6_0|model.ps.spv"
+            "model_shadow.vs.hlsl|vs_6_0|model_shadow.vs.spv"
+            "outline_mask.ps.hlsl|ps_6_0|outline_mask.ps.spv"
+            "fullscreen.vs.hlsl|vs_6_0|fullscreen.vs.spv"
+            "sky.ps.hlsl|ps_6_0|sky.ps.spv"
+            "ssao.ps.hlsl|ps_6_0|ssao.ps.spv"
+            "blur.ps.hlsl|ps_6_0|blur.ps.spv"
+            "bloom_down.ps.hlsl|ps_6_0|bloom_down.ps.spv"
+            "bloom_up.ps.hlsl|ps_6_0|bloom_up.ps.spv"
+            "composite.ps.hlsl|ps_6_0|composite.ps.spv"
+            "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv")
     set(SPV_OUTS "")
     foreach (JOB ${SHADER_JOBS})
         string(REPLACE "|" ";" JOB_PARTS "${JOB}")
@@ -318,9 +363,11 @@ if (NOT EMSCRIPTEN)
         add_custom_command(
                 OUTPUT ${SHADER_BIN}/${OUT}
                 COMMAND ${DXC} ${DXC_COMMON_FLAGS}
+                -fspv-target-env=vulkan1.3
                 -T ${PROFILE} -E Main
                 ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
-                DEPENDS ${SHADER_SRC}/${SRC}
+                DEPENDS ${SHADER_SRC}/${SRC} ${SHADER_SRC}/model_common.hlsli
+                        ${SHADER_SRC}/post_common.hlsli
                 COMMENT "DXC ${SRC} -> ${OUT}"
                 COMMAND_EXPAND_LISTS)
         list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})
@@ -348,12 +395,19 @@ add_executable(mercury_test
         tests/primitives_test.cc
         tests/ui_test.cc
         tests/physics_constraints_test.cc
-        tests/mpack_test.cc)
+        tests/mpack_test.cc
+        tests/gameplay_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 include(GoogleTest)
 gtest_discover_tests(mercury_test)
+endif ()
+
+# Command line tools (model inspection for importers)
+if (NOT EMSCRIPTEN)
+    add_executable(mercury_model_info tools/model_info.cc)
+    target_link_libraries(mercury_model_info mercury)
 endif ()
 
 # Games made of a .mproj project (maps, assets and C++ scripts)

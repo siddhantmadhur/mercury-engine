@@ -13,6 +13,7 @@
 #include "vulkan/vk_buffer.h"
 #include "vulkan/vk_context.h"
 #include "camera_buffer.h"
+#include "vulkan/vk_scene_renderer.h"
 #include "vulkan/vk_swapchain.h"
 #include "vulkan/vk_ui_renderer.h"
 
@@ -250,6 +251,18 @@ class VulkanApplication : public Application {
   // UI Toolkit: the game's UI over the scene, and the editor's UI Builder
   // canvas drawn into its own target (reset after each frame).
   vk::UIRenderer ui_renderer_;
+  vk::SceneRenderer scene_renderer_;
+
+  // The cameras to draw this frame at `extent`: the scene's, or (in the
+  // editor, or without camera components) the current camera alone.
+  std::vector<RenderCamera> FrameCameras(VkExtent2D extent);
+  // Draws `cameras` with the model renderer (and the older draws) into an
+  // image of the swapchain's format, leaving it as a color attachment.
+  void RenderSceneTo(VkCommandBuffer cmd, FrameData& frame,
+                     const std::vector<RenderCamera>& cameras, VkImage image,
+                     VkImageView view, VkExtent2D extent, VkImageLayout layout,
+                     VkDescriptorSet legacy_set, bool draw_static, UINT static_index_count,
+                     bool draw_instanced);
   const UI::UIDrawData* ui_preview_data_ = nullptr;
   glm::vec4 ui_preview_background_ = glm::vec4(0.0f);
   bool ui_preview_target_dirty_ = false;
@@ -260,6 +273,7 @@ class VulkanApplication : public Application {
 
   bool show_render_stats_ = true;
 
+  void RequestCapture(const std::string& file) override;
   std::string capture_path_;
   uint64_t capture_frame_ = 90;
   bool capture_quit_ = false;

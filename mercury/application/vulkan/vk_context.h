@@ -38,6 +38,7 @@ class Context {
   uint32_t queue_family = 0;
   VkQueue queue = VK_NULL_HANDLE;
   VmaAllocator allocator = VK_NULL_HANDLE;
+  bool sampler_anisotropy = false;
 
  private:
   bool CreateInstance();

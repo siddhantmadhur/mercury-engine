@@ -13,7 +13,7 @@ void BananaPickup::OnTick(double dt) {
                       glm::vec3(0.0f, rotate_speed * static_cast<float>(dt), 0.0f));
 }
 
-void BananaPickup::OnCollisionEnter(Mercury::GameObject other) {
+void BananaPickup::OnTriggerEnter(Mercury::GameObject other) {
   if (collected_) return;
   if (!other.GetBehaviour<PlayerBall>()) return;
 

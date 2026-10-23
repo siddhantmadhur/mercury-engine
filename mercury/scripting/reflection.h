@@ -56,6 +56,8 @@ enum class FieldType {
   kNodeRef,
   kAsset,
   kEnum,
+  kList,   // an array of element_type values
+  kEvent,  // an Event's saved calls
 };
 
 const char* FieldTypeName(FieldType type);
@@ -67,6 +69,7 @@ struct FieldInfo {
   std::vector<std::string> enum_values;  // kEnum: allowed strings
   std::string asset_type;  // kAsset: "Material", "PhysicsMaterial", "Texture"
   std::string tooltip;
+  FieldType element_type = FieldType::kString;  // kList: type of each item
 };
 
 // Converts a field's value to the Variant stored in files.
@@ -74,6 +77,8 @@ mtext::Variant EmptyValueFor(FieldType type);
 
 // Infers a field type from a value (used when loading a schema file).
 FieldType FieldTypeOf(const mtext::Variant& value);
+
+class Event;
 
 class Reflector {
  public:
@@ -83,6 +88,7 @@ class Reflector {
     kWrite,     // store every field into properties
     kGet,       // read one field as a Variant (UI data binding)
     kSet,       // assign one field from a Variant (UI data binding)
+    kEvents,    // hand every Event field to a callback (binding them)
   };
 
   static Reflector Describe() { return Reflector(Mode::kDescribe, nullptr); }
@@ -105,6 +111,12 @@ class Reflector {
     r.in_ = &value;
     return r;
   }
+  // Calls `fn` for each Event field.
+  static Reflector Events(std::function<void(Event&)> fn) {
+    Reflector r(Mode::kEvents, nullptr);
+    r.event_fn_ = std::move(fn);
+    return r;
+  }
   bool Found() const { return found_; }
 
   Mode GetMode() const { return mode_; }
@@ -119,6 +131,17 @@ class Reflector {
   Reflector& Field(const char* name, NodeRef& value);
   Reflector& Field(const char* name, AssetRef& value,
                    const char* asset_type = "");
+
+  // Arrays, saved as [a, b, c].
+  Reflector& Field(const char* name, std::vector<int>& value);
+  Reflector& Field(const char* name, std::vector<float>& value);
+  Reflector& Field(const char* name, std::vector<std::string>& value);
+  Reflector& Field(const char* name, std::vector<NodeRef>& value);
+  Reflector& Field(const char* name, std::vector<AssetRef>& value,
+                   const char* asset_type = "");
+
+  // An Event's saved calls (see scripting/event.h).
+  Reflector& Field(const char* name, Event& value);
 
   /**
    * @brief An enum stored as one of `names` (index 0, 1, 2... in order)
@@ -156,6 +179,9 @@ class Reflector {
   template <typename T, typename ToVariant, typename FromVariant>
   Reflector& Visit(const char* name, FieldType type, T& member,
                    ToVariant to_variant, FromVariant from_variant);
+  template <typename T, typename ToVariant, typename FromVariant>
+  Reflector& VisitList(const char* name, FieldType element, std::vector<T>& member,
+                       ToVariant to_variant, FromVariant from_variant);
 
   void EnumImpl(const char* name, int& index,
                 std::initializer_list<const char*> names);
@@ -169,6 +195,7 @@ class Reflector {
   mtext::Variant* out_ = nullptr;
   const mtext::Variant* in_ = nullptr;
   bool found_ = false;
+  std::function<void(Event&)> event_fn_;
 };
 
 }  // namespace Mercury
