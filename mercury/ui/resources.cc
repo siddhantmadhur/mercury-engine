@@ -1,9 +1,7 @@
 #include "resources.h"
 
-#include <fstream>
-#include <sstream>
-
 #include "debugger/debugger.h"
+#include "os/filesystem.h"
 #include "ui/uxml.h"
 
 #ifndef MERCURY_UI_RESOURCE_PATH
@@ -17,11 +15,9 @@ namespace {
 constexpr std::string_view kEnginePrefix = "mercury://";
 
 bool ReadText(const std::filesystem::path& path, std::string& out) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) return false;
-  std::ostringstream buffer;
-  buffer << file.rdbuf();
-  out = buffer.str();
+  auto text = os::ReadText(path);
+  if (!text) return false;
+  out = std::move(*text);
   return true;
 }
 

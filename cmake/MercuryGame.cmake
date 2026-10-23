@@ -4,8 +4,13 @@
 #   - every .cc/.cpp under <dir>/scripts is compiled in (new script files are
 #     picked up on the next build thanks to CONFIGURE_DEPENDS),
 #   - main() opens <dir>/<name>.mproj by default,
-#   - <dir>/.mercury/player.mcfg tells the editor how to build and run it,
+#   - <dir>/.mercury/player.mcfg tells the editor how to build and run it
+#     (MERCURY_PLAYER_MCFG renames it; the editor's Build Game configures a
+#     separate Release build that writes player-release.mcfg),
 #   - the scripts land in compile_commands.json, for clangd.
+set(MERCURY_PLAYER_MCFG "player" CACHE STRING
+        "Name of the .mercury/<name>.mcfg file mercury_add_game() writes")
+
 function(mercury_add_game TARGET)
     cmake_parse_arguments(GAME "" "PROJECT" "SOURCES" ${ARGN})
     if (NOT GAME_PROJECT)
@@ -37,11 +42,15 @@ function(mercury_add_game TARGET)
             EXPORT_COMPILE_COMMANDS ON
             CXX_SCAN_FOR_MODULES OFF)
 
+    # The engine's UI resources (default font and theme) and compiled shaders,
+    # which Build Game packs into engine.mpack.
+    get_target_property(MERCURY_SOURCE mercury SOURCE_DIR)
+    get_target_property(MERCURY_BINARY mercury BINARY_DIR)
+    set(MERCURY_UI_RESOURCES "${MERCURY_SOURCE}/mercury/ui/resources")
+
     if (EMSCRIPTEN)
-        # The engine's UI resources (default font and theme) are read from
-        # MERCURY_UI_RESOURCE_PATH, so ship them at the same path.
-        get_target_property(MERCURY_SOURCE mercury SOURCE_DIR)
-        set(MERCURY_UI_RESOURCES "${MERCURY_SOURCE}/mercury/ui/resources")
+        # They are read from MERCURY_UI_RESOURCE_PATH, so ship them at the
+        # same path.
         set_target_properties(${TARGET} PROPERTIES SUFFIX ".html")
         target_link_options(${TARGET} PRIVATE
                 "--shell-file" "${CMAKE_SOURCE_DIR}/web/shell.html"
@@ -56,10 +65,10 @@ function(mercury_add_game TARGET)
     # Multi-config generators (Visual Studio) get one file per configuration.
     get_property(MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
     if (MULTI_CONFIG)
-        set(GAME_MCFG "${GAME_PROJECT}/.mercury/player-$<CONFIG>.mcfg")
+        set(GAME_MCFG "${GAME_PROJECT}/.mercury/${MERCURY_PLAYER_MCFG}-$<CONFIG>.mcfg")
     else ()
-        set(GAME_MCFG "${GAME_PROJECT}/.mercury/player.mcfg")
+        set(GAME_MCFG "${GAME_PROJECT}/.mercury/${MERCURY_PLAYER_MCFG}.mcfg")
     endif ()
     file(GENERATE OUTPUT "${GAME_MCFG}" CONTENT
-            "[player]\nexecutable = \"$<TARGET_FILE:${TARGET}>\"\nbuild_dir = \"${CMAKE_BINARY_DIR}\"\ntarget = \"${TARGET}\"\nconfig = \"$<CONFIG>\"\n")
+            "[player]\nexecutable = \"$<TARGET_FILE:${TARGET}>\"\nbuild_dir = \"${CMAKE_BINARY_DIR}\"\nsource_dir = \"${CMAKE_SOURCE_DIR}\"\ntarget = \"${TARGET}\"\nconfig = \"$<CONFIG>\"\nspirv_dir = \"${MERCURY_BINARY}/shaders\"\nui_resources = \"${MERCURY_UI_RESOURCES}\"\n")
 endfunction()

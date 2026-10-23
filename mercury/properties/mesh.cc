@@ -7,6 +7,7 @@
 #include "assimp/scene.h"
 #include "assimp/code/Common/StackAllocator.h"
 #include "debugger/debugger.h"
+#include "properties/vfs_io_system.h"
 
 namespace Mercury {
 Mesh::Mesh() {
@@ -16,6 +17,7 @@ Mesh::Mesh() {
 
 Mesh::Mesh(const std::string &file_path) {
   Assimp::Importer importer;
+  UseVfs(importer);
 
   const aiScene *scene = importer.ReadFile(
       file_path, aiProcess_Triangulate | aiProcess_FlipUVs |

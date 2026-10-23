@@ -23,6 +23,7 @@
 #include "editor_settings.h"
 #include "imgui.h"
 #include "play_session.h"
+#include "release_build.h"
 #include "project/map.h"
 #include "project/project.h"
 #include "scene/map_scene.h"
@@ -92,6 +93,8 @@ class EditorScene : public MapScene {
 
   // Draws the editor for one field; returns true if `properties` changed.
   bool DrawField(const FieldInfo& field, mtext::PropertyList& properties);
+  bool DrawLockGroup(const char* label, const std::string& prefix,
+                     mtext::PropertyList& properties);
   bool DrawRawProperty(mtext::Property& property);
   bool DrawAssetPicker(const char* label, std::string& path,
                        const std::string& asset_type);
@@ -158,6 +161,7 @@ class EditorScene : public MapScene {
   EditorSettings settings_;
   Console console_;
   PlaySession play_;
+  ReleaseBuild release_{console_};
   UIBuilder ui_builder_{console_};
 
   // The open project is MapScene::GetProject().
@@ -213,10 +217,19 @@ class EditorScene : public MapScene {
   char new_project_dir_[1024] = "";
   char new_name_[128] = "";
   std::filesystem::path new_item_dir_;
-  enum class Modal { kNone, kNewScript, kNewMap, kNewFolder, kUnsaved, kDelete };
+  enum class Modal {
+    kNone,
+    kNewScript,
+    kNewMap,
+    kNewFolder,
+    kUnsaved,
+    kDelete,
+    kBuildGame
+  };
   Modal modal_ = Modal::kNone;
   bool open_modal_ = false;
   std::filesystem::path delete_target_;
+  std::string build_output_;  // Build Game's output folder, as typed
   enum class AfterSave { kNothing, kQuit, kCloseProject };
   AfterSave after_unsaved_ = AfterSave::kNothing;
 

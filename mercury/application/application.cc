@@ -16,6 +16,7 @@
 #endif
 
 #include "debugger/debugger.h"
+#include "properties/texture2d.h"
 
 namespace Mercury {
 
@@ -304,7 +305,7 @@ void Application::SetPointer(std::string file_path) {
   PDebug::info("Setting cursor...");
 
   int x, y, channels;
-  auto* res = stbi_load(file_path.c_str(), &x, &y, &channels, 4);
+  auto* res = LoadImageFile(file_path, &x, &y, &channels, 4);
   if (res) {
     GLFWimage* image = new GLFWimage();
     image->width = x;

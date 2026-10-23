@@ -86,6 +86,15 @@ int Project::GetWindowHeight() const {
                  : 720;
 }
 
+std::string Project::GetBuildOutput() const {
+  auto section = document_.Find("build");
+  return section ? section->properties.GetString("output") : "";
+}
+
+void Project::SetBuildOutput(std::string path) {
+  GetOrAddSection("build").properties.Set("output", std::move(path));
+}
+
 glm::vec3 Project::GetGravity() const {
   constexpr glm::vec3 kDefault(0.0f, -9.81f, 0.0f);
   auto section = document_.Find("physics");

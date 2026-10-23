@@ -4,9 +4,9 @@
 #include <atomic>
 #include <cctype>
 #include <format>
-#include <fstream>
-#include <sstream>
 #include <utility>
+
+#include "os/filesystem.h"
 
 namespace Mercury {
 
@@ -244,15 +244,13 @@ bool Map::LoadFromString(std::string_view source, std::string* error) {
 }
 
 bool Map::Load(const std::filesystem::path& path, std::string* error) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
+  auto text = os::ReadText(path);
+  if (!text) {
     if (error) *error = "could not open " + path.string();
     return false;
   }
-  std::stringstream buffer;
-  buffer << file.rdbuf();
   std::string inner_error;
-  if (!LoadFromString(buffer.str(), &inner_error)) {
+  if (!LoadFromString(*text, &inner_error)) {
     if (error) *error = path.string() + ":" + inner_error;
     return false;
   }

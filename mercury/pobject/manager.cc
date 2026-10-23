@@ -11,6 +11,7 @@
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
+#include "properties/vfs_io_system.h"
 #include "debugger/debugger.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include "properties/mesh.h"
@@ -111,6 +112,7 @@ kEntityId PObjectManager::NewPlane2D(glm::vec3 position, glm::vec2 size,
 kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
                                             float scale, glm::vec4 color) {
   Assimp::Importer importer;
+  UseVfs(importer);
 
   const aiScene *scene = importer.ReadFile(
       file_path, aiProcess_Triangulate | aiProcess_FlipUVs |

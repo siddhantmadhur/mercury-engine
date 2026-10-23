@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "debugger/debugger.h"
+#include "properties/texture2d.h"
 #include "stb/stb_image.h"
 #include "ui/draw_data.h"
 
@@ -51,7 +52,7 @@ std::shared_ptr<UITexture> UITextureRegistry::LoadFile(
     }
   }
   int width = 0, height = 0, channels = 0;
-  stbi_uc* pixels = stbi_load(absolute_path.c_str(), &width, &height, &channels, 4);
+  stbi_uc* pixels = LoadImageFile(absolute_path, &width, &height, &channels, 4);
   if (!pixels) {
     PDebug::warn("UI: could not load image {}", absolute_path);
     std::lock_guard lock(mutex_);

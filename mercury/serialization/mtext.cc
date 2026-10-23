@@ -7,6 +7,8 @@
 #include <sstream>
 #include <system_error>
 
+#include "os/filesystem.h"
+
 namespace Mercury::mtext {
 
 // ---------------------------------------------------------------- Variant ---
@@ -628,14 +630,12 @@ std::string Write(const Document& document) {
 
 bool LoadFile(const std::filesystem::path& path, Document& out,
               ParseError* error) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
+  auto text = os::ReadText(path);
+  if (!text) {
     if (error) *error = ParseError{0, 0, "could not open " + path.string()};
     return false;
   }
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  return Parse(buffer.str(), out, error);
+  return Parse(*text, out, error);
 }
 
 bool SaveFile(const std::filesystem::path& path, const Document& document) {

@@ -13,6 +13,9 @@
  *   title = "Pong"
  *   width = 1280
  *   height = 720
+ *
+ *   [build]
+ *   output = "Builds/Pong"     where the editor's Build Game writes the game
  */
 #ifndef MERCURY_PROJECT_PROJECT_H
 #define MERCURY_PROJECT_PROJECT_H
@@ -67,6 +70,9 @@ class Project {
   std::string GetWindowTitle() const;
   int GetWindowWidth() const;
   int GetWindowHeight() const;
+  // [build] output: a folder, absolute or relative to the root; empty if unset
+  std::string GetBuildOutput() const;
+  void SetBuildOutput(std::string path);
   // [physics] gravity, in units per second squared
   glm::vec3 GetGravity() const;
 

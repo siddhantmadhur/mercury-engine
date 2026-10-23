@@ -374,18 +374,11 @@ void MapScene::CreatePhysicsBodies() {
       settings.mMotionType = body->motion_type == MotionType::kKinematic
                                  ? JPH::EMotionType::Kinematic
                                  : JPH::EMotionType::Dynamic;
-      using D = JPH::EAllowedDOFs;
-      switch (body->allowed_dofs) {
-        case AllowedDofs::kAll: settings.mAllowedDOFs = D::All; break;
-        case AllowedDofs::kTranslationXYZ:
-          settings.mAllowedDOFs = D::TranslationX | D::TranslationY | D::TranslationZ;
-          break;
-        case AllowedDofs::kTranslationXY:
-          settings.mAllowedDOFs = D::TranslationX | D::TranslationY;
-          break;
-        case AllowedDofs::kPlane2D: settings.mAllowedDOFs = D::Plane2D; break;
-        case AllowedDofs::kTranslationX: settings.mAllowedDOFs = D::TranslationX; break;
-        case AllowedDofs::kTranslationY: settings.mAllowedDOFs = D::TranslationY; break;
+      const uint8_t allowed = body->ComputeAllowedDOFs();
+      if (allowed == 0) {
+        settings.mMotionType = JPH::EMotionType::Static;
+      } else {
+        settings.mAllowedDOFs = JPH::EAllowedDOFs(allowed);
       }
       settings.mMotionQuality = body->motion_quality == MotionQuality::kLinearCast
                                     ? JPH::EMotionQuality::LinearCast

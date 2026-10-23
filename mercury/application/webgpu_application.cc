@@ -650,7 +650,7 @@ void WebGpuApplication::UpdateSkyboxTexture() {
   if (path.empty()) return;
 
   int width = 0, height = 0, channels = 0;
-  stbi_uc* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+  stbi_uc* pixels = LoadImageFile(path, &width, &height, &channels, 4);
   if (!pixels) {
     PDebug::error("Could not load skybox image: {}", path);
     return;

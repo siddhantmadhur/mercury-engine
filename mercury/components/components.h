@@ -170,29 +170,101 @@ enum class MotionQuality { kDiscrete, kLinearCast };
 struct Rigidbody {
   MotionType motion_type = MotionType::kDynamic;
   float mass = 1.0f;
-  AllowedDofs allowed_dofs = AllowedDofs::kAll;
   MotionQuality motion_quality = MotionQuality::kDiscrete;
   float gravity_factor = 1.0f;
   float linear_damping = 0.05f;
   float angular_damping = 0.05f;
   bool allow_sleeping = true;
 
+  // Constraints: lock translation along world axes
+  bool lock_translation_x = false;
+  bool lock_translation_y = false;
+  bool lock_translation_z = false;
+
+  // Constraints: lock rotation around world axes
+  bool lock_rotation_x = false;
+  bool lock_rotation_y = false;
+  bool lock_rotation_z = false;
+
+  // Computes the bitmask of allowed DOFs (compatible with JPH::EAllowedDOFs)
+  uint8_t ComputeAllowedDOFs() const {
+    uint8_t allowed = 0b111111;
+    if (lock_translation_x) allowed &= ~0b000001;
+    if (lock_translation_y) allowed &= ~0b000010;
+    if (lock_translation_z) allowed &= ~0b000100;
+    if (lock_rotation_x) allowed &= ~0b001000;
+    if (lock_rotation_y) allowed &= ~0b010000;
+    if (lock_rotation_z) allowed &= ~0b100000;
+    return allowed;
+  }
+
   void Reflect(Reflector& r) {
     r.Enum("motion_type", motion_type, {"static", "kinematic", "dynamic"})
         .Tooltip(
             "kinematic bodies move only by the velocity you set and are not "
             "pushed by collisions");
-    r.Enum("allowed_dofs", allowed_dofs,
-           {"all", "translation_xyz", "translation_xy", "plane_2d",
-            "translation_x", "translation_y"})
-        .Tooltip("Which axes the body may move or rotate along");
     r.Field("mass", mass).Tooltip("In kilograms");
     r.Enum("motion_quality", motion_quality, {"discrete", "linear_cast"})
         .Tooltip("linear_cast stops fast bodies tunneling through others");
+    r.Field("lock_translation_x", lock_translation_x)
+        .Tooltip("Freeze movement along the world X axis");
+    r.Field("lock_translation_y", lock_translation_y)
+        .Tooltip("Freeze movement along the world Y axis");
+    r.Field("lock_translation_z", lock_translation_z)
+        .Tooltip("Freeze movement along the world Z axis");
+    r.Field("lock_rotation_x", lock_rotation_x)
+        .Tooltip("Freeze rotation around the world X axis");
+    r.Field("lock_rotation_y", lock_rotation_y)
+        .Tooltip("Freeze rotation around the world Y axis");
+    r.Field("lock_rotation_z", lock_rotation_z)
+        .Tooltip("Freeze rotation around the world Z axis");
     r.Field("gravity_factor", gravity_factor);
     r.Field("linear_damping", linear_damping);
     r.Field("angular_damping", angular_damping);
     r.Field("allow_sleeping", allow_sleeping);
+
+    if (r.GetMode() == Reflector::Mode::kRead) {
+      // Also accept lock_transform_* and lock_position_* aliases if present
+      r.Field("lock_transform_x", lock_translation_x);
+      r.Field("lock_transform_y", lock_translation_y);
+      r.Field("lock_transform_z", lock_translation_z);
+      r.Field("lock_position_x", lock_translation_x);
+      r.Field("lock_position_y", lock_translation_y);
+      r.Field("lock_position_z", lock_translation_z);
+
+      // Backward compatibility with legacy allowed_dofs
+      AllowedDofs legacy_dofs = AllowedDofs::kAll;
+      r.Enum("allowed_dofs", legacy_dofs,
+             {"all", "translation_xyz", "translation_xy", "plane_2d",
+              "translation_x", "translation_y"});
+      if (legacy_dofs != AllowedDofs::kAll &&
+          !lock_translation_x && !lock_translation_y && !lock_translation_z &&
+          !lock_rotation_x && !lock_rotation_y && !lock_rotation_z) {
+        switch (legacy_dofs) {
+          case AllowedDofs::kTranslationXYZ:
+            lock_rotation_x = lock_rotation_y = lock_rotation_z = true;
+            break;
+          case AllowedDofs::kTranslationXY:
+            lock_translation_z = true;
+            lock_rotation_x = lock_rotation_y = lock_rotation_z = true;
+            break;
+          case AllowedDofs::kPlane2D:
+            lock_translation_z = true;
+            lock_rotation_x = lock_rotation_y = true;
+            break;
+          case AllowedDofs::kTranslationX:
+            lock_translation_y = lock_translation_z = true;
+            lock_rotation_x = lock_rotation_y = lock_rotation_z = true;
+            break;
+          case AllowedDofs::kTranslationY:
+            lock_translation_x = lock_translation_z = true;
+            lock_rotation_x = lock_rotation_y = lock_rotation_z = true;
+            break;
+          default:
+            break;
+        }
+      }
+    }
   }
 };
 
