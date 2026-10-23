@@ -12,6 +12,11 @@
  *
  *   [windows]
  *   ui_builder = true
+ *   lore = true
+ *
+ *   [lore]
+ *   executable = "lore"
+ *   server = "lore://127.0.0.1:41337"
  */
 #ifndef MERCURY_EDITOR_EDITOR_SETTINGS_H
 #define MERCURY_EDITOR_EDITOR_SETTINGS_H
@@ -29,6 +34,12 @@ struct EditorSettings {
   std::vector<std::string> recent_projects;
   // Window > UI Builder.
   bool show_ui_builder = false;
+  // Window > Lore.
+  bool show_lore = true;
+  // The Lore command line tool; empty means "lore" from PATH.
+  std::string lore_executable;
+  // Server new Lore repositories are created on.
+  std::string lore_server = "lore://127.0.0.1:41337";
 
   static std::filesystem::path ConfigDir();
   static std::filesystem::path HomeDir();

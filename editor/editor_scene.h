@@ -4,7 +4,8 @@
  * The Mercury editor, modeled on Unity's: a project launcher, then a docked
  * workspace with Hierarchy, Inspector, Scene, Project and Console panels.
  *
- * In-game UI is edited in the UI Builder window (ui_builder.h).
+ * In-game UI is edited in the UI Builder window (ui_builder.h), and the
+ * project is versioned with Lore from the Lore panel (lore_vcs.h).
  *
  * The editor edits a Map (the data in a .mmap file) and mirrors it into an
  * edit-mode MapScene for drawing. Game code is never loaded here: Play builds
@@ -22,6 +23,7 @@
 #include "console.h"
 #include "editor_settings.h"
 #include "imgui.h"
+#include "lore_vcs.h"
 #include "play_session.h"
 #include "release_build.h"
 #include "project/map.h"
@@ -163,6 +165,7 @@ class EditorScene : public MapScene {
   PlaySession play_;
   ReleaseBuild release_{console_};
   UIBuilder ui_builder_{console_};
+  LoreVcs lore_{console_, settings_};
 
   // The open project is MapScene::GetProject().
   Map map_;

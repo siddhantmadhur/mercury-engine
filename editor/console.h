@@ -2,7 +2,8 @@
  * console.h
  *
  * Log lines shown in the editor's Console panel: the editor's own messages,
- * engine logs (through PDebug's sink) and the output of builds and the game.
+ * engine logs (through PDebug's sink), the output of builds and the game, and
+ * Lore version control commands.
  */
 #ifndef MERCURY_EDITOR_CONSOLE_H
 #define MERCURY_EDITOR_CONSOLE_H
@@ -17,7 +18,7 @@ namespace Mercury {
 class Console {
  public:
   enum class Level { kInfo, kWarning, kError };
-  enum class Source { kEditor, kBuild, kGame };
+  enum class Source { kEditor, kBuild, kGame, kLore };
 
   struct Line {
     Level level;
