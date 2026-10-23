@@ -662,7 +662,9 @@ void MapScene::DispatchCollisions() {
 }
 
 void MapScene::AwakeBehaviours() {
-  if (mode_ != Mode::kPlay) return;
+  // A map instantiated before the scene starts is awoken by OnStart, once the
+  // application has a window and input (Unity's Awake runs on scene load).
+  if (mode_ != Mode::kPlay || !running_) return;
   // Awake/OnEnable may add more behaviours; index so the loop sees them.
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
