@@ -21,6 +21,9 @@ Transform::Transform() : transformations_(0) {
   this->rotation_ = glm::vec3(0.0f);
   this->interpolated_rotation_ = glm::vec3(0.0f);
   this->previous_rotation_ = glm::vec3(0.0f);
+  this->local_position_ = glm::vec3(0.0f);
+  this->local_rotation_ = glm::vec3(0.0f);
+  this->local_scale_ = glm::vec3(1.0f);
 }
 Transform::Transform(glm::vec3 position) : transformations_(0) {
   this->position_ = position;
@@ -30,12 +33,74 @@ Transform::Transform(glm::vec3 position) : transformations_(0) {
   this->rotation_ = glm::vec3(0.0f);
   this->interpolated_rotation_ = glm::vec3(0.0f);
   this->previous_rotation_ = glm::vec3(0.0f);
+  this->local_position_ = position;
+  this->local_rotation_ = glm::vec3(0.0f);
+  this->local_scale_ = glm::vec3(1.0f);
 }
 
 glm::vec3 Transform::GetPosition() const { return this->position_; }
 void Transform::SetPosition(glm::vec3 position) {
   this->position_ = position;
   transformations_.push_back(kTransformPosition);
+  dirty_ = true;
+  if (on_world_changed_) on_world_changed_();
+}
+
+void Transform::SetLocalPosition(glm::vec3 position) {
+  this->local_position_ = position;
+  dirty_ = true;
+  if (on_local_changed_) on_local_changed_();
+}
+
+void Transform::SetLocalRotate(glm::vec3 rotation) {
+  this->local_rotation_ = rotation;
+  dirty_ = true;
+  if (on_local_changed_) on_local_changed_();
+}
+
+void Transform::SetLocalScale(glm::vec3 scale) {
+  this->local_scale_ = scale;
+  dirty_ = true;
+  if (on_local_changed_) on_local_changed_();
+}
+
+void Transform::SetWorldTransformInternal(glm::vec3 pos, glm::vec3 rot,
+                                         glm::vec3 scale) {
+  this->position_ = pos;
+  this->rotation_ = rot;
+  this->scale_ = scale;
+  transformations_.push_back(kTransformPosition);
+  transformations_.push_back(kTransformRotation);
+  dirty_ = true;
+}
+
+void Transform::SetWorldPositionInternal(glm::vec3 pos) {
+  this->position_ = pos;
+  transformations_.push_back(kTransformPosition);
+  dirty_ = true;
+}
+
+void Transform::SetWorldRotationInternal(glm::vec3 rot) {
+  this->rotation_ = rot;
+  transformations_.push_back(kTransformRotation);
+  dirty_ = true;
+}
+
+void Transform::SetWorldScaleInternal(glm::vec3 scale) {
+  this->scale_ = scale;
+  dirty_ = true;
+}
+
+void Transform::SetInterpolatedTransformInternal(glm::vec3 pos, glm::vec3 rot,
+                                                glm::vec3 scale) {
+  interpolated_position_ = pos;
+  interpolated_rotation_ = rot;
+  interpolated_scale_ = scale;
+  if (rot == glm::vec3(0.0f)) {
+    rotation_matrix_ = glm::mat4(1.0f);
+  } else {
+    rotation_matrix_ = glm::mat4_cast(EulerToQuat(rot));
+  }
   dirty_ = true;
 }
 
@@ -48,16 +113,19 @@ void Transform::SetRotate(glm::vec3 new_value) {
   this->rotation_ = new_value;
   transformations_.push_back(kTransformRotation);
   dirty_ = true;
+  if (on_world_changed_) on_world_changed_();
 }
 void Transform::ChangeRotate(glm::vec3 delta) {
   rotation_ += delta;
   transformations_.push_back(kTransformRotation);
   dirty_ = true;
+  if (on_world_changed_) on_world_changed_();
 }
 
 void Transform::SetScale(glm::vec3 scale) {
   this->scale_ = scale;
   dirty_ = true;
+  if (on_world_changed_) on_world_changed_();
 }
 glm::vec3 Transform::GetRotate() const { return this->rotation_; }
 glm::vec3 Transform::GetScale() const { return this->scale_; }
@@ -71,7 +139,9 @@ void Transform::SetVelocityMagnitude(float) {
 
 void Transform::Move(glm::vec3 movement) {
   this->position_ += movement;
+  transformations_.push_back(kTransformPosition);
   dirty_ = true;
+  if (on_world_changed_) on_world_changed_();
 }
 
 glm::vec3 Transform::GetInterpolatedPosition() const {

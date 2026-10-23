@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
 
 #include "globals.h"
 #include "properties/texture2d.h"
@@ -26,6 +27,7 @@ struct NodeInfo {
   std::string path;  // from the map root, e.g. "Walls/Left"
   kEntityId parent = entt::null;
   uint64_t uid = 0;  // MapNode::uid
+  std::vector<kEntityId> children;
 };
 
 /**

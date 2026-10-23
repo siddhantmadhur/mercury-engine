@@ -130,7 +130,7 @@ position = Vector3(0, -0.5, -14)
 scale = Vector3(3.2, 1, 18)
 
 [component type="MeshRenderer" node="NarrowBridge"]
-material = ExtResource("6")
+material = ExtResource("8")
 
 [component type="BoxCollider" node="NarrowBridge"]
 material = ExtResource("7")
@@ -241,7 +241,7 @@ position = Vector3(0, 2.1, -79)
 scale = Vector3(5, 1, 22)
 
 [component type="MeshRenderer" node="MogulTrack"]
-material = ExtResource("6")
+material = ExtResource("8")
 
 [component type="BoxCollider" node="MogulTrack"]
 material = ExtResource("7")

@@ -134,6 +134,7 @@ class GameScene {
   void SetHeight(float);
 
   entt::registry& GetRegistry() { return object_manager_->GetRegistry(); }
+  const entt::registry& GetRegistry() const { return object_manager_->GetRegistry(); }
 
   void SetInputManager(InputManager*);
   void SetRenderHost(RenderHost* host) { render_host_ = host; }
@@ -143,7 +144,7 @@ class GameScene {
 
   void SimulatePhysics(int steps);
 
-  void ProcessOnFrame(float alpha);
+  virtual void ProcessOnFrame(float alpha);
   void OnTickBegin();
 
  protected:
