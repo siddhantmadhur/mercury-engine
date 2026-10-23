@@ -1,0 +1,131 @@
+[mmap format=1]
+
+[ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
+[ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
+[ext_resource type="Model" path="res://models/sibenik/sibenik.obj" id="3"]
+[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="4"]
+
+[node name="Sibenik"]
+
+[component type="Transform" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
+panel_settings = ExtResource("2")
+
+[component type="SceneHud" node="."]
+title = "Sibenik Cathedral"
+hint = "The camera flies a loop. Space: pause · Esc: menu"
+
+[component type="PostProcessVolume" node="."]
+profile = ExtResource("4")
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(-17, -10, 0)
+rotation = Vector3(0, 0, 0)
+
+[component type="Camera" node="Camera"]
+fov = 60
+near_clip = 0.05
+far_clip = 200
+background = Color(0.05, 0.05, 0.06, 1)
+
+[component type="FlythroughCamera" node="Camera"]
+path = NodePath("Path")
+lap_seconds = 70
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+rotation = Vector3(-55, 35, 0)
+
+[component type="DirectionalLight" node="Sun"]
+color = Color(1, 0.96, 0.9, 1)
+intensity = 1.6
+ambient = Color(0.3, 0.3, 0.32, 1)
+ground_ambient = Color(0.12, 0.11, 0.1, 1)
+cast_shadows = false
+
+[node name="Lights" parent="."]
+
+[component type="Transform" node="Lights"]
+
+[node name="L0" parent="Lights"]
+
+[component type="Transform" node="Lights/L0"]
+position = Vector3(-12, -8, 0)
+
+[component type="PointLight" node="Lights/L0"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 30
+range = 18
+
+[node name="L1" parent="Lights"]
+
+[component type="Transform" node="Lights/L1"]
+position = Vector3(0, -8, 0)
+
+[component type="PointLight" node="Lights/L1"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 30
+range = 18
+
+[node name="L2" parent="Lights"]
+
+[component type="Transform" node="Lights/L2"]
+position = Vector3(12, -8, 0)
+
+[component type="PointLight" node="Lights/L2"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 30
+range = 18
+
+[node name="Model" parent="."]
+
+[component type="Transform" node="Model"]
+
+[component type="MeshRenderer" node="Model"]
+mesh = "model"
+model = ExtResource("3")
+
+[node name="Path" parent="."]
+
+[component type="Transform" node="Path"]
+
+[node name="P0" parent="Path"]
+
+[component type="Transform" node="Path/P0"]
+position = Vector3(-17, -11.8, 0)
+rotation = Vector3(2.08, -90, 0)
+
+[node name="P1" parent="Path"]
+
+[component type="Transform" node="Path/P1"]
+position = Vector3(-6, -11.5, 1.8)
+rotation = Vector3(8.75, -80.07, 0)
+
+[node name="P2" parent="Path"]
+
+[component type="Transform" node="Path/P2"]
+position = Vector3(2.5, -10, 0)
+rotation = Vector3(3.69, -90, 0)
+
+[node name="P3" parent="Path"]
+
+[component type="Transform" node="Path/P3"]
+position = Vector3(2, -5, -1.5)
+rotation = Vector3(-17.92, 104.04, 0)
+
+[node name="P4" parent="Path"]
+
+[component type="Transform" node="Path/P4"]
+position = Vector3(-8, -4, 0)
+rotation = Vector3(7.77, 90, 0)
+
+[node name="P5" parent="Path"]
+
+[component type="Transform" node="Path/P5"]
+position = Vector3(-15, -8, -1)
+rotation = Vector3(-7.58, -93.81, 0)

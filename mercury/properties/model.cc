@@ -1,10 +1,12 @@
 #include "model.h"
 
+#include <assimp/ObjMaterial.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <set>
 #include <filesystem>
 #include <functional>
@@ -18,6 +20,9 @@
 #include "properties/texture2d.h"
 #include "properties/vfs_io_system.h"
 #include "serialization/mtext.h"
+
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb/stb_image_resize2.h"
 
 namespace Mercury {
 
@@ -73,6 +78,42 @@ void MeshGeometry::ComputeBounds() {
   for (const auto& v : vertices) {
     bounds_min = glm::min(bounds_min, v.position);
     bounds_max = glm::max(bounds_max, v.position);
+  }
+}
+
+void MeshGeometry::ComputeTangents() {
+  // Per vertex: the surface directions of increasing u and of "up" in the
+  // image (decreasing v: row 0 is the top), summed over its triangles.
+  std::vector<glm::vec3> along_u(vertices.size(), glm::vec3(0.0f));
+  std::vector<glm::vec3> up(vertices.size(), glm::vec3(0.0f));
+  for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+    const uint32_t a = indices[i], b = indices[i + 1], c = indices[i + 2];
+    if (a >= vertices.size() || b >= vertices.size() || c >= vertices.size()) continue;
+    const glm::vec3 e1 = vertices[b].position - vertices[a].position;
+    const glm::vec3 e2 = vertices[c].position - vertices[a].position;
+    const glm::vec2 d1 = vertices[b].uv - vertices[a].uv;
+    const glm::vec2 d2 = vertices[c].uv - vertices[a].uv;
+    const float det = d1.x * d2.y - d2.x * d1.y;
+    if (std::abs(det) < 1e-12f) continue;
+    const float r = 1.0f / det;
+    const glm::vec3 t = (e1 * d2.y - e2 * d1.y) * r;
+    const glm::vec3 bv = (e2 * d1.x - e1 * d2.x) * r;
+    for (uint32_t v : {a, b, c}) {
+      along_u[v] += t;
+      up[v] -= bv;
+    }
+  }
+  for (size_t v = 0; v < vertices.size(); v++) {
+    const glm::vec3 n = vertices[v].normal;
+    glm::vec3 t = along_u[v] - n * glm::dot(n, along_u[v]);
+    if (glm::dot(t, t) < 1e-20f) {
+      // No usable UVs: any direction across the surface.
+      t = std::abs(n.x) < 0.9f ? glm::cross(n, glm::vec3(1, 0, 0))
+                               : glm::cross(n, glm::vec3(0, 1, 0));
+    }
+    t = glm::normalize(t);
+    const float w = glm::dot(glm::cross(n, t), up[v]) < 0.0f ? -1.0f : 1.0f;
+    vertices[v].tangent = glm::vec4(t, w);
   }
 }
 
@@ -153,6 +194,8 @@ ModelImportSettings ModelImportSettings::ForFile(const std::string& model_path,
     settings.scale = static_cast<float>(section->properties.GetFloat("scale", settings.scale));
     settings.use_file_scale =
         section->properties.GetBool("use_file_scale", settings.use_file_scale);
+    settings.max_texture_size = static_cast<int>(
+        section->properties.GetInt("max_texture_size", settings.max_texture_size));
   }
   return settings;
 }
@@ -183,6 +226,25 @@ glm::mat4 FlipMatrix(const glm::mat4& m) {
   return r * m * r;
 }
 
+std::string Lower(std::string text) {
+  for (char& c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return text;
+}
+
+// `dir / file`, matching the name without regard to case when the exact one
+// is missing (models made on Windows often spell their textures differently).
+fs::path FindInDirectory(const fs::path& dir, const fs::path& file) {
+  std::error_code ec;
+  const fs::path exact = dir / file;
+  if (fs::exists(exact, ec)) return exact;
+  if (!fs::is_directory(dir.empty() ? fs::path(".") : dir, ec)) return {};
+  const std::string wanted = Lower(file.string());
+  for (const auto& entry : fs::directory_iterator(dir.empty() ? fs::path(".") : dir, ec)) {
+    if (Lower(entry.path().filename().string()) == wanted) return entry.path();
+  }
+  return {};
+}
+
 // Finds a texture a model refers to, the way Unity's importer searches:
 // next to the model, in a "Textures" folder, then in the folders above.
 std::string FindTexture(const fs::path& model_dir, const std::string& reference) {
@@ -190,22 +252,98 @@ std::string FindTexture(const fs::path& model_dir, const std::string& reference)
   std::replace(name.begin(), name.end(), '\\', '/');
   const fs::path file = fs::path(name).filename();
   if (file.empty()) return "";
-  std::error_code ec;
   // A relative path as written in the file.
   if (!fs::path(name).is_absolute()) {
     const fs::path direct = model_dir / name;
-    if (fs::exists(direct, ec)) return direct.string();
+    if (auto found = FindInDirectory(direct.parent_path(), file); !found.empty()) {
+      return found.string();
+    }
   }
   fs::path dir = model_dir;
   for (int depth = 0; depth < 6 && !dir.empty(); depth++) {
     for (const char* sub : {"", "Textures", "textures", "Texture", "texture"}) {
-      const fs::path candidate = dir / sub / file;
-      if (fs::exists(candidate, ec)) return candidate.string();
+      if (auto found = FindInDirectory(dir / sub, file); !found.empty()) {
+        return found.string();
+      }
     }
     if (dir == dir.parent_path()) break;
     dir = dir.parent_path();
   }
   return "";
+}
+
+// Scales `image` down (keeping its aspect) so neither side exceeds `max_size`.
+std::shared_ptr<ImageData> FitTexture(std::shared_ptr<ImageData> image, int max_size) {
+  if (!image || max_size <= 0 || std::max(image->width, image->height) <= max_size) {
+    return image;
+  }
+  const float factor = static_cast<float>(max_size) / std::max(image->width, image->height);
+  const int width = std::max(1, static_cast<int>(image->width * factor));
+  const int height = std::max(1, static_cast<int>(image->height * factor));
+  std::vector<uint8_t> pixels(size_t(width) * height * 4);
+  if (image->srgb) {
+    stbir_resize_uint8_srgb(image->pixels.data(), image->width, image->height, 0,
+                            pixels.data(), width, height, 0, STBIR_RGBA);
+  } else {
+    stbir_resize_uint8_linear(image->pixels.data(), image->width, image->height, 0,
+                              pixels.data(), width, height, 0, STBIR_RGBA);
+  }
+  PDebug::log("{}: scaled {}x{} down to {}x{}", image->source, image->width, image->height,
+              width, height);
+  auto result = ImageData::FromPixels(width, height, std::move(pixels), image->source);
+  result->srgb = image->srgb;
+  return result;
+}
+
+// True when the image is already a tangent-space normal map (bluish, with
+// x and y centered), rather than a height map.
+bool LooksLikeNormalMap(const ImageData& image) {
+  const size_t count = size_t(image.width) * image.height;
+  if (count == 0) return false;
+  const size_t step = std::max<size_t>(1, count / 4096);
+  double r = 0.0, g = 0.0, b = 0.0;
+  size_t samples = 0;
+  for (size_t i = 0; i < count; i += step, samples++) {
+    r += image.pixels[i * 4 + 0];
+    g += image.pixels[i * 4 + 1];
+    b += image.pixels[i * 4 + 2];
+  }
+  r /= samples * 255.0;
+  g /= samples * 255.0;
+  b /= samples * 255.0;
+  return b > 0.7 && std::abs(r - 0.5) < 0.15 && std::abs(g - 0.5) < 0.15;
+}
+
+// Turns a height (bump) map, light = raised, into a tangent-space normal map
+// with x along +u and y toward the top of the image.
+std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height, float strength) {
+  const int w = height.width, h = height.height;
+  std::vector<float> lum(size_t(w) * h);
+  for (size_t i = 0; i < lum.size(); i++) {
+    lum[i] = (0.299f * height.pixels[i * 4 + 0] + 0.587f * height.pixels[i * 4 + 1] +
+              0.114f * height.pixels[i * 4 + 2]) / 255.0f;
+  }
+  // Textures repeat, so the filter wraps around the edges.
+  auto at = [&](int x, int y) { return lum[size_t((y + h) % h) * w + (x + w) % w]; };
+  std::vector<uint8_t> pixels(size_t(w) * h * 4);
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      // Sobel; rows grow downward, so "up" is y - 1.
+      const float dx = (at(x + 1, y - 1) + 2.0f * at(x + 1, y) + at(x + 1, y + 1)) -
+                       (at(x - 1, y - 1) + 2.0f * at(x - 1, y) + at(x - 1, y + 1));
+      const float dy = (at(x - 1, y - 1) + 2.0f * at(x, y - 1) + at(x + 1, y - 1)) -
+                       (at(x - 1, y + 1) + 2.0f * at(x, y + 1) + at(x + 1, y + 1));
+      const glm::vec3 n = glm::normalize(glm::vec3(-dx * strength, -dy * strength, 1.0f));
+      uint8_t* out = &pixels[(size_t(y) * w + x) * 4];
+      out[0] = static_cast<uint8_t>(std::lround((n.x * 0.5f + 0.5f) * 255.0f));
+      out[1] = static_cast<uint8_t>(std::lround((n.y * 0.5f + 0.5f) * 255.0f));
+      out[2] = static_cast<uint8_t>(std::lround((n.z * 0.5f + 0.5f) * 255.0f));
+      out[3] = 255;
+    }
+  }
+  auto image = ImageData::FromPixels(w, h, std::move(pixels), height.source + " (normals)");
+  image->srgb = false;
+  return image;
 }
 
 }  // namespace
@@ -217,6 +355,9 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
   UseVfs(importer);
   importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
   importer.SetPropertyInteger(AI_CONFIG_PP_LBW_MAX_WEIGHTS, 4);
+  // Files without normals keep hard edges above 60 degrees (Unity's default
+  // smoothing angle), so boxes don't shade like pillows.
+  importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 60.0f);
   importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE,
                               aiPrimitiveType_POINT | aiPrimitiveType_LINE);
   const aiScene* scene = importer.ReadFile(
@@ -311,7 +452,53 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
 
   // ---- Materials
   const fs::path model_dir = fs::path(path).parent_path();
-  std::map<std::string, std::shared_ptr<ImageData>> loaded_textures;
+  const bool is_obj = Lower(fs::path(path).extension().string()) == ".obj";
+  enum class TextureUse { kColor, kData, kHeight };
+  std::map<std::pair<std::string, TextureUse>, std::shared_ptr<ImageData>> loaded_textures;
+  // A texture the file refers to, embedded or next to it; each is decoded
+  // once per use. Height maps come back as normal maps.
+  auto load_texture = [&](const std::string& reference, TextureUse use,
+                          float bump_scale) -> std::shared_ptr<ImageData> {
+    if (reference.empty()) return nullptr;
+    const auto key = std::pair(reference, use);
+    if (auto it = loaded_textures.find(key); it != loaded_textures.end()) return it->second;
+    std::shared_ptr<ImageData> image;
+    if (const aiTexture* embedded = scene->GetEmbeddedTexture(reference.c_str())) {
+      if (embedded->mHeight == 0) {
+        image = ImageData::FromMemory(reinterpret_cast<const uint8_t*>(embedded->pcData),
+                                      embedded->mWidth, path + ":" + reference);
+      } else {
+        std::vector<uint8_t> pixels(size_t(embedded->mWidth) * embedded->mHeight * 4);
+        for (size_t i = 0; i < size_t(embedded->mWidth) * embedded->mHeight; i++) {
+          pixels[i * 4 + 0] = embedded->pcData[i].r;
+          pixels[i * 4 + 1] = embedded->pcData[i].g;
+          pixels[i * 4 + 2] = embedded->pcData[i].b;
+          pixels[i * 4 + 3] = embedded->pcData[i].a;
+        }
+        image = ImageData::FromPixels(embedded->mWidth, embedded->mHeight,
+                                      std::move(pixels), path + ":" + reference);
+      }
+    } else if (auto file = FindTexture(model_dir, reference); !file.empty()) {
+      image = ImageData::Load(file);
+    }
+    if (!image) {
+      PDebug::warn("{}: texture {} not found", path, reference);
+    } else {
+      image->srgb = use == TextureUse::kColor;
+      if (use == TextureUse::kHeight && !LooksLikeNormalMap(*image)) {
+        image = HeightToNormalMap(*FitTexture(image, settings.max_texture_size),
+                                  2.0f * bump_scale);
+      }
+      image = FitTexture(image, settings.max_texture_size);
+    }
+    loaded_textures[key] = image;
+    return image;
+  };
+  auto texture_of = [](const aiMaterial* material, aiTextureType type) {
+    aiString texture_path;
+    if (material->GetTexture(type, 0, &texture_path) != AI_SUCCESS) return std::string();
+    return std::string(texture_path.C_Str());
+  };
   for (unsigned m = 0; m < scene->mNumMaterials; m++) {
     const aiMaterial* source = scene->mMaterials[m];
     ModelMaterial material;
@@ -329,38 +516,63 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
     if (source->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
       material.metallic = metallic;
     }
-    aiString texture_path;
-    if (source->GetTexture(aiTextureType_BASE_COLOR, 0, &texture_path) != AI_SUCCESS) {
-      source->GetTexture(aiTextureType_DIFFUSE, 0, &texture_path);
-    }
-    const std::string reference = texture_path.C_Str();
-    if (!reference.empty()) {
-      if (auto it = loaded_textures.find(reference); it != loaded_textures.end()) {
-        material.texture = it->second;
-      } else {
-        std::shared_ptr<ImageData> image;
-        if (const aiTexture* embedded = scene->GetEmbeddedTexture(reference.c_str())) {
-          if (embedded->mHeight == 0) {
-            image = ImageData::FromMemory(reinterpret_cast<const uint8_t*>(embedded->pcData),
-                                          embedded->mWidth, path + ":" + reference);
-          } else {
-            std::vector<uint8_t> pixels(size_t(embedded->mWidth) * embedded->mHeight * 4);
-            for (size_t i = 0; i < size_t(embedded->mWidth) * embedded->mHeight; i++) {
-              pixels[i * 4 + 0] = embedded->pcData[i].r;
-              pixels[i * 4 + 1] = embedded->pcData[i].g;
-              pixels[i * 4 + 2] = embedded->pcData[i].b;
-              pixels[i * 4 + 3] = embedded->pcData[i].a;
-            }
-            image = ImageData::FromPixels(embedded->mWidth, embedded->mHeight,
-                                          std::move(pixels), path + ":" + reference);
-          }
-        } else if (auto file = FindTexture(model_dir, reference); !file.empty()) {
-          image = ImageData::Load(file);
+    float roughness = 0.0f;
+    if (source->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
+      material.smoothness = 1.0f - std::clamp(roughness, 0.0f, 1.0f);
+    } else if (is_obj) {
+      // Blinn-Phong exponent (Ns) to GGX roughness; without specular (Ks)
+      // the surface is matte whatever Ns says.
+      float shininess = 0.0f;
+      source->Get(AI_MATKEY_SHININESS, shininess);
+      aiColor3D specular(0, 0, 0);
+      source->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+      const float ks = std::max({specular.r, specular.g, specular.b});
+      const float smooth = 1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
+      material.smoothness = std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
+      // No diffuse but a strong specular: a mirror, or glass when the
+      // illumination model refracts (4, 6, 7). Approximated as metal and as
+      // see-through, there being no reflections or refraction to draw.
+      const float kd = std::max({color.r, color.g, color.b});
+      if (kd < 0.05f && ks > 0.25f && texture_of(source, aiTextureType_DIFFUSE).empty()) {
+        int illum = 2;
+        source->Get(AI_MATKEY_OBJ_ILLUM, illum);
+        if (illum == 4 || illum == 6 || illum == 7) {
+          material.color = glm::vec4(glm::vec3(std::max(ks, 0.6f)), 0.25f);
+          material.transparent = true;
+        } else {
+          material.color = glm::vec4(specular.r, specular.g, specular.b, material.color.a);
+          material.metallic = 1.0f;
         }
-        if (!image) PDebug::warn("{}: texture {} not found", path, reference);
-        loaded_textures[reference] = image;
-        material.texture = image;
       }
+    }
+    aiColor3D emissive(0, 0, 0);
+    source->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
+    material.emission = glm::vec3(emissive.r, emissive.g, emissive.b);
+
+    std::string reference = texture_of(source, aiTextureType_BASE_COLOR);
+    if (reference.empty()) reference = texture_of(source, aiTextureType_DIFFUSE);
+    material.texture = load_texture(reference, TextureUse::kColor, 1.0f);
+    // OBJ exporters often write Kd 0 next to map_Kd, meaning "the texture
+    // alone" rather than black.
+    if (is_obj && material.texture && glm::vec3(material.color) == glm::vec3(0.0f)) {
+      material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
+    }
+
+    material.emission_texture =
+        load_texture(texture_of(source, aiTextureType_EMISSIVE), TextureUse::kColor, 1.0f);
+    if (material.emission_texture && material.emission == glm::vec3(0.0f)) {
+      material.emission = glm::vec3(1.0f);
+    }
+
+    if (auto normals = texture_of(source, aiTextureType_NORMALS); !normals.empty()) {
+      material.normal_texture = load_texture(normals, TextureUse::kData, 1.0f);
+      source->Get(AI_MATKEY_OBJ_BUMPMULT_NORMALS(0), material.normal_scale);
+    } else {
+      std::string height = texture_of(source, aiTextureType_HEIGHT);
+      if (height.empty()) height = texture_of(source, aiTextureType_DISPLACEMENT);
+      float bump = 1.0f;
+      source->Get(AI_MATKEY_OBJ_BUMPMULT_HEIGHT(0), bump);
+      material.normal_texture = load_texture(height, TextureUse::kHeight, bump);
     }
     model->materials_.push_back(std::move(material));
   }
@@ -437,6 +649,7 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
       }
       mesh.geometry = MeshGeometry::Create(std::move(vertices), std::move(indices));
       mesh.geometry->skinned = !mesh.bones.empty();
+      if (model->materials_[mesh.material].normal_texture) mesh.geometry->ComputeTangents();
       const int mesh_index = static_cast<int>(model->meshes_.size());
       model->meshes_.push_back(std::move(mesh));
       model->nodes_[index].meshes.push_back(mesh_index);

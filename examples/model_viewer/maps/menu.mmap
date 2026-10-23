@@ -1,0 +1,21 @@
+[mmap format=1]
+
+[ext_resource type="UXML" path="res://ui/menu.uxml" id="1"]
+[ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
+
+[node name="Menu"]
+
+[component type="Transform" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
+panel_settings = ExtResource("2")
+
+[component type="MainMenu" node="."]
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+
+[component type="Camera" node="Camera"]
+background = Color(0.07, 0.08, 0.1, 1)

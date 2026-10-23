@@ -1,0 +1,43 @@
+.hud {
+    flex-grow: 1;
+    color: var(--text);
+}
+
+.info {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    max-width: 560px;
+}
+
+.info__title {
+    font-size: 24px;
+    -unity-font-style: bold;
+}
+
+.info__hint {
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.info__fps {
+    font-size: 18px;
+    color: var(--accent);
+    -unity-font-style: bold;
+}
+
+.info__lap {
+    font-size: 14px;
+    white-space: normal;
+}
+
+.back {
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    min-width: 110px;
+    -unity-text-align: middle-center;
+    background-color: var(--panel);
+}

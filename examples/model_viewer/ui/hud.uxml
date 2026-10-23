@@ -1,0 +1,29 @@
+<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="common.uss" />
+    <Style src="hud.uss" />
+    <ui:VisualElement class="hud" picking-mode="Ignore">
+        <ui:VisualElement class="panel info" picking-mode="Ignore">
+            <ui:Label class="info__title">
+                <Bindings>
+                    <ui:DataBinding property="text" data-source-path="title" />
+                </Bindings>
+            </ui:Label>
+            <ui:Label class="info__hint">
+                <Bindings>
+                    <ui:DataBinding property="text" data-source-path="hint" />
+                </Bindings>
+            </ui:Label>
+            <ui:Label class="info__fps">
+                <Bindings>
+                    <ui:DataBinding property="text" data-source-path="fps_text" />
+                </Bindings>
+            </ui:Label>
+            <ui:Label class="info__lap">
+                <Bindings>
+                    <ui:DataBinding property="text" data-source-path="lap_text" />
+                </Bindings>
+            </ui:Label>
+        </ui:VisualElement>
+        <ui:Button name="back" class="button back" text="Back (Esc)" />
+    </ui:VisualElement>
+</ui:UXML>

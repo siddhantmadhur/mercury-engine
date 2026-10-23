@@ -1,0 +1,66 @@
+[mmap format=1]
+
+[ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
+[ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
+[ext_resource type="Model" path="res://models/cornell_box/CornellBox-Water.obj" id="3"]
+[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="4"]
+
+[node name="CornellBox"]
+
+[component type="Transform" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
+panel_settings = ExtResource("2")
+
+[component type="SceneHud" node="."]
+title = "Cornell Box · Water"
+hint = "Fixed camera · Esc: menu"
+
+[component type="PostProcessVolume" node="."]
+profile = ExtResource("4")
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(0, 0.8, 3.72)
+rotation = Vector3(0, 0, 0)
+
+[component type="Camera" node="Camera"]
+fov = 39
+near_clip = 0.05
+far_clip = 50
+background = Color(0, 0, 0, 1)
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+rotation = Vector3(-90, 0, 0)
+
+[component type="DirectionalLight" node="Sun"]
+intensity = 0
+cast_shadows = false
+ambient = Color(0.2, 0.19, 0.18, 1)
+ground_ambient = Color(0.12, 0.11, 0.1, 1)
+
+[node name="Lights" parent="."]
+
+[component type="Transform" node="Lights"]
+
+[node name="L0" parent="Lights"]
+
+[component type="Transform" node="Lights/L0"]
+position = Vector3(0, 1.5, 0)
+
+[component type="PointLight" node="Lights/L0"]
+color = Color(1, 0.85, 0.65, 1)
+intensity = 2.5
+range = 5
+
+[node name="Model" parent="."]
+
+[component type="Transform" node="Model"]
+
+[component type="MeshRenderer" node="Model"]
+mesh = "model"
+model = ExtResource("3")

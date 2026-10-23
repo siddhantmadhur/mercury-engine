@@ -61,7 +61,17 @@ class RenderHost {
 };
 
 /**
- * @brief One directional light plus ambient light, used by lit meshes
+ * @brief A point light as the renderer sees it (world space)
+ */
+struct PointLightData {
+  glm::vec3 position = glm::vec3(0.0f);
+  glm::vec3 color = glm::vec3(1.0f);  // linear color * intensity
+  float range = 10.0f;
+};
+
+/**
+ * @brief One directional light, point lights and ambient light, used by lit
+ * meshes
  */
 struct SceneLighting {
   glm::vec3 direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f));
@@ -72,6 +82,7 @@ struct SceneLighting {
   float shadow_bias = 0.0015f;
   float shadow_normal_bias = 0.035f;
   float shadow_distance = 120.0f;
+  std::vector<PointLightData> point_lights;  // the renderer uses the first 16
 };
 
 /**

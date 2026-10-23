@@ -1,0 +1,9 @@
+[project]
+name = "Model Viewer"
+main_map = "res://maps/menu.mmap"
+engine_version = "dev"
+
+[window]
+title = "Model Viewer"
+width = 1600
+height = 900

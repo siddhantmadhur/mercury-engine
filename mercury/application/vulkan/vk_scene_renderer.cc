@@ -310,6 +310,7 @@ VkPipeline SceneRenderer::BuildPipeline(VkShaderModule vs, VkShaderModule ps,
       {4, 0, VK_FORMAT_R32G32B32A32_UINT, offsetof(ModelVertex, joints)},
       {5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(ModelVertex, weights)},
       {6, 1, VK_FORMAT_R32_UINT, 0},
+      {7, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(ModelVertex, tangent)},
   };
   VkPipelineVertexInputStateCreateInfo vertex_input = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
@@ -565,6 +566,8 @@ void SceneRenderer::Shutdown() {
   textures_.clear();
   geometry_.clear();
   garbage_.clear();
+  image_garbage_.clear();
+  free_slots_.clear();
   frames_.clear();
   white_.Reset();
   shadow_image_.Reset();
@@ -707,7 +710,7 @@ uint32_t SceneRenderer::TextureSlot(VkCommandBuffer cmd, FrameResources& frame,
                                     const std::shared_ptr<ImageData>& image) {
   if (!image || image->pixels.empty()) return 0;
   if (auto it = textures_.find(image->id); it != textures_.end()) return it->second.slot;
-  if (next_slot_ >= kMaxTextures) {
+  if (free_slots_.empty() && next_slot_ >= kMaxTextures) {
     PDebug::error("Vulkan: more than {} textures", kMaxTextures);
     return 0;
   }
@@ -773,7 +776,13 @@ uint32_t SceneRenderer::TextureSlot(VkCommandBuffer cmd, FrameResources& frame,
                       VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                       VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   frame.staging.push_back(std::move(staging));
-  texture.slot = next_slot_++;
+  if (!free_slots_.empty()) {
+    texture.slot = free_slots_.back();
+    free_slots_.pop_back();
+  } else {
+    texture.slot = next_slot_++;
+  }
+  texture.source = image;
   WriteTextureSlot(texture.slot, texture.image.View());
   const uint32_t slot = texture.slot;
   textures_.emplace(image->id, std::move(texture));
@@ -807,6 +816,61 @@ uint32_t SceneRenderer::RenderTextureSlot(const std::string& path, int width, in
 }
 
 bool SceneRenderer::CreateWhiteTexture() { return true; }
+
+void SceneRenderer::ReleaseUnused(VkCommandBuffer cmd) {
+  // Images retired long enough ago: no frame in flight samples them now.
+  std::erase_if(image_garbage_, [&](ImageGarbage& g) {
+    if (g.frame + frames_in_flight_ + 1 > frame_number_) return false;
+    WriteTextureSlot(g.slot, white_.View());
+    free_slots_.push_back(g.slot);
+    return true;
+  });
+  // Only now and then: the scans are cheap but not free.
+  if (frame_number_ % 30 != 0) return;
+  for (auto it = textures_.begin(); it != textures_.end();) {
+    if (it->second.source.expired()) {
+      image_garbage_.push_back({frame_number_, std::move(it->second.image), it->second.slot});
+      it = textures_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  uint64_t live_vertices = 0;
+  for (auto it = geometry_.begin(); it != geometry_.end();) {
+    if (it->second.source.expired()) {
+      it = geometry_.erase(it);
+    } else {
+      live_vertices += it->second.source.lock()->vertices.size();
+      ++it;
+    }
+  }
+  // The buffers only grow at the end, so space is won back by starting
+  // over: live geometry uploads again as it is drawn.
+  constexpr uint32_t kInitialVertices = 262144;
+  constexpr uint32_t kInitialIndices = 1048576;
+  if (vertices_used_ <= kInitialVertices || live_vertices * 2 > vertices_used_) return;
+  Buffer vertices, indices;
+  if (!vertices.Create(context_->allocator, sizeof(ModelVertex) * kInitialVertices,
+                       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       Buffer::Memory::kDeviceLocal) ||
+      !indices.Create(context_->allocator, sizeof(uint32_t) * kInitialIndices,
+                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                          VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                      Buffer::Memory::kDeviceLocal)) {
+    return;
+  }
+  (void)cmd;
+  garbage_.push_back({frame_number_, std::move(vertex_buffer_)});
+  garbage_.push_back({frame_number_, std::move(index_buffer_)});
+  vertex_buffer_ = std::move(vertices);
+  index_buffer_ = std::move(indices);
+  vertex_capacity_ = kInitialVertices;
+  index_capacity_ = kInitialIndices;
+  vertices_used_ = 0;
+  indices_used_ = 0;
+  geometry_.clear();
+}
 
 // ----------------------------------------------------------------- Prepare --
 
@@ -843,6 +907,7 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
     frame.staging.push_back(std::move(staging));
     WriteTextureSlot(0, white_.View());
   }
+  ReleaseUnused(cmd);
 
   auto& registry = scene.GetRegistry();
   auto* map_scene = dynamic_cast<MapScene*>(&scene);
@@ -903,7 +968,10 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
       if (material.sdf_text) flags |= kFlagSdfText;
       if (material.transparent) flags |= kFlagTransparent;
       record.info = glm::uvec4(texture, flags, bone_offset, layer);
-      record.material = glm::vec4(material.metallic, material.smoothness, 0.0f, 0.0f);
+      record.material =
+          glm::vec4(material.metallic, material.smoothness, material.normal_scale, 0.0f);
+      record.maps = glm::uvec4(TextureSlot(cmd, frame, material.normal_texture),
+                               TextureSlot(cmd, frame, material.emission_texture), 0, 0);
 
       FrameDraw frame_draw;
       frame_draw.geometry = geometry;
@@ -1125,7 +1193,15 @@ FrameUniforms SceneRenderer::CameraUniforms(const RenderCamera& camera, VkExtent
                         ? glm::vec4(kShadowResolution, lighting_.shadow_normal_bias,
                                     lighting_.shadow_bias * 0.0f, 0.0f)
                         : glm::vec4(0.0f);
-  u.flags = glm::vec4(linear ? 0.0f : 1.0f, overlay ? 1.0f : 0.0f, 0.0f, 0.0f);
+  const uint32_t point_count =
+      std::min<uint32_t>(static_cast<uint32_t>(lighting_.point_lights.size()), kMaxPointLights);
+  for (uint32_t i = 0; i < point_count; i++) {
+    const PointLightData& light = lighting_.point_lights[i];
+    u.point_lights[2 * i] = glm::vec4(light.position, light.range);
+    u.point_lights[2 * i + 1] = glm::vec4(light.color, 0.0f);
+  }
+  u.flags = glm::vec4(linear ? 0.0f : 1.0f, overlay ? 1.0f : 0.0f, 0.0f,
+                      static_cast<float>(point_count));
   return u;
 }
 

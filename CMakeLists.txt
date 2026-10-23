@@ -416,6 +416,7 @@ if (MERCURY_BUILD_EXAMPLES)
     add_subdirectory(examples/pong)
     add_subdirectory(examples/roll_a_ball)
     add_subdirectory(examples/monkey_ball)
+    add_subdirectory(examples/model_viewer)
 
     # Older examples that still build their worlds in code
     if (NOT EMSCRIPTEN)

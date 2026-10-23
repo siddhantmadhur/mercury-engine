@@ -31,6 +31,9 @@ struct RenderMaterial {
   float metallic = 0.0f;
   float smoothness = 0.5f;
   glm::vec3 emission = glm::vec3(0.0f);  // linear, added to the lit color
+  std::shared_ptr<ImageData> emission_texture;  // multiplies emission
+  std::shared_ptr<ImageData> normal_texture;    // tangent space, linear
+  float normal_scale = 1.0f;
   bool transparent = false;
   bool double_sided = false;
   bool unlit = false;
