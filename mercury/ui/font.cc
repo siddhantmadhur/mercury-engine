@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 
 #include "debugger/debugger.h"
+#include "os/filesystem.h"
 
 // Our own copy: Dear ImGui compiles its stb_truetype as static functions.
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -32,14 +32,12 @@ Font::~Font() {
 }
 
 std::shared_ptr<Font> Font::LoadFile(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
+  auto data = os::ReadBytes(path);
+  if (!data) {
     PDebug::warn("UI: could not open font {}", path);
     return nullptr;
   }
-  std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)),
-                            std::istreambuf_iterator<char>());
-  auto font = FromMemory(std::move(data));
+  auto font = FromMemory(std::move(*data));
   if (font) font->path_ = path;
   else PDebug::warn("UI: {} is not a TrueType font", path);
   return font;

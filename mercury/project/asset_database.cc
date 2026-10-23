@@ -3,6 +3,7 @@
 #include <system_error>
 
 #include "debugger/debugger.h"
+#include "os/filesystem.h"
 
 namespace Mercury {
 
@@ -39,8 +40,10 @@ AssetDatabase::AssetDatabase(std::shared_ptr<const Project> project)
 const Asset* AssetDatabase::Load(std::string_view res_path) {
   if (res_path.empty() || !project_) return nullptr;
   const auto file = project_->Resolve(res_path);
+  // Packed files never change, so they keep the default time.
   std::error_code ec;
-  const auto modified = std::filesystem::last_write_time(file, ec);
+  std::filesystem::file_time_type modified;
+  if (!os::IsPacked(file)) modified = std::filesystem::last_write_time(file, ec);
   if (ec) {
     PDebug::error("Asset not found: {}", res_path);
     cache_.erase(std::string(res_path));

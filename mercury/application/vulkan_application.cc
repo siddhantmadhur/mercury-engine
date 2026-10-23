@@ -296,20 +296,18 @@ void VulkanApplication::OnNewTick() {
 VkShaderModule VulkanApplication::LoadShaderModule(
     const std::string &file_name) const {
   const fs::path path = fs::path(MERCURY_SPIRV_PATH) / file_name;
-  std::ifstream file(path, std::ios::binary | std::ios::ate);
-  if (!file) {
+  const auto bytes = os::ReadBytes(path);
+  if (!bytes) {
     PDebug::error("Vulkan: could not open shader {}", path.string());
     return VK_NULL_HANDLE;
   }
-  const auto size = static_cast<size_t>(file.tellg());
+  const size_t size = bytes->size();
   if (size == 0 || size % sizeof(uint32_t) != 0) {
     PDebug::error("Vulkan: {} is not valid SPIR-V", path.string());
     return VK_NULL_HANDLE;
   }
   std::vector<uint32_t> code(size / sizeof(uint32_t));
-  file.seekg(0);
-  file.read(reinterpret_cast<char *>(code.data()),
-            static_cast<std::streamsize>(size));
+  std::memcpy(code.data(), bytes->data(), size);
 
   VkShaderModuleCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
@@ -1079,7 +1077,7 @@ void VulkanApplication::UpdateSkyboxImage() {
   if (path.empty()) return;
 
   int width = 0, height = 0, channels = 0;
-  stbi_uc *pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+  stbi_uc *pixels = LoadImageFile(path, &width, &height, &channels, 4);
   if (!pixels) {
     PDebug::error("Could not load skybox image: {}", path);
     return;

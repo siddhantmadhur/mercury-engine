@@ -69,6 +69,9 @@ class Process {
 bool LaunchDetached(const std::vector<std::string>& args,
                     std::string* error = nullptr);
 
+// True if `program` (without .exe) is found in one of the PATH folders.
+bool IsOnPath(const std::string& program);
+
 // Opens a file or folder with the desktop's default application.
 bool OpenWithDefaultApp(const std::filesystem::path& path);
 

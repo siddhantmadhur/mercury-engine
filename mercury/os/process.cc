@@ -16,6 +16,7 @@ extern char** environ;
 #endif
 
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 
 namespace Mercury::os {
@@ -365,5 +366,28 @@ bool OpenWithDefaultApp(const std::filesystem::path& path) {
 }
 
 #endif
+
+bool IsOnPath(const std::string& program) {
+  namespace fs = std::filesystem;
+  const char* path = std::getenv("PATH");
+  if (!path) return false;
+#if defined(_WIN32)
+  const char separator = ';';
+  const std::string suffix = ".exe";
+#else
+  const char separator = ':';
+  const std::string suffix;
+#endif
+  std::string_view rest(path);
+  while (!rest.empty()) {
+    auto end = rest.find(separator);
+    fs::path dir(rest.substr(0, end));
+    std::error_code ec;
+    if (!dir.empty() && fs::exists(dir / (program + suffix), ec)) return true;
+    if (end == std::string_view::npos) break;
+    rest.remove_prefix(end + 1);
+  }
+  return false;
+}
 
 }  // namespace Mercury::os

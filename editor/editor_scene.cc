@@ -95,6 +95,7 @@ void EditorScene::OnStart() {
 
 void EditorScene::OnDestroy() {
   play_.Stop();
+  release_.Cancel();
   MapScene::OnDestroy();
 }
 
@@ -112,6 +113,7 @@ bool EditorScene::OnCloseRequested() {
 
 void EditorScene::OnFrame(double delta_t) {
   play_.Update();
+  release_.Update();
   if (play_.TakeSchemaUpdated()) LoadScriptSchema();
 
   project_scan_timer_ += delta_t / 1000.0;
@@ -175,6 +177,7 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
     return false;
   }
   play_.Stop();
+  release_.Cancel();
   SetProject(project);
   ui_builder_.SetProject(project);
   settings_.AddRecentProject(project->GetFile());
@@ -200,6 +203,7 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
 
 void EditorScene::CloseProject() {
   play_.Stop();
+  release_.Cancel();
   SetProject(nullptr);
   ui_builder_.SetProject(nullptr);
   map_ = Map();
@@ -525,7 +529,7 @@ void EditorScene::HandleShortcuts() {
   if (chord(ImGuiMod_Ctrl | ImGuiKey_P)) {
     if (play_.IsBusy()) {
       play_.Stop();
-    } else if (SaveMap()) {
+    } else if (!release_.IsBusy() && SaveMap()) {
       play_.Play(*GetProject(), map_path_);
     }
   }
@@ -633,9 +637,18 @@ void EditorScene::DrawMenuBar() {
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Project")) {
-    if (ImGui::MenuItem("Build", nullptr, false, !play_.IsBusy())) {
+    const bool busy = play_.IsBusy() || release_.IsBusy();
+    if (ImGui::MenuItem("Build", nullptr, false, !busy)) {
       play_.Build(*project);
     }
+    if (ImGui::MenuItem("Build Game...", nullptr, false, !busy)) {
+      build_output_ = project->GetBuildOutput();
+      if (build_output_.empty()) build_output_ = ReleaseBuild::DefaultOutput(*project);
+      modal_ = Modal::kBuildGame;
+      open_modal_ = true;
+    }
+    ImGui::SetItemTooltip(
+        "Build a Release executable with its assets packed into .mpack files");
     if (ImGui::MenuItem("Reload Script List")) LoadScriptSchema();
     if (ImGui::MenuItem("Open Folder")) os::OpenWithDefaultApp(project->GetRoot());
     if (ImGui::MenuItem("Open in External Editor")) {
@@ -668,7 +681,17 @@ void EditorScene::DrawToolbar() {
   const float width = ImGui::GetWindowWidth();
   ImGui::SetCursorPosX(width * 0.5f - 90.0f);
   const auto state = play_.GetState();
-  if (state == PlaySession::State::kIdle) {
+  if (release_.IsBusy()) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
+    if (ImGui::Button("  Stop  ")) release_.Cancel();
+    ImGui::PopStyleColor();
+    const auto release_state = release_.GetState();
+    const char* status =
+        release_state == ReleaseBuild::State::kConfiguring ? "Configuring Release..."
+        : release_state == ReleaseBuild::State::kBuilding  ? "Building game..."
+                                                           : "Packing...";
+    ImGui::TextDisabled("%s", status);
+  } else if (state == PlaySession::State::kIdle) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.22f, 1.0f));
     if (ImGui::Button("  Play  ")) {
       if (SaveMap()) play_.Play(*project, map_path_);
@@ -696,7 +719,8 @@ void EditorScene::DrawToolbar() {
 
 void EditorScene::DrawModals() {
   static const char* kTitles[] = {"", "New Script", "New Map", "New Folder",
-                                  "Unsaved Changes", "Delete"};
+                                  "Unsaved Changes", "Delete",
+                                  "Build Game"};
   if (modal_ == Modal::kNone) return;
   const char* title = kTitles[static_cast<int>(modal_)];
   if (open_modal_) {
@@ -823,6 +847,34 @@ void EditorScene::DrawModals() {
         selected_asset_.clear();
         close();
       }
+      ImGui::SameLine();
+      if (ImGui::Button("Cancel")) close();
+      break;
+    }
+    case Modal::kBuildGame: {
+      ImGui::TextUnformatted("Output folder:");
+      ImGui::SetNextItemWidth(420);
+      if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+      const bool enter = ImGui::InputText("##output", &build_output_,
+                                          ImGuiInputTextFlags_EnterReturnsTrue);
+      const fs::path output = project->Resolve(build_output_);
+      ImGui::TextDisabled("%s", output.string().c_str());
+      ImGui::TextDisabled(
+          "Writes the executable, engine.mpack and game.mpack there.");
+      // Packing the project into its own root would pack the build too.
+      std::error_code ec;
+      const bool valid = !build_output_.empty() &&
+                         !fs::equivalent(output, project->GetRoot(), ec);
+      ImGui::BeginDisabled(!valid);
+      if (ImGui::Button("Build") || (enter && valid)) {
+        if (build_output_ != project->GetBuildOutput()) {
+          project->SetBuildOutput(build_output_);
+          if (!project->Save()) console_.Error("Could not save the project file");
+        }
+        if (SaveMap()) release_.Start(*project, output);
+        close();
+      }
+      ImGui::EndDisabled();
       ImGui::SameLine();
       if (ImGui::Button("Cancel")) close();
       break;

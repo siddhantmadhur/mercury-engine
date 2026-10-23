@@ -8,6 +8,7 @@
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
+#include "properties/vfs_io_system.h"
 
 namespace Mercury::Primitives {
 
@@ -208,6 +209,7 @@ Mesh Quad(glm::vec4 color) {
 std::optional<Mesh> LoadModel(const std::string& path, glm::vec4 color,
                               std::string* error) {
   Assimp::Importer importer;
+  UseVfs(importer);
   const aiScene* scene = importer.ReadFile(
       path, aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                 aiProcess_PreTransformVertices | aiProcess_FlipUVs |

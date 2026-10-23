@@ -1,7 +1,6 @@
 #include "play_session.h"
 
 #include <chrono>
-#include <cstdlib>
 #include <format>
 #include <thread>
 
@@ -11,32 +10,6 @@
 namespace Mercury {
 
 namespace fs = std::filesystem;
-
-namespace {
-
-bool IsOnPath(const std::string& program) {
-  const char* path = std::getenv("PATH");
-  if (!path) return false;
-#if defined(_WIN32)
-  const char separator = ';';
-  const std::string suffix = ".exe";
-#else
-  const char separator = ':';
-  const std::string suffix;
-#endif
-  std::string_view rest(path);
-  while (!rest.empty()) {
-    auto end = rest.find(separator);
-    fs::path dir(rest.substr(0, end));
-    std::error_code ec;
-    if (!dir.empty() && fs::exists(dir / (program + suffix), ec)) return true;
-    if (end == std::string_view::npos) break;
-    rest.remove_prefix(end + 1);
-  }
-  return false;
-}
-
-}  // namespace
 
 fs::path PlaySession::SchemaPath(const Project& project) {
   return project.GetCacheDir() / "scripts.mschema";
@@ -115,7 +88,7 @@ bool PlaySession::StartConfigure() {
       "cmake", "-S", project_root_.string(), "-B",
       (project_root_ / kProjectCacheDir / "build").string(),
       "-DCMAKE_BUILD_TYPE=Debug"};
-  if (IsOnPath("ninja")) {
+  if (os::IsOnPath("ninja")) {
     args.insert(args.begin() + 1, {"-G", "Ninja"});
   }
   if (!Launch(args, Console::Source::kBuild)) return false;

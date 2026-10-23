@@ -11,6 +11,12 @@
 #include "glm/vec4.hpp"
 
 namespace Mercury {
+
+// stbi_load() through os::ReadBytes, so images can come from a mounted .mpack.
+// Free the result with stbi_image_free().
+stbi_uc *LoadImageFile(const std::string &path, int *width, int *height,
+                       int *channels, int desired_channels);
+
 class Texture2D {
  public:
   Texture2D();  // Creates a blank white texture

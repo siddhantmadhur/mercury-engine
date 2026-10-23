@@ -155,6 +155,28 @@ made from the launcher build against this engine checkout.
 Each game is its own executable, such as `./build/examples/pong/pong`. With no arguments it opens
 the project it was built from; it also takes `[project.mproj] [--map res://maps/x.mmap]`.
 
+#### Shipping a game: Build Game and .mpack
+
+**Project > Build Game...** makes a folder you can ship, like Source 2's release builds with their
+`.vpk` files. It compiles a Release executable, in a separate build under `.mercury/build-release`,
+and packs the assets into a few archives instead of thousands of loose files:
+
+```
+Builds/Pong/pong          the game (pong.exe on Windows)
+Builds/Pong/engine.mpack  compiled shaders, the default UI theme and fonts
+Builds/Pong/game.mpack    the project: .mproj, maps, assets, UI, textures, models
+                          (game_001.mpack, game_002.mpack, ... past 1 GiB)
+```
+
+The output folder is saved in the `.mproj` as `[build] output`. Scripts, `CMakeLists.txt`, source
+files, hidden folders such as `.mercury/` and `Builds/` are left out. Each file is compressed with
+zlib unless that saves less than 5% (PNGs and fonts are stored as they are), and has a CRC-32
+checked on read. When the executable starts without a project argument and finds `game.mpack` next
+to itself, it runs from the packs. Everything else (the editor, Play, Build and tests) reads loose
+files. The format is described in `mercury/pack/mpack.h`. The reader and the VFS that mounts
+packs (`mercury/os/filesystem.h`) are in the engine; the packing step is in
+`editor/release_build.cc`.
+
 #### File formats
 
 `.mproj`, `.mmap` and `.masset` share one text format, modeled on Godot's `.tscn` so that people
@@ -291,7 +313,8 @@ makes new UI documents, style sheets and panel settings.
 #### Testing
 
 `ctest --test-dir build` runs the unit tests for the formats, maps, reflection, primitive
-meshes, rotations and the UI Toolkit (USS, UXML, cascade, layout, events, bindings, drawing).
+meshes, rotations, `.mpack` archives and the UI Toolkit (USS, UXML, cascade, layout, events,
+bindings, drawing).
 `mercury_editor_smoke <project> <script>` replays scripted input into the editor. Set
 `MERCURY_CAPTURE=frame.png` (plus `MERCURY_CAPTURE_FRAME=n` and `MERCURY_CAPTURE_QUIT=1`) on any
 Mercury program to save a screenshot of a frame.

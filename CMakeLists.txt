@@ -68,7 +68,11 @@ add_library(mercury STATIC
         mercury/application/application.h
         mercury/application/application.cc
         ${MERCURY_GRAPHICS_SOURCES}
+        mercury/os/filesystem.cc
         mercury/os/filesystem.h
+        mercury/pack/mpack.cc
+        mercury/pack/mpack.h
+        mercury/properties/vfs_io_system.h
         mercury/scene/scene.cc
         mercury/input/input_manager.cc
         mercury/input/input_manager.h
@@ -215,6 +219,12 @@ add_subdirectory("third_party/assimp")
 include_directories("third_party/entt/single_include")
 add_subdirectory("third_party/entt")
 
+# zlib for .mpack compression: the copy assimp builds (ASSIMP_BUILD_ZLIB).
+target_link_libraries(mercury zlibstatic)
+target_include_directories(mercury PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/assimp/contrib/zlib"
+        "${CMAKE_CURRENT_BINARY_DIR}/third_party/assimp/contrib/zlib")
+
 # Vulkan Memory Allocator (header-only; implemented in vma_impl.cc)
 include_directories("third_party/VulkanMemoryAllocator/include")
 
@@ -319,7 +329,9 @@ add_executable(mercury_test
         tests/hierarchy_test.cc
         tests/reflection_test.cc
         tests/primitives_test.cc
-        tests/ui_test.cc)
+        tests/ui_test.cc
+        tests/physics_constraints_test.cc
+        tests/mpack_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -361,6 +373,8 @@ if (MERCURY_BUILD_EDITOR AND NOT EMSCRIPTEN)
             editor/editor_settings.h
             editor/play_session.cc
             editor/play_session.h
+            editor/release_build.cc
+            editor/release_build.h
             editor/templates.cc
             editor/templates.h
             editor/ui_builder.cc

@@ -241,6 +241,34 @@ void EditorScene::DrawNodeInspector(MapNode& node) {
       }
       if (info) {
         for (const auto& field : info->fields) {
+          if (component.type == "Rigidbody") {
+            if (field.name == "lock_translation_x") {
+              ImGui::PushID("lock_translation");
+              if (DrawLockGroup("Lock Transform", "lock_translation",
+                                component.properties)) {
+                MarkChanged();
+              }
+              ImGui::PopID();
+              continue;
+            }
+            if (field.name == "lock_translation_y" ||
+                field.name == "lock_translation_z") {
+              continue;
+            }
+            if (field.name == "lock_rotation_x") {
+              ImGui::PushID("lock_rotation");
+              if (DrawLockGroup("Lock Rotation", "lock_rotation",
+                                component.properties)) {
+                MarkChanged();
+              }
+              ImGui::PopID();
+              continue;
+            }
+            if (field.name == "lock_rotation_y" ||
+                field.name == "lock_rotation_z") {
+              continue;
+            }
+          }
           ImGui::PushID(field.name.c_str());
           if (DrawField(field, component.properties)) MarkChanged();
           ImGui::PopID();
@@ -259,6 +287,16 @@ void EditorScene::DrawNodeInspector(MapNode& node) {
       // editable as raw values so nothing is silently lost.
       for (auto& property : component.properties) {
         if (info && info->FindField(property.key)) continue;
+        if (component.type == "Rigidbody" &&
+            (property.key == "allowed_dofs" ||
+             property.key == "lock_transform_x" ||
+             property.key == "lock_transform_y" ||
+             property.key == "lock_transform_z" ||
+             property.key == "lock_position_x" ||
+             property.key == "lock_position_y" ||
+             property.key == "lock_position_z")) {
+          continue;
+        }
         ImGui::PushID(property.key.c_str());
         if (DrawRawProperty(property)) MarkChanged();
         ImGui::PopID();
@@ -438,6 +476,104 @@ bool EditorScene::DrawField(const FieldInfo& field,
     properties.Set(field.name, value);
   }
   return true;
+}
+
+bool EditorScene::DrawLockGroup(const char* label, const std::string& prefix,
+                                mtext::PropertyList& properties) {
+  const std::string key_x = prefix + "_x";
+  const std::string key_y = prefix + "_y";
+  const std::string key_z = prefix + "_z";
+
+  bool x = false;
+  bool y = false;
+  bool z = false;
+
+  // If no explicit lock properties are set, check aliases or legacy allowed_dofs
+  if (!properties.Get(key_x) && !properties.Get(key_y) && !properties.Get(key_z)) {
+    if (const auto* val = properties.Get("lock_transform_x")) x = val->ToBool().value_or(false);
+    if (const auto* val = properties.Get("lock_transform_y")) y = val->ToBool().value_or(false);
+    if (const auto* val = properties.Get("lock_transform_z")) z = val->ToBool().value_or(false);
+    if (const auto* val = properties.Get("lock_position_x")) x = val->ToBool().value_or(false);
+    if (const auto* val = properties.Get("lock_position_y")) y = val->ToBool().value_or(false);
+    if (const auto* val = properties.Get("lock_position_z")) z = val->ToBool().value_or(false);
+
+    if (!x && !y && !z) {
+      if (const auto* dofs = properties.Get("allowed_dofs")) {
+        std::string mode = dofs->ToString().value_or("");
+        if (prefix == "lock_translation") {
+          if (mode == "translation_x") { y = z = true; }
+          else if (mode == "translation_y") { x = z = true; }
+          else if (mode == "translation_xy" || mode == "plane_2d") { z = true; }
+        } else if (prefix == "lock_rotation") {
+          if (mode == "translation_xyz" || mode == "translation_xy" ||
+              mode == "translation_x" || mode == "translation_y") {
+            x = y = z = true;
+          } else if (mode == "plane_2d") {
+            x = y = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (const auto* val = properties.Get(key_x)) x = val->ToBool().value_or(false);
+  if (const auto* val = properties.Get(key_y)) y = val->ToBool().value_or(false);
+  if (const auto* val = properties.Get(key_z)) z = val->ToBool().value_or(false);
+
+  const bool any_locked = x || y || z;
+  ImGui::AlignTextToFramePadding();
+  if (any_locked) {
+    ImGui::TextUnformatted(label);
+  } else {
+    ImGui::TextDisabled("%s", label);
+  }
+
+  const bool is_rotation = (std::string(label).find("Rotation") != std::string::npos);
+  if (is_rotation) {
+    ImGui::SetItemTooltip("Freeze rotation around the world X, Y, or Z axes");
+  } else {
+    ImGui::SetItemTooltip("Freeze position along the world X, Y, or Z axes");
+  }
+
+  ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.38f);
+
+  bool changed = false;
+  auto draw_axis_checkbox = [&](const char* axis_name, const std::string& key, bool& val) {
+    std::string cb_id = std::string(axis_name) + "##" + key;
+    if (ImGui::Checkbox(cb_id.c_str(), &val)) {
+      changed = true;
+      if (val) {
+        properties.Set(key, true);
+      } else {
+        properties.Remove(key);
+      }
+      if (properties.Get("allowed_dofs")) {
+        properties.Remove("allowed_dofs");
+        if (x) properties.Set(key_x, true); else properties.Remove(key_x);
+        if (y) properties.Set(key_y, true); else properties.Remove(key_y);
+        if (z) properties.Set(key_z, true); else properties.Remove(key_z);
+      }
+    }
+  };
+
+  draw_axis_checkbox("X", key_x, x);
+  ImGui::SameLine();
+  draw_axis_checkbox("Y", key_y, y);
+  ImGui::SameLine();
+  draw_axis_checkbox("Z", key_z, z);
+
+  if (ImGui::BeginPopupContextItem((std::string(label) + "_menu").c_str())) {
+    if (ImGui::MenuItem("Reset to Default", nullptr, false, any_locked)) {
+      properties.Remove(key_x);
+      properties.Remove(key_y);
+      properties.Remove(key_z);
+      properties.Remove("allowed_dofs");
+      changed = true;
+    }
+    ImGui::EndPopup();
+  }
+
+  return changed;
 }
 
 bool EditorScene::DrawRawProperty(mtext::Property& property) {
