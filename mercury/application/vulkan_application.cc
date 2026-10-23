@@ -64,7 +64,13 @@ VulkanApplication::~VulkanApplication() {
     scene_renderer_.Shutdown();
     DestroyOffscreenTarget(ui_preview_color_, ui_preview_depth_,
                            ui_preview_texture_set_);
-    if (imgui_vulkan_initialized_) ImGui_ImplVulkan_Shutdown();
+    DestroySceneTarget();
+    DestroyOffscreenTarget(preview_color_, preview_depth_,
+                           preview_texture_set_);
+    if (imgui_vulkan_initialized_) {
+      ImGui_ImplVulkan_Shutdown();
+      imgui_vulkan_initialized_ = false;
+    }
 
     for (FrameData &frame : frames_) {
       frame.camera_ubo.Reset();
@@ -84,9 +90,6 @@ VulkanApplication::~VulkanApplication() {
     atlas_image_.Reset();
     shadow_image_.Reset();
     skybox_image_.Reset();
-    DestroySceneTarget();
-    DestroyOffscreenTarget(preview_color_, preview_depth_,
-                           preview_texture_set_);
     capture_buffer_.Reset();
     vkDestroySampler(device, scene_sampler_, nullptr);
 
@@ -2225,7 +2228,9 @@ void VulkanApplication::DestroyOffscreenTarget(vk::Image &color,
                                                vk::Image &depth,
                                                VkDescriptorSet &imgui_set) {
   if (imgui_set != VK_NULL_HANDLE) {
-    ImGui_ImplVulkan_RemoveTexture(imgui_set);
+    if (imgui_vulkan_initialized_) {
+      ImGui_ImplVulkan_RemoveTexture(imgui_set);
+    }
     imgui_set = VK_NULL_HANDLE;
   }
   color.Reset();

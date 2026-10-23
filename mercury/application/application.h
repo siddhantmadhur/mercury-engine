@@ -15,6 +15,9 @@
 #include <string>
 #include <string_view>
 
+#if defined(MERCURY_GRAPHICS_VULKAN) && !defined(GLFW_INCLUDE_VULKAN)
+#define GLFW_INCLUDE_VULKAN 1
+#endif
 #include "GLFW/glfw3.h"
 #include "input/input_script.h"
 #include "pobject/texture_atlas.h"

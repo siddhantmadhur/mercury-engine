@@ -235,7 +235,7 @@ bool Process::Start(const std::vector<std::string>& args,
   posix_spawn_file_actions_adddup2(&actions, fds[1], STDERR_FILENO);
   posix_spawn_file_actions_addclose(&actions, fds[0]);
   posix_spawn_file_actions_addclose(&actions, fds[1]);
-#if defined(__GLIBC__) && (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 29)
+#if (defined(__GLIBC__) && (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 29)) || defined(__APPLE__)
   if (!working_dir.empty()) {
     posix_spawn_file_actions_addchdir_np(&actions, working_dir.c_str());
   }
