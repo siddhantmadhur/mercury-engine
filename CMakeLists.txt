@@ -371,6 +371,8 @@ if (MERCURY_BUILD_EDITOR AND NOT EMSCRIPTEN)
             editor/console.h
             editor/editor_settings.cc
             editor/editor_settings.h
+            editor/lore_vcs.cc
+            editor/lore_vcs.h
             editor/play_session.cc
             editor/play_session.h
             editor/release_build.cc

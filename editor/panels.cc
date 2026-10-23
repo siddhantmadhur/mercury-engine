@@ -853,11 +853,12 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
     }
     ImGui::PushStyleColor(ImGuiCol_Text, color);
     const bool selected = res_path == selected_asset_ || res_path == map_path_;
+    const bool locked = lore_.IsLocked(path);
     ImGui::TreeNodeEx("##file",
                       ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
                           ImGuiTreeNodeFlags_SpanAvailWidth |
                           (selected ? ImGuiTreeNodeFlags_Selected : 0),
-                      "%s", name.c_str());
+                      "%s%s", name.c_str(), locked ? "  [locked]" : "");
     ImGui::PopStyleColor();
 
     if (ImGui::BeginDragDropSource()) {
@@ -895,6 +896,14 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
       }
       if (ImGui::MenuItem("Open in External Editor")) OpenInExternalEditor(path);
       if (ImGui::MenuItem("Copy res:// Path")) ImGui::SetClipboardText(res_path.c_str());
+      if (lore_.IsRepository()) {
+        ImGui::Separator();
+        if (locked) {
+          if (ImGui::MenuItem("Release Lore Lock")) lore_.Unlock(path);
+        } else if (ImGui::MenuItem("Lock with Lore")) {
+          lore_.Lock(path);
+        }
+      }
       ImGui::Separator();
       if (ImGui::MenuItem("Delete...", nullptr, false, res_path != map_path_)) {
         delete_target_ = path;
@@ -919,6 +928,7 @@ void EditorScene::DrawConsole() {
   static bool show_errors = true;
   static bool show_game = true;
   static bool show_build = true;
+  static bool show_lore = true;
   static ImGuiTextFilter filter;
   static size_t last_version = 0;
 
@@ -934,6 +944,8 @@ void EditorScene::DrawConsole() {
   ImGui::SameLine();
   ImGui::Checkbox("Game", &show_game);
   ImGui::SameLine();
+  ImGui::Checkbox("Lore", &show_lore);
+  ImGui::SameLine();
   filter.Draw("##filter", -1);
   ImGui::Separator();
 
@@ -946,12 +958,14 @@ void EditorScene::DrawConsole() {
     if (line.level == Console::Level::kError && !show_errors) continue;
     if (line.source == Console::Source::kGame && !show_game) continue;
     if (line.source == Console::Source::kBuild && !show_build) continue;
+    if (line.source == Console::Source::kLore && !show_lore) continue;
     if (!filter.PassFilter(line.text.c_str())) continue;
     ImVec4 color(0.85f, 0.85f, 0.85f, 1.0f);
     if (line.level == Console::Level::kWarning) color = ImVec4(1.0f, 0.8f, 0.35f, 1.0f);
     if (line.level == Console::Level::kError) color = ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
     const char* tag = line.source == Console::Source::kGame    ? "[game]  "
                       : line.source == Console::Source::kBuild ? "[build] "
+                      : line.source == Console::Source::kLore  ? "[lore]  "
                                                                : "[editor]";
     ImGui::TextDisabled("%s", tag);
     ImGui::SameLine();

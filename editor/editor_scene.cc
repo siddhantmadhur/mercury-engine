@@ -23,6 +23,7 @@ constexpr const char* kSceneWindow = "Scene";
 constexpr const char* kProjectWindow = "Project";
 constexpr const char* kConsoleWindow = "Console";
 constexpr const char* kUIBuilderWindow = UIBuilder::kWindowName;
+constexpr const char* kLoreWindow = LoreVcs::kWindowName;
 constexpr size_t kMaxUndoSteps = 200;
 
 void ApplyEditorStyle() {
@@ -114,6 +115,7 @@ bool EditorScene::OnCloseRequested() {
 void EditorScene::OnFrame(double delta_t) {
   play_.Update();
   release_.Update();
+  lore_.Update();
   if (play_.TakeSchemaUpdated()) LoadScriptSchema();
 
   project_scan_timer_ += delta_t / 1000.0;
@@ -133,6 +135,16 @@ void EditorScene::OnFrame(double delta_t) {
     DrawScene();
     DrawProjectBrowser();
     DrawConsole();
+    if (settings_.show_lore) {
+      // Layouts saved before the Lore panel existed: put it beside the
+      // Console the first time it shows.
+      if (ImGuiWindow* console = ImGui::FindWindowByName(kConsoleWindow);
+          console && console->DockId) {
+        ImGui::SetNextWindowDockID(console->DockId, ImGuiCond_FirstUseEver);
+      }
+      lore_.Draw(&settings_.show_lore);
+      if (!settings_.show_lore) settings_.Save();
+    }
     if (settings_.show_ui_builder) {
       ui_builder_.Draw(render_host_, &settings_.show_ui_builder);
       if (!settings_.show_ui_builder) settings_.Save();
@@ -180,6 +192,7 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   release_.Cancel();
   SetProject(project);
   ui_builder_.SetProject(project);
+  lore_.SetProject(project);
   settings_.AddRecentProject(project->GetFile());
   settings_.Save();
   game_aspect_ = static_cast<float>(project->GetWindowWidth()) /
@@ -206,6 +219,7 @@ void EditorScene::CloseProject() {
   release_.Cancel();
   SetProject(nullptr);
   ui_builder_.SetProject(nullptr);
+  lore_.SetProject(nullptr);
   map_ = Map();
   map_path_.clear();
   undo_.clear();
@@ -580,6 +594,7 @@ void EditorScene::BuildDefaultLayout(ImGuiID dockspace) {
   ImGui::DockBuilderDockWindow(kInspectorWindow, right);
   ImGui::DockBuilderDockWindow(kProjectWindow, bottom);
   ImGui::DockBuilderDockWindow(kConsoleWindow, bottom);
+  ImGui::DockBuilderDockWindow(kLoreWindow, bottom);
   ImGui::DockBuilderDockWindow(kSceneWindow, center);
   ImGui::DockBuilderDockWindow(kUIBuilderWindow, center);
   ImGui::DockBuilderFinish(dockspace);
@@ -667,6 +682,7 @@ void EditorScene::DrawMenuBar() {
     if (ImGui::MenuItem("UI Builder", nullptr, &settings_.show_ui_builder)) {
       settings_.Save();
     }
+    if (ImGui::MenuItem("Lore", nullptr, &settings_.show_lore)) settings_.Save();
     ImGui::Separator();
     if (ImGui::MenuItem("Reset Layout")) reset_layout_ = true;
     ImGui::EndMenu();

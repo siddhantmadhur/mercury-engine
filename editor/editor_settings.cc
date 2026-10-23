@@ -46,6 +46,12 @@ void EditorSettings::Load() {
   }
   if (auto windows = document.Find("windows")) {
     show_ui_builder = windows->properties.GetBool("ui_builder", false);
+    show_lore = windows->properties.GetBool("lore", true);
+  }
+  if (auto lore = document.Find("lore")) {
+    lore_executable = lore->properties.GetString("executable");
+    const std::string server = lore->properties.GetString("server");
+    if (!server.empty()) lore_server = server;
   }
   if (auto recent = document.Find("recent")) {
     if (auto list = recent->properties.Get("projects")) {
@@ -64,7 +70,12 @@ void EditorSettings::Save() const {
   mtext::Array projects;
   for (const auto& path : recent_projects) projects.emplace_back(path);
   document.Add("recent").properties.Set("projects", projects);
-  document.Add("windows").properties.Set("ui_builder", show_ui_builder);
+  auto& windows = document.Add("windows").properties;
+  windows.Set("ui_builder", show_ui_builder);
+  windows.Set("lore", show_lore);
+  auto& lore = document.Add("lore").properties;
+  lore.Set("executable", lore_executable);
+  lore.Set("server", lore_server);
   mtext::SaveFile(ConfigDir() / "editor.cfg", document);
 }
 
