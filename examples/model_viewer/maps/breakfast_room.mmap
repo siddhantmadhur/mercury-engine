@@ -1,0 +1,105 @@
+[mmap format=1]
+
+[ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
+[ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
+[ext_resource type="Model" path="res://models/breakfast_room/breakfast_room.obj" id="3"]
+[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="4"]
+
+[node name="BreakfastRoom"]
+
+[component type="Transform" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
+panel_settings = ExtResource("2")
+
+[component type="SceneHud" node="."]
+title = "Breakfast Room"
+hint = "The camera flies a loop. Space: pause · Esc: menu"
+
+[component type="PostProcessVolume" node="."]
+profile = ExtResource("4")
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(3, 1, 6)
+rotation = Vector3(0, 0, 0)
+
+[component type="Camera" node="Camera"]
+fov = 60
+near_clip = 0.05
+far_clip = 200
+background = Color(0.7, 0.8, 0.95, 1)
+
+[component type="FlythroughCamera" node="Camera"]
+path = NodePath("Path")
+lap_seconds = 50
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+rotation = Vector3(-35, 60, 0)
+
+[component type="DirectionalLight" node="Sun"]
+color = Color(1, 0.96, 0.9, 1)
+intensity = 4
+ambient = Color(0.25, 0.25, 0.27, 1)
+ground_ambient = Color(0.12, 0.1, 0.09, 1)
+shadow_distance = 25
+
+[node name="Lights" parent="."]
+
+[component type="Transform" node="Lights"]
+
+[node name="L0" parent="Lights"]
+
+[component type="Transform" node="Lights/L0"]
+position = Vector3(-0.7, 4, -1.9)
+
+[component type="PointLight" node="Lights/L0"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 2
+range = 10
+
+[node name="Model" parent="."]
+
+[component type="Transform" node="Model"]
+
+[component type="MeshRenderer" node="Model"]
+mesh = "model"
+model = ExtResource("3")
+
+[node name="Path" parent="."]
+
+[component type="Transform" node="Path"]
+
+[node name="P0" parent="Path"]
+
+[component type="Transform" node="Path/P0"]
+position = Vector3(4.4, 1.8, 2)
+rotation = Vector3(-10.59, 52.59, 0)
+
+[node name="P1" parent="Path"]
+
+[component type="Transform" node="Path/P1"]
+position = Vector3(4.4, 2, -3.9)
+rotation = Vector3(-14.34, 111.41, 0)
+
+[node name="P2" parent="Path"]
+
+[component type="Transform" node="Path/P2"]
+position = Vector3(-5.2, 1.6, -3.6)
+rotation = Vector3(-11.74, -110.7, 0)
+
+[node name="P3" parent="Path"]
+
+[component type="Transform" node="Path/P3"]
+position = Vector3(-5.5, 2.4, 3)
+rotation = Vector3(-14.7, -44.41, 0)
+
+[node name="P4" parent="Path"]
+
+[component type="Transform" node="Path/P4"]
+position = Vector3(0, 3.2, 7.5)
+rotation = Vector3(-15.42, 4.26, 0)

@@ -49,8 +49,10 @@ struct FrameUniforms {
   glm::vec4 camera_pos;
   glm::vec4 resolution;
   glm::vec4 shadow_params;
-  glm::vec4 flags;
+  glm::vec4 flags;  // w: point light count
+  glm::vec4 point_lights[2 * 16];  // position + range, color
 };
+inline constexpr uint32_t kMaxPointLights = 16;
 
 // Must match DrawData in model_common.hlsli.
 struct DrawData {
@@ -61,8 +63,9 @@ struct DrawData {
   glm::vec4 uv;
   glm::uvec4 info;
   glm::vec4 material;
+  glm::uvec4 maps;  // x: normal map slot, y: emission map slot (0: none)
 };
-static_assert(sizeof(DrawData) == 208);
+static_assert(sizeof(DrawData) == 224);
 
 class SceneRenderer {
  public:
@@ -129,6 +132,7 @@ class SceneRenderer {
   struct GpuTexture {
     vk::Image image;
     uint32_t slot = 0;
+    std::weak_ptr<const ImageData> source;
   };
 
   struct RenderTextureTarget;
@@ -204,6 +208,9 @@ class SceneRenderer {
   uint32_t TextureSlot(VkCommandBuffer cmd, FrameResources& frame,
                        const std::shared_ptr<ImageData>& image);
   uint32_t RenderTextureSlot(const std::string& path, int width, int height);
+  // Frees textures and geometry nothing uses any more (e.g. after a map
+  // change), once the frames in flight are done with them.
+  void ReleaseUnused(VkCommandBuffer cmd);
   bool GrowBuffer(VkCommandBuffer cmd, vk::Buffer& buffer, VkDeviceSize needed,
                   VkBufferUsageFlags usage);
   void WriteTextureSlot(uint32_t slot, VkImageView view);
@@ -299,6 +306,13 @@ class SceneRenderer {
     vk::Buffer buffer;
   };
   std::vector<Garbage> garbage_;
+  struct ImageGarbage {
+    uint64_t frame;
+    vk::Image image;
+    uint32_t slot;  // freed with the image
+  };
+  std::vector<ImageGarbage> image_garbage_;
+  std::vector<uint32_t> free_slots_;
 
   // This frame's draws, in record order.
   std::vector<FrameDraw> draws_;

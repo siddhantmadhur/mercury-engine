@@ -129,6 +129,15 @@ class MapScene : public GameScene {
   void ClearMap();
 
   /**
+   * @brief Replace the scene with another map (Unity's SceneManager.LoadScene)
+   *
+   * Safe to call from scripts and UI callbacks: the map is loaded at the
+   * start of the next frame, before any script runs. Models and images the
+   * old map loaded are released.
+   */
+  void LoadMap(std::string res_path) { pending_map_ = std::move(res_path); }
+
+  /**
    * @brief Rebuild the entities for the given nodes after they were edited
    *
    * Used by the editor; only valid in edit mode. Entities for nodes that no
@@ -234,7 +243,7 @@ class MapScene : public GameScene {
   // Loads (once) a model with its hierarchy, materials and clips.
   std::shared_ptr<const Model> GetModelAsset(std::string_view res_path);
   // Loads (once) an image for the model renderer; null if unreadable.
-  std::shared_ptr<ImageData> GetImage(std::string_view res_path);
+  std::shared_ptr<ImageData> GetImage(std::string_view res_path, bool srgb = true);
   // Shared geometry of a built-in shape, scaled by mesh_scale.
   std::shared_ptr<const MeshGeometry> GetPrimitive(MeshShape shape,
                                                    glm::vec3 mesh_scale = glm::vec3(1.0f));
@@ -309,6 +318,8 @@ class MapScene : public GameScene {
   void DestroyNodeEntity(kEntityId entity);
   void CreatePhysicsBodies();
   void ApplyEnvironment();
+  // Copies the active PointLights into lighting_.
+  void GatherPointLights();
   void DispatchCollisions();
   void StartBehaviours();
   void DestroyPending();
@@ -332,6 +343,8 @@ class MapScene : public GameScene {
 
   std::map<std::string, std::unique_ptr<Texture2D>, std::less<>> textures_;
   std::map<std::string, std::unique_ptr<Mesh>, std::less<>> models_;
+  std::string pending_map_;  // LoadMap
+  void LoadPendingMap();
   std::map<std::string, std::shared_ptr<const Model>, std::less<>> model_assets_;
   std::map<std::string, std::shared_ptr<ImageData>, std::less<>> images_;
   std::map<std::string, std::shared_ptr<const MeshGeometry>> primitives_;

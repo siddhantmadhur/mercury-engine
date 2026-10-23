@@ -1,0 +1,2 @@
+[mimport]
+max_texture_size = 8192  ; gallery.jpg is 16384 x 16384

@@ -1,5 +1,6 @@
 // Model renderer pixel shader: Cook-Torrance GGX for the directional light
-// with PCF shadows, plus hemispheric ambient. Writes linear HDR color and a
+// with PCF shadows and for up to kMaxPointLights point lights (unshadowed),
+// plus hemispheric ambient. Normal and emission maps are optional. Writes linear HDR color and a
 // view-space normal for SSAO (alpha 0 in overlay passes: no AO there).
 #include "model_common.hlsli"
 
@@ -40,6 +41,32 @@ float3 FresnelSchlick(float cos_theta, float3 F0)
 float3 FresnelSchlickRoughness(float cos_theta, float3 F0, float roughness)
 {
     return F0 + (max((1.0 - roughness).xxx, F0) - F0) * pow(saturate(1.0 - cos_theta), 5.0);
+}
+
+// Diffuse + specular of one light arriving from direction L (unit, toward
+// the light) with `radiance` (linear color * intensity * attenuation).
+float3 DirectLight(float3 N, float3 V, float3 L, float3 radiance, float3 albedo,
+                   float3 F0, float metallic, float roughness)
+{
+    float3 H = normalize(V + L);
+    float NdotL = saturate(dot(N, L));
+    float NdotV = max(dot(N, V), 1e-4);
+    float NdotH = saturate(dot(N, H));
+    float D = DistributionGGX(NdotH, roughness);
+    float G = GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);
+    float3 F = FresnelSchlick(saturate(dot(H, V)), F0);
+    float3 kD = (1.0 - F) * (1.0 - metallic);
+    float3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, 1e-4);
+    // Unity's lights are not divided by PI; neither is the diffuse here.
+    return (kD * albedo + specular * PI) * radiance * NdotL;
+}
+
+// Unity's URP point light falloff: inverse square, faded to 0 at `range`.
+float PointAttenuation(float distance_sq, float range)
+{
+    float ratio = distance_sq / max(range * range, 1e-4);
+    float fade = saturate(1.0 - ratio * ratio);
+    return fade * fade / max(distance_sq, 1e-4);
 }
 
 float CalculateShadow(float3 world_pos, float3 normal, float3 to_light)
@@ -105,6 +132,23 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
     PSOutput output = (PSOutput) 0;
     float3 N = normalize(input.normal);
     if (!front_face) N = -N;
+    const float3 surface_normal = N;  // before the normal map, for shadow bias
+    if (data.maps.x != 0 && dot(input.tangent.xyz, input.tangent.xyz) > 1e-12)
+    {
+        // Tangent-space normal, green toward the top of the image.
+        float3 T = normalize(input.tangent.xyz - N * dot(N, input.tangent.xyz));
+        float3 B = cross(N, T) * (input.tangent.w < 0.0 ? -1.0 : 1.0);
+        float3 n = textures[NonUniformResourceIndex(data.maps.x)]
+                       .Sample(material_sampler, input.uv).xyz * 2.0 - 1.0;
+        n.xy *= data.material.z;
+        N = normalize(T * n.x + B * n.y + N * max(n.z, 1e-3));
+    }
+    float3 emission = data.emission.rgb;
+    if (data.maps.y != 0)
+    {
+        emission *= textures[NonUniformResourceIndex(data.maps.y)]
+                        .Sample(material_sampler, input.uv).rgb;
+    }
     float3 view_normal = normalize(mul((float3x3) view, N));
     output.normal = float4(view_normal * 0.5 + 0.5, (flags.y > 0.5) ? 0.0 : 1.0);
     if ((draw_flags & kFlagTransparent) != 0) output.normal.a = 0.0;
@@ -112,36 +156,39 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
     float3 color;
     if ((draw_flags & kFlagUnlit) != 0 || length(input.normal) < 1e-4)
     {
-        color = base.rgb + data.emission.rgb;
+        color = base.rgb + emission;
     }
     else
     {
         float3 V = normalize(camera_pos.xyz - input.world_position);
         float3 L = -normalize(light_dir.xyz);
-        float3 H = normalize(V + L);
         float metallic = saturate(data.material.x);
         float roughness = clamp(1.0 - data.material.y, 0.045, 1.0);
         float3 albedo = base.rgb;
         float3 F0 = lerp(0.04.xxx, albedo, metallic);
-
-        float NdotL = saturate(dot(N, L));
         float NdotV = max(dot(N, V), 1e-4);
-        float NdotH = saturate(dot(N, H));
-        float D = DistributionGGX(NdotH, roughness);
-        float G = GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);
-        float3 F = FresnelSchlick(saturate(dot(H, V)), F0);
-        float3 kD = (1.0 - F) * (1.0 - metallic);
-        float3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, 1e-4);
-        float shadow = CalculateShadow(input.world_position, N, L);
-        // Unity's lights are not divided by PI; neither is the diffuse here.
-        float3 direct = (kD * albedo + specular * PI) * light_color.rgb * NdotL * shadow;
+
+        float shadow = CalculateShadow(input.world_position, surface_normal, L);
+        float3 direct = DirectLight(N, V, L, light_color.rgb * shadow, albedo, F0, metallic,
+                                    roughness);
+        const uint point_count = min((uint) flags.w, kMaxPointLights);
+        for (uint i = 0; i < point_count; ++i)
+        {
+            float4 light = point_lights[2 * i];
+            float3 to_light = light.xyz - input.world_position;
+            float distance_sq = dot(to_light, to_light);
+            if (distance_sq >= light.w * light.w) continue;
+            float3 radiance = point_lights[2 * i + 1].rgb * PointAttenuation(distance_sq, light.w);
+            direct += DirectLight(N, V, to_light * rsqrt(max(distance_sq, 1e-8)), radiance,
+                                  albedo, F0, metallic, roughness);
+        }
 
         float hemi = N.y * 0.5 + 0.5;
         float3 ambient_light = lerp(ambient_ground.rgb, ambient_sky.rgb, hemi);
         float3 F_ambient = FresnelSchlickRoughness(NdotV, F0, roughness);
         float3 ambient = (1.0 - F_ambient) * (1.0 - metallic) * albedo * ambient_light
                        + F_ambient * ambient_light * (1.0 - roughness) * 0.5;
-        color = direct + ambient + data.emission.rgb;
+        color = direct + ambient + emission;
     }
 
     if (flags.x > 0.5)

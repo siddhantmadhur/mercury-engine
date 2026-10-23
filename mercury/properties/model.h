@@ -11,6 +11,7 @@
  *   convention = "unity"   ; "native" (default) or "unity"
  *   scale = 1.0            ; extra uniform scale
  *   use_file_scale = true  ; convert the file's units to meters
+ *   max_texture_size = 8192 ; larger textures are scaled down to fit
  *
  * "unity" lays the model out the way Unity's importer does (axis conversion
  * on the top nodes, the file's units converted to meters, a single top node
@@ -42,8 +43,9 @@ struct ModelVertex {
   glm::vec4 color = glm::vec4(1.0f);
   glm::uvec4 joints = glm::uvec4(0);  // bone indices into the mesh's skin
   glm::vec4 weights = glm::vec4(0.0f);
+  glm::vec4 tangent = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);  // w: bitangent sign
 };
-static_assert(sizeof(ModelVertex) == 80);
+static_assert(sizeof(ModelVertex) == 96);
 
 /**
  * @brief Decoded RGBA8 image shared by everything that uses it
@@ -78,6 +80,8 @@ struct MeshGeometry {
   uint64_t id = 0;  // unique, for GPU caches
 
   void ComputeBounds();
+  // Tangents from the UV layout, for normal maps.
+  void ComputeTangents();
   static std::shared_ptr<MeshGeometry> Create(std::vector<ModelVertex> vertices,
                                               std::vector<uint32_t> indices);
 };
@@ -88,6 +92,10 @@ struct ModelMaterial {
   std::shared_ptr<ImageData> texture;
   float metallic = 0.0f;
   float smoothness = 0.5f;
+  glm::vec3 emission = glm::vec3(0.0f);  // linear
+  std::shared_ptr<ImageData> emission_texture;  // multiplies emission
+  std::shared_ptr<ImageData> normal_texture;    // tangent space
+  float normal_scale = 1.0f;
   bool transparent = false;
 };
 
@@ -146,6 +154,7 @@ struct ModelImportSettings {
   ModelConvention convention = ModelConvention::kNative;
   float scale = 1.0f;
   bool use_file_scale = true;
+  int max_texture_size = 8192;
 
   // Reads "<model path>.mimport" if it exists; otherwise `defaults`.
   static ModelImportSettings ForFile(const std::string& model_path,

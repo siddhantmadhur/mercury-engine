@@ -1,0 +1,149 @@
+[mmap format=1]
+
+[ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
+[ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
+[ext_resource type="Model" path="res://models/conference/conference.obj" id="3"]
+[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="4"]
+
+[node name="Conference"]
+
+[component type="Transform" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
+panel_settings = ExtResource("2")
+
+[component type="SceneHud" node="."]
+title = "Conference Room"
+hint = "The camera flies a loop. Space: pause · Esc: menu"
+
+[component type="PostProcessVolume" node="."]
+profile = ExtResource("4")
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(10, 2.5, 3)
+rotation = Vector3(0, 0, 0)
+
+[component type="Camera" node="Camera"]
+fov = 60
+near_clip = 0.05
+far_clip = 200
+background = Color(0.05, 0.05, 0.06, 1)
+
+[component type="FlythroughCamera" node="Camera"]
+path = NodePath("Path")
+lap_seconds = 60
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+rotation = Vector3(-60, 30, 0)
+
+[component type="DirectionalLight" node="Sun"]
+color = Color(1, 0.96, 0.9, 1)
+intensity = 0.6
+ambient = Color(0.25, 0.25, 0.27, 1)
+ground_ambient = Color(0.1, 0.1, 0.1, 1)
+cast_shadows = false
+
+[node name="Lights" parent="."]
+
+[component type="Transform" node="Lights"]
+
+[node name="L0" parent="Lights"]
+
+[component type="Transform" node="Lights/L0"]
+position = Vector3(-5, 5.5, -6)
+
+[component type="PointLight" node="Lights/L0"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 12
+range = 12
+
+[node name="L1" parent="Lights"]
+
+[component type="Transform" node="Lights/L1"]
+position = Vector3(3, 5.5, -6)
+
+[component type="PointLight" node="Lights/L1"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 12
+range = 12
+
+[node name="L2" parent="Lights"]
+
+[component type="Transform" node="Lights/L2"]
+position = Vector3(11, 5.5, -6)
+
+[component type="PointLight" node="Lights/L2"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 12
+range = 12
+
+[node name="L3" parent="Lights"]
+
+[component type="Transform" node="Lights/L3"]
+position = Vector3(-5, 5.5, 2)
+
+[component type="PointLight" node="Lights/L3"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 12
+range = 12
+
+[node name="L4" parent="Lights"]
+
+[component type="Transform" node="Lights/L4"]
+position = Vector3(3, 5.5, 2)
+
+[component type="PointLight" node="Lights/L4"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 12
+range = 12
+
+[node name="L5" parent="Lights"]
+
+[component type="Transform" node="Lights/L5"]
+position = Vector3(11, 5.5, 2)
+
+[component type="PointLight" node="Lights/L5"]
+color = Color(1, 0.95, 0.85, 1)
+intensity = 12
+range = 12
+
+[node name="Model" parent="."]
+
+[component type="Transform" node="Model"]
+
+[component type="MeshRenderer" node="Model"]
+mesh = "model"
+model = ExtResource("3")
+
+[node name="Path" parent="."]
+
+[component type="Transform" node="Path"]
+
+[node name="P0" parent="Path"]
+
+[component type="Transform" node="Path/P0"]
+position = Vector3(11, 2.6, 3)
+rotation = Vector3(-9.63, 57.99, 0)
+
+[node name="P1" parent="Path"]
+
+[component type="Transform" node="Path/P1"]
+position = Vector3(11, 3, -7)
+rotation = Vector3(-11.97, 122.01, 0)
+
+[node name="P2" parent="Path"]
+
+[component type="Transform" node="Path/P2"]
+position = Vector3(-2, 3, -7)
+rotation = Vector3(-15.79, -135, 0)
+
+[node name="P3" parent="Path"]
+
+[component type="Transform" node="Path/P3"]
+position = Vector3(-3, 2.4, 3)
+rotation = Vector3(-10.16, -50.19, 0)

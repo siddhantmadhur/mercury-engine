@@ -1,0 +1,42 @@
+<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="common.uss" />
+    <Style src="menu.uss" />
+    <ui:VisualElement class="menu">
+        <ui:Label class="title" text="Model Viewer" />
+        <ui:Label class="subtitle" text="Scenes from the McGuire Computer Graphics Archive" />
+        <ui:VisualElement class="columns">
+            <ui:VisualElement class="panel column">
+                <ui:Label class="column__title" text="Benchmark scenes" />
+                <ui:Label class="column__text" text="The camera flies a fixed loop; each lap reports average, 1% low and minimum fps." />
+                <ui:Button name="sponza" class="button" text="Sponza" />
+                <ui:Button name="sibenik" class="button" text="Sibenik Cathedral" />
+                <ui:Button name="conference" class="button" text="Conference Room" />
+                <ui:Button name="breakfast_room" class="button" text="Breakfast Room" />
+                <ui:Button name="living_room" class="button" text="Living Room" />
+                <ui:Button name="gallery" class="button" text="Art Gallery" />
+            </ui:VisualElement>
+            <ui:VisualElement class="panel column">
+                <ui:Label class="column__title" text="Models" />
+                <ui:Label class="column__text" text="Drag to orbit, right-drag to pan, scroll to zoom." />
+                <ui:Button name="bunny" class="button" text="Stanford Bunny" />
+                <ui:Button name="mori_knob" class="button" text="Mori Knob" />
+            </ui:VisualElement>
+            <ui:VisualElement class="panel column">
+                <ui:Label class="column__title" text="Cornell Box" />
+                <ui:Label class="column__text" text="Fixed camera, lit by a point light under the ceiling panel." />
+                <ui:Button name="cornell_original" class="button" text="Original" />
+                <ui:Button name="cornell_sphere" class="button" text="Spheres" />
+                <ui:Button name="cornell_water" class="button" text="Water" />
+                <ui:Button name="cornell_glossy" class="button" text="Glossy" />
+                <ui:Button name="cornell_mirror" class="button" text="Mirror" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="footer">
+            <ui:Button name="quit" class="button" text="Quit" />
+            <ui:Label class="credit" text="Models: casual-effects.com/data (see each folder's copyright.txt)" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="loading-overlay" class="overlay hidden">
+        <ui:Label name="loading" class="loading" text="Loading..." />
+    </ui:VisualElement>
+</ui:UXML>

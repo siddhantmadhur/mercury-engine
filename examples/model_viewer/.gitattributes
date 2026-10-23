@@ -1,0 +1,5 @@
+# The archive's models and textures are large; keep them in Git LFS.
+models/**/*.obj filter=lfs diff=lfs merge=lfs -text
+models/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+models/**/*.JPG filter=lfs diff=lfs merge=lfs -text
+models/**/*.png filter=lfs diff=lfs merge=lfs -text
