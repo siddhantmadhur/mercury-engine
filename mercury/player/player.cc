@@ -132,17 +132,18 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
     return 1;
   }
 
-  Map map;
-  if (!map.Load(project->Resolve(map_path), &error)) {
-    PDebug::error("Could not load map: {}", error);
-    return 1;
-  }
-
   auto application = std::make_unique<DefaultApplication>(
       project->GetWindowTitle(),
       static_cast<float>(project->GetWindowWidth()),
       static_cast<float>(project->GetWindowHeight()));
   auto scene = std::make_unique<MapScene>(project, MapScene::Mode::kPlay);
+
+  Map map;
+  if (!map.Load(project->Resolve(map_path), &error,
+                scene->GetPrefabCache().Loader())) {
+    PDebug::error("Could not load map: {}", error);
+    return 1;
+  }
   scene->Instantiate(map);
   application->SetGameScene(std::move(scene));
   return application->Run();

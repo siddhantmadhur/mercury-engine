@@ -6,6 +6,7 @@
 #include "editor_scene.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "project/asset_database.h"
+#include "scripting/event.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury {
@@ -361,25 +362,9 @@ void EditorScene::DrawNodeInspector(MapNode& node) {
   }
 }
 
-bool EditorScene::DrawField(const FieldInfo& field,
-                            mtext::PropertyList& properties) {
-  const mtext::Variant* stored = properties.Get(field.name);
-  mtext::Variant value = stored ? *stored : field.default_value;
+bool EditorScene::DrawValue(const FieldInfo& field, FieldType type, mtext::Variant& value) {
   bool changed = false;
-  const char* label = field.name.c_str();
-
-  // Label on the left, widget filling the rest, like Unity's Inspector.
-  ImGui::AlignTextToFramePadding();
-  if (stored && !(*stored == field.default_value)) {
-    ImGui::TextUnformatted(label);  // bright when it differs from default
-  } else {
-    ImGui::TextDisabled("%s", label);
-  }
-  if (!field.tooltip.empty()) ImGui::SetItemTooltip("%s", field.tooltip.c_str());
-  ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.38f);
-  ImGui::SetNextItemWidth(-1);
-
-  switch (field.type) {
+  switch (type) {
     case FieldType::kBool: {
       bool v = value.ToBool().value_or(false);
       if (ImGui::Checkbox("##v", &v)) value = v, changed = true;
@@ -457,7 +442,167 @@ bool EditorScene::DrawField(const FieldInfo& field,
       }
       break;
     }
+    case FieldType::kList:
+      changed = DrawList(field, value);
+      break;
+    case FieldType::kEvent:
+      changed = DrawEventCalls(value);
+      break;
   }
+  return changed;
+}
+
+bool EditorScene::DrawList(const FieldInfo& field, mtext::Variant& value) {
+  mtext::Array items;
+  if (auto* array = value.Get<mtext::Array>()) items = *array;
+  bool changed = false;
+  ImGui::TextDisabled("%zu item%s", items.size(), items.size() == 1 ? "" : "s");
+  ImGui::SameLine();
+  if (ImGui::SmallButton("+")) {
+    mtext::Variant item;
+    switch (field.element_type) {
+      case FieldType::kInt: item = 0; break;
+      case FieldType::kFloat: item = 0.0; break;
+      case FieldType::kNodeRef: item = mtext::NodePath{}; break;
+      case FieldType::kAsset: item = mtext::Resource{}; break;
+      default: item = std::string(); break;
+    }
+    items.push_back(std::move(item));
+    changed = true;
+  }
+  int remove = -1;
+  ImGui::Indent();
+  for (size_t i = 0; i < items.size(); i++) {
+    ImGui::PushID(static_cast<int>(i));
+    if (ImGui::SmallButton("x")) remove = static_cast<int>(i);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-1);
+    changed |= DrawValue(field, field.element_type, items[i]);
+    ImGui::PopID();
+  }
+  ImGui::Unindent();
+  if (remove >= 0) {
+    items.erase(items.begin() + remove);
+    changed = true;
+  }
+  if (changed) value = mtext::Variant(std::move(items));
+  return changed;
+}
+
+// An Event's saved calls: target node, script, method and argument, like
+// the list under a UnityEvent in Unity's Inspector.
+bool EditorScene::DrawEventCalls(mtext::Variant& value) {
+  std::vector<EventCall> calls = Event::FromVariant(value).value_or(std::vector<EventCall>{});
+  bool changed = false;
+  ImGui::TextDisabled("%zu call%s", calls.size(), calls.size() == 1 ? "" : "s");
+  ImGui::SameLine();
+  if (ImGui::SmallButton("+")) {
+    calls.emplace_back();
+    changed = true;
+  }
+  int remove = -1;
+  ImGui::Indent();
+  const auto& registry = TypeRegistry::Instance();
+  for (size_t i = 0; i < calls.size(); i++) {
+    EventCall& call = calls[i];
+    ImGui::PushID(static_cast<int>(i));
+    if (ImGui::SmallButton("x")) remove = static_cast<int>(i);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-1);
+    if (DrawNodePicker("##node", call.target.path)) changed = true;
+
+    // Scripts on the target that have methods, plus GameObject.SetActive.
+    std::vector<const ComponentInfo*> choices;
+    if (const MapNode* node = map_.FindNode(call.target.path)) {
+      for (const auto& component : node->components) {
+        const ComponentInfo* info = registry.FindComponent(component.type);
+        if (info && !info->methods.empty()) choices.push_back(info);
+      }
+    }
+    const std::string current = call.component.empty() ? "No Function"
+                                                        : call.component + "." + call.method;
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::BeginCombo("##method", current.c_str())) {
+      auto option = [&](const std::string& component, const MethodDesc& method) {
+        const std::string label =
+            component + "." + method.name + (method.arg.empty() ? "" : " (" + method.arg + ")");
+        if (ImGui::Selectable(label.c_str(),
+                              component == call.component && method.name == call.method)) {
+          call.component = component;
+          call.method = method.name;
+          if (method.arg == "bool") call.argument = false;
+          else if (method.arg == "int") call.argument = 0;
+          else if (method.arg == "float") call.argument = 0.0;
+          else if (method.arg == "string") call.argument = std::string();
+          else call.argument = mtext::Variant();
+          changed = true;
+        }
+      };
+      option("GameObject", MethodDesc{"SetActive", "bool"});
+      for (const ComponentInfo* info : choices) {
+        for (const auto& method : info->methods) option(info->name, method);
+      }
+      ImGui::EndCombo();
+    }
+
+    using T = mtext::Variant::Type;
+    ImGui::SetNextItemWidth(-1);
+    switch (call.argument.GetType()) {
+      case T::kBool: {
+        bool v = call.argument.ToBool().value_or(false);
+        if (ImGui::Checkbox("##arg", &v)) call.argument = v, changed = true;
+        break;
+      }
+      case T::kInt: {
+        int v = static_cast<int>(call.argument.ToInt().value_or(0));
+        if (ImGui::DragInt("##arg", &v)) call.argument = v, changed = true;
+        break;
+      }
+      case T::kFloat: {
+        float v = static_cast<float>(call.argument.ToFloat().value_or(0.0));
+        if (ImGui::DragFloat("##arg", &v, 0.1f, 0.0f, 0.0f, "%.3g")) {
+          call.argument = static_cast<double>(v), changed = true;
+        }
+        break;
+      }
+      case T::kString: {
+        std::string v = call.argument.ToString().value_or("");
+        if (ImGui::InputText("##arg", &v)) call.argument = v, changed = true;
+        break;
+      }
+      default:
+        break;
+    }
+    ImGui::Separator();
+    ImGui::PopID();
+  }
+  ImGui::Unindent();
+  if (remove >= 0) {
+    calls.erase(calls.begin() + remove);
+    changed = true;
+  }
+  if (changed) value = Event::ToVariant(calls);
+  return changed;
+}
+
+bool EditorScene::DrawField(const FieldInfo& field,
+                            mtext::PropertyList& properties) {
+  const mtext::Variant* stored = properties.Get(field.name);
+  mtext::Variant value = stored ? *stored : field.default_value;
+  const char* label = field.name.c_str();
+
+  // Label on the left, widget filling the rest, like Unity's Inspector.
+  ImGui::AlignTextToFramePadding();
+  if (stored && !(*stored == field.default_value)) {
+    ImGui::TextUnformatted(label);  // bright when it differs from default
+  } else {
+    ImGui::TextDisabled("%s", label);
+  }
+  if (!field.tooltip.empty()) ImGui::SetItemTooltip("%s", field.tooltip.c_str());
+  ImGui::SameLine(ImGui::GetContentRegionAvail().x * 0.38f);
+  ImGui::SetNextItemWidth(-1);
+
+  const bool changed = DrawValue(field, field.type, value);
 
   if (ImGui::BeginPopupContextItem("field_menu")) {
     if (ImGui::MenuItem("Reset to Default", nullptr, false, stored != nullptr)) {

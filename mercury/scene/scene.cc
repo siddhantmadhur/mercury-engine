@@ -70,7 +70,7 @@ void GameScene::SetInputManager(InputManager* input_manager) {
 void GameScene::QuitScene() { should_close = true; }
 bool GameScene::ShouldQuit() const { return should_close; }
 void GameScene::SimulatePhysics(int steps) {
-  if (steps < 5) physics_engine_->Compute(steps);
+  if (steps > 0 && steps < 5) physics_engine_->Compute(steps);
 }
 void GameScene::ProcessOnFrame(float alpha) {
   object_manager_->ProcessOnFrame(alpha);

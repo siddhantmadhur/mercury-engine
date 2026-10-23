@@ -8,6 +8,7 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui_impl_glfw.h>
 
+#include <cstdlib>
 #include <format>
 
 #if defined(__EMSCRIPTEN__)
@@ -120,6 +121,7 @@ bool Application::Initialize() {
 
   glfwSetWindowUserPointer(window_, this);
   glfwSetFramebufferSizeCallback(window_, HandleResize);
+  input_manager.Initialize(window_);
 
   glfwSetKeyCallback(window_, HandleKeyCallback);
   glfwSetCursorPosCallback(
@@ -164,6 +166,8 @@ void Application::StepFrame() {
   double current_time = glfwGetTime() * 1000;
   auto frametime = current_time - time_elapsed_;
   delta_time_ = frametime;
+  // Scripted input replays the same way however fast frames render.
+  if (!input_script_.IsEmpty()) delta_time_ = 1000.0 / 60.0;
   time_elapsed_ = current_time;
 
   {  // FPS logic
@@ -181,10 +185,9 @@ void Application::StepFrame() {
     average_fps_ = std::round(1000 / average);
   }
 
-  constexpr double kTickMs = 1000.0 / kTicksPerSec;
+  const int tick_rate = std::max(1, game_scene_->GetTicksPerSecond());
+  const double kTickMs = 1000.0 / tick_rate;
   time_since_last_tick_ += delta_time_;
-
-  int ticks = int(time_elapsed_ / kTickMs);
 
   input_manager.BeginFrame();
   glfwPollEvents();
@@ -202,6 +205,13 @@ void Application::StepFrame() {
     input_manager.SetContentScale(content_x);
 #endif
   }
+  input_manager.PollGamepads();
+  if (!input_script_.IsEmpty()) {
+    InputScript::Hooks hooks;
+    hooks.capture = [this](const std::string& file) { RequestCapture(file); };
+    hooks.quit = [this] { quit_after_frame_ = true; };
+    input_script_.Apply(script_frame_++, input_manager, window_, hooks);
+  }
   ImGuiNewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
@@ -211,20 +221,21 @@ void Application::StepFrame() {
   }
 
   game_scene_->OnFrame(delta_time_);
-  if (ticks > last_tick_) {
+  // Run every tick that is due (Unity runs several FixedUpdates when a frame
+  // takes long), but never more than a few so a stall cannot snowball.
+  int ticks_run = 0;
+  while (time_since_last_tick_ >= kTickMs && ticks_run < 5) {
     game_scene_->OnTickBegin();
-    game_scene_->OnTick(time_since_last_tick_);
-
-    game_scene_->SimulatePhysics(
-        60 / kTicksPerSec);  // Only works as long as tps is 60
-
+    game_scene_->OnTick(kTickMs);
+    game_scene_->SimulatePhysics(1);
     input_manager.ResetFreshPresses();
-
-    last_tick_ = ticks;
-    time_since_last_tick_ = 0.0;
+    time_since_last_tick_ -= kTickMs;
+    ticks_run++;
   }
+  if (time_since_last_tick_ > kTickMs) time_since_last_tick_ = std::fmod(time_since_last_tick_, kTickMs);
 
   float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
+  alpha = std::clamp(alpha, 0.0f, 1.0f);
   game_scene_->ProcessOnFrame(alpha);
   // Rebuild the per-frame vertex/index buffers to match the primitives_ we
   // are about to render.
@@ -244,6 +255,11 @@ void Application::StepFrame() {
   }
 
   Render();
+  if (quit_after_frame_) Quit();
+}
+
+void Application::RequestCapture(const std::string& file) {
+  PDebug::warn("This renderer cannot save captures ({})", file);
 }
 
 int Application::Run() {
@@ -257,6 +273,17 @@ int Application::Run() {
     return 1;
   }
   game_scene_->OnStart();
+
+#if !defined(__EMSCRIPTEN__)
+  if (const char* script = std::getenv("MERCURY_INPUT_SCRIPT")) {
+    std::string error;
+    if (input_script_.Load(script, &error)) {
+      PDebug::info("Replaying input from {}", script);
+    } else {
+      PDebug::error("Input script: {}", error);
+    }
+  }
+#endif
 
   if (current_cursor) {
     GLFWcursor* cursor = glfwCreateCursor(current_cursor, 10, 8);

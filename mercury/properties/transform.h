@@ -88,6 +88,9 @@ class Transform {
   // Make the interpolated (rendered) state equal the current state, so a
   // freshly placed object does not blend in from the origin or from scale 0.
   void SnapInterpolation();
+  // Shows the current rotation this frame instead of turning towards it
+  // over the tick (for rotations set every frame, like mouse look).
+  void SnapRotation() { previous_rotation_ = rotation_; }
 
   std::vector<TransformationType> GetTransformations();
   void ClearTransformations();

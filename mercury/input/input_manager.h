@@ -17,6 +17,15 @@ namespace Mercury {
 using Key = int;
 
 enum class MouseButton { kLeft, kRight, kMiddle };
+
+/**
+ * @brief The state of the first connected gamepad (SDL/Xbox layout)
+ */
+struct GamepadState {
+  bool connected = false;
+  bool buttons[15] = {};  // GLFW_GAMEPAD_BUTTON_*
+  float axes[6] = {};     // GLFW_GAMEPAD_AXIS_*: sticks -1..1, triggers 0..1
+};
 enum KeyStatus { kJustPressed = 0, kContinuous = 1, kReleased = 2 };
 
 /**
@@ -47,7 +56,21 @@ class InputManager {
   bool IsJustPressed(MouseButton btn);
 
   glm::vec2 GetCursorPos();
+  // Movement since the last tick.
   glm::vec2 GetCursorDelta();
+  // Movement since the last frame, in window pixels (Unity's Mouse.delta).
+  glm::vec2 GetFrameCursorDelta() const { return frame_mouse_delta_; }
+  glm::vec2 GetFrameScroll() const { return frame_scroll_; }
+
+  // Unity's Cursor.lockState = Locked and Cursor.visible.
+  void SetCursorLocked(bool locked);
+  bool IsCursorLocked() const { return cursor_locked_; }
+  void SetCursorVisible(bool visible);
+  bool IsCursorVisible() const { return cursor_visible_; }
+
+  // Reads the first gamepad; the application calls this once per frame.
+  void PollGamepads();
+  const GamepadState& GetGamepad() const { return gamepad_; }
 
   void HandleKeyCallback(GLFWwindow* window, int key, int scancode, int action,
                          int mods);
@@ -65,7 +88,14 @@ class InputManager {
   // Events since the last BeginFrame(); the application clears them before
   // polling each frame.
   const std::vector<InputEvent>& GetFrameEvents() const { return frame_events_; }
-  void BeginFrame() { frame_events_.clear(); }
+  void BeginFrame() {
+    frame_events_.clear();
+    frame_mouse_delta_ = glm::vec2(0.0f);
+    frame_scroll_ = glm::vec2(0.0f);
+  }
+  // Adds mouse movement as if the cursor moved (scripted input).
+  void AddFrameCursorDelta(glm::vec2 delta) { frame_mouse_delta_ += delta; }
+  void ClearFrameCursorDelta() { frame_mouse_delta_ = glm::vec2(0.0f); }
 
   bool IsCursorInWindow() const { return cursor_inside_; }
   // Framebuffer pixels per window coordinate (2 on most HiDPI displays).
@@ -120,6 +150,13 @@ class InputManager {
   float content_scale_ = 1.0f;
   bool imgui_wants_mouse_ = false;
   bool imgui_wants_keyboard_ = false;
+  GLFWwindow* window_ = nullptr;
+  glm::vec2 frame_mouse_delta_ = glm::vec2(0.0f);
+  glm::vec2 frame_scroll_ = glm::vec2(0.0f);
+  bool have_mouse_position_ = false;
+  bool cursor_locked_ = false;
+  bool cursor_visible_ = true;
+  GamepadState gamepad_;
 };
 
 }  // namespace Mercury

@@ -169,11 +169,25 @@ bool Context::PickPhysicalDevice() {
 
     VkPhysicalDeviceVulkan13Features features13 = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    VkPhysicalDeviceVulkan12Features features12 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext = &features13};
     VkPhysicalDeviceFeatures2 features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &features13};
+        .pNext = &features12};
     vkGetPhysicalDeviceFeatures2(candidate, &features);
-    if (!features13.dynamicRendering || !features13.synchronization2) continue;
+    if (!features13.dynamicRendering || !features13.synchronization2 ||
+        !features13.shaderDemoteToHelperInvocation ||
+        !features.features.independentBlend) {
+      continue;
+    }
+    // Bindless textures for the model renderer.
+    if (!features12.runtimeDescriptorArray ||
+        !features12.descriptorBindingPartiallyBound ||
+        !features12.descriptorBindingSampledImageUpdateAfterBind ||
+        !features12.shaderSampledImageArrayNonUniformIndexing) {
+      continue;
+    }
 
     uint32_t family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(candidate, &family_count,
@@ -234,9 +248,24 @@ bool Context::CreateDevice() {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
   features13.dynamicRendering = VK_TRUE;
   features13.synchronization2 = VK_TRUE;
+  // HLSL's discard compiles to demote-to-helper for Vulkan 1.3 targets.
+  features13.shaderDemoteToHelperInvocation = VK_TRUE;
+  VkPhysicalDeviceVulkan12Features features12 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+      .pNext = &features13};
+  features12.runtimeDescriptorArray = VK_TRUE;
+  features12.descriptorBindingPartiallyBound = VK_TRUE;
+  features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+  features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
   VkPhysicalDeviceFeatures2 features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-      .pNext = &features13};
+      .pNext = &features12};
+  VkPhysicalDeviceFeatures supported = {};
+  vkGetPhysicalDeviceFeatures(physical_device, &supported);
+  features.features.samplerAnisotropy = supported.samplerAnisotropy;
+  // The model renderer's main pass blends color but not its normal target.
+  features.features.independentBlend = VK_TRUE;
+  sampler_anisotropy = supported.samplerAnisotropy == VK_TRUE;
 
   const char* extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
