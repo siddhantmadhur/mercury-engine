@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "vk_check.h"
+#include "vk_context.h"
 
 namespace Mercury::vk {
 
