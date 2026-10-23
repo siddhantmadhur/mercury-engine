@@ -13,7 +13,11 @@
 namespace Mercury {
 InputManager::InputManager() {}
 
-void InputManager::Initialize(GLFWwindow* window) { window_ = window; }
+void InputManager::Initialize(GLFWwindow* window) {
+  window_ = window;
+  // Apply a cursor mode requested before the window existed.
+  if (cursor_locked_ || !cursor_visible_) SetCursorLocked(cursor_locked_);
+}
 
 Key InputManager::KeyFromName(std::string_view name) {
   std::string key(name);
