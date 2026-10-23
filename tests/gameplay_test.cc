@@ -17,6 +17,7 @@
 #include "project/map.h"
 #include "project/project.h"
 #include "properties/model.h"
+#include "stb/stb_image_write.h"
 #include "scene/map_scene.h"
 #include "scripting/behaviour.h"
 #include "ui/controls.h"
@@ -64,6 +65,15 @@ class TestWalker : public Behaviour {
   CharacterController* controller = nullptr;
 };
 MERCURY_SCRIPT(TestWalker);
+
+// Asks for another map from inside OnFrame, as a menu button would.
+class TestMapSwitcher : public Behaviour {
+ public:
+  void Reflect(Reflector& r) override { r.Field("next", next); }
+  void OnFrame(double) override { LoadMap(next); }
+  std::string next;
+};
+MERCURY_SCRIPT(TestMapSwitcher);
 
 std::shared_ptr<Project> LoadProject() {
   std::string error;
@@ -277,6 +287,125 @@ TEST(Gameplay, ModelLoadsNodesAndMeshes) {
   EXPECT_EQ(model->Meshes().size(), 2u);
   EXPECT_GE(model->FindNode("Left"), 0);
   EXPECT_GE(model->FindNode("Right"), 0);
+  std::filesystem::remove_all(dir);
+}
+
+TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
+  const auto dir = std::filesystem::temp_directory_path() / "mercury_obj_material_test";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  // Textures named in a different case than the .mtl spells them, as in
+  // models made on Windows.
+  auto write_png = [&](const char* name, int size, uint8_t (*pixel)(int, int)) {
+    std::vector<uint8_t> pixels(size_t(size) * size * 4);
+    for (int y = 0; y < size; y++) {
+      for (int x = 0; x < size; x++) {
+        uint8_t* p = &pixels[(size_t(y) * size + x) * 4];
+        p[0] = p[1] = p[2] = pixel(x, y);
+        p[3] = 255;
+      }
+    }
+    stbi_write_png((dir / name).string().c_str(), size, size, 4, pixels.data(), size * 4);
+  };
+  write_png("color.png", 64, [](int, int) -> uint8_t { return 200; });
+  // Bright stripes every 4 texels: a bump map with slopes along x only.
+  write_png("bumps.png", 16, [](int x, int) -> uint8_t { return x % 4 == 0 ? 255 : 0; });
+  {
+    std::ofstream mtl(dir / "scene.mtl");
+    mtl << "newmtl Lamp\nKd 0.5 0.5 0.5\nKe 4 3 2\nKs 0 0 0\nNs 10\n"
+           "newmtl Stone\nKd 0 0 0\nKs 0.5 0.5 0.5\nNs 200\n"
+           "map_Kd COLOR.PNG\nbump Bumps.png\n";
+  }
+  {
+    std::ofstream obj(dir / "scene.obj");
+    obj << "mtllib scene.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\n"
+           "usemtl Lamp\nf 1/1 2/2 3/3\nusemtl Stone\nf 1/1 2/2 3/3\n";
+  }
+  ModelImportSettings settings;
+  settings.max_texture_size = 32;
+  std::string error;
+  auto model = Model::Load((dir / "scene.obj").string(), settings, &error);
+  ASSERT_TRUE(model) << error;
+
+  const ModelMaterial* lamp = nullptr;
+  const ModelMaterial* stone = nullptr;
+  for (const auto& material : model->Materials()) {
+    if (material.name == "Lamp") lamp = &material;
+    if (material.name == "Stone") stone = &material;
+  }
+  ASSERT_TRUE(lamp && stone);
+  EXPECT_EQ(lamp->emission, glm::vec3(4.0f, 3.0f, 2.0f));
+  // No specular color: matte, whatever Ns says.
+  EXPECT_FLOAT_EQ(lamp->smoothness, 0.0f);
+  EXPECT_GT(stone->smoothness, 0.8f);
+
+  // Found despite the case, scaled down to the limit, and Kd 0 next to a
+  // texture means the texture alone.
+  ASSERT_TRUE(stone->texture);
+  EXPECT_EQ(stone->texture->width, 32);
+  EXPECT_EQ(stone->texture->height, 32);
+  EXPECT_EQ(glm::vec3(stone->color), glm::vec3(1.0f));
+
+  // The bump map becomes a linear normal map tilted along x, not y.
+  ASSERT_TRUE(stone->normal_texture);
+  EXPECT_FALSE(stone->normal_texture->srgb);
+  const auto& normals = stone->normal_texture->pixels;
+  int tilted_x = 0;
+  for (size_t i = 0; i < normals.size(); i += 4) {
+    if (std::abs(normals[i] - 128) > 20) tilted_x++;
+    EXPECT_NEAR(normals[i + 1], 128, 2);
+  }
+  EXPECT_GT(tilted_x, 0);
+
+  // Normal-mapped meshes get unit tangents along +u.
+  for (const auto& mesh : model->Meshes()) {
+    if (&model->Materials()[mesh.material] != stone) continue;
+    for (const auto& v : mesh.geometry->vertices) {
+      EXPECT_NEAR(v.tangent.x, 1.0f, 1e-4f);
+      EXPECT_NEAR(std::abs(v.tangent.w), 1.0f, 1e-6f);
+    }
+  }
+  std::filesystem::remove_all(dir);
+}
+
+TEST(Gameplay, LoadMapFromScriptReplacesTheScene) {
+  const auto dir = std::filesystem::temp_directory_path() / "mercury_load_map_test";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir / "maps");
+  {
+    std::ofstream(dir / "test.mproj") << "[project]\nname = \"Test\"\n"
+                                         "main_map = \"res://maps/a.mmap\"\n";
+    std::ofstream(dir / "maps/a.mmap")
+        << "[mmap format=1]\n[node name=\"A\"]\n[node name=\"Switch\" parent=\".\"]\n"
+           "[component type=\"TestMapSwitcher\" node=\"Switch\"]\n"
+           "next = \"res://maps/b.mmap\"\n";
+    std::ofstream(dir / "maps/b.mmap")
+        << "[mmap format=1]\n[node name=\"B\"]\n[node name=\"Lamp\" parent=\".\"]\n"
+           "[component type=\"Transform\" node=\"Lamp\"]\nposition = Vector3(1, 2, 3)\n"
+           "[component type=\"PointLight\" node=\"Lamp\"]\nintensity = 2\nrange = 5\n";
+  }
+  std::string error;
+  auto project = Project::Load(dir / "test.mproj", &error);
+  ASSERT_TRUE(project) << error;
+  Map map;
+  ASSERT_TRUE(map.Load(dir / "maps/a.mmap", &error)) << error;
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.Instantiate(map);
+  scene.OnStart();
+  ASSERT_TRUE(scene.Find("Switch").IsValid());
+
+  // The request made during this frame takes effect at the next one.
+  scene.OnFrame(1000.0 / 60.0);
+  EXPECT_TRUE(scene.Find("Switch").IsValid());
+  scene.OnFrame(1000.0 / 60.0);
+  EXPECT_FALSE(scene.Find("Switch").IsValid());
+  ASSERT_TRUE(scene.Find("Lamp").IsValid());
+
+  ASSERT_EQ(scene.GetLighting().point_lights.size(), 1u);
+  const PointLightData& light = scene.GetLighting().point_lights[0];
+  EXPECT_EQ(light.position, glm::vec3(1.0f, 2.0f, 3.0f));
+  EXPECT_EQ(light.color, glm::vec3(2.0f));
+  EXPECT_FLOAT_EQ(light.range, 5.0f);
   std::filesystem::remove_all(dir);
 }
 

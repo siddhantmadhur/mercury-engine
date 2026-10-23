@@ -930,6 +930,30 @@ void EditorScene::DrawNodeGizmos(ImDrawList* draw, const MapNode& node) {
     drew_something = true;
   }
 
+  if (auto* point = Objects().GetProperty<PointLight>(entity)) {
+    const ImU32 color = selected ? selection_color : light_color;
+    ImVec2 at;
+    if (WorldToScreen(position, at)) {
+      draw->AddCircleFilled(at, 5.0f, color, 12);
+      draw->AddCircle(at, 9.0f, color, 16, 1.5f);
+    }
+    if (selected) {
+      // Its range, as a circle around each axis.
+      for (int axis = 0; axis < 3; axis++) {
+        glm::vec3 previous(0.0f);
+        for (int i = 0; i <= 32; i++) {
+          const float angle = i * 2.0f * kPi / 32.0f;
+          glm::vec3 offset(0.0f);
+          offset[(axis + 1) % 3] = std::cos(angle) * point->range;
+          offset[(axis + 2) % 3] = std::sin(angle) * point->range;
+          if (i > 0) DrawLine3D(draw, position + previous, position + offset, color, 1.0f);
+          previous = offset;
+        }
+      }
+    }
+    drew_something = true;
+  }
+
   glm::mat4 model;
   glm::vec3 min, max;
   if (selected && GetNodeBounds(entity, model, min, max)) {
@@ -1075,7 +1099,7 @@ bool EditorScene::MapLooks3D() const {
   const_cast<Map&>(map_).Visit([&](const MapNode& node) {
     for (const auto& component : node.components) {
       if (component.type == "MeshRenderer" ||
-          component.type == "DirectionalLight" ||
+          component.type == "DirectionalLight" || component.type == "PointLight" ||
           component.type == "SphereCollider" ||
           component.type == "CapsuleCollider" ||
           component.type == "CylinderCollider") {
@@ -1114,7 +1138,8 @@ void EditorScene::FrameMap() {
         }
         // Cameras and lights usually sit away from the action.
         const bool helper = node.FindComponent("Camera") ||
-                            node.FindComponent("DirectionalLight");
+                            node.FindComponent("DirectionalLight") ||
+                            node.FindComponent("PointLight");
         if (!node.IsRoot() && !helper) {
           min = glm::min(min, position - glm::abs(scale) * 0.5f);
           max = glm::max(max, position + glm::abs(scale) * 0.5f);

@@ -399,6 +399,7 @@ void EditorScene::DrawCreateMenuItems(MapNode* parent) {
     if (ImGui::MenuItem("Directional Light")) {
       CreatePreset(parent, Preset::kDirectionalLight);
     }
+    if (ImGui::MenuItem("Point Light")) CreatePreset(parent, Preset::kPointLight);
     ImGui::EndMenu();
   }
   if (ImGui::MenuItem("Camera")) CreatePreset(parent, Preset::kCamera);
@@ -407,7 +408,7 @@ void EditorScene::DrawCreateMenuItems(MapNode* parent) {
 MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
   static constexpr const char* kNames[] = {
       "Node", "Cube",   "Sphere", "Capsule",          "Cylinder",
-      "Plane", "Quad", "Sprite", "DirectionalLight", "Camera",
+      "Plane", "Quad", "Sprite", "DirectionalLight", "Camera", "PointLight",
   };
   if (!parent) parent = map_.GetRoot();
   MapNode* node = map_.AddNode(parent, kNames[static_cast<int>(preset)]);
@@ -468,6 +469,10 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
       rotation = glm::vec3(-50.0f, -30.0f, 0.0f);
       scale = glm::vec3(1.0f);
       node->components.push_back({"DirectionalLight", {}});
+      break;
+    case Preset::kPointLight:
+      scale = glm::vec3(1.0f);
+      node->components.push_back({"PointLight", {}});
       break;
     case Preset::kCamera: {
       ComponentData camera{"Camera", {}};

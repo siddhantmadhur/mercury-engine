@@ -88,6 +88,10 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
     result.texture = own->texture;
     result.metallic = own->metallic;
     result.smoothness = own->smoothness;
+    result.emission = own->emission;
+    result.emission_texture = own->emission_texture;
+    result.normal_texture = own->normal_texture;
+    result.normal_scale = own->normal_scale;
     result.transparent = own->transparent;
     return result;
   };
@@ -491,6 +495,13 @@ void RegisterBuiltinTypes() {
         "DirectionalLight", "Rendering",
         "Sunlight along the node's forward (-Z) direction, plus ambient light");
     info.attach = StoreAsProperty<DirectionalLight>("DirectionalLight");
+    registry.RegisterComponent(std::move(info));
+  }
+  {
+    auto info = MakeInfo<PointLight>(
+        "PointLight", "Rendering",
+        "Light in every direction from the node, fading out at its range");
+    info.attach = StoreAsProperty<PointLight>("PointLight");
     registry.RegisterComponent(std::move(info));
   }
   {

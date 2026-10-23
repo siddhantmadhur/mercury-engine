@@ -68,7 +68,7 @@ class EditorScene : public MapScene {
   // Things the Create menus can add, like Unity's GameObject menu.
   enum class Preset {
     kEmpty, kCube, kSphere, kCapsule, kCylinder, kPlane, kQuad,
-    kSprite, kDirectionalLight, kCamera,
+    kSprite, kDirectionalLight, kCamera, kPointLight,
   };
   MapNode* CreatePreset(MapNode* parent, Preset preset);
   void DrawCreateMenuItems(MapNode* parent);

@@ -147,6 +147,9 @@ class Behaviour {
   PhysicsEngine& Physics() const { return scene_->Physics(); }
   AssetDatabase& Assets() const { return scene_->Assets(); }
   void Quit() const { scene_->QuitScene(); }
+  // Replaces the scene with another map at the start of the next frame,
+  // e.g. LoadMap("res://maps/level2.mmap").
+  void LoadMap(std::string res_path) const { scene_->LoadMap(std::move(res_path)); }
 
  private:
   friend class MapScene;

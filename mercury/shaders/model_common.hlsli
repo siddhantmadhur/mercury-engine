@@ -26,8 +26,12 @@
     float4 camera_pos;
     float4 resolution;      // xy: target size, zw: 1 / size
     float4 shadow_params;   // x: shadow map size (0: none), y: normal bias, z: depth bias
-    float4 flags;           // x: tonemap in shader, y: overlay pass, z: time
+    float4 flags;           // x: tonemap in shader, y: overlay pass, z: time, w: point lights
+    // Per point light: [2i] xyz position, w range; [2i + 1] rgb linear color * intensity.
+    float4 point_lights[2 * 16];
 };
+
+static const uint kMaxPointLights = 16;
 
 struct DrawData
 {
@@ -37,7 +41,8 @@ struct DrawData
     float4 emission;  // linear rgb
     float4 uv;        // xy: tiling, zw: offset
     uint4 info;       // x: texture index, y: flags, z: first bone (~0: rigid)
-    float4 material;  // x: metallic, y: smoothness
+    float4 material;  // x: metallic, y: smoothness, z: normal map strength
+    uint4 maps;       // x: normal map index, y: emission map index (0: none)
 };
 
 static const uint kFlagUnlit = 1;
@@ -59,6 +64,7 @@ struct ModelVSInput
     [[vk::location(5)]] float4 weights : BLENDWEIGHT;
     // Per instance: which DrawData this draw uses (firstInstance).
     [[vk::location(6)]] uint draw : DRAWINDEX;
+    [[vk::location(7)]] float4 tangent : TANGENT;  // w: bitangent sign
 };
 
 struct ModelVSOutput
@@ -69,13 +75,16 @@ struct ModelVSOutput
     [[vk::location(2)]] float2 uv : TEXCOORD0;
     [[vk::location(3)]] float4 color : COLOR0;
     [[vk::location(4)]] nointerpolation uint draw : DRAWINDEX;
+    [[vk::location(5)]] float4 tangent : TANGENT;  // world, w: bitangent sign
 };
 
-// Skinned position and normal in the draw's (entity) space.
-void SkinVertex(ModelVSInput input, DrawData data, out float4 position, out float3 normal)
+// Skinned position, normal and tangent in the draw's (entity) space.
+void SkinVertex(ModelVSInput input, DrawData data, out float4 position, out float3 normal,
+                out float3 tangent)
 {
     position = float4(input.position, 1.0);
     normal = input.normal;
+    tangent = input.tangent.xyz;
     if (data.info.z == kNoSkin) return;
     float4x4 skin = bones[data.info.z + input.joints.x] * input.weights.x
                   + bones[data.info.z + input.joints.y] * input.weights.y
@@ -83,6 +92,7 @@ void SkinVertex(ModelVSInput input, DrawData data, out float4 position, out floa
                   + bones[data.info.z + input.joints.w] * input.weights.w;
     position = mul(skin, position);
     normal = mul((float3x3) skin, normal);
+    tangent = mul((float3x3) skin, tangent);
 }
 
 float3 SrgbToLinear(float3 c)
