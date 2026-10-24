@@ -5,9 +5,12 @@
  * builds with their .vpk files:
  *
  *   <output>/<game>(.exe)
+ *   <output>/engine.mindex    index of engine.mpack
  *   <output>/engine.mpack     compiled shaders, default UI theme and fonts
+ *   <output>/game.mindex      index of game.mpack and its game_NNN.mpack
  *   <output>/game.mpack       the project's maps, assets and UI
- *                             (game_001.mpack, ... once game.mpack is full)
+ *                             (game_001.mpack, ... once game.mpack is full;
+ *                             the size is chosen in the Build Game dialog)
  *
  * Steps, each started from Update():
  *
@@ -41,7 +44,10 @@ class ReleaseBuild {
   explicit ReleaseBuild(Console& console) : console_(console) {}
   ~ReleaseBuild();
 
-  void Start(const Project& project, const std::filesystem::path& output_dir);
+  // max_archive_bytes: size at which game.mpack rolls over into game_001.mpack
+  // and so on, 0 for a single archive.
+  void Start(const Project& project, const std::filesystem::path& output_dir,
+             uint64_t max_archive_bytes);
   // Stops the configure or build. Packing finishes, but its result is
   // dropped.
   void Cancel();
@@ -77,7 +83,8 @@ class ReleaseBuild {
   bool StartBuild();
   void StartPacking();
   static PackResult Pack(Config config, std::filesystem::path project_root,
-                         std::filesystem::path output_dir);
+                         std::filesystem::path output_dir,
+                         uint64_t max_archive_bytes);
   bool Launch(const std::vector<std::string>& args);
   void Finish(const std::string& message, bool error);
 
@@ -89,6 +96,7 @@ class ReleaseBuild {
 
   std::filesystem::path project_root_;
   std::filesystem::path output_dir_;
+  uint64_t max_archive_bytes_ = 0;
   std::optional<Config> config_;
 };
 

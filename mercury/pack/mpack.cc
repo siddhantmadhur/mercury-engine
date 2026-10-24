@@ -13,7 +13,12 @@ namespace Mercury::mpack {
 namespace {
 
 constexpr char kMagic[4] = {'M', 'P', 'A', 'K'};
+constexpr char kIndexMagic[4] = {'M', 'I', 'D', 'X'};
 constexpr size_t kHeaderSize = 32;
+constexpr size_t kIndexHeaderSize = 32;
+constexpr size_t kIndexEntrySize = 48;
+// Load factor of the index's hash table is at most 1/2.
+constexpr uint32_t kMinBuckets = 16;
 constexpr uint64_t kAlignment = 16;
 // Compressed bytes are only kept when they save at least this much, so
 // PNGs, JPEGs and fonts are stored as they are.
@@ -23,9 +28,6 @@ struct Header {
   uint32_t version = kVersion;
   uint16_t archive_index = 0;
   uint16_t archive_count = 0;
-  uint32_t entry_count = 0;
-  uint64_t index_offset = 0;
-  uint64_t index_size = 0;
 };
 
 class ByteWriter {
@@ -62,9 +64,9 @@ class ByteReader {
     pos_ += size;
     return out;
   }
-  bool Magic() {
+  bool Magic(const char (&magic)[4] = kMagic) {
     if (!Need(4)) return false;
-    bool match = std::memcmp(data_ + pos_, kMagic, 4) == 0;
+    bool match = std::memcmp(data_ + pos_, magic, 4) == 0;
     pos_ += 4;
     return match;
   }
@@ -96,10 +98,27 @@ std::vector<uint8_t> EncodeHeader(const Header& header) {
   out.U32(header.version);
   out.U16(header.archive_index);
   out.U16(header.archive_count);
-  out.U32(header.entry_count);
-  out.U64(header.index_offset);
-  out.U64(header.index_size);
+  for (int i = 0; i < 16; i++) out.U8(0);
   return out.Bytes();
+}
+
+}  // namespace
+
+uint64_t HashPath(std::string_view path) {
+  uint64_t hash = 14695981039346656037ull;  // FNV-1a
+  for (const char c : path) {
+    hash ^= static_cast<uint8_t>(c);
+    hash *= 1099511628211ull;
+  }
+  return hash;
+}
+
+namespace {
+
+uint32_t BucketCount(size_t entries) {
+  uint32_t buckets = kMinBuckets;
+  while (buckets < entries * 2) buckets *= 2;
+  return buckets;
 }
 
 uint32_t Crc32(const std::vector<uint8_t>& data) {
@@ -145,6 +164,11 @@ uint64_t AlignUp(uint64_t value) {
 }
 
 }  // namespace
+
+std::filesystem::path IndexPath(const std::filesystem::path& dir,
+                                std::string_view base_name) {
+  return dir / std::format("{}{}", base_name, kIndexExtension);
+}
 
 std::filesystem::path ArchivePath(const std::filesystem::path& dir,
                                   std::string_view base_name, int index) {
@@ -230,7 +254,8 @@ bool Writer::Write(const std::filesystem::path& dir, std::string_view base_name,
     entry.stored_size = stored.size();
 
     uint64_t offset = AlignUp(pos);
-    if (archive_has_data && offset + stored.size() > max_archive_bytes) {
+    if (max_archive_bytes != 0 && archive_has_data &&
+        offset + stored.size() > max_archive_bytes) {
       if (!open_next()) return false;
       offset = AlignUp(pos);
     }
@@ -247,41 +272,61 @@ bool Writer::Write(const std::filesystem::path& dir, std::string_view base_name,
   out.close();
   const int archive_count = archive + 1;
 
-  // The index goes at the end of archive 0.
-  ByteWriter index;
-  for (const auto& entry : entries) {
-    index.U16(static_cast<uint16_t>(entry.path.size()));
-    index.Raw(entry.path.data(), entry.path.size());
-    index.U16(entry.archive);
-    index.U64(entry.offset);
-    index.U64(entry.stored_size);
-    index.U64(entry.size);
-    index.U8(static_cast<uint8_t>(entry.compression));
-    index.U32(entry.crc32);
+  // The index is its own file: a hash table of path hashes, then the
+  // entries, then their paths.
+  ByteWriter strings;
+  ByteWriter records;
+  const uint32_t bucket_count = BucketCount(entries.size());
+  std::vector<uint32_t> buckets(bucket_count, 0);
+  for (size_t i = 0; i < entries.size(); i++) {
+    const Entry& entry = entries[i];
+    const uint64_t hash = HashPath(entry.path);
+    for (uint32_t b = hash & (bucket_count - 1); ; b = (b + 1) & (bucket_count - 1)) {
+      if (buckets[b] == 0) {
+        buckets[b] = static_cast<uint32_t>(i + 1);
+        break;
+      }
+    }
+    records.U64(hash);
+    records.U32(static_cast<uint32_t>(strings.Bytes().size()));
+    records.U16(static_cast<uint16_t>(entry.path.size()));
+    records.U16(entry.archive);
+    records.U64(entry.offset);
+    records.U64(entry.stored_size);
+    records.U64(entry.size);
+    records.U8(static_cast<uint8_t>(entry.compression));
+    records.U8(0);
+    records.U16(0);
+    records.U32(entry.crc32);
+    strings.Raw(entry.path.data(), entry.path.size());
   }
-  const auto first = ArchivePath(dir, base_name, 0);
-  std::fstream file0(first, std::ios::binary | std::ios::in | std::ios::out);
-  file0.seekp(0, std::ios::end);
-  Header header;
-  header.index_offset = static_cast<uint64_t>(file0.tellp());
-  header.index_size = index.Bytes().size();
-  header.entry_count = static_cast<uint32_t>(entries.size());
-  header.archive_count = static_cast<uint16_t>(archive_count);
-  file0.write(reinterpret_cast<const char*>(index.Bytes().data()),
-              index.Bytes().size());
-  const auto encoded = EncodeHeader(header);
-  file0.seekp(0);
-  file0.write(reinterpret_cast<const char*>(encoded.data()), encoded.size());
-  if (!file0) return fail("could not write " + first.string());
-  file0.close();
+  if (strings.Bytes().size() > UINT32_MAX) return fail("too many paths");
+  ByteWriter index;
+  index.Raw(kIndexMagic, 4);
+  index.U32(kVersion);
+  index.U32(static_cast<uint32_t>(archive_count));
+  index.U32(static_cast<uint32_t>(entries.size()));
+  index.U32(bucket_count);
+  index.U32(0);
+  index.U64(strings.Bytes().size());
+  for (const uint32_t bucket : buckets) index.U32(bucket);
+  index.Raw(records.Bytes().data(), records.Bytes().size());
+  index.Raw(strings.Bytes().data(), strings.Bytes().size());
+  const auto index_path = IndexPath(dir, base_name);
+  {
+    std::ofstream file(index_path, std::ios::binary | std::ios::trunc);
+    file.write(reinterpret_cast<const char*>(index.Bytes().data()),
+               index.Bytes().size());
+    if (!file) return fail("could not write " + index_path.string());
+  }
 
-  for (int i = 1; i < archive_count; i++) {
-    Header data_header;
-    data_header.archive_index = static_cast<uint16_t>(i);
-    data_header.archive_count = static_cast<uint16_t>(archive_count);
+  for (int i = 0; i < archive_count; i++) {
+    Header header;
+    header.archive_index = static_cast<uint16_t>(i);
+    header.archive_count = static_cast<uint16_t>(archive_count);
     const auto path = ArchivePath(dir, base_name, i);
     std::fstream file(path, std::ios::binary | std::ios::in | std::ios::out);
-    const auto bytes = EncodeHeader(data_header);
+    const auto bytes = EncodeHeader(header);
     file.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     if (!file) return fail("could not write " + path.string());
   }
@@ -307,9 +352,6 @@ std::shared_ptr<Reader> Reader::Open(const std::filesystem::path& archive0,
   header.version = header_reader.U32();
   header.archive_index = header_reader.U16();
   header.archive_count = header_reader.U16();
-  header.entry_count = header_reader.U32();
-  header.index_offset = header_reader.U64();
-  header.index_size = header_reader.U64();
   if (header.version != kVersion) {
     return fail(std::format("unsupported version {}", header.version));
   }
@@ -317,50 +359,78 @@ std::shared_ptr<Reader> Reader::Open(const std::filesystem::path& archive0,
     return fail("is a data archive; open the pack's first .mpack file");
   }
 
-  file->seekg(0, std::ios::end);
-  const auto file_size = static_cast<uint64_t>(file->tellg());
-  if (header.index_offset > file_size ||
-      header.index_size > file_size - header.index_offset) {
-    return fail("index is truncated");
+  const auto dir = archive0.parent_path();
+  const auto base_name = archive0.stem().string();
+  const auto index_path = IndexPath(dir, base_name);
+  auto index = ReadWholeFile(index_path);
+  if (!index) return fail("could not read " + index_path.filename().string());
+  ByteReader in(index->data(), index->size());
+  if (!in.Magic(kIndexMagic)) return fail("index is not a .mindex file");
+  const uint32_t version = in.U32();
+  const uint32_t archive_count = in.U32();
+  const uint32_t entry_count = in.U32();
+  const uint32_t bucket_count = in.U32();
+  in.U32();
+  const uint64_t strings_size = in.U64();
+  if (!in.Ok() || version != kVersion) return fail("unsupported index version");
+  if (archive_count != header.archive_count || bucket_count == 0 ||
+      (bucket_count & (bucket_count - 1)) != 0 || bucket_count <= entry_count) {
+    return fail("index does not match the archive");
   }
-  std::vector<uint8_t> index(header.index_size);
-  file->seekg(static_cast<std::streamoff>(header.index_offset));
-  if (!index.empty() &&
-      !file->read(reinterpret_cast<char*>(index.data()), index.size())) {
-    return fail("could not read the index");
+  const uint64_t table_size = uint64_t{bucket_count} * 4;
+  const uint64_t records_size = uint64_t{entry_count} * kIndexEntrySize;
+  if (index->size() != kIndexHeaderSize + table_size + records_size + strings_size) {
+    return fail("index is truncated");
   }
 
   std::shared_ptr<Reader> reader(new Reader());
-  reader->dir_ = archive0.parent_path();
-  reader->base_name_ = archive0.stem().string();
-  ByteReader in(index.data(), index.size());
-  for (uint32_t i = 0; i < header.entry_count; i++) {
+  reader->dir_ = dir;
+  reader->base_name_ = base_name;
+  reader->buckets_.resize(bucket_count);
+  for (auto& bucket : reader->buckets_) bucket = in.U32();
+  const uint8_t* strings = index->data() + kIndexHeaderSize + table_size + records_size;
+  for (uint32_t i = 0; i < entry_count; i++) {
     Entry entry;
-    entry.path = in.String(in.U16());
+    const uint64_t hash = in.U64();
+    const uint32_t path_offset = in.U32();
+    const uint16_t path_length = in.U16();
     entry.archive = in.U16();
     entry.offset = in.U64();
     entry.stored_size = in.U64();
     entry.size = in.U64();
     const uint8_t compression = in.U8();
+    in.U8();
+    in.U16();
     entry.crc32 = in.U32();
-    if (!in.Ok()) return fail("index is corrupt");
+    if (!in.Ok() || path_offset > strings_size ||
+        path_length > strings_size - path_offset) {
+      return fail("index is corrupt");
+    }
+    entry.path.assign(reinterpret_cast<const char*>(strings) + path_offset,
+                      path_length);
     if (compression > static_cast<uint8_t>(Compression::kZlib) ||
-        entry.archive >= header.archive_count ||
-        !IsValidEntryPath(entry.path)) {
+        entry.archive >= archive_count || !IsValidEntryPath(entry.path) ||
+        HashPath(entry.path) != hash) {
       return fail("index entry \"" + entry.path + "\" is corrupt");
     }
     entry.compression = static_cast<Compression>(compression);
-    reader->by_path_[entry.path] = reader->entries_.size();
     reader->entries_.push_back(std::move(entry));
   }
-  reader->archives_.resize(header.archive_count);
+  for (const uint32_t bucket : reader->buckets_) {
+    if (bucket > entry_count) return fail("index is corrupt");
+  }
+  reader->archives_.resize(archive_count);
   reader->archives_[0] = std::move(file);
   return reader;
 }
 
 const Entry* Reader::Find(std::string_view path) const {
-  auto it = by_path_.find(path);
-  return it == by_path_.end() ? nullptr : &entries_[it->second];
+  const uint64_t mask = buckets_.size() - 1;
+  for (uint64_t b = HashPath(path) & mask;; b = (b + 1) & mask) {
+    const uint32_t slot = buckets_[b];
+    if (slot == 0) return nullptr;
+    if (entries_[slot - 1].path == path) return &entries_[slot - 1];
+  }
 }
 
 bool Reader::Contains(std::string_view path) const {

@@ -18,6 +18,22 @@ namespace fs = std::filesystem;
 
 namespace {
 
+struct PackSizeOption {
+  const char* label;
+  int megabytes;  // 0: one archive
+};
+constexpr PackSizeOption kPackSizes[] = {
+    {"Single file", 0}, {"100 MB", 100}, {"256 MB", 256},
+    {"512 MB", 512},    {"1 GB", 1024},  {"2 GB", 2048},
+};
+
+const char* PackSizeLabel(int megabytes) {
+  for (const auto& option : kPackSizes) {
+    if (option.megabytes == megabytes) return option.label;
+  }
+  return "Custom";
+}
+
 constexpr const char* kHierarchyWindow = "Hierarchy";
 constexpr const char* kInspectorWindow = "Inspector";
 constexpr const char* kSceneWindow = "Scene";
@@ -1002,7 +1018,23 @@ void EditorScene::DrawModals() {
       const fs::path output = project->Resolve(build_output_);
       ImGui::TextDisabled("%s", output.string().c_str());
       ImGui::TextDisabled(
-          "Writes the executable, engine.mpack and game.mpack there.");
+          "Writes the executable, engine.mpack/.mindex and game.mpack/.mindex there.");
+      ImGui::TextUnformatted("Split game.mpack into files of:");
+      ImGui::SetNextItemWidth(200);
+      if (ImGui::BeginCombo("##pack_size",
+                            PackSizeLabel(settings_.pack_size_mb))) {
+        for (int i = 0; i < static_cast<int>(std::size(kPackSizes)); i++) {
+          if (ImGui::Selectable(kPackSizes[i].label,
+                                kPackSizes[i].megabytes == settings_.pack_size_mb)) {
+            settings_.pack_size_mb = kPackSizes[i].megabytes;
+            settings_.Save();
+          }
+        }
+        ImGui::EndCombo();
+      }
+      ImGui::SetItemTooltip(
+          "Archives roll over into game_001.mpack, game_002.mpack, ... past "
+          "this size. game.mindex maps every path to its archive and offset.");
       // Packing the project into its own root would pack the build too.
       std::error_code ec;
       const bool valid = !build_output_.empty() &&
@@ -1013,7 +1045,8 @@ void EditorScene::DrawModals() {
           project->SetBuildOutput(build_output_);
           if (!project->Save()) console_.Error("Could not save the project file");
         }
-        if (SaveMap()) release_.Start(*project, output);
+        if (SaveMap()) release_.Start(*project, output,
+                                           static_cast<uint64_t>(settings_.pack_size_mb) << 20);
         close();
       }
       ImGui::EndDisabled();

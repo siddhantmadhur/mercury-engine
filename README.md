@@ -166,9 +166,14 @@ and packs the assets into a few archives instead of thousands of loose files:
 ```
 Builds/Pong/pong          the game (pong.exe on Windows)
 Builds/Pong/engine.mpack  compiled shaders, the default UI theme and fonts
+Builds/Pong/engine.mindex index: hash table of path -> archive, offset and size
 Builds/Pong/game.mpack    the project: .mproj, maps, assets, UI, textures, models
-                          (game_001.mpack, game_002.mpack, ... past 1 GiB)
+Builds/Pong/game.mindex   index of game.mpack and the archives below
+                          (game_001.mpack, game_002.mpack, ... past the chosen size)
 ```
+
+The Build Game dialog has a "Split game.mpack into files of" option (single file, 100 MB, 256 MB,
+512 MB, 1 GB or 2 GB; 256 MB by default), remembered in the editor settings as `pack_size_mb`.
 
 The output folder is saved in the `.mproj` as `[build] output`. Scripts, `CMakeLists.txt`, source
 files, hidden folders such as `.mercury/` and `Builds/` are left out. Each file is compressed with

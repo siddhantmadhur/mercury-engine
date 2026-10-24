@@ -43,6 +43,8 @@ void EditorSettings::Load() {
   if (!mtext::LoadFile(ConfigDir() / "editor.cfg", document)) return;
   if (auto editor = document.Find("editor")) {
     external_editor = editor->properties.GetString("external_editor");
+    pack_size_mb = static_cast<int>(
+        std::max<int64_t>(0, editor->properties.GetInt("pack_size_mb", 256)));
   }
   if (auto windows = document.Find("windows")) {
     show_ui_builder = windows->properties.GetBool("ui_builder", false);
@@ -66,7 +68,9 @@ void EditorSettings::Load() {
 
 void EditorSettings::Save() const {
   mtext::Document document;
-  document.Add("editor").properties.Set("external_editor", external_editor);
+  auto& editor = document.Add("editor").properties;
+  editor.Set("external_editor", external_editor);
+  editor.Set("pack_size_mb", static_cast<int64_t>(pack_size_mb));
   mtext::Array projects;
   for (const auto& path : recent_projects) projects.emplace_back(path);
   document.Add("recent").properties.Set("projects", projects);
