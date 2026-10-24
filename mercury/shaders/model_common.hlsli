@@ -27,11 +27,23 @@
     float4 resolution;      // xy: target size, zw: 1 / size
     float4 shadow_params;   // x: shadow map size (0: none), y: normal bias, z: depth bias
     float4 flags;           // x: tonemap in shader, y: overlay pass, z: time, w: point lights
-    // Per point light: [2i] xyz position, w range; [2i + 1] rgb linear color * intensity.
+    // Per point light: [2i] xyz position, w range; [2i + 1] rgb linear color
+    // * intensity, w shadow cube slot (-1: none).
     float4 point_lights[2 * 16];
+    float4 point_shadows[16];   // x: light radius, y: shadow bias, z: soft (1) or hard
+    // Per area light: [4i] center, range; [4i + 1] half the width, two-sided;
+    // [4i + 2] half the height, shadow slot (-1: none); [4i + 3] radiance, soft.
+    float4 area_lights[4 * 4];
+    float4 area_shadow_bias[4]; // x: bias
+    float4 shadow_cubes_info[4]; // per shadow slot: xyz cube center, w far distance
+    float4 light_info;          // x: area lights, y: probe capture pass, z: cube size, w: capture emission
+    float4 gi_min;              // xyz: probe volume min, w: enabled
+    float4 gi_max;              // xyz: probe volume max, w: intensity
+    float4 gi_counts;           // xyz: probes along each axis, w: probes per atlas row
 };
 
 static const uint kMaxPointLights = 16;
+static const uint kMaxAreaLights = 4;
 
 struct DrawData
 {

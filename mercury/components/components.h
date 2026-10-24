@@ -219,22 +219,95 @@ struct DirectionalLight {
   }
 };
 
+// How a point or area light casts shadows.
+enum class LightShadows { kNone, kHard, kSoft };
+
 /**
  * @brief Light given off in every direction from the node's position
  *
  * Like Unity's point light: brightness falls off with the square of the
- * distance and reaches 0 at `range`. No shadows. The renderer uses the first
- * 16 active point lights of a map.
+ * distance and reaches 0 at `range`. The renderer uses the first 16 active
+ * point lights of a map; up to 4 point and area lights in all cast shadows.
  */
 struct PointLight {
   glm::vec4 color = glm::vec4(1.0f);
   float intensity = 1.0f;
   float range = 10.0f;
+  LightShadows shadows = LightShadows::kNone;
+  // Size of the bulb: soft shadows widen with it.
+  float radius = 0.05f;
+  float shadow_bias = 0.02f;
 
   void Reflect(Reflector& r) {
     r.Field("color", color);
     r.Field("intensity", intensity);
     r.Field("range", range).Tooltip("Distance at which the light fades out");
+    r.Enum("shadows", shadows, {"none", "hard", "soft"});
+    r.Field("radius", radius).Tooltip("Size of the light; soft shadows blur more for larger lights");
+    r.Field("shadow_bias", shadow_bias).Tooltip("Distance bias against shadow acne");
+  }
+};
+
+/**
+ * @brief A glowing rectangle (Unity's Rectangle Area Light, drawn in real time)
+ *
+ * The rectangle lies in the node's XY plane, `size` across, and shines along
+ * the node's -Z. `color` * `intensity` is the light's radiance, so matching an
+ * emissive surface's emission makes it light the scene as brightly as it
+ * looks. Lighting is exact for diffuse surfaces; shadows soften with the
+ * rectangle's size.
+ */
+struct AreaLight {
+  glm::vec4 color = glm::vec4(1.0f);
+  float intensity = 1.0f;
+  glm::vec2 size = glm::vec2(1.0f);
+  float range = 10.0f;
+  bool two_sided = false;
+  LightShadows shadows = LightShadows::kSoft;
+  float shadow_bias = 0.02f;
+
+  void Reflect(Reflector& r) {
+    r.Field("color", color);
+    r.Field("intensity", intensity).Tooltip("Radiance: an emission of 17 matches intensity 17");
+    r.Field("size", size).Tooltip("Width (x) and height (y) of the rectangle");
+    r.Field("range", range).Tooltip("Distance at which the light fades out");
+    r.Field("two_sided", two_sided).Tooltip("Shine from both faces");
+    r.Enum("shadows", shadows, {"none", "hard", "soft"});
+    r.Field("shadow_bias", shadow_bias).Tooltip("Distance bias against shadow acne");
+  }
+};
+
+/**
+ * @brief Light bouncing between surfaces (global illumination) inside a box
+ *
+ * Like Unity's Adaptive Probe Volume, but computed while the game runs: a grid
+ * of light probes, `size` across and centered on the node, each sees the
+ * scene around it and records the light arriving from every direction.
+ * Surfaces inside take their indirect light from the probes instead of the
+ * DirectionalLight's ambient colors, so walls tint what is near them. Each
+ * pass over the probes adds one more bounce; the probes update again when
+ * lights or objects change.
+ */
+struct LightProbeVolume {
+  glm::vec3 size = glm::vec3(10.0f);
+  glm::vec3 resolution = glm::vec3(8.0f);  // probes along x, y and z
+  float intensity = 1.0f;
+  int bounces = 3;
+  // Emissive surfaces light the scene through the probes; turn it off when
+  // an AreaLight already stands for them, or their light counts twice.
+  bool include_emission = true;
+  // Probes per frame while updating (0: as many as the scene allows).
+  int probes_per_frame = 0;
+
+  void Reflect(Reflector& r) {
+    r.Field("size", size).Tooltip("Extent of the probe grid, centered on the node");
+    r.Field("resolution", resolution).Tooltip("Probes along x, y and z (2 to 16 each)");
+    r.Field("intensity", intensity).Tooltip("Multiplies the indirect light");
+    r.Field("bounces", bounces).Tooltip("Passes over the probes; each adds a bounce of light");
+    r.Field("include_emission", include_emission)
+        .Tooltip("Emissive surfaces add light; off when an AreaLight stands for them");
+    r.Field("probes_per_frame", probes_per_frame)
+        .Tooltip("Update budget; 0 picks one from the scene's size");
   }
 };
 

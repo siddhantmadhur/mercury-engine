@@ -351,14 +351,51 @@ void MapScene::ApplyEnvironment() {
 }
 
 void MapScene::GatherPointLights() {
+  auto& registry = GetRegistry();
   lighting_.point_lights.clear();
-  for (auto [entity, light, transform] : GetRegistry().view<PointLight, Transform>().each()) {
+  for (auto [entity, light, transform] : registry.view<PointLight, Transform>().each()) {
     if (light.range <= 0.0f || !IsActiveInHierarchy(entity)) continue;
     PointLightData data;
     data.position = transform.GetInterpolatedPosition();
     data.color = glm::vec3(light.color) * light.intensity;
     data.range = light.range;
+    data.shadows = static_cast<int>(light.shadows);
+    data.radius = light.radius;
+    data.shadow_bias = light.shadow_bias;
     lighting_.point_lights.push_back(data);
+  }
+  lighting_.area_lights.clear();
+  for (auto [entity, light, transform] : registry.view<AreaLight, Transform>().each()) {
+    if (light.range <= 0.0f || !IsActiveInHierarchy(entity)) continue;
+    const glm::quat rotation = transform.GetRotationQuat();
+    const glm::vec3 scale = transform.GetScale();
+    AreaLightData data;
+    data.position = transform.GetInterpolatedPosition();
+    // right x up = -Z: the light shines along the node's -Z.
+    data.right = rotation * glm::vec3(0.5f * light.size.x * scale.x, 0.0f, 0.0f);
+    data.up = rotation * glm::vec3(0.0f, -0.5f * light.size.y * scale.y, 0.0f);
+    data.color = glm::vec3(light.color) * light.intensity;
+    data.range = light.range;
+    data.two_sided = light.two_sided;
+    data.shadows = static_cast<int>(light.shadows);
+    data.shadow_bias = light.shadow_bias;
+    lighting_.area_lights.push_back(data);
+  }
+  lighting_.probes = ProbeVolumeData{};
+  for (auto [entity, volume, transform] : registry.view<LightProbeVolume, Transform>().each()) {
+    if (!IsActiveInHierarchy(entity)) continue;
+    ProbeVolumeData& data = lighting_.probes;
+    const glm::vec3 half = glm::abs(volume.size * transform.GetScale()) * 0.5f;
+    data.enabled = true;
+    data.min = transform.GetPosition() - half;
+    data.max = transform.GetPosition() + half;
+    data.counts = glm::clamp(glm::ivec3(glm::round(volume.resolution)), glm::ivec3(2),
+                             glm::ivec3(16));
+    data.intensity = volume.intensity;
+    data.bounces = std::max(volume.bounces, 1);
+    data.include_emission = volume.include_emission;
+    data.probes_per_frame = volume.probes_per_frame;
+    break;
   }
 }
 

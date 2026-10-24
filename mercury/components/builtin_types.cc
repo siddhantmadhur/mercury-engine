@@ -505,6 +505,20 @@ void RegisterBuiltinTypes() {
     registry.RegisterComponent(std::move(info));
   }
   {
+    auto info = MakeInfo<AreaLight>(
+        "AreaLight", "Rendering",
+        "A glowing rectangle in the node's XY plane, shining along -Z, with soft shadows");
+    info.attach = StoreAsProperty<AreaLight>("AreaLight");
+    registry.RegisterComponent(std::move(info));
+  }
+  {
+    auto info = MakeInfo<LightProbeVolume>(
+        "LightProbeVolume", "Rendering",
+        "A grid of light probes that lets light bounce between surfaces inside it");
+    info.attach = StoreAsProperty<LightProbeVolume>("LightProbeVolume");
+    registry.RegisterComponent(std::move(info));
+  }
+  {
     auto info = MakeInfo<Rigidbody>(
         "Rigidbody", "Physics",
         "Lets the node's collider move under physics or by its velocity");

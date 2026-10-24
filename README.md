@@ -221,7 +221,9 @@ Built-in components:
 | `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file (its node tree, materials, skin and clips; `node` draws one part, `materials` overrides them) |
 | `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture` and `post_processing` |
 | `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity`, `ambient` and `ground_ambient` |
-| `PointLight` | Light in every direction from the node, with `color`, `intensity` and `range` (Unity's falloff, no shadows; up to 16 per map) |
+| `PointLight` | Light in every direction from the node, with `color`, `intensity` and `range` (Unity's falloff; up to 16 per map). `shadows = "hard"` or `"soft"` gives it cube-map shadows that soften with its `radius` |
+| `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance (match an emissive surface's emission). Exact diffuse lighting and soft shadows whose penumbra grows with distance from the caster; up to 4 per map, and 4 shadowed point and area lights in all |
+| `LightProbeVolume` | Light bouncing between surfaces inside a box of `size`: a grid of probes (`resolution`) captures the lit scene and keeps L2 spherical harmonics, one bounce per pass (`bounces`). Surfaces inside take their indirect light from it instead of the ambient colors; it updates again when lights or objects change |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps (`OnTriggerEnter/Stay/Exit`) without pushing |
 | `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |

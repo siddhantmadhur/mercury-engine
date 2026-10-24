@@ -26,7 +26,11 @@ struct FrontFace {
   }
 };
 
-constexpr uint32_t kMaxPasses = 32;
+// Uniform slots per frame: cameras, the sun, 6 per shadow cube and per probe
+// captured.
+constexpr uint32_t kMaxPasses = 512;
+constexpr VkFormat kShadowCubeFormat = VK_FORMAT_R32_SFLOAT;
+constexpr VkFormat kProbeFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 constexpr VkFormat kLdrFormat = VK_FORMAT_B8G8R8A8_UNORM;
 constexpr VkFormat kMaskFormat = VK_FORMAT_R8_UNORM;
 constexpr VkFormat kRenderTextureFormat = VK_FORMAT_R8G8B8A8_SRGB;
@@ -120,7 +124,7 @@ bool SceneRenderer::Init(Context& context, uint32_t frames_in_flight,
   uniform_stride_ = (sizeof(FrameUniforms) + alignment - 1) / alignment * alignment;
 
   if (!CreateLayouts() || !CreatePipelines(shaders) || !CreateFrameResources() ||
-      !CreateShadowMap()) {
+      !CreateShadowMap() || !CreateLightingResources()) {
     PDebug::error("Vulkan: could not create the model renderer");
     return false;
   }
@@ -154,6 +158,8 @@ bool SceneRenderer::CreateLayouts() {
         {4, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {5, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {6, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        {7, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        {8, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
     };
     VkDescriptorSetLayoutCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -424,14 +430,17 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
   VkShaderModule up_ps = shaders("bloom_up.ps.spv");
   composite_ps_ = shaders("composite.ps.spv");
   fxaa_ps_ = shaders("fxaa.ps.spv");
+  VkShaderModule shadow_cube_ps = shaders("shadow_cube.ps.spv");
+  VkShaderModule probe_sh_ps = shaders("probe_sh.ps.spv");
   auto destroy = [&] {
     for (VkShaderModule m : {model_vs, model_ps, shadow_vs, outline_ps, sky_ps, ssao_ps,
-                             blur_ps, down_ps, up_ps}) {
+                             blur_ps, down_ps, up_ps, shadow_cube_ps, probe_sh_ps}) {
       if (m) vkDestroyShaderModule(device, m, nullptr);
     }
   };
   if (!model_vs || !model_ps || !shadow_vs || !outline_ps || !fullscreen_vs_ || !sky_ps ||
-      !ssao_ps || !blur_ps || !down_ps || !up_ps || !composite_ps_ || !fxaa_ps_) {
+      !ssao_ps || !blur_ps || !down_ps || !up_ps || !composite_ps_ || !fxaa_ps_ ||
+      !shadow_cube_ps || !probe_sh_ps) {
     destroy();
     return false;
   }
@@ -465,7 +474,18 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
   bloom_up_ = BuildPipeline(fullscreen_vs_, up_ps, false, {kHdrFormat}, VK_FORMAT_UNDEFINED, 2,
                             false, false, VK_COMPARE_OP_ALWAYS, VK_CULL_MODE_NONE, false,
                             post_pipeline_layout_);
-  ok = ok && shadow_ && outline_mask_ && sky_ && ssao_ && blur_ && bloom_down_ && bloom_up_;
+  shadow_cube_ = BuildPipeline(model_vs, shadow_cube_ps, true, {kShadowCubeFormat}, kDepthFormat,
+                               0, true, true, VK_COMPARE_OP_LESS_OR_EQUAL, VK_CULL_MODE_NONE,
+                               false, model_layout_);
+  // Probes see both faces of everything, to tell when they are inside.
+  probe_capture_ = BuildPipeline(model_vs, model_ps, true, main_colors, kDepthFormat, 0, true,
+                                 true, VK_COMPARE_OP_LESS_OR_EQUAL, VK_CULL_MODE_NONE, false,
+                                 model_layout_);
+  probe_sh_ = BuildPipeline(fullscreen_vs_, probe_sh_ps, false, {kProbeFormat},
+                            VK_FORMAT_UNDEFINED, 0, false, false, VK_COMPARE_OP_ALWAYS,
+                            VK_CULL_MODE_NONE, false, post_pipeline_layout_);
+  ok = ok && shadow_ && outline_mask_ && sky_ && ssao_ && blur_ && bloom_down_ && bloom_up_ &&
+       shadow_cube_ && probe_capture_ && probe_sh_;
   destroy();
   return ok;
 }
@@ -518,8 +538,12 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
       {material_sampler_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED},
       {clamp_sampler_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED},
   };
-  VkWriteDescriptorSet writes[7] = {};
-  for (int i = 0; i < 7; i++) {
+  VkDescriptorImageInfo cubes = {VK_NULL_HANDLE, shadow_cubes_.View(),
+                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkDescriptorImageInfo atlas = {VK_NULL_HANDLE, probe_atlas_.View(),
+                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkWriteDescriptorSet writes[9] = {};
+  for (int i = 0; i < 9; i++) {
     writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[i].dstSet = frame.set;
     writes[i].dstBinding = static_cast<uint32_t>(i);
@@ -537,7 +561,11 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
     writes[4 + i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
     writes[4 + i].pImageInfo = &samplers[i];
   }
-  vkUpdateDescriptorSets(context_->device, 7, writes, 0, nullptr);
+  writes[7].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  writes[7].pImageInfo = &cubes;
+  writes[8].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  writes[8].pImageInfo = &atlas;
+  vkUpdateDescriptorSets(context_->device, 9, writes, 0, nullptr);
 }
 
 bool SceneRenderer::CreateShadowMap() {
@@ -546,6 +574,31 @@ bool SceneRenderer::CreateShadowMap() {
                             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
                                 VK_IMAGE_USAGE_SAMPLED_BIT,
                             VK_IMAGE_ASPECT_DEPTH_BIT)) {
+    return false;
+  }
+  return true;
+}
+
+bool SceneRenderer::CreateLightingResources() {
+  VmaAllocator a = context_->allocator;
+  VkDevice d = context_->device;
+  const VkImageUsageFlags color = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  if (!shadow_cubes_.CreateArray(a, d, kShadowCubeResolution, kShadowCubeResolution,
+                                 kMaxShadowCubes * 6, kShadowCubeFormat, color,
+                                 VK_IMAGE_ASPECT_COLOR_BIT) ||
+      !shadow_cube_depth_.Create(a, d, kShadowCubeResolution, kShadowCubeResolution,
+                                 kDepthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                 VK_IMAGE_ASPECT_DEPTH_BIT) ||
+      !probe_atlas_.Create(a, d, kProbesPerAtlasRow * 9, kMaxProbes / kProbesPerAtlasRow,
+                           kProbeFormat, color | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                           VK_IMAGE_ASPECT_COLOR_BIT) ||
+      !probe_faces_.CreateArray(a, d, kProbeFaceSize, kProbeFaceSize, kMaxProbeBatch * 6,
+                                kHdrFormat, color, VK_IMAGE_ASPECT_COLOR_BIT) ||
+      !probe_normal_.Create(a, d, kProbeFaceSize, kProbeFaceSize, kNormalFormat,
+                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT) ||
+      !probe_depth_.Create(a, d, kProbeFaceSize, kProbeFaceSize, kDepthFormat,
+                           VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                           VK_IMAGE_ASPECT_DEPTH_BIT)) {
     return false;
   }
   for (auto& frame : frames_) UpdateFrameSet(frame);
@@ -571,6 +624,12 @@ void SceneRenderer::Shutdown() {
   frames_.clear();
   white_.Reset();
   shadow_image_.Reset();
+  shadow_cubes_.Reset();
+  shadow_cube_depth_.Reset();
+  probe_atlas_.Reset();
+  probe_faces_.Reset();
+  probe_normal_.Reset();
+  probe_depth_.Reset();
   vertex_buffer_.Reset();
   index_buffer_.Reset();
   auto destroy_pipeline = [&](VkPipeline& p) {
@@ -582,7 +641,7 @@ void SceneRenderer::Shutdown() {
     destroy_pipeline(transparent_[i]);
   }
   for (VkPipeline* p : {&shadow_, &outline_mask_, &sky_, &ssao_, &blur_, &bloom_down_,
-                        &bloom_up_}) {
+                        &bloom_up_, &shadow_cube_, &probe_capture_, &probe_sh_}) {
     destroy_pipeline(*p);
   }
   for (auto& [key, pipeline] : output_pipelines_) vkDestroyPipeline(device, pipeline, nullptr);
@@ -907,6 +966,22 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
     frame.staging.push_back(std::move(staging));
     WriteTextureSlot(0, white_.View());
   }
+  if (!lighting_initialized_) {
+    // Nothing drawn yet: shadow cubes and probe faces start out readable,
+    // the probe atlas empty (every probe unusable).
+    for (VkImage image : {shadow_cubes_.Get(), probe_faces_.Get()}) {
+      TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    }
+    TransitionImage(cmd, probe_atlas_.Get(), VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    probe_sh_set_ = AllocatePostSet({probe_faces_.View()});
+    probes_.clear_atlas = true;
+    lighting_initialized_ = true;
+  }
+  AssignShadowCubes();
   ReleaseUnused(cmd);
 
   auto& registry = scene.GetRegistry();
@@ -1193,15 +1268,8 @@ FrameUniforms SceneRenderer::CameraUniforms(const RenderCamera& camera, VkExtent
                         ? glm::vec4(kShadowResolution, lighting_.shadow_normal_bias,
                                     lighting_.shadow_bias * 0.0f, 0.0f)
                         : glm::vec4(0.0f);
-  const uint32_t point_count =
-      std::min<uint32_t>(static_cast<uint32_t>(lighting_.point_lights.size()), kMaxPointLights);
-  for (uint32_t i = 0; i < point_count; i++) {
-    const PointLightData& light = lighting_.point_lights[i];
-    u.point_lights[2 * i] = glm::vec4(light.position, light.range);
-    u.point_lights[2 * i + 1] = glm::vec4(light.color, 0.0f);
-  }
-  u.flags = glm::vec4(linear ? 0.0f : 1.0f, overlay ? 1.0f : 0.0f, 0.0f,
-                      static_cast<float>(point_count));
+  u.flags = glm::vec4(linear ? 0.0f : 1.0f, overlay ? 1.0f : 0.0f, 0.0f, 0.0f);
+  FillLighting(u);
   return u;
 }
 
@@ -1216,8 +1284,8 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
                     VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     shadow_written_ = true;
   }
-  if (!enabled) return;
   FrameResources& frame = frames_[frame_index_];
+  if (enabled) {
   FrameUniforms uniforms = CameraUniforms(main_camera, {kShadowResolution, kShadowResolution},
                                           false, true);
   uniforms.view_proj = light_view_proj;
@@ -1260,6 +1328,344 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
   }
   vkCmdEndRendering(cmd);
   DepthToShaderRead(cmd, shadow_image_.Get());
+  }
+  // The probes see the scene lit, shadows included, so they come last.
+  RenderShadowCubes(cmd, frame);
+  UpdateProbes(cmd, frame);
+}
+
+// ---------------------------------------------------------------- Lighting --
+
+namespace {
+
+// Must match kFaceForward / kFaceUp in lighting_math.hlsli.
+constexpr glm::vec3 kFaceForward[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0},
+                                       {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+constexpr glm::vec3 kFaceUp[6] = {{0, 1, 0}, {0, 1, 0}, {0, 0, -1},
+                                  {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
+
+// FNV-1a over floats rounded to 1/4096, to notice when lights or objects
+// change. Rounding ignores the last-bit wobble of interpolated transforms.
+void HashFloats(uint64_t& hash, const float* values, size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    const int64_t q = std::llround(static_cast<double>(values[i]) * 4096.0);
+    const auto* bytes = reinterpret_cast<const uint8_t*>(&q);
+    for (size_t b = 0; b < sizeof(q); b++) {
+      hash ^= bytes[b];
+      hash *= 1099511628211ull;
+    }
+  }
+}
+
+}  // namespace
+
+void SceneRenderer::AssignShadowCubes() {
+  cubes_.clear();
+  area_slots_.assign(lighting_.area_lights.size(), -1);
+  point_slots_.assign(lighting_.point_lights.size(), -1);
+  // Area lights first: they are usually the scene's main lights.
+  for (size_t i = 0; i < lighting_.area_lights.size() && i < kMaxAreaLights; i++) {
+    const AreaLightData& light = lighting_.area_lights[i];
+    if (light.shadows == 0 || cubes_.size() >= kMaxShadowCubes) continue;
+    area_slots_[i] = static_cast<int>(cubes_.size());
+    // Just in front of the rectangle, so the emissive surface it often sits
+    // on does not shadow everything.
+    const glm::vec3 normal = light.Normal();
+    cubes_.push_back({light.position + normal * (light.two_sided ? 0.0f : 0.02f), light.range,
+                      !light.two_sided, normal});
+  }
+  for (size_t i = 0; i < lighting_.point_lights.size() && i < kMaxPointLights; i++) {
+    const PointLightData& light = lighting_.point_lights[i];
+    if (light.shadows == 0 || cubes_.size() >= kMaxShadowCubes) continue;
+    point_slots_[i] = static_cast<int>(cubes_.size());
+    cubes_.push_back({light.position, light.range});
+  }
+}
+
+void SceneRenderer::FillLighting(FrameUniforms& u) const {
+  const uint32_t point_count =
+      std::min<uint32_t>(static_cast<uint32_t>(lighting_.point_lights.size()), kMaxPointLights);
+  for (uint32_t i = 0; i < point_count; i++) {
+    const PointLightData& light = lighting_.point_lights[i];
+    const int slot = i < point_slots_.size() ? point_slots_[i] : -1;
+    u.point_lights[2 * i] = glm::vec4(light.position, light.range);
+    u.point_lights[2 * i + 1] = glm::vec4(light.color, static_cast<float>(slot));
+    u.point_shadows[i] =
+        glm::vec4(light.radius, light.shadow_bias, light.shadows == 2 ? 1.0f : 0.0f, 0.0f);
+  }
+  u.flags.w = static_cast<float>(point_count);
+  const uint32_t area_count =
+      std::min<uint32_t>(static_cast<uint32_t>(lighting_.area_lights.size()), kMaxAreaLights);
+  for (uint32_t i = 0; i < area_count; i++) {
+    const AreaLightData& light = lighting_.area_lights[i];
+    const int slot = i < area_slots_.size() ? area_slots_[i] : -1;
+    u.area_lights[4 * i] = glm::vec4(light.position, light.range);
+    u.area_lights[4 * i + 1] = glm::vec4(light.right, light.two_sided ? 1.0f : 0.0f);
+    u.area_lights[4 * i + 2] = glm::vec4(light.up, static_cast<float>(slot));
+    u.area_lights[4 * i + 3] = glm::vec4(light.color, light.shadows == 2 ? 1.0f : 0.0f);
+    u.area_shadow_bias[i] = glm::vec4(light.shadow_bias, 0.0f, 0.0f, 0.0f);
+  }
+  for (size_t i = 0; i < cubes_.size(); i++) {
+    u.shadow_cubes_info[i] = glm::vec4(cubes_[i].center, cubes_[i].far_clip);
+  }
+  u.light_info = glm::vec4(static_cast<float>(area_count), 0.0f,
+                           static_cast<float>(kShadowCubeResolution), 1.0f);
+  if (probes_.active) {
+    const ProbeVolumeData& volume = lighting_.probes;
+    u.gi_min = glm::vec4(volume.min, 1.0f);
+    u.gi_max = glm::vec4(volume.max, volume.intensity);
+    u.gi_counts = glm::vec4(glm::vec3(volume.counts), static_cast<float>(kProbesPerAtlasRow));
+  }
+}
+
+FrameUniforms SceneRenderer::CubeFaceUniforms(glm::vec3 center, uint32_t face, float near_clip,
+                                              float far_clip, VkExtent2D extent) const {
+  RenderCamera camera;
+  camera.view = glm::lookAt(center, center + kFaceForward[face], kFaceUp[face]);
+  camera.projection = glm::perspective(glm::radians(90.0f), 1.0f, near_clip, far_clip);
+  camera.position = center;
+  return CameraUniforms(camera, extent, false, true);
+}
+
+void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame) {
+  if (cubes_.empty()) return;
+  std::vector<const FrameDraw*> casters;
+  for (const auto& draw : draws_) {
+    if (draw.cast_shadows) casters.push_back(&draw);
+  }
+  const VkExtent2D extent = {kShadowCubeResolution, kShadowCubeResolution};
+  ToAttachment(cmd, shadow_cubes_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  for (size_t slot = 0; slot < cubes_.size(); slot++) {
+    for (uint32_t face = 0; face < 6; face++) {
+      FrameUniforms uniforms =
+          CubeFaceUniforms(cubes_[slot].center, face, 0.005f, cubes_[slot].far_clip, extent);
+      uniforms.light_dir = glm::vec4(cubes_[slot].normal, cubes_[slot].one_sided ? 1.0f : 0.0f);
+      const uint32_t offset = PushUniforms(frame, uniforms);
+      TransitionImage(cmd, shadow_cube_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                      kDepthStages, kDepthAccess, kDepthStages, kDepthAccess);
+      VkRenderingAttachmentInfo color = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+      color.imageView = shadow_cubes_.LayerView(static_cast<uint32_t>(slot) * 6 + face);
+      color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      color.clearValue.color = {{1e30f, 0.0f, 0.0f, 0.0f}};  // nothing in the way
+      VkRenderingAttachmentInfo depth = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+      depth.imageView = shadow_cube_depth_.View();
+      depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+      depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+      depth.clearValue.depthStencil = {1.0f, 0};
+      VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+      rendering.renderArea = {{0, 0}, extent};
+      rendering.layerCount = 1;
+      rendering.colorAttachmentCount = 1;
+      rendering.pColorAttachments = &color;
+      rendering.pDepthAttachment = &depth;
+      vkCmdBeginRendering(cmd, &rendering);
+      SetViewport(cmd, extent);
+      if (!casters.empty()) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_cube_);
+        const VkDescriptorSet sets[2] = {frame.set, texture_set_};
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
+                                1, &offset);
+        const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+        const VkDeviceSize offsets[2] = {0, 0};
+        vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+        vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
+        for (const FrameDraw* draw : casters) {
+          vkCmdDrawIndexed(cmd, draw->geometry->index_count, 1, draw->geometry->first_index,
+                           static_cast<int32_t>(draw->geometry->first_vertex), draw->record);
+        }
+      }
+      vkCmdEndRendering(cmd);
+    }
+  }
+  ToShaderRead(cmd, shadow_cubes_.Get());
+}
+
+void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
+  const ProbeVolumeData& volume = lighting_.probes;
+  probes_.active = volume.enabled;
+  if (!volume.enabled) return;
+  const uint32_t total = static_cast<uint32_t>(volume.counts.x * volume.counts.y *
+                                               volume.counts.z);
+  if (total == 0 || total > kMaxProbes) {
+    probes_.active = false;
+    return;
+  }
+  // A different volume starts over from empty probes.
+  if (probes_.clear_atlas || volume.min != probes_.min || volume.max != probes_.max ||
+      volume.counts != probes_.counts) {
+    probes_.min = volume.min;
+    probes_.max = volume.max;
+    probes_.counts = volume.counts;
+    probes_.next = 0;
+    probes_.passes = 0;
+    probes_.clear_atlas = false;
+    TransitionImage(cmd, probe_atlas_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_PIPELINE_STAGE_2_CLEAR_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    const VkClearColorValue zero = {};
+    const VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    vkCmdClearColorImage(cmd, probe_atlas_.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1,
+                         &range);
+    TransitionImage(cmd, probe_atlas_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_CLEAR_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  }
+
+  // Anything that changes the light the probes saw starts the bounces over
+  // (keeping the old values, so the change fades in).
+  uint64_t hash = 1469598103934665603ull;
+  HashFloats(hash, &lighting_.direction.x, 12);  // direction, color and ambients
+  for (const auto& light : lighting_.point_lights) {
+    const float values[9] = {light.position.x, light.position.y, light.position.z,
+                             light.color.r,    light.color.g,    light.color.b,
+                             light.range,      static_cast<float>(light.shadows), light.radius};
+    HashFloats(hash, values, 9);
+  }
+  for (const auto& light : lighting_.area_lights) {
+    HashFloats(hash, &light.position.x, 12);  // position, right, up, color
+    const float rest[3] = {light.range, light.two_sided ? 1.0f : 0.0f,
+                           static_cast<float>(light.shadows)};
+    HashFloats(hash, rest, 3);
+  }
+  for (const auto& record : records_) {
+    // World matrix, color and emission (info and the rest never change alone).
+    HashFloats(hash, &record.world[0][0], 16);
+    HashFloats(hash, &record.color.x, 8);
+  }
+  if (hash != probes_.scene_hash) {
+    probes_.scene_hash = hash;
+    probes_.passes = 0;
+  }
+  if (probes_.passes >= volume.bounces) return;
+
+  std::vector<const FrameDraw*> opaque;
+  for (const auto& draw : draws_) {
+    if (!draw.transparent) opaque.push_back(&draw);
+  }
+  uint32_t batch = volume.probes_per_frame > 0
+                       ? static_cast<uint32_t>(volume.probes_per_frame)
+                       : static_cast<uint32_t>(std::max<size_t>(
+                             1, 3000 / (6 * std::max<size_t>(opaque.size(), 1))));
+  batch = std::min({batch, kMaxProbeBatch, total - probes_.next});
+
+  const VkExtent2D extent = {kProbeFaceSize, kProbeFaceSize};
+  const glm::vec3 cells = glm::max(glm::vec3(volume.counts - 1), glm::vec3(1.0f));
+  // The sky a probe sees past everything is the ambient light.
+  const glm::vec3 sky = lighting_.ambient;
+  ToAttachment(cmd, probe_faces_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  for (uint32_t k = 0; k < batch; k++) {
+    const uint32_t probe = probes_.next + k;
+    const glm::ivec3 cell(probe % volume.counts.x, (probe / volume.counts.x) % volume.counts.y,
+                          probe / (volume.counts.x * volume.counts.y));
+    const glm::vec3 position = glm::mix(volume.min, volume.max, glm::vec3(cell) / cells);
+    for (uint32_t face = 0; face < 6; face++) {
+      FrameUniforms uniforms = CubeFaceUniforms(position, face, 0.01f, 1000.0f, extent);
+      uniforms.light_info.y = 1.0f;  // capture
+      uniforms.light_info.w = volume.include_emission ? 1.0f : 0.0f;
+      const uint32_t offset = PushUniforms(frame, uniforms);
+      ToAttachment(cmd, probe_normal_.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
+      TransitionImage(cmd, probe_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                      kDepthStages, kDepthAccess, kDepthStages, kDepthAccess);
+      VkRenderingAttachmentInfo colors[2] = {};
+      for (auto& c : colors) {
+        c.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        c.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        c.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        c.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      }
+      colors[0].imageView = probe_faces_.LayerView(k * 6 + face);
+      // Alpha 1: open sky counts as a front face.
+      colors[0].clearValue.color = {{sky.r, sky.g, sky.b, 1.0f}};
+      colors[1].imageView = probe_normal_.View();
+      colors[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+      VkRenderingAttachmentInfo depth = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+      depth.imageView = probe_depth_.View();
+      depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+      depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+      depth.clearValue.depthStencil = {1.0f, 0};
+      VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+      rendering.renderArea = {{0, 0}, extent};
+      rendering.layerCount = 1;
+      rendering.colorAttachmentCount = 2;
+      rendering.pColorAttachments = colors;
+      rendering.pDepthAttachment = &depth;
+      vkCmdBeginRendering(cmd, &rendering);
+      SetViewport(cmd, extent);
+      if (!opaque.empty()) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_capture_);
+        const VkDescriptorSet sets[2] = {frame.set, texture_set_};
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
+                                1, &offset);
+        const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+        const VkDeviceSize offsets[2] = {0, 0};
+        vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+        vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
+        FrontFace front_face;
+        for (const FrameDraw* draw : opaque) {
+          front_face.Set(cmd, draw->mirrored);
+          vkCmdDrawIndexed(cmd, draw->geometry->index_count, 1, draw->geometry->first_index,
+                           static_cast<int32_t>(draw->geometry->first_vertex), draw->record);
+        }
+      }
+      vkCmdEndRendering(cmd);
+    }
+  }
+  ToShaderRead(cmd, probe_faces_.Get());
+
+  // Each probe's 9 coefficients, in place in the atlas.
+  ToAttachment(cmd, probe_atlas_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  const VkExtent2D atlas = probe_atlas_.Extent();
+  VkRenderingAttachmentInfo color = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  color.imageView = probe_atlas_.View();
+  color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+  rendering.renderArea = {{0, 0}, atlas};
+  rendering.layerCount = 1;
+  rendering.colorAttachmentCount = 1;
+  rendering.pColorAttachments = &color;
+  vkCmdBeginRendering(cmd, &rendering);
+  SetViewport(cmd, atlas);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_sh_);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_pipeline_layout_, 0, 1,
+                          &probe_sh_set_, 0, nullptr);
+  for (uint32_t k = 0; k < batch; k++) {
+    const uint32_t probe = probes_.next + k;
+    const int32_t x = static_cast<int32_t>((probe % kProbesPerAtlasRow) * 9);
+    const int32_t y = static_cast<int32_t>(probe / kProbesPerAtlasRow);
+    const VkRect2D scissor = {{x, y}, {9, 1}};
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+    PostPush push;
+    push.p[0] = glm::vec4(static_cast<float>(k * 6), static_cast<float>(kProbeFaceSize),
+                          static_cast<float>(x), static_cast<float>(y));
+    push.p[1] = glm::vec4(0.25f, 0.0f, 0.0f, 0.0f);  // back faces above which it is inside
+    vkCmdPushConstants(cmd, post_pipeline_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push),
+                       &push);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+  }
+  vkCmdEndRendering(cmd);
+  ToShaderRead(cmd, probe_atlas_.Get());
+
+  probes_.next += batch;
+  if (probes_.next >= total) {
+    probes_.next = 0;
+    probes_.passes++;
+    if (probes_.passes == volume.bounces) {
+      PDebug::log("Light probes: {} probes settled after {} bounces (frame {})", total,
+                  volume.bounces, frame_number_);
+    }
+  }
 }
 
 void SceneRenderer::DrawList(VkCommandBuffer cmd, FrameResources& frame, uint32_t uniform_offset,
