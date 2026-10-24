@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <mutex>
+#include <set>
 #include <shared_mutex>
 #include <system_error>
 
@@ -98,6 +99,34 @@ bool Exists(const fs::path& path) {
 }
 
 bool IsPacked(const fs::path& path) { return FindPacked(path).has_value(); }
+
+std::vector<std::string> ListDirectory(const fs::path& dir) {
+  std::vector<std::string> names;
+  std::set<std::string> seen;
+  auto add = [&](std::string name) {
+    if (seen.insert(name).second) names.push_back(std::move(name));
+  };
+  std::string key = Normalize(dir);
+  if (key == ".") key.clear();
+  if (!key.empty() && !key.ends_with('/')) key += '/';
+  {
+    std::shared_lock lock(g_mounts_mutex);
+    for (auto it = g_mounts.rbegin(); it != g_mounts.rend(); ++it) {
+      if (!key.starts_with(it->prefix)) continue;
+      const std::string folder = it->entry_prefix + key.substr(it->prefix.size());
+      for (const mpack::Entry& entry : it->pack->GetEntries()) {
+        if (!entry.path.starts_with(folder)) continue;
+        std::string rest = entry.path.substr(folder.size());
+        if (!rest.empty() && rest.find('/') == std::string::npos) add(std::move(rest));
+      }
+    }
+  }
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator(dir.empty() ? fs::path(".") : dir, ec)) {
+    if (entry.is_regular_file(ec)) add(entry.path().filename().string());
+  }
+  return names;
+}
 
 fs::path ExecutableDir() {
   std::error_code ec;

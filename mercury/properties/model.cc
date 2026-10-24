@@ -257,14 +257,13 @@ std::string Lower(std::string text) {
 
 // `dir / file`, matching the name without regard to case when the exact one
 // is missing (models made on Windows often spell their textures differently).
+// Through os:: so that a shipped game finds them in its .mpack.
 fs::path FindInDirectory(const fs::path& dir, const fs::path& file) {
-  std::error_code ec;
   const fs::path exact = dir / file;
-  if (fs::exists(exact, ec)) return exact;
-  if (!fs::is_directory(dir.empty() ? fs::path(".") : dir, ec)) return {};
+  if (os::Exists(exact)) return exact;
   const std::string wanted = Lower(file.string());
-  for (const auto& entry : fs::directory_iterator(dir.empty() ? fs::path(".") : dir, ec)) {
-    if (Lower(entry.path().filename().string()) == wanted) return entry.path();
+  for (const std::string& name : os::ListDirectory(dir)) {
+    if (Lower(name) == wanted) return dir / name;
   }
   return {};
 }

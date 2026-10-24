@@ -43,6 +43,9 @@ bool HasMounts();
 std::optional<std::vector<uint8_t>> ReadBytes(const fs::path& path);
 std::optional<std::string> ReadText(const fs::path& path);
 bool Exists(const fs::path& path);
+// Names of the files directly in `dir`, from mounted packs and from disk
+// (each once, packs first; folders are not listed).
+std::vector<std::string> ListDirectory(const fs::path& dir);
 // True if `path` is served from a mounted pack.
 bool IsPacked(const fs::path& path);
 
