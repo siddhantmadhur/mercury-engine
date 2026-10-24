@@ -65,6 +65,11 @@ class EditorScene : public MapScene {
   MapNode* GetSelectedNode();
   void Select(const MapNode* node);
   MapNode* CreateNode(MapNode* parent, const std::string& name);
+  // Right-click > Import into Scene on a .obj: loads it in the background,
+  // then adds a node for each of its objects and groups, each drawing just
+  // that part of the model, so they can be moved or deleted one by one.
+  void ImportModel(const std::string& res_path);
+  void FinishModelImport();
   // Things the Create menus can add, like Unity's GameObject menu.
   enum class Preset {
     kEmpty, kCube, kSphere, kCapsule, kCylinder, kPlane, kQuad,
@@ -91,6 +96,7 @@ class EditorScene : public MapScene {
   void DrawProjectDirectory(const std::filesystem::path& dir);
   void DrawConsole();
   void DrawModals();
+  void DrawModelLoadingPopup();
   void HandleShortcuts();
 
   // Draws the editor for one field; returns true if `properties` changed.
@@ -187,6 +193,7 @@ class EditorScene : public MapScene {
   uint64_t selected_uid_ = 0;
   std::string selected_asset_;  // res:// path shown in the Inspector
   uint64_t rename_uid_ = 0;     // node being renamed in the Hierarchy
+  std::string pending_import_;  // the model ImportModel waits to have loaded
 
   // Scene view state. The editor camera looks at camera_target_ from
   // camera_distance_ away; in 2D it looks straight down -Z.

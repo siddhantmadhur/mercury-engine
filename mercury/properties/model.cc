@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <set>
 #include <filesystem>
 #include <functional>
@@ -17,6 +18,8 @@
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
+#include "algorithms/parallel_for.h"
+#include "properties/parallel_obj.h"
 #include "properties/texture2d.h"
 #include "properties/vfs_io_system.h"
 #include "serialization/mtext.h"
@@ -373,21 +376,53 @@ std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height, float stre
 
 std::shared_ptr<Model> Model::Load(const std::string& path,
                                    const ModelImportSettings& settings,
-                                   std::string* error) {
+                                   std::string* error, std::atomic<float>* progress) {
+  const auto start_time = std::chrono::steady_clock::now();
+  auto seconds_since = [](std::chrono::steady_clock::time_point from) {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - from).count();
+  };
+  // The load is reported as three stages of the progress bar: the file,
+  // its textures, its meshes.
+  auto report = [progress](float done) {
+    if (progress) progress->store(done);
+  };
+  constexpr unsigned kImportFlags =
+      aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices |
+      aiProcess_FlipUVs | aiProcess_LimitBoneWeights | aiProcess_SortByPType |
+      aiProcess_ValidateDataStructure;
+  auto configure = [](Assimp::Importer& importer) {
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
+    importer.SetPropertyInteger(AI_CONFIG_PP_LBW_MAX_WEIGHTS, 4);
+    // Files without normals keep hard edges above 60 degrees (Unity's default
+    // smoothing angle), so boxes don't shade like pillows.
+    importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 60.0f);
+    importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE,
+                                aiPrimitiveType_POINT | aiPrimitiveType_LINE);
+  };
+
+  // A big .obj is read in pieces on every core; everything else (and small
+  // or unsplittable .obj files) by one importer.
+  const std::string extension = Lower(fs::path(path).extension().string());
+  report(0.0f);
+  std::unique_ptr<aiScene> pieced_scene;
+  if (extension == ".obj") {
+    ParallelObjOptions options;
+    options.min_bytes = settings.parallel_obj_min_bytes;
+    options.max_pieces = settings.parallel_obj_pieces;
+    options.flags = kImportFlags;
+    options.configure = configure;
+    options.progress = [&report](float done) { report(done * 0.5f); };
+    pieced_scene = ImportObjInParallel(path, options);
+  }
   Assimp::Importer importer;
-  UseVfs(importer);
-  importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
-  importer.SetPropertyInteger(AI_CONFIG_PP_LBW_MAX_WEIGHTS, 4);
-  // Files without normals keep hard edges above 60 degrees (Unity's default
-  // smoothing angle), so boxes don't shade like pillows.
-  importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 60.0f);
-  importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE,
-                              aiPrimitiveType_POINT | aiPrimitiveType_LINE);
-  const aiScene* scene = importer.ReadFile(
-      path, aiProcess_Triangulate | aiProcess_GenSmoothNormals |
-                aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs |
-                aiProcess_LimitBoneWeights | aiProcess_SortByPType |
-                aiProcess_ValidateDataStructure);
+  const aiScene* scene = pieced_scene.get();
+  if (!scene) {
+    UseVfs(importer);
+    configure(importer);
+    scene = importer.ReadFile(path, kImportFlags);
+  }
+  const double import_seconds = seconds_since(start_time);
+  report(0.5f);
   if (!scene || !scene->mRootNode) {
     if (error) *error = importer.GetErrorString();
     return nullptr;
@@ -475,25 +510,28 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
 
   // ---- Materials
   const fs::path model_dir = fs::path(path).parent_path();
-  const std::string extension = Lower(fs::path(path).extension().string());
   const bool is_obj = extension == ".obj";
   // MTL's Kd and glTF's base color factor are linear reflectance, as the
   // renderers these files come from use them; ModelMaterial::color is sRGB.
   const bool linear_colors = is_obj || extension == ".gltf" || extension == ".glb";
   enum class TextureUse { kColor, kData, kHeight };
-  std::map<std::pair<std::string, TextureUse>, std::shared_ptr<ImageData>> loaded_textures;
-  // A texture the file refers to, embedded or next to it; each is decoded
-  // once per use. Height maps come back as normal maps.
-  auto load_texture = [&](const std::string& reference, TextureUse use,
-                          float bump_scale) -> std::shared_ptr<ImageData> {
-    if (reference.empty()) return nullptr;
-    const auto key = std::pair(reference, use);
-    if (auto it = loaded_textures.find(key); it != loaded_textures.end()) return it->second;
+  struct TextureRequest {
+    std::string reference;
+    TextureUse use;
+    float bump_scale;
+  };
+  using TextureKey = std::pair<std::string, TextureUse>;
+  std::map<TextureKey, std::shared_ptr<ImageData>> loaded_textures;
+  std::vector<TextureRequest> requests;  // what the materials ask for
+  bool collecting = true;
+  // Decodes a texture the file refers to, embedded or next to it. Height
+  // maps come back as normal maps. Runs on several threads at once.
+  auto decode_texture = [&](const TextureRequest& request) -> std::shared_ptr<ImageData> {
     std::shared_ptr<ImageData> image;
-    if (const aiTexture* embedded = scene->GetEmbeddedTexture(reference.c_str())) {
+    if (const aiTexture* embedded = scene->GetEmbeddedTexture(request.reference.c_str())) {
       if (embedded->mHeight == 0) {
         image = ImageData::FromMemory(reinterpret_cast<const uint8_t*>(embedded->pcData),
-                                      embedded->mWidth, path + ":" + reference);
+                                      embedded->mWidth, path + ":" + request.reference);
       } else {
         std::vector<uint8_t> pixels(size_t(embedded->mWidth) * embedded->mHeight * 4);
         for (size_t i = 0; i < size_t(embedded->mWidth) * embedded->mHeight; i++) {
@@ -503,200 +541,254 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
           pixels[i * 4 + 3] = embedded->pcData[i].a;
         }
         image = ImageData::FromPixels(embedded->mWidth, embedded->mHeight,
-                                      std::move(pixels), path + ":" + reference);
+                                      std::move(pixels), path + ":" + request.reference);
       }
-    } else if (auto file = FindTexture(model_dir, reference); !file.empty()) {
+    } else if (auto file = FindTexture(model_dir, request.reference); !file.empty()) {
       image = ImageData::Load(file);
     }
     if (!image) {
-      PDebug::warn("{}: texture {} not found", path, reference);
+      PDebug::warn("{}: texture {} not found", path, request.reference);
     } else {
-      image->srgb = use == TextureUse::kColor;
-      if (use == TextureUse::kHeight && !LooksLikeNormalMap(*image)) {
+      image->srgb = request.use == TextureUse::kColor;
+      if (request.use == TextureUse::kHeight && !LooksLikeNormalMap(*image)) {
         image = HeightToNormalMap(*FitTexture(image, settings.max_texture_size),
-                                  2.0f * bump_scale);
+                                  2.0f * request.bump_scale);
       }
       image = FitTexture(image, settings.max_texture_size);
     }
-    loaded_textures[key] = image;
     return image;
+  };
+  // Each texture is decoded once per use. The materials are built twice: the
+  // first time only notes which textures they want, so they can all be
+  // decoded at the same time before the second time attaches them.
+  auto load_texture = [&](const std::string& reference, TextureUse use,
+                          float bump_scale) -> std::shared_ptr<ImageData> {
+    if (reference.empty()) return nullptr;
+    const TextureKey key(reference, use);
+    if (collecting) {
+      if (loaded_textures.emplace(key, nullptr).second) {
+        requests.push_back({reference, use, bump_scale});
+      }
+      return nullptr;
+    }
+    auto it = loaded_textures.find(key);
+    return it != loaded_textures.end() ? it->second : nullptr;
   };
   auto texture_of = [](const aiMaterial* material, aiTextureType type) {
     aiString texture_path;
     if (material->GetTexture(type, 0, &texture_path) != AI_SUCCESS) return std::string();
     return std::string(texture_path.C_Str());
   };
-  for (unsigned m = 0; m < scene->mNumMaterials; m++) {
-    const aiMaterial* source = scene->mMaterials[m];
-    ModelMaterial material;
-    aiString name;
-    if (source->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) material.name = name.C_Str();
-    aiColor4D color(1, 1, 1, 1);
-    if (source->Get(AI_MATKEY_BASE_COLOR, color) != AI_SUCCESS) {
-      source->Get(AI_MATKEY_COLOR_DIFFUSE, color);
-    }
-    float opacity = 1.0f;
-    source->Get(AI_MATKEY_OPACITY, opacity);
-    material.color = glm::vec4(color.r, color.g, color.b, color.a * opacity);
-    material.transparent = material.color.a < 0.999f;
-    float metallic = 0.0f;
-    if (source->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
-      material.metallic = metallic;
-    }
-    float roughness = 0.0f;
-    if (source->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
-      material.smoothness = 1.0f - std::clamp(roughness, 0.0f, 1.0f);
-    } else if (is_obj) {
-      // Blinn-Phong exponent (Ns) to GGX roughness; without specular (Ks)
-      // the surface is matte whatever Ns says.
-      float shininess = 0.0f;
-      source->Get(AI_MATKEY_SHININESS, shininess);
-      aiColor3D specular(0, 0, 0);
-      source->Get(AI_MATKEY_COLOR_SPECULAR, specular);
-      const float ks = std::max({specular.r, specular.g, specular.b});
-      const float smooth = 1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
-      material.smoothness = std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
-      // No diffuse but a strong specular: a mirror, or glass when the
-      // illumination model refracts (4, 6, 7). Approximated as metal and as
-      // see-through, there being no reflections or refraction to draw.
-      const float kd = std::max({color.r, color.g, color.b});
-      if (kd < 0.05f && ks > 0.25f && texture_of(source, aiTextureType_DIFFUSE).empty()) {
-        int illum = 2;
-        source->Get(AI_MATKEY_OBJ_ILLUM, illum);
-        if (illum == 4 || illum == 6 || illum == 7) {
-          material.color = glm::vec4(glm::vec3(std::max(ks, 0.6f)), 0.25f);
-          material.transparent = true;
-        } else {
-          material.color = glm::vec4(specular.r, specular.g, specular.b, material.color.a);
-          material.metallic = 1.0f;
+  auto build_materials = [&] {
+    for (unsigned m = 0; m < scene->mNumMaterials; m++) {
+      const aiMaterial* source = scene->mMaterials[m];
+      ModelMaterial material;
+      aiString name;
+      if (source->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) material.name = name.C_Str();
+      aiColor4D color(1, 1, 1, 1);
+      if (source->Get(AI_MATKEY_BASE_COLOR, color) != AI_SUCCESS) {
+        source->Get(AI_MATKEY_COLOR_DIFFUSE, color);
+      }
+      float opacity = 1.0f;
+      source->Get(AI_MATKEY_OPACITY, opacity);
+      material.color = glm::vec4(color.r, color.g, color.b, color.a * opacity);
+      material.transparent = material.color.a < 0.999f;
+      float metallic = 0.0f;
+      if (source->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
+        material.metallic = metallic;
+      }
+      float roughness = 0.0f;
+      if (source->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
+        material.smoothness = 1.0f - std::clamp(roughness, 0.0f, 1.0f);
+      } else if (is_obj) {
+        // Blinn-Phong exponent (Ns) to GGX roughness; without specular (Ks)
+        // the surface is matte whatever Ns says.
+        float shininess = 0.0f;
+        source->Get(AI_MATKEY_SHININESS, shininess);
+        aiColor3D specular(0, 0, 0);
+        source->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+        const float ks = std::max({specular.r, specular.g, specular.b});
+        const float smooth = 1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
+        material.smoothness = std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
+        // No diffuse but a strong specular: a mirror, or glass when the
+        // illumination model refracts (4, 6, 7). Approximated as metal and as
+        // see-through, there being no reflections or refraction to draw.
+        const float kd = std::max({color.r, color.g, color.b});
+        if (kd < 0.05f && ks > 0.25f && texture_of(source, aiTextureType_DIFFUSE).empty()) {
+          int illum = 2;
+          source->Get(AI_MATKEY_OBJ_ILLUM, illum);
+          if (illum == 4 || illum == 6 || illum == 7) {
+            material.color = glm::vec4(glm::vec3(std::max(ks, 0.6f)), 0.25f);
+            material.transparent = true;
+          } else {
+            material.color = glm::vec4(specular.r, specular.g, specular.b, material.color.a);
+            material.metallic = 1.0f;
+          }
         }
       }
-    }
-    if (linear_colors) {
-      material.color = glm::vec4(LinearToSrgb(material.color.r), LinearToSrgb(material.color.g),
-                                 LinearToSrgb(material.color.b), material.color.a);
-    }
-    aiColor3D emissive(0, 0, 0);
-    source->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
-    material.emission = glm::vec3(emissive.r, emissive.g, emissive.b);
-
-    std::string reference = texture_of(source, aiTextureType_BASE_COLOR);
-    if (reference.empty()) reference = texture_of(source, aiTextureType_DIFFUSE);
-    material.texture = load_texture(reference, TextureUse::kColor, 1.0f);
-    // OBJ exporters often write Kd 0 next to map_Kd, meaning "the texture
-    // alone" rather than black.
-    if (is_obj && material.texture && glm::vec3(material.color) == glm::vec3(0.0f)) {
-      material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
-    }
-
-    material.emission_texture =
-        load_texture(texture_of(source, aiTextureType_EMISSIVE), TextureUse::kColor, 1.0f);
-    if (material.emission_texture && material.emission == glm::vec3(0.0f)) {
-      material.emission = glm::vec3(1.0f);
-    }
-
-    if (auto normals = texture_of(source, aiTextureType_NORMALS); !normals.empty()) {
-      material.normal_texture = load_texture(normals, TextureUse::kData, 1.0f);
-      source->Get(AI_MATKEY_OBJ_BUMPMULT_NORMALS(0), material.normal_scale);
-    } else {
-      std::string height = texture_of(source, aiTextureType_HEIGHT);
-      if (height.empty()) height = texture_of(source, aiTextureType_DISPLACEMENT);
-      float bump = 1.0f;
-      source->Get(AI_MATKEY_OBJ_BUMPMULT_HEIGHT(0), bump);
-      material.normal_texture = load_texture(height, TextureUse::kHeight, bump);
-    }
-    for (const ModelMaterialOverride& entry : settings.materials) {
-      if (entry.name != material.name) continue;
-      if (entry.color) {
-        material.color = *entry.color;
-        material.transparent = material.color.a < 0.999f;
+      if (linear_colors) {
+        material.color = glm::vec4(LinearToSrgb(material.color.r), LinearToSrgb(material.color.g),
+                                   LinearToSrgb(material.color.b), material.color.a);
       }
-      if (entry.metallic) material.metallic = std::clamp(*entry.metallic, 0.0f, 1.0f);
-      if (entry.smoothness) material.smoothness = std::clamp(*entry.smoothness, 0.0f, 1.0f);
-      if (entry.emission) material.emission = *entry.emission;
+      aiColor3D emissive(0, 0, 0);
+      source->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
+      material.emission = glm::vec3(emissive.r, emissive.g, emissive.b);
+
+      std::string reference = texture_of(source, aiTextureType_BASE_COLOR);
+      if (reference.empty()) reference = texture_of(source, aiTextureType_DIFFUSE);
+      material.texture = load_texture(reference, TextureUse::kColor, 1.0f);
+      // OBJ exporters often write Kd 0 next to map_Kd, meaning "the texture
+      // alone" rather than black.
+      if (is_obj && material.texture && glm::vec3(material.color) == glm::vec3(0.0f)) {
+        material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
+      }
+
+      material.emission_texture =
+          load_texture(texture_of(source, aiTextureType_EMISSIVE), TextureUse::kColor, 1.0f);
+      if (material.emission_texture && material.emission == glm::vec3(0.0f)) {
+        material.emission = glm::vec3(1.0f);
+      }
+
+      if (auto normals = texture_of(source, aiTextureType_NORMALS); !normals.empty()) {
+        material.normal_texture = load_texture(normals, TextureUse::kData, 1.0f);
+        source->Get(AI_MATKEY_OBJ_BUMPMULT_NORMALS(0), material.normal_scale);
+      } else {
+        std::string height = texture_of(source, aiTextureType_HEIGHT);
+        if (height.empty()) height = texture_of(source, aiTextureType_DISPLACEMENT);
+        float bump = 1.0f;
+        source->Get(AI_MATKEY_OBJ_BUMPMULT_HEIGHT(0), bump);
+        material.normal_texture = load_texture(height, TextureUse::kHeight, bump);
+      }
+      for (const ModelMaterialOverride& entry : settings.materials) {
+        if (entry.name != material.name) continue;
+        if (entry.color) {
+          material.color = *entry.color;
+          material.transparent = material.color.a < 0.999f;
+        }
+        if (entry.metallic) material.metallic = std::clamp(*entry.metallic, 0.0f, 1.0f);
+        if (entry.smoothness) material.smoothness = std::clamp(*entry.smoothness, 0.0f, 1.0f);
+        if (entry.emission) material.emission = *entry.emission;
+      }
+      model->materials_.push_back(std::move(material));
     }
-    model->materials_.push_back(std::move(material));
+  };
+  build_materials();
+  collecting = false;
+  const double materials_seconds = seconds_since(start_time);
+  std::vector<std::shared_ptr<ImageData>> decoded(requests.size());
+  std::atomic<size_t> decoded_count{0};
+  ParallelFor(requests.size(), [&](size_t i) {
+    decoded[i] = decode_texture(requests[i]);
+    report(0.5f + 0.3f * static_cast<float>(++decoded_count) /
+                      static_cast<float>(requests.size()));
+  });
+  for (size_t i = 0; i < requests.size(); i++) {
+    loaded_textures[TextureKey(requests[i].reference, requests[i].use)] = std::move(decoded[i]);
   }
+  model->materials_.clear();
+  build_materials();
+  const double textures_seconds = seconds_since(start_time) - materials_seconds;
+  report(0.8f);
   if (model->materials_.empty()) model->materials_.push_back(ModelMaterial{});
 
   // ---- Meshes
+  // Converted at the same time, a mesh per thread; kept in file order.
+  struct MeshJob {
+    const aiMesh* source;
+    int node;
+  };
+  std::vector<MeshJob> mesh_jobs;
   for (const auto& [source_node, index] : node_order) {
     for (unsigned i = 0; i < source_node->mNumMeshes; i++) {
       const aiMesh* source = scene->mMeshes[source_node->mMeshes[i]];
-      if (!(source->mPrimitiveTypes & aiPrimitiveType_TRIANGLE)) continue;
-      std::vector<ModelVertex> vertices(source->mNumVertices);
-      for (unsigned v = 0; v < source->mNumVertices; v++) {
-        ModelVertex& vertex = vertices[v];
-        const aiVector3D& p = source->mVertices[v];
-        vertex.position = glm::vec3(p.x, p.y, p.z) * scale;
-        if (source->HasNormals()) {
-          vertex.normal = glm::vec3(source->mNormals[v].x, source->mNormals[v].y,
-                                    source->mNormals[v].z);
-        }
-        if (source->HasTextureCoords(0)) {
-          vertex.uv = glm::vec2(source->mTextureCoords[0][v].x,
-                                source->mTextureCoords[0][v].y);
-        }
-        if (unity) {
-          vertex.position = FlipPosition(vertex.position);
-          vertex.normal = FlipPosition(vertex.normal);
-        }
-      }
-      std::vector<uint32_t> indices;
-      indices.reserve(source->mNumFaces * 3);
-      for (unsigned f = 0; f < source->mNumFaces; f++) {
-        const aiFace& face = source->mFaces[f];
-        if (face.mNumIndices != 3) continue;
-        indices.push_back(face.mIndices[0]);
-        indices.push_back(face.mIndices[1]);
-        indices.push_back(face.mIndices[2]);
-      }
-
-      ModelMesh mesh;
-      mesh.name = source->mName.C_Str();
-      mesh.node = index;
-      mesh.material = static_cast<int>(
-          std::min<unsigned>(source->mMaterialIndex,
-                             static_cast<unsigned>(model->materials_.size() - 1)));
-      if (source->HasBones()) {
-        std::vector<int> counts(vertices.size(), 0);
-        for (unsigned b = 0; b < source->mNumBones; b++) {
-          const aiBone* bone = source->mBones[b];
-          ModelBone model_bone;
-          if (const aiNode* bone_node = root->FindNode(bone->mName)) {
-            auto it = node_index.find(bone_node);
-            if (it != node_index.end()) model_bone.node = it->second;
-          }
-          glm::mat4 offset = ToGlm(bone->mOffsetMatrix);
-          offset[3] = glm::vec4(glm::vec3(offset[3]) * scale, 1.0f);
-          if (unity) offset = FlipMatrix(offset);
-          model_bone.offset = offset;
-          mesh.bones.push_back(model_bone);
-          for (unsigned w = 0; w < bone->mNumWeights; w++) {
-            const aiVertexWeight& weight = bone->mWeights[w];
-            if (weight.mVertexId >= vertices.size()) continue;
-            int& slot = counts[weight.mVertexId];
-            if (slot >= 4) continue;
-            vertices[weight.mVertexId].joints[slot] = b;
-            vertices[weight.mVertexId].weights[slot] = weight.mWeight;
-            slot++;
-          }
-        }
-        for (auto& vertex : vertices) {
-          const float total = vertex.weights.x + vertex.weights.y + vertex.weights.z +
-                              vertex.weights.w;
-          if (total > 0.0f) vertex.weights /= total;
-        }
-      }
-      mesh.geometry = MeshGeometry::Create(std::move(vertices), std::move(indices));
-      mesh.geometry->skinned = !mesh.bones.empty();
-      if (model->materials_[mesh.material].normal_texture) mesh.geometry->ComputeTangents();
-      const int mesh_index = static_cast<int>(model->meshes_.size());
-      model->meshes_.push_back(std::move(mesh));
-      model->nodes_[index].meshes.push_back(mesh_index);
+      if (source->mPrimitiveTypes & aiPrimitiveType_TRIANGLE) mesh_jobs.push_back({source, index});
     }
   }
+  std::vector<ModelMesh> built_meshes(mesh_jobs.size());
+  std::atomic<size_t> converted{0};
+  ParallelFor(mesh_jobs.size(), [&](size_t job_index) {
+    const aiMesh* source = mesh_jobs[job_index].source;
+    const int index = mesh_jobs[job_index].node;
+    std::vector<ModelVertex> vertices(source->mNumVertices);
+    for (unsigned v = 0; v < source->mNumVertices; v++) {
+      ModelVertex& vertex = vertices[v];
+      const aiVector3D& p = source->mVertices[v];
+      vertex.position = glm::vec3(p.x, p.y, p.z) * scale;
+      if (source->HasNormals()) {
+        vertex.normal = glm::vec3(source->mNormals[v].x, source->mNormals[v].y,
+                                  source->mNormals[v].z);
+      }
+      if (source->HasTextureCoords(0)) {
+        vertex.uv = glm::vec2(source->mTextureCoords[0][v].x,
+                              source->mTextureCoords[0][v].y);
+      }
+      if (unity) {
+        vertex.position = FlipPosition(vertex.position);
+        vertex.normal = FlipPosition(vertex.normal);
+      }
+    }
+    std::vector<uint32_t> indices;
+    indices.reserve(source->mNumFaces * 3);
+    for (unsigned f = 0; f < source->mNumFaces; f++) {
+      const aiFace& face = source->mFaces[f];
+      if (face.mNumIndices != 3) continue;
+      indices.push_back(face.mIndices[0]);
+      indices.push_back(face.mIndices[1]);
+      indices.push_back(face.mIndices[2]);
+    }
 
+    ModelMesh mesh;
+    mesh.name = source->mName.C_Str();
+    mesh.node = index;
+    mesh.material = static_cast<int>(
+        std::min<unsigned>(source->mMaterialIndex,
+                           static_cast<unsigned>(model->materials_.size() - 1)));
+    if (source->HasBones()) {
+      std::vector<int> counts(vertices.size(), 0);
+      for (unsigned b = 0; b < source->mNumBones; b++) {
+        const aiBone* bone = source->mBones[b];
+        ModelBone model_bone;
+        if (const aiNode* bone_node = root->FindNode(bone->mName)) {
+          auto it = node_index.find(bone_node);
+          if (it != node_index.end()) model_bone.node = it->second;
+        }
+        glm::mat4 offset = ToGlm(bone->mOffsetMatrix);
+        offset[3] = glm::vec4(glm::vec3(offset[3]) * scale, 1.0f);
+        if (unity) offset = FlipMatrix(offset);
+        model_bone.offset = offset;
+        mesh.bones.push_back(model_bone);
+        for (unsigned w = 0; w < bone->mNumWeights; w++) {
+          const aiVertexWeight& weight = bone->mWeights[w];
+          if (weight.mVertexId >= vertices.size()) continue;
+          int& slot = counts[weight.mVertexId];
+          if (slot >= 4) continue;
+          vertices[weight.mVertexId].joints[slot] = b;
+          vertices[weight.mVertexId].weights[slot] = weight.mWeight;
+          slot++;
+        }
+      }
+      for (auto& vertex : vertices) {
+        const float total = vertex.weights.x + vertex.weights.y + vertex.weights.z +
+                            vertex.weights.w;
+        if (total > 0.0f) vertex.weights /= total;
+      }
+    }
+    mesh.geometry = MeshGeometry::Create(std::move(vertices), std::move(indices));
+    mesh.geometry->skinned = !mesh.bones.empty();
+    if (model->materials_[mesh.material].normal_texture) mesh.geometry->ComputeTangents();
+    built_meshes[job_index] = std::move(mesh);
+    report(0.8f + 0.2f * static_cast<float>(++converted) /
+                      static_cast<float>(mesh_jobs.size()));
+  });
+  for (size_t i = 0; i < built_meshes.size(); i++) {
+    const int mesh_index = static_cast<int>(model->meshes_.size());
+    model->nodes_[mesh_jobs[i].node].meshes.push_back(mesh_index);
+    model->meshes_.push_back(std::move(built_meshes[i]));
+  }
+
+  report(1.0f);
+  PDebug::log("Loaded {} in {:.1f}s (file {:.1f}s, textures {:.1f}s)", path,
+              seconds_since(start_time), import_seconds, textures_seconds);
   // ---- Animations
   std::map<std::string, int> node_by_name;
   for (size_t i = 0; i < model->nodes_.size(); i++) {
@@ -795,6 +887,20 @@ void Model::ComputeGlobals(const std::vector<glm::mat4>& locals,
 int Model::FindNode(std::string_view name) const {
   for (size_t i = 0; i < nodes_.size(); i++) {
     if (nodes_[i].name == name) return static_cast<int>(i);
+  }
+  // "Name#3" is the third node called Name, for the many models whose nodes
+  // share names (an .obj's groups are often all "Default").
+  const size_t hash = name.rfind('#');
+  if (hash == std::string_view::npos || hash + 1 >= name.size()) return -1;
+  size_t wanted = 0;
+  for (char c : name.substr(hash + 1)) {
+    if (c < '0' || c > '9') return -1;
+    wanted = wanted * 10 + static_cast<size_t>(c - '0');
+  }
+  const std::string_view base = name.substr(0, hash);
+  size_t seen = 0;
+  for (size_t i = 0; i < nodes_.size(); i++) {
+    if (nodes_[i].name == base && ++seen == wanted) return static_cast<int>(i);
   }
   return -1;
 }

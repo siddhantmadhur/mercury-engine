@@ -1039,6 +1039,10 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
       if (extension == kUxmlExtension && ImGui::MenuItem("Open in UI Builder")) {
         OpenInUIBuilder(res_path);
       }
+      if (extension == ".obj" &&
+          ImGui::MenuItem("Import into Scene", nullptr, false, !IsModelPreloading())) {
+        ImportModel(res_path);
+      }
       if (ImGui::MenuItem("Open in External Editor")) OpenInExternalEditor(path);
       if (ImGui::MenuItem("Copy res:// Path")) ImGui::SetClipboardText(res_path.c_str());
       if (lore_.IsRepository()) {

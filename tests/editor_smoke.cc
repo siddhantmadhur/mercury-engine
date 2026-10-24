@@ -6,6 +6,7 @@
 //
 //   <frame> move <x> <y>
 //   <frame> click <x> <y>          (press now, release two frames later)
+//   <frame> rclick <x> <y>         (right button, like click)
 //   <frame> down | up              (left button)
 //   <frame> drag <x> <y>           (move with the button held)
 //   <frame> key <name>             (ctrl+s, ctrl+z, delete, enter, f, ...)
@@ -76,6 +77,10 @@ class ScriptedEditor : public Mercury::EditorScene {
         SetMouse(std::stof(step.args[0]), std::stof(step.args[1]));
         io.AddMouseButtonEvent(0, true);
         release_at_ = frame_ + 2;
+      } else if (step.command == "rclick") {
+        SetMouse(std::stof(step.args[0]), std::stof(step.args[1]));
+        io.AddMouseButtonEvent(1, true);
+        release_right_at_ = frame_ + 2;
       } else if (step.command == "down") {
         io.AddMouseButtonEvent(0, true);
       } else if (step.command == "up") {
@@ -91,6 +96,7 @@ class ScriptedEditor : public Mercury::EditorScene {
       }
     }
     if (frame_ == release_at_) io.AddMouseButtonEvent(0, false);
+    if (frame_ == release_right_at_) io.AddMouseButtonEvent(1, false);
     frame_++;
     EditorScene::OnFrame(delta_t);
   }
@@ -125,6 +131,7 @@ class ScriptedEditor : public Mercury::EditorScene {
   std::vector<Step> steps_;
   int frame_ = 0;
   int release_at_ = -1;
+  int release_right_at_ = -1;
   std::vector<ImGuiKey> held_;
   ImVec2 mouse_ = {0, 0};
   bool has_mouse_ = false;

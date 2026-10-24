@@ -16,6 +16,27 @@
 
 namespace Mercury {
 
+namespace {
+
+// The models a map's MeshRenderers and MeshColliders load, read straight from
+// the properties so no field warnings are logged twice.
+void CollectModelPaths(const MapNode& node, std::vector<std::string>& paths) {
+  for (const ComponentData& component : node.components) {
+    const bool renderer = component.type == "MeshRenderer";
+    if (!renderer && component.type != "MeshCollider") continue;
+    // A renderer draws a cube unless told otherwise; a collider uses its model.
+    if (component.properties.GetString("mesh", renderer ? "cube" : "model") != "model") {
+      continue;
+    }
+    const mtext::Variant* model = component.properties.Get("model");
+    const auto* resource = model ? model->Get<mtext::Resource>() : nullptr;
+    if (resource && !resource->path.empty()) paths.push_back(resource->path);
+  }
+  for (const auto& child : node.children) CollectModelPaths(*child, paths);
+}
+
+}  // namespace
+
 // ------------------------------------------------------------- GameObject ---
 
 bool GameObject::IsValid() const {
@@ -253,7 +274,12 @@ int MapScene::GetTicksPerSecond() const {
 }
 
 void MapScene::SetProject(std::shared_ptr<Project> project) {
+  // Models loading for the old project must not reach the new one's cache.
+  preloader_.Cancel();
+  loading_map_.reset();
   ClearMap();
+  model_assets_.clear();
+  images_.clear();
   textures_.clear();
   models_.clear();
   project_ = std::move(project);
@@ -318,6 +344,79 @@ void MapScene::Instantiate(const Map& map) {
   }
   ApplyEnvironment();
   if (running_) StartPendingBehaviours();
+}
+
+void MapScene::BeginInstantiate(Map map, bool fresh_assets) {
+  preloader_.Cancel();
+  loading_map_.reset();
+  auto jobs = MissingModels(map, fresh_assets);
+  if (jobs.empty()) {
+    if (fresh_assets) {
+      ClearMap();
+      model_assets_.clear();
+      images_.clear();
+    }
+    Instantiate(map);
+    if (running_) PlayAudioOnAwake();
+    return;
+  }
+  loading_map_ = std::move(map);
+  loading_fresh_ = fresh_assets;
+  // At startup nothing is drawn until the models are ready: show black.
+  if (entities_.empty()) SetClearColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+  preloader_.Start(std::move(jobs));
+}
+
+void MapScene::FinishLoadingMap() {
+  if (!loading_map_ || !preloader_.IsFinished()) return;
+  auto results = preloader_.TakeResults();
+  if (loading_fresh_) {
+    // The old map's models and images (often hundreds of MB) go with it.
+    ClearMap();
+    model_assets_.clear();
+    images_.clear();
+  }
+  for (auto& result : results) {
+    model_assets_.emplace(std::move(result.res_path), std::move(result.model));
+  }
+  Instantiate(*loading_map_);
+  loading_map_.reset();
+  // OnStart has already run, so the new map's sources start here.
+  if (running_) PlayAudioOnAwake();
+}
+
+std::vector<ModelPreloader::Job> MapScene::MissingModels(const Map& map, bool all) {
+  std::vector<ModelPreloader::Job> jobs;
+  if (!project_ || !map.GetRoot()) return jobs;
+  std::vector<std::string> paths;
+  CollectModelPaths(*map.GetRoot(), paths);
+  std::sort(paths.begin(), paths.end());
+  paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+  for (const std::string& path : paths) {
+    if (!all && model_assets_.contains(path)) continue;
+    jobs.push_back(MakeModelJob(path));
+  }
+  return jobs;
+}
+
+ModelPreloader::Job MapScene::MakeModelJob(const std::string& res_path) const {
+  ModelPreloader::Job job;
+  job.res_path = res_path;
+  job.file = project_->Resolve(res_path).string();
+  job.settings = ModelSettings(job.file);
+  return job;
+}
+
+void MapScene::StartModelPreload(std::vector<ModelPreloader::Job> jobs) {
+  preloader_.Start(std::move(jobs));
+}
+
+bool MapScene::PollModelPreload() {
+  if (!preloader_.IsFinished()) return false;
+  for (auto& result : preloader_.TakeResults()) {
+    model_assets_.emplace(std::move(result.res_path), std::move(result.model));
+  }
+  return true;
 }
 
 void MapScene::SyncFromMap(const Map& map) {
@@ -760,13 +859,17 @@ void MapScene::StartPendingBehaviours() {
   }
 }
 
-void MapScene::OnStart() {
-  running_ = true;
+void MapScene::PlayAudioOnAwake() {
   // Sources set to play on awake start with the scene.
   auto sources = GetRegistry().view<AudioSource>();
   for (auto [entity, source] : sources.each()) {
     if (source.play_on_awake && source.enabled && IsActiveInHierarchy(entity)) source.Play();
   }
+}
+
+void MapScene::OnStart() {
+  running_ = true;
+  PlayAudioOnAwake();
   AwakeBehaviours();
   StartPendingBehaviours();
 }
@@ -781,15 +884,12 @@ void MapScene::LoadPendingMap() {
     PDebug::warn("Could not load map {}: {}", path, error);
     return;
   }
-  ClearMap();
-  // The old map's models and images (often hundreds of MB) go with it.
-  model_assets_.clear();
-  images_.clear();
-  Instantiate(map);
+  BeginInstantiate(std::move(map), true);
 }
 
 void MapScene::OnFrame(double delta_t) {
   const double seconds = delta_t / 1000.0;
+  if (mode_ == Mode::kPlay) FinishLoadingMap();
   if (mode_ == Mode::kPlay && !pending_map_.empty()) LoadPendingMap();
   if (mode_ == Mode::kPlay) {
     Time::BeginFrame(seconds);
@@ -1624,19 +1724,22 @@ void MapScene::DestroyPending() {
   }
 }
 
+ModelImportSettings MapScene::ModelSettings(const std::string& file) const {
+  ModelImportSettings defaults;
+  defaults.convention = project_->GetModelConvention() == "unity"
+                            ? ModelConvention::kUnity
+                            : ModelConvention::kNative;
+  return ModelImportSettings::ForFile(file, defaults);
+}
+
 std::shared_ptr<const Model> MapScene::GetModelAsset(std::string_view res_path) {
   if (res_path.empty() || !project_) return nullptr;
   if (auto it = model_assets_.find(res_path); it != model_assets_.end()) {
     return it->second;
   }
   const std::string file = project_->Resolve(res_path).string();
-  ModelImportSettings defaults;
-  defaults.convention = project_->GetModelConvention() == "unity"
-                            ? ModelConvention::kUnity
-                            : ModelConvention::kNative;
   std::string error;
-  std::shared_ptr<const Model> model =
-      Model::Load(file, ModelImportSettings::ForFile(file, defaults), &error);
+  std::shared_ptr<const Model> model = Model::Load(file, ModelSettings(file), &error);
   if (!model) PDebug::warn("Could not load model {}: {}", res_path, error);
   model_assets_.emplace(std::string(res_path), model);
   return model;
