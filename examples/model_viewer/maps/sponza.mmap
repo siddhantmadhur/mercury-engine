@@ -2,8 +2,8 @@
 
 [ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
 [ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
-[ext_resource type="Model" path="res://models/sponza/sponza.obj" id="3"]
-[ext_resource type="PostProcessProfile" path="res://assets/post_sponza.masset" id="4"]
+[ext_resource type="PostProcessProfile" path="res://assets/post_sponza.masset" id="3"]
+[ext_resource type="Model" path="res://models/sponza/sponza.obj" id="4"]
 
 [node name="Sponza"]
 
@@ -18,7 +18,7 @@ title = "Sponza"
 hint = "The camera flies a loop. Space: pause · Esc: menu"
 
 [component type="PostProcessVolume" node="."]
-profile = ExtResource("4")
+profile = ExtResource("3")
 
 [node name="Camera" parent="."]
 
@@ -39,7 +39,7 @@ lap_seconds = 70
 [node name="Sun" parent="."]
 
 [component type="Transform" node="Sun"]
-rotation = Vector3(-62, 25, 0)
+rotation = Vector3(-70.4, 118, 15.9)
 
 [component type="DirectionalLight" node="Sun"]
 color = Color(1, 0.96, 0.9, 1)
@@ -54,7 +54,7 @@ shadow_distance = 30
 
 [component type="MeshRenderer" node="Model"]
 mesh = "model"
-model = ExtResource("3")
+model = ExtResource("4")
 
 [node name="Path" parent="."]
 
@@ -75,13 +75,13 @@ rotation = Vector3(8.22, -74.36, 0)
 [node name="P2" parent="Path"]
 
 [component type="Transform" node="Path/P2"]
-position = Vector3(8, 3.5, 1.5)
+position = Vector3(8, 6.909, 1.5)
 rotation = Vector3(22.55, -41.63, 0)
 
 [node name="P3" parent="Path"]
 
 [component type="Transform" node="Path/P3"]
-position = Vector3(10, 6, -1)
+position = Vector3(13.587, 6.781, -1)
 rotation = Vector3(5.68, 95.71, 0)
 
 [node name="P4" parent="Path"]

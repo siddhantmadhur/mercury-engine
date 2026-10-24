@@ -5,7 +5,8 @@
 // emission maps are optional.
 //
 // In a probe capture pass (light_info.y) it writes the radiance a probe sees,
-// with alpha 0 on back faces so probes inside walls can be found. Writes linear HDR color and a
+// with the distance in alpha (negative on back faces, so probes inside walls
+// can be found). Writes linear HDR color and a
 // view-space normal for SSAO (alpha 0 in overlay passes: no AO there).
 #include "model_common.hlsli"
 #include "lighting.hlsli"
@@ -303,7 +304,7 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
         }
 
         float3 ambient_light;
-        if (!SampleProbes(input.world_position, N, ambient_light))
+        if (!SampleProbes(input.world_position, surface_normal, N, camera_pos.xyz, ambient_light))
         {
             float hemi = N.y * 0.5 + 0.5;
             ambient_light = lerp(ambient_ground.rgb, ambient_sky.rgb, hemi);
@@ -325,6 +326,11 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
         color = LinearToSrgb(AcesTonemap(color));
     }
     output.color = float4(color, base.a);
-    if (capture) output.color.a = front_face ? 1.0 : 0.0;
+    if (capture)
+    {
+        // Signed distance from the probe: back faces mean it is inside.
+        float distance = length(input.world_position - camera_pos.xyz);
+        output.color.a = front_face ? distance : -distance;
+    }
     return output;
 }

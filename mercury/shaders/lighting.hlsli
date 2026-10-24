@@ -6,11 +6,15 @@
 //                                     texel the distance to the nearest caster
 //   binding 8  Texture2D<float4>      probe atlas: 9 texels per probe, the
 //                                     L2 spherical harmonics of its radiance
+//   binding 10 Texture2D<float2>      probe visibility: an octahedral map
+//                                     per probe of the distance to the
+//                                     nearest surface (mean, mean square)
 
 #include "lighting_math.hlsli"
 
 [[vk::binding(7, 0)]] Texture2DArray<float> shadow_cubes;
 [[vk::binding(8, 0)]] Texture2D<float4> probe_atlas;
+[[vk::binding(10, 0)]] Texture2D<float2> probe_visibility;
 
 // ---------------------------------------------------------- cube shadows --
 
@@ -128,17 +132,55 @@ float3 ProbeIrradiance(uint probe, float3 n)
     return max(e, 0.0);
 }
 
-// The probes' indirect light at a surface (as ProbeIrradiance), blended from
-// the 8 around it. Probes inside walls and ones behind the surface count
-// less. Returns false outside the volume or when no probe is usable.
-bool SampleProbes(float3 p, float3 n, out float3 light)
+// Mean and mean square of the distance from `probe` to the nearest surface
+// along `d`, bilinear within the probe's map.
+float2 ProbeDistance(uint probe, float3 d)
+{
+    const int size = (int) kProbeVisibilitySize;
+    uint per_row = (uint) gi_counts.w;
+    int2 corner = int2(probe % per_row, probe / per_row) * size;
+    float2 uv = (OctEncode(d) * 0.5 + 0.5) * size - 0.5;
+    int2 i = (int2) floor(uv);
+    float2 f = uv - (float2) i;
+    float2 m00 = probe_visibility.Load(int3(corner + clamp(i, 0, size - 1), 0));
+    float2 m10 = probe_visibility.Load(int3(corner + clamp(i + int2(1, 0), 0, size - 1), 0));
+    float2 m01 = probe_visibility.Load(int3(corner + clamp(i + int2(0, 1), 0, size - 1), 0));
+    float2 m11 = probe_visibility.Load(int3(corner + clamp(i + int2(1, 1), 0, size - 1), 0));
+    return lerp(lerp(m00, m10, f.x), lerp(m01, m11, f.x), f.y);
+}
+
+// How likely `probe` sees a point `distance` away along `d`: 1 in front of
+// the surfaces it saw there, falling off behind them (Chebyshev, as DDGI).
+float ProbeVisibility(uint probe, float3 d, float distance)
+{
+    float2 moments = ProbeDistance(probe, d);
+    if (distance <= moments.x) return 1.0;
+    float variance = abs(moments.y - moments.x * moments.x);
+    float gap = distance - moments.x;
+    float chebyshev = variance / (variance + gap * gap);
+    return max(chebyshev * chebyshev * chebyshev, 0.0);
+}
+
+// The probes' indirect light at a surface (as ProbeIrradiance toward the
+// shading normal n), blended from the 8 around it. Probes inside walls, ones
+// behind the surface (its geometric normal) and ones a wall hides from it count
+// less, so light does not leak through walls. `eye` is the camera position.
+// Returns false outside the volume or when no probe is usable.
+bool SampleProbes(float3 p, float3 surface_normal, float3 n, float3 eye, out float3 light)
 {
     light = 0.0;
     if (gi_min.w < 0.5) return false;
     float3 extent = gi_max.xyz - gi_min.xyz;
     float3 spacing = extent / max(gi_counts.xyz - 1.0, 1.0);
-    // Off the surface a little, so the probes behind it matter less.
-    float3 q = p + n * min(spacing.x, min(spacing.y, spacing.z)) * 0.3;
+    float min_spacing = min(spacing.x, min(spacing.y, spacing.z));
+    // Off the surface and toward the camera (as DDGI): near a wall the point
+    // then sits clearly in front of it, so probes beyond the wall stay hidden
+    // even where the floor meets it. The camera sees p, so the way to it is
+    // open space.
+    float3 to_eye = eye - p;
+    float eye_distance = length(to_eye);
+    float3 q = p + surface_normal * min_spacing * 0.2 +
+               to_eye / max(eye_distance, 1e-5) * min(min_spacing * 0.3, eye_distance * 0.5);
     float3 g = (q - gi_min.xyz) / spacing;
     float3 counts = gi_counts.xyz;
     if (any(g < -0.5) || any(g > counts - 0.5)) return false;
@@ -152,17 +194,24 @@ bool SampleProbes(float3 p, float3 n, out float3 light)
         int3 offset = int3(corner & 1, (corner >> 1) & 1, (corner >> 2) & 1);
         int3 cell = base + offset;
         float3 tri = lerp(1.0 - t, t, (float3) offset);
-        float w = tri.x * tri.y * tri.z;
         uint probe = ProbeIndex(cell);
         float valid = probe_atlas.Load(int3(ProbeTexel(probe, 0), 0)).a;
-        float3 to_probe = normalize(ProbePosition(cell) - p + 1e-5);
-        float facing = (dot(to_probe, n) + 1.0) * 0.5;
-        w *= valid * (facing * facing + 0.05);
-        if (w <= 1e-6) continue;
+        if (valid < 0.5) continue;
+        float3 probe_position = ProbePosition(cell);
+        float3 to_probe = normalize(probe_position - p + 1e-5);
+        float facing = (dot(to_probe, surface_normal) + 1.0) * 0.5;
+        float w = facing * facing + 0.05;
+        // From the offset point, so the surface itself does not hide probes.
+        float3 from_probe = q - probe_position;
+        float reach = length(from_probe);
+        w *= max(ProbeVisibility(probe, from_probe / max(reach, 1e-5), reach), 1e-4);
+        // Crush small weights further, so a hidden probe barely counts.
+        if (w < 0.2) w = w * w * w / 0.04;
+        w *= tri.x * tri.y * tri.z;
         light += ProbeIrradiance(probe, n) * w;
         total += w;
     }
-    if (total < 1e-4) return false;
+    if (total < 1e-9) return false;
     light = light / total * gi_max.w;
     return true;
 }

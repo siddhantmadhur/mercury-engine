@@ -95,6 +95,33 @@ float RangeFade(float distance_sq, float range)
 
 static const uint kProbeCoefficients = 9;
 
+// Probe visibility: kProbeVisibilitySize^2 texels per probe, an octahedral
+// map of the distance to the nearest surface (mean and mean square).
+static const uint kProbeVisibilitySize = 8;
+
+// A probe capture's alpha: the signed distance to what the texel sees
+// (negative on back faces), or more than kProbeSkyAlpha where it saw nothing.
+static const float kProbeSkyAlpha = 60000.0;
+
+float2 SignNotZero(float2 v)
+{
+    return float2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0);
+}
+
+// Unit direction <-> [-1, 1]^2 on the octahedron.
+float2 OctEncode(float3 d)
+{
+    d /= abs(d.x) + abs(d.y) + abs(d.z);
+    return d.z >= 0.0 ? d.xy : (1.0 - abs(d.yx)) * SignNotZero(d.xy);
+}
+
+float3 OctDecode(float2 e)
+{
+    float3 d = float3(e, 1.0 - abs(e.x) - abs(e.y));
+    if (d.z < 0.0) d.xy = (1.0 - abs(d.yx)) * SignNotZero(d.xy);
+    return normalize(d);
+}
+
 // Real spherical harmonics up to band 2, in the usual order.
 void ShBasis(float3 d, out float basis[9])
 {
