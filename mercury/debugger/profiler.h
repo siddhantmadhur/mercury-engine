@@ -16,6 +16,8 @@
  *   MERCURY_BENCH_WARMUP=N    frames skipped once the map has loaded
  *                             (default 300: uploads, light probes settling)
  *   MERCURY_BENCH_OUT=path    also write the summary there
+ *   MERCURY_BENCH_CAPTURE=path  and a screenshot of the frame after the last
+ *                             measured one
  */
 #ifndef MERCURY_DEBUGGER_PROFILER_H
 #define MERCURY_DEBUGGER_PROFILER_H

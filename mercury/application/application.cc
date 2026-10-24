@@ -275,12 +275,17 @@ void Application::StepFrame() {
   }
 
   Profiler::DrawOverlay();
+  // The benchmark is done: a screenshot of this frame if asked for, then quit.
+  if (Profiler::BenchFinished() && !quit_after_frame_) {
+    if (const char* capture = std::getenv("MERCURY_BENCH_CAPTURE")) RequestCapture(capture);
+    quit_after_frame_ = true;
+  }
   {
     MERCURY_PROFILE_SCOPE("render");
     Render();
   }
   Profiler::EndFrame();
-  if (quit_after_frame_ || Profiler::BenchFinished()) Quit();
+  if (quit_after_frame_) Quit();
 }
 
 void Application::RequestCapture(const std::string& file) {
