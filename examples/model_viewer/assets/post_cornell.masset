@@ -1,6 +1,6 @@
 [masset type="PostProcessProfile" format=1]
 tonemap = "neutral"
-exposure = 4.0
+exposure = 3.0
 bloom_intensity = 0.04
 bloom_threshold = 4.0
 bloom_scatter = 0.5

@@ -2,9 +2,9 @@
 
 [ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
 [ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
-[ext_resource type="Model" path="res://models/cornell_box/CornellBox-Glossy.obj" id="3"]
-[ext_resource type="PostProcessProfile" path="res://assets/post_cornell.masset" id="4"]
-[ext_resource type="Material" path="res://assets/light_panel.masset" id="5"]
+[ext_resource type="PostProcessProfile" path="res://assets/post_cornell.masset" id="3"]
+[ext_resource type="Material" path="res://assets/light_panel.masset" id="4"]
+[ext_resource type="Model" path="res://models/cornell_box/CornellBox-Glossy.obj" id="5"]
 
 [node name="CornellBox"]
 
@@ -19,7 +19,7 @@ title = "Cornell Box · Glossy"
 hint = "Fixed camera · Esc: menu"
 
 [component type="PostProcessVolume" node="."]
-profile = ExtResource("4")
+profile = ExtResource("3")
 
 [node name="Camera" parent="."]
 
@@ -76,7 +76,7 @@ scale = Vector3(0.47, 0.38, 1)
 
 [component type="MeshRenderer" node="LightPanel"]
 mesh = "quad"
-material = ExtResource("5")
+material = ExtResource("4")
 cast_shadows = false
 
 [node name="Model" parent="."]
@@ -85,4 +85,4 @@ cast_shadows = false
 
 [component type="MeshRenderer" node="Model"]
 mesh = "model"
-model = ExtResource("3")
+model = ExtResource("5")

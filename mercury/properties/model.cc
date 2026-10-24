@@ -197,12 +197,36 @@ ModelImportSettings ModelImportSettings::ForFile(const std::string& model_path,
     settings.max_texture_size = static_cast<int>(
         section->properties.GetInt("max_texture_size", settings.max_texture_size));
   }
+  for (const mtext::Section* section : document.FindAll("material")) {
+    ModelMaterialOverride entry;
+    entry.name = section->attributes.GetString("name");
+    if (entry.name.empty()) {
+      PDebug::warn("{}:{}: [material] needs a name", sidecar, section->line);
+      continue;
+    }
+    const mtext::PropertyList& p = section->properties;
+    if (auto v = p.Get("color"); v && v->Get<mtext::Color>()) {
+      entry.color = v->Get<mtext::Color>()->rgba;
+    }
+    if (auto v = p.Get("emission"); v && v->Get<mtext::Color>()) {
+      entry.emission = glm::vec3(v->Get<mtext::Color>()->rgba);
+    }
+    if (p.Has("metallic")) entry.metallic = static_cast<float>(p.GetFloat("metallic"));
+    if (p.Has("smoothness")) entry.smoothness = static_cast<float>(p.GetFloat("smoothness"));
+    settings.materials.push_back(std::move(entry));
+  }
   return settings;
 }
 
 // ----------------------------------------------------------------- Model ---
 
 namespace {
+
+// Linear to sRGB, for colors stored the way ModelMaterial::color expects.
+float LinearToSrgb(float c) {
+  c = std::clamp(c, 0.0f, 1.0f);
+  return c <= 0.0031308f ? c * 12.92f : 1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f;
+}
 
 glm::mat4 ToGlm(const aiMatrix4x4& m) {
   // assimp is row-major, glm column-major.
@@ -452,7 +476,11 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
 
   // ---- Materials
   const fs::path model_dir = fs::path(path).parent_path();
-  const bool is_obj = Lower(fs::path(path).extension().string()) == ".obj";
+  const std::string extension = Lower(fs::path(path).extension().string());
+  const bool is_obj = extension == ".obj";
+  // MTL's Kd and glTF's base color factor are linear reflectance, as the
+  // renderers these files come from use them; ModelMaterial::color is sRGB.
+  const bool linear_colors = is_obj || extension == ".gltf" || extension == ".glb";
   enum class TextureUse { kColor, kData, kHeight };
   std::map<std::pair<std::string, TextureUse>, std::shared_ptr<ImageData>> loaded_textures;
   // A texture the file refers to, embedded or next to it; each is decoded
@@ -545,6 +573,10 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
         }
       }
     }
+    if (linear_colors) {
+      material.color = glm::vec4(LinearToSrgb(material.color.r), LinearToSrgb(material.color.g),
+                                 LinearToSrgb(material.color.b), material.color.a);
+    }
     aiColor3D emissive(0, 0, 0);
     source->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
     material.emission = glm::vec3(emissive.r, emissive.g, emissive.b);
@@ -573,6 +605,16 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
       float bump = 1.0f;
       source->Get(AI_MATKEY_OBJ_BUMPMULT_HEIGHT(0), bump);
       material.normal_texture = load_texture(height, TextureUse::kHeight, bump);
+    }
+    for (const ModelMaterialOverride& entry : settings.materials) {
+      if (entry.name != material.name) continue;
+      if (entry.color) {
+        material.color = *entry.color;
+        material.transparent = material.color.a < 0.999f;
+      }
+      if (entry.metallic) material.metallic = std::clamp(*entry.metallic, 0.0f, 1.0f);
+      if (entry.smoothness) material.smoothness = std::clamp(*entry.smoothness, 0.0f, 1.0f);
+      if (entry.emission) material.emission = *entry.emission;
     }
     model->materials_.push_back(std::move(material));
   }

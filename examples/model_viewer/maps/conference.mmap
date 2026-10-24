@@ -59,7 +59,7 @@ position = Vector3(-5, 5.5, -6)
 
 [component type="PointLight" node="Lights/L0"]
 color = Color(1, 0.95, 0.85, 1)
-intensity = 12
+intensity = 5
 range = 12
 
 [node name="L1" parent="Lights"]
@@ -69,7 +69,7 @@ position = Vector3(3, 5.5, -6)
 
 [component type="PointLight" node="Lights/L1"]
 color = Color(1, 0.95, 0.85, 1)
-intensity = 12
+intensity = 5
 range = 12
 
 [node name="L2" parent="Lights"]
@@ -79,7 +79,7 @@ position = Vector3(11, 5.5, -6)
 
 [component type="PointLight" node="Lights/L2"]
 color = Color(1, 0.95, 0.85, 1)
-intensity = 12
+intensity = 5
 range = 12
 
 [node name="L3" parent="Lights"]
@@ -89,7 +89,7 @@ position = Vector3(-5, 5.5, 2)
 
 [component type="PointLight" node="Lights/L3"]
 color = Color(1, 0.95, 0.85, 1)
-intensity = 12
+intensity = 5
 range = 12
 
 [node name="L4" parent="Lights"]
@@ -99,7 +99,7 @@ position = Vector3(3, 5.5, 2)
 
 [component type="PointLight" node="Lights/L4"]
 color = Color(1, 0.95, 0.85, 1)
-intensity = 12
+intensity = 5
 range = 12
 
 [node name="L5" parent="Lights"]
@@ -109,7 +109,7 @@ position = Vector3(11, 5.5, 2)
 
 [component type="PointLight" node="Lights/L5"]
 color = Color(1, 0.95, 0.85, 1)
-intensity = 12
+intensity = 5
 range = 12
 
 [node name="Model" parent="."]

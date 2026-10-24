@@ -7,3 +7,6 @@ engine_version = "dev"
 title = "Model Viewer"
 width = 1600
 height = 900
+
+[build]
+output = "Builds/Model Viewer"

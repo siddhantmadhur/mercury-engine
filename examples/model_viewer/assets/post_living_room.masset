@@ -1,0 +1,6 @@
+[masset type="PostProcessProfile" format=1]
+tonemap = "aces"
+exposure = 0.6
+bloom_intensity = 0.15
+bloom_threshold = 2.0
+bloom_scatter = 0.6

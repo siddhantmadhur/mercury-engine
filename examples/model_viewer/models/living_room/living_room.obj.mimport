@@ -1,0 +1,6 @@
+[mimport]
+
+; The MTL describes the floor as matte (Ks 0.05, Ns 5); the original
+; scene's floor is varnished.
+[material name="Floor"]
+smoothness = 0.8
