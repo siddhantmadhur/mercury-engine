@@ -9,6 +9,7 @@
                 <ui:Label class="column__title" text="Benchmark scenes" />
                 <ui:Label class="column__text" text="The camera flies a fixed loop; each lap reports average, 1% low and minimum fps." />
                 <ui:Button name="sponza" class="button" text="Sponza" />
+                <ui:Button name="san_miguel" class="button" text="San Miguel (large)" />
                 <ui:Button name="sibenik" class="button" text="Sibenik Cathedral" />
                 <ui:Button name="conference" class="button" text="Conference Room" />
                 <ui:Button name="breakfast_room" class="button" text="Breakfast Room" />

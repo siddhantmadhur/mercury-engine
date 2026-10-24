@@ -10,10 +10,9 @@ namespace {
 
 // Buttons in ui/menu.uxml; each opens maps/<name>.mmap.
 constexpr const char* kScenes[] = {
-    "sponza",         "sibenik",         "conference",     "breakfast_room",
-    "living_room",    "gallery",         "bunny",          "mori_knob",
-    "cornell_original", "cornell_sphere", "cornell_water", "cornell_glossy",
-    "cornell_mirror",
+    "sponza",           "san_miguel",     "sibenik",       "conference",    "breakfast_room",
+    "living_room",      "gallery",        "bunny",         "mori_knob",     "cornell_original",
+    "cornell_sphere",   "cornell_water",  "cornell_glossy", "cornell_mirror",
 };
 
 }  // namespace

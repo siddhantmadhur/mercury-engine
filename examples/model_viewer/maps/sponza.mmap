@@ -46,7 +46,7 @@ color = Color(1, 0.96, 0.9, 1)
 ambient = Color(0.5, 0.56, 0.68, 1)
 ground_ambient = Color(0.15, 0.13, 0.11, 1)
 shadow_distance = 30
-intensity = 7.2
+intensity = 5.2
 
 [node name="Model" parent="."]
 
