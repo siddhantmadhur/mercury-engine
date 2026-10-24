@@ -52,6 +52,11 @@ bool IsPacked(const fs::path& path);
 // The folder holding the running executable.
 fs::path ExecutableDir();
 
+// A folder for files the engine can rebuild (imported models, settled light
+// probes): MERCURY_CACHE_DIR, or the platform's cache folder plus "mercury".
+// Created on first use; empty when there is none (the web).
+fs::path CacheDir();
+
 }  // namespace Mercury::os
 
 #endif  // MERCURYENGINE_FILESYSTEM_H

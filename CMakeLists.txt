@@ -171,6 +171,8 @@ add_library(mercury STATIC
         mercury/project/prefab_cache.h
         mercury/properties/model.cc
         mercury/properties/model.h
+        mercury/properties/model_cache.cc
+        mercury/properties/model_cache.h
         mercury/properties/render_mesh.cc
         mercury/properties/render_mesh.h
         mercury/audio/audio_system.cc
@@ -419,10 +421,12 @@ add_executable(mercury_test
         tests/mpack_test.cc
         tests/gameplay_test.cc
         tests/model_preloader_test.cc
-        tests/parallel_load_test.cc)
+        tests/parallel_load_test.cc
+        tests/model_cache_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
-        MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        MERCURY_TEST_CACHE_DIR="${CMAKE_CURRENT_BINARY_DIR}/test_cache")
 include(GoogleTest)
 gtest_discover_tests(mercury_test)
 endif ()
