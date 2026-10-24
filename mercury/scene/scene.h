@@ -139,10 +139,12 @@ struct RenderSettings {
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;
   glm::vec2 vignette_center = glm::vec2(0.5f);
-  float ssao_intensity = 0.0f;
-  float ssao_radius = 0.3f;
+  // Ambient occlusion (on indirect light only) and FXAA run with or without
+  // post_processing.
+  float ssao_intensity = 0.8f;
+  float ssao_radius = 0.5f;
   int ssao_samples = 12;
-  bool fxaa = false;
+  bool fxaa = true;
   // Linework's wide outline around objects on these rendering layers.
   uint32_t outline_layers = 0;
   glm::vec4 outline_color = glm::vec4(1.0f);

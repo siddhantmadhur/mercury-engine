@@ -61,6 +61,9 @@ struct FrameUniforms {
   glm::vec4 gi_min;                // + enabled
   glm::vec4 gi_max;                // + intensity
   glm::vec4 gi_counts;             // + probes per atlas row
+  // The sun's shadow over the whole scene, past the camera's map.
+  glm::mat4 far_light_view_proj;
+  glm::vec4 far_shadow_params;     // resolution (0: none), normal bias, -, use it alone
 };
 inline constexpr uint32_t kMaxPointLights = 16;
 inline constexpr uint32_t kMaxAreaLights = 4;
@@ -86,6 +89,7 @@ class SceneRenderer {
   static constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
   static constexpr uint32_t kShadowResolution = 2048;
   static constexpr uint32_t kShadowCubeResolution = 512;
+  static constexpr uint32_t kFarShadowResolution = 4096;
   static constexpr uint32_t kProbeFaceSize = 16;   // each face a probe captures
   static constexpr uint32_t kMaxProbeBatch = 32;   // probes updated per frame at most
   static constexpr uint32_t kProbesPerAtlasRow = 64;
@@ -225,13 +229,18 @@ class SceneRenderer {
   // Picks which point and area lights get this frame's shadow cubes.
   void AssignShadowCubes();
   void RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame);
-  void UpdateProbes(VkCommandBuffer cmd, FrameResources& frame, uint32_t culling_mask);
+  void UpdateProbes(VkCommandBuffer cmd, FrameResources& frame);
   // The probe grid this frame: the scene's volume, or one fitted around
   // the still geometry. False when there is none.
-  bool ResolveProbeVolume(glm::vec3 still_min, glm::vec3 still_max, ProbeVolumeData& volume);
-  // `casters` into the sun's shadow map as `view_proj` sees them.
-  void DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, const glm::mat4& view_proj,
+  bool ResolveProbeVolume(ProbeVolumeData& volume);
+  // `casters` into a sun shadow map (`image`, `size` square) as `view_proj`
+  // sees them.
+  void DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
+                     uint32_t size, const glm::mat4& view_proj,
                      const std::vector<const FrameDraw*>& casters);
+  // Redraws the scene-wide sun shadow map when the sun or still geometry
+  // changed.
+  void UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame);
   // Marks draws of objects that moved lately as dynamic.
   void TrackMotion();
   // Uniforms of a 90 degree view along cube face `face` from `center`.
@@ -328,6 +337,20 @@ class SceneRenderer {
 
   vk::Image shadow_image_;
   bool shadow_written_ = false;
+
+  // The sun's shadow over all still geometry, for what lies past the
+  // camera's map and for the probes. Drawn again only when it changes.
+  vk::Image far_shadow_image_;
+  bool far_shadow_valid_ = false;
+  uint64_t far_shadow_hash_ = 0;
+  glm::mat4 far_view_proj_ = glm::mat4(1.0f);
+  float far_normal_bias_ = 0.0f;
+
+  // This frame's still, opaque draws the main camera sees (what the probes
+  // and the far shadow map see), and their bounds.
+  std::vector<const FrameDraw*> still_;
+  glm::vec3 still_min_ = glm::vec3(0.0f), still_max_ = glm::vec3(0.0f);
+  uint64_t still_indices_ = 0;
 
   // Point and area light shadows: 6 faces per slot of distances to the
   // nearest caster.

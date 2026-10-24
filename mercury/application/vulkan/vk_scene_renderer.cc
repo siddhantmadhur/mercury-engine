@@ -202,6 +202,7 @@ bool SceneRenderer::CreateLayouts() {
         {6, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {7, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {8, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        {9, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
     };
     VkDescriptorSetLayoutCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -584,8 +585,10 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
   VkDescriptorImageInfo atlas = {VK_NULL_HANDLE, probe_atlas_.View(),
                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-  VkWriteDescriptorSet writes[9] = {};
-  for (int i = 0; i < 9; i++) {
+  VkDescriptorImageInfo far_shadow = {VK_NULL_HANDLE, far_shadow_image_.View(),
+                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkWriteDescriptorSet writes[10] = {};
+  for (int i = 0; i < 10; i++) {
     writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[i].dstSet = frame.set;
     writes[i].dstBinding = static_cast<uint32_t>(i);
@@ -607,7 +610,9 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
   writes[7].pImageInfo = &cubes;
   writes[8].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
   writes[8].pImageInfo = &atlas;
-  vkUpdateDescriptorSets(context_->device, 9, writes, 0, nullptr);
+  writes[9].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  writes[9].pImageInfo = &far_shadow;
+  vkUpdateDescriptorSets(context_->device, 10, writes, 0, nullptr);
 }
 
 bool SceneRenderer::CreateShadowMap() {
@@ -640,7 +645,11 @@ bool SceneRenderer::CreateLightingResources() {
                             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT) ||
       !probe_depth_.Create(a, d, kProbeFaceSize, kProbeFaceSize, kDepthFormat,
                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                           VK_IMAGE_ASPECT_DEPTH_BIT)) {
+                           VK_IMAGE_ASPECT_DEPTH_BIT) ||
+      !far_shadow_image_.Create(a, d, kFarShadowResolution, kFarShadowResolution, kDepthFormat,
+                                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                    VK_IMAGE_USAGE_SAMPLED_BIT,
+                                VK_IMAGE_ASPECT_DEPTH_BIT)) {
     return false;
   }
   for (auto& frame : frames_) UpdateFrameSet(frame);
@@ -667,6 +676,7 @@ void SceneRenderer::Shutdown() {
   white_.Reset();
   shadow_image_.Reset();
   shadow_cubes_.Reset();
+  far_shadow_image_.Reset();
   shadow_cube_depth_.Reset();
   probe_atlas_.Reset();
   probe_faces_.Reset();
@@ -1021,6 +1031,10 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
     TransitionImage(cmd, probe_atlas_.Get(), VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    TransitionImage(cmd, far_shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_NONE, 0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     probe_sh_set_ = AllocatePostSet({probe_faces_.View()});
     probes_.clear_atlas = true;
     lighting_initialized_ = true;
@@ -1384,10 +1398,23 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
     shadow_written_ = true;
   }
   FrameResources& frame = frames_[frame_index_];
-  // The probes see the scene lit, shadows included, so they come after the
-  // cubes. They may borrow the sun's map, so the camera's comes last.
-  RenderShadowCubes(cmd, frame);
-  UpdateProbes(cmd, frame, main_camera.culling_mask);
+  // The still, opaque geometry the main camera draws: what the probes and
+  // the far shadow map see. Moving objects are left out, or neither would
+  // ever settle.
+  still_.clear();
+  still_min_ = glm::vec3(std::numeric_limits<float>::max());
+  still_max_ = glm::vec3(-std::numeric_limits<float>::max());
+  still_indices_ = 0;
+  for (const auto& draw : draws_) {
+    if (draw.transparent || draw.dynamic ||
+        !(main_camera.culling_mask & (1u << (draw.layer & 31)))) {
+      continue;
+    }
+    still_.push_back(&draw);
+    still_min_ = glm::min(still_min_, draw.bounds_min);
+    still_max_ = glm::max(still_max_, draw.bounds_max);
+    still_indices_ += draw.geometry->index_count;
+  }
   if (enabled) {
     std::vector<const FrameDraw*> casters;
     for (const auto& draw : draws_) {
@@ -1395,32 +1422,81 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
         casters.push_back(&draw);
       }
     }
-    DrawSunShadow(cmd, frame, light_view_proj, casters);
+    DrawSunShadow(cmd, frame, shadow_image_, kShadowResolution, light_view_proj, casters);
   }
+  // The probes see the scene lit, shadows included, so they come last.
+  RenderShadowCubes(cmd, frame);
+  UpdateFarShadow(cmd, frame);
+  UpdateProbes(cmd, frame);
 }
 
-void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame,
-                                  const glm::mat4& view_proj,
+void SceneRenderer::UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame) {
+  if (lighting_.color == glm::vec3(0.0f) || still_.empty()) {
+    far_shadow_valid_ = false;
+    return;
+  }
+  uint64_t hash = kHashSeed;
+  HashFloats(hash, &lighting_.direction.x, 3);
+  std::vector<const FrameDraw*> casters;
+  for (const FrameDraw* draw : still_) {
+    if (!draw->cast_shadows) continue;
+    casters.push_back(draw);
+    HashFloats(hash, &records_[draw->record].world[0][0], 16);
+    const float geometry[2] = {static_cast<float>(draw->geometry->first_index),
+                               static_cast<float>(draw->geometry->index_count)};
+    HashFloats(hash, geometry, 2);
+  }
+  if (far_shadow_valid_ && hash == far_shadow_hash_) return;
+  far_shadow_hash_ = hash;
+  far_shadow_valid_ = true;
+
+  // An orthographic box around all still geometry, tight in the sun's view.
+  const glm::vec3 lo = still_min_ - 0.05f, hi = still_max_ + 0.05f;
+  const glm::vec3 center = (lo + hi) * 0.5f;
+  const float radius = glm::length(hi - lo) * 0.5f;
+  const glm::vec3 dir = glm::normalize(lighting_.direction);
+  const glm::vec3 up = std::abs(dir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+  const glm::mat4 view = glm::lookAt(center - dir * radius * 2.0f, center, up);
+  glm::vec3 box_min(std::numeric_limits<float>::max());
+  glm::vec3 box_max(-std::numeric_limits<float>::max());
+  for (int corner = 0; corner < 8; corner++) {
+    const glm::vec3 p((corner & 1) ? hi.x : lo.x, (corner & 2) ? hi.y : lo.y,
+                      (corner & 4) ? hi.z : lo.z);
+    const glm::vec3 q = glm::vec3(view * glm::vec4(p, 1.0f));
+    box_min = glm::min(box_min, q);
+    box_max = glm::max(box_max, q);
+  }
+  far_view_proj_ = glm::orthoRH_ZO(box_min.x, box_max.x, box_min.y, box_max.y,
+                                   -box_max.z - 0.01f, -box_min.z + 0.01f) *
+                   view;
+  // A coarser map needs a wider offset against acne.
+  const float texel = std::max(box_max.x - box_min.x, box_max.y - box_min.y) /
+                      static_cast<float>(kFarShadowResolution);
+  far_normal_bias_ = std::max(lighting_.shadow_normal_bias, 2.0f * texel);
+  DrawSunShadow(cmd, frame, far_shadow_image_, kFarShadowResolution, far_view_proj_, casters);
+}
+
+void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
+                                  uint32_t size, const glm::mat4& view_proj,
                                   const std::vector<const FrameDraw*>& casters) {
   RenderCamera camera;
-  FrameUniforms uniforms =
-      CameraUniforms(camera, {kShadowResolution, kShadowResolution}, false, true);
+  FrameUniforms uniforms = CameraUniforms(camera, {size, size}, false, true);
   uniforms.view_proj = view_proj;
   const uint32_t offset = PushUniforms(frame, uniforms);
 
-  DepthToAttachment(cmd, shadow_image_.Get());
+  DepthToAttachment(cmd, image.Get());
   VkRenderingAttachmentInfo depth = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-  depth.imageView = shadow_image_.View();
+  depth.imageView = image.View();
   depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
   depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   depth.clearValue.depthStencil = {1.0f, 0};
   VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
-  rendering.renderArea = {{0, 0}, {kShadowResolution, kShadowResolution}};
+  rendering.renderArea = {{0, 0}, {size, size}};
   rendering.layerCount = 1;
   rendering.pDepthAttachment = &depth;
   vkCmdBeginRendering(cmd, &rendering);
-  SetViewport(cmd, {kShadowResolution, kShadowResolution});
+  SetViewport(cmd, {size, size});
   if (!casters.empty()) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_);
     const VkDescriptorSet sets[2] = {frame.set, texture_set_};
@@ -1438,7 +1514,7 @@ void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame,
     }
   }
   vkCmdEndRendering(cmd);
-  DepthToShaderRead(cmd, shadow_image_.Get());
+  DepthToShaderRead(cmd, image.Get());
 }
 
 // ---------------------------------------------------------------- Lighting --
@@ -1494,6 +1570,11 @@ void SceneRenderer::FillLighting(FrameUniforms& u) const {
   }
   u.light_info = glm::vec4(static_cast<float>(area_count), 0.0f,
                            static_cast<float>(kShadowCubeResolution), 1.0f);
+  if (far_shadow_valid_) {
+    u.far_light_view_proj = far_view_proj_;
+    u.far_shadow_params =
+        glm::vec4(static_cast<float>(kFarShadowResolution), far_normal_bias_, 0.0f, 0.0f);
+  }
   if (probes_.active) {
     u.gi_min = glm::vec4(probes_.min, 1.0f);
     u.gi_max = glm::vec4(probes_.max, probes_.intensity);
@@ -1603,8 +1684,8 @@ void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame
   ToShaderRead(cmd, shadow_cubes_.Get());
 }
 
-bool SceneRenderer::ResolveProbeVolume(glm::vec3 still_min, glm::vec3 still_max,
-                                       ProbeVolumeData& volume) {
+bool SceneRenderer::ResolveProbeVolume(ProbeVolumeData& volume) {
+  const glm::vec3 still_min = still_min_, still_max = still_max_;
   volume = lighting_.probes;
   if (!volume.enabled) return false;
   if (!volume.automatic) {
@@ -1654,23 +1735,10 @@ bool SceneRenderer::ResolveProbeVolume(glm::vec3 still_min, glm::vec3 still_max,
   return true;
 }
 
-void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame,
-                                 uint32_t culling_mask) {
-  // The probes see the still, opaque geometry the main camera draws. Moving
-  // objects are left out, or the probes would never settle.
-  std::vector<const FrameDraw*> still;
-  glm::vec3 still_min(std::numeric_limits<float>::max());
-  glm::vec3 still_max(-std::numeric_limits<float>::max());
-  uint64_t still_indices = 0;
-  for (const auto& draw : draws_) {
-    if (draw.transparent || draw.dynamic || !(culling_mask & (1u << (draw.layer & 31)))) continue;
-    still.push_back(&draw);
-    still_min = glm::min(still_min, draw.bounds_min);
-    still_max = glm::max(still_max, draw.bounds_max);
-    still_indices += draw.geometry->index_count;
-  }
+void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
+  const std::vector<const FrameDraw*>& still = still_;
   ProbeVolumeData volume;
-  probes_.active = ResolveProbeVolume(still_min, still_max, volume);
+  probes_.active = ResolveProbeVolume(volume);
   if (!probes_.active) return;
   probes_.intensity = volume.intensity;
   const uint32_t total = static_cast<uint32_t>(volume.counts.x * volume.counts.y *
@@ -1735,46 +1803,8 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame,
   uint32_t batch = volume.probes_per_frame > 0
                        ? static_cast<uint32_t>(volume.probes_per_frame)
                        : static_cast<uint32_t>(std::max<uint64_t>(
-                             1, kProbeIndexBudget / std::max<uint64_t>(2 * still_indices, 1)));
+                             1, kProbeIndexBudget / std::max<uint64_t>(2 * still_indices_, 1)));
   batch = std::min({batch, kMaxProbeBatch, total - probes_.next});
-
-  // The sun's shadows over the whole volume: the camera's map covers only
-  // what is near the camera. Drawn into the same map, which the camera's
-  // pass redraws afterwards (when it has shadows).
-  glm::mat4 sun_view_proj(1.0f);
-  float sun_normal_bias = lighting_.shadow_normal_bias;
-  // Always shadowed for the probes, even when the camera's view is not: a
-  // sun shining through walls would light every room.
-  const bool sun_shadow = lighting_.color != glm::vec3(0.0f);
-  if (sun_shadow) {
-    const glm::vec3 lo = glm::min(volume.min, still_min);
-    const glm::vec3 hi = glm::max(volume.max, still_max);
-    const glm::vec3 center = (lo + hi) * 0.5f;
-    const float radius = glm::length(hi - lo) * 0.5f + 0.01f;
-    const glm::vec3 dir = glm::normalize(lighting_.direction);
-    const glm::vec3 up = std::abs(dir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
-    const glm::mat4 view = glm::lookAt(center - dir * radius * 2.0f, center, up);
-    glm::vec3 box_min(std::numeric_limits<float>::max()), box_max(-std::numeric_limits<float>::max());
-    for (int corner = 0; corner < 8; corner++) {
-      const glm::vec3 p((corner & 1) ? hi.x : lo.x, (corner & 2) ? hi.y : lo.y,
-                        (corner & 4) ? hi.z : lo.z);
-      const glm::vec3 q = glm::vec3(view * glm::vec4(p, 1.0f));
-      box_min = glm::min(box_min, q);
-      box_max = glm::max(box_max, q);
-    }
-    sun_view_proj = glm::ortho(box_min.x, box_max.x, box_min.y, box_max.y, -box_max.z - 0.01f,
-                               -box_min.z + 0.01f) *
-                    view;
-    // A coarser map needs a wider offset against acne.
-    const float texel = std::max(box_max.x - box_min.x, box_max.y - box_min.y) /
-                        static_cast<float>(kShadowResolution);
-    sun_normal_bias = std::max(sun_normal_bias, 2.0f * texel);
-    std::vector<const FrameDraw*> casters;
-    for (const FrameDraw* draw : still) {
-      if (draw->cast_shadows) casters.push_back(draw);
-    }
-    DrawSunShadow(cmd, frame, sun_view_proj, casters);
-  }
 
   const VkExtent2D extent = {kProbeFaceSize, kProbeFaceSize};
   const glm::vec3 cells = glm::max(glm::vec3(volume.counts - 1), glm::vec3(1.0f));
@@ -1790,10 +1820,10 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame,
       FrameUniforms uniforms = CubeFaceUniforms(position, face, 0.01f, 1000.0f, extent);
       uniforms.light_info.y = 1.0f;  // capture
       uniforms.light_info.w = volume.include_emission ? 1.0f : 0.0f;
-      if (sun_shadow) {
-        uniforms.light_view_proj = sun_view_proj;
-        uniforms.shadow_params = glm::vec4(kShadowResolution, sun_normal_bias, 0.0f, 0.0f);
-      }
+      // Shadowed by the scene-wide map alone, even when the camera's view
+      // has no sun shadows: a sun shining through walls would light every room.
+      uniforms.shadow_params.x = 0.0f;
+      uniforms.far_shadow_params.w = 1.0f;
       const uint32_t offset = PushUniforms(frame, uniforms);
       ToAttachment(cmd, probe_normal_.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
       TransitionImage(cmd, probe_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -2132,7 +2162,10 @@ void SceneRenderer::PostProcess(VkCommandBuffer cmd, Targets& targets, const Ren
 
   // Composite (and FXAA)
   PostPush push;
-  const bool ao = post && settings.ssao_intensity > 0.0f;
+  // AO and FXAA run without post-processing too (on the display-ready
+  // image), for the screen's camera only (RenderTextures have no AO pass).
+  const bool effects = camera.post_processing && !srgb_output;
+  const bool ao = effects && settings.ssao_intensity > 0.0f;
   // Without post-processing the scene shaders already tonemapped (3), except
   // into RenderTextures, which stay linear (0).
   const float tonemap = post ? static_cast<float>(settings.tonemap) : (srgb_output ? 0.0f : 3.0f);
@@ -2146,7 +2179,7 @@ void SceneRenderer::PostProcess(VkCommandBuffer cmd, Targets& targets, const Ren
   // An sRGB target encodes by itself (p4.z).
   push.p[4] = glm::vec4(1.0f / extent.width, 1.0f / extent.height, srgb_output ? 1.0f : 0.0f,
                         0.0f);
-  const bool fxaa = post && settings.fxaa && !srgb_output;
+  const bool fxaa = effects && settings.fxaa;
   if (fxaa) {
     ToAttachment(cmd, targets.ldr.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     Fullscreen(cmd, PipelineForFormat(kLdrFormat, false), targets.composite_set,
@@ -2233,7 +2266,7 @@ void SceneRenderer::RenderView(VkCommandBuffer cmd, GameScene& scene,
   DrawCamera(cmd, frame, *main, targets, true, true, false, post, &legacy, sky_texture,
              sky_texture != VK_NULL_HANDLE && clears);
 
-  if (post && settings_.ssao_intensity > 0.0f) {
+  if (main->post_processing && settings_.ssao_intensity > 0.0f) {
     PostPush push;
     const glm::mat4& p = main->projection;
     push.p[0] = glm::vec4(1.0f / p[0][0], 1.0f / p[1][1], p[2][2], p[3][2]);

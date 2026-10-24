@@ -814,6 +814,10 @@ struct PostProcessProfile {
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;
   glm::vec2 vignette_center = glm::vec2(0.5f);
+  // Screen-space ambient occlusion, darkening only indirect light.
+  float ambient_occlusion = 0.8f;
+  float ao_radius = 0.5f;
+  bool antialiasing = true;  // FXAA
 
   void Reflect(Reflector& r) {
     r.Enum("tonemap", tonemap, {"none", "neutral", "aces"});
@@ -825,6 +829,10 @@ struct PostProcessProfile {
     r.Field("vignette_intensity", vignette_intensity).Tooltip("0 turns the vignette off");
     r.Field("vignette_smoothness", vignette_smoothness);
     r.Field("vignette_center", vignette_center);
+    r.Field("ambient_occlusion", ambient_occlusion)
+        .Tooltip("Darkens indirect light in creases and contact areas; 0 turns it off");
+    r.Field("ao_radius", ao_radius).Tooltip("World-space reach of the occlusion");
+    r.Field("antialiasing", antialiasing).Tooltip("Smooths jagged edges (FXAA)");
   }
 };
 
