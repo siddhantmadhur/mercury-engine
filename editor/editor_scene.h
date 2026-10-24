@@ -254,6 +254,7 @@ class EditorScene : public MapScene {
   std::filesystem::path delete_target_;
   std::string build_output_;  // Build Game's output folder, as typed
   enum class AfterSave { kNothing, kQuit, kCloseProject };
+  bool close_project_requested_ = false;
   AfterSave after_unsaved_ = AfterSave::kNothing;
 
   bool reset_layout_ = false;
