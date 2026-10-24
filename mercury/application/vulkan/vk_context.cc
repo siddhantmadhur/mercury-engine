@@ -350,6 +350,8 @@ bool Context::CreateDevice() {
     sampler_filter_minmax = supported12.samplerFilterMinmax == VK_TRUE;
     features12.samplerFilterMinmax = supported12.samplerFilterMinmax;
     texture_compression_bc = supported.textureCompressionBC == VK_TRUE;
+    image_cube_array = supported.imageCubeArray == VK_TRUE;
+    features.features.imageCubeArray = supported.imageCubeArray;
     features.features.textureCompressionBC = supported.textureCompressionBC;
   }
   // The model renderer's main pass blends color but not its normal target.

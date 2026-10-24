@@ -12,7 +12,6 @@
 #include "lighting.hlsli"
 
 [[vk::binding(3, 0)]] Texture2D<float> shadow_map;
-[[vk::binding(4, 0)]] SamplerComparisonState shadow_sampler;
 [[vk::binding(5, 0)]] SamplerState material_sampler;
 [[vk::binding(9, 0)]] Texture2D<float> far_shadow_map;
 [[vk::binding(0, 1)]] Texture2D textures[];

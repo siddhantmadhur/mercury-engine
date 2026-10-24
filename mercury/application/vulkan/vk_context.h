@@ -44,6 +44,7 @@ class Context {
   bool gpu_driven = false;
   bool sampler_filter_minmax = false;
   bool texture_compression_bc = false;
+  bool image_cube_array = false;  // cube array views (light shadows)
 
  private:
   bool CreateInstance();

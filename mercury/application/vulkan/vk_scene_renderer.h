@@ -384,8 +384,11 @@ class SceneRenderer {
   // changed.
   void UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame);
   // Uniforms of a 90 degree view along cube face `face` from `center`.
+  // `cube_map`: mirrored left to right, as the face of a cube map is sampled
+  // (the views are otherwise as lighting_math.hlsli's CubeFaceUV reads them).
   FrameUniforms CubeFaceUniforms(glm::vec3 center, uint32_t face, float near_clip,
-                                 float far_clip, VkExtent2D extent) const;
+                                 float far_clip, VkExtent2D extent,
+                                 bool cube_map = false) const;
   // Lights, shadow cubes and probes, as every pass sees them.
   void FillLighting(FrameUniforms& u) const;
   void UpdateFrameSet(FrameResources& frame);
@@ -528,8 +531,7 @@ class SceneRenderer {
     bool one_sided = false;
     glm::vec3 normal = glm::vec3(0.0f);
   };
-  vk::Image shadow_cubes_;
-  vk::Image shadow_cube_depth_;
+  vk::Image shadow_cubes_;  // a depth cube per slot
   std::vector<ShadowCube> cubes_;   // this frame's slots
   std::vector<int> point_slots_;    // per point light: slot or -1
   std::vector<int> area_slots_;     // per area light
