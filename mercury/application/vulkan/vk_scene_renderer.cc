@@ -3,11 +3,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <format>
+#include <fstream>
 #include <limits>
 
 #include "components/components.h"
 #include "debugger/debugger.h"
 #include "debugger/profiler.h"
+#include "os/filesystem.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "properties/transform.h"
 #include "scene/map_scene.h"
@@ -1011,6 +1014,7 @@ void SceneRenderer::BeginFrame(uint32_t frame_index) {
   std::erase_if(garbage_, [&](const Garbage& g) {
     return g.frame + frames_in_flight_ + 1 <= frame_number_;
   });
+  FinishProbeSave();
 }
 
 bool SceneRenderer::GrowBuffer(VkCommandBuffer cmd, Buffer& buffer, VkDeviceSize needed,
@@ -2428,6 +2432,7 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
     probes_.next = 0;
     probes_.passes = 0;
     probes_.clear_atlas = false;
+    probes_.check_cache = true;
     for (VkImage image : {probe_atlas_.Get(), probe_irradiance_.Get(), probe_radiance_.Get()}) {
       TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -2468,6 +2473,18 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
     probes_.static_version = static_version_;
     probes_.passes = 0;
     probes_.started = frame_number_;
+    probes_.check_cache = true;
+  }
+  if (probes_.check_cache) {
+    // Settled light for this very scene from an earlier run: no bounces.
+    probes_.check_cache = false;
+    probes_.cache_key = ProbeCacheKey(volume);
+    if (LoadProbeCache(cmd, frame, probes_.cache_key, total)) {
+      probes_.next = 0;
+      probes_.passes = volume.bounces;
+      PDebug::log("Light probes: {} probes from the cache", total);
+      return;
+    }
   }
   if (probes_.passes >= volume.bounces) return;
 
@@ -2651,6 +2668,21 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
   ToShaderRead(cmd, probe_visibility_.Get());
 
   // And the light maps shading reads, from the new coefficients.
+  BuildProbeMaps(cmd, probes_.next, batch);
+
+  probes_.next += batch;
+  if (probes_.next >= total) {
+    probes_.next = 0;
+    probes_.passes++;
+    if (probes_.passes == volume.bounces) {
+      PDebug::log("Light probes: {} probes settled after {} bounces in {} frames", total,
+                  volume.bounces, frame_number_ - probes_.started);
+      SaveProbeCache(cmd, probes_.cache_key, total);
+    }
+  }
+}
+
+void SceneRenderer::BuildProbeMaps(VkCommandBuffer cmd, uint32_t first, uint32_t count) {
   ToAttachment(cmd, probe_irradiance_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   ToAttachment(cmd, probe_radiance_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   {
@@ -2673,8 +2705,8 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_octa_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_pipeline_layout_, 0, 1,
                             &probe_octa_set_, 0, nullptr);
-    for (uint32_t k = 0; k < batch; k++) {
-      const uint32_t probe = probes_.next + k;
+    for (uint32_t k = 0; k < count; k++) {
+      const uint32_t probe = first + k;
       const int32_t x = static_cast<int32_t>((probe % kProbesPerAtlasRow) * kProbeOctaTexels);
       const int32_t y = static_cast<int32_t>((probe / kProbesPerAtlasRow) * kProbeOctaTexels);
       const VkRect2D scissor = {{x, y}, {kProbeOctaTexels, kProbeOctaTexels}};
@@ -2691,16 +2723,193 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
   }
   ToShaderRead(cmd, probe_irradiance_.Get());
   ToShaderRead(cmd, probe_radiance_.Get());
+}
 
-  probes_.next += batch;
-  if (probes_.next >= total) {
-    probes_.next = 0;
-    probes_.passes++;
-    if (probes_.passes == volume.bounces) {
-      PDebug::log("Light probes: {} probes settled after {} bounces in {} frames", total,
-                  volume.bounces, frame_number_ - probes_.started);
-    }
+namespace {
+
+// Must change when what a cached probe holds, or how probes are made, does.
+constexpr uint32_t kProbeCacheVersion = 1;
+constexpr char kProbeCacheMagic[4] = {'M', 'P', 'R', 'B'};
+
+std::filesystem::path ProbeCacheFile(uint64_t key) {
+  const std::filesystem::path dir = os::CacheDir();
+  return dir.empty() ? dir : dir / "probes" / std::format("{:016x}.mprobe", key);
+}
+
+bool ProbeCacheEnabled() {
+  const char* value = std::getenv("MERCURY_PROBE_CACHE");
+  return !value || std::string(value) != "0";
+}
+
+}  // namespace
+
+uint64_t SceneRenderer::ProbeCacheKey(const ProbeVolumeData& volume) const {
+  uint64_t hash = kHashSeed;
+  const float grid[13] = {volume.min.x, volume.min.y, volume.min.z, volume.max.x,
+                          volume.max.y, volume.max.z, static_cast<float>(volume.counts.x),
+                          static_cast<float>(volume.counts.y),
+                          static_cast<float>(volume.counts.z),
+                          static_cast<float>(volume.bounces),
+                          volume.include_emission ? 1.0f : 0.0f,
+                          static_cast<float>(kProbeCacheVersion),
+                          static_cast<float>(still_mask_)};
+  HashFloats(hash, grid, 13);
+  // The lights (and sky) as UpdateProbes hashed them.
+  const float light = static_cast<float>(probes_.light_hash % 16777216u);
+  HashFloats(hash, &light, 1);
+  hash ^= probes_.light_hash;
+  // The still geometry, in any order: where each piece is, its size and color.
+  uint64_t sum = 0;
+  for (const FrameDraw* draw : still_) {
+    uint64_t piece = kHashSeed;
+    HashFloats(piece, &draw->bounds_min.x, 3);
+    HashFloats(piece, &draw->bounds_max.x, 3);
+    const DrawData& record = records_[draw->record];
+    HashFloats(piece, &record.color.x, 8);  // color and emission
+    const float indices = static_cast<float>(draw->index_count);
+    HashFloats(piece, &indices, 1);
+    sum += piece;
   }
+  const float counts[2] = {static_cast<float>(still_.size()),
+                           static_cast<float>(sum % 16777216u)};
+  HashFloats(hash, counts, 2);
+  return hash ^ (sum * 0x9e3779b97f4a7c15ull);
+}
+
+bool SceneRenderer::LoadProbeCache(VkCommandBuffer cmd, FrameResources& frame, uint64_t key,
+                                   uint32_t total) {
+  if (!ProbeCacheEnabled()) return false;
+  const std::filesystem::path path = ProbeCacheFile(key);
+  std::error_code ec;
+  if (path.empty() || !std::filesystem::exists(path, ec)) return false;
+  std::ifstream file(path, std::ios::binary);
+  char magic[4] = {};
+  uint64_t stored_key = 0;
+  uint32_t stored_total = 0;
+  uint64_t coefficient_bytes = 0, visibility_bytes = 0;
+  file.read(magic, 4);
+  file.read(reinterpret_cast<char*>(&stored_key), sizeof(stored_key));
+  file.read(reinterpret_cast<char*>(&stored_total), sizeof(stored_total));
+  file.read(reinterpret_cast<char*>(&coefficient_bytes), sizeof(coefficient_bytes));
+  file.read(reinterpret_cast<char*>(&visibility_bytes), sizeof(visibility_bytes));
+  const uint32_t rows = (total + kProbesPerAtlasRow - 1) / kProbesPerAtlasRow;
+  const VkDeviceSize want_coefficients = VkDeviceSize{kProbesPerAtlasRow} * 9 * rows * 8;
+  const VkDeviceSize want_visibility =
+      VkDeviceSize{kProbesPerAtlasRow} * kProbeVisibilityTexels * rows * kProbeVisibilityTexels * 8;
+  if (!file || std::memcmp(magic, kProbeCacheMagic, 4) != 0 || stored_key != key ||
+      stored_total != total || coefficient_bytes != want_coefficients ||
+      visibility_bytes != want_visibility) {
+    return false;
+  }
+  Buffer staging;
+  if (!staging.Create(context_->allocator, coefficient_bytes + visibility_bytes,
+                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT, Buffer::Memory::kHostVisible)) {
+    return false;
+  }
+  file.read(static_cast<char*>(staging.Mapped()),
+            static_cast<std::streamsize>(coefficient_bytes + visibility_bytes));
+  if (!file) return false;
+  staging.Flush(0, staging.Size());
+
+  for (VkImage image : {probe_atlas_.Get(), probe_visibility_.Get()}) {
+    TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                    VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+  }
+  VkBufferImageCopy coefficients = {};
+  coefficients.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  coefficients.imageExtent = {kProbesPerAtlasRow * 9, rows, 1};
+  vkCmdCopyBufferToImage(cmd, staging.Get(), probe_atlas_.Get(),
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &coefficients);
+  VkBufferImageCopy visibility = {};
+  visibility.bufferOffset = coefficient_bytes;
+  visibility.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  visibility.imageExtent = {kProbesPerAtlasRow * kProbeVisibilityTexels,
+                            rows * kProbeVisibilityTexels, 1};
+  vkCmdCopyBufferToImage(cmd, staging.Get(), probe_visibility_.Get(),
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &visibility);
+  for (VkImage image : {probe_atlas_.Get(), probe_visibility_.Get()}) {
+    TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  }
+  frame.staging.push_back(std::move(staging));
+  BuildProbeMaps(cmd, 0, total);
+  return true;
+}
+
+void SceneRenderer::SaveProbeCache(VkCommandBuffer cmd, uint64_t key, uint32_t total) {
+  if (!ProbeCacheEnabled() || key == 0 || probe_save_) return;
+  const std::filesystem::path path = ProbeCacheFile(key);
+  std::error_code ec;
+  if (path.empty() || std::filesystem::exists(path, ec)) return;
+  const uint32_t rows = (total + kProbesPerAtlasRow - 1) / kProbesPerAtlasRow;
+  ProbeSave save;
+  save.frame = frame_number_;
+  save.key = key;
+  save.total = total;
+  save.coefficient_bytes = VkDeviceSize{kProbesPerAtlasRow} * 9 * rows * 8;
+  const VkDeviceSize visibility_bytes =
+      VkDeviceSize{kProbesPerAtlasRow} * kProbeVisibilityTexels * rows * kProbeVisibilityTexels * 8;
+  if (!save.buffer.Create(context_->allocator, save.coefficient_bytes + visibility_bytes,
+                          VK_BUFFER_USAGE_TRANSFER_DST_BIT, Buffer::Memory::kReadback)) {
+    return;
+  }
+  for (VkImage image : {probe_atlas_.Get(), probe_visibility_.Get()}) {
+    TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                    VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+  }
+  VkBufferImageCopy coefficients = {};
+  coefficients.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  coefficients.imageExtent = {kProbesPerAtlasRow * 9, rows, 1};
+  vkCmdCopyImageToBuffer(cmd, probe_atlas_.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         save.buffer.Get(), 1, &coefficients);
+  VkBufferImageCopy visibility = {};
+  visibility.bufferOffset = save.coefficient_bytes;
+  visibility.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  visibility.imageExtent = {kProbesPerAtlasRow * kProbeVisibilityTexels,
+                            rows * kProbeVisibilityTexels, 1};
+  vkCmdCopyImageToBuffer(cmd, probe_visibility_.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         save.buffer.Get(), 1, &visibility);
+  for (VkImage image : {probe_atlas_.Get(), probe_visibility_.Get()}) {
+    TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT,
+                    VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  }
+  probe_save_ = std::move(save);
+}
+
+void SceneRenderer::FinishProbeSave() {
+  // Every frame slot has come around since the copy: it is done.
+  if (!probe_save_ || probe_save_->frame + frames_in_flight_ > frame_number_) return;
+  const std::filesystem::path path = ProbeCacheFile(probe_save_->key);
+  std::error_code ec;
+  std::filesystem::create_directories(path.parent_path(), ec);
+  const std::filesystem::path temporary = path.string() + ".tmp";
+  probe_save_->buffer.Invalidate();
+  {
+    std::ofstream file(temporary, std::ios::binary);
+    const uint64_t visibility_bytes = probe_save_->buffer.Size() - probe_save_->coefficient_bytes;
+    const uint64_t coefficient_bytes = probe_save_->coefficient_bytes;
+    file.write(kProbeCacheMagic, 4);
+    file.write(reinterpret_cast<const char*>(&probe_save_->key), sizeof(uint64_t));
+    file.write(reinterpret_cast<const char*>(&probe_save_->total), sizeof(uint32_t));
+    file.write(reinterpret_cast<const char*>(&coefficient_bytes), sizeof(uint64_t));
+    file.write(reinterpret_cast<const char*>(&visibility_bytes), sizeof(uint64_t));
+    file.write(static_cast<const char*>(probe_save_->buffer.Mapped()),
+               static_cast<std::streamsize>(probe_save_->buffer.Size()));
+    if (!file) PDebug::warn("Could not write the light probe cache {}", path.string());
+  }
+  std::filesystem::rename(temporary, path, ec);
+  if (ec) std::filesystem::remove(temporary, ec);
+  probe_save_.reset();
 }
 
 void SceneRenderer::DrawList(VkCommandBuffer cmd, FrameResources& frame, uint32_t uniform_offset,

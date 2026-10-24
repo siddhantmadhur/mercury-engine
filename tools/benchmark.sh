@@ -31,7 +31,7 @@ for map in "${maps[@]}"; do
   MERCURY_BENCH_OUT="$out/$map.txt" \
   MERCURY_BENCH_CAPTURE="$out/$map.png" \
     "$exe" --map "res://maps/$map.mmap" > "$out/$map.log" 2>&1 || true
-  grep -E "Loaded .* in|settled" "$out/$map.log" || true
+  grep -E "Loaded .* in|Loaded .* from the cache|settled|probes from the cache" "$out/$map.log" || true
   cat "$out/$map.txt" 2>/dev/null || echo "(no summary; see $out/$map.log)"
 done
 echo "results in $out"
