@@ -321,8 +321,14 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
     obj << "mtllib scene.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\n"
            "usemtl Lamp\nf 1/1 2/2 3/3\nusemtl Stone\nf 1/1 2/2 3/3\n";
   }
-  ModelImportSettings settings;
-  settings.max_texture_size = 32;
+  {
+    std::ofstream sidecar(dir / "scene.obj.mimport");
+    sidecar << "[mimport]\nmax_texture_size = 32\n\n"
+               "[material name=\"Lamp\"]\nsmoothness = 0.25\n";
+  }
+  ModelImportSettings settings =
+      ModelImportSettings::ForFile((dir / "scene.obj").string(), ModelImportSettings{});
+  ASSERT_EQ(settings.materials.size(), 1u);
   std::string error;
   auto model = Model::Load((dir / "scene.obj").string(), settings, &error);
   ASSERT_TRUE(model) << error;
@@ -335,9 +341,11 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
   }
   ASSERT_TRUE(lamp && stone);
   EXPECT_EQ(lamp->emission, glm::vec3(4.0f, 3.0f, 2.0f));
-  // No specular color: matte, whatever Ns says.
-  EXPECT_FLOAT_EQ(lamp->smoothness, 0.0f);
+  // The .mimport's [material] section wins over the file.
+  EXPECT_FLOAT_EQ(lamp->smoothness, 0.25f);
   EXPECT_GT(stone->smoothness, 0.8f);
+  // Kd is linear; material colors are stored sRGB (0.5 linear ~ 0.735).
+  EXPECT_NEAR(lamp->color.r, 0.7354f, 1e-3f);
 
   // Found despite the case, scaled down to the limit, and Kd 0 next to a
   // texture means the texture alone.

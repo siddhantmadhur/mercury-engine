@@ -46,10 +46,6 @@ float3 FresnelSchlick(float cos_theta, float3 F0)
     return F0 + (1.0 - F0) * pow(saturate(1.0 - cos_theta), 5.0);
 }
 
-float3 FresnelSchlickRoughness(float cos_theta, float3 F0, float roughness)
-{
-    return F0 + (max((1.0 - roughness).xxx, F0) - F0) * pow(saturate(1.0 - cos_theta), 5.0);
-}
 
 // Diffuse + specular of one light arriving from direction L (unit, toward
 // the light) with `radiance` (linear color * intensity * attenuation).
@@ -213,6 +209,7 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
         float3 albedo = base.rgb;
         float3 F0 = lerp(0.04.xxx, albedo, metallic);
         float NdotV = max(dot(N, V), 1e-4);
+        float3 R = reflect(-V, N);
 
         float shadow = CalculateShadow(input.world_position, surface_normal, L);
         float3 direct = DirectLight(N, V, L, light_color.rgb * shadow, albedo, F0, metallic,
@@ -274,8 +271,8 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
             direct += (1.0 - F_view) * (1.0 - metallic) * albedo * radiance * form_factor;
 
             // Specular: the point of the rectangle nearest the mirror direction,
-            // with the lobe widened by the light's size (Karis 2013).
-            float3 R = reflect(-V, N);
+            // with the lobe widened by the light's size (Karis 2013). The wider
+            // lobe is the normalization: D(wide) times the light's solid angle.
             float denom = dot(R, -light_normal);
             float3 target = center;
             if (denom > 1e-4)
@@ -298,20 +295,28 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
             float D = DistributionGGX(saturate(dot(N, H)), sqrt(wide));
             float G = GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL_area, roughness);
             float3 F_spec = FresnelSchlick(saturate(dot(H, V)), F0);
-            float energy = (alpha / wide) * (alpha / wide);
             direct += D * G * F_spec / max(4.0 * NdotV * NdotL_area, 1e-4) * NdotL_area *
-                      radiance * solid_angle * energy;
+                      radiance * solid_angle;
         }
 
-        float3 ambient_light;
-        if (!SampleProbes(input.world_position, surface_normal, N, camera_pos.xyz, ambient_light))
+        float3 ambient_light, reflected_light;
+        if (!SampleProbes(input.world_position, surface_normal, N, camera_pos.xyz, R, roughness,
+                          ambient_light, reflected_light))
         {
             float hemi = N.y * 0.5 + 0.5;
             ambient_light = lerp(ambient_ground.rgb, ambient_sky.rgb, hemi);
+            reflected_light = lerp(ambient_ground.rgb, ambient_sky.rgb, R.y * 0.5 + 0.5);
         }
-        float3 F_ambient = FresnelSchlickRoughness(NdotV, F0, roughness);
-        float3 ambient = (1.0 - F_ambient) * (1.0 - metallic) * albedo * ambient_light
-                       + F_ambient * ambient_light * (1.0 - roughness) * 0.5;
+        // Split-sum environment BRDF, fitted (Karis 2014): what share of the
+        // reflected light the specular lobe returns, by angle and roughness.
+        const float4 c0 = float4(-1.0, -0.0275, -0.572, 0.022);
+        const float4 c1 = float4(1.0, 0.0425, 1.04, -0.04);
+        float4 env = roughness * c0 + c1;
+        float a004 = min(env.x * env.x, exp2(-9.28 * NdotV)) * env.x + env.y;
+        float2 ab = float2(-1.04, 1.04) * a004 + env.zw;
+        float3 specular_share = F0 * ab.x + ab.y;
+        float3 ambient = (1.0 - specular_share) * (1.0 - metallic) * albedo * ambient_light
+                       + specular_share * reflected_light;
         color = direct + ambient + emission;
         if (flags.y < 0.5 && (draw_flags & kFlagTransparent) == 0)
         {

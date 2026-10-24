@@ -115,19 +115,24 @@ float3 ProbePosition(int3 cell)
     return lerp(gi_min.xyz, gi_max.xyz, (float3) cell / max(counts - 1.0, 1.0));
 }
 
-// Irradiance / pi (the radiance a white diffuse surface reflects) at n from
-// one probe, from its radiance SH convolved with the cosine lobe.
-float3 ProbeIrradiance(uint probe, float3 n)
+// One probe's light toward d from its radiance SH, each band (l = 0, 1, 2)
+// scaled by `bands`: the cosine lobe's (kCosineBands) gives irradiance / pi,
+// the radiance a white diffuse surface reflects; kSharpBands the sharpest
+// radiance L2 holds without ringing (a Hann window: unwindowed, a mirror
+// shows colored blotches that are in no direction).
+static const float3 kCosineBands = float3(1.0, 2.0 / 3.0, 0.25);
+static const float3 kSharpBands = float3(1.0, 0.75, 0.25);
+
+float3 ProbeLight(uint probe, float3 d, float3 bands)
 {
-    static const float kBand[9] = {
-        1.0, 2.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0, 0.25, 0.25, 0.25, 0.25, 0.25};
     float basis[9];
-    ShBasis(n, basis);
-    float3 e = 0.0;
+    ShBasis(d, basis);
+    float3 e = probe_atlas.Load(int3(ProbeTexel(probe, 0), 0)).rgb * (bands.x * basis[0]);
     [unroll]
-    for (uint i = 0; i < 9; ++i)
+    for (uint i = 1; i < 9; ++i)
     {
-        e += probe_atlas.Load(int3(ProbeTexel(probe, i), 0)).rgb * (kBand[i] * basis[i]);
+        float band = i < 4 ? bands.y : bands.z;
+        e += probe_atlas.Load(int3(ProbeTexel(probe, i), 0)).rgb * (band * basis[i]);
     }
     return max(e, 0.0);
 }
@@ -161,14 +166,19 @@ float ProbeVisibility(uint probe, float3 d, float distance)
     return max(chebyshev * chebyshev * chebyshev, 0.0);
 }
 
-// The probes' indirect light at a surface (as ProbeIrradiance toward the
-// shading normal n), blended from the 8 around it. Probes inside walls, ones
-// behind the surface (its geometric normal) and ones a wall hides from it count
-// less, so light does not leak through walls. `eye` is the camera position.
-// Returns false outside the volume or when no probe is usable.
-bool SampleProbes(float3 p, float3 surface_normal, float3 n, float3 eye, out float3 light)
+// The probes' indirect light at a surface, blended from the 8 around it:
+// `light` the diffuse part toward the shading normal n (irradiance / pi),
+// `reflected` the light arriving along the reflection r, blurred more the
+// rougher the surface. Probes inside walls, ones behind the surface (its
+// geometric normal) and ones a wall hides from it count less, so light does
+// not leak through walls. `eye` is the camera position. Returns false outside
+// the volume or when no probe is usable.
+bool SampleProbes(float3 p, float3 surface_normal, float3 n, float3 eye, float3 r,
+                  float roughness, out float3 light, out float3 reflected)
 {
     light = 0.0;
+    reflected = 0.0;
+    float3 gloss_bands = lerp(kSharpBands, kCosineBands, saturate(roughness));
     if (gi_min.w < 0.5) return false;
     float3 extent = gi_max.xyz - gi_min.xyz;
     float3 spacing = extent / max(gi_counts.xyz - 1.0, 1.0);
@@ -208,10 +218,12 @@ bool SampleProbes(float3 p, float3 surface_normal, float3 n, float3 eye, out flo
         // Crush small weights further, so a hidden probe barely counts.
         if (w < 0.2) w = w * w * w / 0.04;
         w *= tri.x * tri.y * tri.z;
-        light += ProbeIrradiance(probe, n) * w;
+        light += ProbeLight(probe, n, kCosineBands) * w;
+        reflected += ProbeLight(probe, r, gloss_bands) * w;
         total += w;
     }
     if (total < 1e-9) return false;
     light = light / total * gi_max.w;
+    reflected = reflected / total * gi_max.w;
     return true;
 }

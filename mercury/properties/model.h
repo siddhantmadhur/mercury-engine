@@ -150,11 +150,23 @@ struct AnimationClip {
 
 enum class ModelConvention { kNative, kUnity };
 
+// Replaces what the file says about one material, for formats that cannot
+// say it (OBJ has no real roughness) or say it wrong. From a
+// `[material name="..."]` section of the .mimport file.
+struct ModelMaterialOverride {
+  std::string name;
+  std::optional<glm::vec4> color;  // sRGB
+  std::optional<float> metallic;
+  std::optional<float> smoothness;
+  std::optional<glm::vec3> emission;  // linear
+};
+
 struct ModelImportSettings {
   ModelConvention convention = ModelConvention::kNative;
   float scale = 1.0f;
   bool use_file_scale = true;
   int max_texture_size = 8192;
+  std::vector<ModelMaterialOverride> materials;
 
   // Reads "<model path>.mimport" if it exists; otherwise `defaults`.
   static ModelImportSettings ForFile(const std::string& model_path,
