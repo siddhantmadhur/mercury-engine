@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <format>
 #include <fstream>
@@ -213,6 +214,11 @@ bool SceneRenderer::Init(Context& context, uint32_t frames_in_flight,
   const VkDeviceSize alignment = properties.limits.minUniformBufferOffsetAlignment;
   uniform_stride_ = (sizeof(FrameUniforms) + alignment - 1) / alignment * alignment;
 
+  // The opaque geometry's depth first, so the lighting runs once per pixel
+  // (MERCURY_DEPTH_PREPASS=0 or 1 overrides when it pays).
+  if (const char* prepass = std::getenv("MERCURY_DEPTH_PREPASS")) {
+    depth_prepass_ = std::string(prepass) != "0" ? 1 : 0;
+  }
   if (!CreateLayouts() || !CreatePipelines(shaders) || !CreateFrameResources() ||
       !CreateShadowMap() || !CreateLightingResources()) {
     PDebug::error("Vulkan: could not create the model renderer");
@@ -569,6 +575,9 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
   for (int i = 0; i < 2; i++) {
     opaque_[i] = BuildPipeline(model_vs, model_ps, true, main_colors, kDepthFormat, 0, true,
                                true, VK_COMPARE_OP_LESS_OR_EQUAL, culls[i], false, model_layout_);
+    prepass_[i] = BuildPipeline(model_vs, VK_NULL_HANDLE, true, {}, kDepthFormat, 0, true, true,
+                                VK_COMPARE_OP_LESS_OR_EQUAL, culls[i], false, model_layout_);
+    ok = ok && prepass_[i];
     transparent_[i] =
         BuildPipeline(model_vs, model_ps, true, main_colors, kDepthFormat, 1, true, false,
                       VK_COMPARE_OP_LESS_OR_EQUAL, culls[i], false, model_layout_, 1);
@@ -976,6 +985,7 @@ void SceneRenderer::Shutdown() {
   };
   for (int i = 0; i < 2; i++) {
     destroy_pipeline(opaque_[i]);
+    destroy_pipeline(prepass_[i]);
     destroy_pipeline(transparent_[i]);
   }
   for (VkPipeline* p : {&shadow_, &outline_mask_, &sky_, &ssao_, &blur_, &bloom_down_,
@@ -1346,6 +1356,7 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
     }
     Profiler::SetCounter("draws", static_cast<double>(live));
     Profiler::SetCounter("triangles", static_cast<double>(triangles));
+    live_triangles_ = triangles;
   }
 
   // Bone matrices are this frame's alone; the buffer grows when needed
@@ -2955,6 +2966,32 @@ void SceneRenderer::DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
   ToAttachment(cmd, targets.hdr.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   ToAttachment(cmd, targets.normal.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   DepthToAttachment(cmd, targets.depth.Get());
+  // It pays where shading costs more than drawing the geometry twice:
+  // lights besides the sun (each pixel lights by all of them), or a scene of
+  // few triangles for its pixels.
+  const bool heavy_shading =
+      !lighting_.point_lights.empty() || !lighting_.area_lights.empty() ||
+      live_triangles_ < 2ull * extent.width * extent.height;
+  const bool prepass = (depth_prepass_ == 1 || (depth_prepass_ < 0 && heavy_shading)) &&
+                       culled.valid && clear_depth;
+  if (prepass) {
+    GpuScope scope(gpu_timer_, cmd, "depth_prepass");
+    VkRenderingAttachmentInfo depth = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    depth.imageView = targets.depth.View();
+    depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depth.clearValue.depthStencil = {1.0f, 0};
+    VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+    rendering.renderArea = {{0, 0}, extent};
+    rendering.layerCount = 1;
+    rendering.pDepthAttachment = &depth;
+    vkCmdBeginRendering(cmd, &rendering);
+    SetViewport(cmd, extent);
+    DrawCulled(cmd, frame, culled, offset, prepass_[0], prepass_[1]);
+    vkCmdEndRendering(cmd);
+    GlobalBarrier(cmd, kDepthStages, kDepthAccess, kDepthStages, kDepthAccess);
+  }
 
   // The background color is sRGB, like Unity's; linear passes decode it.
   glm::vec4 background = camera.background;
@@ -2973,7 +3010,7 @@ void SceneRenderer::DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
   VkRenderingAttachmentInfo depth = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
   depth.imageView = targets.depth.View();
   depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depth.loadOp = clear_depth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+  depth.loadOp = clear_depth && !prepass ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
   depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   depth.clearValue.depthStencil = {1.0f, 0};
   VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
