@@ -353,7 +353,9 @@ if (NOT EMSCRIPTEN)
             "bloom_down.ps.hlsl|ps_6_0|bloom_down.ps.spv"
             "bloom_up.ps.hlsl|ps_6_0|bloom_up.ps.spv"
             "composite.ps.hlsl|ps_6_0|composite.ps.spv"
-            "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv")
+            "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv"
+            "shadow_cube.ps.hlsl|ps_6_0|shadow_cube.ps.spv"
+            "probe_sh.ps.hlsl|ps_6_0|probe_sh.ps.spv")
     set(SPV_OUTS "")
     foreach (JOB ${SHADER_JOBS})
         string(REPLACE "|" ";" JOB_PARTS "${JOB}")
@@ -367,7 +369,8 @@ if (NOT EMSCRIPTEN)
                 -T ${PROFILE} -E Main
                 ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
                 DEPENDS ${SHADER_SRC}/${SRC} ${SHADER_SRC}/model_common.hlsli
-                        ${SHADER_SRC}/post_common.hlsli
+                        ${SHADER_SRC}/post_common.hlsli ${SHADER_SRC}/lighting.hlsli
+                        ${SHADER_SRC}/lighting_math.hlsli
                 COMMENT "DXC ${SRC} -> ${OUT}"
                 COMMAND_EXPAND_LISTS)
         list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})

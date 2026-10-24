@@ -400,6 +400,10 @@ void EditorScene::DrawCreateMenuItems(MapNode* parent) {
       CreatePreset(parent, Preset::kDirectionalLight);
     }
     if (ImGui::MenuItem("Point Light")) CreatePreset(parent, Preset::kPointLight);
+    if (ImGui::MenuItem("Area Light")) CreatePreset(parent, Preset::kAreaLight);
+    if (ImGui::MenuItem("Light Probe Volume")) {
+      CreatePreset(parent, Preset::kLightProbeVolume);
+    }
     ImGui::EndMenu();
   }
   if (ImGui::MenuItem("Camera")) CreatePreset(parent, Preset::kCamera);
@@ -409,6 +413,7 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
   static constexpr const char* kNames[] = {
       "Node", "Cube",   "Sphere", "Capsule",          "Cylinder",
       "Plane", "Quad", "Sprite", "DirectionalLight", "Camera", "PointLight",
+      "AreaLight", "LightProbeVolume",
   };
   if (!parent) parent = map_.GetRoot();
   MapNode* node = map_.AddNode(parent, kNames[static_cast<int>(preset)]);
@@ -473,6 +478,15 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
     case Preset::kPointLight:
       scale = glm::vec3(1.0f);
       node->components.push_back({"PointLight", {}});
+      break;
+    case Preset::kAreaLight:
+      rotation = glm::vec3(-90.0f, 0.0f, 0.0f);  // shining down
+      scale = glm::vec3(1.0f);
+      node->components.push_back({"AreaLight", {}});
+      break;
+    case Preset::kLightProbeVolume:
+      scale = glm::vec3(1.0f);
+      node->components.push_back({"LightProbeVolume", {}});
       break;
     case Preset::kCamera: {
       ComponentData camera{"Camera", {}};

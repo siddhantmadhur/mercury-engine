@@ -3,7 +3,7 @@
 [ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
 [ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
 [ext_resource type="Model" path="res://models/cornell_box/CornellBox-Original.obj" id="3"]
-[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="4"]
+[ext_resource type="PostProcessProfile" path="res://assets/post_cornell.masset" id="4"]
 
 [node name="CornellBox"]
 
@@ -40,22 +40,31 @@ rotation = Vector3(-90, 0, 0)
 [component type="DirectionalLight" node="Sun"]
 intensity = 0
 cast_shadows = false
-ambient = Color(0.2, 0.19, 0.18, 1)
-ground_ambient = Color(0.12, 0.11, 0.1, 1)
+ambient = Color(0.02, 0.02, 0.02, 1)
+ground_ambient = Color(0.02, 0.02, 0.02, 1)
 
-[node name="Lights" parent="."]
+[node name="AreaLight0" parent="."]
 
-[component type="Transform" node="Lights"]
+[component type="Transform" node="AreaLight0"]
+position = Vector3(-0.005, 1.979, -0.03)
+rotation = Vector3(-90, 0, 0)
 
-[node name="L0" parent="Lights"]
+[component type="AreaLight" node="AreaLight0"]
+color = Color(1, 0.705882, 0.235294, 1)
+intensity = 17
+size = Vector2(0.47, 0.38)
+range = 6
 
-[component type="Transform" node="Lights/L0"]
-position = Vector3(0, 1.9, 0)
+[node name="Probes" parent="."]
 
-[component type="PointLight" node="Lights/L0"]
-color = Color(1, 0.85, 0.65, 1)
-intensity = 2.5
-range = 5
+[component type="Transform" node="Probes"]
+position = Vector3(0, 0.995, 0)
+
+[component type="LightProbeVolume" node="Probes"]
+size = Vector3(1.9, 1.89, 1.9)
+resolution = Vector3(8, 8, 8)
+bounces = 4
+include_emission = false
 
 [node name="Model" parent="."]
 

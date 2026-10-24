@@ -1,8 +1,14 @@
 // Model renderer pixel shader: Cook-Torrance GGX for the directional light
-// with PCF shadows and for up to kMaxPointLights point lights (unshadowed),
-// plus hemispheric ambient. Normal and emission maps are optional. Writes linear HDR color and a
+// (PCF shadows), up to kMaxPointLights point lights and kMaxAreaLights
+// rectangular area lights (soft cube-map shadows), and indirect light from
+// the light probe volume, or hemispheric ambient outside one. Normal and
+// emission maps are optional.
+//
+// In a probe capture pass (light_info.y) it writes the radiance a probe sees,
+// with alpha 0 on back faces so probes inside walls can be found. Writes linear HDR color and a
 // view-space normal for SSAO (alpha 0 in overlay passes: no AO there).
 #include "model_common.hlsli"
+#include "lighting.hlsli"
 
 [[vk::binding(3, 0)]] Texture2D<float> shadow_map;
 [[vk::binding(4, 0)]] SamplerComparisonState shadow_sampler;
@@ -143,7 +149,8 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
         n.xy *= data.material.z;
         N = normalize(T * n.x + B * n.y + N * max(n.z, 1e-3));
     }
-    float3 emission = data.emission.rgb;
+    const bool capture = light_info.y > 0.5;
+    float3 emission = data.emission.rgb * (capture ? light_info.w : 1.0);
     if (data.maps.y != 0)
     {
         emission *= textures[NonUniformResourceIndex(data.maps.y)]
@@ -178,13 +185,91 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
             float3 to_light = light.xyz - input.world_position;
             float distance_sq = dot(to_light, to_light);
             if (distance_sq >= light.w * light.w) continue;
-            float3 radiance = point_lights[2 * i + 1].rgb * PointAttenuation(distance_sq, light.w);
+            float4 color = point_lights[2 * i + 1];
+            float3 radiance = color.rgb * PointAttenuation(distance_sq, light.w);
+            if (color.w >= 0.0)
+            {
+                float4 shadow_info = point_shadows[i];
+                radiance *= CubeShadow((uint) color.w, input.world_position, surface_normal,
+                                       shadow_info.x, shadow_info.y, shadow_info.z > 0.5,
+                                       input.position.xy);
+            }
             direct += DirectLight(N, V, to_light * rsqrt(max(distance_sq, 1e-8)), radiance,
                                   albedo, F0, metallic, roughness);
         }
 
-        float hemi = N.y * 0.5 + 0.5;
-        float3 ambient_light = lerp(ambient_ground.rgb, ambient_sky.rgb, hemi);
+        const uint area_count = min((uint) light_info.x, kMaxAreaLights);
+        for (uint a = 0; a < area_count; ++a)
+        {
+            float4 a0 = area_lights[4 * a];
+            float4 a1 = area_lights[4 * a + 1];
+            float4 a2 = area_lights[4 * a + 2];
+            float4 a3 = area_lights[4 * a + 3];
+            float3 center = a0.xyz;
+            float3 right = a1.xyz;
+            float3 up = a2.xyz;
+            float3 light_normal = normalize(cross(right, up));
+            float3 from_light = input.world_position - center;
+            float side = dot(from_light, light_normal);
+            if (side <= 0.0)
+            {
+                if (a1.w < 0.5) continue;  // behind a single-sided light
+                light_normal = -light_normal;
+                side = -side;
+            }
+            float distance_sq = dot(from_light, from_light);
+            if (distance_sq >= a0.w * a0.w) continue;
+            float3 radiance = a3.rgb * RangeFade(distance_sq, a0.w);
+            if (a2.w >= 0.0)
+            {
+                // The rectangle's half-diagonal stands for its size.
+                radiance *= CubeShadow((uint) a2.w, input.world_position, surface_normal,
+                                       length(right + up), area_shadow_bias[a].x, a3.w > 0.5,
+                                       input.position.xy);
+            }
+            float3 corners[4] = {center - right - up, center + right - up,
+                                 center + right + up, center - right + up};
+            // Diffuse: exact for a Lambertian rectangle.
+            float form_factor = PolygonFormFactor(input.world_position, N, corners);
+            float3 F_view = FresnelSchlick(NdotV, F0);
+            direct += (1.0 - F_view) * (1.0 - metallic) * albedo * radiance * form_factor;
+
+            // Specular: the point of the rectangle nearest the mirror direction,
+            // with the lobe widened by the light's size (Karis 2013).
+            float3 R = reflect(-V, N);
+            float denom = dot(R, -light_normal);
+            float3 target = center;
+            if (denom > 1e-4)
+            {
+                float3 hit = input.world_position + R * (side / denom) - center;
+                float hx = clamp(dot(hit, right) / dot(right, right), -1.0, 1.0);
+                float hy = clamp(dot(hit, up) / dot(up, up), -1.0, 1.0);
+                target = center + right * hx + up * hy;
+            }
+            float3 to_target = target - input.world_position;
+            float target_distance = length(to_target);
+            float3 L_area = to_target / max(target_distance, 1e-5);
+            float area = 4.0 * length(right) * length(up);
+            float solid_angle = area * saturate(dot(-L_area, light_normal)) /
+                                max(target_distance * target_distance, 1e-4);
+            float alpha = roughness * roughness;
+            float wide = saturate(alpha + 0.5 * sqrt(area) / max(target_distance, 1e-3));
+            float3 H = normalize(V + L_area);
+            float NdotL_area = saturate(dot(N, L_area));
+            float D = DistributionGGX(saturate(dot(N, H)), sqrt(wide));
+            float G = GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL_area, roughness);
+            float3 F_spec = FresnelSchlick(saturate(dot(H, V)), F0);
+            float energy = (alpha / wide) * (alpha / wide);
+            direct += D * G * F_spec / max(4.0 * NdotV * NdotL_area, 1e-4) * NdotL_area *
+                      radiance * solid_angle * energy;
+        }
+
+        float3 ambient_light;
+        if (!SampleProbes(input.world_position, N, ambient_light))
+        {
+            float hemi = N.y * 0.5 + 0.5;
+            ambient_light = lerp(ambient_ground.rgb, ambient_sky.rgb, hemi);
+        }
         float3 F_ambient = FresnelSchlickRoughness(NdotV, F0, roughness);
         float3 ambient = (1.0 - F_ambient) * (1.0 - metallic) * albedo * ambient_light
                        + F_ambient * ambient_light * (1.0 - roughness) * 0.5;
@@ -196,5 +281,6 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
         color = LinearToSrgb(AcesTonemap(color));
     }
     output.color = float4(color, base.a);
+    if (capture) output.color.a = front_face ? 1.0 : 0.0;
     return output;
 }

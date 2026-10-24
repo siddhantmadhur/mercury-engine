@@ -8,7 +8,9 @@
  *
  *   renderer.BeginFrame(frame_index);              // after the frame fence
  *   renderer.Prepare(cmd, scene);                  // outside any pass
- *   renderer.RenderShadows(cmd, light_view_proj);  // outside any pass
+ *   renderer.RenderShadows(cmd, light_view_proj);  // outside any pass: the
+ *                                                  // sun's map, point and area
+ *                                                  // light cubes, light probes
  *   renderer.RenderView(cmd, cameras, ...);        // per output image
  *
  * Older Mesh/MeshInstance/static draws are recorded into the main camera's
@@ -50,9 +52,19 @@ struct FrameUniforms {
   glm::vec4 resolution;
   glm::vec4 shadow_params;
   glm::vec4 flags;  // w: point light count
-  glm::vec4 point_lights[2 * 16];  // position + range, color
+  glm::vec4 point_lights[2 * 16];  // position + range, color + shadow slot
+  glm::vec4 point_shadows[16];     // radius, bias, soft
+  glm::vec4 area_lights[4 * 4];    // center + range, right + two-sided, up + slot, color + soft
+  glm::vec4 area_shadow_bias[4];
+  glm::vec4 shadow_cubes_info[4];  // center + far
+  glm::vec4 light_info;            // area count, capture pass, cube size, capture emission
+  glm::vec4 gi_min;                // + enabled
+  glm::vec4 gi_max;                // + intensity
+  glm::vec4 gi_counts;             // + probes per atlas row
 };
 inline constexpr uint32_t kMaxPointLights = 16;
+inline constexpr uint32_t kMaxAreaLights = 4;
+inline constexpr uint32_t kMaxShadowCubes = 4;
 
 // Must match DrawData in model_common.hlsli.
 struct DrawData {
@@ -73,6 +85,11 @@ class SceneRenderer {
   static constexpr VkFormat kNormalFormat = VK_FORMAT_R8G8B8A8_UNORM;
   static constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
   static constexpr uint32_t kShadowResolution = 2048;
+  static constexpr uint32_t kShadowCubeResolution = 512;
+  static constexpr uint32_t kProbeFaceSize = 16;   // each face a probe captures
+  static constexpr uint32_t kMaxProbeBatch = 32;   // probes updated per frame at most
+  static constexpr uint32_t kProbesPerAtlasRow = 64;
+  static constexpr uint32_t kMaxProbes = 4096;
 
   using ShaderLoader = std::function<VkShaderModule(const std::string&)>;
   // Records the older draws (skybox panorama, Mesh, static batches) into the
@@ -94,7 +111,8 @@ class SceneRenderer {
   // records. Must be recorded outside a rendering pass.
   void Prepare(VkCommandBuffer cmd, GameScene& scene);
 
-  // Draws the shadow casters into the shadow map (outside a pass).
+  // Draws the shadow casters into the shadow map and the point and area
+  // lights' cube maps, then updates some light probes (outside a pass).
   void RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_view_proj,
                      const RenderCamera& main_camera, bool enabled);
 
@@ -195,6 +213,16 @@ class SceneRenderer {
   bool CreateFrameResources();
   bool CreateShadowMap();
   bool CreateWhiteTexture();
+  bool CreateLightingResources();
+  // Picks which point and area lights get this frame's shadow cubes.
+  void AssignShadowCubes();
+  void RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame);
+  void UpdateProbes(VkCommandBuffer cmd, FrameResources& frame);
+  // Uniforms of a 90 degree view along cube face `face` from `center`.
+  FrameUniforms CubeFaceUniforms(glm::vec3 center, uint32_t face, float near_clip,
+                                 float far_clip, VkExtent2D extent) const;
+  // Lights, shadow cubes and probes, as every pass sees them.
+  void FillLighting(FrameUniforms& u) const;
   void UpdateFrameSet(FrameResources& frame);
 
   VkPipeline BuildPipeline(VkShaderModule vs, VkShaderModule ps, bool model_input,
@@ -268,6 +296,9 @@ class SceneRenderer {
   VkPipeline blur_ = VK_NULL_HANDLE;
   VkPipeline bloom_down_ = VK_NULL_HANDLE;
   VkPipeline bloom_up_ = VK_NULL_HANDLE;
+  VkPipeline shadow_cube_ = VK_NULL_HANDLE;   // distance to the light
+  VkPipeline probe_capture_ = VK_NULL_HANDLE; // the scene as a probe sees it
+  VkPipeline probe_sh_ = VK_NULL_HANDLE;      // capture -> spherical harmonics
   // Composite/FXAA pipelines per output format.
   std::map<std::pair<VkFormat, bool>, VkPipeline> output_pipelines_;
   VkShaderModule fullscreen_vs_ = VK_NULL_HANDLE;
@@ -281,6 +312,39 @@ class SceneRenderer {
 
   vk::Image shadow_image_;
   bool shadow_written_ = false;
+
+  // Point and area light shadows: 6 faces per slot of distances to the
+  // nearest caster.
+  struct ShadowCube {
+    glm::vec3 center = glm::vec3(0.0f);
+    float far_clip = 10.0f;
+    // Single-sided area lights: only what is in front of this plane casts.
+    bool one_sided = false;
+    glm::vec3 normal = glm::vec3(0.0f);
+  };
+  vk::Image shadow_cubes_;
+  vk::Image shadow_cube_depth_;
+  std::vector<ShadowCube> cubes_;   // this frame's slots
+  std::vector<int> point_slots_;    // per point light: slot or -1
+  std::vector<int> area_slots_;     // per area light
+
+  // Light probes: 9 spherical harmonics texels each in the atlas.
+  vk::Image probe_atlas_;
+  vk::Image probe_faces_;   // kMaxProbeBatch probes x 6 faces
+  vk::Image probe_normal_;  // the pass's second attachment, unused
+  vk::Image probe_depth_;
+  VkDescriptorSet probe_sh_set_ = VK_NULL_HANDLE;
+  bool lighting_initialized_ = false;
+  struct ProbeState {
+    bool active = false;        // the volume's probes light this frame
+    glm::vec3 min = glm::vec3(0.0f), max = glm::vec3(0.0f);
+    glm::ivec3 counts = glm::ivec3(0);
+    uint32_t next = 0;          // next probe to update
+    int passes = 0;             // full passes since the scene last changed
+    uint64_t scene_hash = 0;    // lights and objects, to notice changes
+    bool clear_atlas = true;
+  };
+  ProbeState probes_;
 
   std::vector<FrameResources> frames_;
 

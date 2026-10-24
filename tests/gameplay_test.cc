@@ -409,6 +409,63 @@ TEST(Gameplay, LoadMapFromScriptReplacesTheScene) {
   std::filesystem::remove_all(dir);
 }
 
+TEST(Gameplay, AreaLightsAndProbeVolumeReachTheRenderer) {
+  auto project = LoadProject();
+  ASSERT_TRUE(project);
+  Map map;
+  std::string error;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+[node name="Root"]
+[node name="Panel" parent="."]
+[component type="Transform" node="Panel"]
+position = Vector3(0, 2, 0)
+rotation = Vector3(-90, 0, 0)
+[component type="AreaLight" node="Panel"]
+intensity = 17
+size = Vector2(0.4, 0.2)
+[node name="Bulb" parent="."]
+[component type="Transform" node="Bulb"]
+position = Vector3(1, 1, 1)
+[component type="PointLight" node="Bulb"]
+shadows = "soft"
+radius = 0.3
+[node name="Probes" parent="."]
+[component type="Transform" node="Probes"]
+position = Vector3(0, 1, 0)
+[component type="LightProbeVolume" node="Probes"]
+size = Vector3(2, 2, 4)
+resolution = Vector3(4, 40, 1)
+include_emission = false
+)",
+                                 &error))
+      << error;
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.Instantiate(map);
+  const SceneLighting& lighting = scene.GetLighting();
+
+  ASSERT_EQ(lighting.area_lights.size(), 1u);
+  const AreaLightData& panel = lighting.area_lights[0];
+  // Pitched down: the rectangle lies flat and shines toward -Y.
+  const glm::vec3 normal = panel.Normal();
+  EXPECT_NEAR(normal.y, -1.0f, 1e-4f);
+  EXPECT_NEAR(glm::length(panel.right), 0.2f, 1e-4f);
+  EXPECT_NEAR(glm::length(panel.up), 0.1f, 1e-4f);
+  EXPECT_EQ(panel.color, glm::vec3(17.0f));
+  EXPECT_EQ(panel.shadows, 2);  // soft by default
+
+  ASSERT_EQ(lighting.point_lights.size(), 1u);
+  EXPECT_EQ(lighting.point_lights[0].shadows, 2);
+  EXPECT_FLOAT_EQ(lighting.point_lights[0].radius, 0.3f);
+
+  // Centered on its node; counts are kept between 2 and 16.
+  const ProbeVolumeData& probes = lighting.probes;
+  ASSERT_TRUE(probes.enabled);
+  EXPECT_EQ(probes.min, glm::vec3(-1.0f, 0.0f, -2.0f));
+  EXPECT_EQ(probes.max, glm::vec3(1.0f, 2.0f, 2.0f));
+  EXPECT_EQ(probes.counts, glm::ivec3(4, 16, 2));
+  EXPECT_FALSE(probes.include_emission);
+}
+
 TEST(Gameplay, AnimatorControllerParses) {
   std::string error;
   auto controller = AnimatorController::FromString(R"([manimator format=1]

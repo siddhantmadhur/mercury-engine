@@ -76,8 +76,24 @@ void Buffer::Flush(VkDeviceSize offset, VkDeviceSize bytes) {
 bool Image::Create(VmaAllocator allocator, VkDevice device, uint32_t width,
                    uint32_t height, VkFormat format, VkImageUsageFlags usage,
                    VkImageAspectFlags aspect, uint32_t mip_levels) {
+  return CreateImage(allocator, device, width, height, 1, format, usage, aspect, mip_levels,
+                     VK_IMAGE_VIEW_TYPE_2D);
+}
+
+bool Image::CreateArray(VmaAllocator allocator, VkDevice device, uint32_t width,
+                        uint32_t height, uint32_t layers, VkFormat format,
+                        VkImageUsageFlags usage, VkImageAspectFlags aspect) {
+  return CreateImage(allocator, device, width, height, std::max(1u, layers), format, usage,
+                     aspect, 1, VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+}
+
+bool Image::CreateImage(VmaAllocator allocator, VkDevice device, uint32_t width,
+                        uint32_t height, uint32_t layers, VkFormat format,
+                        VkImageUsageFlags usage, VkImageAspectFlags aspect,
+                        uint32_t mip_levels, VkImageViewType view_type) {
   Reset();
   mip_levels_ = std::max(1u, mip_levels);
+  layers_ = layers;
   aspect_ = aspect;
 
   VkImageCreateInfo image_info = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
@@ -85,7 +101,7 @@ bool Image::Create(VmaAllocator allocator, VkDevice device, uint32_t width,
   image_info.format = format;
   image_info.extent = {width, height, 1};
   image_info.mipLevels = mip_levels_;
-  image_info.arrayLayers = 1;
+  image_info.arrayLayers = layers;
   image_info.samples = VK_SAMPLE_COUNT_1_BIT;
   image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
   image_info.usage = usage;
@@ -106,10 +122,24 @@ bool Image::Create(VmaAllocator allocator, VkDevice device, uint32_t width,
   VkImageViewCreateInfo view_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
   view_info.image = image_;
-  view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  view_info.viewType = view_type;
   view_info.format = format;
-  view_info.subresourceRange = {aspect, 0, mip_levels_, 0, 1};
+  view_info.subresourceRange = {aspect, 0, mip_levels_, 0, layers};
   return VK_CHECK(vkCreateImageView(device, &view_info, nullptr, &view_));
+}
+
+VkImageView Image::LayerView(uint32_t layer) {
+  if (layer >= layers_ || image_ == VK_NULL_HANDLE) return VK_NULL_HANDLE;
+  if (layer_views_.empty()) layer_views_.resize(layers_, VK_NULL_HANDLE);
+  if (layer_views_[layer] == VK_NULL_HANDLE) {
+    VkImageViewCreateInfo view_info = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    view_info.image = image_;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = format_;
+    view_info.subresourceRange = {aspect_, 0, 1, layer, 1};
+    vkCreateImageView(device_, &view_info, nullptr, &layer_views_[layer]);
+  }
+  return layer_views_[layer];
 }
 
 VkImageView Image::MipView(uint32_t level) {
@@ -138,6 +168,9 @@ Image& Image::operator=(Image&& other) noexcept {
   format_ = std::exchange(other.format_, VK_FORMAT_UNDEFINED);
   mip_views_ = std::move(other.mip_views_);
   other.mip_views_.clear();
+  layer_views_ = std::move(other.layer_views_);
+  other.layer_views_.clear();
+  layers_ = std::exchange(other.layers_, 1u);
   aspect_ = other.aspect_;
   mip_levels_ = std::exchange(other.mip_levels_, 1u);
   return *this;
@@ -148,6 +181,10 @@ void Image::Reset() {
     if (view != VK_NULL_HANDLE) vkDestroyImageView(device_, view, nullptr);
   }
   mip_views_.clear();
+  for (VkImageView view : layer_views_) {
+    if (view != VK_NULL_HANDLE) vkDestroyImageView(device_, view, nullptr);
+  }
+  layer_views_.clear();
   if (view_ != VK_NULL_HANDLE) vkDestroyImageView(device_, view_, nullptr);
   if (image_ != VK_NULL_HANDLE) {
     vmaDestroyImage(allocator_, image_, allocation_);
@@ -175,7 +212,8 @@ void TransitionImage(VkCommandBuffer cmd, VkImage image,
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = image;
-  barrier.subresourceRange = {aspect, 0, VK_REMAINING_MIP_LEVELS, 0, 1};
+  barrier.subresourceRange = {aspect, 0, VK_REMAINING_MIP_LEVELS, 0,
+                              VK_REMAINING_ARRAY_LAYERS};
 
   VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   dependency.imageMemoryBarrierCount = 1;
@@ -198,7 +236,7 @@ void TransitionImageMips(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags 
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = image;
-  barrier.subresourceRange = {aspect, base_mip, mip_count, 0, 1};
+  barrier.subresourceRange = {aspect, base_mip, mip_count, 0, VK_REMAINING_ARRAY_LAYERS};
   VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   dependency.imageMemoryBarrierCount = 1;
   dependency.pImageMemoryBarriers = &barrier;

@@ -67,6 +67,39 @@ struct PointLightData {
   glm::vec3 position = glm::vec3(0.0f);
   glm::vec3 color = glm::vec3(1.0f);  // linear color * intensity
   float range = 10.0f;
+  int shadows = 0;  // 0 none, 1 hard, 2 soft
+  float radius = 0.05f;
+  float shadow_bias = 0.02f;
+};
+
+/**
+ * @brief A rectangular light as the renderer sees it (world space)
+ */
+struct AreaLightData {
+  glm::vec3 position = glm::vec3(0.0f);  // center
+  glm::vec3 right = glm::vec3(0.5f, 0.0f, 0.0f);  // half the width
+  glm::vec3 up = glm::vec3(0.0f, 0.5f, 0.0f);     // half the height
+  glm::vec3 color = glm::vec3(1.0f);  // linear radiance
+  float range = 10.0f;
+  bool two_sided = false;
+  int shadows = 2;
+  float shadow_bias = 0.02f;
+  // The way it shines (right x up when single-sided).
+  glm::vec3 Normal() const { return glm::normalize(glm::cross(right, up)); }
+};
+
+/**
+ * @brief The map's LightProbeVolume, if it has one
+ */
+struct ProbeVolumeData {
+  bool enabled = false;
+  glm::vec3 min = glm::vec3(0.0f);
+  glm::vec3 max = glm::vec3(0.0f);
+  glm::ivec3 counts = glm::ivec3(0);
+  float intensity = 1.0f;
+  int bounces = 3;
+  bool include_emission = true;
+  int probes_per_frame = 0;
 };
 
 /**
@@ -83,6 +116,8 @@ struct SceneLighting {
   float shadow_normal_bias = 0.035f;
   float shadow_distance = 120.0f;
   std::vector<PointLightData> point_lights;  // the renderer uses the first 16
+  std::vector<AreaLightData> area_lights;    // the renderer uses the first 4
+  ProbeVolumeData probes;
 };
 
 /**

@@ -1,0 +1,5 @@
+[masset type="Material" format=1]
+color = Color(1, 1, 1, 1)
+emission = Color(10, 10, 10, 1)
+unlit = true
+cull = "off"

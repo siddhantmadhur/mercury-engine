@@ -53,7 +53,7 @@ class Buffer {
 };
 
 /**
- * @brief VMA-backed 2D VkImage with a single-mip view
+ * @brief VMA-backed 2D VkImage (or 2D array) with a view of all of it
  */
 class Image {
  public:
@@ -67,6 +67,10 @@ class Image {
   bool Create(VmaAllocator allocator, VkDevice device, uint32_t width,
               uint32_t height, VkFormat format, VkImageUsageFlags usage,
               VkImageAspectFlags aspect, uint32_t mip_levels = 1);
+  // An array of `layers` images; View() sees them all (a 2D array view).
+  bool CreateArray(VmaAllocator allocator, VkDevice device, uint32_t width, uint32_t height,
+                   uint32_t layers, VkFormat format, VkImageUsageFlags usage,
+                   VkImageAspectFlags aspect);
   void Reset();
 
   VkImage Get() const { return image_; }
@@ -76,9 +80,17 @@ class Image {
   uint32_t MipLevels() const { return mip_levels_; }
   // A view of one mip level (created on first use).
   VkImageView MipView(uint32_t level);
+  uint32_t Layers() const { return layers_; }
+  // A 2D view of one array layer (created on first use), to render into.
+  VkImageView LayerView(uint32_t layer);
 
  private:
+  bool CreateImage(VmaAllocator allocator, VkDevice device, uint32_t width, uint32_t height,
+                   uint32_t layers, VkFormat format, VkImageUsageFlags usage,
+                   VkImageAspectFlags aspect, uint32_t mip_levels, VkImageViewType view_type);
   std::vector<VkImageView> mip_views_;
+  std::vector<VkImageView> layer_views_;
+  uint32_t layers_ = 1;
   VkImageAspectFlags aspect_ = VK_IMAGE_ASPECT_COLOR_BIT;
   uint32_t mip_levels_ = 1;
   VmaAllocator allocator_ = VK_NULL_HANDLE;

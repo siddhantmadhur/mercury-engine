@@ -930,6 +930,52 @@ void EditorScene::DrawNodeGizmos(ImDrawList* draw, const MapNode& node) {
     drew_something = true;
   }
 
+  if (auto* area = Objects().GetProperty<AreaLight>(entity)) {
+    // The rectangle, and a line the way it shines.
+    const ImU32 color = selected ? selection_color : light_color;
+    const glm::vec3 scale = transform ? transform->GetScale() : glm::vec3(1.0f);
+    const glm::vec3 right = rotation * glm::vec3(0.5f * area->size.x * scale.x, 0, 0);
+    const glm::vec3 up = rotation * glm::vec3(0, 0.5f * area->size.y * scale.y, 0);
+    const glm::vec3 corners[4] = {position - right - up, position + right - up,
+                                  position + right + up, position - right + up};
+    for (int i = 0; i < 4; i++) {
+      DrawLine3D(draw, corners[i], corners[(i + 1) % 4], color, 1.5f);
+    }
+    const glm::vec3 direction = rotation * glm::vec3(0, 0, -1);
+    DrawLine3D(draw, position, position + direction * 40.0f * world_per_pixel, color, 1.5f);
+    drew_something = true;
+  }
+
+  if (auto* volume = Objects().GetProperty<LightProbeVolume>(entity)) {
+    // Its box, and the probes when selected.
+    const ImU32 color = selected ? selection_color : light_color;
+    const glm::vec3 scale = transform ? transform->GetScale() : glm::vec3(1.0f);
+    const glm::vec3 half = glm::abs(volume->size * scale) * 0.5f;
+    const glm::vec3 lo = position - half, hi = position + half;
+    auto corner = [&](int i) {
+      return glm::vec3(i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z);
+    };
+    for (int i = 0; i < 8; i++) {
+      for (int bit : {1, 2, 4}) {
+        if (!(i & bit)) DrawLine3D(draw, corner(i), corner(i | bit), color, 1.0f);
+      }
+    }
+    if (selected) {
+      const glm::ivec3 counts =
+          glm::clamp(glm::ivec3(glm::round(volume->resolution)), glm::ivec3(2), glm::ivec3(16));
+      for (int z = 0; z < counts.z; z++) {
+        for (int y = 0; y < counts.y; y++) {
+          for (int x = 0; x < counts.x; x++) {
+            const glm::vec3 t = glm::vec3(x, y, z) / glm::vec3(counts - 1);
+            ImVec2 at;
+            if (WorldToScreen(glm::mix(lo, hi, t), at)) draw->AddCircleFilled(at, 2.0f, color, 6);
+          }
+        }
+      }
+    }
+    drew_something = true;
+  }
+
   if (auto* point = Objects().GetProperty<PointLight>(entity)) {
     const ImU32 color = selected ? selection_color : light_color;
     ImVec2 at;
@@ -1100,6 +1146,7 @@ bool EditorScene::MapLooks3D() const {
     for (const auto& component : node.components) {
       if (component.type == "MeshRenderer" ||
           component.type == "DirectionalLight" || component.type == "PointLight" ||
+          component.type == "AreaLight" || component.type == "LightProbeVolume" ||
           component.type == "SphereCollider" ||
           component.type == "CapsuleCollider" ||
           component.type == "CylinderCollider") {
@@ -1139,7 +1186,9 @@ void EditorScene::FrameMap() {
         // Cameras and lights usually sit away from the action.
         const bool helper = node.FindComponent("Camera") ||
                             node.FindComponent("DirectionalLight") ||
-                            node.FindComponent("PointLight");
+                            node.FindComponent("PointLight") ||
+                            node.FindComponent("AreaLight") ||
+                            node.FindComponent("LightProbeVolume");
         if (!node.IsRoot() && !helper) {
           min = glm::min(min, position - glm::abs(scale) * 0.5f);
           max = glm::max(max, position + glm::abs(scale) * 0.5f);
