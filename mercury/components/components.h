@@ -233,7 +233,7 @@ struct PointLight {
   glm::vec4 color = glm::vec4(1.0f);
   float intensity = 1.0f;
   float range = 10.0f;
-  LightShadows shadows = LightShadows::kNone;
+  LightShadows shadows = LightShadows::kSoft;
   // Size of the bulb: soft shadows widen with it.
   float radius = 0.05f;
   float shadow_bias = 0.02f;
@@ -278,17 +278,24 @@ struct AreaLight {
 };
 
 /**
- * @brief Light bouncing between surfaces (global illumination) inside a box
+ * @brief Settings for light bouncing between surfaces (global illumination)
  *
- * Like Unity's Adaptive Probe Volume, but computed while the game runs: a grid
- * of light probes, `size` across and centered on the node, each sees the
- * scene around it and records the light arriving from every direction.
- * Surfaces inside take their indirect light from the probes instead of the
- * DirectionalLight's ambient colors, so walls tint what is near them. Each
- * pass over the probes adds one more bounce; the probes update again when
- * lights or objects change.
+ * Every scene has global illumination: without this component the renderer
+ * fits a grid of light probes around the scene's still geometry. Like Unity's
+ * Adaptive Probe Volume, but computed while the game runs: each probe sees the
+ * scene around it and records the light arriving from every direction, and
+ * surfaces take their indirect light from the probes instead of the
+ * DirectionalLight's ambient colors, so walls tint what is near them and
+ * enclosed spaces are darker. Each pass over the probes adds one more bounce;
+ * the probes update again when lights or still objects change. Objects that
+ * move are lit by the probes but not seen by them.
+ *
+ * With this component the grid is `size` across, centered on the node, or
+ * fitted to the scene when `fit_to_scene` is set. Intensity 0 turns global
+ * illumination off (the ambient colors light everything).
  */
 struct LightProbeVolume {
+  bool fit_to_scene = false;
   glm::vec3 size = glm::vec3(10.0f);
   glm::vec3 resolution = glm::vec3(8.0f);  // probes along x, y and z
   float intensity = 1.0f;
@@ -300,6 +307,8 @@ struct LightProbeVolume {
   int probes_per_frame = 0;
 
   void Reflect(Reflector& r) {
+    r.Field("fit_to_scene", fit_to_scene)
+        .Tooltip("Fit the grid around the scene's still geometry; size and resolution are ignored");
     r.Field("size", size).Tooltip("Extent of the probe grid, centered on the node");
     r.Field("resolution", resolution).Tooltip("Probes along x, y and z (2 to 16 each)");
     r.Field("intensity", intensity).Tooltip("Multiplies the indirect light");
