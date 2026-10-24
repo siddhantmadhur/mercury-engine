@@ -1,5 +1,5 @@
 // Screen-space ambient occlusion from depth (input0) and view-space
-// normals (input1). p0: x = 1/proj[0][0], y = 1/proj[1][1],
+// normals (input1), drawn at half resolution. p0: x = 1/proj[0][0], y = 1/proj[1][1],
 // z = proj[2][2], w = proj[3][2]; p1: x radius, y intensity, z sample count;
 // p2: proj[0][0], proj[1][1].
 #include "post_common.hlsli"
@@ -34,6 +34,9 @@ float4 Main(FullscreenOutput input) : SV_Target0
     int samples = (int) params.p1.z;
     float angle = Hash(input.position.xy) * 6.2831853;
     float occlusion = 0.0;
+    float3 tangent = normalize(abs(normal.y) < 0.99 ? cross(normal, float3(0, 1, 0))
+                                                    : cross(normal, float3(1, 0, 0)));
+    float3 bitangent = cross(normal, tangent);
     for (int i = 0; i < samples; ++i)
     {
         // Points on a spiral over the hemisphere around the normal.
@@ -41,9 +44,6 @@ float4 Main(FullscreenOutput input) : SV_Target0
         float phi = angle + i * 2.39996323;
         float r = sqrt(t);
         float3 h = float3(cos(phi) * r, sin(phi) * r, sqrt(1.0 - t));
-        float3 tangent = normalize(abs(normal.y) < 0.99 ? cross(normal, float3(0, 1, 0))
-                                                        : cross(normal, float3(1, 0, 0)));
-        float3 bitangent = cross(normal, tangent);
         float3 offset = (tangent * h.x + bitangent * h.y + normal * h.z) * radius * lerp(0.2, 1.0, t);
         float3 sample_position = position + offset;
         float2 sample_ndc = float2(sample_position.x * params.p2.x, sample_position.y * params.p2.y)

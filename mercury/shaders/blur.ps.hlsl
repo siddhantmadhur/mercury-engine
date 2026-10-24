@@ -1,5 +1,5 @@
-// Small depth-aware box blur of the SSAO result (input0, depth in input1).
-// p0.xy: texel size.
+// Small depth-aware box blur of the SSAO result (input0, depth in input1),
+// at the SSAO's half resolution. p0.xy: its texel size.
 #include "post_common.hlsli"
 
 float4 Main(FullscreenOutput input) : SV_Target0

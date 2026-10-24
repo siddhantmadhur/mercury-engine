@@ -1,6 +1,7 @@
-// Final image: HDR color (input0) with SSAO (input1) on the indirect share
-// of the light (alpha of the normal target, input2), bloom (input3), the outline (mask in input4),
-// tonemapping, vignette and sRGB encoding.
+// Final image: HDR color (input0) with SSAO (input1, half resolution,
+// brought up along the depth in input5) on the indirect share of the light
+// (alpha of the normal target, input2), bloom (input3), the outline (mask in
+// input4), tonemapping, vignette and sRGB encoding.
 //   p0: x AO intensity (0: off), y bloom intensity, z tonemap (0 none,
 //       1 neutral, 2 ACES, 3 already display-ready), w exposure
 //   p1: x vignette intensity, y vignette smoothness, zw vignette center
@@ -28,6 +29,32 @@ float3 AcesTonemap(float3 x)
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
+// The half-resolution AO at uv, from its four nearest texels weighted by
+// how close their depth is to this pixel's (so no halos at edges).
+float UpsampleAo(float2 uv)
+{
+    float2 size;
+    input1.GetDimensions(size.x, size.y);
+    float depth = input5.SampleLevel(point_clamp, uv, 0).r;
+    float2 p = uv * size - 0.5;
+    float2 base = floor(p);
+    float2 f = p - base;
+    float total = 0.0;
+    float weight = 0.0;
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        float2 corner = float2(i & 1, i >> 1);
+        float2 texel_uv = (base + corner + 0.5) / size;
+        float2 b = lerp(1.0 - f, f, corner);
+        float d = input5.SampleLevel(point_clamp, texel_uv, 0).r;
+        float w = b.x * b.y * (abs(d - depth) < 0.002 ? 1.0 : 0.01) + 1e-5;
+        total += input1.SampleLevel(point_clamp, texel_uv, 0).r * w;
+        weight += w;
+    }
+    return total / weight;
+}
+
 float4 Main(FullscreenOutput input) : SV_Target0
 {
     float3 color = input0.SampleLevel(point_clamp, input.uv, 0).rgb;
@@ -38,7 +65,7 @@ float4 Main(FullscreenOutput input) : SV_Target0
         // Only the indirect share of the light (normal alpha) is occluded:
         // direct + indirect * ao.
         float indirect = input2.SampleLevel(point_clamp, input.uv, 0).a;
-        float ao = input1.SampleLevel(linear_clamp, input.uv, 0).r;
+        float ao = UpsampleAo(input.uv);
         float factor = saturate(1.0 - indirect * (1.0 - ao) * params.p0.x);
         // A display-ready image is sRGB encoded: scale it as linear light.
         color *= tonemap == 3 ? pow(factor, 1.0 / 2.2) : factor;
