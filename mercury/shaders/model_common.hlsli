@@ -42,6 +42,7 @@
     float4 gi_counts;           // xyz: probes along each axis, w: probes per atlas row
     float4x4 far_light_view_proj; // the sun's shadow over the whole scene
     float4 far_shadow_params;     // x: resolution (0: none), y: normal bias, w: use it alone
+    float4 gi_params;             // x: the visibility maps filter linearly
 };
 
 static const uint kMaxPointLights = 16;

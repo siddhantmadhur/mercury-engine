@@ -2,7 +2,8 @@
 // visibility map: per direction the mean and mean square of the distance to
 // the nearest surface, so shading can tell when a wall stands between the
 // probe and a point (Chebyshev's inequality, as in DDGI). Drawn over the
-// probe's kProbeVisibilitySize^2 texels.
+// probe's kProbeVisibilityTexels^2 texels: the map and a border folded
+// across the octahedron's edges, for seamless bilinear filtering.
 // Uses the fullscreen passes' layout (post_common.hlsli): binding 2 is the
 // capture, push constants are VisibilityPush.
 #include "lighting_math.hlsli"
@@ -24,8 +25,8 @@ struct VisibilityPush
 
 float4 Main(FullscreenOutput input) : SV_Target0
 {
-    float2 texel = input.position.xy - push.probe.zw;  // pixel centers: x.5
-    float3 direction = OctDecode(texel / kProbeVisibilitySize * 2.0 - 1.0);
+    float2 texel = input.position.xy - push.probe.zw - 1.0;  // pixel centers: x.5
+    float3 direction = OctDecode(OctFold(texel / kProbeVisibilitySize * 2.0 - 1.0));
     const uint size = (uint) push.probe.y;
     const uint first = (uint) push.probe.x;
     const float max_distance = push.limits.x;

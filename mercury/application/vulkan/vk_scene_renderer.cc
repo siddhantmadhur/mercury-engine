@@ -242,6 +242,7 @@ bool SceneRenderer::CreateLayouts() {
         {8, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {9, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {10, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        {11, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
     };
     VkDescriptorSetLayoutCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -538,16 +539,17 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
   VkShaderModule shadow_cube_ps = shaders("shadow_cube.ps.spv");
   VkShaderModule probe_sh_ps = shaders("probe_sh.ps.spv");
   VkShaderModule probe_visibility_ps = shaders("probe_visibility.ps.spv");
+  VkShaderModule probe_octa_ps = shaders("probe_octa.ps.spv");
   auto destroy = [&] {
     for (VkShaderModule m : {model_vs, model_ps, shadow_vs, outline_ps, sky_ps, ssao_ps,
                              blur_ps, down_ps, up_ps, shadow_cube_ps, probe_sh_ps,
-                             probe_visibility_ps}) {
+                             probe_visibility_ps, probe_octa_ps}) {
       if (m) vkDestroyShaderModule(device, m, nullptr);
     }
   };
   if (!model_vs || !model_ps || !shadow_vs || !outline_ps || !fullscreen_vs_ || !sky_ps ||
       !ssao_ps || !blur_ps || !down_ps || !up_ps || !composite_ps_ || !fxaa_ps_ ||
-      !shadow_cube_ps || !probe_sh_ps || !probe_visibility_ps) {
+      !shadow_cube_ps || !probe_sh_ps || !probe_visibility_ps || !probe_octa_ps) {
     destroy();
     return false;
   }
@@ -595,8 +597,11 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
                                          {kProbeVisibilityFormat}, VK_FORMAT_UNDEFINED, 0, false,
                                          false, VK_COMPARE_OP_ALWAYS, VK_CULL_MODE_NONE, false,
                                          post_pipeline_layout_);
+  probe_octa_ = BuildPipeline(fullscreen_vs_, probe_octa_ps, false, {kProbeFormat, kProbeFormat},
+                              VK_FORMAT_UNDEFINED, 0, false, false, VK_COMPARE_OP_ALWAYS,
+                              VK_CULL_MODE_NONE, false, post_pipeline_layout_);
   ok = ok && shadow_ && outline_mask_ && sky_ && ssao_ && blur_ && bloom_down_ && bloom_up_ &&
-       shadow_cube_ && probe_capture_ && probe_sh_ && probe_visibility_pass_;
+       shadow_cube_ && probe_capture_ && probe_sh_ && probe_visibility_pass_ && probe_octa_;
   destroy();
   if (ok && context_->gpu_driven) {
     // Without it every view draws from the CPU lists.
@@ -679,14 +684,16 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
   };
   VkDescriptorImageInfo cubes = {VK_NULL_HANDLE, shadow_cubes_.View(),
                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-  VkDescriptorImageInfo atlas = {VK_NULL_HANDLE, probe_atlas_.View(),
+  VkDescriptorImageInfo atlas = {VK_NULL_HANDLE, probe_irradiance_.View(),
                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkDescriptorImageInfo radiance = {VK_NULL_HANDLE, probe_radiance_.View(),
+                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
   VkDescriptorImageInfo far_shadow = {VK_NULL_HANDLE, far_shadow_image_.View(),
                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
   VkDescriptorImageInfo visibility = {VK_NULL_HANDLE, probe_visibility_.View(),
                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-  VkWriteDescriptorSet writes[11] = {};
-  for (int i = 0; i < 11; i++) {
+  VkWriteDescriptorSet writes[12] = {};
+  for (int i = 0; i < 12; i++) {
     writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[i].dstSet = frame.set;
     writes[i].dstBinding = static_cast<uint32_t>(i);
@@ -712,7 +719,9 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
   writes[9].pImageInfo = &far_shadow;
   writes[10].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
   writes[10].pImageInfo = &visibility;
-  vkUpdateDescriptorSets(context_->device, 11, writes, 0, nullptr);
+  writes[11].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  writes[11].pImageInfo = &radiance;
+  vkUpdateDescriptorSets(context_->device, 12, writes, 0, nullptr);
 }
 
 uint32_t SceneRenderer::SlotCapacity() const {
@@ -842,6 +851,10 @@ bool SceneRenderer::CreateShadowMap() {
 }
 
 bool SceneRenderer::CreateLightingResources() {
+  VkFormatProperties format;
+  vkGetPhysicalDeviceFormatProperties(context_->physical_device, kProbeVisibilityFormat, &format);
+  visibility_filterable_ =
+      (format.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
   VmaAllocator a = context_->allocator;
   VkDevice d = context_->device;
   const VkImageUsageFlags color = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -854,6 +867,14 @@ bool SceneRenderer::CreateLightingResources() {
       !probe_atlas_.Create(a, d, kProbesPerAtlasRow * 9, kMaxProbes / kProbesPerAtlasRow,
                            kProbeFormat, color | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                            VK_IMAGE_ASPECT_COLOR_BIT) ||
+      !probe_irradiance_.Create(a, d, kProbesPerAtlasRow * kProbeOctaTexels,
+                                kMaxProbes / kProbesPerAtlasRow * kProbeOctaTexels, kProbeFormat,
+                                color | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                VK_IMAGE_ASPECT_COLOR_BIT) ||
+      !probe_radiance_.Create(a, d, kProbesPerAtlasRow * kProbeOctaTexels,
+                              kMaxProbes / kProbesPerAtlasRow * kProbeOctaTexels, kProbeFormat,
+                              color | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                              VK_IMAGE_ASPECT_COLOR_BIT) ||
       !probe_faces_.CreateArray(a, d, kProbeFaceSize, kProbeFaceSize, kMaxProbeBatch * 6,
                                 kHdrFormat, color, VK_IMAGE_ASPECT_COLOR_BIT) ||
       !probe_normal_.Create(a, d, kProbeFaceSize, kProbeFaceSize, kNormalFormat,
@@ -861,8 +882,8 @@ bool SceneRenderer::CreateLightingResources() {
       !probe_depth_.Create(a, d, kProbeFaceSize, kProbeFaceSize, kDepthFormat,
                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                            VK_IMAGE_ASPECT_DEPTH_BIT) ||
-      !probe_visibility_.Create(a, d, kProbesPerAtlasRow * kProbeVisibilitySize,
-                                kMaxProbes / kProbesPerAtlasRow * kProbeVisibilitySize,
+      !probe_visibility_.Create(a, d, kProbesPerAtlasRow * kProbeVisibilityTexels,
+                                kMaxProbes / kProbesPerAtlasRow * kProbeVisibilityTexels,
                                 kProbeVisibilityFormat, color, VK_IMAGE_ASPECT_COLOR_BIT) ||
       !far_shadow_image_.Create(a, d, kFarShadowResolution, kFarShadowResolution, kDepthFormat,
                                 VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
@@ -899,6 +920,8 @@ void SceneRenderer::Shutdown() {
   probe_visibility_.Reset();
   shadow_cube_depth_.Reset();
   probe_atlas_.Reset();
+  probe_irradiance_.Reset();
+  probe_radiance_.Reset();
   probe_faces_.Reset();
   probe_normal_.Reset();
   probe_depth_.Reset();
@@ -930,7 +953,7 @@ void SceneRenderer::Shutdown() {
   }
   for (VkPipeline* p : {&shadow_, &outline_mask_, &sky_, &ssao_, &blur_, &bloom_down_,
                         &bloom_up_, &shadow_cube_, &probe_capture_, &probe_sh_,
-                        &probe_visibility_pass_}) {
+                        &probe_visibility_pass_, &probe_octa_}) {
     destroy_pipeline(*p);
   }
   for (auto& [key, pipeline] : output_pipelines_) vkDestroyPipeline(device, pipeline, nullptr);
@@ -1264,14 +1287,17 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
                       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     }
-    TransitionImage(cmd, probe_atlas_.Get(), VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
-                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    for (VkImage image : {probe_atlas_.Get(), probe_irradiance_.Get(), probe_radiance_.Get()}) {
+      TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    }
     TransitionImage(cmd, far_shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
                     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     VK_PIPELINE_STAGE_2_NONE, 0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                     VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     probe_sh_set_ = AllocatePostSet({probe_faces_.View()});
+    probe_octa_set_ = AllocatePostSet({probe_atlas_.View()});
     probes_.clear_atlas = true;
     lighting_initialized_ = true;
   }
@@ -2188,6 +2214,7 @@ void SceneRenderer::FillLighting(FrameUniforms& u) const {
     u.far_shadow_params =
         glm::vec4(static_cast<float>(kFarShadowResolution), far_normal_bias_, 0.0f, 0.0f);
   }
+  u.gi_params = glm::vec4(visibility_filterable_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
   if (probes_.active) {
     u.gi_min = glm::vec4(probes_.min, 1.0f);
     u.gi_max = glm::vec4(probes_.max, probes_.intensity);
@@ -2366,20 +2393,21 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
     probes_.next = 0;
     probes_.passes = 0;
     probes_.clear_atlas = false;
-    TransitionImage(cmd, probe_atlas_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_PIPELINE_STAGE_2_CLEAR_BIT,
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    const VkClearColorValue zero = {};
-    const VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdClearColorImage(cmd, probe_atlas_.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1,
-                         &range);
-    TransitionImage(cmd, probe_atlas_.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_CLEAR_BIT,
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    for (VkImage image : {probe_atlas_.Get(), probe_irradiance_.Get(), probe_radiance_.Get()}) {
+      TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_PIPELINE_STAGE_2_CLEAR_BIT,
+                      VK_ACCESS_2_TRANSFER_WRITE_BIT);
+      const VkClearColorValue zero = {};
+      const VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+      vkCmdClearColorImage(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1, &range);
+      TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_CLEAR_BIT,
+                      VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    }
   }
 
   // Anything that changes the light the probes saw starts the bounces over
@@ -2539,9 +2567,9 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
   const float max_distance = 1.5f * glm::length(spacing);
   for (uint32_t k = 0; k < batch; k++) {
     const uint32_t probe = probes_.next + k;
-    const int32_t x = static_cast<int32_t>((probe % kProbesPerAtlasRow) * kProbeVisibilitySize);
-    const int32_t y = static_cast<int32_t>((probe / kProbesPerAtlasRow) * kProbeVisibilitySize);
-    const VkRect2D scissor = {{x, y}, {kProbeVisibilitySize, kProbeVisibilitySize}};
+    const int32_t x = static_cast<int32_t>((probe % kProbesPerAtlasRow) * kProbeVisibilityTexels);
+    const int32_t y = static_cast<int32_t>((probe / kProbesPerAtlasRow) * kProbeVisibilityTexels);
+    const VkRect2D scissor = {{x, y}, {kProbeVisibilityTexels, kProbeVisibilityTexels}};
     vkCmdSetScissor(cmd, 0, 1, &scissor);
     PostPush push;
     push.p[0] = glm::vec4(static_cast<float>(k * 6), static_cast<float>(kProbeFaceSize),
@@ -2553,6 +2581,48 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
   }
   vkCmdEndRendering(cmd);
   ToShaderRead(cmd, probe_visibility_.Get());
+
+  // And the light maps shading reads, from the new coefficients.
+  ToAttachment(cmd, probe_irradiance_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  ToAttachment(cmd, probe_radiance_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  {
+    const VkExtent2D maps = probe_irradiance_.Extent();
+    VkRenderingAttachmentInfo targets[2] = {};
+    for (int i = 0; i < 2; i++) {
+      targets[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+      targets[i].imageView = i == 0 ? probe_irradiance_.View() : probe_radiance_.View();
+      targets[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      targets[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      targets[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    }
+    VkRenderingInfo octa = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+    octa.renderArea = {{0, 0}, maps};
+    octa.layerCount = 1;
+    octa.colorAttachmentCount = 2;
+    octa.pColorAttachments = targets;
+    vkCmdBeginRendering(cmd, &octa);
+    SetViewport(cmd, maps);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_octa_);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, post_pipeline_layout_, 0, 1,
+                            &probe_octa_set_, 0, nullptr);
+    for (uint32_t k = 0; k < batch; k++) {
+      const uint32_t probe = probes_.next + k;
+      const int32_t x = static_cast<int32_t>((probe % kProbesPerAtlasRow) * kProbeOctaTexels);
+      const int32_t y = static_cast<int32_t>((probe / kProbesPerAtlasRow) * kProbeOctaTexels);
+      const VkRect2D scissor = {{x, y}, {kProbeOctaTexels, kProbeOctaTexels}};
+      vkCmdSetScissor(cmd, 0, 1, &scissor);
+      PostPush push;
+      push.p[0] = glm::vec4(static_cast<float>((probe % kProbesPerAtlasRow) * 9),
+                            static_cast<float>(probe / kProbesPerAtlasRow),
+                            static_cast<float>(x), static_cast<float>(y));
+      vkCmdPushConstants(cmd, post_pipeline_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                         sizeof(push), &push);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+    }
+    vkCmdEndRendering(cmd);
+  }
+  ToShaderRead(cmd, probe_irradiance_.Get());
+  ToShaderRead(cmd, probe_radiance_.Get());
 
   probes_.next += batch;
   if (probes_.next >= total) {
