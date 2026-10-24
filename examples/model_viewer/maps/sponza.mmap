@@ -39,14 +39,14 @@ lap_seconds = 70
 [node name="Sun" parent="."]
 
 [component type="Transform" node="Sun"]
-rotation = Vector3(-70.4, 118, 15.9)
+rotation = Vector3(-98.7, 134, 15.9)
 
 [component type="DirectionalLight" node="Sun"]
 color = Color(1, 0.96, 0.9, 1)
-intensity = 3.2
 ambient = Color(0.5, 0.56, 0.68, 1)
 ground_ambient = Color(0.15, 0.13, 0.11, 1)
 shadow_distance = 30
+intensity = 7.2
 
 [node name="Model" parent="."]
 

@@ -2,8 +2,8 @@
 
 [ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
 [ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
-[ext_resource type="Model" path="res://models/sibenik/sibenik.obj" id="3"]
-[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="4"]
+[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="3"]
+[ext_resource type="Model" path="res://models/sibenik/sibenik.obj" id="4"]
 
 [node name="Sibenik"]
 
@@ -18,7 +18,7 @@ title = "Sibenik Cathedral"
 hint = "The camera flies a loop. Space: pause · Esc: menu"
 
 [component type="PostProcessVolume" node="."]
-profile = ExtResource("4")
+profile = ExtResource("3")
 
 [node name="Camera" parent="."]
 
@@ -87,7 +87,7 @@ range = 18
 
 [component type="MeshRenderer" node="Model"]
 mesh = "model"
-model = ExtResource("3")
+model = ExtResource("4")
 
 [node name="Path" parent="."]
 

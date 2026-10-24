@@ -9,6 +9,8 @@
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
+#include "properties/model.h"
+#include "stb/stb_image_write.h"
 
 using namespace Mercury;
 
@@ -188,4 +190,40 @@ TEST_F(MPackTest, LoadsAProjectFromAPack) {
 
   AssetDatabase assets(project);
   EXPECT_TRUE(assets.Load("res://assets/player.masset"));
+}
+
+// A shipped game has no loose files: a model's textures, spelled with
+// Windows separators and the wrong case as OBJ files often are, must still be
+// found in the pack.
+TEST_F(MPackTest, ModelFindsItsTexturesInAPack) {
+  const uint8_t pixels[4 * 4 * 4] = {};
+  ASSERT_TRUE(stbi_write_png((dir_ / "stone.png").string().c_str(), 4, 4, 4, pixels, 16));
+  mpack::Writer writer;
+  writer.AddBytes("models/box/box.obj",
+                  Bytes("mtllib box.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\n"
+                        "vt 0 1\nusemtl Stone\nf 1/1 2/2 3/3\nusemtl Brick\nf 1/1 2/2 3/3\n"));
+  writer.AddBytes("models/box/box.mtl",
+                  Bytes("newmtl Stone\nKd 1 1 1\nmap_Kd textures\\Stone.PNG\n"
+                        "newmtl Brick\nKd 1 1 1\nmap_Kd textures/stone.png\n"));
+  writer.Add("models/box/textures/stone.png", dir_ / "stone.png");
+  std::string error;
+  ASSERT_TRUE(writer.Write(dir_, "game", mpack::kDefaultMaxArchiveBytes, &error)) << error;
+  auto reader = mpack::Reader::Open(dir_ / "game.mpack", &error);
+  ASSERT_TRUE(reader) << error;
+
+  const std::filesystem::path root = dir_ / "shipped";
+  os::Mount(root, reader);
+  EXPECT_EQ(os::ListDirectory(root / "models/box/textures"),
+            std::vector<std::string>{"stone.png"});
+  auto model = Model::Load((root / "models/box/box.obj").string(), ModelImportSettings{},
+                           &error);
+  ASSERT_TRUE(model) << error;
+  int textured = 0;
+  for (const auto& material : model->Materials()) {
+    if (material.name != "Stone" && material.name != "Brick") continue;
+    ASSERT_TRUE(material.texture) << material.name;
+    EXPECT_EQ(material.texture->width, 4);
+    textured++;
+  }
+  EXPECT_EQ(textured, 2);
 }
