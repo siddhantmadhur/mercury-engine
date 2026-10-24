@@ -2,8 +2,9 @@
 // model.ps.hlsl. Include after model_common.hlsli.
 //
 // Descriptor set 0 (continued from model_common.hlsli):
-//   binding 7  Texture2DArray<float>  shadow cubes: 6 faces per slot, each
-//                                     texel the distance to the nearest caster
+//   binding 7  TextureCubeArray<float> shadow cubes: one per slot, each texel
+//                                     the distance to the nearest caster over
+//                                     the cube's far distance (depth)
 //   binding 6  SamplerState           linear, clamped
 //   binding 8  Texture2D<float4>      probe irradiance: an octahedral map
 //                                     per probe of irradiance / pi, alpha
@@ -16,24 +17,19 @@
 #include "lighting_math.hlsli"
 
 [[vk::binding(6, 0)]] SamplerState clamp_sampler;
-[[vk::binding(7, 0)]] Texture2DArray<float> shadow_cubes;
+[[vk::binding(4, 0)]] SamplerComparisonState shadow_sampler;
+[[vk::binding(7, 0)]] TextureCubeArray<float> shadow_cubes;
 [[vk::binding(8, 0)]] Texture2D<float4> probe_irradiance;
 [[vk::binding(10, 0)]] Texture2D<float2> probe_visibility;
 [[vk::binding(11, 0)]] Texture2D<float4> probe_radiance;
 
 // ---------------------------------------------------------- cube shadows --
 
-// Distance stored in slot `slot` toward direction d.
-float ShadowCubeDistance(uint slot, float3 d)
-{
-    uint face = CubeFace(d);
-    float2 uv = CubeFaceUV(d, face);
-    float size = light_info.z;
-    int2 texel = int2(clamp(uv * size, 0.0, size - 1.0));
-    return shadow_cubes.Load(int4(texel, slot * 6 + face, 0));
-}
-
-static const uint kShadowSamples = 24;
+// Taps of the blocker search and of the filter (each filter tap a hardware
+// 2x2 comparison), and of a hard shadow's filter.
+static const uint kBlockerSamples = 8;
+static const uint kSoftSamples = 12;
+static const uint kHardSamples = 5;
 
 // Sample i of n on a unit disk (Vogel's spiral), turned by `angle`.
 float2 DiskSample(uint i, uint n, float angle)
@@ -67,18 +63,23 @@ float CubeShadow(uint slot, float3 world_pos, float3 normal, float radius, float
     // The sample pattern turns from pixel to pixel, trading banding for grain.
     float angle = PixelNoise(pixel) * 6.2831853;
     float texel = 2.5 / light_info.z;  // a little over one texel, in radians
+    float far_clip = cube.w;
+    float reference = (receiver - bias) / far_clip;
 
     float filter = texel;
+    uint samples = kHardSamples;
     if (soft)
     {
         // Blocker search over the cone the light subtends from the receiver.
         float search = clamp(radius / receiver, texel, 0.5);
         float blockers = 0.0;
         float count = 0.0;
-        for (uint i = 0; i < kShadowSamples; ++i)
+        [unroll]
+        for (uint i = 0; i < kBlockerSamples; ++i)
         {
-            float2 o = DiskSample(i, kShadowSamples, angle) * search;
-            float stored = ShadowCubeDistance(slot, normalize(d + t1 * o.x + t2 * o.y));
+            float2 o = DiskSample(i, kBlockerSamples, angle) * search;
+            float stored = shadow_cubes.SampleLevel(
+                clamp_sampler, float4(d + t1 * o.x + t2 * o.y, slot), 0) * far_clip;
             if (stored < receiver - bias)
             {
                 blockers += stored;
@@ -89,15 +90,16 @@ float CubeShadow(uint slot, float3 world_pos, float3 normal, float radius, float
         float blocker = blockers / count;
         float penumbra = radius * (receiver - blocker) / max(blocker, 1e-3);
         filter = clamp(penumbra / receiver, texel, 0.5);
+        samples = kSoftSamples;
     }
     float lit = 0.0;
-    for (uint j = 0; j < kShadowSamples; ++j)
+    for (uint j = 0; j < samples; ++j)
     {
-        float2 o = DiskSample(j, kShadowSamples, angle) * filter;
-        float stored = ShadowCubeDistance(slot, normalize(d + t1 * o.x + t2 * o.y));
-        lit += stored >= receiver - bias ? 1.0 : 0.0;
+        float2 o = DiskSample(j, samples, angle) * filter;
+        lit += shadow_cubes.SampleCmpLevelZero(shadow_sampler,
+                                               float4(d + t1 * o.x + t2 * o.y, slot), reference);
     }
-    return lit / kShadowSamples;
+    return lit / samples;
 }
 
 // ---------------------------------------------------------- light probes --
