@@ -21,6 +21,7 @@
 #ifndef MERCURY_PROPERTIES_MODEL_H
 #define MERCURY_PROPERTIES_MODEL_H
 
+#include <atomic>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -167,6 +168,10 @@ struct ModelImportSettings {
   bool use_file_scale = true;
   int max_texture_size = 8192;
   std::vector<ModelMaterialOverride> materials;
+  // .obj files at least this big are read in pieces on several threads; not
+  // part of the .mimport file.
+  size_t parallel_obj_min_bytes = 32 * 1024 * 1024;
+  size_t parallel_obj_pieces = 0;  // the most pieces; 0 picks from the core count
 
   // Reads "<model path>.mimport" if it exists; otherwise `defaults`.
   static ModelImportSettings ForFile(const std::string& model_path,
@@ -175,9 +180,12 @@ struct ModelImportSettings {
 
 class Model {
  public:
+  // `progress`, if given, is set from 0 to 1 as the model loads, from any
+  // of the threads that load it.
   static std::shared_ptr<Model> Load(const std::string& path,
                                      const ModelImportSettings& settings,
-                                     std::string* error = nullptr);
+                                     std::string* error = nullptr,
+                                     std::atomic<float>* progress = nullptr);
 
   const std::vector<ModelNode>& Nodes() const { return nodes_; }
   const std::vector<ModelMesh>& Meshes() const { return meshes_; }
@@ -188,6 +196,7 @@ class Model {
   // so drawing starts below it.
   bool RootOnObject() const { return root_on_object_; }
 
+  // By name; "Name#2" finds the second node called Name ("Name#1" the first).
   int FindNode(std::string_view name) const;
   // Clip by full name, or by the part after "|" (Armature|Run -> Run).
   const AnimationClip* FindClip(std::string_view name) const;

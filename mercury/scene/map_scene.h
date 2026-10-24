@@ -11,6 +11,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -26,6 +27,7 @@
 #include "project/map.h"
 #include "project/prefab_cache.h"
 #include "project/project.h"
+#include "scene/model_preloader.h"
 #include "scene/scene.h"
 #include "ui/ui_system.h"
 
@@ -124,6 +126,34 @@ class MapScene : public GameScene {
    * already running).
    */
   void Instantiate(const Map& map);
+
+  /**
+   * @brief Instantiate a map once its models are loaded on background threads
+   *
+   * Instantiates straight away if every model is already cached. Otherwise
+   * the scene keeps what it has (nothing, at startup, so only the clear
+   * color is drawn) until OnFrame sees the models are ready. `fresh_assets`
+   * drops the cached models and images first, as LoadMap does.
+   */
+  void BeginInstantiate(Map map, bool fresh_assets = false);
+  // True while a map from BeginInstantiate is waiting for its models.
+  bool IsLoadingMap() const { return loading_map_.has_value(); }
+
+  /**
+   * @brief Background loading of the models a map uses (editor)
+   *
+   * MissingModels lists the models of `map` that are not cached yet (every
+   * model with `all`). StartModelPreload loads them; call PollModelPreload
+   * each frame, which caches the models once they are done and returns true.
+   */
+  std::vector<ModelPreloader::Job> MissingModels(const Map& map, bool all = false);
+  // The job that loads one model; its res:// path is where it is cached.
+  ModelPreloader::Job MakeModelJob(const std::string& res_path) const;
+  bool HasModelAsset(const std::string& res_path) const { return model_assets_.contains(res_path); }
+  void StartModelPreload(std::vector<ModelPreloader::Job> jobs);
+  bool IsModelPreloading() const { return preloader_.IsBusy(); }
+  bool PollModelPreload();
+  const ModelPreloader& GetModelPreloader() const { return preloader_; }
 
   // Destroys every entity created from the map.
   void ClearMap();
@@ -345,6 +375,12 @@ class MapScene : public GameScene {
   std::map<std::string, std::unique_ptr<Mesh>, std::less<>> models_;
   std::string pending_map_;  // LoadMap
   void LoadPendingMap();
+  ModelPreloader preloader_;
+  std::optional<Map> loading_map_;  // BeginInstantiate, waiting for preloader_
+  bool loading_fresh_ = false;
+  void FinishLoadingMap();
+  void PlayAudioOnAwake();
+  ModelImportSettings ModelSettings(const std::string& file) const;
   std::map<std::string, std::shared_ptr<const Model>, std::less<>> model_assets_;
   std::map<std::string, std::shared_ptr<ImageData>, std::less<>> images_;
   std::map<std::string, std::shared_ptr<const MeshGeometry>> primitives_;

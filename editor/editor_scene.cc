@@ -151,11 +151,21 @@ void EditorScene::OnFrame(double delta_t) {
     }
   }
   DrawModals();
+  DrawModelLoadingPopup();
 
   EndFrameEdits();
-  if (scene_dirty_ && GetProject()) {
-    SyncFromMap(map_);
-    scene_dirty_ = false;
+  // Models the map needs are loaded on background threads first, so the
+  // rebuild below finds them cached instead of freezing the editor.
+  if (IsModelPreloading() && PollModelPreload() && !pending_import_.empty()) {
+    FinishModelImport();
+  }
+  if (scene_dirty_ && GetProject() && !IsModelPreloading()) {
+    if (auto jobs = MissingModels(map_); !jobs.empty()) {
+      StartModelPreload(std::move(jobs));
+    } else {
+      SyncFromMap(map_);
+      scene_dirty_ = false;
+    }
   }
   UpdateEditorCamera();
   UpdateWindowTitle();
@@ -378,6 +388,60 @@ MapNode* EditorScene::CreateNode(MapNode* parent, const std::string& name) {
   Select(node);
   MarkChanged();
   return node;
+}
+
+void EditorScene::ImportModel(const std::string& res_path) {
+  if (!GetProject() || IsModelPreloading()) return;
+  pending_import_ = res_path;
+  if (HasModelAsset(res_path)) {
+    FinishModelImport();
+  } else {
+    StartModelPreload({MakeModelJob(res_path)});
+  }
+}
+
+void EditorScene::FinishModelImport() {
+  const std::string res_path = std::move(pending_import_);
+  pending_import_.clear();
+  auto model = GetModelAsset(res_path);
+  if (!model) {
+    console_.Error("Could not import " + res_path);
+    return;
+  }
+
+  // The objects of an .obj are the root's children; others keep their
+  // nesting out of this, so only nodes that draw something are added.
+  const auto& nodes = model->Nodes();
+  std::map<std::string, int> seen;  // how many nodes of each name so far
+  std::vector<std::pair<std::string, std::string>> parts;  // node name, model node
+  for (size_t i = 1; i < nodes.size(); i++) {
+    const int count = ++seen[nodes[i].name];
+    if (nodes[i].meshes.empty()) continue;
+    // Several nodes may share a name; "Name#2" picks the second.
+    parts.emplace_back(nodes[i].name,
+                       count == 1 ? nodes[i].name : nodes[i].name + "#" + std::to_string(count));
+  }
+  if (parts.empty()) {
+    console_.Warn(res_path + " has nothing to import");
+    return;
+  }
+
+  // Objects keep the positions the file gives them, so the parent sits at the
+  // origin; move it to move everything.
+  const std::string stem = fs::path(res_path).stem().string();
+  MapNode* parent = CreateNode(nullptr, stem.empty() ? "Model" : stem);
+  for (const auto& [name, model_node] : parts) {
+    MapNode* node = map_.AddNode(parent, name);
+    node->components.push_back({"Transform", {}});
+    ComponentData renderer{"MeshRenderer", {}};
+    renderer.properties.Set("mesh", std::string("model"));
+    renderer.properties.Set("model", mtext::Resource{res_path});
+    renderer.properties.Set("node", model_node);
+    node->components.push_back(std::move(renderer));
+  }
+  Select(parent);
+  MarkChanged();
+  console_.Info("Imported " + std::to_string(parts.size()) + " objects from " + res_path);
 }
 
 void EditorScene::DrawCreateMenuItems(MapNode* parent) {
@@ -751,6 +815,30 @@ void EditorScene::DrawToolbar() {
 }
 
 // ----------------------------------------------------------------- Modals ---
+
+void EditorScene::DrawModelLoadingPopup() {
+  constexpr const char* kTitle = "##LoadingModels";
+  const bool busy = IsModelPreloading();
+  if (busy && !ImGui::IsPopupOpen(kTitle)) ImGui::OpenPopup(kTitle);
+  if (!ImGui::IsPopupOpen(kTitle)) return;
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  const auto& loader = GetModelPreloader();
+  const size_t done = loader.Done();
+  const size_t total = std::max<size_t>(1, loader.Total());
+  if (ImGui::BeginPopupModal(kTitle, nullptr,
+                             ImGuiWindowFlags_NoTitleBar |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!busy) {
+      ImGui::CloseCurrentPopup();
+    } else {
+      ImGui::Text("Loading models... %zu / %zu", done, total);
+      ImGui::ProgressBar(loader.Fraction(), ImVec2(360.0f, 0.0f));
+      ImGui::TextDisabled("%s", loader.CurrentName().c_str());
+    }
+    ImGui::EndPopup();
+  }
+}
 
 void EditorScene::DrawModals() {
   static const char* kTitles[] = {"", "New Script", "New Map", "New Folder",

@@ -79,9 +79,13 @@ add_library(mercury STATIC
         mercury/pack/mpack.h
         mercury/properties/vfs_io_system.h
         mercury/scene/scene.cc
+        mercury/scene/model_preloader.cc
+        mercury/scene/model_preloader.h
         mercury/input/input_manager.cc
         mercury/input/input_manager.h
         mercury/properties/texture2d.cc
+        mercury/properties/parallel_obj.cc
+        mercury/properties/parallel_obj.h
         mercury/properties/texture2d.h
         mercury/pobject/texture_atlas.cc
         mercury/pobject/texture_atlas.h
@@ -122,6 +126,7 @@ add_library(mercury STATIC
         mercury/ui/visual_element.cc
         mercury/ui/visual_element.h
         mercury/algorithms/sparse_set.h
+        mercury/algorithms/parallel_for.h
         mercury/pipelines/renderer.cc
         mercury/pipelines/renderer.h
         mercury/math/vector.cc
@@ -400,7 +405,9 @@ add_executable(mercury_test
         tests/ui_test.cc
         tests/physics_constraints_test.cc
         tests/mpack_test.cc
-        tests/gameplay_test.cc)
+        tests/gameplay_test.cc
+        tests/model_preloader_test.cc
+        tests/parallel_load_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

@@ -144,7 +144,8 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
     PDebug::error("Could not load map: {}", error);
     return 1;
   }
-  scene->Instantiate(map);
+  // Models load on background threads while the window shows black.
+  scene->BeginInstantiate(std::move(map));
   application->SetGameScene(std::move(scene));
   return application->Run();
 }

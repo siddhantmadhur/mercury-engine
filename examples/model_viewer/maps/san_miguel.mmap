@@ -1,0 +1,31 @@
+[mmap format=1]
+
+[ext_resource type="Model" path="res://models/san_miguel/san-miguel-low-poly.obj" id="1"]
+
+[node name="Model Viewer"]
+
+[component type="Transform" node="."]
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(0, 3, 8)
+rotation = Vector3(-15, 0, 0)
+
+[component type="Camera" node="Camera"]
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+rotation = Vector3(-66.1, -317, 0)
+
+[component type="DirectionalLight" node="Sun"]
+intensity = 1.1
+
+[node name="Map" parent="."]
+
+[component type="Transform" node="Map"]
+
+[component type="MeshRenderer" node="Map"]
+mesh = "model"
+model = ExtResource("1")
