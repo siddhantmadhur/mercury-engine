@@ -568,12 +568,20 @@ const MapNode* Map::FindFrom(const MapNode* root, std::string_view path) {
   return node;
 }
 
+namespace {
+
+MapNode* FindUidBelow(MapNode& node, uint64_t uid) {
+  if (node.uid == uid) return &node;
+  for (auto& child : node.children) {
+    if (MapNode* found = FindUidBelow(*child, uid)) return found;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 MapNode* Map::FindByUid(uint64_t uid) {
-  MapNode* found = nullptr;
-  Visit([&](MapNode& node) {
-    if (node.uid == uid) found = &node;
-  });
-  return found;
+  return root_ ? FindUidBelow(*root_, uid) : nullptr;
 }
 
 std::string Map::UniqueChildName(const MapNode* parent, std::string_view base,
