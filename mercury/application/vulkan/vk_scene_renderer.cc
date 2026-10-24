@@ -829,14 +829,16 @@ void SceneRenderer::DrawCulled(VkCommandBuffer cmd, FrameResources& frame, const
 }
 
 bool SceneRenderer::CreateShadowMap() {
-  if (!shadow_image_.Create(context_->allocator, context_->device, kShadowResolution,
-                            kShadowResolution, kDepthFormat,
-                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                VK_IMAGE_USAGE_SAMPLED_BIT,
-                            VK_IMAGE_ASPECT_DEPTH_BIT)) {
-    return false;
-  }
-  return true;
+  return shadow_image_.Create(context_->allocator, context_->device, kShadowResolution,
+                              kShadowResolution, kDepthFormat,
+                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                              VK_IMAGE_ASPECT_DEPTH_BIT) &&
+         shadow_cache_.Create(context_->allocator, context_->device, kShadowResolution,
+                              kShadowResolution, kDepthFormat,
+                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                  VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                              VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 bool SceneRenderer::CreateLightingResources() {
@@ -891,6 +893,7 @@ void SceneRenderer::Shutdown() {
   frames_.clear();
   white_.Reset();
   shadow_image_.Reset();
+  shadow_cache_.Reset();
   shadow_cubes_.Reset();
   far_shadow_image_.Reset();
   probe_visibility_.Reset();
@@ -1614,6 +1617,7 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
 void SceneRenderer::UpdateDynamic() {
   // Still for 2 seconds (at 60 fps) makes an object part of the scene again.
   constexpr uint64_t kRestFrames = 120;
+  dynamic_casters_ = 0;
   for (uint32_t slot = 0; slot < draws_.size(); slot++) {
     FrameDraw& draw = draws_[slot];
     if (!draw.alive) continue;
@@ -1624,6 +1628,7 @@ void SceneRenderer::UpdateDynamic() {
       static_version_++;
       WriteCullData(slot);
     }
+    dynamic_casters_ += dynamic && draw.cast_shadows;
   }
 }
 
@@ -1881,7 +1886,7 @@ FrameUniforms SceneRenderer::CameraUniforms(const RenderCamera& camera, VkExtent
 void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_view_proj,
                                   const RenderCamera& main_camera, bool enabled) {
   shadows_enabled_ = enabled;
-  light_view_proj_ = light_view_proj;
+  light_view_proj_ = light_view_proj;  // UpdateSunShadow places its own
   if (!shadow_written_) {
     TransitionImage(cmd, shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
                     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -1915,19 +1920,7 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
   }
   if (enabled) {
     GpuScope scope(gpu_timer_, cmd, "sun_shadow");
-    const CulledView culled =
-        CullView(cmd, frame, light_view_proj, kCullAlive | kCullCastShadows,
-                 kCullAlive | kCullCastShadows, main_camera.culling_mask);
-    std::vector<const FrameDraw*> casters;
-    if (!culled.valid) {
-      for (const auto& draw : draws_) {
-        if (draw.alive && draw.cast_shadows &&
-            (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
-          casters.push_back(&draw);
-        }
-      }
-    }
-    DrawSunShadow(cmd, frame, shadow_image_, kShadowResolution, light_view_proj, casters, culled);
+    UpdateSunShadow(cmd, frame, main_camera);
   }
   // The probes see the scene lit, shadows included, so they come last.
   {
@@ -1996,20 +1989,114 @@ void SceneRenderer::UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame) 
                 culled);
 }
 
+void SceneRenderer::UpdateSunShadow(VkCommandBuffer cmd, FrameResources& frame,
+                                    const RenderCamera& camera) {
+  glm::vec3 dir = lighting_.direction;
+  dir = glm::length(dir) < 0.001f ? glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f))
+                                  : glm::normalize(dir);
+  const float distance = lighting_.shadow_distance > 0.0f ? lighting_.shadow_distance : 60.0f;
+  const float half_box = distance * 0.6f;
+  // The map's center moves in steps of a quarter of it (whole texels), so
+  // between steps its still casters stay where they were drawn.
+  const float step = half_box * 0.5f;
+  const glm::vec3 up = std::abs(dir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+  const glm::mat4 rotation = glm::lookAt(glm::vec3(0.0f), dir, up);
+  const glm::vec3 eye = glm::vec3(rotation * glm::vec4(camera.position, 1.0f));
+  ShadowCacheKey key;
+  key.cell = glm::ivec3(glm::round(eye / step));
+  key.direction = dir;
+  key.distance = distance;
+  key.static_version = static_version_;
+  key.layers = camera.culling_mask;
+  const glm::vec3 center = glm::vec3(key.cell) * step;
+  const glm::mat4 view = glm::translate(glm::mat4(1.0f), -center) * rotation;
+  // Depth from `distance` toward the sun to `distance` away from it.
+  light_view_proj_ = glm::orthoRH_ZO(-half_box, half_box, -half_box, half_box, -distance,
+                                     distance) *
+                     view;
+
+  const bool redraw = !shadow_cache_valid_ || !(key == shadow_cache_key_);
+  if (redraw) {
+    shadow_cache_key_ = key;
+    shadow_cache_valid_ = true;
+    const CulledView still = CullView(cmd, frame, light_view_proj_,
+                                      kCullAlive | kCullCastShadows | kCullDynamic,
+                                      kCullAlive | kCullCastShadows, camera.culling_mask);
+    std::vector<const FrameDraw*> casters;
+    if (!still.valid) {
+      for (const auto& draw : draws_) {
+        if (draw.alive && draw.cast_shadows && !draw.dynamic &&
+            (camera.culling_mask & (1u << (draw.layer & 31)))) {
+          casters.push_back(&draw);
+        }
+      }
+    }
+    DrawSunShadow(cmd, frame, shadow_cache_, kShadowResolution, light_view_proj_, casters, still,
+                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+  }
+  // The live map: the cache, with this frame's moving casters over it. Left
+  // alone while it already shows just the cache.
+  const bool dynamic = dynamic_casters_ > 0;
+  if (!redraw && !dynamic && !shadow_has_dynamic_) return;
+  shadow_has_dynamic_ = dynamic;
+  TransitionImage(cmd, shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                  VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+  VkImageCopy region = {};
+  region.srcSubresource = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1};
+  region.dstSubresource = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1};
+  region.extent = {kShadowResolution, kShadowResolution, 1};
+  vkCmdCopyImage(cmd, shadow_cache_.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 shadow_image_.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+  if (!dynamic) {
+    TransitionImage(cmd, shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    return;
+  }
+  const CulledView moving = CullView(cmd, frame, light_view_proj_,
+                                     kCullAlive | kCullCastShadows | kCullDynamic,
+                                     kCullAlive | kCullCastShadows | kCullDynamic,
+                                     camera.culling_mask);
+  std::vector<const FrameDraw*> casters;
+  if (!moving.valid) {
+    for (const auto& draw : draws_) {
+      if (draw.alive && draw.cast_shadows && draw.dynamic &&
+          (camera.culling_mask & (1u << (draw.layer & 31)))) {
+        casters.push_back(&draw);
+      }
+    }
+  }
+  DrawSunShadow(cmd, frame, shadow_image_, kShadowResolution, light_view_proj_, casters, moving,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
 void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
                                   uint32_t size, const glm::mat4& view_proj,
                                   const std::vector<const FrameDraw*>& casters,
-                                  const CulledView& culled) {
+                                  const CulledView& culled, VkImageLayout from,
+                                  VkImageLayout to) {
   RenderCamera camera;
   FrameUniforms uniforms = CameraUniforms(camera, {size, size}, false, true);
   uniforms.view_proj = view_proj;
   const uint32_t offset = PushUniforms(frame, uniforms);
 
-  DepthToAttachment(cmd, image.Get());
+  // Drawn over what a copy put there, or cleared.
+  const bool load = from == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  TransitionImage(cmd, image.Get(), VK_IMAGE_ASPECT_DEPTH_BIT, from,
+                  VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COPY_BIT |
+                      kDepthStages,
+                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT |
+                      VK_ACCESS_2_TRANSFER_WRITE_BIT | kDepthAccess,
+                  kDepthStages, kDepthAccess);
   VkRenderingAttachmentInfo depth = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
   depth.imageView = image.View();
   depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  depth.loadOp = load ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
   depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   depth.clearValue.depthStencil = {1.0f, 0};
   VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
@@ -2037,7 +2124,10 @@ void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk
     }
   }
   vkCmdEndRendering(cmd);
-  DepthToShaderRead(cmd, image.Get());
+  TransitionImage(cmd, image.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
+                  VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, to, kDepthStages, kDepthAccess,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COPY_BIT,
+                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT);
 }
 
 // ---------------------------------------------------------------- Lighting --

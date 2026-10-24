@@ -332,10 +332,17 @@ class SceneRenderer {
   bool ResolveProbeVolume(ProbeVolumeData& volume);
   // `casters` into a sun shadow map (`image`, `size` square) as `view_proj`
   // sees them.
+  // `image` comes in `from` (SHADER_READ_ONLY or TRANSFER_DST: drawn over,
+  // not cleared) and is left in `to`.
   void DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
                      uint32_t size, const glm::mat4& view_proj,
                      const std::vector<const FrameDraw*>& casters,
-                     const CulledView& culled);
+                     const CulledView& culled,
+                     VkImageLayout from = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                     VkImageLayout to = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  // The camera's sun shadow map: still casters from the cache (redrawn when
+  // the map steps), moving ones drawn over a copy of it.
+  void UpdateSunShadow(VkCommandBuffer cmd, FrameResources& frame, const RenderCamera& camera);
   // Redraws the scene-wide sun shadow map when the sun or still geometry
   // changed.
   void UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame);
@@ -435,6 +442,21 @@ class SceneRenderer {
 
   vk::Image shadow_image_;
   bool shadow_written_ = false;
+  // The still casters of the camera's sun map, and what they were drawn for.
+  vk::Image shadow_cache_;
+  struct ShadowCacheKey {
+    glm::ivec3 cell = glm::ivec3(0);  // the map's center, in steps
+    glm::vec3 direction = glm::vec3(0.0f);
+    float distance = 0.0f;
+    uint64_t static_version = 0;
+    uint32_t layers = 0;
+    bool operator==(const ShadowCacheKey&) const = default;
+  };
+  ShadowCacheKey shadow_cache_key_;
+  bool shadow_cache_valid_ = false;
+  // The live map holds moving casters over the cache (cleared next frame).
+  bool shadow_has_dynamic_ = false;
+  uint32_t dynamic_casters_ = 0;  // this frame's moving shadow casters
 
   // The sun's shadow over all still geometry, for what lies past the
   // camera's map and for the probes. Drawn again only when it changes.
