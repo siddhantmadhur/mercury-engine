@@ -95,6 +95,19 @@ class Transform {
   std::vector<TransformationType> GetTransformations();
   void ClearTransformations();
 
+  // The parent's interpolated values the interpolated state was last
+  // derived from (MapScene's hierarchy); changing a local value forgets them.
+  bool MatchesParentInputs(glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) const {
+    return parent_inputs_valid_ && position == parent_position_ &&
+           rotation == parent_rotation_ && scale == parent_scale_;
+  }
+  void SetParentInputs(glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) {
+    parent_position_ = position;
+    parent_rotation_ = rotation;
+    parent_scale_ = scale;
+    parent_inputs_valid_ = true;
+  }
+
   bool IsDirty() const { return dirty_; }
   void ClearDirty() {
     dirty_ = false;
@@ -144,6 +157,13 @@ class Transform {
   // renderer reads + clears this each frame to decide which instance slots
   // need re-upload. Start dirty so the first frame seeds every slot.
   bool dirty_ = true;
+  // Previous, current and interpolated values all agree: Interpolate has
+  // nothing to do until something changes them.
+  bool at_rest_ = false;
+  bool parent_inputs_valid_ = false;
+  glm::vec3 parent_position_{};
+  glm::vec3 parent_rotation_{};
+  glm::vec3 parent_scale_{};
   glm::vec3 last_built_position_{};
   glm::vec3 last_built_rotation_{};
   glm::vec3 last_built_scale_{};

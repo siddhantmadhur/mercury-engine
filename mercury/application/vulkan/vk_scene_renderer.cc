@@ -554,22 +554,29 @@ VkPipeline SceneRenderer::PipelineForFormat(VkFormat format, bool fxaa) {
 }
 
 bool SceneRenderer::CreateFrameResources() {
+  constexpr uint32_t kInitialDraws = 4096;
+  if (!draw_buffer_.Create(context_->allocator, sizeof(DrawData) * kInitialDraws,
+                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                           Buffer::Memory::kDeviceLocal) ||
+      !instance_buffer_.Create(context_->allocator, sizeof(uint32_t) * kInitialDraws,
+                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, Buffer::Memory::kHostVisible)) {
+    return false;
+  }
+  {
+    std::vector<uint32_t> iota(kInitialDraws);
+    for (uint32_t i = 0; i < iota.size(); i++) iota[i] = i;
+    instance_buffer_.Write(iota.data(), iota.size() * sizeof(uint32_t));
+  }
   frames_.resize(frames_in_flight_);
   for (auto& frame : frames_) {
     using Memory = Buffer::Memory;
     if (!frame.uniforms.Create(context_->allocator, uniform_stride_ * kMaxPasses,
                                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, Memory::kHostVisible) ||
-        !frame.draws.Create(context_->allocator, sizeof(DrawData) * 4096,
-                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, Memory::kHostVisible) ||
         !frame.bones.Create(context_->allocator, sizeof(glm::mat4) * 4096,
-                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, Memory::kHostVisible) ||
-        !frame.instances.Create(context_->allocator, sizeof(uint32_t) * 4096,
-                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, Memory::kHostVisible)) {
+                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, Memory::kHostVisible)) {
       return false;
     }
-    std::vector<uint32_t> iota(4096);
-    for (uint32_t i = 0; i < iota.size(); i++) iota[i] = i;
-    frame.instances.Write(iota.data(), iota.size() * sizeof(uint32_t));
     VkDescriptorSetAllocateInfo alloc = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     alloc.descriptorPool = pool_;
     alloc.descriptorSetCount = 1;
@@ -581,7 +588,8 @@ bool SceneRenderer::CreateFrameResources() {
 
 void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
   VkDescriptorBufferInfo uniform = {frame.uniforms.Get(), 0, sizeof(FrameUniforms)};
-  VkDescriptorBufferInfo draws = {frame.draws.Get(), 0, VK_WHOLE_SIZE};
+  VkDescriptorBufferInfo draws = {draw_buffer_.Get(), 0, VK_WHOLE_SIZE};
+  frame.bound_draws = draw_buffer_.Get();
   VkDescriptorBufferInfo bones = {frame.bones.Get(), 0, VK_WHOLE_SIZE};
   VkDescriptorImageInfo shadow = {VK_NULL_HANDLE, shadow_image_.View(),
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
@@ -701,6 +709,14 @@ void SceneRenderer::Shutdown() {
   probe_depth_.Reset();
   vertex_buffer_.Reset();
   index_buffer_.Reset();
+  draw_buffer_.Reset();
+  instance_buffer_.Reset();
+  // The registry may be gone already; its hooks just stop forwarding.
+  if (hooks_) hooks_->renderer = nullptr;
+  hooks_.reset();
+  registry_ = nullptr;
+  draws_.clear();
+  records_.clear();
   auto destroy_pipeline = [&](VkPipeline& p) {
     if (p) vkDestroyPipeline(device, p, nullptr);
     p = VK_NULL_HANDLE;
@@ -999,6 +1015,8 @@ void SceneRenderer::ReleaseUnused(VkCommandBuffer cmd) {
   vertices_used_ = 0;
   indices_used_ = 0;
   geometry_.clear();
+  // Every slot named the old buffers: upload and build them again.
+  rebuild_all_ = true;
 }
 
 // ----------------------------------------------------------------- Prepare --
@@ -1007,11 +1025,7 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
   FrameResources& frame = frames_[frame_index_];
   settings_ = scene.GetRenderSettings();
   lighting_ = scene.GetLighting();
-  draws_.clear();
-  records_.clear();
   bones_.clear();
-  draw_entities_.clear();
-  draw_skinned_.clear();
 
   if (white_.Get() == VK_NULL_HANDLE) {
     white_.Create(context_->allocator, context_->device, 1, 1, VK_FORMAT_R8G8B8A8_UNORM,
@@ -1059,144 +1073,34 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
   }
   AssignShadowCubes();
   ReleaseUnused(cmd);
-
-  auto& registry = scene.GetRegistry();
-  auto* map_scene = dynamic_cast<MapScene*>(&scene);
-  auto view = registry.view<RenderMesh, Transform>();
-  std::vector<glm::mat4> skin;
-  for (auto [entity, mesh, transform] : view.each()) {
-    if (!mesh.visible || registry.all_of<InactiveTag>(entity)) continue;
-    uint32_t layer = 0;
-    if (auto* info = registry.try_get<NodeInfo>(entity)) layer = static_cast<uint32_t>(info->layer);
-    const glm::mat4 world = glm::translate(glm::mat4(1.0f), transform.GetInterpolatedPosition()) *
-                            transform.GetRotationMatrix() *
-                            glm::scale(glm::mat4(1.0f), transform.GetInterpolatedScale());
-    const ModelPose* pose = nullptr;
-    if (mesh.pose_entity != entt::null && registry.valid(mesh.pose_entity)) {
-      pose = registry.try_get<ModelPose>(mesh.pose_entity);
-    }
-    for (const auto& draw : mesh.draws) {
-      const GpuGeometry* geometry = UploadGeometry(cmd, frame, draw.geometry);
-      if (!geometry) continue;
-      static const RenderMaterial kDefaultMaterial;
-      const RenderMaterial& material =
-          mesh.materials.empty()
-              ? kDefaultMaterial
-              : mesh.materials[std::min<size_t>(draw.material, mesh.materials.size() - 1)];
-      DrawData record = {};
-      uint32_t bone_offset = kNoSkin;
-      if (draw.skin >= 0) {
-        mesh.SkinMatrices(draw, pose, skin);
-        bone_offset = static_cast<uint32_t>(bones_.size());
-        bones_.insert(bones_.end(), skin.begin(), skin.end());
-        record.world = world;
-      } else {
-        record.world = world * mesh.DrawMatrix(draw, pose);
-      }
-      const glm::mat3 linear = glm::mat3(record.world);
-      const float det = glm::determinant(linear);
-      const bool mirrored = det < 0.0f;
-      record.normal_matrix = glm::mat4(std::abs(det) > 1e-12f
-                                           ? glm::transpose(glm::inverse(linear))
-                                           : linear);
-      record.color = glm::vec4(SrgbToLinear(glm::vec3(material.color)), material.color.a);
-      record.emission = glm::vec4(material.emission, 0.0f);
-      record.uv = glm::vec4(material.tiling, material.offset);
-      uint32_t texture = 0;
-      uint32_t flags = 0;
-      if (!material.render_texture.empty()) {
-        int width = 1024, height = 1024;
-        if (map_scene) map_scene->GetRenderTextureSize(material.render_texture, width, height);
-        texture = RenderTextureSlot(material.render_texture, width, height);
-        flags |= kFlagClampTexture;
-        // Rendered images start at the top row; Unity's start at the bottom.
-        record.uv.y = -record.uv.y;
-        record.uv.w = 1.0f - record.uv.w;
-      } else {
-        texture = TextureSlot(cmd, frame, material.texture);
-      }
-      if (material.unlit) flags |= kFlagUnlit;
-      if (material.sdf_text) flags |= kFlagSdfText;
-      if (material.transparent) flags |= kFlagTransparent;
-      record.info = glm::uvec4(texture, flags, bone_offset, layer);
-      record.material =
-          glm::vec4(material.metallic, material.smoothness, material.normal_scale, 0.0f);
-      record.maps = glm::uvec4(TextureSlot(cmd, frame, material.normal_texture),
-                               TextureSlot(cmd, frame, material.emission_texture), 0, 0);
-
-      FrameDraw frame_draw;
-      frame_draw.geometry = geometry;
-      frame_draw.record = static_cast<uint32_t>(records_.size());
-      frame_draw.layer = layer;
-      frame_draw.transparent = material.transparent;
-      frame_draw.double_sided = material.double_sided || material.sdf_text;
-      frame_draw.cast_shadows = mesh.cast_shadows && !material.transparent;
-      frame_draw.outline = (mesh.rendering_layers & settings_.outline_layers) != 0;
-      const glm::vec3 local_min = draw.geometry->bounds_min;
-      const glm::vec3 local_max = draw.geometry->bounds_max;
-      frame_draw.center = glm::vec3(record.world * glm::vec4((local_min + local_max) * 0.5f, 1.0f));
-      frame_draw.bounds_min = glm::vec3(std::numeric_limits<float>::max());
-      frame_draw.bounds_max = glm::vec3(-std::numeric_limits<float>::max());
-      for (int corner = 0; corner < 8; corner++) {
-        const glm::vec3 local((corner & 1) ? local_max.x : local_min.x,
-                              (corner & 2) ? local_max.y : local_min.y,
-                              (corner & 4) ? local_max.z : local_min.z);
-        const glm::vec3 p = glm::vec3(record.world * glm::vec4(local, 1.0f));
-        frame_draw.bounds_min = glm::min(frame_draw.bounds_min, p);
-        frame_draw.bounds_max = glm::max(frame_draw.bounds_max, p);
-      }
-      if (draw.skin >= 0) {
-        // Animated limbs reach past the bind pose's box.
-        const glm::vec3 grow = (frame_draw.bounds_max - frame_draw.bounds_min) * 0.25f;
-        frame_draw.bounds_min -= grow;
-        frame_draw.bounds_max += grow;
-      }
-      draw_entities_.push_back(static_cast<uint32_t>(entity));
-      draw_skinned_.push_back(draw.skin >= 0);
-      // An odd number of negative scale axes reverses the winding.
-      frame_draw.mirrored = mirrored;
-      records_.push_back(record);
-      draws_.push_back(frame_draw);
-    }
-  }
-
-  TrackMotion();
+  SyncScene(cmd, frame, scene);
+  UpdateDynamic();
   {
-    uint64_t triangles = 0;
-    for (const auto& draw : draws_) triangles += draw.geometry->index_count / 3;
-    Profiler::SetCounter("draws", static_cast<double>(draws_.size()));
+    uint64_t live = 0, triangles = 0;
+    for (const auto& draw : draws_) {
+      if (!draw.alive) continue;
+      live++;
+      triangles += draw.geometry->index_count / 3;
+    }
+    Profiler::SetCounter("draws", static_cast<double>(live));
     Profiler::SetCounter("triangles", static_cast<double>(triangles));
   }
 
-  // Per-frame buffers grow when needed; this frame's earlier use is done.
-  auto ensure = [&](Buffer& buffer, VkDeviceSize bytes, VkBufferUsageFlags usage) {
-    if (bytes <= buffer.Size()) return true;
-    Buffer bigger;
-    if (!bigger.Create(context_->allocator, std::max(bytes, buffer.Size() * 2), usage,
-                       Buffer::Memory::kHostVisible)) {
-      return false;
-    }
-    buffer = std::move(bigger);
-    return true;
-  };
-  bool rebind = false;
-  const VkDeviceSize draw_bytes = sizeof(DrawData) * std::max<size_t>(records_.size(), 1);
+  // Bone matrices are this frame's alone; the buffer grows when needed
+  // (this frame's earlier use of it is done).
   const VkDeviceSize bone_bytes = sizeof(glm::mat4) * std::max<size_t>(bones_.size(), 1);
-  if (draw_bytes > frame.draws.Size()) {
-    rebind |= ensure(frame.draws, draw_bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-    const VkDeviceSize count = frame.draws.Size() / sizeof(DrawData);
-    if (ensure(frame.instances, count * sizeof(uint32_t), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)) {
-      std::vector<uint32_t> iota(count);
-      for (uint32_t i = 0; i < iota.size(); i++) iota[i] = i;
-      frame.instances.Write(iota.data(), iota.size() * sizeof(uint32_t));
+  bool rebind = false;
+  if (bone_bytes > frame.bones.Size()) {
+    Buffer bigger;
+    if (bigger.Create(context_->allocator, std::max(bone_bytes, frame.bones.Size() * 2),
+                      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, Buffer::Memory::kHostVisible)) {
+      frame.bones = std::move(bigger);
+      rebind = true;
     }
   }
-  if (bone_bytes > frame.bones.Size()) {
-    rebind |= ensure(frame.bones, bone_bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  }
-  if (rebind) UpdateFrameSet(frame);
-  if (!records_.empty()) frame.draws.Write(records_.data(), sizeof(DrawData) * records_.size());
   if (!bones_.empty()) frame.bones.Write(bones_.data(), sizeof(glm::mat4) * bones_.size());
+  UploadRecords(cmd, frame);
+  if (rebind || frame.bound_draws != draw_buffer_.Get()) UpdateFrameSet(frame);
 
   // Copies before any draw reads them.
   GlobalBarrier(cmd, VK_PIPELINE_STAGE_2_COPY_BIT | VK_PIPELINE_STAGE_2_BLIT_BIT,
@@ -1208,39 +1112,349 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
                     VK_ACCESS_2_SHADER_READ_BIT);
 }
 
-void SceneRenderer::TrackMotion() {
-  // Each object's draws hashed together: a model's parts move with it.
-  std::unordered_map<uint32_t, uint64_t> hashes;
-  for (size_t i = 0; i < draws_.size(); i++) {
-    auto [it, inserted] = hashes.try_emplace(draw_entities_[i], kHashSeed);
-    HashFloats(it->second, &records_[draws_[i].record].world[0][0], 16);
+// ------------------------------------------------------------ Scene slots --
+
+void RenderHooks::OnMeshChanged(entt::registry& registry, entt::entity entity) {
+  if (renderer && &registry == renderer->registry_) renderer->changed_.push_back(entity);
+}
+
+void RenderHooks::OnProxyDestroyed(entt::registry& registry, entt::entity entity) {
+  if (renderer && &registry == renderer->registry_) {
+    renderer->FreeProxySlots(registry.get<RenderProxy>(entity));
   }
-  size_t fresh = 0;
-  for (const auto& [entity, hash] : hashes) fresh += motion_.count(entity) == 0;
-  // Most objects new at once is a map loading: they start out still. One
-  // that appears later (spawned) counts as moving until it has rested.
-  const bool loading = fresh * 2 > hashes.size();
-  for (const auto& [entity, hash] : hashes) {
-    auto [it, inserted] = motion_.try_emplace(entity);
-    Motion& motion = it->second;
-    if (inserted) {
-      motion.moved = loading ? 0 : frame_number_;
-    } else if (motion.hash != hash) {
-      motion.moved = frame_number_;
+}
+
+void SceneRenderer::AttachRegistry(entt::registry& registry) {
+  // The previous scene's registry may be gone: let go of it without
+  // touching it.
+  if (hooks_) hooks_->renderer = nullptr;
+  FreeAllSlots();
+  registry_ = &registry;
+  if (auto* existing = registry.try_ctx<std::shared_ptr<RenderHooks>>()) {
+    hooks_ = *existing;
+  } else {
+    hooks_ = std::make_shared<RenderHooks>();
+    registry.set<std::shared_ptr<RenderHooks>>(hooks_);
+    // Rebuilds a RenderMesh added, replaced (emplace_or_replace, patch) or
+    // removed, and entities turning active or inactive. A RenderMesh edited
+    // in place needs registry.patch<RenderMesh>(entity) to be seen.
+    registry.on_construct<RenderMesh>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
+    registry.on_update<RenderMesh>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
+    registry.on_destroy<RenderMesh>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
+    registry.on_construct<InactiveTag>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
+    registry.on_destroy<InactiveTag>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
+    registry.on_destroy<RenderProxy>().connect<&RenderHooks::OnProxyDestroyed>(*hooks_);
+  }
+  // Proxies left from an earlier visit name slots that are gone.
+  registry.clear<RenderProxy>();
+  hooks_->renderer = this;
+  changed_.clear();
+}
+
+void SceneRenderer::FreeAllSlots() {
+  draws_.clear();
+  records_.clear();
+  record_dirty_.clear();
+  dirty_records_.clear();
+  free_draw_slots_.clear();
+  static_version_++;
+}
+
+uint32_t SceneRenderer::AllocateSlot() {
+  if (!free_draw_slots_.empty()) {
+    const uint32_t slot = free_draw_slots_.back();
+    free_draw_slots_.pop_back();
+    return slot;
+  }
+  draws_.emplace_back();
+  records_.emplace_back();
+  record_dirty_.push_back(0);
+  return static_cast<uint32_t>(draws_.size() - 1);
+}
+
+void SceneRenderer::FreeProxySlots(RenderProxy& proxy) {
+  for (uint32_t slot : proxy.slots) {
+    if (slot >= draws_.size()) continue;
+    if (!draws_[slot].dynamic) static_version_++;
+    draws_[slot] = FrameDraw{};
+    free_draw_slots_.push_back(slot);
+  }
+  proxy.slots.clear();
+}
+
+void SceneRenderer::SyncScene(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene) {
+  auto& registry = scene.GetRegistry();
+  if (&registry != registry_) AttachRegistry(registry);
+
+  // What the signals reported: rebuild those, and drop the proxies of
+  // entities that no longer have a RenderMesh.
+  for (entt::entity entity : changed_) {
+    if (!registry.valid(entity)) continue;
+    auto* proxy = registry.try_get<RenderProxy>(entity);
+    if (!proxy) continue;
+    if (!registry.all_of<RenderMesh>(entity)) {
+      registry.remove<RenderProxy>(entity);  // frees its slots
+    } else {
+      proxy->dirty = true;
     }
-    motion.hash = hash;
-    motion.seen = frame_number_;
   }
-  if (frame_number_ % 60 == 0) {
-    std::erase_if(motion_, [&](const auto& entry) { return entry.second.seen + 300 < frame_number_; });
+  changed_.clear();
+  if (rebuild_all_) {
+    rebuild_all_ = false;
+    for (auto [entity, proxy] : registry.view<RenderProxy>().each()) proxy.dirty = true;
   }
+
+  // New entities. Most of the scene new at once is a map loading: it starts
+  // out still. One that appears later (spawned) counts as moving until it
+  // has rested.
+  std::vector<entt::entity> fresh;
+  for (auto entity : registry.view<RenderMesh, Transform>(entt::exclude<RenderProxy>)) {
+    fresh.push_back(entity);
+  }
+  const size_t existing = registry.view<RenderProxy>().size();
+  const bool loading = fresh.size() * 2 > existing + fresh.size();
+  for (entt::entity entity : fresh) {
+    RenderProxy& proxy = registry.emplace<RenderProxy>(entity);
+    if (!loading) proxy.moved = frame_number_;
+  }
+
+  // Every drawn entity: only what moved or changed is rebuilt.
+  for (auto [entity, mesh, transform, proxy] :
+       registry.view<RenderMesh, Transform, RenderProxy>().each()) {
+    const bool visible = mesh.visible && !registry.all_of<InactiveTag>(entity);
+    uint32_t layer = 0;
+    if (auto* info = registry.try_get<NodeInfo>(entity)) layer = static_cast<uint32_t>(info->layer);
+    const glm::vec3 position = transform.GetInterpolatedPosition();
+    const glm::vec3 rotation = transform.GetInterpolatedRotation();
+    const glm::vec3 scale = transform.GetInterpolatedScale();
+    const bool moved = proxy.built && (position != proxy.position || rotation != proxy.rotation ||
+                                       scale != proxy.scale);
+    if (!proxy.dirty && !proxy.animated && !moved && visible == proxy.visible &&
+        layer == proxy.layer && mesh.cast_shadows == proxy.cast_shadows &&
+        mesh.rendering_layers == proxy.rendering_layers) {
+      continue;
+    }
+    if (moved) proxy.moved = frame_number_;
+    proxy.position = position;
+    proxy.rotation = rotation;
+    proxy.scale = scale;
+    proxy.visible = visible;
+    proxy.layer = layer;
+    proxy.cast_shadows = mesh.cast_shadows;
+    proxy.rendering_layers = mesh.rendering_layers;
+    BuildProxy(cmd, frame, scene, entity, mesh, transform, proxy);
+  }
+}
+
+void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene,
+                               entt::entity entity, const RenderMesh& mesh,
+                               const Transform& transform, RenderProxy& proxy) {
+  auto& registry = scene.GetRegistry();
+  proxy.built = true;
+  proxy.dirty = false;
+  const ModelPose* pose = nullptr;
+  if (mesh.pose_entity != entt::null && registry.valid(mesh.pose_entity)) {
+    pose = registry.try_get<ModelPose>(mesh.pose_entity);
+  }
+  bool skinned = false;
+  for (const auto& draw : mesh.draws) skinned |= draw.skin >= 0;
+  proxy.animated = pose != nullptr || skinned;
+
+  // The slots it needs: one per draw with geometry, none when hidden.
+  std::vector<const RenderDraw*> drawn;
+  if (proxy.visible) {
+    for (const auto& draw : mesh.draws) {
+      if (draw.geometry && !draw.geometry->indices.empty()) drawn.push_back(&draw);
+    }
+  }
+  while (proxy.slots.size() > drawn.size()) {
+    const uint32_t slot = proxy.slots.back();
+    proxy.slots.pop_back();
+    if (!draws_[slot].dynamic) static_version_++;
+    draws_[slot] = FrameDraw{};
+    free_draw_slots_.push_back(slot);
+  }
+  while (proxy.slots.size() < drawn.size()) proxy.slots.push_back(AllocateSlot());
+
+  constexpr uint64_t kRestFrames = 120;
+  const bool resting = proxy.moved == 0 || proxy.moved + kRestFrames <= frame_number_;
+  // Still geometry changed: what the probes and shadow caches saw is stale.
+  if (!proxy.animated && resting) static_version_++;
+  if (drawn.empty()) return;
+
+  auto* map_scene = dynamic_cast<MapScene*>(&scene);
+  const glm::mat4 world = glm::translate(glm::mat4(1.0f), transform.GetInterpolatedPosition()) *
+                          transform.GetRotationMatrix() *
+                          glm::scale(glm::mat4(1.0f), transform.GetInterpolatedScale());
+  std::vector<glm::mat4> skin;
+  for (size_t i = 0; i < drawn.size(); i++) {
+    const RenderDraw& draw = *drawn[i];
+    const uint32_t slot = proxy.slots[i];
+    const GpuGeometry* geometry = UploadGeometry(cmd, frame, draw.geometry);
+    FrameDraw& frame_draw = draws_[slot];
+    if (!geometry) {
+      frame_draw = FrameDraw{};  // kept (unused) until the entity changes
+      continue;
+    }
+    static const RenderMaterial kDefaultMaterial;
+    const RenderMaterial& material =
+        mesh.materials.empty()
+            ? kDefaultMaterial
+            : mesh.materials[std::min<size_t>(draw.material, mesh.materials.size() - 1)];
+    DrawData& record = records_[slot];
+    record = {};
+    uint32_t bone_offset = kNoSkin;
+    if (draw.skin >= 0) {
+      mesh.SkinMatrices(draw, pose, skin);
+      bone_offset = static_cast<uint32_t>(bones_.size());
+      bones_.insert(bones_.end(), skin.begin(), skin.end());
+      record.world = world;
+    } else {
+      record.world = world * mesh.DrawMatrix(draw, pose);
+    }
+    const glm::mat3 linear = glm::mat3(record.world);
+    const float det = glm::determinant(linear);
+    record.normal_matrix = glm::mat4(std::abs(det) > 1e-12f
+                                         ? glm::transpose(glm::inverse(linear))
+                                         : linear);
+    record.color = glm::vec4(SrgbToLinear(glm::vec3(material.color)), material.color.a);
+    record.emission = glm::vec4(material.emission, 0.0f);
+    record.uv = glm::vec4(material.tiling, material.offset);
+    uint32_t texture = 0;
+    uint32_t flags = 0;
+    if (!material.render_texture.empty()) {
+      int width = 1024, height = 1024;
+      if (map_scene) map_scene->GetRenderTextureSize(material.render_texture, width, height);
+      texture = RenderTextureSlot(material.render_texture, width, height);
+      flags |= kFlagClampTexture;
+      // Rendered images start at the top row; Unity's start at the bottom.
+      record.uv.y = -record.uv.y;
+      record.uv.w = 1.0f - record.uv.w;
+    } else {
+      texture = TextureSlot(cmd, frame, material.texture);
+    }
+    if (material.unlit) flags |= kFlagUnlit;
+    if (material.sdf_text) flags |= kFlagSdfText;
+    if (material.transparent) flags |= kFlagTransparent;
+    record.info = glm::uvec4(texture, flags, bone_offset, proxy.layer);
+    record.material =
+        glm::vec4(material.metallic, material.smoothness, material.normal_scale, 0.0f);
+    record.maps = glm::uvec4(TextureSlot(cmd, frame, material.normal_texture),
+                             TextureSlot(cmd, frame, material.emission_texture), 0, 0);
+    if (!record_dirty_[slot]) {
+      record_dirty_[slot] = 1;
+      dirty_records_.push_back(slot);
+    }
+
+    const bool was_dynamic = frame_draw.alive && frame_draw.dynamic;
+    frame_draw = FrameDraw{};
+    frame_draw.geometry = geometry;
+    frame_draw.record = slot;
+    frame_draw.layer = proxy.layer;
+    frame_draw.entity = static_cast<uint32_t>(entity);
+    frame_draw.alive = true;
+    frame_draw.transparent = material.transparent;
+    frame_draw.double_sided = material.double_sided || material.sdf_text;
+    frame_draw.cast_shadows = mesh.cast_shadows && !material.transparent;
+    frame_draw.rendering_layers = mesh.rendering_layers;
+    // An odd number of negative scale axes reverses the winding.
+    frame_draw.mirrored = det < 0.0f;
+    frame_draw.skinned = proxy.animated;
+    frame_draw.moved = proxy.moved;
+    frame_draw.dynamic = was_dynamic;  // UpdateDynamic decides
+    const glm::vec3 local_min = draw.geometry->bounds_min;
+    const glm::vec3 local_max = draw.geometry->bounds_max;
+    frame_draw.center = glm::vec3(record.world * glm::vec4((local_min + local_max) * 0.5f, 1.0f));
+    // The world box from the local one: each axis of the matrix adds its
+    // extent (Arvo), no corners to transform.
+    const glm::vec3 local_center = (local_min + local_max) * 0.5f;
+    const glm::vec3 local_half = (local_max - local_min) * 0.5f;
+    const glm::mat3 abs_linear(glm::abs(linear[0]), glm::abs(linear[1]), glm::abs(linear[2]));
+    const glm::vec3 center = glm::vec3(record.world * glm::vec4(local_center, 1.0f));
+    glm::vec3 half = abs_linear * local_half;
+    if (draw.skin >= 0) half *= 1.5f;  // animated limbs reach past the bind pose's box
+    frame_draw.bounds_min = center - half;
+    frame_draw.bounds_max = center + half;
+  }
+}
+
+void SceneRenderer::UpdateDynamic() {
   // Still for 2 seconds (at 60 fps) makes an object part of the scene again.
   constexpr uint64_t kRestFrames = 120;
-  for (size_t i = 0; i < draws_.size(); i++) {
-    const Motion& motion = motion_[draw_entities_[i]];
-    draws_[i].dynamic =
-        draw_skinned_[i] || (motion.moved != 0 && motion.moved + kRestFrames > frame_number_);
+  for (auto& draw : draws_) {
+    if (!draw.alive) continue;
+    const bool dynamic =
+        draw.skinned || (draw.moved != 0 && draw.moved + kRestFrames > frame_number_);
+    if (dynamic != draw.dynamic) {
+      draw.dynamic = dynamic;
+      static_version_++;
+    }
   }
+}
+
+void SceneRenderer::UploadRecords(VkCommandBuffer cmd, FrameResources& frame) {
+  const VkDeviceSize needed = sizeof(DrawData) * std::max<size_t>(records_.size(), 1);
+  if (needed > draw_buffer_.Size()) {
+    // A bigger buffer, filled from the CPU copy; frames in flight keep
+    // reading the old one until they are done.
+    Buffer bigger;
+    const VkDeviceSize size = std::max(needed, draw_buffer_.Size() * 2);
+    if (!bigger.Create(context_->allocator, size,
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       Buffer::Memory::kDeviceLocal)) {
+      PDebug::error("Vulkan: could not grow the draw buffer to {} bytes", size);
+      return;
+    }
+    garbage_.push_back({frame_number_, std::move(draw_buffer_)});
+    draw_buffer_ = std::move(bigger);
+    const VkDeviceSize count = draw_buffer_.Size() / sizeof(DrawData);
+    Buffer instances;
+    if (instances.Create(context_->allocator, count * sizeof(uint32_t),
+                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, Buffer::Memory::kHostVisible)) {
+      std::vector<uint32_t> iota(count);
+      for (uint32_t i = 0; i < iota.size(); i++) iota[i] = i;
+      instances.Write(iota.data(), iota.size() * sizeof(uint32_t));
+      garbage_.push_back({frame_number_, std::move(instance_buffer_)});
+      instance_buffer_ = std::move(instances);
+    }
+    for (size_t slot = 0; slot < records_.size(); slot++) {
+      if (!record_dirty_[slot]) {
+        record_dirty_[slot] = 1;
+        dirty_records_.push_back(static_cast<uint32_t>(slot));
+      }
+    }
+  }
+  if (dirty_records_.empty()) return;
+
+  // Runs of neighboring slots go in one copy each.
+  std::sort(dirty_records_.begin(), dirty_records_.end());
+  Buffer staging;
+  if (!staging.Create(context_->allocator, sizeof(DrawData) * dirty_records_.size(),
+                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT, Buffer::Memory::kHostVisible)) {
+    return;
+  }
+  auto* mapped = static_cast<DrawData*>(staging.Mapped());
+  std::vector<VkBufferCopy> regions;
+  for (size_t i = 0; i < dirty_records_.size(); i++) {
+    const uint32_t slot = dirty_records_[i];
+    mapped[i] = records_[slot];
+    record_dirty_[slot] = 0;
+    if (!regions.empty() && i > 0 && dirty_records_[i - 1] + 1 == slot) {
+      regions.back().size += sizeof(DrawData);
+    } else {
+      regions.push_back({sizeof(DrawData) * i, sizeof(DrawData) * slot, sizeof(DrawData)});
+    }
+  }
+  staging.Flush(0, sizeof(DrawData) * dirty_records_.size());
+  dirty_records_.clear();
+  // Earlier frames may still read the records being replaced.
+  GlobalBarrier(cmd, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT);
+  vkCmdCopyBuffer(cmd, staging.Get(), draw_buffer_.Get(), static_cast<uint32_t>(regions.size()),
+                  regions.data());
+  frame.staging.push_back(std::move(staging));
 }
 
 // ----------------------------------------------------------------- Targets --
@@ -1425,25 +1639,32 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
   // The still, opaque geometry the main camera draws: what the probes and
   // the far shadow map see. Moving objects are left out, or neither would
   // ever settle.
-  still_.clear();
-  still_min_ = glm::vec3(std::numeric_limits<float>::max());
-  still_max_ = glm::vec3(-std::numeric_limits<float>::max());
-  still_indices_ = 0;
-  for (const auto& draw : draws_) {
-    if (draw.transparent || draw.dynamic ||
-        !(main_camera.culling_mask & (1u << (draw.layer & 31)))) {
-      continue;
+  if (still_version_ != static_version_ || still_mask_ != main_camera.culling_mask ||
+      still_base_ != draws_.data()) {
+    still_version_ = static_version_;
+    still_mask_ = main_camera.culling_mask;
+    still_base_ = draws_.data();
+    still_.clear();
+    still_min_ = glm::vec3(std::numeric_limits<float>::max());
+    still_max_ = glm::vec3(-std::numeric_limits<float>::max());
+    still_indices_ = 0;
+    for (const auto& draw : draws_) {
+      if (!draw.alive || draw.transparent || draw.dynamic ||
+          !(main_camera.culling_mask & (1u << (draw.layer & 31)))) {
+        continue;
+      }
+      still_.push_back(&draw);
+      still_min_ = glm::min(still_min_, draw.bounds_min);
+      still_max_ = glm::max(still_max_, draw.bounds_max);
+      still_indices_ += draw.geometry->index_count;
     }
-    still_.push_back(&draw);
-    still_min_ = glm::min(still_min_, draw.bounds_min);
-    still_max_ = glm::max(still_max_, draw.bounds_max);
-    still_indices_ += draw.geometry->index_count;
   }
   if (enabled) {
     GpuScope scope(gpu_timer_, cmd, "sun_shadow");
     std::vector<const FrameDraw*> casters;
     for (const auto& draw : draws_) {
-      if (draw.cast_shadows && (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
+      if (draw.alive && draw.cast_shadows &&
+          (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
         casters.push_back(&draw);
       }
     }
@@ -1470,20 +1691,17 @@ void SceneRenderer::UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame) 
     far_shadow_valid_ = false;
     return;
   }
-  uint64_t hash = kHashSeed;
-  HashFloats(hash, &lighting_.direction.x, 3);
+  if (far_shadow_valid_ && far_shadow_version_ == static_version_ &&
+      far_shadow_direction_ == lighting_.direction) {
+    return;
+  }
+  far_shadow_version_ = static_version_;
+  far_shadow_direction_ = lighting_.direction;
+  far_shadow_valid_ = true;
   std::vector<const FrameDraw*> casters;
   for (const FrameDraw* draw : still_) {
-    if (!draw->cast_shadows) continue;
-    casters.push_back(draw);
-    HashFloats(hash, &records_[draw->record].world[0][0], 16);
-    const float geometry[2] = {static_cast<float>(draw->geometry->first_index),
-                               static_cast<float>(draw->geometry->index_count)};
-    HashFloats(hash, geometry, 2);
+    if (draw->cast_shadows) casters.push_back(draw);
   }
-  if (far_shadow_valid_ && hash == far_shadow_hash_) return;
-  far_shadow_hash_ = hash;
-  far_shadow_valid_ = true;
 
   // An orthographic box around all still geometry, tight in the sun's view.
   const glm::vec3 lo = still_min_ - 0.05f, hi = still_max_ + 0.05f;
@@ -1537,7 +1755,7 @@ void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk
     const VkDescriptorSet sets[2] = {frame.set, texture_set_};
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets, 1,
                             &offset);
-    const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+    const VkBuffer buffers[2] = {vertex_buffer_.Get(), instance_buffer_.Get()};
     const VkDeviceSize offsets[2] = {0, 0};
     vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
     vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
@@ -1639,19 +1857,20 @@ void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame
                              cube.normal.x, cube.normal.y, cube.normal.z,
                              cube.one_sided ? 1.0f : 0.0f};
     HashFloats(hash, values, 8);
-    for (size_t i = 0; i < draws_.size(); i++) {
-      const FrameDraw& draw = draws_[i];
-      if (!draw.cast_shadows || !BoxNear(draw.bounds_min, draw.bounds_max, cube.center,
-                                         cube.far_clip)) {
+    // Still casters count through static_version_; moving ones near the
+    // light one by one (one that leaves changes the set too).
+    const float version = static_cast<float>(static_version_);
+    HashFloats(hash, &version, 1);
+    for (const FrameDraw& draw : draws_) {
+      if (!draw.alive || !draw.cast_shadows ||
+          !BoxNear(draw.bounds_min, draw.bounds_max, cube.center, cube.far_clip)) {
         continue;
       }
       casters[slot].push_back(&draw);
+      if (!draw.dynamic) continue;
       HashFloats(hash, &records_[draw.record].world[0][0], 16);
-      const float geometry[2] = {static_cast<float>(draw.geometry->first_index),
-                                 static_cast<float>(draw.geometry->index_count)};
-      HashFloats(hash, geometry, 2);
       // Skinned meshes change shape without moving.
-      if (draw_skinned_[i]) {
+      if (draw.skinned) {
         const float frame_value = static_cast<float>(frame_number_);
         HashFloats(hash, &frame_value, 1);
       }
@@ -1704,7 +1923,7 @@ void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame
           const VkDescriptorSet sets[2] = {frame.set, texture_set_};
           vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
                                   1, &offset);
-          const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+          const VkBuffer buffers[2] = {vertex_buffer_.Get(), instance_buffer_.Get()};
           const VkDeviceSize offsets[2] = {0, 0};
           vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
           vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
@@ -1819,16 +2038,11 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
                            static_cast<float>(light.shadows)};
     HashFloats(hash, rest, 3);
   }
-  for (const FrameDraw* draw : still) {
-    // World matrix, color and emission (info and the rest never change alone).
-    const DrawData& record = records_[draw->record];
-    HashFloats(hash, &record.world[0][0], 16);
-    HashFloats(hash, &record.color.x, 8);
-    const float geometry = static_cast<float>(draw->geometry->first_index);
-    HashFloats(hash, &geometry, 1);
-  }
-  if (hash != probes_.scene_hash) {
-    probes_.scene_hash = hash;
+  // Still geometry (moved, recolored, added or removed) through
+  // static_version_.
+  if (hash != probes_.light_hash || static_version_ != probes_.static_version) {
+    probes_.light_hash = hash;
+    probes_.static_version = static_version_;
     probes_.passes = 0;
   }
   if (probes_.passes >= volume.bounces) return;
@@ -1898,7 +2112,7 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
           const VkDescriptorSet sets[2] = {frame.set, texture_set_};
           vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
                                   1, &offset);
-          const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+          const VkBuffer buffers[2] = {vertex_buffer_.Get(), instance_buffer_.Get()};
           const VkDeviceSize offsets[2] = {0, 0};
           vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
           vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
@@ -1997,7 +2211,7 @@ void SceneRenderer::DrawList(VkCommandBuffer cmd, FrameResources& frame, uint32_
   const VkDescriptorSet sets[2] = {frame.set, texture_set_};
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets, 1,
                           &uniform_offset);
-  const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+  const VkBuffer buffers[2] = {vertex_buffer_.Get(), instance_buffer_.Get()};
   const VkDeviceSize offsets[2] = {0, 0};
   vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
   vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
@@ -2079,7 +2293,7 @@ void SceneRenderer::DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
 
   std::vector<const FrameDraw*> opaque, transparent;
   for (const auto& draw : draws_) {
-    if (!(camera.culling_mask & (1u << (draw.layer & 31)))) continue;
+    if (!draw.alive || !(camera.culling_mask & (1u << (draw.layer & 31)))) continue;
     (draw.transparent ? transparent : opaque).push_back(&draw);
   }
   std::stable_sort(opaque.begin(), opaque.end(), [](const FrameDraw* a, const FrameDraw* b) {
@@ -2102,7 +2316,8 @@ void SceneRenderer::DrawOutlineMask(VkCommandBuffer cmd, FrameResources& frame,
                                     const RenderSettings& settings) {
   std::vector<const FrameDraw*> outlined;
   for (const auto& draw : draws_) {
-    if (draw.outline && (camera.culling_mask & (1u << (draw.layer & 31)))) {
+    if (draw.alive && (draw.rendering_layers & settings.outline_layers) != 0 &&
+        (camera.culling_mask & (1u << (draw.layer & 31)))) {
       outlined.push_back(&draw);
     }
   }
@@ -2127,7 +2342,7 @@ void SceneRenderer::DrawOutlineMask(VkCommandBuffer cmd, FrameResources& frame,
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, outline_mask_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets, 1,
                             &offset);
-    const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+    const VkBuffer buffers[2] = {vertex_buffer_.Get(), instance_buffer_.Get()};
     const VkDeviceSize offsets[2] = {0, 0};
     vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
     vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);

@@ -1488,9 +1488,12 @@ void MapScene::UpdateInterpolatedHierarchy() {
     if (!parent_transform || !child_transform) continue;
 
     const glm::vec3 p_pos = parent_transform->GetInterpolatedPosition();
-    const glm::quat p_rot = Transform::EulerToQuat(
-        parent_transform->GetInterpolatedRotation());
+    const glm::vec3 p_euler = parent_transform->GetInterpolatedRotation();
     const glm::vec3 p_scale = parent_transform->GetInterpolatedScale();
+    // Nothing it depends on changed (most of a level stands still).
+    if (child_transform->MatchesParentInputs(p_pos, p_euler, p_scale)) continue;
+    child_transform->SetParentInputs(p_pos, p_euler, p_scale);
+    const glm::quat p_rot = Transform::EulerToQuat(p_euler);
 
     const glm::vec3 child_local_pos = child_transform->GetLocalPosition();
     const glm::quat child_local_rot = child_transform->GetLocalRotationQuat();

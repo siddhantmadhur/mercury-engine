@@ -31,6 +31,7 @@
 
 #include "globals.h"
 #include "properties/render_mesh.h"
+#include "properties/transform.h"
 #include "scene/scene.h"
 #include "vk_buffer.h"
 #include "vk_context.h"
@@ -82,6 +83,35 @@ struct DrawData {
   glm::uvec4 maps;  // x: normal map slot, y: emission map slot (0: none)
 };
 static_assert(sizeof(DrawData) == 224);
+
+// The renderer's record of an entity it draws (a component in the scene's
+// registry): which draw slots it has and what they were built from.
+struct RenderProxy {
+  std::vector<uint32_t> slots;
+  glm::vec3 position = glm::vec3(0.0f);  // interpolated, when built
+  glm::vec3 rotation = glm::vec3(0.0f);
+  glm::vec3 scale = glm::vec3(0.0f);
+  uint32_t layer = 0;
+  bool visible = false;
+  bool cast_shadows = false;
+  uint32_t rendering_layers = 0;
+  // Posed by an Animator (or skinned): rebuilt every frame.
+  bool animated = false;
+  uint64_t moved = 0;  // renderer frame it last moved; 0 never
+  bool dirty = true;
+  bool built = false;
+};
+
+class SceneRenderer;
+
+// Forwards a registry's signals to the renderer drawing it. The registry's
+// context and the renderer share it, so either may go first: the renderer
+// clears `renderer` when it shuts down or moves to another scene.
+struct RenderHooks {
+  SceneRenderer* renderer = nullptr;
+  void OnMeshChanged(entt::registry& registry, entt::entity entity);
+  void OnProxyDestroyed(entt::registry& registry, entt::entity entity);
+};
 
 class SceneRenderer {
  public:
@@ -199,18 +229,23 @@ class SceneRenderer {
     std::unique_ptr<Targets> targets;
   };
 
-  // A draw of this frame.
+  // A draw slot: one RenderDraw of one entity, kept from frame to frame and
+  // rebuilt only when the entity changes. Its DrawData is records_[slot].
   struct FrameDraw {
     const GpuGeometry* geometry = nullptr;
-    uint32_t record = 0;  // index into the frame's DrawData
+    uint32_t record = 0;  // its slot: index into records_ and the draw buffer
     uint32_t layer = 0;   // node layer
+    uint32_t entity = 0;
+    bool alive = false;   // the slot is in use
     bool transparent = false;
     bool double_sided = false;
     bool cast_shadows = true;
-    bool outline = false;
+    uint32_t rendering_layers = 0;  // RenderMesh's, for outlines
     bool mirrored = false;  // negative scale: triangles wind the other way
+    bool skinned = false;
     // Moved recently or animated: lit by the probes but not seen by them.
     bool dynamic = false;
+    uint64_t moved = 0;  // frame its entity last moved; 0 never
     glm::vec3 center = glm::vec3(0.0f);  // world, for sorting
     glm::vec3 bounds_min = glm::vec3(0.0f);  // world box
     glm::vec3 bounds_max = glm::vec3(0.0f);
@@ -218,10 +253,11 @@ class SceneRenderer {
 
   struct FrameResources {
     vk::Buffer uniforms;  // kMaxPasses FrameUniforms slots
-    vk::Buffer draws;
     vk::Buffer bones;
-    vk::Buffer instances;  // 0, 1, 2, ... (the draw index per instance)
     VkDescriptorSet set = VK_NULL_HANDLE;
+    // The draw buffer the set points at: it is replaced when it grows, and a
+    // set may only be rewritten once its frame is done.
+    VkBuffer bound_draws = VK_NULL_HANDLE;
     std::vector<vk::Buffer> staging;  // uploads still in flight
     uint32_t passes_used = 0;
   };
@@ -232,6 +268,20 @@ class SceneRenderer {
   bool CreateShadowMap();
   bool CreateWhiteTexture();
   bool CreateLightingResources();
+  // Brings the draw slots up to date with the scene: entities that moved or
+  // changed are rebuilt, new ones get slots, removed ones free theirs.
+  void SyncScene(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene);
+  // (Re)builds one entity's slots.
+  void BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene,
+                  entt::entity entity, const RenderMesh& mesh, const Transform& transform,
+                  RenderProxy& proxy);
+  void FreeProxySlots(RenderProxy& proxy);
+  uint32_t AllocateSlot();
+  // Copies the changed records into the draw buffer (growing it if needed).
+  void UploadRecords(VkCommandBuffer cmd, FrameResources& frame);
+  // Marks still draws that moved lately as dynamic; changes to what is
+  // still bump static_version_.
+  void UpdateDynamic();
   // Picks which point and area lights get this frame's shadow cubes.
   void AssignShadowCubes();
   void RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame);
@@ -247,8 +297,6 @@ class SceneRenderer {
   // Redraws the scene-wide sun shadow map when the sun or still geometry
   // changed.
   void UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame);
-  // Marks draws of objects that moved lately as dynamic.
-  void TrackMotion();
   // Uniforms of a 90 degree view along cube face `face` from `center`.
   FrameUniforms CubeFaceUniforms(glm::vec3 center, uint32_t face, float near_clip,
                                  float far_clip, VkExtent2D extent) const;
@@ -350,15 +398,24 @@ class SceneRenderer {
   // camera's map and for the probes. Drawn again only when it changes.
   vk::Image far_shadow_image_;
   bool far_shadow_valid_ = false;
-  uint64_t far_shadow_hash_ = 0;
   glm::mat4 far_view_proj_ = glm::mat4(1.0f);
   float far_normal_bias_ = 0.0f;
 
   // This frame's still, opaque draws the main camera sees (what the probes
-  // and the far shadow map see), and their bounds.
+  // and the far shadow map see), and their bounds. Rebuilt when
+  // static_version_ or the camera's mask changes.
   std::vector<const FrameDraw*> still_;
   glm::vec3 still_min_ = glm::vec3(0.0f), still_max_ = glm::vec3(0.0f);
   uint64_t still_indices_ = 0;
+  uint64_t still_version_ = ~0ull;
+  uint32_t still_mask_ = 0;
+  const FrameDraw* still_base_ = nullptr;  // draws_ when it was built
+  // Bumped whenever still geometry changes (added, removed, moved, recolored,
+  // or turning still or dynamic): what the far shadow, the shadow cubes and
+  // the probes saw is out of date.
+  uint64_t static_version_ = 1;
+  uint64_t far_shadow_version_ = 0;
+  glm::vec3 far_shadow_direction_ = glm::vec3(0.0f);
 
   // Point and area light shadows: 6 faces per slot of distances to the
   // nearest caster.
@@ -394,7 +451,8 @@ class SceneRenderer {
     glm::ivec3 counts = glm::ivec3(0);
     uint32_t next = 0;          // next probe to update
     int passes = 0;             // full passes since the scene last changed
-    uint64_t scene_hash = 0;    // lights and objects, to notice changes
+    uint64_t light_hash = 0;    // the lights they saw
+    uint64_t static_version = 0;  // and the still geometry
     bool clear_atlas = true;
     float intensity = 1.0f;
     // A volume fitted to the scene: the geometry's box it was fitted to, and
@@ -406,17 +464,27 @@ class SceneRenderer {
   };
   ProbeState probes_;
 
-  // When each object last moved, by entity.
-  struct Motion {
-    uint64_t hash = 0;     // its world transform
-    uint64_t moved = 0;    // frame it last moved; 0 never
-    uint64_t seen = 0;     // frame it was last drawn
-  };
-  std::unordered_map<uint32_t, Motion> motion_;
-  std::vector<uint32_t> draw_entities_;  // per draw of this frame
-  std::vector<bool> draw_skinned_;
-
   std::vector<FrameResources> frames_;
+
+  // The scene the slots belong to, and the hooks its registry signals.
+  friend struct RenderHooks;
+  entt::registry* registry_ = nullptr;
+  std::shared_ptr<RenderHooks> hooks_;
+  // Entities whose RenderMesh was added, replaced or removed, or that turned
+  // active or inactive: rebuilt next frame.
+  std::vector<entt::entity> changed_;
+  // A geometry buffer restart: every slot is rebuilt.
+  bool rebuild_all_ = false;
+  void AttachRegistry(entt::registry& registry);
+  void FreeAllSlots();
+
+  // Persistent draw records, by slot, and the device-local buffer the
+  // shaders read them from. Changed slots are copied each frame.
+  vk::Buffer draw_buffer_;
+  vk::Buffer instance_buffer_;  // 0, 1, 2, ... (the draw index per instance)
+  std::vector<uint32_t> free_draw_slots_;
+  std::vector<uint32_t> dirty_records_;
+  std::vector<uint8_t> record_dirty_;  // by slot, to list each once
 
   vk::Buffer vertex_buffer_;
   vk::Buffer index_buffer_;
@@ -448,7 +516,7 @@ class SceneRenderer {
   std::vector<ImageGarbage> image_garbage_;
   std::vector<uint32_t> free_slots_;
 
-  // This frame's draws, in record order.
+  // Every slot, by slot (free ones have alive false).
   std::vector<FrameDraw> draws_;
   std::vector<DrawData> records_;
   std::vector<glm::mat4> bones_;

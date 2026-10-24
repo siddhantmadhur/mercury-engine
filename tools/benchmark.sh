@@ -5,7 +5,7 @@
 #
 # Each map runs with a fixed 1/60 s time step (the flythrough is at the same
 # place on the same frame every run) and no vsync. It prints one summary per
-# map and saves it, with a screenshot of the last measured frame, under
+# map and saves it, with a screenshot taken right after the measured frames, under
 # $BENCH_DIR (default: bench/<date>-<commit>).
 #
 #   WARMUP=300 FRAMES=1000   frames skipped, frames measured
@@ -29,7 +29,7 @@ for map in "${maps[@]}"; do
   MERCURY_FIXED_DT=1 MERCURY_VSYNC=0 \
   MERCURY_BENCH_WARMUP="$warmup" MERCURY_BENCH_FRAMES="$frames" \
   MERCURY_BENCH_OUT="$out/$map.txt" \
-  MERCURY_CAPTURE="$out/$map.png" MERCURY_CAPTURE_FRAME="$((warmup + frames - 1))" \
+  MERCURY_BENCH_CAPTURE="$out/$map.png" \
     "$exe" --map "res://maps/$map.mmap" > "$out/$map.log" 2>&1 || true
   grep -E "Loaded .* in|settled" "$out/$map.log" || true
   cat "$out/$map.txt" 2>/dev/null || echo "(no summary; see $out/$map.log)"
