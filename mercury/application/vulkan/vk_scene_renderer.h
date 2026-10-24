@@ -84,6 +84,17 @@ struct DrawData {
 };
 static_assert(sizeof(DrawData) == 224);
 
+// Must match CullData in cull.cs.hlsl.
+struct CullData {
+  glm::vec4 center = glm::vec4(0.0f);  // world box center
+  glm::vec4 extent = glm::vec4(0.0f);  // world box half size
+  uint32_t index_count = 0;
+  uint32_t first_index = 0;
+  int32_t vertex_offset = 0;
+  uint32_t flags = 0;  // kCull* bits, layer in bits 8-12
+};
+static_assert(sizeof(CullData) == 48);
+
 // The renderer's record of an entity it draws (a component in the scene's
 // registry): which draw slots it has and what they were built from.
 struct RenderProxy {
@@ -260,6 +271,20 @@ class SceneRenderer {
     VkBuffer bound_draws = VK_NULL_HANDLE;
     std::vector<vk::Buffer> staging;  // uploads still in flight
     uint32_t passes_used = 0;
+    // GPU culling: kMaxCullViews views of 4 buckets of indirect draws each,
+    // and their counts.
+    vk::Buffer indirect;
+    vk::Buffer counts;
+    VkDescriptorSet cull_set = VK_NULL_HANDLE;
+    VkBuffer bound_cull = VK_NULL_HANDLE;
+    uint32_t cull_views = 0;  // used this frame
+  };
+
+  // A view culled on the GPU: where its buckets are in the frame's buffers.
+  struct CulledView {
+    bool valid = false;
+    uint32_t command_base = 0;  // first command (of bucket 0)
+    uint32_t count_base = 0;    // first count
   };
 
   bool CreateLayouts();
@@ -279,6 +304,22 @@ class SceneRenderer {
   uint32_t AllocateSlot();
   // Copies the changed records into the draw buffer (growing it if needed).
   void UploadRecords(VkCommandBuffer cmd, FrameResources& frame);
+  // Rewrites a slot's CullData from draws_[slot] and queues it for upload.
+  void WriteCullData(uint32_t slot);
+  void MarkSlotDirty(uint32_t slot);
+  // Slots the draw and cull buffers hold.
+  uint32_t SlotCapacity() const;
+  bool CreateCullResources();
+  // Records the culling of all slots against `view_proj`'s frustum, keeping
+  // those whose flags masked by `mask` equal `value` and whose layer is in
+  // `layers`. Outside any rendering pass. Invalid when culling on the GPU is
+  // unavailable (draw from the CPU lists then).
+  CulledView CullView(VkCommandBuffer cmd, FrameResources& frame, const glm::mat4& view_proj,
+                      uint32_t mask, uint32_t value, uint32_t layers);
+  // Draws a culled view's buckets: `single` and `double_sided` pipelines,
+  // front faces flipped for the mirrored buckets.
+  void DrawCulled(VkCommandBuffer cmd, FrameResources& frame, const CulledView& view,
+                  uint32_t uniform_offset, VkPipeline single, VkPipeline double_sided);
   // Marks still draws that moved lately as dynamic; changes to what is
   // still bump static_version_.
   void UpdateDynamic();
@@ -293,7 +334,8 @@ class SceneRenderer {
   // sees them.
   void DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
                      uint32_t size, const glm::mat4& view_proj,
-                     const std::vector<const FrameDraw*>& casters);
+                     const std::vector<const FrameDraw*>& casters,
+                     const CulledView& culled);
   // Redraws the scene-wide sun shadow map when the sun or still geometry
   // changed.
   void UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame);
@@ -482,7 +524,13 @@ class SceneRenderer {
   // shaders read them from. Changed slots are copied each frame.
   vk::Buffer draw_buffer_;
   vk::Buffer instance_buffer_;  // 0, 1, 2, ... (the draw index per instance)
+  vk::Buffer cull_buffer_;  // CullData by slot
+  std::vector<CullData> cull_records_;
   std::vector<uint32_t> free_draw_slots_;
+  VkDescriptorSetLayout cull_layout_ = VK_NULL_HANDLE;
+  VkPipelineLayout cull_pipeline_layout_ = VK_NULL_HANDLE;
+  VkPipeline cull_ = VK_NULL_HANDLE;
+  static constexpr uint32_t kMaxCullViews = 8;
   std::vector<uint32_t> dirty_records_;
   std::vector<uint8_t> record_dirty_;  // by slot, to list each once
 
