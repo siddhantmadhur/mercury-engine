@@ -1,7 +1,10 @@
 // Model renderer vertex shader; see model_common.hlsli for the bindings.
 #include "model_common.hlsli"
 
-ModelVSOutput Main(ModelVSInput input)
+// Invariant (18): the depth prepass and the main pass, different pipelines
+// over this shader, must place vertices identically.
+ModelVSOutput Main(ModelVSInput input,
+                   [[vk::ext_decorate(18)]] out precise float4 position : SV_Position)
 {
     DrawData data = draws[input.draw];
     float4 local;
@@ -11,7 +14,7 @@ ModelVSOutput Main(ModelVSInput input)
 
     ModelVSOutput output = (ModelVSOutput) 0;
     float4 world_position = mul(data.world, local);
-    output.position = mul(view_proj, world_position);
+    position = mul(view_proj, world_position);
     output.world_position = world_position.xyz;
     output.normal = mul((float3x3) data.normal_matrix, local_normal);
     output.tangent = float4(mul((float3x3) data.world, local_tangent), input.tangent.w);
