@@ -17,6 +17,7 @@
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <map>
 #include <string_view>
 #include <vector>
 
@@ -40,6 +41,9 @@ class GpuTimer {
   // any rendering pass.
   void BeginFrame(VkCommandBuffer cmd, uint32_t frame_index);
 
+  // The latest milliseconds measured for a scope name (0 if none yet).
+  double Last(std::string_view name) const;
+
   // A scope's index, or -1 when timing is unavailable or full.
   int Begin(VkCommandBuffer cmd, std::string_view name);
   void End(VkCommandBuffer cmd, int scope);
@@ -56,6 +60,7 @@ class GpuTimer {
   uint64_t valid_mask_ = ~0ull;
   uint32_t frame_index_ = 0;
   std::vector<Slot> slots_;
+  std::map<std::string_view, double> last_;
 };
 
 // Times the rest of the block on the GPU.

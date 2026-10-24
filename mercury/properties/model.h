@@ -72,6 +72,14 @@ struct ImageData {
  * @brief Immutable triangle geometry, uploaded once and shared by every node
  * that draws it
  */
+// A spatially compact run of a mesh's triangles, culled on its own.
+struct MeshCluster {
+  uint32_t first_index = 0;
+  uint32_t index_count = 0;
+  glm::vec3 bounds_min = glm::vec3(0.0f);
+  glm::vec3 bounds_max = glm::vec3(0.0f);
+};
+
 struct MeshGeometry {
   std::vector<ModelVertex> vertices;
   std::vector<uint32_t> indices;
@@ -79,8 +87,13 @@ struct MeshGeometry {
   glm::vec3 bounds_max = glm::vec3(0.0f);
   bool skinned = false;
   uint64_t id = 0;  // unique, for GPU caches
+  // Large meshes in pieces that views cull one by one; empty: one piece.
+  std::vector<MeshCluster> clusters;
 
   void ComputeBounds();
+  // Puts the triangles of a large mesh in spatial order and splits them
+  // into `clusters` (vertices unchanged).
+  void BuildClusters();
   // Tangents from the UV layout, for normal maps.
   void ComputeTangents();
   static std::shared_ptr<MeshGeometry> Create(std::vector<ModelVertex> vertices,
