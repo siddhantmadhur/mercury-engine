@@ -21,6 +21,7 @@
 #endif
 
 #include "debugger/debugger.h"
+#include "debugger/profiler.h"
 #include "properties/texture2d.h"
 
 namespace Mercury {
@@ -170,11 +171,14 @@ void Application::StepFrame() {
     return;
   }
 
+  Profiler::BeginFrame();
   double current_time = glfwGetTime() * 1000;
   auto frametime = current_time - time_elapsed_;
   delta_time_ = frametime;
-  // Scripted input replays the same way however fast frames render.
+  // Scripted input and benchmarks replay the same way however fast frames
+  // render.
   if (!input_script_.IsEmpty()) delta_time_ = 1000.0 / 60.0;
+  if (Profiler::FixedDeltaMs() > 0.0) delta_time_ = Profiler::FixedDeltaMs();
   time_elapsed_ = current_time;
 
   {  // FPS logic
@@ -227,7 +231,10 @@ void Application::StepFrame() {
     input_manager.SetImGuiCapture(io.WantCaptureMouse, io.WantCaptureKeyboard);
   }
 
-  game_scene_->OnFrame(delta_time_);
+  {
+    MERCURY_PROFILE_SCOPE("update");
+    game_scene_->OnFrame(delta_time_);
+  }
   // Run every tick that is due (Unity runs several FixedUpdates when a frame
   // takes long), but never more than a few so a stall cannot snowball.
   int ticks_run = 0;
@@ -243,10 +250,16 @@ void Application::StepFrame() {
 
   float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
   alpha = std::clamp(alpha, 0.0f, 1.0f);
-  game_scene_->ProcessOnFrame(alpha);
+  {
+    MERCURY_PROFILE_SCOPE("process_on_frame");
+    game_scene_->ProcessOnFrame(alpha);
+  }
   // Rebuild the per-frame vertex/index buffers to match the primitives_ we
   // are about to render.
-  OnNewTick();
+  {
+    MERCURY_PROFILE_SCOPE("new_tick");
+    OnNewTick();
+  }
 
   // A minimized window has a 0x0 framebuffer, which most backends cannot create
   // swapchains or targets for. Close out the ImGui frame without drawing.
@@ -261,8 +274,13 @@ void Application::StepFrame() {
     return;
   }
 
-  Render();
-  if (quit_after_frame_) Quit();
+  Profiler::DrawOverlay();
+  {
+    MERCURY_PROFILE_SCOPE("render");
+    Render();
+  }
+  Profiler::EndFrame();
+  if (quit_after_frame_ || Profiler::BenchFinished()) Quit();
 }
 
 void Application::RequestCapture(const std::string& file) {

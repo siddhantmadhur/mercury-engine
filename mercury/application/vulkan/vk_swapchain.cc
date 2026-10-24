@@ -1,6 +1,9 @@
 #include "vk_swapchain.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 #include "debugger/debugger.h"
 #include "vk_check.h"
@@ -97,7 +100,22 @@ bool Swapchain::Create(Context& context, uint32_t framebuffer_width,
   create_info.preTransform = capabilities.currentTransform;
   create_info.compositeAlpha = composite_alpha;
   // FIFO is the only mode every implementation must support (vsync).
+  // MERCURY_VSYNC=0 asks for an unthrottled mode, for benchmarks.
   create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  if (const char* vsync = std::getenv("MERCURY_VSYNC"); vsync && std::string(vsync) == "0") {
+    uint32_t mode_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface,
+                                              &mode_count, nullptr);
+    std::vector<VkPresentModeKHR> modes(mode_count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface,
+                                              &mode_count, modes.data());
+    for (VkPresentModeKHR wanted : {VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR}) {
+      if (std::find(modes.begin(), modes.end(), wanted) != modes.end()) {
+        create_info.presentMode = wanted;
+        break;
+      }
+    }
+  }
   create_info.clipped = VK_TRUE;
   create_info.oldSwapchain = old_swapchain;
 

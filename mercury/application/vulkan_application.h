@@ -12,6 +12,7 @@
 #include "globals.h"
 #include "vulkan/vk_buffer.h"
 #include "vulkan/vk_context.h"
+#include "vulkan/vk_gpu_timer.h"
 #include "camera_buffer.h"
 #include "vulkan/vk_scene_renderer.h"
 #include "vulkan/vk_swapchain.h"
@@ -252,6 +253,8 @@ class VulkanApplication : public Application {
   // canvas drawn into its own target (reset after each frame).
   vk::UIRenderer ui_renderer_;
   vk::SceneRenderer scene_renderer_;
+  // GPU pass timings for the profiler.
+  vk::GpuTimer gpu_timer_;
 
   // The cameras to draw this frame at `extent`: the scene's, or (in the
   // editor, or without camera components) the current camera alone.

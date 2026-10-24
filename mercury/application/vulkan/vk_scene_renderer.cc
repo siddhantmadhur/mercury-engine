@@ -7,6 +7,7 @@
 
 #include "components/components.h"
 #include "debugger/debugger.h"
+#include "debugger/profiler.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "properties/transform.h"
 #include "scene/map_scene.h"
@@ -1160,6 +1161,12 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
   }
 
   TrackMotion();
+  {
+    uint64_t triangles = 0;
+    for (const auto& draw : draws_) triangles += draw.geometry->index_count / 3;
+    Profiler::SetCounter("draws", static_cast<double>(draws_.size()));
+    Profiler::SetCounter("triangles", static_cast<double>(triangles));
+  }
 
   // Per-frame buffers grow when needed; this frame's earlier use is done.
   auto ensure = [&](Buffer& buffer, VkDeviceSize bytes, VkBufferUsageFlags usage) {
@@ -1433,6 +1440,7 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
     still_indices_ += draw.geometry->index_count;
   }
   if (enabled) {
+    GpuScope scope(gpu_timer_, cmd, "sun_shadow");
     std::vector<const FrameDraw*> casters;
     for (const auto& draw : draws_) {
       if (draw.cast_shadows && (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
@@ -1442,9 +1450,19 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
     DrawSunShadow(cmd, frame, shadow_image_, kShadowResolution, light_view_proj, casters);
   }
   // The probes see the scene lit, shadows included, so they come last.
-  RenderShadowCubes(cmd, frame);
-  UpdateFarShadow(cmd, frame);
-  UpdateProbes(cmd, frame);
+  {
+    GpuScope scope(gpu_timer_, cmd, "shadow_cubes");
+    RenderShadowCubes(cmd, frame);
+  }
+  {
+    GpuScope scope(gpu_timer_, cmd, "far_shadow");
+    UpdateFarShadow(cmd, frame);
+  }
+  {
+    MERCURY_PROFILE_SCOPE("update_probes");
+    GpuScope scope(gpu_timer_, cmd, "probes");
+    UpdateProbes(cmd, frame);
+  }
 }
 
 void SceneRenderer::UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame) {
@@ -2310,10 +2328,14 @@ void SceneRenderer::RenderView(VkCommandBuffer cmd, GameScene& scene,
   const bool post = settings_.post_processing && main->post_processing;
   const bool clears = main->clear != static_cast<int>(CameraClear::kNothing) &&
                       main->clear != static_cast<int>(CameraClear::kDepthOnly);
-  DrawCamera(cmd, frame, *main, targets, true, true, false, post, &legacy, sky_texture,
-             sky_texture != VK_NULL_HANDLE && clears);
+  {
+    GpuScope scope(gpu_timer_, cmd, "main");
+    DrawCamera(cmd, frame, *main, targets, true, true, false, post, &legacy, sky_texture,
+               sky_texture != VK_NULL_HANDLE && clears);
+  }
 
   if (main->post_processing && settings_.ssao_intensity > 0.0f) {
+    GpuScope scope(gpu_timer_, cmd, "ssao");
     PostPush push;
     const glm::mat4& p = main->projection;
     push.p[0] = glm::vec4(1.0f / p[0][0], 1.0f / p[1][1], p[2][2], p[3][2]);
@@ -2338,6 +2360,7 @@ void SceneRenderer::RenderView(VkCommandBuffer cmd, GameScene& scene,
     DrawCamera(cmd, frame, *overlay, targets, clear_color, true, true, post, nullptr,
                sky_texture, false);
   }
+  GpuScope scope(gpu_timer_, cmd, "post");
   PostProcess(cmd, targets, *main, settings_, output, output_view, output_format, output_layout,
               false);
 }

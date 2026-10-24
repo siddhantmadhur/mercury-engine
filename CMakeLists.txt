@@ -51,6 +51,8 @@ else ()
             mercury/application/vulkan/vk_swapchain.h
             mercury/application/vulkan/vk_buffer.cc
             mercury/application/vulkan/vk_buffer.h
+            mercury/application/vulkan/vk_gpu_timer.cc
+            mercury/application/vulkan/vk_gpu_timer.h
             mercury/application/vulkan/vk_ui_renderer.cc
             mercury/application/vulkan/vk_ui_renderer.h
             mercury/application/vulkan/vk_scene_renderer.cc
@@ -64,6 +66,8 @@ add_library(mercury STATIC
         mercury/pobject/manager.cc
         mercury/pobject/manager.h
         mercury/debugger/debugger.h
+        mercury/debugger/profiler.cc
+        mercury/debugger/profiler.h
         mercury/properties/mesh.cc
         mercury/properties/primitives.cc
         mercury/properties/primitives.h
