@@ -4,6 +4,7 @@
 #include <format>
 
 #include "editor_scene.h"
+#include "imgui_internal.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "project/asset_database.h"
 #include "scripting/event.h"
@@ -57,6 +58,7 @@ void EditorScene::DrawHierarchy() {
   ImGui::Separator();
 
   ImGui::BeginChild("tree");
+  tree_changed_ = false;
   DrawHierarchyNode(*map_.GetRoot());
 
   // Dropping on empty space moves a node to the top level.
@@ -155,11 +157,32 @@ void EditorScene::DrawHierarchyNode(MapNode& node) {
   }
 
   if (open) {
-    // Children may be removed while drawing; iterate over a copy of pointers.
+    // An edit may remove children while they draw (tree_changed_ stops it);
+    // iterate over a copy of the pointers.
     std::vector<MapNode*> children;
+    children.reserve(node.children.size());
     for (auto& child : node.children) children.push_back(child.get());
-    for (MapNode* child : children) {
-      if (map_.FindByUid(child->uid)) DrawHierarchyNode(*child);
+    // Leaves out of sight are blank space, as many at once as are hidden:
+    // a model's thousands of parts cost only the rows on screen.
+    const ImRect clip = ImGui::GetCurrentWindow()->ClipRect;
+    const float row = ImGui::GetTextLineHeightWithSpacing();
+    auto hidden_leaf = [&](const MapNode* child, float y) {
+      return child->children.empty() && child->uid != selected_uid_ &&
+             child->uid != rename_uid_ && (y > clip.Max.y || y + row < clip.Min.y);
+    };
+    for (size_t i = 0; i < children.size() && !tree_changed_;) {
+      float y = ImGui::GetCursorScreenPos().y;
+      size_t hidden = 0;
+      while (i + hidden < children.size() && hidden_leaf(children[i + hidden], y)) {
+        hidden++;
+        y += row;
+      }
+      if (hidden > 0) {
+        ImGui::Dummy(ImVec2(1.0f, hidden * row - ImGui::GetStyle().ItemSpacing.y));
+        i += hidden;
+        continue;
+      }
+      DrawHierarchyNode(*children[i++]);
     }
   }
   if (pushed) ImGui::TreePop();
