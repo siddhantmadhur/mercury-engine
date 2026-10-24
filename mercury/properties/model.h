@@ -164,6 +164,10 @@ struct AnimationClip {
 
 enum class ModelConvention { kNative, kUnity };
 
+// How a material uses a texture: color (sRGB), data (linear, like normal
+// maps), or a height map to be turned into a normal map.
+enum class ModelTextureUse : uint8_t { kColor, kData, kHeight };
+
 // Replaces what the file says about one material, for formats that cannot
 // say it (OBJ has no real roughness) or say it wrong. From a
 // `[material name="..."]` section of the .mimport file.
@@ -194,7 +198,8 @@ struct ModelImportSettings {
 class Model {
  public:
   // `progress`, if given, is set from 0 to 1 as the model loads, from any
-  // of the threads that load it.
+  // of the threads that load it. A model imported before comes from the
+  // cache (model_cache.h) while its files and settings are unchanged.
   static std::shared_ptr<Model> Load(const std::string& path,
                                      const ModelImportSettings& settings,
                                      std::string* error = nullptr,
@@ -231,6 +236,30 @@ class Model {
                       std::vector<glm::mat4>& globals) const;
 
  private:
+  friend class ModelCache;
+
+  // A texture as the file names it, and how a material uses it.
+  struct TextureSource {
+    std::string reference;  // empty: none
+    ModelTextureUse use = ModelTextureUse::kColor;
+    float bump_scale = 1.0f;
+  };
+  struct MaterialSources {
+    TextureSource texture, emission, normal;
+  };
+
+  // The import itself, with assimp.
+  static std::shared_ptr<Model> Import(const std::string& path,
+                                       const ModelImportSettings& settings, std::string* error,
+                                       std::atomic<float>* progress);
+  // A texture file the model refers to, found, decoded and prepared as the
+  // import does it (null if missing).
+  static std::shared_ptr<ImageData> DecodeTexture(const std::string& model_path,
+                                                  const TextureSource& source,
+                                                  const ModelImportSettings& settings);
+  // The bind pose and bounds, from the nodes and meshes.
+  void Finish();
+
   std::string path_;
   std::vector<ModelNode> nodes_;  // parents before children; 0 is the root
   std::vector<ModelMesh> meshes_;
@@ -240,6 +269,10 @@ class Model {
   glm::vec3 bounds_min_ = glm::vec3(0.0f);
   glm::vec3 bounds_max_ = glm::vec3(0.0f);
   bool root_on_object_ = false;
+  // Per material, where its textures came from (for the cache), and
+  // whether any came from inside the file (no cache then).
+  std::vector<MaterialSources> material_sources_;
+  bool embedded_textures_ = false;
 };
 
 }  // namespace Mercury
