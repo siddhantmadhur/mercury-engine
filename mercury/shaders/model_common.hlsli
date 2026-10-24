@@ -35,7 +35,7 @@
     // [4i + 2] half the height, shadow slot (-1: none); [4i + 3] radiance, soft.
     float4 area_lights[4 * 4];
     float4 area_shadow_bias[4]; // x: bias
-    float4 shadow_cubes_info[4]; // per shadow slot: xyz cube center, w far distance
+    float4 shadow_cubes_info[8]; // per shadow slot: xyz cube center, w far distance
     float4 light_info;          // x: area lights, y: probe capture pass, z: cube size, w: capture emission
     float4 gi_min;              // xyz: probe volume min, w: enabled
     float4 gi_max;              // xyz: probe volume max, w: intensity

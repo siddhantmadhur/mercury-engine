@@ -381,12 +381,16 @@ void MapScene::GatherPointLights() {
     data.shadow_bias = light.shadow_bias;
     lighting_.area_lights.push_back(data);
   }
+  // Without a volume, one fitted to the scene with the default settings.
   lighting_.probes = ProbeVolumeData{};
+  lighting_.probes.enabled = true;
+  lighting_.probes.automatic = true;
   for (auto [entity, volume, transform] : registry.view<LightProbeVolume, Transform>().each()) {
     if (!IsActiveInHierarchy(entity)) continue;
     ProbeVolumeData& data = lighting_.probes;
     const glm::vec3 half = glm::abs(volume.size * transform.GetScale()) * 0.5f;
-    data.enabled = true;
+    data.enabled = volume.intensity > 0.0f;
+    data.automatic = volume.fit_to_scene;
     data.min = transform.GetPosition() - half;
     data.max = transform.GetPosition() + half;
     data.counts = glm::clamp(glm::ivec3(glm::round(volume.resolution)), glm::ivec3(2),

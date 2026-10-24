@@ -3,7 +3,7 @@
 [ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
 [ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
 [ext_resource type="Model" path="res://models/sponza/sponza.obj" id="3"]
-[ext_resource type="PostProcessProfile" path="res://assets/post.masset" id="4"]
+[ext_resource type="PostProcessProfile" path="res://assets/post_sponza.masset" id="4"]
 
 [node name="Sponza"]
 
@@ -44,8 +44,8 @@ rotation = Vector3(-62, 25, 0)
 [component type="DirectionalLight" node="Sun"]
 color = Color(1, 0.96, 0.9, 1)
 intensity = 3.2
-ambient = Color(0.22, 0.24, 0.28, 1)
-ground_ambient = Color(0.1, 0.09, 0.08, 1)
+ambient = Color(0.5, 0.56, 0.68, 1)
+ground_ambient = Color(0.15, 0.13, 0.11, 1)
 shadow_distance = 30
 
 [node name="Model" parent="."]

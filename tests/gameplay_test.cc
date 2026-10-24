@@ -466,6 +466,53 @@ include_emission = false
   EXPECT_FALSE(probes.include_emission);
 }
 
+TEST(Gameplay, GlobalIlluminationIsOnByDefault) {
+  auto project = LoadProject();
+  ASSERT_TRUE(project);
+  auto lighting_of = [&](const char* text) {
+    Map map;
+    std::string error;
+    EXPECT_TRUE(map.LoadFromString(text, &error)) << error;
+    MapScene scene(project, MapScene::Mode::kPlay);
+    scene.Instantiate(map);
+    return scene.GetLighting();
+  };
+
+  // No volume: the renderer fits one around the scene; point lights cast
+  // soft shadows unless told otherwise.
+  const SceneLighting plain = lighting_of(R"([mmap format=1]
+[node name="Root"]
+[node name="Bulb" parent="."]
+[component type="Transform" node="Bulb"]
+[component type="PointLight" node="Bulb"]
+)");
+  EXPECT_TRUE(plain.probes.enabled);
+  EXPECT_TRUE(plain.probes.automatic);
+  ASSERT_EQ(plain.point_lights.size(), 1u);
+  EXPECT_EQ(plain.point_lights[0].shadows, 2);
+
+  // A fitted volume keeps its own settings.
+  const SceneLighting fitted = lighting_of(R"([mmap format=1]
+[node name="Root"]
+[component type="Transform" node="."]
+[component type="LightProbeVolume" node="."]
+fit_to_scene = true
+bounces = 5
+)");
+  EXPECT_TRUE(fitted.probes.enabled);
+  EXPECT_TRUE(fitted.probes.automatic);
+  EXPECT_EQ(fitted.probes.bounces, 5);
+
+  // Intensity 0 turns it off.
+  const SceneLighting off = lighting_of(R"([mmap format=1]
+[node name="Root"]
+[component type="Transform" node="."]
+[component type="LightProbeVolume" node="."]
+intensity = 0
+)");
+  EXPECT_FALSE(off.probes.enabled);
+}
+
 TEST(Gameplay, AnimatorControllerParses) {
   std::string error;
   auto controller = AnimatorController::FromString(R"([manimator format=1]

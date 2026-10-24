@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #include "components/components.h"
 #include "debugger/debugger.h"
@@ -35,6 +36,47 @@ constexpr VkFormat kLdrFormat = VK_FORMAT_B8G8R8A8_UNORM;
 constexpr VkFormat kMaskFormat = VK_FORMAT_R8_UNORM;
 constexpr VkFormat kRenderTextureFormat = VK_FORMAT_R8G8B8A8_SRGB;
 constexpr uint32_t kNoSkin = 0xffffffffu;
+
+// Must match kFaceForward / kFaceUp in lighting_math.hlsli.
+constexpr glm::vec3 kFaceForward[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0},
+                                       {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+constexpr glm::vec3 kFaceUp[6] = {{0, 1, 0}, {0, 1, 0}, {0, 0, -1},
+                                  {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
+
+// FNV-1a over floats rounded to 1/4096, to notice when lights or objects
+// change. Rounding ignores the last-bit wobble of interpolated transforms.
+void HashFloats(uint64_t& hash, const float* values, size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    const int64_t q = std::llround(static_cast<double>(values[i]) * 4096.0);
+    const auto* bytes = reinterpret_cast<const uint8_t*>(&q);
+    for (size_t b = 0; b < sizeof(q); b++) {
+      hash ^= bytes[b];
+      hash *= 1099511628211ull;
+    }
+  }
+}
+
+// Whether a box (world space) may show through cube face `face` seen from
+// `eye`, no farther than `far_clip`: a bounding sphere against the face's
+// 90 degree frustum.
+bool FaceSees(glm::vec3 eye, uint32_t face, glm::vec3 box_min, glm::vec3 box_max,
+              float far_clip) {
+  const glm::vec3 c = (box_min + box_max) * 0.5f - eye;
+  const float r = glm::length(box_max - box_min) * 0.5f;
+  const float f = glm::dot(c, kFaceForward[face]);
+  if (f + r <= 0.0f || f - r > far_clip) return false;
+  const glm::vec3 right = glm::cross(kFaceForward[face], kFaceUp[face]);
+  const float k = r * 1.41421356f;
+  return std::abs(glm::dot(c, right)) - f < k && std::abs(glm::dot(c, kFaceUp[face])) - f < k;
+}
+
+// Whether a box comes within `radius` of `point`.
+bool BoxNear(glm::vec3 box_min, glm::vec3 box_max, glm::vec3 point, float radius) {
+  const glm::vec3 d = glm::max(glm::max(box_min - point, point - box_max), glm::vec3(0.0f));
+  return glm::dot(d, d) <= radius * radius;
+}
+
+constexpr uint64_t kHashSeed = 1469598103934665603ull;
 
 constexpr uint32_t kFlagUnlit = 1;
 constexpr uint32_t kFlagSdfText = 2;
@@ -940,6 +982,8 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
   draws_.clear();
   records_.clear();
   bones_.clear();
+  draw_entities_.clear();
+  draw_skinned_.clear();
 
   if (white_.Get() == VK_NULL_HANDLE) {
     white_.Create(context_->allocator, context_->device, 1, 1, VK_FORMAT_R8G8B8A8_UNORM,
@@ -1056,15 +1100,35 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
       frame_draw.double_sided = material.double_sided || material.sdf_text;
       frame_draw.cast_shadows = mesh.cast_shadows && !material.transparent;
       frame_draw.outline = (mesh.rendering_layers & settings_.outline_layers) != 0;
-      const glm::vec3 center =
-          (draw.geometry->bounds_min + draw.geometry->bounds_max) * 0.5f;
-      frame_draw.center = glm::vec3(record.world * glm::vec4(center, 1.0f));
+      const glm::vec3 local_min = draw.geometry->bounds_min;
+      const glm::vec3 local_max = draw.geometry->bounds_max;
+      frame_draw.center = glm::vec3(record.world * glm::vec4((local_min + local_max) * 0.5f, 1.0f));
+      frame_draw.bounds_min = glm::vec3(std::numeric_limits<float>::max());
+      frame_draw.bounds_max = glm::vec3(-std::numeric_limits<float>::max());
+      for (int corner = 0; corner < 8; corner++) {
+        const glm::vec3 local((corner & 1) ? local_max.x : local_min.x,
+                              (corner & 2) ? local_max.y : local_min.y,
+                              (corner & 4) ? local_max.z : local_min.z);
+        const glm::vec3 p = glm::vec3(record.world * glm::vec4(local, 1.0f));
+        frame_draw.bounds_min = glm::min(frame_draw.bounds_min, p);
+        frame_draw.bounds_max = glm::max(frame_draw.bounds_max, p);
+      }
+      if (draw.skin >= 0) {
+        // Animated limbs reach past the bind pose's box.
+        const glm::vec3 grow = (frame_draw.bounds_max - frame_draw.bounds_min) * 0.25f;
+        frame_draw.bounds_min -= grow;
+        frame_draw.bounds_max += grow;
+      }
+      draw_entities_.push_back(static_cast<uint32_t>(entity));
+      draw_skinned_.push_back(draw.skin >= 0);
       // An odd number of negative scale axes reverses the winding.
       frame_draw.mirrored = mirrored;
       records_.push_back(record);
       draws_.push_back(frame_draw);
     }
   }
+
+  TrackMotion();
 
   // Per-frame buffers grow when needed; this frame's earlier use is done.
   auto ensure = [&](Buffer& buffer, VkDeviceSize bytes, VkBufferUsageFlags usage) {
@@ -1104,6 +1168,41 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                 VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_2_INDEX_READ_BIT |
                     VK_ACCESS_2_SHADER_READ_BIT);
+}
+
+void SceneRenderer::TrackMotion() {
+  // Each object's draws hashed together: a model's parts move with it.
+  std::unordered_map<uint32_t, uint64_t> hashes;
+  for (size_t i = 0; i < draws_.size(); i++) {
+    auto [it, inserted] = hashes.try_emplace(draw_entities_[i], kHashSeed);
+    HashFloats(it->second, &records_[draws_[i].record].world[0][0], 16);
+  }
+  size_t fresh = 0;
+  for (const auto& [entity, hash] : hashes) fresh += motion_.count(entity) == 0;
+  // Most objects new at once is a map loading: they start out still. One
+  // that appears later (spawned) counts as moving until it has rested.
+  const bool loading = fresh * 2 > hashes.size();
+  for (const auto& [entity, hash] : hashes) {
+    auto [it, inserted] = motion_.try_emplace(entity);
+    Motion& motion = it->second;
+    if (inserted) {
+      motion.moved = loading ? 0 : frame_number_;
+    } else if (motion.hash != hash) {
+      motion.moved = frame_number_;
+    }
+    motion.hash = hash;
+    motion.seen = frame_number_;
+  }
+  if (frame_number_ % 60 == 0) {
+    std::erase_if(motion_, [&](const auto& entry) { return entry.second.seen + 300 < frame_number_; });
+  }
+  // Still for 2 seconds (at 60 fps) makes an object part of the scene again.
+  constexpr uint64_t kRestFrames = 120;
+  for (size_t i = 0; i < draws_.size(); i++) {
+    const Motion& motion = motion_[draw_entities_[i]];
+    draws_[i].dynamic =
+        draw_skinned_[i] || (motion.moved != 0 && motion.moved + kRestFrames > frame_number_);
+  }
 }
 
 // ----------------------------------------------------------------- Targets --
@@ -1285,10 +1384,28 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
     shadow_written_ = true;
   }
   FrameResources& frame = frames_[frame_index_];
+  // The probes see the scene lit, shadows included, so they come after the
+  // cubes. They may borrow the sun's map, so the camera's comes last.
+  RenderShadowCubes(cmd, frame);
+  UpdateProbes(cmd, frame, main_camera.culling_mask);
   if (enabled) {
-  FrameUniforms uniforms = CameraUniforms(main_camera, {kShadowResolution, kShadowResolution},
-                                          false, true);
-  uniforms.view_proj = light_view_proj;
+    std::vector<const FrameDraw*> casters;
+    for (const auto& draw : draws_) {
+      if (draw.cast_shadows && (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
+        casters.push_back(&draw);
+      }
+    }
+    DrawSunShadow(cmd, frame, light_view_proj, casters);
+  }
+}
+
+void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame,
+                                  const glm::mat4& view_proj,
+                                  const std::vector<const FrameDraw*>& casters) {
+  RenderCamera camera;
+  FrameUniforms uniforms =
+      CameraUniforms(camera, {kShadowResolution, kShadowResolution}, false, true);
+  uniforms.view_proj = view_proj;
   const uint32_t offset = PushUniforms(frame, uniforms);
 
   DepthToAttachment(cmd, shadow_image_.Get());
@@ -1304,12 +1421,6 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
   rendering.pDepthAttachment = &depth;
   vkCmdBeginRendering(cmd, &rendering);
   SetViewport(cmd, {kShadowResolution, kShadowResolution});
-  std::vector<const FrameDraw*> casters;
-  for (const auto& draw : draws_) {
-    if (draw.cast_shadows && (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
-      casters.push_back(&draw);
-    }
-  }
   if (!casters.empty()) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_);
     const VkDescriptorSet sets[2] = {frame.set, texture_set_};
@@ -1328,36 +1439,9 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
   }
   vkCmdEndRendering(cmd);
   DepthToShaderRead(cmd, shadow_image_.Get());
-  }
-  // The probes see the scene lit, shadows included, so they come last.
-  RenderShadowCubes(cmd, frame);
-  UpdateProbes(cmd, frame);
 }
 
 // ---------------------------------------------------------------- Lighting --
-
-namespace {
-
-// Must match kFaceForward / kFaceUp in lighting_math.hlsli.
-constexpr glm::vec3 kFaceForward[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0},
-                                       {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
-constexpr glm::vec3 kFaceUp[6] = {{0, 1, 0}, {0, 1, 0}, {0, 0, -1},
-                                  {0, 0, 1}, {0, 1, 0}, {0, 1, 0}};
-
-// FNV-1a over floats rounded to 1/4096, to notice when lights or objects
-// change. Rounding ignores the last-bit wobble of interpolated transforms.
-void HashFloats(uint64_t& hash, const float* values, size_t count) {
-  for (size_t i = 0; i < count; i++) {
-    const int64_t q = std::llround(static_cast<double>(values[i]) * 4096.0);
-    const auto* bytes = reinterpret_cast<const uint8_t*>(&q);
-    for (size_t b = 0; b < sizeof(q); b++) {
-      hash ^= bytes[b];
-      hash *= 1099511628211ull;
-    }
-  }
-}
-
-}  // namespace
 
 void SceneRenderer::AssignShadowCubes() {
   cubes_.clear();
@@ -1411,10 +1495,9 @@ void SceneRenderer::FillLighting(FrameUniforms& u) const {
   u.light_info = glm::vec4(static_cast<float>(area_count), 0.0f,
                            static_cast<float>(kShadowCubeResolution), 1.0f);
   if (probes_.active) {
-    const ProbeVolumeData& volume = lighting_.probes;
-    u.gi_min = glm::vec4(volume.min, 1.0f);
-    u.gi_max = glm::vec4(volume.max, volume.intensity);
-    u.gi_counts = glm::vec4(glm::vec3(volume.counts), static_cast<float>(kProbesPerAtlasRow));
+    u.gi_min = glm::vec4(probes_.min, 1.0f);
+    u.gi_max = glm::vec4(probes_.max, probes_.intensity);
+    u.gi_counts = glm::vec4(glm::vec3(probes_.counts), static_cast<float>(kProbesPerAtlasRow));
   }
 }
 
@@ -1429,17 +1512,48 @@ FrameUniforms SceneRenderer::CubeFaceUniforms(glm::vec3 center, uint32_t face, f
 
 void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame) {
   if (cubes_.empty()) return;
-  std::vector<const FrameDraw*> casters;
-  for (const auto& draw : draws_) {
-    if (draw.cast_shadows) casters.push_back(&draw);
+  // Each slot's casters, and whether anything about them changed since the
+  // slot was last drawn: still scenes draw their cubes once.
+  std::vector<std::vector<const FrameDraw*>> casters(cubes_.size());
+  std::vector<size_t> dirty;
+  for (size_t slot = 0; slot < cubes_.size(); slot++) {
+    const ShadowCube& cube = cubes_[slot];
+    uint64_t hash = kHashSeed;
+    const float values[8] = {cube.center.x, cube.center.y, cube.center.z, cube.far_clip,
+                             cube.normal.x, cube.normal.y, cube.normal.z,
+                             cube.one_sided ? 1.0f : 0.0f};
+    HashFloats(hash, values, 8);
+    for (size_t i = 0; i < draws_.size(); i++) {
+      const FrameDraw& draw = draws_[i];
+      if (!draw.cast_shadows || !BoxNear(draw.bounds_min, draw.bounds_max, cube.center,
+                                         cube.far_clip)) {
+        continue;
+      }
+      casters[slot].push_back(&draw);
+      HashFloats(hash, &records_[draw.record].world[0][0], 16);
+      const float geometry[2] = {static_cast<float>(draw.geometry->first_index),
+                                 static_cast<float>(draw.geometry->index_count)};
+      HashFloats(hash, geometry, 2);
+      // Skinned meshes change shape without moving.
+      if (draw_skinned_[i]) {
+        const float frame_value = static_cast<float>(frame_number_);
+        HashFloats(hash, &frame_value, 1);
+      }
+    }
+    if (hash != cube_hashes_[slot]) {
+      cube_hashes_[slot] = hash;
+      dirty.push_back(slot);
+    }
   }
+  if (dirty.empty()) return;
+
   const VkExtent2D extent = {kShadowCubeResolution, kShadowCubeResolution};
   ToAttachment(cmd, shadow_cubes_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-  for (size_t slot = 0; slot < cubes_.size(); slot++) {
+  for (size_t slot : dirty) {
+    const ShadowCube& cube = cubes_[slot];
     for (uint32_t face = 0; face < 6; face++) {
-      FrameUniforms uniforms =
-          CubeFaceUniforms(cubes_[slot].center, face, 0.005f, cubes_[slot].far_clip, extent);
-      uniforms.light_dir = glm::vec4(cubes_[slot].normal, cubes_[slot].one_sided ? 1.0f : 0.0f);
+      FrameUniforms uniforms = CubeFaceUniforms(cube.center, face, 0.005f, cube.far_clip, extent);
+      uniforms.light_dir = glm::vec4(cube.normal, cube.one_sided ? 1.0f : 0.0f);
       const uint32_t offset = PushUniforms(frame, uniforms);
       TransitionImage(cmd, shadow_cube_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -1464,19 +1578,24 @@ void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame
       rendering.pDepthAttachment = &depth;
       vkCmdBeginRendering(cmd, &rendering);
       SetViewport(cmd, extent);
-      if (!casters.empty()) {
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_cube_);
-        const VkDescriptorSet sets[2] = {frame.set, texture_set_};
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
-                                1, &offset);
-        const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
-        const VkDeviceSize offsets[2] = {0, 0};
-        vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
-        vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
-        for (const FrameDraw* draw : casters) {
-          vkCmdDrawIndexed(cmd, draw->geometry->index_count, 1, draw->geometry->first_index,
-                           static_cast<int32_t>(draw->geometry->first_vertex), draw->record);
+      bool bound = false;
+      for (const FrameDraw* draw : casters[slot]) {
+        if (!FaceSees(cube.center, face, draw->bounds_min, draw->bounds_max, cube.far_clip)) {
+          continue;
         }
+        if (!bound) {
+          vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_cube_);
+          const VkDescriptorSet sets[2] = {frame.set, texture_set_};
+          vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
+                                  1, &offset);
+          const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+          const VkDeviceSize offsets[2] = {0, 0};
+          vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+          vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
+          bound = true;
+        }
+        vkCmdDrawIndexed(cmd, draw->geometry->index_count, 1, draw->geometry->first_index,
+                         static_cast<int32_t>(draw->geometry->first_vertex), draw->record);
       }
       vkCmdEndRendering(cmd);
     }
@@ -1484,16 +1603,78 @@ void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame
   ToShaderRead(cmd, shadow_cubes_.Get());
 }
 
-void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
-  const ProbeVolumeData& volume = lighting_.probes;
-  probes_.active = volume.enabled;
-  if (!volume.enabled) return;
+bool SceneRenderer::ResolveProbeVolume(glm::vec3 still_min, glm::vec3 still_max,
+                                       ProbeVolumeData& volume) {
+  volume = lighting_.probes;
+  if (!volume.enabled) return false;
+  if (!volume.automatic) {
+    const int total = volume.counts.x * volume.counts.y * volume.counts.z;
+    return total > 0 && total <= static_cast<int>(kMaxProbes);
+  }
+  if (glm::any(glm::greaterThan(still_min, still_max))) return false;  // nothing still
+
+  // Refit only when the geometry outgrows the box or shrinks well inside it:
+  // small changes keep the probes (a new grid starts from dark).
+  const glm::vec3 old_extent = probes_.fit_max - probes_.fit_min;
+  const glm::vec3 slack = old_extent * 0.02f + 1e-3f;
+  const bool refit =
+      !probes_.fitted ||
+      glm::any(glm::lessThan(still_min, probes_.fit_min - slack)) ||
+      glm::any(glm::greaterThan(still_max, probes_.fit_max + slack)) ||
+      glm::any(glm::greaterThan(still_min - probes_.fit_min, old_extent * 0.15f + slack)) ||
+      glm::any(glm::greaterThan(probes_.fit_max - still_max, old_extent * 0.15f + slack));
+  if (refit) {
+    probes_.fitted = true;
+    probes_.fit_min = still_min;
+    probes_.fit_max = still_max;
+    // Flat scenes still get some height, so there is room above the floor.
+    glm::vec3 extent = still_max - still_min;
+    const float longest = std::max({extent.x, extent.y, extent.z, 0.1f});
+    extent = glm::max(extent, glm::vec3(longest * 0.15f));
+    // Even spacing, a probe's spacing past the geometry on every side, as
+    // many probes as kAutoProbes allows.
+    float spacing = std::cbrt(extent.x * extent.y * extent.z / kAutoProbes);
+    glm::ivec3 counts;
+    glm::vec3 span;
+    for (int attempt = 0; attempt < 64; attempt++) {
+      span = extent + spacing;
+      counts = glm::clamp(glm::ivec3(glm::round(span / spacing)) + 1, glm::ivec3(2),
+                          glm::ivec3(16));
+      if (counts.x * counts.y * counts.z <= static_cast<int>(kAutoProbes)) break;
+      spacing *= 1.08f;
+    }
+    const glm::vec3 center = (still_min + still_max) * 0.5f;
+    probes_.grid_min = center - span * 0.5f;
+    probes_.grid_max = center + span * 0.5f;
+    probes_.grid_counts = counts;
+  }
+  volume.min = probes_.grid_min;
+  volume.max = probes_.grid_max;
+  volume.counts = probes_.grid_counts;
+  return true;
+}
+
+void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame,
+                                 uint32_t culling_mask) {
+  // The probes see the still, opaque geometry the main camera draws. Moving
+  // objects are left out, or the probes would never settle.
+  std::vector<const FrameDraw*> still;
+  glm::vec3 still_min(std::numeric_limits<float>::max());
+  glm::vec3 still_max(-std::numeric_limits<float>::max());
+  uint64_t still_indices = 0;
+  for (const auto& draw : draws_) {
+    if (draw.transparent || draw.dynamic || !(culling_mask & (1u << (draw.layer & 31)))) continue;
+    still.push_back(&draw);
+    still_min = glm::min(still_min, draw.bounds_min);
+    still_max = glm::max(still_max, draw.bounds_max);
+    still_indices += draw.geometry->index_count;
+  }
+  ProbeVolumeData volume;
+  probes_.active = ResolveProbeVolume(still_min, still_max, volume);
+  if (!probes_.active) return;
+  probes_.intensity = volume.intensity;
   const uint32_t total = static_cast<uint32_t>(volume.counts.x * volume.counts.y *
                                                volume.counts.z);
-  if (total == 0 || total > kMaxProbes) {
-    probes_.active = false;
-    return;
-  }
   // A different volume starts over from empty probes.
   if (probes_.clear_atlas || volume.min != probes_.min || volume.max != probes_.max ||
       volume.counts != probes_.counts) {
@@ -1521,7 +1702,7 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
 
   // Anything that changes the light the probes saw starts the bounces over
   // (keeping the old values, so the change fades in).
-  uint64_t hash = 1469598103934665603ull;
+  uint64_t hash = kHashSeed;
   HashFloats(hash, &lighting_.direction.x, 12);  // direction, color and ambients
   for (const auto& light : lighting_.point_lights) {
     const float values[9] = {light.position.x, light.position.y, light.position.z,
@@ -1535,10 +1716,13 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
                            static_cast<float>(light.shadows)};
     HashFloats(hash, rest, 3);
   }
-  for (const auto& record : records_) {
+  for (const FrameDraw* draw : still) {
     // World matrix, color and emission (info and the rest never change alone).
+    const DrawData& record = records_[draw->record];
     HashFloats(hash, &record.world[0][0], 16);
     HashFloats(hash, &record.color.x, 8);
+    const float geometry = static_cast<float>(draw->geometry->first_index);
+    HashFloats(hash, &geometry, 1);
   }
   if (hash != probes_.scene_hash) {
     probes_.scene_hash = hash;
@@ -1546,20 +1730,56 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
   }
   if (probes_.passes >= volume.bounces) return;
 
-  std::vector<const FrameDraw*> opaque;
-  for (const auto& draw : draws_) {
-    if (!draw.transparent) opaque.push_back(&draw);
-  }
+  // Probes this frame: a budget of indices, about a third of the scene per
+  // face once the faces cull what they cannot see.
   uint32_t batch = volume.probes_per_frame > 0
                        ? static_cast<uint32_t>(volume.probes_per_frame)
-                       : static_cast<uint32_t>(std::max<size_t>(
-                             1, 3000 / (6 * std::max<size_t>(opaque.size(), 1))));
+                       : static_cast<uint32_t>(std::max<uint64_t>(
+                             1, kProbeIndexBudget / std::max<uint64_t>(2 * still_indices, 1)));
   batch = std::min({batch, kMaxProbeBatch, total - probes_.next});
+
+  // The sun's shadows over the whole volume: the camera's map covers only
+  // what is near the camera. Drawn into the same map, which the camera's
+  // pass redraws afterwards (when it has shadows).
+  glm::mat4 sun_view_proj(1.0f);
+  float sun_normal_bias = lighting_.shadow_normal_bias;
+  // Always shadowed for the probes, even when the camera's view is not: a
+  // sun shining through walls would light every room.
+  const bool sun_shadow = lighting_.color != glm::vec3(0.0f);
+  if (sun_shadow) {
+    const glm::vec3 lo = glm::min(volume.min, still_min);
+    const glm::vec3 hi = glm::max(volume.max, still_max);
+    const glm::vec3 center = (lo + hi) * 0.5f;
+    const float radius = glm::length(hi - lo) * 0.5f + 0.01f;
+    const glm::vec3 dir = glm::normalize(lighting_.direction);
+    const glm::vec3 up = std::abs(dir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+    const glm::mat4 view = glm::lookAt(center - dir * radius * 2.0f, center, up);
+    glm::vec3 box_min(std::numeric_limits<float>::max()), box_max(-std::numeric_limits<float>::max());
+    for (int corner = 0; corner < 8; corner++) {
+      const glm::vec3 p((corner & 1) ? hi.x : lo.x, (corner & 2) ? hi.y : lo.y,
+                        (corner & 4) ? hi.z : lo.z);
+      const glm::vec3 q = glm::vec3(view * glm::vec4(p, 1.0f));
+      box_min = glm::min(box_min, q);
+      box_max = glm::max(box_max, q);
+    }
+    sun_view_proj = glm::ortho(box_min.x, box_max.x, box_min.y, box_max.y, -box_max.z - 0.01f,
+                               -box_min.z + 0.01f) *
+                    view;
+    // A coarser map needs a wider offset against acne.
+    const float texel = std::max(box_max.x - box_min.x, box_max.y - box_min.y) /
+                        static_cast<float>(kShadowResolution);
+    sun_normal_bias = std::max(sun_normal_bias, 2.0f * texel);
+    std::vector<const FrameDraw*> casters;
+    for (const FrameDraw* draw : still) {
+      if (draw->cast_shadows) casters.push_back(draw);
+    }
+    DrawSunShadow(cmd, frame, sun_view_proj, casters);
+  }
 
   const VkExtent2D extent = {kProbeFaceSize, kProbeFaceSize};
   const glm::vec3 cells = glm::max(glm::vec3(volume.counts - 1), glm::vec3(1.0f));
-  // The sky a probe sees past everything is the ambient light.
-  const glm::vec3 sky = lighting_.ambient;
+  // The sky a probe sees past everything is the ambient light: alpha 2 asks
+  // the projection for the sky and ground colors by direction.
   ToAttachment(cmd, probe_faces_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   for (uint32_t k = 0; k < batch; k++) {
     const uint32_t probe = probes_.next + k;
@@ -1570,6 +1790,10 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
       FrameUniforms uniforms = CubeFaceUniforms(position, face, 0.01f, 1000.0f, extent);
       uniforms.light_info.y = 1.0f;  // capture
       uniforms.light_info.w = volume.include_emission ? 1.0f : 0.0f;
+      if (sun_shadow) {
+        uniforms.light_view_proj = sun_view_proj;
+        uniforms.shadow_params = glm::vec4(kShadowResolution, sun_normal_bias, 0.0f, 0.0f);
+      }
       const uint32_t offset = PushUniforms(frame, uniforms);
       ToAttachment(cmd, probe_normal_.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
       TransitionImage(cmd, probe_depth_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -1583,8 +1807,7 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
         c.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
       }
       colors[0].imageView = probe_faces_.LayerView(k * 6 + face);
-      // Alpha 1: open sky counts as a front face.
-      colors[0].clearValue.color = {{sky.r, sky.g, sky.b, 1.0f}};
+      colors[0].clearValue.color = {{0.0f, 0.0f, 0.0f, 2.0f}};
       colors[1].imageView = probe_normal_.View();
       colors[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
       VkRenderingAttachmentInfo depth = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
@@ -1601,21 +1824,24 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
       rendering.pDepthAttachment = &depth;
       vkCmdBeginRendering(cmd, &rendering);
       SetViewport(cmd, extent);
-      if (!opaque.empty()) {
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_capture_);
-        const VkDescriptorSet sets[2] = {frame.set, texture_set_};
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
-                                1, &offset);
-        const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
-        const VkDeviceSize offsets[2] = {0, 0};
-        vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
-        vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
-        FrontFace front_face;
-        for (const FrameDraw* draw : opaque) {
-          front_face.Set(cmd, draw->mirrored);
-          vkCmdDrawIndexed(cmd, draw->geometry->index_count, 1, draw->geometry->first_index,
-                           static_cast<int32_t>(draw->geometry->first_vertex), draw->record);
+      bool bound = false;
+      FrontFace front_face;
+      for (const FrameDraw* draw : still) {
+        if (!FaceSees(position, face, draw->bounds_min, draw->bounds_max, 1000.0f)) continue;
+        if (!bound) {
+          vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_capture_);
+          const VkDescriptorSet sets[2] = {frame.set, texture_set_};
+          vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets,
+                                  1, &offset);
+          const VkBuffer buffers[2] = {vertex_buffer_.Get(), frame.instances.Get()};
+          const VkDeviceSize offsets[2] = {0, 0};
+          vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+          vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
+          bound = true;
         }
+        front_face.Set(cmd, draw->mirrored);
+        vkCmdDrawIndexed(cmd, draw->geometry->index_count, 1, draw->geometry->first_index,
+                         static_cast<int32_t>(draw->geometry->first_vertex), draw->record);
       }
       vkCmdEndRendering(cmd);
     }
@@ -1650,6 +1876,8 @@ void SceneRenderer::UpdateProbes(VkCommandBuffer cmd, FrameResources& frame) {
     push.p[0] = glm::vec4(static_cast<float>(k * 6), static_cast<float>(kProbeFaceSize),
                           static_cast<float>(x), static_cast<float>(y));
     push.p[1] = glm::vec4(0.25f, 0.0f, 0.0f, 0.0f);  // back faces above which it is inside
+    push.p[2] = glm::vec4(lighting_.ambient, 0.0f);   // the sky, above
+    push.p[3] = glm::vec4(lighting_.ambient_ground, 0.0f);  // and below
     vkCmdPushConstants(cmd, post_pipeline_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push),
                        &push);
     vkCmdDraw(cmd, 3, 1, 0, 0);

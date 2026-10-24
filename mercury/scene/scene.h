@@ -93,6 +93,9 @@ struct AreaLightData {
  */
 struct ProbeVolumeData {
   bool enabled = false;
+  // The renderer fits the grid around the scene's still geometry (min, max
+  // and counts are then ignored).
+  bool automatic = false;
   glm::vec3 min = glm::vec3(0.0f);
   glm::vec3 max = glm::vec3(0.0f);
   glm::ivec3 counts = glm::ivec3(0);

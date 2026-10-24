@@ -1,7 +1,8 @@
 // Projects the 6 faces a light probe captured onto L2 spherical harmonics.
 // Drawn over the probe's 9 texels of the atlas (one per coefficient). Alpha
 // of coefficient 0 says whether the probe is usable: probes that mostly see
-// back faces are inside something.
+// back faces are inside something. Texels that saw nothing take the ambient
+// sky and ground colors by direction.
 // Uses the fullscreen passes' layout (post_common.hlsli): binding 2 is the
 // capture, push constants are ProbePush.
 #include "lighting_math.hlsli"
@@ -18,6 +19,8 @@ struct ProbePush
 {
     float4 probe;  // x: first face layer, y: face size, zw: atlas texel of coefficient 0
     float4 limits; // x: fraction of back faces above which the probe is unusable
+    float4 sky;    // ambient light from above, where a face saw nothing
+    float4 ground; // and from below
 };
 [[vk::push_constant]] ProbePush push;
 
@@ -41,6 +44,11 @@ float4 Main(FullscreenOutput input) : SV_Target0
                 float2 ndc = uv * 2.0 - 1.0;
                 float w = 1.0 / pow(1.0 + dot(ndc, ndc), 1.5);
                 float4 texel = faces.Load(int4(x, y, first + f, 0));
+                if (texel.a > 1.5)
+                {
+                    // Nothing there (alpha 2): the sky, as the ambient colors.
+                    texel = float4(lerp(push.ground.rgb, push.sky.rgb, d.y * 0.5 + 0.5), 1.0);
+                }
                 float basis[9];
                 ShBasis(d, basis);
                 sum += texel.rgb * basis[coefficient] * w;

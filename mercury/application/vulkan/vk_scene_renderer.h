@@ -56,7 +56,7 @@ struct FrameUniforms {
   glm::vec4 point_shadows[16];     // radius, bias, soft
   glm::vec4 area_lights[4 * 4];    // center + range, right + two-sided, up + slot, color + soft
   glm::vec4 area_shadow_bias[4];
-  glm::vec4 shadow_cubes_info[4];  // center + far
+  glm::vec4 shadow_cubes_info[8];  // center + far
   glm::vec4 light_info;            // area count, capture pass, cube size, capture emission
   glm::vec4 gi_min;                // + enabled
   glm::vec4 gi_max;                // + intensity
@@ -64,7 +64,7 @@ struct FrameUniforms {
 };
 inline constexpr uint32_t kMaxPointLights = 16;
 inline constexpr uint32_t kMaxAreaLights = 4;
-inline constexpr uint32_t kMaxShadowCubes = 4;
+inline constexpr uint32_t kMaxShadowCubes = 8;
 
 // Must match DrawData in model_common.hlsli.
 struct DrawData {
@@ -90,6 +90,10 @@ class SceneRenderer {
   static constexpr uint32_t kMaxProbeBatch = 32;   // probes updated per frame at most
   static constexpr uint32_t kProbesPerAtlasRow = 64;
   static constexpr uint32_t kMaxProbes = 4096;
+  static constexpr uint32_t kAutoProbes = 512;      // probes of a volume fitted to the scene
+  // Indices drawn per frame for probe captures; a scene's probes take more
+  // frames to settle the more geometry it has.
+  static constexpr uint64_t kProbeIndexBudget = 40'000'000;
 
   using ShaderLoader = std::function<VkShaderModule(const std::string&)>;
   // Records the older draws (skybox panorama, Mesh, static batches) into the
@@ -195,7 +199,11 @@ class SceneRenderer {
     bool cast_shadows = true;
     bool outline = false;
     bool mirrored = false;  // negative scale: triangles wind the other way
+    // Moved recently or animated: lit by the probes but not seen by them.
+    bool dynamic = false;
     glm::vec3 center = glm::vec3(0.0f);  // world, for sorting
+    glm::vec3 bounds_min = glm::vec3(0.0f);  // world box
+    glm::vec3 bounds_max = glm::vec3(0.0f);
   };
 
   struct FrameResources {
@@ -217,7 +225,15 @@ class SceneRenderer {
   // Picks which point and area lights get this frame's shadow cubes.
   void AssignShadowCubes();
   void RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame);
-  void UpdateProbes(VkCommandBuffer cmd, FrameResources& frame);
+  void UpdateProbes(VkCommandBuffer cmd, FrameResources& frame, uint32_t culling_mask);
+  // The probe grid this frame: the scene's volume, or one fitted around
+  // the still geometry. False when there is none.
+  bool ResolveProbeVolume(glm::vec3 still_min, glm::vec3 still_max, ProbeVolumeData& volume);
+  // `casters` into the sun's shadow map as `view_proj` sees them.
+  void DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, const glm::mat4& view_proj,
+                     const std::vector<const FrameDraw*>& casters);
+  // Marks draws of objects that moved lately as dynamic.
+  void TrackMotion();
   // Uniforms of a 90 degree view along cube face `face` from `center`.
   FrameUniforms CubeFaceUniforms(glm::vec3 center, uint32_t face, float near_clip,
                                  float far_clip, VkExtent2D extent) const;
@@ -327,6 +343,9 @@ class SceneRenderer {
   std::vector<ShadowCube> cubes_;   // this frame's slots
   std::vector<int> point_slots_;    // per point light: slot or -1
   std::vector<int> area_slots_;     // per area light
+  // What each slot last drew; a slot whose light and casters are unchanged
+  // keeps its faces.
+  std::array<uint64_t, kMaxShadowCubes> cube_hashes_ = {};
 
   // Light probes: 9 spherical harmonics texels each in the atlas.
   vk::Image probe_atlas_;
@@ -343,8 +362,25 @@ class SceneRenderer {
     int passes = 0;             // full passes since the scene last changed
     uint64_t scene_hash = 0;    // lights and objects, to notice changes
     bool clear_atlas = true;
+    float intensity = 1.0f;
+    // A volume fitted to the scene: the geometry's box it was fitted to, and
+    // the grid.
+    bool fitted = false;
+    glm::vec3 fit_min = glm::vec3(0.0f), fit_max = glm::vec3(0.0f);
+    glm::vec3 grid_min = glm::vec3(0.0f), grid_max = glm::vec3(0.0f);
+    glm::ivec3 grid_counts = glm::ivec3(0);
   };
   ProbeState probes_;
+
+  // When each object last moved, by entity.
+  struct Motion {
+    uint64_t hash = 0;     // its world transform
+    uint64_t moved = 0;    // frame it last moved; 0 never
+    uint64_t seen = 0;     // frame it was last drawn
+  };
+  std::unordered_map<uint32_t, Motion> motion_;
+  std::vector<uint32_t> draw_entities_;  // per draw of this frame
+  std::vector<bool> draw_skinned_;
 
   std::vector<FrameResources> frames_;
 
