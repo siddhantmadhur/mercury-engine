@@ -1854,9 +1854,10 @@ bool SceneRenderer::CreateTargets(Targets& targets, VkExtent2D extent) {
       targets.depth.Create(a, d, extent.width, extent.height, kDepthFormat,
                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                            VK_IMAGE_ASPECT_DEPTH_BIT) &&
-      targets.ao.Create(a, d, extent.width, extent.height, kMaskFormat, color_usage,
+      // Ambient occlusion at half resolution.
+      targets.ao.Create(a, d, half.width, half.height, kMaskFormat, color_usage,
                         VK_IMAGE_ASPECT_COLOR_BIT) &&
-      targets.ao_blur.Create(a, d, extent.width, extent.height, kMaskFormat, color_usage,
+      targets.ao_blur.Create(a, d, half.width, half.height, kMaskFormat, color_usage,
                              VK_IMAGE_ASPECT_COLOR_BIT) &&
       targets.bloom.Create(a, d, half.width, half.height, kHdrFormat, color_usage,
                            VK_IMAGE_ASPECT_COLOR_BIT, targets.bloom_mips) &&
@@ -1882,7 +1883,7 @@ bool SceneRenderer::CreateTargets(Targets& targets, VkExtent2D extent) {
   }
   targets.composite_set =
       AllocatePostSet({targets.hdr.View(), targets.ao_blur.View(), targets.normal.View(),
-                       targets.bloom.MipView(0), targets.outline.View()});
+                       targets.bloom.MipView(0), targets.outline.View(), targets.depth.View()});
   targets.fxaa_set = AllocatePostSet({targets.ldr.View()});
   targets.sky_set = AllocatePostSet({});
   targets.sky_view = VK_NULL_HANDLE;
@@ -3317,13 +3318,14 @@ void SceneRenderer::RenderView(VkCommandBuffer cmd, GameScene& scene,
     push.p[1] = glm::vec4(settings_.ssao_radius, settings_.ssao_intensity,
                           static_cast<float>(settings_.ssao_samples), 0.0f);
     push.p[2] = glm::vec4(p[0][0], p[1][1], 0.0f, 0.0f);
+    const VkExtent2D half = targets.ao.Extent();
     ToAttachment(cmd, targets.ao.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    Fullscreen(cmd, ssao_, targets.ssao_set, targets.ao.View(), extent, &push, false);
+    Fullscreen(cmd, ssao_, targets.ssao_set, targets.ao.View(), half, &push, false);
     ToShaderRead(cmd, targets.ao.Get());
     PostPush blur;
-    blur.p[0] = glm::vec4(1.0f / extent.width, 1.0f / extent.height, 0.0f, 0.0f);
+    blur.p[0] = glm::vec4(1.0f / half.width, 1.0f / half.height, 0.0f, 0.0f);
     ToAttachment(cmd, targets.ao_blur.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    Fullscreen(cmd, blur_, targets.blur_set, targets.ao_blur.View(), extent, &blur, false);
+    Fullscreen(cmd, blur_, targets.blur_set, targets.ao_blur.View(), half, &blur, false);
     ToShaderRead(cmd, targets.ao_blur.Get());
   }
   if (post && settings_.outline_layers != 0) {
