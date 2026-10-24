@@ -66,6 +66,7 @@ struct FrameUniforms {
   // The sun's shadow over the whole scene, past the camera's map.
   glm::mat4 far_light_view_proj;
   glm::vec4 far_shadow_params;     // resolution (0: none), normal bias, -, use it alone
+  glm::vec4 gi_params;             // visibility maps filter linearly
 };
 inline constexpr uint32_t kMaxPointLights = 16;
 inline constexpr uint32_t kMaxAreaLights = 4;
@@ -137,6 +138,11 @@ class SceneRenderer {
   static constexpr uint32_t kProbesPerAtlasRow = 64;
   // Must match kProbeVisibilitySize in lighting_math.hlsli.
   static constexpr uint32_t kProbeVisibilitySize = 8;
+  static constexpr uint32_t kProbeVisibilityTexels = kProbeVisibilitySize + 2;  // with border
+  // Must match kProbeOctaSize in lighting_math.hlsli: each probe's light
+  // maps, inside a one-texel border.
+  static constexpr uint32_t kProbeOctaSize = 6;
+  static constexpr uint32_t kProbeOctaTexels = kProbeOctaSize + 2;
   static constexpr uint32_t kMaxProbes = 4096;
   static constexpr uint32_t kAutoProbes = 512;      // probes of a volume fitted to the scene
   // Indices drawn per frame for probe captures; a scene's probes take more
@@ -429,6 +435,7 @@ class SceneRenderer {
   VkPipeline probe_capture_ = VK_NULL_HANDLE; // the scene as a probe sees it
   VkPipeline probe_sh_ = VK_NULL_HANDLE;      // capture -> spherical harmonics
   VkPipeline probe_visibility_pass_ = VK_NULL_HANDLE;  // capture -> distance map
+  VkPipeline probe_octa_ = VK_NULL_HANDLE;    // spherical harmonics -> light maps
   // Composite/FXAA pipelines per output format.
   std::map<std::pair<VkFormat, bool>, VkPipeline> output_pipelines_;
   VkShaderModule fullscreen_vs_ = VK_NULL_HANDLE;
@@ -499,8 +506,12 @@ class SceneRenderer {
   // keeps its faces.
   std::array<uint64_t, kMaxShadowCubes> cube_hashes_ = {};
 
-  // Light probes: 9 spherical harmonics texels each in the atlas.
+  // Light probes: 9 spherical harmonics texels each in the atlas, and the
+  // octahedral maps shading reads, made from them.
   vk::Image probe_atlas_;
+  vk::Image probe_irradiance_;
+  vk::Image probe_radiance_;
+  VkDescriptorSet probe_octa_set_ = VK_NULL_HANDLE;
   // Per probe an octahedral map of the distance to the nearest surface
   // (mean, mean square), so walls block the probes behind them.
   vk::Image probe_visibility_;
@@ -509,6 +520,7 @@ class SceneRenderer {
   vk::Image probe_depth_;
   VkDescriptorSet probe_sh_set_ = VK_NULL_HANDLE;
   bool lighting_initialized_ = false;
+  bool visibility_filterable_ = false;  // kProbeVisibilityFormat filters linearly
   struct ProbeState {
     bool active = false;        // the volume's probes light this frame
     glm::vec3 min = glm::vec3(0.0f), max = glm::vec3(0.0f);

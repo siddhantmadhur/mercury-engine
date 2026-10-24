@@ -4,17 +4,22 @@
 // Descriptor set 0 (continued from model_common.hlsli):
 //   binding 7  Texture2DArray<float>  shadow cubes: 6 faces per slot, each
 //                                     texel the distance to the nearest caster
-//   binding 8  Texture2D<float4>      probe atlas: 9 texels per probe, the
-//                                     L2 spherical harmonics of its radiance
+//   binding 6  SamplerState           linear, clamped
+//   binding 8  Texture2D<float4>      probe irradiance: an octahedral map
+//                                     per probe of irradiance / pi, alpha
+//                                     its validity (probe_octa.ps.hlsl)
 //   binding 10 Texture2D<float2>      probe visibility: an octahedral map
 //                                     per probe of the distance to the
 //                                     nearest surface (mean, mean square)
+//   binding 11 Texture2D<float4>      probe radiance, sharp, for reflections
 
 #include "lighting_math.hlsli"
 
+[[vk::binding(6, 0)]] SamplerState clamp_sampler;
 [[vk::binding(7, 0)]] Texture2DArray<float> shadow_cubes;
-[[vk::binding(8, 0)]] Texture2D<float4> probe_atlas;
+[[vk::binding(8, 0)]] Texture2D<float4> probe_irradiance;
 [[vk::binding(10, 0)]] Texture2D<float2> probe_visibility;
+[[vk::binding(11, 0)]] Texture2D<float4> probe_radiance;
 
 // ---------------------------------------------------------- cube shadows --
 
@@ -97,12 +102,6 @@ float CubeShadow(uint slot, float3 world_pos, float3 normal, float radius, float
 
 // ---------------------------------------------------------- light probes --
 
-int2 ProbeTexel(uint probe, uint coefficient)
-{
-    uint per_row = (uint) gi_counts.w;
-    return int2((probe % per_row) * kProbeCoefficients + coefficient, probe / per_row);
-}
-
 uint ProbeIndex(int3 cell)
 {
     int3 counts = int3(gi_counts.xyz);
@@ -115,42 +114,36 @@ float3 ProbePosition(int3 cell)
     return lerp(gi_min.xyz, gi_max.xyz, (float3) cell / max(counts - 1.0, 1.0));
 }
 
-// One probe's light toward d from its radiance SH, each band (l = 0, 1, 2)
-// scaled by `bands`: the cosine lobe's (kCosineBands) gives irradiance / pi,
-// the radiance a white diffuse surface reflects; kSharpBands the sharpest
-// radiance L2 holds without ringing (a Hann window: unwindowed, a mirror
-// shows colored blotches that are in no direction).
-static const float3 kCosineBands = float3(1.0, 2.0 / 3.0, 0.25);
-static const float3 kSharpBands = float3(1.0, 0.75, 0.25);
-
-float3 ProbeLight(uint probe, float3 d, float3 bands)
+// Where direction d of `probe` falls in its octahedral maps (atlas uv).
+float2 ProbeOctaUV(uint probe, float3 d, float2 atlas_texel)
 {
-    float basis[9];
-    ShBasis(d, basis);
-    float3 e = probe_atlas.Load(int3(ProbeTexel(probe, 0), 0)).rgb * (bands.x * basis[0]);
-    [unroll]
-    for (uint i = 1; i < 9; ++i)
-    {
-        float band = i < 4 ? bands.y : bands.z;
-        e += probe_atlas.Load(int3(ProbeTexel(probe, i), 0)).rgb * (band * basis[i]);
-    }
-    return max(e, 0.0);
+    uint per_row = (uint) gi_counts.w;
+    float2 corner = float2(probe % per_row, probe / per_row) * kProbeOctaTexels;
+    float2 inside = (OctEncode(d) * 0.5 + 0.5) * kProbeOctaSize + 1.0;
+    return (corner + inside) * atlas_texel;
 }
 
 // Mean and mean square of the distance from `probe` to the nearest surface
-// along `d`, bilinear within the probe's map.
+// along `d`, bilinear within the probe's map (its border makes that seamless).
 float2 ProbeDistance(uint probe, float3 d)
 {
-    const int size = (int) kProbeVisibilitySize;
     uint per_row = (uint) gi_counts.w;
-    int2 corner = int2(probe % per_row, probe / per_row) * size;
-    float2 uv = (OctEncode(d) * 0.5 + 0.5) * size - 0.5;
+    float2 corner = float2(probe % per_row, probe / per_row) * kProbeVisibilityTexels;
+    float2 inside = (OctEncode(d) * 0.5 + 0.5) * kProbeVisibilitySize + 1.0;
+    if (gi_params.x > 0.5)
+    {
+        float2 size;
+        probe_visibility.GetDimensions(size.x, size.y);
+        return probe_visibility.SampleLevel(clamp_sampler, (corner + inside) / size, 0);
+    }
+    // The format does not filter on this GPU: four texels by hand.
+    float2 uv = corner + inside - 0.5;
     int2 i = (int2) floor(uv);
     float2 f = uv - (float2) i;
-    float2 m00 = probe_visibility.Load(int3(corner + clamp(i, 0, size - 1), 0));
-    float2 m10 = probe_visibility.Load(int3(corner + clamp(i + int2(1, 0), 0, size - 1), 0));
-    float2 m01 = probe_visibility.Load(int3(corner + clamp(i + int2(0, 1), 0, size - 1), 0));
-    float2 m11 = probe_visibility.Load(int3(corner + clamp(i + int2(1, 1), 0, size - 1), 0));
+    float2 m00 = probe_visibility.Load(int3(i, 0));
+    float2 m10 = probe_visibility.Load(int3(i + int2(1, 0), 0));
+    float2 m01 = probe_visibility.Load(int3(i + int2(0, 1), 0));
+    float2 m11 = probe_visibility.Load(int3(i + int2(1, 1), 0));
     return lerp(lerp(m00, m10, f.x), lerp(m01, m11, f.x), f.y);
 }
 
@@ -178,8 +171,13 @@ bool SampleProbes(float3 p, float3 surface_normal, float3 n, float3 eye, float3 
 {
     light = 0.0;
     reflected = 0.0;
-    float3 gloss_bands = lerp(kSharpBands, kCosineBands, saturate(roughness));
     if (gi_min.w < 0.5) return false;
+    float2 atlas_size;
+    probe_irradiance.GetDimensions(atlas_size.x, atlas_size.y);
+    float2 atlas_texel = 1.0 / atlas_size;
+    // The reflection's bands lerp from sharp to the cosine lobe's with
+    // roughness; the SH are linear in them, so the maps lerp the same way.
+    float gloss = saturate(roughness);
     float3 extent = gi_max.xyz - gi_min.xyz;
     float3 spacing = extent / max(gi_counts.xyz - 1.0, 1.0);
     float min_spacing = min(spacing.x, min(spacing.y, spacing.z));
@@ -205,8 +203,9 @@ bool SampleProbes(float3 p, float3 surface_normal, float3 n, float3 eye, float3 
         int3 cell = base + offset;
         float3 tri = lerp(1.0 - t, t, (float3) offset);
         uint probe = ProbeIndex(cell);
-        float valid = probe_atlas.Load(int3(ProbeTexel(probe, 0), 0)).a;
-        if (valid < 0.5) continue;
+        float4 diffuse = probe_irradiance.SampleLevel(clamp_sampler,
+                                                      ProbeOctaUV(probe, n, atlas_texel), 0);
+        if (diffuse.a < 0.5) continue;  // inside something
         float3 probe_position = ProbePosition(cell);
         float3 to_probe = normalize(probe_position - p + 1e-5);
         float facing = (dot(to_probe, surface_normal) + 1.0) * 0.5;
@@ -218,8 +217,11 @@ bool SampleProbes(float3 p, float3 surface_normal, float3 n, float3 eye, float3 
         // Crush small weights further, so a hidden probe barely counts.
         if (w < 0.2) w = w * w * w / 0.04;
         w *= tri.x * tri.y * tri.z;
-        light += ProbeLight(probe, n, kCosineBands) * w;
-        reflected += ProbeLight(probe, r, gloss_bands) * w;
+        float2 uv_r = ProbeOctaUV(probe, r, atlas_texel);
+        float3 sharp = probe_radiance.SampleLevel(clamp_sampler, uv_r, 0).rgb;
+        float3 broad = probe_irradiance.SampleLevel(clamp_sampler, uv_r, 0).rgb;
+        light += diffuse.rgb * w;
+        reflected += lerp(sharp, broad, gloss) * w;
         total += w;
     }
     if (total < 1e-9) return false;
