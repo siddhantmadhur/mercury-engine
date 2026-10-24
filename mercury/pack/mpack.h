@@ -5,25 +5,33 @@
  * of thousands of loose ones, like Source 2's .vpk files. Only the editor's
  * Build Game writes them; development builds read loose files.
  *
- * A pack named "game" is a set of archives:
+ * A pack named "game" is an index file and a set of data archives:
  *
- *   game.mpack       header, file data, then the index of every entry
+ *   game.mindex      the index: path -> archive, offset and size
+ *   game.mpack       header and file data
  *   game_001.mpack   header and more file data, once game.mpack is full
  *   game_002.mpack   ...
  *
- * Every archive starts with the same 32-byte little-endian header:
+ * Every data archive starts with the same 32-byte little-endian header:
  *
- *   char[4] magic "MPAK"     u32 version
- *   u16 archive_index        u16 archive_count
- *   u32 entry_count          u64 index_offset      u64 index_size
+ *   char[4] magic "MPAK"   u32 version   u16 archive_index   u16 archive_count
+ *   16 reserved bytes
  *
- * Only archive 0 has an index (the others store 0s). Each index entry is
+ * The index file is read whole when the pack is opened:
  *
- *   u16 path_length, path (UTF-8, '/'-separated, relative to the pack root)
- *   u16 archive   u64 offset   u64 stored_size   u64 size
- *   u8 compression (0 stored, 1 zlib)   u32 crc32 (of the uncompressed bytes)
- *
- * sorted by path.
+ *   header (32 bytes)
+ *     char[4] magic "MIDX"   u32 version   u32 archive_count
+ *     u32 entry_count        u32 bucket_count (a power of two, >= entry_count)
+ *     u32 reserved           u64 strings_size
+ *   u32 buckets[bucket_count]   open-addressed hash table (linear probing)
+ *                               of entry number + 1, 0 when empty; a path
+ *                               starts at HashPath(path) & (bucket_count - 1)
+ *   entries[entry_count], 48 bytes each, sorted by path
+ *     u64 hash (HashPath)   u32 path_offset   u16 path_length   u16 archive
+ *     u64 offset   u64 stored_size   u64 size
+ *     u8 compression (0 stored, 1 zlib)   3 reserved bytes   u32 crc32
+ *       (of the uncompressed bytes)
+ *   path strings (UTF-8, '/'-separated, relative to the pack root)
  */
 #ifndef MERCURY_PACK_MPACK_H
 #define MERCURY_PACK_MPACK_H
@@ -42,9 +50,12 @@
 namespace Mercury::mpack {
 
 inline constexpr std::string_view kExtension = ".mpack";
+inline constexpr std::string_view kIndexExtension = ".mindex";
 inline constexpr uint32_t kVersion = 1;
 // Archives roll over to the next _NNN file past this size, as .vpk does.
-inline constexpr uint64_t kDefaultMaxArchiveBytes = 1ull << 30;
+// 0 never rolls over.
+inline constexpr uint64_t kDefaultMaxArchiveBytes = 256ull << 20;
+inline constexpr uint64_t kUnlimitedArchiveBytes = 0;
 
 // What Build Game writes next to the executable, and RunPlayer mounts.
 inline constexpr std::string_view kGamePackName = "game";
@@ -69,6 +80,13 @@ struct Entry {
 std::filesystem::path ArchivePath(const std::filesystem::path& dir,
                                   std::string_view base_name, int index);
 
+// <dir>/<base>.mindex
+std::filesystem::path IndexPath(const std::filesystem::path& dir,
+                                std::string_view base_name);
+
+// 64-bit FNV-1a of an entry path, the key of the index's hash table.
+uint64_t HashPath(std::string_view path);
+
 // False for paths a pack can't hold: empty, absolute, or with "." or "..".
 bool IsValidEntryPath(std::string_view path);
 
@@ -81,7 +99,8 @@ class Writer {
   size_t GetEntryCount() const { return sources_.size(); }
 
   /**
-   * @brief Writes <dir>/<base_name>.mpack and any _NNN archives it needs
+   * @brief Writes <dir>/<base_name>.mindex, <base_name>.mpack and any _NNN
+   * archives it needs; max_archive_bytes 0 keeps everything in one archive
    * @return false with `error` filled if a source could not be read or an
    * archive could not be written
    */
@@ -99,8 +118,8 @@ class Writer {
 
 class Reader {
  public:
-  // Opens archive 0 (e.g. game.mpack) and reads its index. The _NNN
-  // archives next to it are opened when first needed.
+  // Opens archive 0 (e.g. game.mpack) and the game.mindex next to it. The
+  // _NNN archives are opened when first needed.
   static std::shared_ptr<Reader> Open(const std::filesystem::path& archive0,
                                       std::string* error = nullptr);
 
@@ -119,7 +138,7 @@ class Reader {
   std::filesystem::path dir_;
   std::string base_name_;
   std::vector<Entry> entries_;
-  std::map<std::string, size_t, std::less<>> by_path_;
+  std::vector<uint32_t> buckets_;  // entry number + 1, 0 when empty
 
   mutable std::mutex mutex_;
   mutable std::vector<std::unique_ptr<std::ifstream>> archives_;

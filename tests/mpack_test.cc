@@ -95,6 +95,47 @@ TEST_F(MPackTest, RollsOverIntoNumberedArchives) {
   EXPECT_FALSE(mpack::Reader::Open(dir_ / "game_001.mpack"));
 }
 
+TEST_F(MPackTest, ZeroMaxSizeKeepsOneArchive) {
+  mpack::Writer writer;
+  for (int i = 0; i < 5; i++) {
+    writer.AddBytes("file" + std::to_string(i), Noise(1000, i));
+  }
+  std::string error;
+  ASSERT_TRUE(writer.Write(dir_, "game", mpack::kUnlimitedArchiveBytes, &error))
+      << error;
+  EXPECT_FALSE(std::filesystem::exists(dir_ / "game_001.mpack"));
+  auto reader = mpack::Reader::Open(dir_ / "game.mpack", &error);
+  ASSERT_TRUE(reader) << error;
+  EXPECT_EQ(reader->Read("file4"), Noise(1000, 4));
+}
+
+TEST_F(MPackTest, IndexFileLooksUpManyPaths) {
+  mpack::Writer writer;
+  for (int i = 0; i < 500; i++) {
+    writer.AddBytes("dir/file" + std::to_string(i), Noise(8, i));
+  }
+  std::string error;
+  ASSERT_TRUE(writer.Write(dir_, "game", 1024, &error)) << error;
+  EXPECT_TRUE(std::filesystem::exists(dir_ / "game.mindex"));
+
+  auto reader = mpack::Reader::Open(dir_ / "game.mpack", &error);
+  ASSERT_TRUE(reader) << error;
+  ASSERT_EQ(reader->GetEntries().size(), 500u);
+  for (int i = 0; i < 500; i++) {
+    EXPECT_EQ(reader->Read("dir/file" + std::to_string(i)), Noise(8, i)) << i;
+  }
+  EXPECT_FALSE(reader->Contains("dir/file500"));
+  EXPECT_FALSE(reader->Contains("dir"));
+}
+
+TEST_F(MPackTest, MissingIndexFailsToOpen) {
+  mpack::Writer writer;
+  writer.AddBytes("a", Noise(8, 1));
+  ASSERT_TRUE(writer.Write(dir_, "game"));
+  std::filesystem::remove(dir_ / "game.mindex");
+  EXPECT_FALSE(mpack::Reader::Open(dir_ / "game.mpack"));
+}
+
 TEST_F(MPackTest, DetectsCorruptData) {
   mpack::Writer writer;
   writer.AddBytes("noise.bin", Noise(256, 7));

@@ -6,6 +6,7 @@
  *
  *   [editor]
  *   external_editor = "code {project} {file}"
+ *   pack_size_mb = 256
  *
  *   [recent]
  *   projects = ["/home/me/games/pong/pong.mproj"]
@@ -31,6 +32,9 @@ struct EditorSettings {
   // Command used to open scripts. {file} and {project} are replaced with
   // paths. Empty means the desktop's default application.
   std::string external_editor;
+  // Build Game: size at which game.mpack rolls over into the next archive,
+  // in MiB. 0 keeps the whole pack in one archive.
+  int pack_size_mb = 256;
   std::vector<std::string> recent_projects;
   // Window > UI Builder.
   bool show_ui_builder = false;

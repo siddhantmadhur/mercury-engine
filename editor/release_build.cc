@@ -82,8 +82,10 @@ std::string ReleaseBuild::DefaultOutput(const Project& project) {
   return "Builds/" + project.GetName();
 }
 
-void ReleaseBuild::Start(const Project& project, const fs::path& output_dir) {
+void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
+                         uint64_t max_archive_bytes) {
   if (IsBusy()) return;
+  max_archive_bytes_ = max_archive_bytes;
   project_root_ = project.GetRoot();
   output_dir_ = output_dir;
   cancelled_ = false;
@@ -187,11 +189,12 @@ void ReleaseBuild::StartPacking() {
                "Packing assets into .mpack files...");
   state_ = State::kPacking;
   packing_ = std::async(std::launch::async, &ReleaseBuild::Pack, *config_,
-                        project_root_, output_dir_);
+                        project_root_, output_dir_, max_archive_bytes_);
 }
 
 ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
-                                            fs::path output_dir) {
+                                            fs::path output_dir,
+                                            uint64_t max_archive_bytes) {
   PackResult result;
   auto fail = [&](std::string message) {
     result.error = std::move(message);
@@ -204,7 +207,9 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
 
   // Archives from an earlier build would shadow or outlive the new ones.
   for (const auto& entry : fs::directory_iterator(output, ec)) {
-    if (entry.is_regular_file() && entry.path().extension() == mpack::kExtension) {
+    const auto extension = entry.path().extension();
+    if (entry.is_regular_file() &&
+        (extension == mpack::kExtension || extension == mpack::kIndexExtension)) {
       fs::remove(entry.path(), ec);
     }
   }
@@ -264,7 +269,7 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
   for (auto [writer, base, bytes] :
        {std::tuple{&game, mpack::kGamePackName, game_bytes},
         std::tuple{&engine, mpack::kEnginePackName, engine_bytes}}) {
-    if (!writer->Write(output, base, mpack::kDefaultMaxArchiveBytes, &error)) {
+    if (!writer->Write(output, base, max_archive_bytes, &error)) {
       return fail(error);
     }
     const auto [packed, archives] = ArchiveSizes(output, base);
