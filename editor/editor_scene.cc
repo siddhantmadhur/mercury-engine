@@ -133,6 +133,12 @@ bool EditorScene::OnCloseRequested() {
 // ------------------------------------------------------------------ Frame ---
 
 void EditorScene::OnFrame(double delta_t) {
+  // Closing mid-frame would leave the panels drawn after the menu bar with
+  // no project, so it waits for the next frame.
+  if (close_project_requested_) {
+    close_project_requested_ = false;
+    CloseProject();
+  }
   play_.Update();
   release_.Update();
   lore_.Update();
@@ -743,7 +749,7 @@ void EditorScene::DrawMenuBar() {
         open_modal_ = true;
         after_unsaved_ = AfterSave::kCloseProject;
       } else {
-        CloseProject();
+        close_project_requested_ = true;
       }
     }
     if (ImGui::MenuItem("Quit")) {
@@ -978,7 +984,9 @@ void EditorScene::DrawModals() {
       auto proceed = [&] {
         close();
         if (after_unsaved_ == AfterSave::kQuit) QuitScene();
-        if (after_unsaved_ == AfterSave::kCloseProject) CloseProject();
+        if (after_unsaved_ == AfterSave::kCloseProject) {
+          close_project_requested_ = true;
+        }
       };
       if (ImGui::Button("Save")) {
         const bool map_ok = !dirty_ || SaveMap();
