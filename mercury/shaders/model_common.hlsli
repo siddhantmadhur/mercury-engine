@@ -82,11 +82,9 @@ struct ModelVSInput
     [[vk::location(7)]] float4 tangent : TANGENT;  // w: bitangent sign
 };
 
+// The vertex shader's other outputs; SV_Position is its own (Invariant).
 struct ModelVSOutput
 {
-    // Invariant (18): the depth prepass and the main pass, different
-    // pipelines over the same vertex shader, must place vertices identically.
-    [[vk::ext_decorate(18)]] precise float4 position : SV_Position;
     [[vk::location(0)]] float3 world_position : POSITION1;
     [[vk::location(1)]] float3 normal : NORMAL;
     [[vk::location(2)]] float2 uv : TEXCOORD0;
