@@ -104,8 +104,12 @@ struct RenderProxy {
   glm::vec3 position = glm::vec3(0.0f);  // interpolated, when built
   glm::vec3 rotation = glm::vec3(0.0f);
   glm::vec3 scale = glm::vec3(0.0f);
+  // The node's layer and whether it is inactive, read when a signal marks
+  // the proxy dirty (they change through the registry).
   uint32_t layer = 0;
-  bool visible = false;
+  bool inactive = false;
+  bool mesh_visible = false;  // RenderMesh::visible, when built
+  bool visible = false;       // drawn: mesh_visible and not inactive
   bool cast_shadows = false;
   uint32_t rendering_layers = 0;
   // Posed by an Animator (or skinned): rebuilt every frame.

@@ -1345,7 +1345,11 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
   }
   AssignShadowCubes();
   ReleaseUnused(cmd);
-  SyncScene(cmd, frame, scene);
+  {
+    MERCURY_PROFILE_SCOPE("sync_scene");
+    SyncScene(cmd, frame, scene);
+  }
+  MERCURY_PROFILE_SCOPE("update_dynamic");
   UpdateDynamic();
   {
     uint64_t live = 0, triangles = 0;
@@ -1422,6 +1426,8 @@ void SceneRenderer::AttachRegistry(entt::registry& registry) {
     registry.on_destroy<RenderMesh>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
     registry.on_construct<InactiveTag>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
     registry.on_destroy<InactiveTag>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
+    // A node's layer (MapScene::SetLayer patches it).
+    registry.on_update<NodeInfo>().connect<&RenderHooks::OnMeshChanged>(*hooks_);
     registry.on_destroy<RenderProxy>().connect<&RenderHooks::OnProxyDestroyed>(*hooks_);
   }
   // Proxies left from an earlier visit name slots that are gone.
@@ -1528,25 +1534,29 @@ void SceneRenderer::SyncScene(VkCommandBuffer cmd, FrameResources& frame, GameSc
   // Every drawn entity: only what moved or changed is rebuilt.
   for (auto [entity, mesh, transform, proxy] :
        registry.view<RenderMesh, Transform, RenderProxy>().each()) {
-    const bool visible = mesh.visible && !registry.all_of<InactiveTag>(entity);
-    uint32_t layer = 0;
-    if (auto* info = registry.try_get<NodeInfo>(entity)) layer = static_cast<uint32_t>(info->layer);
     const glm::vec3 position = transform.GetInterpolatedPosition();
     const glm::vec3 rotation = transform.GetInterpolatedRotation();
     const glm::vec3 scale = transform.GetInterpolatedScale();
     const bool moved = proxy.built && (position != proxy.position || rotation != proxy.rotation ||
                                        scale != proxy.scale);
-    if (!proxy.dirty && !proxy.animated && !moved && visible == proxy.visible &&
-        layer == proxy.layer && mesh.cast_shadows == proxy.cast_shadows &&
+    if (!proxy.dirty && !proxy.animated && !moved && mesh.visible == proxy.mesh_visible &&
+        mesh.cast_shadows == proxy.cast_shadows &&
         mesh.rendering_layers == proxy.rendering_layers) {
       continue;
+    }
+    if (proxy.dirty || !proxy.built) {
+      proxy.inactive = registry.all_of<InactiveTag>(entity);
+      proxy.layer = 0;
+      if (auto* info = registry.try_get<NodeInfo>(entity)) {
+        proxy.layer = static_cast<uint32_t>(info->layer);
+      }
     }
     if (moved) proxy.moved = frame_number_;
     proxy.position = position;
     proxy.rotation = rotation;
     proxy.scale = scale;
-    proxy.visible = visible;
-    proxy.layer = layer;
+    proxy.mesh_visible = mesh.visible;
+    proxy.visible = mesh.visible && !proxy.inactive;
     proxy.cast_shadows = mesh.cast_shadows;
     proxy.rendering_layers = mesh.rendering_layers;
     BuildProxy(cmd, frame, scene, entity, mesh, transform, proxy);

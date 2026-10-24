@@ -1332,6 +1332,8 @@ void MapScene::SetLayer(kEntityId entity, int layer) {
   auto info = object_manager_->GetProperty<NodeInfo>(entity);
   if (!info) return;
   info->layer = layer;
+  // Tells registry listeners (the renderer) the node changed.
+  GetRegistry().patch<NodeInfo>(entity);
   physics_engine_->SetLayer(entity, layer);
 }
 
@@ -1479,12 +1481,22 @@ void MapScene::UpdateEntityTransformHierarchy(kEntityId entity) {
 }
 
 void MapScene::UpdateInterpolatedHierarchy() {
+  auto& registry = GetRegistry();
+  // Siblings follow each other in entities_, so the parent's lookup is
+  // shared until it changes.
+  kEntityId parent = entt::null;
+  Transform* parent_transform = nullptr;
   for (kEntityId entity : entities_) {
-    if (!HasParent(entity)) continue;
-    auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
-    auto parent_transform =
-        object_manager_->GetProperty<Transform>(node_info->parent);
-    auto child_transform = object_manager_->GetProperty<Transform>(entity);
+    if (!registry.valid(entity)) continue;
+    auto* node_info = registry.try_get<NodeInfo>(entity);
+    if (!node_info || node_info->parent == entt::null || node_info->parent == root_entity_) {
+      continue;
+    }
+    if (node_info->parent != parent) {
+      parent = node_info->parent;
+      parent_transform = registry.valid(parent) ? registry.try_get<Transform>(parent) : nullptr;
+    }
+    auto* child_transform = registry.try_get<Transform>(entity);
     if (!parent_transform || !child_transform) continue;
 
     const glm::vec3 p_pos = parent_transform->GetInterpolatedPosition();
@@ -1510,7 +1522,11 @@ void MapScene::UpdateInterpolatedHierarchy() {
 }
 
 void MapScene::ProcessOnFrame(float alpha) {
-  GameScene::ProcessOnFrame(alpha);
+  {
+    MERCURY_PROFILE_SCOPE("interpolate");
+    GameScene::ProcessOnFrame(alpha);
+  }
+  MERCURY_PROFILE_SCOPE("interpolated_hierarchy");
   UpdateInterpolatedHierarchy();
 }
 

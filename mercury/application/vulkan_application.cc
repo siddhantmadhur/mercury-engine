@@ -1693,6 +1693,7 @@ void VulkanApplication::Render() {
     auto& registry = game_scene_->GetRegistry();
     EnsureRegistrySignalsHooked(registry);
 
+    MERCURY_PROFILE_SCOPE("legacy_instances");
     instance_copies_.clear();
     if (layout_dirty_) {
       RebuildInstanceLayout(registry, atlas, frame);
@@ -1757,6 +1758,7 @@ void VulkanApplication::Render() {
   vk::UIRenderer::Batch game_ui;
   if (game_scene_ && !scene_texture_enabled_) {
     if (const UI::UIDrawData* ui = game_scene_->GetUIDrawData()) {
+      MERCURY_PROFILE_SCOPE("ui_prepare");
       game_ui = ui_renderer_.Prepare(cmd, *ui);
     }
   }
@@ -1798,6 +1800,7 @@ void VulkanApplication::Render() {
   const VkImage swapchain_image = swapchain_.ImageAt(image_index);
   const bool scene_on_window = game_scene_ && !scene_texture_enabled_;
   if (scene_on_window) {
+    MERCURY_PROFILE_SCOPE("render_scene");
     RenderSceneTo(cmd, frame, cameras, swapchain_image,
                   swapchain_.ImageView(image_index), extent,
                   VK_IMAGE_LAYOUT_UNDEFINED, frame.descriptor_set, draw_static,
@@ -1862,7 +1865,10 @@ void VulkanApplication::Render() {
   //   ImGui::End();
   // }
 
-  ImGui::Render();
+  {
+    MERCURY_PROFILE_SCOPE("imgui_render");
+    ImGui::Render();
+  }
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
   vkCmdEndRendering(cmd);
