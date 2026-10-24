@@ -34,6 +34,7 @@
 #include "scene/scene.h"
 #include "vk_buffer.h"
 #include "vk_context.h"
+#include "vk_gpu_timer.h"
 
 namespace Mercury::vk {
 
@@ -144,6 +145,9 @@ class SceneRenderer {
   static void MainPassFormats(VkFormat (&colors)[2], VkFormat& depth);
 
   VkImageView ShadowMapView() const { return shadow_image_.View(); }
+
+  // Times the passes on the GPU (may be null).
+  void SetGpuTimer(GpuTimer* timer) { gpu_timer_ = timer; }
 
  private:
   struct Pipeline {
@@ -299,6 +303,7 @@ class SceneRenderer {
   VkPipeline PipelineForFormat(VkFormat format, bool fxaa);
 
   Context* context_ = nullptr;
+  GpuTimer* gpu_timer_ = nullptr;
   uint32_t frames_in_flight_ = 2;
   uint32_t frame_index_ = 0;
   uint64_t frame_number_ = 0;

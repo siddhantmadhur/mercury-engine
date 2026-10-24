@@ -8,6 +8,7 @@
 
 #include "animation/animator.h"
 #include "debugger/debugger.h"
+#include "debugger/profiler.h"
 #include "properties/camera.h"
 #include "properties/primitives.h"
 #include "scripting/behaviour.h"
@@ -891,6 +892,7 @@ void MapScene::OnFrame(double delta_t) {
   const double seconds = delta_t / 1000.0;
   if (mode_ == Mode::kPlay) FinishLoadingMap();
   if (mode_ == Mode::kPlay && !pending_map_.empty()) LoadPendingMap();
+  Profiler::SetLoading(!pending_map_.empty() || loading_map_.has_value());
   if (mode_ == Mode::kPlay) {
     Time::BeginFrame(seconds);
     if (input_actions_ && input_manager_) input_actions_->Update(*input_manager_);
