@@ -926,10 +926,11 @@ RenderSettings MapScene::GetRenderSettings() const {
   if (render) {
     const auto& p = render->properties;
     settings.post_processing = p.GetBool("post_processing", false);
-    settings.ssao_intensity = static_cast<float>(p.GetFloat("ssao_intensity", 0.0));
-    settings.ssao_radius = static_cast<float>(p.GetFloat("ssao_radius", 0.3));
-    settings.ssao_samples = static_cast<int>(p.GetInt("ssao_samples", 12));
-    settings.fxaa = p.GetBool("fxaa", false);
+    settings.ssao_intensity =
+        static_cast<float>(p.GetFloat("ssao_intensity", settings.ssao_intensity));
+    settings.ssao_radius = static_cast<float>(p.GetFloat("ssao_radius", settings.ssao_radius));
+    settings.ssao_samples = static_cast<int>(p.GetInt("ssao_samples", settings.ssao_samples));
+    settings.fxaa = p.GetBool("fxaa", settings.fxaa);
     settings.outline_layers = static_cast<uint32_t>(p.GetInt("outline_layers", 0));
     settings.outline_width = static_cast<float>(p.GetFloat("outline_width", 3.0));
     if (auto color = p.Get("outline_color")) {
@@ -959,6 +960,9 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.vignette_intensity = profile.vignette_intensity;
     settings.vignette_smoothness = profile.vignette_smoothness;
     settings.vignette_center = profile.vignette_center;
+    settings.ssao_intensity = profile.ambient_occlusion;
+    settings.ssao_radius = profile.ao_radius;
+    settings.fxaa = profile.antialiasing;
   }
   return settings;
 }

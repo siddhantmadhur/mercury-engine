@@ -220,7 +220,7 @@ Built-in components:
 | `SpriteRenderer` | An unlit quad on the XY plane, sized by the scale (2D) |
 | `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file (its node tree, materials, skin and clips; `node` draws one part, `materials` overrides them) |
 | `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture` and `post_processing` |
-| `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity`, `ambient` and `ground_ambient` |
+| `DirectionalLight` | Sunlight along its -Z, with `color`, `intensity`, `ambient` and `ground_ambient`. With `cast_shadows`, a detailed shadow map covers `shadow_distance` around the camera and a scene-wide map of the still geometry (redrawn only when it or the sun changes) shadows everything farther away |
 | `PointLight` | Light in every direction from the node, with `color`, `intensity` and `range` (Unity's falloff; up to 16 per map). Casts soft cube-map shadows that widen with its `radius`; `shadows = "hard"` or `"none"` changes that |
 | `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance (match an emissive surface's emission). Exact diffuse lighting and soft shadows whose penumbra grows with distance from the caster; up to 4 per map, and 8 shadowed point and area lights in all. Shadow maps are redrawn only when the light or something near it moves |
 | `LightProbeVolume` | Settings for global illumination, which every map has: without this component the renderer fits a grid of light probes around the still geometry. A grid of probes captures the lit scene (the sun shadowed over the whole grid, the ambient colors as the sky) and keeps L2 spherical harmonics, one bounce per pass (`bounces`); surfaces take their indirect light from it instead of the flat ambient colors. It updates again when lights or still objects change; objects that moved in the last 2 seconds and skinned meshes are lit by it but not captured. With the component the grid is `size` across with `resolution` probes, or fitted when `fit_to_scene` is set; `intensity = 0` turns it off |
@@ -230,7 +230,7 @@ Built-in components:
 | `Animator` | Plays a `.manim` controller (parameters, blend trees, transitions, layers) on the node's model |
 | `AudioSource`, `AudioListener` | Sound playback (miniaudio) with 3D attenuation; `Play`, `Stop`, `PlayOneShot` |
 | `TextMesh` | SDF text in the world (TextMeshPro 3D) |
-| `PostProcessVolume` | Picks a `PostProcessProfile` asset (bloom, vignette, tonemapping) |
+| `PostProcessVolume` | Picks a `PostProcessProfile` asset (bloom, vignette, tonemapping, `ambient_occlusion` and `ao_radius`, `antialiasing`). Ambient occlusion (SSAO, darkening only indirect light) and FXAA are on by default, with or without a volume. Turn them off with `ambient_occlusion = 0` or `antialiasing = false` in the profile, or for maps without a volume with `ssao_intensity = 0` or `fxaa = false` in the project's `[render]` section |
 | `UIDocument` | Shows a `.uxml` document on screen (see UI Toolkit below) |
 
 Shapes have unit size at scale 1 (a 1 x 1 x 1 cube, a sphere 1 across, a capsule 1 across and 2

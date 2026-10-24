@@ -1560,7 +1560,8 @@ void VulkanApplication::Render() {
       glm::mat4 light_view = glm::lookAt(light_pos, light_target, up);
 
       float half_box = shadow_dist * 0.6f;
-      glm::mat4 light_proj = glm::ortho(
+      // Vulkan's 0..1 depth: glm::ortho's -1..1 loses the near half.
+      glm::mat4 light_proj = glm::orthoRH_ZO(
           -half_box, half_box, -half_box, half_box, 1.0f, shadow_dist * 2.0f);
 
       // Texel snapping in light space to eliminate shadow edge shimmering

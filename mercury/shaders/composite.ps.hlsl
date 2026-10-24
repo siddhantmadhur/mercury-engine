@@ -1,5 +1,5 @@
-// Final image: HDR color (input0) with SSAO (input1, where the normal
-// target input2 allows it), bloom (input3), the outline (mask in input4),
+// Final image: HDR color (input0) with SSAO (input1) on the indirect share
+// of the light (alpha of the normal target, input2), bloom (input3), the outline (mask in input4),
 // tonemapping, vignette and sRGB encoding.
 //   p0: x AO intensity (0: off), y bloom intensity, z tonemap (0 none,
 //       1 neutral, 2 ACES, 3 already display-ready), w exposure
@@ -35,9 +35,13 @@ float4 Main(FullscreenOutput input) : SV_Target0
 
     if (params.p0.x > 0.0)
     {
-        float allowed = input2.SampleLevel(point_clamp, input.uv, 0).a;
+        // Only the indirect share of the light (normal alpha) is occluded:
+        // direct + indirect * ao.
+        float indirect = input2.SampleLevel(point_clamp, input.uv, 0).a;
         float ao = input1.SampleLevel(linear_clamp, input.uv, 0).r;
-        color *= lerp(1.0, lerp(1.0, ao, params.p0.x), allowed);
+        float factor = saturate(1.0 - indirect * (1.0 - ao) * params.p0.x);
+        // A display-ready image is sRGB encoded: scale it as linear light.
+        color *= tonemap == 3 ? pow(factor, 1.0 / 2.2) : factor;
     }
     if (params.p0.y > 0.0)
     {

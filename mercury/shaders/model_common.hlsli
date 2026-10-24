@@ -40,6 +40,8 @@
     float4 gi_min;              // xyz: probe volume min, w: enabled
     float4 gi_max;              // xyz: probe volume max, w: intensity
     float4 gi_counts;           // xyz: probes along each axis, w: probes per atlas row
+    float4x4 far_light_view_proj; // the sun's shadow over the whole scene
+    float4 far_shadow_params;     // x: resolution (0: none), y: normal bias, w: use it alone
 };
 
 static const uint kMaxPointLights = 16;

@@ -25,7 +25,8 @@ float4 Main(FullscreenOutput input) : SV_Target0
 {
     float depth = input0.SampleLevel(point_clamp, input.uv, 0).r;
     float4 normal_data = input1.SampleLevel(point_clamp, input.uv, 0);
-    if (depth >= 1.0 || normal_data.a < 0.5) return 1.0.xxxx;
+    // Alpha 0: nothing here takes ambient occlusion.
+    if (depth >= 1.0 || normal_data.a <= 0.0) return 1.0.xxxx;
     float3 position = ViewPosition(input.uv, depth);
     float3 normal = normalize(normal_data.xyz * 2.0 - 1.0);
 
@@ -53,6 +54,8 @@ float4 Main(FullscreenOutput input) : SV_Target0
         float range = saturate(radius / max(abs(position.z - scene_z), 1e-4));
         occlusion += (scene_z >= sample_position.z + 0.02 ? 1.0 : 0.0) * range;
     }
+    // Squared: creases read clearly while open surfaces stay untouched.
     float ao = 1.0 - occlusion / max(samples, 1);
+    ao *= ao;
     return float4(ao.xxx, 1.0);
 }
