@@ -93,6 +93,8 @@ class SceneRenderer {
   static constexpr uint32_t kProbeFaceSize = 16;   // each face a probe captures
   static constexpr uint32_t kMaxProbeBatch = 32;   // probes updated per frame at most
   static constexpr uint32_t kProbesPerAtlasRow = 64;
+  // Must match kProbeVisibilitySize in lighting_math.hlsli.
+  static constexpr uint32_t kProbeVisibilitySize = 8;
   static constexpr uint32_t kMaxProbes = 4096;
   static constexpr uint32_t kAutoProbes = 512;      // probes of a volume fitted to the scene
   // Indices drawn per frame for probe captures; a scene's probes take more
@@ -324,6 +326,7 @@ class SceneRenderer {
   VkPipeline shadow_cube_ = VK_NULL_HANDLE;   // distance to the light
   VkPipeline probe_capture_ = VK_NULL_HANDLE; // the scene as a probe sees it
   VkPipeline probe_sh_ = VK_NULL_HANDLE;      // capture -> spherical harmonics
+  VkPipeline probe_visibility_pass_ = VK_NULL_HANDLE;  // capture -> distance map
   // Composite/FXAA pipelines per output format.
   std::map<std::pair<VkFormat, bool>, VkPipeline> output_pipelines_;
   VkShaderModule fullscreen_vs_ = VK_NULL_HANDLE;
@@ -372,6 +375,9 @@ class SceneRenderer {
 
   // Light probes: 9 spherical harmonics texels each in the atlas.
   vk::Image probe_atlas_;
+  // Per probe an octahedral map of the distance to the nearest surface
+  // (mean, mean square), so walls block the probes behind them.
+  vk::Image probe_visibility_;
   vk::Image probe_faces_;   // kMaxProbeBatch probes x 6 faces
   vk::Image probe_normal_;  // the pass's second attachment, unused
   vk::Image probe_depth_;

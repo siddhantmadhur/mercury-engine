@@ -44,16 +44,16 @@ float4 Main(FullscreenOutput input) : SV_Target0
                 float2 ndc = uv * 2.0 - 1.0;
                 float w = 1.0 / pow(1.0 + dot(ndc, ndc), 1.5);
                 float4 texel = faces.Load(int4(x, y, first + f, 0));
-                if (texel.a > 1.5)
+                if (texel.a > kProbeSkyAlpha)
                 {
-                    // Nothing there (alpha 2): the sky, as the ambient colors.
-                    texel = float4(lerp(push.ground.rgb, push.sky.rgb, d.y * 0.5 + 0.5), 1.0);
+                    // Nothing there: the sky, as the ambient colors.
+                    texel.rgb = lerp(push.ground.rgb, push.sky.rgb, d.y * 0.5 + 0.5);
                 }
                 float basis[9];
                 ShBasis(d, basis);
                 sum += texel.rgb * basis[coefficient] * w;
                 weight += w;
-                back += (1.0 - texel.a) * w;
+                back += texel.a < 0.0 ? w : 0.0;
             }
         }
     }
