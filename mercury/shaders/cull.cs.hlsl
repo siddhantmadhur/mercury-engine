@@ -4,6 +4,7 @@
 // vkCmdDrawIndexedIndirectCount:
 //   bucket 0  single-sided        1  double-sided
 //   bucket 2  single-sided, mirrored (negative scale)   3  double-sided, mirrored
+// or, for views drawn with one pipeline that culls no faces, all to bucket 0.
 //
 // Descriptor set 0:
 //   binding 0  CullData[]   per slot: world box and geometry
@@ -40,9 +41,15 @@ struct CullPush
     // x: slots, y: first command of this view, z: its first count,
     // w: commands per bucket
     uint4 view;
-    // x, y: a slot draws when (flags & x) == y; z: layer mask
+    // x, y: a slot draws when (flags & x) == y; z: layer mask; w: kView* bits
     uint4 filter;
 };
+
+// One bucket for everything.
+static const uint kViewOneBucket = 1;
+// planes[5] is no plane but a size test: xyz an eye, w the smallest radius
+// over distance that is drawn (what a low-resolution view cannot see).
+static const uint kViewSizeTest = 2;
 [[vk::push_constant]] CullPush push;
 
 [numthreads(64, 1, 1)]
@@ -56,16 +63,27 @@ void Main(uint3 id : SV_DispatchThreadID)
     if ((push.filter.z & (1u << layer)) == 0) return;
 
     // Box against each plane: outside when even its nearest corner is.
+    const bool size_test = (push.filter.w & kViewSizeTest) != 0;
     [unroll]
     for (uint i = 0; i < 6; ++i)
     {
         float4 plane = push.planes[i];
+        if (i == 5 && size_test)
+        {
+            float radius = length(data.extent.xyz);
+            if (radius < plane.w * distance(data.center.xyz, plane.xyz)) return;
+            continue;
+        }
         float reach = dot(abs(plane.xyz), data.extent.xyz);
         if (dot(plane.xyz, data.center.xyz) + plane.w < -reach) return;
     }
 
-    uint bucket = ((data.flags & kCullDoubleSided) != 0 ? 1u : 0u) +
-                  ((data.flags & kCullMirrored) != 0 ? 2u : 0u);
+    uint bucket = 0;
+    if ((push.filter.w & kViewOneBucket) == 0)
+    {
+        bucket = ((data.flags & kCullDoubleSided) != 0 ? 1u : 0u) +
+                 ((data.flags & kCullMirrored) != 0 ? 2u : 0u);
+    }
     uint index;
     InterlockedAdd(counts[push.view.z + bucket], 1u, index);
     uint base = (push.view.y + bucket * push.view.w + index) * 5;

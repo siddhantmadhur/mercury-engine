@@ -273,6 +273,12 @@ target_include_directories(mercury PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/assimp/contrib/zlib"
         "${CMAKE_CURRENT_BINARY_DIR}/third_party/assimp/contrib/zlib")
 
+# meshoptimizer (mesh simplification for coarse versions of meshes)
+file(GLOB MESHOPTIMIZER_SOURCES "third_party/meshoptimizer/src/*.cpp")
+add_library(meshoptimizer STATIC ${MESHOPTIMIZER_SOURCES})
+target_link_libraries(mercury meshoptimizer)
+# End of meshoptimizer
+
 # Vulkan Memory Allocator (header-only; implemented in vma_impl.cc)
 include_directories("third_party/VulkanMemoryAllocator/include")
 

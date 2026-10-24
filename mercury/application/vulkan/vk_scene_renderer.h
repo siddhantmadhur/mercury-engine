@@ -145,9 +145,12 @@ class SceneRenderer {
   static constexpr uint32_t kProbeOctaTexels = kProbeOctaSize + 2;
   static constexpr uint32_t kMaxProbes = 4096;
   static constexpr uint32_t kAutoProbes = 512;      // probes of a volume fitted to the scene
-  // Indices drawn per frame for probe captures; a scene's probes take more
-  // frames to settle the more geometry it has.
+  // Indices drawn per frame for probe captures when their GPU time is not
+  // measured; a scene's probes take more frames to settle the more geometry
+  // it has.
   static constexpr uint64_t kProbeIndexBudget = 40'000'000;
+  // GPU time per frame for probe updates when it is measured.
+  static constexpr double kProbeGpuBudgetMs = 2.0;
 
   using ShaderLoader = std::function<VkShaderModule(const std::string&)>;
   // Records the older draws (skybox panorama, Mesh, static batches) into the
@@ -250,6 +253,9 @@ class SceneRenderer {
   // rebuilt only when the entity changes. Its DrawData is records_[slot].
   struct FrameDraw {
     const GpuGeometry* geometry = nullptr;
+    // The indices it draws: all of the geometry's, or a cluster's.
+    uint32_t first_index = 0;
+    uint32_t index_count = 0;
     uint32_t record = 0;  // its slot: index into records_ and the draw buffer
     uint32_t layer = 0;   // node layer
     uint32_t entity = 0;
@@ -277,13 +283,14 @@ class SceneRenderer {
     VkBuffer bound_draws = VK_NULL_HANDLE;
     std::vector<vk::Buffer> staging;  // uploads still in flight
     uint32_t passes_used = 0;
-    // GPU culling: kMaxCullViews views of 4 buckets of indirect draws each,
-    // and their counts.
+    // GPU culling: each view's buckets of indirect draws, taken in turn
+    // from `indirect`, and their counts.
     vk::Buffer indirect;
     vk::Buffer counts;
     VkDescriptorSet cull_set = VK_NULL_HANDLE;
     VkBuffer bound_cull = VK_NULL_HANDLE;
-    uint32_t cull_views = 0;  // used this frame
+    uint32_t cull_commands = 0;  // used this frame
+    uint32_t cull_counts = 0;
   };
 
   // A view culled on the GPU: where its buckets are in the frame's buffers.
@@ -291,6 +298,16 @@ class SceneRenderer {
     bool valid = false;
     uint32_t command_base = 0;  // first command (of bucket 0)
     uint32_t count_base = 0;    // first count
+    uint32_t buckets = 0;
+    uint32_t stride = 0;        // commands per bucket
+  };
+  // How a view is culled beyond its frustum.
+  struct CullOptions {
+    bool one_bucket = false;  // drawn with one pipeline that culls no faces
+    // Skip what is smaller than this radius over distance from `eye`
+    // (0: no test); the frustum's far plane is not tested then.
+    float min_size = 0.0f;
+    glm::vec3 eye = glm::vec3(0.0f);
   };
 
   bool CreateLayouts();
@@ -321,7 +338,8 @@ class SceneRenderer {
   // `layers`. Outside any rendering pass. Invalid when culling on the GPU is
   // unavailable (draw from the CPU lists then).
   CulledView CullView(VkCommandBuffer cmd, FrameResources& frame, const glm::mat4& view_proj,
-                      uint32_t mask, uint32_t value, uint32_t layers);
+                      uint32_t mask, uint32_t value, uint32_t layers,
+                      const CullOptions& options);
   // Draws a culled view's buckets: `single` and `double_sided` pipelines,
   // front faces flipped for the mirrored buckets.
   void DrawCulled(VkCommandBuffer cmd, FrameResources& frame, const CulledView& view,
@@ -526,6 +544,10 @@ class SceneRenderer {
     glm::vec3 min = glm::vec3(0.0f), max = glm::vec3(0.0f);
     glm::ivec3 counts = glm::ivec3(0);
     uint32_t next = 0;          // next probe to update
+    uint64_t started = 0;       // frame the current passes began
+    // Probes updated by each frame slot's last frame (0: none), to go with
+    // the GPU time it reports.
+    std::array<uint32_t, 4> batches = {};
     int passes = 0;             // full passes since the scene last changed
     uint64_t light_hash = 0;    // the lights they saw
     uint64_t static_version = 0;  // and the still geometry
@@ -564,7 +586,10 @@ class SceneRenderer {
   VkDescriptorSetLayout cull_layout_ = VK_NULL_HANDLE;
   VkPipelineLayout cull_pipeline_layout_ = VK_NULL_HANDLE;
   VkPipeline cull_ = VK_NULL_HANDLE;
-  static constexpr uint32_t kMaxCullViews = 8;
+  // Each frame's indirect commands (about 20 MB) and counts, whatever the
+  // views; a view that does not fit is drawn from the CPU lists.
+  static constexpr uint32_t kCullArenaCommands = 1u << 20;
+  static constexpr uint32_t kMaxCullCounts = 2048;
   std::vector<uint32_t> dirty_records_;
   std::vector<uint8_t> record_dirty_;  // by slot, to list each once
 

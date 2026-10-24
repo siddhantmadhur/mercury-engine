@@ -1,7 +1,5 @@
 #include "vk_gpu_timer.h"
 
-#include <map>
-
 #include "debugger/profiler.h"
 #include "vk_check.h"
 
@@ -56,12 +54,20 @@ void GpuTimer::BeginFrame(VkCommandBuffer cmd, uint32_t frame_index) {
         const uint64_t ticks = ((end & valid_mask_) - (begin & valid_mask_)) & valid_mask_;
         totals[slot.names[i / 2]] += static_cast<double>(ticks) * period_ns_ * 1e-6;
       }
-      for (const auto& [name, ms] : totals) Profiler::AddGpu(name, ms);
+      for (const auto& [name, ms] : totals) {
+        Profiler::AddGpu(name, ms);
+        last_[name] = ms;
+      }
     }
   }
   vkCmdResetQueryPool(cmd, pool_, first, kMaxScopes * 2);
   slot.used = 0;
   slot.names.clear();
+}
+
+double GpuTimer::Last(std::string_view name) const {
+  auto it = last_.find(name);
+  return it == last_.end() ? 0.0 : it->second;
 }
 
 int GpuTimer::Begin(VkCommandBuffer cmd, std::string_view name) {

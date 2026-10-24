@@ -1,3 +1,4 @@
+#include "meshoptimizer/src/meshoptimizer.h"
 #include "model.h"
 
 #include <assimp/ObjMaterial.h>
@@ -118,6 +119,35 @@ void MeshGeometry::ComputeTangents() {
     const float w = glm::dot(glm::cross(n, t), up[v]) < 0.0f ? -1.0f : 1.0f;
     vertices[v].tangent = glm::vec4(t, w);
   }
+}
+
+void MeshGeometry::BuildClusters() {
+  // Big enough that draws stay few, small enough that a view of part of a
+  // building skips the rest of it.
+  constexpr size_t kClusterTriangles = 2048;
+  clusters.clear();
+  const size_t triangles = indices.size() / 3;
+  // Skinned meshes move away from their bind pose's boxes.
+  if (skinned || triangles < 2 * kClusterTriangles) return;
+  std::vector<uint32_t> sorted(indices.size());
+  meshopt_spatialSortTriangles(sorted.data(), indices.data(), indices.size(),
+                               &vertices[0].position.x, vertices.size(), sizeof(ModelVertex));
+  for (size_t first = 0; first < triangles; first += kClusterTriangles) {
+    const size_t count = std::min(kClusterTriangles, triangles - first);
+    uint32_t* run = sorted.data() + first * 3;
+    // Each cluster's triangles in an order the vertex cache likes.
+    meshopt_optimizeVertexCache(run, run, count * 3, vertices.size());
+    MeshCluster cluster;
+    cluster.first_index = static_cast<uint32_t>(first * 3);
+    cluster.index_count = static_cast<uint32_t>(count * 3);
+    cluster.bounds_min = cluster.bounds_max = vertices[run[0]].position;
+    for (size_t i = 0; i < count * 3; i++) {
+      cluster.bounds_min = glm::min(cluster.bounds_min, vertices[run[i]].position);
+      cluster.bounds_max = glm::max(cluster.bounds_max, vertices[run[i]].position);
+    }
+    clusters.push_back(cluster);
+  }
+  indices = std::move(sorted);
 }
 
 std::shared_ptr<MeshGeometry> MeshGeometry::Create(std::vector<ModelVertex> vertices,
@@ -776,6 +806,7 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
     mesh.geometry = MeshGeometry::Create(std::move(vertices), std::move(indices));
     mesh.geometry->skinned = !mesh.bones.empty();
     if (model->materials_[mesh.material].normal_texture) mesh.geometry->ComputeTangents();
+    mesh.geometry->BuildClusters();
     built_meshes[job_index] = std::move(mesh);
     report(0.8f + 0.2f * static_cast<float>(++converted) /
                       static_cast<float>(mesh_jobs.size()));
