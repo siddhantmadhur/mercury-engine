@@ -457,6 +457,10 @@ class SceneRenderer {
 
   // [cull back, cull none]
   VkPipeline opaque_[2] = {};
+  VkPipeline prepass_[2] = {};  // opaque depth only, before the main pass
+  // -1: when it pays (see DrawCamera), 0: never, 1: always.
+  int depth_prepass_ = -1;
+  uint64_t live_triangles_ = 0;  // in every draw slot, this frame
   VkPipeline transparent_[2] = {};
   VkPipeline shadow_ = VK_NULL_HANDLE;
   VkPipeline outline_mask_ = VK_NULL_HANDLE;
