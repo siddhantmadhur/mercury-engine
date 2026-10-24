@@ -80,6 +80,42 @@ bool BoxNear(glm::vec3 box_min, glm::vec3 box_max, glm::vec3 point, float radius
 
 constexpr uint64_t kHashSeed = 1469598103934665603ull;
 
+// Must match kCull* in cull.cs.hlsl.
+constexpr uint32_t kCullAlive = 1;
+constexpr uint32_t kCullTransparent = 2;
+constexpr uint32_t kCullDoubleSided = 4;
+constexpr uint32_t kCullMirrored = 8;
+constexpr uint32_t kCullCastShadows = 16;
+constexpr uint32_t kCullDynamic = 32;
+constexpr uint32_t kCullBuckets = 4;
+constexpr VkDeviceSize kCommandSize = sizeof(VkDrawIndexedIndirectCommand);
+
+struct CullPush {
+  glm::vec4 planes[6];
+  glm::uvec4 view;    // slots, first command, first count, commands per bucket
+  glm::uvec4 filter;  // mask, value, layers
+};
+static_assert(sizeof(CullPush) == 128);
+
+// The six planes (pointing inside) of the frustum `view_proj` sees, in
+// world space, for depth 0..1.
+void FrustumPlanes(const glm::mat4& m, glm::vec4 (&planes)[6]) {
+  const glm::vec4 row0(m[0][0], m[1][0], m[2][0], m[3][0]);
+  const glm::vec4 row1(m[0][1], m[1][1], m[2][1], m[3][1]);
+  const glm::vec4 row2(m[0][2], m[1][2], m[2][2], m[3][2]);
+  const glm::vec4 row3(m[0][3], m[1][3], m[2][3], m[3][3]);
+  planes[0] = row3 + row0;
+  planes[1] = row3 - row0;
+  planes[2] = row3 + row1;
+  planes[3] = row3 - row1;
+  planes[4] = row2;
+  planes[5] = row3 - row2;
+  for (auto& plane : planes) {
+    const float length = glm::length(glm::vec3(plane));
+    if (length > 0.0f) plane /= length;
+  }
+}
+
 constexpr uint32_t kFlagUnlit = 1;
 constexpr uint32_t kFlagSdfText = 2;
 constexpr uint32_t kFlagClampTexture = 4;
@@ -273,9 +309,32 @@ bool SceneRenderer::CreateLayouts() {
     }
   }
   {
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+        {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+    };
+    VkDescriptorSetLayoutCreateInfo info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    info.bindingCount = static_cast<uint32_t>(std::size(bindings));
+    info.pBindings = bindings;
+    if (!VK_CHECK(vkCreateDescriptorSetLayout(device, &info, nullptr, &cull_layout_))) {
+      return false;
+    }
+    const VkPushConstantRange range = {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CullPush)};
+    VkPipelineLayoutCreateInfo layout = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    layout.setLayoutCount = 1;
+    layout.pSetLayouts = &cull_layout_;
+    layout.pushConstantRangeCount = 1;
+    layout.pPushConstantRanges = &range;
+    if (!VK_CHECK(vkCreatePipelineLayout(device, &layout, nullptr, &cull_pipeline_layout_))) {
+      return false;
+    }
+  }
+  {
     const VkDescriptorPoolSize sizes[] = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, frames_in_flight_},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, frames_in_flight_ * 2},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, frames_in_flight_ * 8},
         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4096},
         {VK_DESCRIPTOR_TYPE_SAMPLER, 2048},
     };
@@ -539,6 +598,21 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
   ok = ok && shadow_ && outline_mask_ && sky_ && ssao_ && blur_ && bloom_down_ && bloom_up_ &&
        shadow_cube_ && probe_capture_ && probe_sh_ && probe_visibility_pass_;
   destroy();
+  if (ok && context_->gpu_driven) {
+    // Without it every view draws from the CPU lists.
+    if (VkShaderModule cull_cs = shaders("cull.cs.spv")) {
+      VkComputePipelineCreateInfo info = {.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+      info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+      info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+      info.stage.module = cull_cs;
+      info.stage.pName = "Main";
+      info.layout = cull_pipeline_layout_;
+      if (!VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &cull_))) {
+        cull_ = VK_NULL_HANDLE;
+      }
+      vkDestroyShaderModule(device, cull_cs, nullptr);
+    }
+  }
   return ok;
 }
 
@@ -567,6 +641,11 @@ bool SceneRenderer::CreateFrameResources() {
     std::vector<uint32_t> iota(kInitialDraws);
     for (uint32_t i = 0; i < iota.size(); i++) iota[i] = i;
     instance_buffer_.Write(iota.data(), iota.size() * sizeof(uint32_t));
+  }
+  if (!cull_buffer_.Create(context_->allocator, sizeof(CullData) * kInitialDraws,
+                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           Buffer::Memory::kDeviceLocal)) {
+    return false;
   }
   frames_.resize(frames_in_flight_);
   for (auto& frame : frames_) {
@@ -634,6 +713,119 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
   writes[10].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
   writes[10].pImageInfo = &visibility;
   vkUpdateDescriptorSets(context_->device, 11, writes, 0, nullptr);
+}
+
+uint32_t SceneRenderer::SlotCapacity() const {
+  return static_cast<uint32_t>(draw_buffer_.Size() / sizeof(DrawData));
+}
+
+bool SceneRenderer::CreateCullResources() {
+  // Each frame's arena fits kMaxCullViews views of every slot.
+  FrameResources& frame = frames_[frame_index_];
+  const VkDeviceSize commands = VkDeviceSize{kMaxCullViews} * kCullBuckets * SlotCapacity();
+  if (frame.indirect.Size() < commands * kCommandSize) {
+    Buffer indirect;
+    if (!indirect.Create(context_->allocator, commands * kCommandSize,
+                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+                         Buffer::Memory::kDeviceLocal)) {
+      return false;
+    }
+    garbage_.push_back({frame_number_, std::move(frame.indirect)});
+    frame.indirect = std::move(indirect);
+    frame.bound_cull = VK_NULL_HANDLE;
+  }
+  if (!frame.counts.Valid() &&
+      !frame.counts.Create(context_->allocator, sizeof(uint32_t) * kMaxCullViews * kCullBuckets,
+                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           Buffer::Memory::kDeviceLocal)) {
+    return false;
+  }
+  if (!frame.cull_set) {
+    VkDescriptorSetAllocateInfo alloc = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    alloc.descriptorPool = pool_;
+    alloc.descriptorSetCount = 1;
+    alloc.pSetLayouts = &cull_layout_;
+    if (!VK_CHECK(vkAllocateDescriptorSets(context_->device, &alloc, &frame.cull_set))) {
+      return false;
+    }
+    frame.bound_cull = VK_NULL_HANDLE;
+  }
+  if (frame.bound_cull == cull_buffer_.Get()) return true;
+  frame.bound_cull = cull_buffer_.Get();
+  const VkDescriptorBufferInfo buffers[3] = {{cull_buffer_.Get(), 0, VK_WHOLE_SIZE},
+                                             {frame.indirect.Get(), 0, VK_WHOLE_SIZE},
+                                             {frame.counts.Get(), 0, VK_WHOLE_SIZE}};
+  VkWriteDescriptorSet writes[3] = {};
+  for (uint32_t i = 0; i < 3; i++) {
+    writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[i].dstSet = frame.cull_set;
+    writes[i].dstBinding = i;
+    writes[i].descriptorCount = 1;
+    writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    writes[i].pBufferInfo = &buffers[i];
+  }
+  vkUpdateDescriptorSets(context_->device, 3, writes, 0, nullptr);
+  return true;
+}
+
+SceneRenderer::CulledView SceneRenderer::CullView(VkCommandBuffer cmd, FrameResources& frame,
+                                                  const glm::mat4& view_proj, uint32_t mask,
+                                                  uint32_t value, uint32_t layers) {
+  CulledView view;
+  if (!cull_ || !frame.cull_set || frame.cull_views >= kMaxCullViews) return view;
+  const uint32_t index = frame.cull_views++;
+  const uint32_t capacity = SlotCapacity();
+  view.valid = true;
+  view.command_base = index * kCullBuckets * capacity;
+  view.count_base = index * kCullBuckets;
+
+  vkCmdFillBuffer(cmd, frame.counts.Get(), sizeof(uint32_t) * view.count_base,
+                  sizeof(uint32_t) * kCullBuckets, 0);
+  GlobalBarrier(cmd, VK_PIPELINE_STAGE_2_CLEAR_BIT | VK_PIPELINE_STAGE_2_COPY_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+  CullPush push = {};
+  FrustumPlanes(view_proj, push.planes);
+  const uint32_t slots = static_cast<uint32_t>(cull_records_.size());
+  push.view = glm::uvec4(slots, view.command_base, view.count_base, capacity);
+  push.filter = glm::uvec4(mask, value, layers, 0u);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, cull_);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, cull_pipeline_layout_, 0, 1,
+                          &frame.cull_set, 0, nullptr);
+  vkCmdPushConstants(cmd, cull_pipeline_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push),
+                     &push);
+  if (slots > 0) vkCmdDispatch(cmd, (slots + 63) / 64, 1, 1);
+  GlobalBarrier(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+  return view;
+}
+
+void SceneRenderer::DrawCulled(VkCommandBuffer cmd, FrameResources& frame, const CulledView& view,
+                               uint32_t uniform_offset, VkPipeline single,
+                               VkPipeline double_sided) {
+  const VkDescriptorSet sets[2] = {frame.set, texture_set_};
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets, 1,
+                          &uniform_offset);
+  const VkBuffer buffers[2] = {vertex_buffer_.Get(), instance_buffer_.Get()};
+  const VkDeviceSize offsets[2] = {0, 0};
+  vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+  vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
+  const uint32_t capacity = SlotCapacity();
+  VkPipeline bound = VK_NULL_HANDLE;
+  for (uint32_t bucket = 0; bucket < kCullBuckets; bucket++) {
+    VkPipeline pipeline = (bucket & 1) ? double_sided : single;
+    if (pipeline != bound) {
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+      bound = pipeline;
+    }
+    vkCmdSetFrontFace(cmd, (bucket & 2) ? VK_FRONT_FACE_CLOCKWISE
+                                        : VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    vkCmdDrawIndexedIndirectCount(
+        cmd, frame.indirect.Get(), kCommandSize * (view.command_base + bucket * capacity),
+        frame.counts.Get(), sizeof(uint32_t) * (view.count_base + bucket), capacity,
+        static_cast<uint32_t>(kCommandSize));
+  }
 }
 
 bool SceneRenderer::CreateShadowMap() {
@@ -711,6 +903,14 @@ void SceneRenderer::Shutdown() {
   index_buffer_.Reset();
   draw_buffer_.Reset();
   instance_buffer_.Reset();
+  cull_buffer_.Reset();
+  cull_records_.clear();
+  if (cull_) vkDestroyPipeline(device, cull_, nullptr);
+  cull_ = VK_NULL_HANDLE;
+  if (cull_pipeline_layout_) vkDestroyPipelineLayout(device, cull_pipeline_layout_, nullptr);
+  if (cull_layout_) vkDestroyDescriptorSetLayout(device, cull_layout_, nullptr);
+  cull_pipeline_layout_ = VK_NULL_HANDLE;
+  cull_layout_ = VK_NULL_HANDLE;
   // The registry may be gone already; its hooks just stop forwarding.
   if (hooks_) hooks_->renderer = nullptr;
   hooks_.reset();
@@ -762,6 +962,7 @@ void SceneRenderer::BeginFrame(uint32_t frame_index) {
   if (frames_.empty()) return;
   frames_[frame_index].staging.clear();
   frames_[frame_index].passes_used = 0;
+  frames_[frame_index].cull_views = 0;
   std::erase_if(garbage_, [&](const Garbage& g) {
     return g.frame + frames_in_flight_ + 1 <= frame_number_;
   });
@@ -1101,13 +1302,19 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
   if (!bones_.empty()) frame.bones.Write(bones_.data(), sizeof(glm::mat4) * bones_.size());
   UploadRecords(cmd, frame);
   if (rebind || frame.bound_draws != draw_buffer_.Get()) UpdateFrameSet(frame);
+  if (cull_ && !CreateCullResources()) {
+    PDebug::error("Vulkan: could not create the culling buffers; culling on the CPU");
+    vkDestroyPipeline(context_->device, cull_, nullptr);
+    cull_ = VK_NULL_HANDLE;
+  }
 
-  // Copies before any draw reads them.
+  // Copies before any draw (or culling) reads them.
   GlobalBarrier(cmd, VK_PIPELINE_STAGE_2_COPY_BIT | VK_PIPELINE_STAGE_2_BLIT_BIT,
                 VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT |
                     VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
-                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
+                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_2_INDEX_READ_BIT |
                     VK_ACCESS_2_SHADER_READ_BIT);
 }
@@ -1154,6 +1361,7 @@ void SceneRenderer::AttachRegistry(entt::registry& registry) {
 void SceneRenderer::FreeAllSlots() {
   draws_.clear();
   records_.clear();
+  cull_records_.clear();
   record_dirty_.clear();
   dirty_records_.clear();
   free_draw_slots_.clear();
@@ -1168,8 +1376,34 @@ uint32_t SceneRenderer::AllocateSlot() {
   }
   draws_.emplace_back();
   records_.emplace_back();
+  cull_records_.emplace_back();
   record_dirty_.push_back(0);
   return static_cast<uint32_t>(draws_.size() - 1);
+}
+
+void SceneRenderer::MarkSlotDirty(uint32_t slot) {
+  if (record_dirty_[slot]) return;
+  record_dirty_[slot] = 1;
+  dirty_records_.push_back(slot);
+}
+
+void SceneRenderer::WriteCullData(uint32_t slot) {
+  const FrameDraw& draw = draws_[slot];
+  CullData& data = cull_records_[slot];
+  data = {};
+  if (draw.alive) {
+    data.center = glm::vec4((draw.bounds_min + draw.bounds_max) * 0.5f, 0.0f);
+    data.extent = glm::vec4((draw.bounds_max - draw.bounds_min) * 0.5f, 0.0f);
+    data.index_count = draw.geometry->index_count;
+    data.first_index = draw.geometry->first_index;
+    data.vertex_offset = static_cast<int32_t>(draw.geometry->first_vertex);
+    data.flags = kCullAlive | (draw.transparent ? kCullTransparent : 0u) |
+                 (draw.double_sided ? kCullDoubleSided : 0u) |
+                 (draw.mirrored ? kCullMirrored : 0u) |
+                 (draw.cast_shadows ? kCullCastShadows : 0u) |
+                 (draw.dynamic ? kCullDynamic : 0u) | ((draw.layer & 31u) << 8);
+  }
+  MarkSlotDirty(slot);
 }
 
 void SceneRenderer::FreeProxySlots(RenderProxy& proxy) {
@@ -1177,6 +1411,7 @@ void SceneRenderer::FreeProxySlots(RenderProxy& proxy) {
     if (slot >= draws_.size()) continue;
     if (!draws_[slot].dynamic) static_version_++;
     draws_[slot] = FrameDraw{};
+    WriteCullData(slot);
     free_draw_slots_.push_back(slot);
   }
   proxy.slots.clear();
@@ -1272,6 +1507,7 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
     proxy.slots.pop_back();
     if (!draws_[slot].dynamic) static_version_++;
     draws_[slot] = FrameDraw{};
+    WriteCullData(slot);
     free_draw_slots_.push_back(slot);
   }
   while (proxy.slots.size() < drawn.size()) proxy.slots.push_back(AllocateSlot());
@@ -1294,6 +1530,7 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
     FrameDraw& frame_draw = draws_[slot];
     if (!geometry) {
       frame_draw = FrameDraw{};  // kept (unused) until the entity changes
+      WriteCullData(slot);
       continue;
     }
     static const RenderMaterial kDefaultMaterial;
@@ -1341,11 +1578,6 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
         glm::vec4(material.metallic, material.smoothness, material.normal_scale, 0.0f);
     record.maps = glm::uvec4(TextureSlot(cmd, frame, material.normal_texture),
                              TextureSlot(cmd, frame, material.emission_texture), 0, 0);
-    if (!record_dirty_[slot]) {
-      record_dirty_[slot] = 1;
-      dirty_records_.push_back(slot);
-    }
-
     const bool was_dynamic = frame_draw.alive && frame_draw.dynamic;
     frame_draw = FrameDraw{};
     frame_draw.geometry = geometry;
@@ -1375,19 +1607,22 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
     if (draw.skin >= 0) half *= 1.5f;  // animated limbs reach past the bind pose's box
     frame_draw.bounds_min = center - half;
     frame_draw.bounds_max = center + half;
+    WriteCullData(slot);
   }
 }
 
 void SceneRenderer::UpdateDynamic() {
   // Still for 2 seconds (at 60 fps) makes an object part of the scene again.
   constexpr uint64_t kRestFrames = 120;
-  for (auto& draw : draws_) {
+  for (uint32_t slot = 0; slot < draws_.size(); slot++) {
+    FrameDraw& draw = draws_[slot];
     if (!draw.alive) continue;
     const bool dynamic =
         draw.skinned || (draw.moved != 0 && draw.moved + kRestFrames > frame_number_);
     if (dynamic != draw.dynamic) {
       draw.dynamic = dynamic;
       static_version_++;
+      WriteCullData(slot);
     }
   }
 }
@@ -1409,6 +1644,13 @@ void SceneRenderer::UploadRecords(VkCommandBuffer cmd, FrameResources& frame) {
     garbage_.push_back({frame_number_, std::move(draw_buffer_)});
     draw_buffer_ = std::move(bigger);
     const VkDeviceSize count = draw_buffer_.Size() / sizeof(DrawData);
+    Buffer culls;
+    if (culls.Create(context_->allocator, count * sizeof(CullData),
+                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                     Buffer::Memory::kDeviceLocal)) {
+      garbage_.push_back({frame_number_, std::move(cull_buffer_)});
+      cull_buffer_ = std::move(culls);
+    }
     Buffer instances;
     if (instances.Create(context_->allocator, count * sizeof(uint32_t),
                          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, Buffer::Memory::kHostVisible)) {
@@ -1429,31 +1671,43 @@ void SceneRenderer::UploadRecords(VkCommandBuffer cmd, FrameResources& frame) {
 
   // Runs of neighboring slots go in one copy each.
   std::sort(dirty_records_.begin(), dirty_records_.end());
+  // Records first, then the cull data, in one staging buffer.
+  const size_t count = dirty_records_.size();
+  const VkDeviceSize cull_start = sizeof(DrawData) * count;
   Buffer staging;
-  if (!staging.Create(context_->allocator, sizeof(DrawData) * dirty_records_.size(),
+  if (!staging.Create(context_->allocator, cull_start + sizeof(CullData) * count,
                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT, Buffer::Memory::kHostVisible)) {
     return;
   }
-  auto* mapped = static_cast<DrawData*>(staging.Mapped());
-  std::vector<VkBufferCopy> regions;
-  for (size_t i = 0; i < dirty_records_.size(); i++) {
+  auto* mapped = static_cast<uint8_t*>(staging.Mapped());
+  std::vector<VkBufferCopy> regions, cull_regions;
+  for (size_t i = 0; i < count; i++) {
     const uint32_t slot = dirty_records_[i];
-    mapped[i] = records_[slot];
+    std::memcpy(mapped + sizeof(DrawData) * i, &records_[slot], sizeof(DrawData));
+    std::memcpy(mapped + cull_start + sizeof(CullData) * i, &cull_records_[slot],
+                sizeof(CullData));
     record_dirty_[slot] = 0;
-    if (!regions.empty() && i > 0 && dirty_records_[i - 1] + 1 == slot) {
+    if (!regions.empty() && dirty_records_[i - 1] + 1 == slot) {
       regions.back().size += sizeof(DrawData);
+      cull_regions.back().size += sizeof(CullData);
     } else {
       regions.push_back({sizeof(DrawData) * i, sizeof(DrawData) * slot, sizeof(DrawData)});
+      cull_regions.push_back(
+          {cull_start + sizeof(CullData) * i, sizeof(CullData) * slot, sizeof(CullData)});
     }
   }
-  staging.Flush(0, sizeof(DrawData) * dirty_records_.size());
+  staging.Flush(0, staging.Size());
   dirty_records_.clear();
   // Earlier frames may still read the records being replaced.
-  GlobalBarrier(cmd, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+  GlobalBarrier(cmd,
+                VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
+                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
                 VK_ACCESS_2_TRANSFER_WRITE_BIT);
   vkCmdCopyBuffer(cmd, staging.Get(), draw_buffer_.Get(), static_cast<uint32_t>(regions.size()),
                   regions.data());
+  vkCmdCopyBuffer(cmd, staging.Get(), cull_buffer_.Get(),
+                  static_cast<uint32_t>(cull_regions.size()), cull_regions.data());
   frame.staging.push_back(std::move(staging));
 }
 
@@ -1661,14 +1915,19 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
   }
   if (enabled) {
     GpuScope scope(gpu_timer_, cmd, "sun_shadow");
+    const CulledView culled =
+        CullView(cmd, frame, light_view_proj, kCullAlive | kCullCastShadows,
+                 kCullAlive | kCullCastShadows, main_camera.culling_mask);
     std::vector<const FrameDraw*> casters;
-    for (const auto& draw : draws_) {
-      if (draw.alive && draw.cast_shadows &&
-          (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
-        casters.push_back(&draw);
+    if (!culled.valid) {
+      for (const auto& draw : draws_) {
+        if (draw.alive && draw.cast_shadows &&
+            (main_camera.culling_mask & (1u << (draw.layer & 31)))) {
+          casters.push_back(&draw);
+        }
       }
     }
-    DrawSunShadow(cmd, frame, shadow_image_, kShadowResolution, light_view_proj, casters);
+    DrawSunShadow(cmd, frame, shadow_image_, kShadowResolution, light_view_proj, casters, culled);
   }
   // The probes see the scene lit, shadows included, so they come last.
   {
@@ -1698,10 +1957,6 @@ void SceneRenderer::UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame) 
   far_shadow_version_ = static_version_;
   far_shadow_direction_ = lighting_.direction;
   far_shadow_valid_ = true;
-  std::vector<const FrameDraw*> casters;
-  for (const FrameDraw* draw : still_) {
-    if (draw->cast_shadows) casters.push_back(draw);
-  }
 
   // An orthographic box around all still geometry, tight in the sun's view.
   const glm::vec3 lo = still_min_ - 0.05f, hi = still_max_ + 0.05f;
@@ -1726,12 +1981,25 @@ void SceneRenderer::UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame) 
   const float texel = std::max(box_max.x - box_min.x, box_max.y - box_min.y) /
                       static_cast<float>(kFarShadowResolution);
   far_normal_bias_ = std::max(lighting_.shadow_normal_bias, 2.0f * texel);
-  DrawSunShadow(cmd, frame, far_shadow_image_, kFarShadowResolution, far_view_proj_, casters);
+  // Still casters only, as still_ has them.
+  const CulledView culled = CullView(
+      cmd, frame, far_view_proj_,
+      kCullAlive | kCullCastShadows | kCullDynamic | kCullTransparent,
+      kCullAlive | kCullCastShadows, still_mask_);
+  std::vector<const FrameDraw*> casters;
+  if (!culled.valid) {
+    for (const FrameDraw* draw : still_) {
+      if (draw->cast_shadows) casters.push_back(draw);
+    }
+  }
+  DrawSunShadow(cmd, frame, far_shadow_image_, kFarShadowResolution, far_view_proj_, casters,
+                culled);
 }
 
 void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
                                   uint32_t size, const glm::mat4& view_proj,
-                                  const std::vector<const FrameDraw*>& casters) {
+                                  const std::vector<const FrameDraw*>& casters,
+                                  const CulledView& culled) {
   RenderCamera camera;
   FrameUniforms uniforms = CameraUniforms(camera, {size, size}, false, true);
   uniforms.view_proj = view_proj;
@@ -1750,7 +2018,9 @@ void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk
   rendering.pDepthAttachment = &depth;
   vkCmdBeginRendering(cmd, &rendering);
   SetViewport(cmd, {size, size});
-  if (!casters.empty()) {
+  if (culled.valid) {
+    DrawCulled(cmd, frame, culled, offset, shadow_, shadow_);
+  } else if (!casters.empty()) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_);
     const VkDescriptorSet sets[2] = {frame.set, texture_set_};
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets, 1,
@@ -2237,6 +2507,10 @@ void SceneRenderer::DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
   const VkExtent2D extent = targets.extent;
   const FrameUniforms uniforms = CameraUniforms(camera, extent, overlay, linear);
   const uint32_t offset = PushUniforms(frame, uniforms);
+  // Opaque draws are culled and drawn on the GPU; transparent ones are
+  // sorted here.
+  const CulledView culled = CullView(cmd, frame, uniforms.view_proj, kCullAlive | kCullTransparent,
+                                     kCullAlive, camera.culling_mask);
 
   ToAttachment(cmd, targets.hdr.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   ToAttachment(cmd, targets.normal.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -2294,15 +2568,24 @@ void SceneRenderer::DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
   std::vector<const FrameDraw*> opaque, transparent;
   for (const auto& draw : draws_) {
     if (!draw.alive || !(camera.culling_mask & (1u << (draw.layer & 31)))) continue;
-    (draw.transparent ? transparent : opaque).push_back(&draw);
+    if (draw.transparent) {
+      transparent.push_back(&draw);
+    } else if (!culled.valid) {
+      opaque.push_back(&draw);
+    }
   }
-  std::stable_sort(opaque.begin(), opaque.end(), [](const FrameDraw* a, const FrameDraw* b) {
-    return a->double_sided < b->double_sided;
-  });
+  if (culled.valid) {
+    DrawCulled(cmd, frame, culled, offset, opaque_[0], opaque_[1]);
+  } else {
+    std::stable_sort(opaque.begin(), opaque.end(), [](const FrameDraw* a, const FrameDraw* b) {
+      return a->double_sided < b->double_sided;
+    });
+    DrawList(cmd, frame, offset, opaque, false);
+  }
   std::sort(transparent.begin(), transparent.end(), [&](const FrameDraw* a, const FrameDraw* b) {
-    return glm::distance(a->center, camera.position) > glm::distance(b->center, camera.position);
+    const glm::vec3 da = a->center - camera.position, db = b->center - camera.position;
+    return glm::dot(da, da) > glm::dot(db, db);
   });
-  DrawList(cmd, frame, offset, opaque, false);
   DrawList(cmd, frame, offset, transparent, true);
   vkCmdEndRendering(cmd);
 

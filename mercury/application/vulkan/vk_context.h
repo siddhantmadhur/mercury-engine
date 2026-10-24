@@ -39,6 +39,11 @@ class Context {
   VkQueue queue = VK_NULL_HANDLE;
   VmaAllocator allocator = VK_NULL_HANDLE;
   bool sampler_anisotropy = false;
+  // Culling on the GPU and indirect draws (multiDrawIndirect,
+  // drawIndirectFirstInstance, drawIndirectCount).
+  bool gpu_driven = false;
+  bool sampler_filter_minmax = false;
+  bool texture_compression_bc = false;
 
  private:
   bool CreateInstance();

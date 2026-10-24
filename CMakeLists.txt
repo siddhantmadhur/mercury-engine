@@ -365,7 +365,8 @@ if (NOT EMSCRIPTEN)
             "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv"
             "shadow_cube.ps.hlsl|ps_6_0|shadow_cube.ps.spv"
             "probe_sh.ps.hlsl|ps_6_0|probe_sh.ps.spv"
-            "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv")
+            "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv"
+            "cull.cs.hlsl|cs_6_0|cull.cs.spv")
     set(SPV_OUTS "")
     foreach (JOB ${SHADER_JOBS})
         string(REPLACE "|" ";" JOB_PARTS "${JOB}")
