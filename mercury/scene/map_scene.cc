@@ -8,6 +8,7 @@
 
 #include "animation/animator.h"
 #include "debugger/debugger.h"
+#include "debugger/profiler.h"
 #include "properties/camera.h"
 #include "properties/primitives.h"
 #include "scripting/behaviour.h"
@@ -891,6 +892,7 @@ void MapScene::OnFrame(double delta_t) {
   const double seconds = delta_t / 1000.0;
   if (mode_ == Mode::kPlay) FinishLoadingMap();
   if (mode_ == Mode::kPlay && !pending_map_.empty()) LoadPendingMap();
+  Profiler::SetLoading(!pending_map_.empty() || loading_map_.has_value());
   if (mode_ == Mode::kPlay) {
     Time::BeginFrame(seconds);
     if (input_actions_ && input_manager_) input_actions_->Update(*input_manager_);
@@ -1330,6 +1332,8 @@ void MapScene::SetLayer(kEntityId entity, int layer) {
   auto info = object_manager_->GetProperty<NodeInfo>(entity);
   if (!info) return;
   info->layer = layer;
+  // Tells registry listeners (the renderer) the node changed.
+  GetRegistry().patch<NodeInfo>(entity);
   physics_engine_->SetLayer(entity, layer);
 }
 
@@ -1477,18 +1481,31 @@ void MapScene::UpdateEntityTransformHierarchy(kEntityId entity) {
 }
 
 void MapScene::UpdateInterpolatedHierarchy() {
+  auto& registry = GetRegistry();
+  // Siblings follow each other in entities_, so the parent's lookup is
+  // shared until it changes.
+  kEntityId parent = entt::null;
+  Transform* parent_transform = nullptr;
   for (kEntityId entity : entities_) {
-    if (!HasParent(entity)) continue;
-    auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
-    auto parent_transform =
-        object_manager_->GetProperty<Transform>(node_info->parent);
-    auto child_transform = object_manager_->GetProperty<Transform>(entity);
+    if (!registry.valid(entity)) continue;
+    auto* node_info = registry.try_get<NodeInfo>(entity);
+    if (!node_info || node_info->parent == entt::null || node_info->parent == root_entity_) {
+      continue;
+    }
+    if (node_info->parent != parent) {
+      parent = node_info->parent;
+      parent_transform = registry.valid(parent) ? registry.try_get<Transform>(parent) : nullptr;
+    }
+    auto* child_transform = registry.try_get<Transform>(entity);
     if (!parent_transform || !child_transform) continue;
 
     const glm::vec3 p_pos = parent_transform->GetInterpolatedPosition();
-    const glm::quat p_rot = Transform::EulerToQuat(
-        parent_transform->GetInterpolatedRotation());
+    const glm::vec3 p_euler = parent_transform->GetInterpolatedRotation();
     const glm::vec3 p_scale = parent_transform->GetInterpolatedScale();
+    // Nothing it depends on changed (most of a level stands still).
+    if (child_transform->MatchesParentInputs(p_pos, p_euler, p_scale)) continue;
+    child_transform->SetParentInputs(p_pos, p_euler, p_scale);
+    const glm::quat p_rot = Transform::EulerToQuat(p_euler);
 
     const glm::vec3 child_local_pos = child_transform->GetLocalPosition();
     const glm::quat child_local_rot = child_transform->GetLocalRotationQuat();
@@ -1505,7 +1522,11 @@ void MapScene::UpdateInterpolatedHierarchy() {
 }
 
 void MapScene::ProcessOnFrame(float alpha) {
-  GameScene::ProcessOnFrame(alpha);
+  {
+    MERCURY_PROFILE_SCOPE("interpolate");
+    GameScene::ProcessOnFrame(alpha);
+  }
+  MERCURY_PROFILE_SCOPE("interpolated_hierarchy");
   UpdateInterpolatedHierarchy();
 }
 

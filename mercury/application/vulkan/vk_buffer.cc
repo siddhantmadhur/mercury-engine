@@ -36,6 +36,10 @@ bool Buffer::Create(VmaAllocator allocator, VkDeviceSize size,
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
     alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                        VMA_ALLOCATION_CREATE_MAPPED_BIT;
+  } else if (memory == Memory::kReadback) {
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+    alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
+                       VMA_ALLOCATION_CREATE_MAPPED_BIT;
   } else {
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
   }
@@ -73,6 +77,10 @@ void Buffer::Flush(VkDeviceSize offset, VkDeviceSize bytes) {
   vmaFlushAllocation(allocator_, allocation_, offset, bytes);
 }
 
+void Buffer::Invalidate() {
+  if (allocation_) vmaInvalidateAllocation(allocator_, allocation_, 0, VK_WHOLE_SIZE);
+}
+
 bool Image::Create(VmaAllocator allocator, VkDevice device, uint32_t width,
                    uint32_t height, VkFormat format, VkImageUsageFlags usage,
                    VkImageAspectFlags aspect, uint32_t mip_levels) {
@@ -87,16 +95,26 @@ bool Image::CreateArray(VmaAllocator allocator, VkDevice device, uint32_t width,
                      aspect, 1, VK_IMAGE_VIEW_TYPE_2D_ARRAY);
 }
 
+bool Image::CreateCubeArray(VmaAllocator allocator, VkDevice device, uint32_t size,
+                            uint32_t cubes, VkFormat format, VkImageUsageFlags usage,
+                            VkImageAspectFlags aspect) {
+  return CreateImage(allocator, device, size, size, std::max(1u, cubes) * 6, format, usage,
+                     aspect, 1, VK_IMAGE_VIEW_TYPE_CUBE_ARRAY,
+                     VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+}
+
 bool Image::CreateImage(VmaAllocator allocator, VkDevice device, uint32_t width,
                         uint32_t height, uint32_t layers, VkFormat format,
                         VkImageUsageFlags usage, VkImageAspectFlags aspect,
-                        uint32_t mip_levels, VkImageViewType view_type) {
+                        uint32_t mip_levels, VkImageViewType view_type,
+                        VkImageCreateFlags flags) {
   Reset();
   mip_levels_ = std::max(1u, mip_levels);
   layers_ = layers;
   aspect_ = aspect;
 
   VkImageCreateInfo image_info = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+  image_info.flags = flags;
   image_info.imageType = VK_IMAGE_TYPE_2D;
   image_info.format = format;
   image_info.extent = {width, height, 1};

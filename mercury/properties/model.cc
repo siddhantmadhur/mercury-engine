@@ -17,8 +17,10 @@
 #include <glm/gtx/matrix_decompose.hpp>
 
 #include "debugger/debugger.h"
+#include "meshoptimizer/src/meshoptimizer.h"
 #include "os/filesystem.h"
 #include "algorithms/parallel_for.h"
+#include "properties/model_cache.h"
 #include "properties/parallel_obj.h"
 #include "properties/texture2d.h"
 #include "properties/vfs_io_system.h"
@@ -118,6 +120,35 @@ void MeshGeometry::ComputeTangents() {
     const float w = glm::dot(glm::cross(n, t), up[v]) < 0.0f ? -1.0f : 1.0f;
     vertices[v].tangent = glm::vec4(t, w);
   }
+}
+
+void MeshGeometry::BuildClusters() {
+  // Big enough that draws stay few, small enough that a view of part of a
+  // building skips the rest of it.
+  constexpr size_t kClusterTriangles = 2048;
+  clusters.clear();
+  const size_t triangles = indices.size() / 3;
+  // Skinned meshes move away from their bind pose's boxes.
+  if (skinned || triangles < 2 * kClusterTriangles) return;
+  std::vector<uint32_t> sorted(indices.size());
+  meshopt_spatialSortTriangles(sorted.data(), indices.data(), indices.size(),
+                               &vertices[0].position.x, vertices.size(), sizeof(ModelVertex));
+  for (size_t first = 0; first < triangles; first += kClusterTriangles) {
+    const size_t count = std::min(kClusterTriangles, triangles - first);
+    uint32_t* run = sorted.data() + first * 3;
+    // Each cluster's triangles in an order the vertex cache likes.
+    meshopt_optimizeVertexCache(run, run, count * 3, vertices.size());
+    MeshCluster cluster;
+    cluster.first_index = static_cast<uint32_t>(first * 3);
+    cluster.index_count = static_cast<uint32_t>(count * 3);
+    cluster.bounds_min = cluster.bounds_max = vertices[run[0]].position;
+    for (size_t i = 0; i < count * 3; i++) {
+      cluster.bounds_min = glm::min(cluster.bounds_min, vertices[run[i]].position);
+      cluster.bounds_max = glm::max(cluster.bounds_max, vertices[run[i]].position);
+    }
+    clusters.push_back(cluster);
+  }
+  indices = std::move(sorted);
 }
 
 std::shared_ptr<MeshGeometry> MeshGeometry::Create(std::vector<ModelVertex> vertices,
@@ -377,6 +408,32 @@ std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height, float stre
 std::shared_ptr<Model> Model::Load(const std::string& path,
                                    const ModelImportSettings& settings,
                                    std::string* error, std::atomic<float>* progress) {
+  if (auto cached = ModelCache::Read(path, settings, progress)) return cached;
+  auto model = Import(path, settings, error, progress);
+  if (model) ModelCache::Write(*model, path, settings);
+  return model;
+}
+
+std::shared_ptr<ImageData> Model::DecodeTexture(const std::string& model_path,
+                                                const TextureSource& source,
+                                                const ModelImportSettings& settings) {
+  const std::string file = FindTexture(fs::path(model_path).parent_path(), source.reference);
+  std::shared_ptr<ImageData> image = file.empty() ? nullptr : ImageData::Load(file);
+  if (!image) {
+    PDebug::warn("{}: texture {} not found", model_path, source.reference);
+    return nullptr;
+  }
+  image->srgb = source.use == ModelTextureUse::kColor;
+  if (source.use == ModelTextureUse::kHeight && !LooksLikeNormalMap(*image)) {
+    image = HeightToNormalMap(*FitTexture(image, settings.max_texture_size),
+                              2.0f * source.bump_scale);
+  }
+  return FitTexture(image, settings.max_texture_size);
+}
+
+std::shared_ptr<Model> Model::Import(const std::string& path,
+                                     const ModelImportSettings& settings, std::string* error,
+                                     std::atomic<float>* progress) {
   const auto start_time = std::chrono::steady_clock::now();
   auto seconds_since = [](std::chrono::steady_clock::time_point from) {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - from).count();
@@ -514,7 +571,7 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
   // MTL's Kd and glTF's base color factor are linear reflectance, as the
   // renderers these files come from use them; ModelMaterial::color is sRGB.
   const bool linear_colors = is_obj || extension == ".gltf" || extension == ".glb";
-  enum class TextureUse { kColor, kData, kHeight };
+  using TextureUse = ModelTextureUse;
   struct TextureRequest {
     std::string reference;
     TextureUse use;
@@ -524,11 +581,13 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
   std::map<TextureKey, std::shared_ptr<ImageData>> loaded_textures;
   std::vector<TextureRequest> requests;  // what the materials ask for
   bool collecting = true;
+  std::atomic<bool> embedded_any{false};
   // Decodes a texture the file refers to, embedded or next to it. Height
   // maps come back as normal maps. Runs on several threads at once.
   auto decode_texture = [&](const TextureRequest& request) -> std::shared_ptr<ImageData> {
     std::shared_ptr<ImageData> image;
     if (const aiTexture* embedded = scene->GetEmbeddedTexture(request.reference.c_str())) {
+      embedded_any = true;
       if (embedded->mHeight == 0) {
         image = ImageData::FromMemory(reinterpret_cast<const uint8_t*>(embedded->pcData),
                                       embedded->mWidth, path + ":" + request.reference);
@@ -543,8 +602,8 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
         image = ImageData::FromPixels(embedded->mWidth, embedded->mHeight,
                                       std::move(pixels), path + ":" + request.reference);
       }
-    } else if (auto file = FindTexture(model_dir, request.reference); !file.empty()) {
-      image = ImageData::Load(file);
+    } else {
+      return DecodeTexture(path, {request.reference, request.use, request.bump_scale}, settings);
     }
     if (!image) {
       PDebug::warn("{}: texture {} not found", path, request.reference);
@@ -583,6 +642,7 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
     for (unsigned m = 0; m < scene->mNumMaterials; m++) {
       const aiMaterial* source = scene->mMaterials[m];
       ModelMaterial material;
+      MaterialSources sources;
       aiString name;
       if (source->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) material.name = name.C_Str();
       aiColor4D color(1, 1, 1, 1);
@@ -637,20 +697,22 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
       std::string reference = texture_of(source, aiTextureType_BASE_COLOR);
       if (reference.empty()) reference = texture_of(source, aiTextureType_DIFFUSE);
       material.texture = load_texture(reference, TextureUse::kColor, 1.0f);
+      sources.texture = {reference, TextureUse::kColor, 1.0f};
       // OBJ exporters often write Kd 0 next to map_Kd, meaning "the texture
       // alone" rather than black.
       if (is_obj && material.texture && glm::vec3(material.color) == glm::vec3(0.0f)) {
         material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
       }
 
-      material.emission_texture =
-          load_texture(texture_of(source, aiTextureType_EMISSIVE), TextureUse::kColor, 1.0f);
+      sources.emission = {texture_of(source, aiTextureType_EMISSIVE), TextureUse::kColor, 1.0f};
+      material.emission_texture = load_texture(sources.emission.reference, TextureUse::kColor, 1.0f);
       if (material.emission_texture && material.emission == glm::vec3(0.0f)) {
         material.emission = glm::vec3(1.0f);
       }
 
       if (auto normals = texture_of(source, aiTextureType_NORMALS); !normals.empty()) {
         material.normal_texture = load_texture(normals, TextureUse::kData, 1.0f);
+        sources.normal = {normals, TextureUse::kData, 1.0f};
         source->Get(AI_MATKEY_OBJ_BUMPMULT_NORMALS(0), material.normal_scale);
       } else {
         std::string height = texture_of(source, aiTextureType_HEIGHT);
@@ -658,6 +720,7 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
         float bump = 1.0f;
         source->Get(AI_MATKEY_OBJ_BUMPMULT_HEIGHT(0), bump);
         material.normal_texture = load_texture(height, TextureUse::kHeight, bump);
+        sources.normal = {height, TextureUse::kHeight, bump};
       }
       for (const ModelMaterialOverride& entry : settings.materials) {
         if (entry.name != material.name) continue;
@@ -670,6 +733,7 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
         if (entry.emission) material.emission = *entry.emission;
       }
       model->materials_.push_back(std::move(material));
+      if (!collecting) model->material_sources_.push_back(std::move(sources));
     }
   };
   build_materials();
@@ -687,9 +751,13 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
   }
   model->materials_.clear();
   build_materials();
+  model->embedded_textures_ = embedded_any;
   const double textures_seconds = seconds_since(start_time) - materials_seconds;
   report(0.8f);
-  if (model->materials_.empty()) model->materials_.push_back(ModelMaterial{});
+  if (model->materials_.empty()) {
+    model->materials_.push_back(ModelMaterial{});
+    model->material_sources_.push_back({});
+  }
 
   // ---- Meshes
   // Converted at the same time, a mesh per thread; kept in file order.
@@ -776,6 +844,7 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
     mesh.geometry = MeshGeometry::Create(std::move(vertices), std::move(indices));
     mesh.geometry->skinned = !mesh.bones.empty();
     if (model->materials_[mesh.material].normal_texture) mesh.geometry->ComputeTangents();
+    mesh.geometry->BuildClusters();
     built_meshes[job_index] = std::move(mesh);
     report(0.8f + 0.2f * static_cast<float>(++converted) /
                       static_cast<float>(mesh_jobs.size()));
@@ -849,24 +918,27 @@ std::shared_ptr<Model> Model::Load(const std::string& path,
     model->clips_.push_back(std::move(clip));
   }
 
-  // ---- Bind pose and bounds
-  std::vector<glm::mat4> locals(model->nodes_.size());
-  for (size_t i = 0; i < model->nodes_.size(); i++) locals[i] = model->nodes_[i].LocalMatrix();
-  model->ComputeGlobals(locals, model->bind_globals_);
+  model->Finish();
+  return model;
+}
+
+void Model::Finish() {
+  std::vector<glm::mat4> locals(nodes_.size());
+  for (size_t i = 0; i < nodes_.size(); i++) locals[i] = nodes_[i].LocalMatrix();
+  ComputeGlobals(locals, bind_globals_);
   bool first = true;
-  for (const auto& mesh : model->meshes_) {
-    const glm::mat4& m = model->bind_globals_[mesh.node];
+  for (const auto& mesh : meshes_) {
+    const glm::mat4& m = bind_globals_[mesh.node];
     const glm::vec3 lo = mesh.geometry->bounds_min, hi = mesh.geometry->bounds_max;
     for (int corner = 0; corner < 8; corner++) {
       const glm::vec3 p((corner & 1) ? hi.x : lo.x, (corner & 2) ? hi.y : lo.y,
                         (corner & 4) ? hi.z : lo.z);
       const glm::vec3 w = glm::vec3(m * glm::vec4(p, 1.0f));
-      model->bounds_min_ = first ? w : glm::min(model->bounds_min_, w);
-      model->bounds_max_ = first ? w : glm::max(model->bounds_max_, w);
+      bounds_min_ = first ? w : glm::min(bounds_min_, w);
+      bounds_max_ = first ? w : glm::max(bounds_max_, w);
       first = false;
     }
   }
-  return model;
 }
 
 void Model::ComputeGlobals(const std::vector<glm::mat4>& locals,

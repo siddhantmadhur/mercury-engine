@@ -51,6 +51,8 @@ else ()
             mercury/application/vulkan/vk_swapchain.h
             mercury/application/vulkan/vk_buffer.cc
             mercury/application/vulkan/vk_buffer.h
+            mercury/application/vulkan/vk_gpu_timer.cc
+            mercury/application/vulkan/vk_gpu_timer.h
             mercury/application/vulkan/vk_ui_renderer.cc
             mercury/application/vulkan/vk_ui_renderer.h
             mercury/application/vulkan/vk_scene_renderer.cc
@@ -64,6 +66,8 @@ add_library(mercury STATIC
         mercury/pobject/manager.cc
         mercury/pobject/manager.h
         mercury/debugger/debugger.h
+        mercury/debugger/profiler.cc
+        mercury/debugger/profiler.h
         mercury/properties/mesh.cc
         mercury/properties/primitives.cc
         mercury/properties/primitives.h
@@ -167,6 +171,8 @@ add_library(mercury STATIC
         mercury/project/prefab_cache.h
         mercury/properties/model.cc
         mercury/properties/model.h
+        mercury/properties/model_cache.cc
+        mercury/properties/model_cache.h
         mercury/properties/render_mesh.cc
         mercury/properties/render_mesh.h
         mercury/audio/audio_system.cc
@@ -269,6 +275,12 @@ target_include_directories(mercury PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/assimp/contrib/zlib"
         "${CMAKE_CURRENT_BINARY_DIR}/third_party/assimp/contrib/zlib")
 
+# meshoptimizer (mesh simplification for coarse versions of meshes)
+file(GLOB MESHOPTIMIZER_SOURCES "third_party/meshoptimizer/src/*.cpp")
+add_library(meshoptimizer STATIC ${MESHOPTIMIZER_SOURCES})
+target_link_libraries(mercury meshoptimizer)
+# End of meshoptimizer
+
 # Vulkan Memory Allocator (header-only; implemented in vma_impl.cc)
 include_directories("third_party/VulkanMemoryAllocator/include")
 
@@ -361,7 +373,9 @@ if (NOT EMSCRIPTEN)
             "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv"
             "shadow_cube.ps.hlsl|ps_6_0|shadow_cube.ps.spv"
             "probe_sh.ps.hlsl|ps_6_0|probe_sh.ps.spv"
-            "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv")
+            "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv"
+            "probe_octa.ps.hlsl|ps_6_0|probe_octa.ps.spv"
+            "cull.cs.hlsl|cs_6_0|cull.cs.spv")
     set(SPV_OUTS "")
     foreach (JOB ${SHADER_JOBS})
         string(REPLACE "|" ";" JOB_PARTS "${JOB}")
@@ -407,10 +421,12 @@ add_executable(mercury_test
         tests/mpack_test.cc
         tests/gameplay_test.cc
         tests/model_preloader_test.cc
-        tests/parallel_load_test.cc)
+        tests/parallel_load_test.cc
+        tests/model_cache_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
-        MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        MERCURY_TEST_CACHE_DIR="${CMAKE_CURRENT_BINARY_DIR}/test_cache")
 include(GoogleTest)
 gtest_discover_tests(mercury_test)
 endif ()

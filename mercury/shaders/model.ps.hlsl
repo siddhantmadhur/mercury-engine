@@ -12,9 +12,7 @@
 #include "lighting.hlsli"
 
 [[vk::binding(3, 0)]] Texture2D<float> shadow_map;
-[[vk::binding(4, 0)]] SamplerComparisonState shadow_sampler;
 [[vk::binding(5, 0)]] SamplerState material_sampler;
-[[vk::binding(6, 0)]] SamplerState clamp_sampler;
 [[vk::binding(9, 0)]] Texture2D<float> far_shadow_map;
 [[vk::binding(0, 1)]] Texture2D textures[];
 
@@ -145,7 +143,8 @@ float3 AcesTonemap(float3 x)
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
-PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
+PSOutput Main(ModelVSOutput input, float4 position : SV_Position,
+              bool front_face : SV_IsFrontFace)
 {
     DrawData data = draws[input.draw];
     const uint draw_flags = data.info.y;
@@ -228,7 +227,7 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
                 float4 shadow_info = point_shadows[i];
                 radiance *= CubeShadow((uint) color.w, input.world_position, surface_normal,
                                        shadow_info.x, shadow_info.y, shadow_info.z > 0.5,
-                                       input.position.xy);
+                                       position.xy);
             }
             direct += DirectLight(N, V, to_light * rsqrt(max(distance_sq, 1e-8)), radiance,
                                   albedo, F0, metallic, roughness);
@@ -261,7 +260,7 @@ PSOutput Main(ModelVSOutput input, bool front_face : SV_IsFrontFace)
                 // The rectangle's half-diagonal stands for its size.
                 radiance *= CubeShadow((uint) a2.w, input.world_position, surface_normal,
                                        length(right + up), area_shadow_bias[a].x, a3.w > 0.5,
-                                       input.position.xy);
+                                       position.xy);
             }
             float3 corners[4] = {center - right - up, center + right - up,
                                  center + right + up, center - right + up};

@@ -42,6 +42,7 @@
     float4 gi_counts;           // xyz: probes along each axis, w: probes per atlas row
     float4x4 far_light_view_proj; // the sun's shadow over the whole scene
     float4 far_shadow_params;     // x: resolution (0: none), y: normal bias, w: use it alone
+    float4 gi_params;             // x: the visibility maps filter linearly
 };
 
 static const uint kMaxPointLights = 16;
@@ -81,9 +82,9 @@ struct ModelVSInput
     [[vk::location(7)]] float4 tangent : TANGENT;  // w: bitangent sign
 };
 
+// The vertex shader's other outputs; SV_Position is its own (Invariant).
 struct ModelVSOutput
 {
-    float4 position : SV_Position;
     [[vk::location(0)]] float3 world_position : POSITION1;
     [[vk::location(1)]] float3 normal : NORMAL;
     [[vk::location(2)]] float2 uv : TEXCOORD0;
