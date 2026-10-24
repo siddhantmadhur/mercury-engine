@@ -25,6 +25,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -351,6 +352,18 @@ class SceneRenderer {
   void AssignShadowCubes();
   void RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame);
   void UpdateProbes(VkCommandBuffer cmd, FrameResources& frame);
+  // The octahedral light maps of probes [first, first + count) from their
+  // coefficients.
+  void BuildProbeMaps(VkCommandBuffer cmd, uint32_t first, uint32_t count);
+  // Settled probes are kept on disk (os::CacheDir()/probes) under a key of
+  // what they saw: the still geometry, the lights and the volume.
+  uint64_t ProbeCacheKey(const ProbeVolumeData& volume) const;
+  // Fills the probes from the cache; false if it has none for `key`.
+  bool LoadProbeCache(VkCommandBuffer cmd, FrameResources& frame, uint64_t key, uint32_t total);
+  // Copies the settled probes out, to be written once the frame is done.
+  void SaveProbeCache(VkCommandBuffer cmd, uint64_t key, uint32_t total);
+  // Writes a finished copy to disk (BeginFrame).
+  void FinishProbeSave();
   // The probe grid this frame: the scene's volume, or one fitted around
   // the still geometry. False when there is none.
   bool ResolveProbeVolume(ProbeVolumeData& volume);
@@ -545,6 +558,8 @@ class SceneRenderer {
     glm::ivec3 counts = glm::ivec3(0);
     uint32_t next = 0;          // next probe to update
     uint64_t started = 0;       // frame the current passes began
+    uint64_t cache_key = 0;     // what the current passes are for (0: unknown)
+    bool check_cache = true;    // look for it in the cache before updating
     // Probes updated by each frame slot's last frame (0: none), to go with
     // the GPU time it reports.
     std::array<uint32_t, 4> batches = {};
@@ -561,6 +576,15 @@ class SceneRenderer {
     glm::ivec3 grid_counts = glm::ivec3(0);
   };
   ProbeState probes_;
+  // Settled probes being copied out for the cache.
+  struct ProbeSave {
+    uint64_t frame = 0;  // recorded in this frame
+    uint64_t key = 0;
+    uint32_t total = 0;
+    vk::Buffer buffer;   // coefficient rows, then visibility rows
+    VkDeviceSize coefficient_bytes = 0;
+  };
+  std::optional<ProbeSave> probe_save_;
 
   std::vector<FrameResources> frames_;
 

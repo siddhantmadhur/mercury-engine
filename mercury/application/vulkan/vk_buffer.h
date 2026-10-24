@@ -21,6 +21,7 @@ class Buffer {
   enum class Memory {
     kDeviceLocal,  // GPU-only; filled with transfer commands
     kHostVisible,  // persistently mapped, written sequentially by the CPU
+    kReadback,     // persistently mapped, read by the CPU (Invalidate first)
   };
 
   Buffer() = default;
@@ -38,6 +39,8 @@ class Buffer {
   // Returns false (and copies nothing) if the write would overrun the buffer.
   bool Write(const void* data, VkDeviceSize bytes, VkDeviceSize offset = 0);
   void Flush(VkDeviceSize offset, VkDeviceSize bytes);
+  // Makes what the GPU wrote visible to Mapped() (a no-op on coherent memory).
+  void Invalidate();
 
   VkBuffer Get() const { return buffer_; }
   void* Mapped() const { return mapped_; }

@@ -36,6 +36,10 @@ bool Buffer::Create(VmaAllocator allocator, VkDeviceSize size,
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
     alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                        VMA_ALLOCATION_CREATE_MAPPED_BIT;
+  } else if (memory == Memory::kReadback) {
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+    alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
+                       VMA_ALLOCATION_CREATE_MAPPED_BIT;
   } else {
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
   }
@@ -71,6 +75,10 @@ bool Buffer::Write(const void* data, VkDeviceSize bytes, VkDeviceSize offset) {
 
 void Buffer::Flush(VkDeviceSize offset, VkDeviceSize bytes) {
   vmaFlushAllocation(allocator_, allocation_, offset, bytes);
+}
+
+void Buffer::Invalidate() {
+  if (allocation_) vmaInvalidateAllocation(allocator_, allocation_, 0, VK_WHOLE_SIZE);
 }
 
 bool Image::Create(VmaAllocator allocator, VkDevice device, uint32_t width,
