@@ -1,5 +1,6 @@
 #include "filesystem.h"
 
+#include <cstdlib>
 #include <fstream>
 #include <mutex>
 #include <set>
@@ -126,6 +127,34 @@ std::vector<std::string> ListDirectory(const fs::path& dir) {
     if (entry.is_regular_file(ec)) add(entry.path().filename().string());
   }
   return names;
+}
+
+fs::path CacheDir() {
+  const fs::path dir = [] {
+    fs::path base;
+    if (const char* custom = std::getenv("MERCURY_CACHE_DIR"); custom && *custom) {
+      return fs::path(custom);
+    }
+#if defined(__EMSCRIPTEN__)
+    return fs::path();
+#elif defined(_WIN32)
+    if (const char* local = std::getenv("LOCALAPPDATA")) base = fs::path(local) / "Mercury";
+#elif defined(__APPLE__)
+    if (const char* home = std::getenv("HOME")) base = fs::path(home) / "Library" / "Caches";
+#else
+    if (const char* xdg = std::getenv("XDG_CACHE_HOME"); xdg && *xdg) {
+      base = xdg;
+    } else if (const char* home = std::getenv("HOME")) {
+      base = fs::path(home) / ".cache";
+    }
+#endif
+    return base.empty() ? base : base / "mercury";
+  }();
+  if (!dir.empty()) {
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+  }
+  return dir;
 }
 
 fs::path ExecutableDir() {

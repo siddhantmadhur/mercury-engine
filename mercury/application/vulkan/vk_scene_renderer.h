@@ -25,15 +25,18 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "globals.h"
 #include "properties/render_mesh.h"
+#include "properties/transform.h"
 #include "scene/scene.h"
 #include "vk_buffer.h"
 #include "vk_context.h"
+#include "vk_gpu_timer.h"
 
 namespace Mercury::vk {
 
@@ -64,6 +67,7 @@ struct FrameUniforms {
   // The sun's shadow over the whole scene, past the camera's map.
   glm::mat4 far_light_view_proj;
   glm::vec4 far_shadow_params;     // resolution (0: none), normal bias, -, use it alone
+  glm::vec4 gi_params;             // visibility maps filter linearly
 };
 inline constexpr uint32_t kMaxPointLights = 16;
 inline constexpr uint32_t kMaxAreaLights = 4;
@@ -82,6 +86,50 @@ struct DrawData {
 };
 static_assert(sizeof(DrawData) == 224);
 
+// Must match CullData in cull.cs.hlsl.
+struct CullData {
+  glm::vec4 center = glm::vec4(0.0f);  // world box center
+  glm::vec4 extent = glm::vec4(0.0f);  // world box half size
+  uint32_t index_count = 0;
+  uint32_t first_index = 0;
+  int32_t vertex_offset = 0;
+  uint32_t flags = 0;  // kCull* bits, layer in bits 8-12
+};
+static_assert(sizeof(CullData) == 48);
+
+// The renderer's record of an entity it draws (a component in the scene's
+// registry): which draw slots it has and what they were built from.
+struct RenderProxy {
+  std::vector<uint32_t> slots;
+  glm::vec3 position = glm::vec3(0.0f);  // interpolated, when built
+  glm::vec3 rotation = glm::vec3(0.0f);
+  glm::vec3 scale = glm::vec3(0.0f);
+  // The node's layer and whether it is inactive, read when a signal marks
+  // the proxy dirty (they change through the registry).
+  uint32_t layer = 0;
+  bool inactive = false;
+  bool mesh_visible = false;  // RenderMesh::visible, when built
+  bool visible = false;       // drawn: mesh_visible and not inactive
+  bool cast_shadows = false;
+  uint32_t rendering_layers = 0;
+  // Posed by an Animator (or skinned): rebuilt every frame.
+  bool animated = false;
+  uint64_t moved = 0;  // renderer frame it last moved; 0 never
+  bool dirty = true;
+  bool built = false;
+};
+
+class SceneRenderer;
+
+// Forwards a registry's signals to the renderer drawing it. The registry's
+// context and the renderer share it, so either may go first: the renderer
+// clears `renderer` when it shuts down or moves to another scene.
+struct RenderHooks {
+  SceneRenderer* renderer = nullptr;
+  void OnMeshChanged(entt::registry& registry, entt::entity entity);
+  void OnProxyDestroyed(entt::registry& registry, entt::entity entity);
+};
+
 class SceneRenderer {
  public:
   static constexpr VkFormat kHdrFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -95,11 +143,19 @@ class SceneRenderer {
   static constexpr uint32_t kProbesPerAtlasRow = 64;
   // Must match kProbeVisibilitySize in lighting_math.hlsli.
   static constexpr uint32_t kProbeVisibilitySize = 8;
+  static constexpr uint32_t kProbeVisibilityTexels = kProbeVisibilitySize + 2;  // with border
+  // Must match kProbeOctaSize in lighting_math.hlsli: each probe's light
+  // maps, inside a one-texel border.
+  static constexpr uint32_t kProbeOctaSize = 6;
+  static constexpr uint32_t kProbeOctaTexels = kProbeOctaSize + 2;
   static constexpr uint32_t kMaxProbes = 4096;
   static constexpr uint32_t kAutoProbes = 512;      // probes of a volume fitted to the scene
-  // Indices drawn per frame for probe captures; a scene's probes take more
-  // frames to settle the more geometry it has.
+  // Indices drawn per frame for probe captures when their GPU time is not
+  // measured; a scene's probes take more frames to settle the more geometry
+  // it has.
   static constexpr uint64_t kProbeIndexBudget = 40'000'000;
+  // GPU time per frame for probe updates when it is measured.
+  static constexpr double kProbeGpuBudgetMs = 2.0;
 
   using ShaderLoader = std::function<VkShaderModule(const std::string&)>;
   // Records the older draws (skybox panorama, Mesh, static batches) into the
@@ -144,6 +200,9 @@ class SceneRenderer {
   static void MainPassFormats(VkFormat (&colors)[2], VkFormat& depth);
 
   VkImageView ShadowMapView() const { return shadow_image_.View(); }
+
+  // Times the passes on the GPU (may be null).
+  void SetGpuTimer(GpuTimer* timer) { gpu_timer_ = timer; }
 
  private:
   struct Pipeline {
@@ -195,18 +254,26 @@ class SceneRenderer {
     std::unique_ptr<Targets> targets;
   };
 
-  // A draw of this frame.
+  // A draw slot: one RenderDraw of one entity, kept from frame to frame and
+  // rebuilt only when the entity changes. Its DrawData is records_[slot].
   struct FrameDraw {
     const GpuGeometry* geometry = nullptr;
-    uint32_t record = 0;  // index into the frame's DrawData
+    // The indices it draws: all of the geometry's, or a cluster's.
+    uint32_t first_index = 0;
+    uint32_t index_count = 0;
+    uint32_t record = 0;  // its slot: index into records_ and the draw buffer
     uint32_t layer = 0;   // node layer
+    uint32_t entity = 0;
+    bool alive = false;   // the slot is in use
     bool transparent = false;
     bool double_sided = false;
     bool cast_shadows = true;
-    bool outline = false;
+    uint32_t rendering_layers = 0;  // RenderMesh's, for outlines
     bool mirrored = false;  // negative scale: triangles wind the other way
+    bool skinned = false;
     // Moved recently or animated: lit by the probes but not seen by them.
     bool dynamic = false;
+    uint64_t moved = 0;  // frame its entity last moved; 0 never
     glm::vec3 center = glm::vec3(0.0f);  // world, for sorting
     glm::vec3 bounds_min = glm::vec3(0.0f);  // world box
     glm::vec3 bounds_max = glm::vec3(0.0f);
@@ -214,12 +281,38 @@ class SceneRenderer {
 
   struct FrameResources {
     vk::Buffer uniforms;  // kMaxPasses FrameUniforms slots
-    vk::Buffer draws;
     vk::Buffer bones;
-    vk::Buffer instances;  // 0, 1, 2, ... (the draw index per instance)
     VkDescriptorSet set = VK_NULL_HANDLE;
+    // The draw buffer the set points at: it is replaced when it grows, and a
+    // set may only be rewritten once its frame is done.
+    VkBuffer bound_draws = VK_NULL_HANDLE;
     std::vector<vk::Buffer> staging;  // uploads still in flight
     uint32_t passes_used = 0;
+    // GPU culling: each view's buckets of indirect draws, taken in turn
+    // from `indirect`, and their counts.
+    vk::Buffer indirect;
+    vk::Buffer counts;
+    VkDescriptorSet cull_set = VK_NULL_HANDLE;
+    VkBuffer bound_cull = VK_NULL_HANDLE;
+    uint32_t cull_commands = 0;  // used this frame
+    uint32_t cull_counts = 0;
+  };
+
+  // A view culled on the GPU: where its buckets are in the frame's buffers.
+  struct CulledView {
+    bool valid = false;
+    uint32_t command_base = 0;  // first command (of bucket 0)
+    uint32_t count_base = 0;    // first count
+    uint32_t buckets = 0;
+    uint32_t stride = 0;        // commands per bucket
+  };
+  // How a view is culled beyond its frustum.
+  struct CullOptions {
+    bool one_bucket = false;  // drawn with one pipeline that culls no faces
+    // Skip what is smaller than this radius over distance from `eye`
+    // (0: no test); the frustum's far plane is not tested then.
+    float min_size = 0.0f;
+    glm::vec3 eye = glm::vec3(0.0f);
   };
 
   bool CreateLayouts();
@@ -228,26 +321,78 @@ class SceneRenderer {
   bool CreateShadowMap();
   bool CreateWhiteTexture();
   bool CreateLightingResources();
+  // Brings the draw slots up to date with the scene: entities that moved or
+  // changed are rebuilt, new ones get slots, removed ones free theirs.
+  void SyncScene(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene);
+  // (Re)builds one entity's slots.
+  void BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene,
+                  entt::entity entity, const RenderMesh& mesh, const Transform& transform,
+                  RenderProxy& proxy);
+  void FreeProxySlots(RenderProxy& proxy);
+  uint32_t AllocateSlot();
+  // Copies the changed records into the draw buffer (growing it if needed).
+  void UploadRecords(VkCommandBuffer cmd, FrameResources& frame);
+  // Rewrites a slot's CullData from draws_[slot] and queues it for upload.
+  void WriteCullData(uint32_t slot);
+  void MarkSlotDirty(uint32_t slot);
+  // Slots the draw and cull buffers hold.
+  uint32_t SlotCapacity() const;
+  bool CreateCullResources();
+  // Records the culling of all slots against `view_proj`'s frustum, keeping
+  // those whose flags masked by `mask` equal `value` and whose layer is in
+  // `layers`. Outside any rendering pass. Invalid when culling on the GPU is
+  // unavailable (draw from the CPU lists then).
+  CulledView CullView(VkCommandBuffer cmd, FrameResources& frame, const glm::mat4& view_proj,
+                      uint32_t mask, uint32_t value, uint32_t layers,
+                      const CullOptions& options);
+  // Draws a culled view's buckets: `single` and `double_sided` pipelines,
+  // front faces flipped for the mirrored buckets.
+  void DrawCulled(VkCommandBuffer cmd, FrameResources& frame, const CulledView& view,
+                  uint32_t uniform_offset, VkPipeline single, VkPipeline double_sided);
+  // Marks still draws that moved lately as dynamic; changes to what is
+  // still bump static_version_.
+  void UpdateDynamic();
   // Picks which point and area lights get this frame's shadow cubes.
   void AssignShadowCubes();
   void RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame);
   void UpdateProbes(VkCommandBuffer cmd, FrameResources& frame);
+  // The octahedral light maps of probes [first, first + count) from their
+  // coefficients.
+  void BuildProbeMaps(VkCommandBuffer cmd, uint32_t first, uint32_t count);
+  // Settled probes are kept on disk (os::CacheDir()/probes) under a key of
+  // what they saw: the still geometry, the lights and the volume.
+  uint64_t ProbeCacheKey(const ProbeVolumeData& volume) const;
+  // Fills the probes from the cache; false if it has none for `key`.
+  bool LoadProbeCache(VkCommandBuffer cmd, FrameResources& frame, uint64_t key, uint32_t total);
+  // Copies the settled probes out, to be written once the frame is done.
+  void SaveProbeCache(VkCommandBuffer cmd, uint64_t key, uint32_t total);
+  // Writes a finished copy to disk (BeginFrame).
+  void FinishProbeSave();
   // The probe grid this frame: the scene's volume, or one fitted around
   // the still geometry. False when there is none.
   bool ResolveProbeVolume(ProbeVolumeData& volume);
   // `casters` into a sun shadow map (`image`, `size` square) as `view_proj`
   // sees them.
+  // `image` comes in `from` (SHADER_READ_ONLY or TRANSFER_DST: drawn over,
+  // not cleared) and is left in `to`.
   void DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
                      uint32_t size, const glm::mat4& view_proj,
-                     const std::vector<const FrameDraw*>& casters);
+                     const std::vector<const FrameDraw*>& casters,
+                     const CulledView& culled,
+                     VkImageLayout from = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                     VkImageLayout to = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  // The camera's sun shadow map: still casters from the cache (redrawn when
+  // the map steps), moving ones drawn over a copy of it.
+  void UpdateSunShadow(VkCommandBuffer cmd, FrameResources& frame, const RenderCamera& camera);
   // Redraws the scene-wide sun shadow map when the sun or still geometry
   // changed.
   void UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame);
-  // Marks draws of objects that moved lately as dynamic.
-  void TrackMotion();
   // Uniforms of a 90 degree view along cube face `face` from `center`.
+  // `cube_map`: mirrored left to right, as the face of a cube map is sampled
+  // (the views are otherwise as lighting_math.hlsli's CubeFaceUV reads them).
   FrameUniforms CubeFaceUniforms(glm::vec3 center, uint32_t face, float near_clip,
-                                 float far_clip, VkExtent2D extent) const;
+                                 float far_clip, VkExtent2D extent,
+                                 bool cube_map = false) const;
   // Lights, shadow cubes and probes, as every pass sees them.
   void FillLighting(FrameUniforms& u) const;
   void UpdateFrameSet(FrameResources& frame);
@@ -299,6 +444,7 @@ class SceneRenderer {
   VkPipeline PipelineForFormat(VkFormat format, bool fxaa);
 
   Context* context_ = nullptr;
+  GpuTimer* gpu_timer_ = nullptr;
   uint32_t frames_in_flight_ = 2;
   uint32_t frame_index_ = 0;
   uint64_t frame_number_ = 0;
@@ -315,6 +461,10 @@ class SceneRenderer {
 
   // [cull back, cull none]
   VkPipeline opaque_[2] = {};
+  VkPipeline prepass_[2] = {};  // opaque depth only, before the main pass
+  // -1: when it pays (see DrawCamera), 0: never, 1: always.
+  int depth_prepass_ = -1;
+  uint64_t live_triangles_ = 0;  // in every draw slot, this frame
   VkPipeline transparent_[2] = {};
   VkPipeline shadow_ = VK_NULL_HANDLE;
   VkPipeline outline_mask_ = VK_NULL_HANDLE;
@@ -327,6 +477,7 @@ class SceneRenderer {
   VkPipeline probe_capture_ = VK_NULL_HANDLE; // the scene as a probe sees it
   VkPipeline probe_sh_ = VK_NULL_HANDLE;      // capture -> spherical harmonics
   VkPipeline probe_visibility_pass_ = VK_NULL_HANDLE;  // capture -> distance map
+  VkPipeline probe_octa_ = VK_NULL_HANDLE;    // spherical harmonics -> light maps
   // Composite/FXAA pipelines per output format.
   std::map<std::pair<VkFormat, bool>, VkPipeline> output_pipelines_;
   VkShaderModule fullscreen_vs_ = VK_NULL_HANDLE;
@@ -340,20 +491,44 @@ class SceneRenderer {
 
   vk::Image shadow_image_;
   bool shadow_written_ = false;
+  // The still casters of the camera's sun map, and what they were drawn for.
+  vk::Image shadow_cache_;
+  struct ShadowCacheKey {
+    glm::ivec3 cell = glm::ivec3(0);  // the map's center, in steps
+    glm::vec3 direction = glm::vec3(0.0f);
+    float distance = 0.0f;
+    uint64_t static_version = 0;
+    uint32_t layers = 0;
+    bool operator==(const ShadowCacheKey&) const = default;
+  };
+  ShadowCacheKey shadow_cache_key_;
+  bool shadow_cache_valid_ = false;
+  // The live map holds moving casters over the cache (cleared next frame).
+  bool shadow_has_dynamic_ = false;
+  uint32_t dynamic_casters_ = 0;  // this frame's moving shadow casters
 
   // The sun's shadow over all still geometry, for what lies past the
   // camera's map and for the probes. Drawn again only when it changes.
   vk::Image far_shadow_image_;
   bool far_shadow_valid_ = false;
-  uint64_t far_shadow_hash_ = 0;
   glm::mat4 far_view_proj_ = glm::mat4(1.0f);
   float far_normal_bias_ = 0.0f;
 
   // This frame's still, opaque draws the main camera sees (what the probes
-  // and the far shadow map see), and their bounds.
+  // and the far shadow map see), and their bounds. Rebuilt when
+  // static_version_ or the camera's mask changes.
   std::vector<const FrameDraw*> still_;
   glm::vec3 still_min_ = glm::vec3(0.0f), still_max_ = glm::vec3(0.0f);
   uint64_t still_indices_ = 0;
+  uint64_t still_version_ = ~0ull;
+  uint32_t still_mask_ = 0;
+  const FrameDraw* still_base_ = nullptr;  // draws_ when it was built
+  // Bumped whenever still geometry changes (added, removed, moved, recolored,
+  // or turning still or dynamic): what the far shadow, the shadow cubes and
+  // the probes saw is out of date.
+  uint64_t static_version_ = 1;
+  uint64_t far_shadow_version_ = 0;
+  glm::vec3 far_shadow_direction_ = glm::vec3(0.0f);
 
   // Point and area light shadows: 6 faces per slot of distances to the
   // nearest caster.
@@ -364,8 +539,7 @@ class SceneRenderer {
     bool one_sided = false;
     glm::vec3 normal = glm::vec3(0.0f);
   };
-  vk::Image shadow_cubes_;
-  vk::Image shadow_cube_depth_;
+  vk::Image shadow_cubes_;  // a depth cube per slot
   std::vector<ShadowCube> cubes_;   // this frame's slots
   std::vector<int> point_slots_;    // per point light: slot or -1
   std::vector<int> area_slots_;     // per area light
@@ -373,8 +547,12 @@ class SceneRenderer {
   // keeps its faces.
   std::array<uint64_t, kMaxShadowCubes> cube_hashes_ = {};
 
-  // Light probes: 9 spherical harmonics texels each in the atlas.
+  // Light probes: 9 spherical harmonics texels each in the atlas, and the
+  // octahedral maps shading reads, made from them.
   vk::Image probe_atlas_;
+  vk::Image probe_irradiance_;
+  vk::Image probe_radiance_;
+  VkDescriptorSet probe_octa_set_ = VK_NULL_HANDLE;
   // Per probe an octahedral map of the distance to the nearest surface
   // (mean, mean square), so walls block the probes behind them.
   vk::Image probe_visibility_;
@@ -383,13 +561,21 @@ class SceneRenderer {
   vk::Image probe_depth_;
   VkDescriptorSet probe_sh_set_ = VK_NULL_HANDLE;
   bool lighting_initialized_ = false;
+  bool visibility_filterable_ = false;  // kProbeVisibilityFormat filters linearly
   struct ProbeState {
     bool active = false;        // the volume's probes light this frame
     glm::vec3 min = glm::vec3(0.0f), max = glm::vec3(0.0f);
     glm::ivec3 counts = glm::ivec3(0);
     uint32_t next = 0;          // next probe to update
+    uint64_t started = 0;       // frame the current passes began
+    uint64_t cache_key = 0;     // what the current passes are for (0: unknown)
+    bool check_cache = true;    // look for it in the cache before updating
+    // Probes updated by each frame slot's last frame (0: none), to go with
+    // the GPU time it reports.
+    std::array<uint32_t, 4> batches = {};
     int passes = 0;             // full passes since the scene last changed
-    uint64_t scene_hash = 0;    // lights and objects, to notice changes
+    uint64_t light_hash = 0;    // the lights they saw
+    uint64_t static_version = 0;  // and the still geometry
     bool clear_atlas = true;
     float intensity = 1.0f;
     // A volume fitted to the scene: the geometry's box it was fitted to, and
@@ -400,18 +586,46 @@ class SceneRenderer {
     glm::ivec3 grid_counts = glm::ivec3(0);
   };
   ProbeState probes_;
-
-  // When each object last moved, by entity.
-  struct Motion {
-    uint64_t hash = 0;     // its world transform
-    uint64_t moved = 0;    // frame it last moved; 0 never
-    uint64_t seen = 0;     // frame it was last drawn
+  // Settled probes being copied out for the cache.
+  struct ProbeSave {
+    uint64_t frame = 0;  // recorded in this frame
+    uint64_t key = 0;
+    uint32_t total = 0;
+    vk::Buffer buffer;   // coefficient rows, then visibility rows
+    VkDeviceSize coefficient_bytes = 0;
   };
-  std::unordered_map<uint32_t, Motion> motion_;
-  std::vector<uint32_t> draw_entities_;  // per draw of this frame
-  std::vector<bool> draw_skinned_;
+  std::optional<ProbeSave> probe_save_;
 
   std::vector<FrameResources> frames_;
+
+  // The scene the slots belong to, and the hooks its registry signals.
+  friend struct RenderHooks;
+  entt::registry* registry_ = nullptr;
+  std::shared_ptr<RenderHooks> hooks_;
+  // Entities whose RenderMesh was added, replaced or removed, or that turned
+  // active or inactive: rebuilt next frame.
+  std::vector<entt::entity> changed_;
+  // A geometry buffer restart: every slot is rebuilt.
+  bool rebuild_all_ = false;
+  void AttachRegistry(entt::registry& registry);
+  void FreeAllSlots();
+
+  // Persistent draw records, by slot, and the device-local buffer the
+  // shaders read them from. Changed slots are copied each frame.
+  vk::Buffer draw_buffer_;
+  vk::Buffer instance_buffer_;  // 0, 1, 2, ... (the draw index per instance)
+  vk::Buffer cull_buffer_;  // CullData by slot
+  std::vector<CullData> cull_records_;
+  std::vector<uint32_t> free_draw_slots_;
+  VkDescriptorSetLayout cull_layout_ = VK_NULL_HANDLE;
+  VkPipelineLayout cull_pipeline_layout_ = VK_NULL_HANDLE;
+  VkPipeline cull_ = VK_NULL_HANDLE;
+  // Each frame's indirect commands (about 20 MB) and counts, whatever the
+  // views; a view that does not fit is drawn from the CPU lists.
+  static constexpr uint32_t kCullArenaCommands = 1u << 20;
+  static constexpr uint32_t kMaxCullCounts = 2048;
+  std::vector<uint32_t> dirty_records_;
+  std::vector<uint8_t> record_dirty_;  // by slot, to list each once
 
   vk::Buffer vertex_buffer_;
   vk::Buffer index_buffer_;
@@ -443,7 +657,7 @@ class SceneRenderer {
   std::vector<ImageGarbage> image_garbage_;
   std::vector<uint32_t> free_slots_;
 
-  // This frame's draws, in record order.
+  // Every slot, by slot (free ones have alive false).
   std::vector<FrameDraw> draws_;
   std::vector<DrawData> records_;
   std::vector<glm::mat4> bones_;

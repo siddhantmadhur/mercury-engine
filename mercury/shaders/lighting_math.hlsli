@@ -95,9 +95,25 @@ float RangeFade(float distance_sq, float range)
 
 static const uint kProbeCoefficients = 9;
 
-// Probe visibility: kProbeVisibilitySize^2 texels per probe, an octahedral
-// map of the distance to the nearest surface (mean and mean square).
+// Probe visibility: an octahedral map per probe of the distance to the
+// nearest surface (mean and mean square), kProbeVisibilitySize^2 texels
+// inside a one-texel border.
 static const uint kProbeVisibilitySize = 8;
+static const uint kProbeVisibilityTexels = kProbeVisibilitySize + 2;
+
+// Probe light: octahedral maps of kProbeOctaSize^2 texels per probe inside
+// a one-texel border (probe_octa.ps.hlsl). Must match kProbeOctaSize in
+// vk_scene_renderer.h.
+static const uint kProbeOctaSize = 6;
+static const uint kProbeOctaTexels = kProbeOctaSize + 2;
+
+// Band weights (l = 0, 1, 2) for evaluating a probe's radiance SH: the
+// cosine lobe's (kCosineBands) give irradiance / pi, the radiance a white
+// diffuse surface reflects; kSharpBands the sharpest radiance L2 holds
+// without ringing (a Hann window: unwindowed, a mirror shows colored blotches
+// that are in no direction).
+static const float3 kCosineBands = float3(1.0, 2.0 / 3.0, 0.25);
+static const float3 kSharpBands = float3(1.0, 0.75, 0.25);
 
 // A probe capture's alpha: the signed distance to what the texel sees
 // (negative on back faces), or more than kProbeSkyAlpha where it saw nothing.
@@ -113,6 +129,23 @@ float2 OctEncode(float3 d)
 {
     d /= abs(d.x) + abs(d.y) + abs(d.z);
     return d.z >= 0.0 ? d.xy : (1.0 - abs(d.yx)) * SignNotZero(d.xy);
+}
+
+// A point just past the octahedral square's edge, as the point inside it
+// with the same direction: the map folds over at its edges.
+float2 OctFold(float2 e)
+{
+    if (abs(e.x) > 1.0)
+    {
+        e.x = (e.x > 0.0 ? 2.0 : -2.0) - e.x;
+        e.y = -e.y;
+    }
+    if (abs(e.y) > 1.0)
+    {
+        e.y = (e.y > 0.0 ? 2.0 : -2.0) - e.y;
+        e.x = -e.x;
+    }
+    return e;
 }
 
 float3 OctDecode(float2 e)

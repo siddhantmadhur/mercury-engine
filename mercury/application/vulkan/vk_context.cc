@@ -334,6 +334,26 @@ bool Context::CreateDevice() {
   VkPhysicalDeviceFeatures supported = {};
   vkGetPhysicalDeviceFeatures(physical_device, &supported);
   features.features.samplerAnisotropy = supported.samplerAnisotropy;
+  {
+    VkPhysicalDeviceVulkan12Features supported12 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceFeatures2 query = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    query.pNext = &supported12;
+    vkGetPhysicalDeviceFeatures2(physical_device, &query);
+    gpu_driven = supported.multiDrawIndirect && supported.drawIndirectFirstInstance &&
+                 supported12.drawIndirectCount;
+    if (gpu_driven) {
+      features.features.multiDrawIndirect = VK_TRUE;
+      features.features.drawIndirectFirstInstance = VK_TRUE;
+      features12.drawIndirectCount = VK_TRUE;
+    }
+    sampler_filter_minmax = supported12.samplerFilterMinmax == VK_TRUE;
+    features12.samplerFilterMinmax = supported12.samplerFilterMinmax;
+    texture_compression_bc = supported.textureCompressionBC == VK_TRUE;
+    image_cube_array = supported.imageCubeArray == VK_TRUE;
+    features.features.imageCubeArray = supported.imageCubeArray;
+    features.features.textureCompressionBC = supported.textureCompressionBC;
+  }
   // The model renderer's main pass blends color but not its normal target.
   features.features.independentBlend = VK_TRUE;
   sampler_anisotropy = supported.samplerAnisotropy == VK_TRUE;

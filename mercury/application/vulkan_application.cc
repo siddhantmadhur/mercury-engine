@@ -14,6 +14,7 @@
 
 #include "components/components.h"
 #include "debugger/debugger.h"
+#include "debugger/profiler.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "os/filesystem.h"
 #include "properties/mesh.h"
@@ -62,6 +63,7 @@ VulkanApplication::~VulkanApplication() {
 
     ui_renderer_.Shutdown();
     scene_renderer_.Shutdown();
+    gpu_timer_.Shutdown();
     DestroyOffscreenTarget(ui_preview_color_, ui_preview_depth_,
                            ui_preview_texture_set_);
     DestroySceneTarget();
@@ -796,6 +798,9 @@ bool VulkanApplication::OnLoad() {
           [this](const std::string& name) { return LoadShaderModule(name); })) {
     return false;
   }
+  if (gpu_timer_.Init(context_, kFramesInFlight)) {
+    scene_renderer_.SetGpuTimer(&gpu_timer_);
+  }
 
   WriteDescriptorSets();
   return true;
@@ -1479,7 +1484,10 @@ void VulkanApplication::Render() {
 
   FrameData& frame = frames_[frame_index_];
   VkDevice device = context_.device;
-  vkWaitForFences(device, 1, &frame.in_flight, VK_TRUE, UINT64_MAX);
+  {
+    MERCURY_PROFILE_SCOPE("wait_fence");
+    vkWaitForFences(device, 1, &frame.in_flight, VK_TRUE, UINT64_MAX);
+  }
   // The upload that used this staging buffer has finished.
   frame.atlas_staging.Reset();
 
@@ -1636,6 +1644,8 @@ void VulkanApplication::Render() {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   vkBeginCommandBuffer(cmd, &begin_info);
+  gpu_timer_.BeginFrame(cmd, frame_index_);
+  const int gpu_frame_scope = gpu_timer_.Begin(cmd, "frame");
 
   int copies = 0;
   bool draw_static = false;
@@ -1683,6 +1693,7 @@ void VulkanApplication::Render() {
     auto& registry = game_scene_->GetRegistry();
     EnsureRegistrySignalsHooked(registry);
 
+    MERCURY_PROFILE_SCOPE("legacy_instances");
     instance_copies_.clear();
     if (layout_dirty_) {
       RebuildInstanceLayout(registry, atlas, frame);
@@ -1691,6 +1702,7 @@ void VulkanApplication::Render() {
       UpdateDirtyInstances(registry, atlas, frame);
     }
     RecordInstanceUploads(frame);
+    MERCURY_PROFILE_SCOPE("prepare");
     scene_renderer_.Prepare(cmd, *game_scene_);
   }
 
@@ -1736,6 +1748,7 @@ void VulkanApplication::Render() {
                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   }
   if (game_scene_) {
+    MERCURY_PROFILE_SCOPE("render_shadows");
     scene_renderer_.RenderShadows(cmd, light_view_proj, main_camera,
                                   cast_shadows);
   }
@@ -1745,6 +1758,7 @@ void VulkanApplication::Render() {
   vk::UIRenderer::Batch game_ui;
   if (game_scene_ && !scene_texture_enabled_) {
     if (const UI::UIDrawData* ui = game_scene_->GetUIDrawData()) {
+      MERCURY_PROFILE_SCOPE("ui_prepare");
       game_ui = ui_renderer_.Prepare(cmd, *ui);
     }
   }
@@ -1786,6 +1800,7 @@ void VulkanApplication::Render() {
   const VkImage swapchain_image = swapchain_.ImageAt(image_index);
   const bool scene_on_window = game_scene_ && !scene_texture_enabled_;
   if (scene_on_window) {
+    MERCURY_PROFILE_SCOPE("render_scene");
     RenderSceneTo(cmd, frame, cameras, swapchain_image,
                   swapchain_.ImageView(image_index), extent,
                   VK_IMAGE_LAYOUT_UNDEFINED, frame.descriptor_set, draw_static,
@@ -1850,7 +1865,10 @@ void VulkanApplication::Render() {
   //   ImGui::End();
   // }
 
-  ImGui::Render();
+  {
+    MERCURY_PROFILE_SCOPE("imgui_render");
+    ImGui::Render();
+  }
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
   vkCmdEndRendering(cmd);
@@ -1888,6 +1906,7 @@ void VulkanApplication::Render() {
                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_NONE, 0);
   }
+  gpu_timer_.End(cmd, gpu_frame_scope);
   vkEndCommandBuffer(cmd);
 
   VkSemaphoreSubmitInfo wait_info = {
@@ -1909,7 +1928,10 @@ void VulkanApplication::Render() {
   submit.pCommandBufferInfos = &cmd_info;
   submit.signalSemaphoreInfoCount = 1;
   submit.pSignalSemaphoreInfos = &signal_info;
-  VK_CHECK(vkQueueSubmit2(context_.queue, 1, &submit, frame.in_flight));
+  {
+    MERCURY_PROFILE_SCOPE("submit");
+    VK_CHECK(vkQueueSubmit2(context_.queue, 1, &submit, frame.in_flight));
+  }
 
   VkSwapchainKHR swapchain = swapchain_.Get();
   VkPresentInfoKHR present = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};

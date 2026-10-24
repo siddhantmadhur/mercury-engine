@@ -4,6 +4,7 @@
 #include <format>
 
 #include "debugger/debugger.h"
+#include "debugger/profiler.h"
 #include "imgui_internal.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "os/process.h"
@@ -48,9 +49,10 @@ void ApplyEditorStyle() {
 
 }  // namespace
 
-EditorScene::EditorScene(fs::path initial_project)
+EditorScene::EditorScene(fs::path initial_project, std::string initial_map)
     : MapScene(nullptr, Mode::kEdit),
       initial_project_(std::move(initial_project)),
+      initial_map_(std::move(initial_map)),
       play_(console_) {
   settings_.Load();
   // Mirror engine logs into the Console panel.
@@ -91,7 +93,9 @@ void EditorScene::OnStart() {
   }
   UpdateEditorCamera();
 
-  if (!initial_project_.empty()) OpenProject(initial_project_);
+  if (!initial_project_.empty() && OpenProject(initial_project_) && !initial_map_.empty()) {
+    OpenMap(initial_map_);
+  }
 }
 
 void EditorScene::OnDestroy() {
@@ -130,10 +134,22 @@ void EditorScene::OnFrame(double delta_t) {
     DrawLauncher();
   } else {
     DrawDockspace();
-    DrawHierarchy();
-    DrawInspector();
-    DrawScene();
-    DrawProjectBrowser();
+    {
+      MERCURY_PROFILE_SCOPE("editor_hierarchy");
+      DrawHierarchy();
+    }
+    {
+      MERCURY_PROFILE_SCOPE("editor_inspector");
+      DrawInspector();
+    }
+    {
+      MERCURY_PROFILE_SCOPE("editor_scene_view");
+      DrawScene();
+    }
+    {
+      MERCURY_PROFILE_SCOPE("editor_project");
+      DrawProjectBrowser();
+    }
     DrawConsole();
     if (settings_.show_lore) {
       // Layouts saved before the Lore panel existed: put it beside the
@@ -142,6 +158,7 @@ void EditorScene::OnFrame(double delta_t) {
           console && console->DockId) {
         ImGui::SetNextWindowDockID(console->DockId, ImGuiCond_FirstUseEver);
       }
+      MERCURY_PROFILE_SCOPE("editor_lore");
       lore_.Draw(&settings_.show_lore);
       if (!settings_.show_lore) settings_.Save();
     }
@@ -169,6 +186,7 @@ void EditorScene::OnFrame(double delta_t) {
   }
   UpdateEditorCamera();
   UpdateWindowTitle();
+  Profiler::SetLoading(!GetProject() || scene_dirty_ || IsModelPreloading());
 }
 
 void EditorScene::UpdateWindowTitle() {
@@ -338,6 +356,7 @@ void EditorScene::MarkChanged() {
   }
   dirty_ = true;
   scene_dirty_ = true;
+  tree_changed_ = true;
 }
 
 void EditorScene::EndFrameEdits() {

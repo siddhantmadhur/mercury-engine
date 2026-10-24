@@ -35,7 +35,8 @@ namespace Mercury {
 
 class EditorScene : public MapScene {
  public:
-  explicit EditorScene(std::filesystem::path initial_project = {});
+  explicit EditorScene(std::filesystem::path initial_project = {},
+                       std::string initial_map = {});
   ~EditorScene() override;
 
   void OnStart() override;
@@ -138,7 +139,10 @@ class EditorScene : public MapScene {
   void DrawBox3D(ImDrawList* draw, const glm::mat4& model, glm::vec3 min,
                  glm::vec3 max, ImU32 color, float thickness = 1.0f) const;
   void DrawGrid(ImDrawList* draw);
-  void DrawNodeGizmos(ImDrawList* draw, const MapNode& node);
+  // The gizmos of the node `entity` stands for (its NodeInfo `info`).
+  void DrawNodeGizmos(ImDrawList* draw, kEntityId entity, const NodeInfo& info);
+  // Every node's gizmos: only those with something to show are visited.
+  void DrawAllGizmos(ImDrawList* draw);
   void DrawToolHandles(ImDrawList* draw);
   void DrawSceneToolbar();
   void DrawAxisIndicator(ImDrawList* draw);
@@ -171,6 +175,7 @@ class EditorScene : public MapScene {
   void CreateUIFile(const std::filesystem::path& dir, const std::string& kind);
 
   std::filesystem::path initial_project_;
+  std::string initial_map_;  // opened instead of the main map
   EditorSettings settings_;
   Console console_;
   PlaySession play_;
@@ -193,6 +198,9 @@ class EditorScene : public MapScene {
   uint64_t selected_uid_ = 0;
   std::string selected_asset_;  // res:// path shown in the Inspector
   uint64_t rename_uid_ = 0;     // node being renamed in the Hierarchy
+  // An edit changed the map while the Hierarchy was drawing it: the rest
+  // of the tree waits for the next frame.
+  bool tree_changed_ = false;
   std::string pending_import_;  // the model ImportModel waits to have loaded
 
   // Scene view state. The editor camera looks at camera_target_ from

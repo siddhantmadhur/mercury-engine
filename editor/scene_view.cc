@@ -768,17 +768,53 @@ void EditorScene::DrawToolHandles(ImDrawList* draw) {
 
 // ----------------------------------------------------------------- Gizmos ---
 
-void EditorScene::DrawNodeGizmos(ImDrawList* draw, const MapNode& node) {
-  kEntityId entity = GetEntityForNode(node.uid);
+void EditorScene::DrawAllGizmos(ImDrawList* draw) {
+  // Gizmo components draw their shapes; nodes with nothing that draws get a
+  // marker to click; the selection gets its box. The parts of a model (each
+  // with a RenderMesh) show nothing, so a model of thousands costs nothing.
+  auto& registry = GetRegistry();
+  std::vector<kEntityId> shown;
+  auto add = [&](auto view) {
+    for (kEntityId entity : view) shown.push_back(entity);
+  };
+  add(registry.view<PlaneCollider>());
+  add(registry.view<BoxCollider>());
+  add(registry.view<SphereCollider>());
+  add(registry.view<CapsuleCollider>());
+  add(registry.view<CylinderCollider>());
+  add(registry.view<CameraComponent>());
+  add(registry.view<DirectionalLight>());
+  add(registry.view<AreaLight>());
+  add(registry.view<LightProbeVolume>());
+  add(registry.view<PointLight>());
+  add(registry.view<Transform, NodeInfo>(
+      entt::exclude<RenderMesh, Mesh, PlaneCollider, BoxCollider, SphereCollider,
+                    CapsuleCollider, CylinderCollider, CameraComponent, DirectionalLight,
+                    AreaLight, LightProbeVolume, PointLight>));
+  if (selected_uid_) shown.push_back(GetEntityForNode(selected_uid_));
+  std::sort(shown.begin(), shown.end());
+  shown.erase(std::unique(shown.begin(), shown.end()), shown.end());
+  for (kEntityId entity : shown) {
+    if (!registry.valid(entity)) continue;
+    const auto* info = registry.try_get<NodeInfo>(entity);
+    // Map nodes only (not the editor's own entities).
+    if (info && info->uid != 0 && GetEntityForNode(info->uid) == entity) {
+      DrawNodeGizmos(draw, entity, *info);
+    }
+  }
+}
+
+void EditorScene::DrawNodeGizmos(ImDrawList* draw, kEntityId entity, const NodeInfo& info) {
   auto transform = Objects().GetProperty<Transform>(entity);
   if (!transform) return;
   const glm::vec3 position = transform->GetPosition();
   const glm::vec3 scale = glm::abs(transform->GetScale());
   const glm::quat rotation = transform->GetRotationQuat();
   const glm::mat4 placed = GetNodeMatrix(entity, false);
-  const bool selected = node.uid == selected_uid_;
+  const bool selected = info.uid == selected_uid_;
   const float world_per_pixel = WorldPerPixel(position);
-  const bool has_mesh = Objects().GetProperty<Mesh>(entity) != nullptr;
+  const bool has_mesh = Objects().GetProperty<Mesh>(entity) != nullptr ||
+                        Objects().GetProperty<RenderMesh>(entity) != nullptr;
   bool drew_something = has_mesh;
   // Colliders of visible things only clutter the view, so like Unity they
   // are outlined only when selected.
@@ -889,7 +925,7 @@ void EditorScene::DrawNodeGizmos(ImDrawList* draw, const MapNode& node) {
       ImVec2 label;
       if (WorldToScreen(corners[0], label)) {
         draw->AddText(ImVec2(label.x + 4, label.y + 2), camera_color,
-                      node.name.c_str());
+                      info.name.c_str());
       }
     } else {
       // A 3D camera: a small view frustum with a notch on top.
@@ -1004,7 +1040,7 @@ void EditorScene::DrawNodeGizmos(ImDrawList* draw, const MapNode& node) {
   glm::vec3 min, max;
   if (selected && GetNodeBounds(entity, model, min, max)) {
     DrawBox3D(draw, model, min, max, selection_color, 2.0f);
-  } else if (!drew_something && !node.IsRoot()) {
+  } else if (!drew_something && info.parent != entt::null) {
     // Empty nodes get a small marker so they can be seen and clicked.
     ImVec2 at;
     if (WorldToScreen(position, at)) {
@@ -1360,7 +1396,7 @@ void EditorScene::DrawScene() {
 
   draw->PushClipRect(scene_origin_, corner, true);
   DrawGrid(draw);
-  map_.Visit([&](const MapNode& node) { DrawNodeGizmos(draw, node); });
+  DrawAllGizmos(draw);
   DrawToolHandles(draw);
 
   // Left click: with Alt (3D) orbit; on a handle, drag it; anywhere else,

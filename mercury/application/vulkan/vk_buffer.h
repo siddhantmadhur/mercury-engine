@@ -21,6 +21,7 @@ class Buffer {
   enum class Memory {
     kDeviceLocal,  // GPU-only; filled with transfer commands
     kHostVisible,  // persistently mapped, written sequentially by the CPU
+    kReadback,     // persistently mapped, read by the CPU (Invalidate first)
   };
 
   Buffer() = default;
@@ -38,6 +39,8 @@ class Buffer {
   // Returns false (and copies nothing) if the write would overrun the buffer.
   bool Write(const void* data, VkDeviceSize bytes, VkDeviceSize offset = 0);
   void Flush(VkDeviceSize offset, VkDeviceSize bytes);
+  // Makes what the GPU wrote visible to Mapped() (a no-op on coherent memory).
+  void Invalidate();
 
   VkBuffer Get() const { return buffer_; }
   void* Mapped() const { return mapped_; }
@@ -71,6 +74,10 @@ class Image {
   bool CreateArray(VmaAllocator allocator, VkDevice device, uint32_t width, uint32_t height,
                    uint32_t layers, VkFormat format, VkImageUsageFlags usage,
                    VkImageAspectFlags aspect);
+  // `cubes` cube maps of `size` square faces (6 layers each, in the order
+  // +X, -X, +Y, -Y, +Z, -Z); View() is a cube array view, LayerView() a face.
+  bool CreateCubeArray(VmaAllocator allocator, VkDevice device, uint32_t size, uint32_t cubes,
+                       VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect);
   void Reset();
 
   VkImage Get() const { return image_; }
@@ -87,7 +94,8 @@ class Image {
  private:
   bool CreateImage(VmaAllocator allocator, VkDevice device, uint32_t width, uint32_t height,
                    uint32_t layers, VkFormat format, VkImageUsageFlags usage,
-                   VkImageAspectFlags aspect, uint32_t mip_levels, VkImageViewType view_type);
+                   VkImageAspectFlags aspect, uint32_t mip_levels, VkImageViewType view_type,
+                   VkImageCreateFlags flags = 0);
   std::vector<VkImageView> mip_views_;
   std::vector<VkImageView> layer_views_;
   uint32_t layers_ = 1;
