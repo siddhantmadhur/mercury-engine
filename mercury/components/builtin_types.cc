@@ -93,6 +93,10 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
     result.normal_texture = own->normal_texture;
     result.normal_scale = own->normal_scale;
     result.transparent = own->transparent;
+    result.transmission = own->transmission;
+    result.ior = own->ior;
+    result.transmission_color = own->transmission_color;
+    result.thickness = own->thickness;
     return result;
   };
 

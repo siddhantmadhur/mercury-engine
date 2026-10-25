@@ -21,7 +21,7 @@ namespace {
 namespace fs = std::filesystem;
 
 // Bump when what is written, or how Model::Import builds a model, changes.
-constexpr uint32_t kVersion = 1;
+constexpr uint32_t kVersion = 2;
 constexpr char kMagic[4] = {'M', 'M', 'C', 'F'};
 
 struct Hash {
@@ -87,6 +87,11 @@ uint64_t CacheKey(const std::string& path, const ModelImportSettings& settings) 
     hash.Add(entry.smoothness.value_or(-1.0f));
     hash.Add(entry.emission.has_value());
     if (entry.emission) hash.Add(*entry.emission);
+    hash.Add(entry.transmission.value_or(-1.0f));
+    hash.Add(entry.ior.value_or(-1.0f));
+    hash.Add(entry.transmission_color.has_value());
+    if (entry.transmission_color) hash.Add(*entry.transmission_color);
+    hash.Add(entry.thickness.value_or(-1.0f));
   }
   return hash.value;
 }
@@ -231,6 +236,10 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     material.emission = in.Pod<glm::vec3>();
     material.normal_scale = in.Pod<float>();
     material.transparent = in.Pod<uint8_t>() != 0;
+    material.transmission = in.Pod<float>();
+    material.ior = in.Pod<float>();
+    material.transmission_color = in.Pod<glm::vec3>();
+    material.thickness = in.Pod<float>();
     Model::MaterialSources& sources = model->material_sources_[m];
     for (Model::TextureSource* source : {&sources.texture, &sources.emission, &sources.normal}) {
       source->reference = in.String();
@@ -378,6 +387,10 @@ void ModelCache::Write(const Model& model, const std::string& path,
     out.Pod(material.emission);
     out.Pod(material.normal_scale);
     out.Pod<uint8_t>(material.transparent ? 1 : 0);
+    out.Pod(material.transmission);
+    out.Pod(material.ior);
+    out.Pod(material.transmission_color);
+    out.Pod(material.thickness);
     const Model::MaterialSources sources =
         m < model.material_sources_.size() ? model.material_sources_[m] : Model::MaterialSources{};
     for (const Model::TextureSource* source :

@@ -111,6 +111,14 @@ struct ModelMaterial {
   std::shared_ptr<ImageData> normal_texture;    // tangent space
   float normal_scale = 1.0f;
   bool transparent = false;
+  // Glass-like: the share of light that passes through (refracted) rather
+  // than being reflected diffusely, the index of refraction, and the tint
+  // what passes through takes on (linear) after `thickness` world units of
+  // it (0: thin walled, tinted once at each surface).
+  float transmission = 0.0f;
+  float ior = 1.5f;
+  glm::vec3 transmission_color = glm::vec3(1.0f);
+  float thickness = 0.0f;
 };
 
 struct ModelBone {
@@ -177,6 +185,10 @@ struct ModelMaterialOverride {
   std::optional<float> metallic;
   std::optional<float> smoothness;
   std::optional<glm::vec3> emission;  // linear
+  std::optional<float> transmission;
+  std::optional<float> ior;
+  std::optional<glm::vec3> transmission_color;  // linear
+  std::optional<float> thickness;
 };
 
 struct ModelImportSettings {

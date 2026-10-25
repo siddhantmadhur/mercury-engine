@@ -91,6 +91,10 @@ TEST_F(ModelCacheTest, ReadBackIsTheImportedModel) {
     EXPECT_EQ(a.name, b.name);
     EXPECT_EQ(a.color, b.color);
     EXPECT_EQ(a.smoothness, b.smoothness);
+    EXPECT_EQ(a.transmission, b.transmission);
+    EXPECT_EQ(a.ior, b.ior);
+    EXPECT_EQ(a.transmission_color, b.transmission_color);
+    EXPECT_EQ(a.thickness, b.thickness);
     for (auto [x, y] : {std::pair(a.texture, b.texture),
                         std::pair(a.normal_texture, b.normal_texture),
                         std::pair(a.emission_texture, b.emission_texture)}) {
@@ -129,4 +133,29 @@ TEST_F(ModelCacheTest, OtherSettingsImportAgain) {
   auto scaled = Model::Load(kModel.string(), bigger, &error);
   ASSERT_TRUE(scaled) << error;
   EXPECT_FLOAT_EQ(scaled->BoundsMax().y, first->BoundsMax().y * 2.0f);
+}
+
+// OBJ glass (illum 7 with a transmission filter) imports as transmissive,
+// with its index of refraction and tint, and the cache keeps them.
+TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
+  const fs::path model = fs::path(MERCURY_SOURCE_DIR) /
+                         "examples/model_viewer/models/cornell_box/CornellBox-Sphere.obj";
+  for (int pass = 0; pass < 2; pass++) {  // imported, then from the cache
+    std::string error;
+    auto loaded = Model::Load(model.string(), Settings(), &error);
+    ASSERT_TRUE(loaded) << error;
+    const ModelMaterial* glass = nullptr;
+    const ModelMaterial* mirror = nullptr;
+    for (const ModelMaterial& material : loaded->Materials()) {
+      if (material.name == "rightSphere") glass = &material;
+      if (material.name == "leftSphere") mirror = &material;
+    }
+    ASSERT_TRUE(glass && mirror);
+    EXPECT_FLOAT_EQ(glass->transmission, 1.0f);
+    EXPECT_FLOAT_EQ(glass->ior, 2.5f);
+    EXPECT_NEAR(glass->transmission_color.r, 0.1f, 1e-5f);
+    EXPECT_FALSE(glass->transparent);
+    EXPECT_FLOAT_EQ(mirror->transmission, 0.0f);
+    EXPECT_FLOAT_EQ(mirror->metallic, 1.0f);
+  }
 }

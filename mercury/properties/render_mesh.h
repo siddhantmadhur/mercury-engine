@@ -35,6 +35,11 @@ struct RenderMaterial {
   std::shared_ptr<ImageData> normal_texture;    // tangent space, linear
   float normal_scale = 1.0f;
   bool transparent = false;
+  // Glass-like transmission, as ModelMaterial has it.
+  float transmission = 0.0f;
+  float ior = 1.5f;
+  glm::vec3 transmission_color = glm::vec3(1.0f);  // linear
+  float thickness = 0.0f;
   bool double_sided = false;
   bool unlit = false;
   // The texture is a signed-distance font atlas (TextMesh).

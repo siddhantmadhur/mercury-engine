@@ -743,7 +743,7 @@ struct CharacterController {
 
 // ------------------------------------------------------------ Asset types ---
 
-enum class SurfaceType { kOpaque, kTransparent };
+enum class SurfaceType { kOpaque, kTransparent, kTransmissive };
 enum class CullMode { kBack, kFront, kOff };
 
 struct MaterialAsset {
@@ -758,6 +758,11 @@ struct MaterialAsset {
   AssetRef normal_map;
   float normal_scale = 1.0f;
   SurfaceType surface = SurfaceType::kOpaque;
+  // Transmissive surfaces (glass, liquids): see SurfaceType::kTransmissive.
+  float transmission = 1.0f;
+  float ior = 1.5f;
+  glm::vec4 transmission_color = glm::vec4(1.0f);  // linear
+  float thickness = 0.0f;
   CullMode cull = CullMode::kBack;
   bool unlit = false;
   // Show a camera's RenderTexture (a mirror or a screen) instead of texture.
@@ -781,8 +786,19 @@ struct MaterialAsset {
     r.Field("normal_map", normal_map, "Texture")
         .Tooltip("Tangent-space normal map (OpenGL convention, green up)");
     r.Field("normal_scale", normal_scale).Tooltip("Strength of the normal map");
-    r.Enum("surface", surface, {"opaque", "transparent"})
-        .Tooltip("transparent blends with what is behind by the color's alpha");
+    r.Enum("surface", surface, {"opaque", "transparent", "transmissive"})
+        .Tooltip(
+            "transparent blends with what is behind by the color's alpha; "
+            "transmissive refracts it, like glass");
+    r.Field("transmission", transmission)
+        .Tooltip("Transmissive: share of light passing through [0 = opaque, 1 = clear]");
+    r.Field("ior", ior).Tooltip("Transmissive: index of refraction (water 1.33, glass 1.5)");
+    r.Field("transmission_color", transmission_color)
+        .Tooltip("Transmissive: tint of the light passing through (linear)");
+    r.Field("thickness", thickness)
+        .Tooltip(
+            "Transmissive: distance at which the tint is reached, in world units "
+            "(0 = thin walled)");
     r.Enum("cull", cull, {"back", "front", "off"})
         .Tooltip("Which faces are hidden; off draws both sides");
     r.Field("unlit", unlit).Tooltip("Ignore lights; show the color as is");
