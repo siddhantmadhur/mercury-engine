@@ -426,6 +426,41 @@ void MapScene::SyncFromMap(const Map& map) {
   Instantiate(map);
 }
 
+bool MapScene::SyncNodeTransform(const MapNode& node) {
+  auto found = by_uid_.find(node.uid);
+  if (found == by_uid_.end() || !GetRegistry().valid(found->second)) return false;
+  const kEntityId entity = found->second;
+  auto transform = object_manager_->GetProperty<Transform>(entity);
+  if (!transform) return false;
+
+  TransformComponent data;
+  if (auto component = node.FindComponent("Transform")) {
+    data = ReadFields<TransformComponent>(component->properties, "Transform");
+  }
+  // Each setter carries the change down to the children.
+  transform->SetLocalPosition(data.position);
+  transform->SetLocalRotate(data.rotation);
+  transform->SetLocalScale(data.scale);
+
+  // Show the new place at once, as a rebuild would.
+  std::vector<kEntityId> pending{entity};
+  while (!pending.empty()) {
+    const kEntityId current = pending.back();
+    pending.pop_back();
+    if (auto t = object_manager_->GetProperty<Transform>(current)) {
+      t->SnapInterpolation();
+      t->ClearTransformations();
+    }
+    if (auto info = object_manager_->GetProperty<NodeInfo>(current)) {
+      for (kEntityId child : info->children) {
+        if (GetRegistry().valid(child)) pending.push_back(child);
+      }
+    }
+  }
+  ApplyEnvironment();  // a moved light or camera
+  return true;
+}
+
 void MapScene::ApplyEnvironment() {
   lighting_ = SceneLighting{};
   for (kEntityId entity : entities_) {

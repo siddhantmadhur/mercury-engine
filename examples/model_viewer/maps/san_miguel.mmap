@@ -12617,8 +12617,8 @@ rotation = Vector3(171.88, -41.55, 180)
 [node name="P2" parent="Path"]
 
 [component type="Transform" node="Path/P2"]
-position = Vector3(18.602, 5.389, 2.06)
-rotation = Vector3(0, 53.32, 0)
+position = Vector3(19.322, 6.615, 1.091)
+rotation = Vector3(24.37, 49.02, 30.97)
 
 [node name="P3" parent="Path"]
 

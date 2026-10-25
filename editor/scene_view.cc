@@ -614,7 +614,8 @@ void EditorScene::SetSelectedTransform(const char* key, glm::vec3 value) {
   const mtext::Variant* current = transform->properties.Get(key);
   if (!current || !(*current == mtext::Variant(value))) {
     transform->properties.Set(key, value);
-    MarkChanged();
+    MarkChanged(false);
+    transform_uid_ = node->uid;
   }
 }
 
