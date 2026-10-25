@@ -44,7 +44,9 @@ void MainMenu::Open(const std::string& map, const std::string& title) {
 
 void MainMenu::OnFrame(double dt) {
   if (pending_.empty() || --wait_frames_ > 0) return;
+  // Once only: LoadMap restarts the background load if it is called again.
   LoadMap("res://maps/" + pending_ + ".mmap");
+  pending_.clear();
 }
 
 void MainMenu::OnTick(double dt) {

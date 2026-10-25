@@ -1,0 +1,875 @@
+[mmap format=1]
+
+[ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
+[ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
+[ext_resource type="PostProcessProfile" path="res://assets/post_sponza.masset" id="3"]
+[ext_resource type="Texture" path="res://models/rungholt/skybox-day.png" id="4"]
+[ext_resource type="Model" path="res://models/rungholt/rungholt.obj" id="5"]
+
+[node name="San Miguel"]
+
+[component type="Transform" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
+panel_settings = ExtResource("2")
+
+[component type="SceneHud" node="."]
+title = "San Miguel"
+hint = "The camera flies a loop. Space: pause · Esc: menu"
+
+[component type="PostProcessVolume" node="."]
+profile = ExtResource("3")
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(-6, 4, 4)
+rotation = Vector3(0, -90, 0)
+
+[component type="Camera" node="Camera"]
+fov = 60
+near_clip = 0.05
+far_clip = 300
+background = Color(0.55, 0.68, 0.85, 1)
+skybox = ExtResource("4")
+
+[component type="FlythroughCamera" node="Camera"]
+path = NodePath("Path")
+lap_seconds = 90
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+rotation = Vector3(-66.1, -317, 0)
+
+[component type="DirectionalLight" node="Sun"]
+color = Color(1, 0.96, 0.9, 1)
+ambient = Color(0.5, 0.56, 0.68, 1)
+ground_ambient = Color(0.15, 0.13, 0.11, 1)
+shadow_distance = 60
+intensity = 1.9
+
+[node name="Path" parent="."]
+
+[component type="Transform" node="Path"]
+
+[node name="P0" parent="Path"]
+
+[component type="Transform" node="Path/P0"]
+position = Vector3(6.698, 13.37, 1.096)
+rotation = Vector3(0, 1.85, 0)
+
+[node name="P1" parent="Path"]
+
+[component type="Transform" node="Path/P1"]
+position = Vector3(7.068, 13.37, -52.521)
+rotation = Vector3(0, 1.85, 0)
+
+[node name="P2" parent="Path"]
+
+[component type="Transform" node="Path/P2"]
+position = Vector3(-20.092, 13.37, -71.918)
+rotation = Vector3(0, 82.69, 0)
+
+[node name="P3" parent="Path"]
+
+[component type="Transform" node="Path/P3"]
+position = Vector3(-105.611, 13.37, -79.467)
+rotation = Vector3(180, 87.64, 180)
+
+[node name="P4" parent="Path"]
+
+[component type="Transform" node="Path/P4"]
+position = Vector3(-116.017, 17.406, -79.038)
+rotation = Vector3(0, 24.09, 0)
+
+[node name="P5" parent="Path"]
+
+[component type="Transform" node="Path/P5"]
+position = Vector3(-120.052, 27.073, -88.463)
+rotation = Vector3(-11.09, -3.38, 0)
+
+[node name="P6" parent="Path"]
+
+[component type="Transform" node="Path/P6"]
+position = Vector3(-117.573, 28.08, -130.435)
+rotation = Vector3(0, -43.15, 0)
+
+[node name="P7" parent="Path"]
+
+[component type="Transform" node="Path/P7"]
+position = Vector3(-46.222, 57.675, -206.549)
+rotation = Vector3(174.94, -60.03, -180)
+
+[node name="P8" parent="Path"]
+
+[component type="Transform" node="Path/P8"]
+position = Vector3(86.401, 72.792, -130.073)
+rotation = Vector3(177.04, -31.52, 177.16)
+
+[node name="P9" parent="Path"]
+
+[component type="Transform" node="Path/P9"]
+position = Vector3(100.099, 62.9, 69.847)
+rotation = Vector3(179.73, 20.26, -178.29)
+
+[node name="rungholt" parent="."]
+
+[component type="Transform" node="rungholt"]
+
+[node name="Stone" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stone"]
+
+[component type="MeshRenderer" node="rungholt/Stone"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stone"
+
+[node name="Grass" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Grass"]
+
+[component type="MeshRenderer" node="rungholt/Grass"]
+mesh = "model"
+model = ExtResource("5")
+node = "Grass"
+
+[node name="Dirt" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Dirt"]
+
+[component type="MeshRenderer" node="rungholt/Dirt"]
+mesh = "model"
+model = ExtResource("5")
+node = "Dirt"
+
+[node name="Cobblestone" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Cobblestone"]
+
+[component type="MeshRenderer" node="rungholt/Cobblestone"]
+mesh = "model"
+model = ExtResource("5")
+node = "Cobblestone"
+
+[node name="Wooden_Plank" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Wooden_Plank"]
+
+[component type="MeshRenderer" node="rungholt/Wooden_Plank"]
+mesh = "model"
+model = ExtResource("5")
+node = "Wooden_Plank"
+
+[node name="Sapling" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Sapling"]
+
+[component type="MeshRenderer" node="rungholt/Sapling"]
+mesh = "model"
+model = ExtResource("5")
+node = "Sapling"
+
+[node name="Stationary_Water" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stationary_Water"]
+
+[component type="MeshRenderer" node="rungholt/Stationary_Water"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stationary_Water"
+
+[node name="Stationary_Lava" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stationary_Lava"]
+
+[component type="MeshRenderer" node="rungholt/Stationary_Lava"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stationary_Lava"
+
+[node name="Sand" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Sand"]
+
+[component type="MeshRenderer" node="rungholt/Sand"]
+mesh = "model"
+model = ExtResource("5")
+node = "Sand"
+
+[node name="Gravel" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Gravel"]
+
+[component type="MeshRenderer" node="rungholt/Gravel"]
+mesh = "model"
+model = ExtResource("5")
+node = "Gravel"
+
+[node name="Iron_Ore" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Iron_Ore"]
+
+[component type="MeshRenderer" node="rungholt/Iron_Ore"]
+mesh = "model"
+model = ExtResource("5")
+node = "Iron_Ore"
+
+[node name="Coal_Ore" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Coal_Ore"]
+
+[component type="MeshRenderer" node="rungholt/Coal_Ore"]
+mesh = "model"
+model = ExtResource("5")
+node = "Coal_Ore"
+
+[node name="Log" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Log"]
+
+[component type="MeshRenderer" node="rungholt/Log"]
+mesh = "model"
+model = ExtResource("5")
+node = "Log"
+
+[node name="Leaves" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Leaves"]
+
+[component type="MeshRenderer" node="rungholt/Leaves"]
+mesh = "model"
+model = ExtResource("5")
+node = "Leaves"
+
+[node name="Glass" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Glass"]
+
+[component type="MeshRenderer" node="rungholt/Glass"]
+mesh = "model"
+model = ExtResource("5")
+node = "Glass"
+
+[node name="Dispenser" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Dispenser"]
+
+[component type="MeshRenderer" node="rungholt/Dispenser"]
+mesh = "model"
+model = ExtResource("5")
+node = "Dispenser"
+
+[node name="Sandstone" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Sandstone"]
+
+[component type="MeshRenderer" node="rungholt/Sandstone"]
+mesh = "model"
+model = ExtResource("5")
+node = "Sandstone"
+
+[node name="Bed" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Bed"]
+
+[component type="MeshRenderer" node="rungholt/Bed"]
+mesh = "model"
+model = ExtResource("5")
+node = "Bed"
+
+[node name="Tall_Grass" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Tall_Grass"]
+
+[component type="MeshRenderer" node="rungholt/Tall_Grass"]
+mesh = "model"
+model = ExtResource("5")
+node = "Tall_Grass"
+
+[node name="Piston" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Piston"]
+
+[component type="MeshRenderer" node="rungholt/Piston"]
+mesh = "model"
+model = ExtResource("5")
+node = "Piston"
+
+[node name="Piston_Head" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Piston_Head"]
+
+[component type="MeshRenderer" node="rungholt/Piston_Head"]
+mesh = "model"
+model = ExtResource("5")
+node = "Piston_Head"
+
+[node name="Dandelion" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Dandelion"]
+
+[component type="MeshRenderer" node="rungholt/Dandelion"]
+mesh = "model"
+model = ExtResource("5")
+node = "Dandelion"
+
+[node name="Rose" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Rose"]
+
+[component type="MeshRenderer" node="rungholt/Rose"]
+mesh = "model"
+model = ExtResource("5")
+node = "Rose"
+
+[node name="Brown_Mushroom" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Brown_Mushroom"]
+
+[component type="MeshRenderer" node="rungholt/Brown_Mushroom"]
+mesh = "model"
+model = ExtResource("5")
+node = "Brown_Mushroom"
+
+[node name="Red_Mushroom" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Red_Mushroom"]
+
+[component type="MeshRenderer" node="rungholt/Red_Mushroom"]
+mesh = "model"
+model = ExtResource("5")
+node = "Red_Mushroom"
+
+[node name="Gold_Block" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Gold_Block"]
+
+[component type="MeshRenderer" node="rungholt/Gold_Block"]
+mesh = "model"
+model = ExtResource("5")
+node = "Gold_Block"
+
+[node name="Iron_Block" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Iron_Block"]
+
+[component type="MeshRenderer" node="rungholt/Iron_Block"]
+mesh = "model"
+model = ExtResource("5")
+node = "Iron_Block"
+
+[node name="Double_Slab" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Double_Slab"]
+
+[component type="MeshRenderer" node="rungholt/Double_Slab"]
+mesh = "model"
+model = ExtResource("5")
+node = "Double_Slab"
+
+[node name="Stone_Slab" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stone_Slab"]
+
+[component type="MeshRenderer" node="rungholt/Stone_Slab"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stone_Slab"
+
+[node name="Brick" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Brick"]
+
+[component type="MeshRenderer" node="rungholt/Brick"]
+mesh = "model"
+model = ExtResource("5")
+node = "Brick"
+
+[node name="Bookshelf" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Bookshelf"]
+
+[component type="MeshRenderer" node="rungholt/Bookshelf"]
+mesh = "model"
+model = ExtResource("5")
+node = "Bookshelf"
+
+[node name="Moss_Stone" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Moss_Stone"]
+
+[component type="MeshRenderer" node="rungholt/Moss_Stone"]
+mesh = "model"
+model = ExtResource("5")
+node = "Moss_Stone"
+
+[node name="Obsidian" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Obsidian"]
+
+[component type="MeshRenderer" node="rungholt/Obsidian"]
+mesh = "model"
+model = ExtResource("5")
+node = "Obsidian"
+
+[node name="Torch" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Torch"]
+
+[component type="MeshRenderer" node="rungholt/Torch"]
+mesh = "model"
+model = ExtResource("5")
+node = "Torch"
+
+[node name="Fire" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Fire"]
+
+[component type="MeshRenderer" node="rungholt/Fire"]
+mesh = "model"
+model = ExtResource("5")
+node = "Fire"
+
+[node name="Monster_Spawner" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Monster_Spawner"]
+
+[component type="MeshRenderer" node="rungholt/Monster_Spawner"]
+mesh = "model"
+model = ExtResource("5")
+node = "Monster_Spawner"
+
+[node name="Wooden_Stairs" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Wooden_Stairs"]
+
+[component type="MeshRenderer" node="rungholt/Wooden_Stairs"]
+mesh = "model"
+model = ExtResource("5")
+node = "Wooden_Stairs"
+
+[node name="Chest" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Chest"]
+
+[component type="MeshRenderer" node="rungholt/Chest"]
+mesh = "model"
+model = ExtResource("5")
+node = "Chest"
+
+[node name="Redstone_Wire" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Redstone_Wire"]
+
+[component type="MeshRenderer" node="rungholt/Redstone_Wire"]
+mesh = "model"
+model = ExtResource("5")
+node = "Redstone_Wire"
+
+[node name="Crafting_Table" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Crafting_Table"]
+
+[component type="MeshRenderer" node="rungholt/Crafting_Table"]
+mesh = "model"
+model = ExtResource("5")
+node = "Crafting_Table"
+
+[node name="Crops" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Crops"]
+
+[component type="MeshRenderer" node="rungholt/Crops"]
+mesh = "model"
+model = ExtResource("5")
+node = "Crops"
+
+[node name="Farmland" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Farmland"]
+
+[component type="MeshRenderer" node="rungholt/Farmland"]
+mesh = "model"
+model = ExtResource("5")
+node = "Farmland"
+
+[node name="Furnace" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Furnace"]
+
+[component type="MeshRenderer" node="rungholt/Furnace"]
+mesh = "model"
+model = ExtResource("5")
+node = "Furnace"
+
+[node name="Sign_Post" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Sign_Post"]
+
+[component type="MeshRenderer" node="rungholt/Sign_Post"]
+mesh = "model"
+model = ExtResource("5")
+node = "Sign_Post"
+
+[node name="Wooden_Door" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Wooden_Door"]
+
+[component type="MeshRenderer" node="rungholt/Wooden_Door"]
+mesh = "model"
+model = ExtResource("5")
+node = "Wooden_Door"
+
+[node name="Ladder" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Ladder"]
+
+[component type="MeshRenderer" node="rungholt/Ladder"]
+mesh = "model"
+model = ExtResource("5")
+node = "Ladder"
+
+[node name="Rail" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Rail"]
+
+[component type="MeshRenderer" node="rungholt/Rail"]
+mesh = "model"
+model = ExtResource("5")
+node = "Rail"
+
+[node name="Cobblestone_Stairs" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Cobblestone_Stairs"]
+
+[component type="MeshRenderer" node="rungholt/Cobblestone_Stairs"]
+mesh = "model"
+model = ExtResource("5")
+node = "Cobblestone_Stairs"
+
+[node name="Wall_Sign" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Wall_Sign"]
+
+[component type="MeshRenderer" node="rungholt/Wall_Sign"]
+mesh = "model"
+model = ExtResource("5")
+node = "Wall_Sign"
+
+[node name="Lever" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Lever"]
+
+[component type="MeshRenderer" node="rungholt/Lever"]
+mesh = "model"
+model = ExtResource("5")
+node = "Lever"
+
+[node name="Stone_Plate" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stone_Plate"]
+
+[component type="MeshRenderer" node="rungholt/Stone_Plate"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stone_Plate"
+
+[node name="Iron_Door" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Iron_Door"]
+
+[component type="MeshRenderer" node="rungholt/Iron_Door"]
+mesh = "model"
+model = ExtResource("5")
+node = "Iron_Door"
+
+[node name="Wooden_Plate" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Wooden_Plate"]
+
+[component type="MeshRenderer" node="rungholt/Wooden_Plate"]
+mesh = "model"
+model = ExtResource("5")
+node = "Wooden_Plate"
+
+[node name="Redstone_Torch_(off)" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Redstone_Torch_(off)"]
+
+[component type="MeshRenderer" node="rungholt/Redstone_Torch_(off)"]
+mesh = "model"
+model = ExtResource("5")
+node = "Redstone_Torch_(off)"
+
+[node name="Redstone_Torch_(on)" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Redstone_Torch_(on)"]
+
+[component type="MeshRenderer" node="rungholt/Redstone_Torch_(on)"]
+mesh = "model"
+model = ExtResource("5")
+node = "Redstone_Torch_(on)"
+
+[node name="Stone_Button" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stone_Button"]
+
+[component type="MeshRenderer" node="rungholt/Stone_Button"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stone_Button"
+
+[node name="Clay" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Clay"]
+
+[component type="MeshRenderer" node="rungholt/Clay"]
+mesh = "model"
+model = ExtResource("5")
+node = "Clay"
+
+[node name="Sugar_Cane" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Sugar_Cane"]
+
+[component type="MeshRenderer" node="rungholt/Sugar_Cane"]
+mesh = "model"
+model = ExtResource("5")
+node = "Sugar_Cane"
+
+[node name="Fence" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Fence"]
+
+[component type="MeshRenderer" node="rungholt/Fence"]
+mesh = "model"
+model = ExtResource("5")
+node = "Fence"
+
+[node name="Netherrack" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Netherrack"]
+
+[component type="MeshRenderer" node="rungholt/Netherrack"]
+mesh = "model"
+model = ExtResource("5")
+node = "Netherrack"
+
+[node name="Glowstone" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Glowstone"]
+
+[component type="MeshRenderer" node="rungholt/Glowstone"]
+mesh = "model"
+model = ExtResource("5")
+node = "Glowstone"
+
+[node name="Jack-O-Lantern" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Jack-O-Lantern"]
+
+[component type="MeshRenderer" node="rungholt/Jack-O-Lantern"]
+mesh = "model"
+model = ExtResource("5")
+node = "Jack-O-Lantern"
+
+[node name="Cake" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Cake"]
+
+[component type="MeshRenderer" node="rungholt/Cake"]
+mesh = "model"
+model = ExtResource("5")
+node = "Cake"
+
+[node name="Repeater_(on)" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Repeater_(on)"]
+
+[component type="MeshRenderer" node="rungholt/Repeater_(on)"]
+mesh = "model"
+model = ExtResource("5")
+node = "Repeater_(on)"
+
+[node name="Trapdoor" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Trapdoor"]
+
+[component type="MeshRenderer" node="rungholt/Trapdoor"]
+mesh = "model"
+model = ExtResource("5")
+node = "Trapdoor"
+
+[node name="Stone_Brick" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stone_Brick"]
+
+[component type="MeshRenderer" node="rungholt/Stone_Brick"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stone_Brick"
+
+[node name="Iron_Bars" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Iron_Bars"]
+
+[component type="MeshRenderer" node="rungholt/Iron_Bars"]
+mesh = "model"
+model = ExtResource("5")
+node = "Iron_Bars"
+
+[node name="Glass_Pane" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Glass_Pane"]
+
+[component type="MeshRenderer" node="rungholt/Glass_Pane"]
+mesh = "model"
+model = ExtResource("5")
+node = "Glass_Pane"
+
+[node name="Vines" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Vines"]
+
+[component type="MeshRenderer" node="rungholt/Vines"]
+mesh = "model"
+model = ExtResource("5")
+node = "Vines"
+
+[node name="Fence_Gate" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Fence_Gate"]
+
+[component type="MeshRenderer" node="rungholt/Fence_Gate"]
+mesh = "model"
+model = ExtResource("5")
+node = "Fence_Gate"
+
+[node name="Brick_Stairs" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Brick_Stairs"]
+
+[component type="MeshRenderer" node="rungholt/Brick_Stairs"]
+mesh = "model"
+model = ExtResource("5")
+node = "Brick_Stairs"
+
+[node name="Stone_Brick_Stairs" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Stone_Brick_Stairs"]
+
+[component type="MeshRenderer" node="rungholt/Stone_Brick_Stairs"]
+mesh = "model"
+model = ExtResource("5")
+node = "Stone_Brick_Stairs"
+
+[node name="Lily_Pad" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Lily_Pad"]
+
+[component type="MeshRenderer" node="rungholt/Lily_Pad"]
+mesh = "model"
+model = ExtResource("5")
+node = "Lily_Pad"
+
+[node name="Enchantment_Table" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Enchantment_Table"]
+
+[component type="MeshRenderer" node="rungholt/Enchantment_Table"]
+mesh = "model"
+model = ExtResource("5")
+node = "Enchantment_Table"
+
+[node name="White_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/White_Wool"]
+
+[component type="MeshRenderer" node="rungholt/White_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "White_Wool"
+
+[node name="Orange_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Orange_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Orange_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Orange_Wool"
+
+[node name="Light_Blue_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Light_Blue_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Light_Blue_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Light_Blue_Wool"
+
+[node name="Gray_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Gray_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Gray_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Gray_Wool"
+
+[node name="Light_Gray_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Light_Gray_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Light_Gray_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Light_Gray_Wool"
+
+[node name="Cyan_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Cyan_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Cyan_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Cyan_Wool"
+
+[node name="Brown_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Brown_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Brown_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Brown_Wool"
+
+[node name="Green_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Green_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Green_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Green_Wool"
+
+[node name="Red_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Red_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Red_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Red_Wool"
+
+[node name="Black_Wool" parent="rungholt"]
+
+[component type="Transform" node="rungholt/Black_Wool"]
+
+[component type="MeshRenderer" node="rungholt/Black_Wool"]
+mesh = "model"
+model = ExtResource("5")
+node = "Black_Wool"
