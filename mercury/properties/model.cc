@@ -247,6 +247,14 @@ ModelImportSettings ModelImportSettings::ForFile(const std::string& model_path,
     }
     if (p.Has("metallic")) entry.metallic = static_cast<float>(p.GetFloat("metallic"));
     if (p.Has("smoothness")) entry.smoothness = static_cast<float>(p.GetFloat("smoothness"));
+    if (p.Has("transmission")) {
+      entry.transmission = static_cast<float>(p.GetFloat("transmission"));
+    }
+    if (p.Has("ior")) entry.ior = static_cast<float>(p.GetFloat("ior"));
+    if (auto v = p.Get("transmission_color"); v && v->Get<mtext::Color>()) {
+      entry.transmission_color = glm::vec3(v->Get<mtext::Color>()->rgba);
+    }
+    if (p.Has("thickness")) entry.thickness = static_cast<float>(p.GetFloat("thickness"));
     settings.materials.push_back(std::move(entry));
   }
   return settings;
@@ -670,21 +678,47 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
         const float ks = std::max({specular.r, specular.g, specular.b});
         const float smooth = 1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
         material.smoothness = std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
-        // No diffuse but a strong specular: a mirror, or glass when the
-        // illumination model refracts (4, 6, 7). Approximated as metal and as
-        // see-through, there being no reflections or refraction to draw.
+        // Illumination models 4, 6 and 7 refract: glass when the file gives
+        // it a transmission filter (Tf), or when it has no diffuse but a
+        // strong specular. Without them, that look is a mirror.
         const float kd = std::max({color.r, color.g, color.b});
-        if (kd < 0.05f && ks > 0.25f && texture_of(source, aiTextureType_DIFFUSE).empty()) {
-          int illum = 2;
-          source->Get(AI_MATKEY_OBJ_ILLUM, illum);
-          if (illum == 4 || illum == 6 || illum == 7) {
-            material.color = glm::vec4(glm::vec3(std::max(ks, 0.6f)), 0.25f);
-            material.transparent = true;
-          } else {
-            material.color = glm::vec4(specular.r, specular.g, specular.b, material.color.a);
-            material.metallic = 1.0f;
-          }
+        const bool bare = kd < 0.05f && ks > 0.25f &&
+                          texture_of(source, aiTextureType_DIFFUSE).empty();
+        int illum = 2;
+        source->Get(AI_MATKEY_OBJ_ILLUM, illum);
+        aiColor3D filter(1, 1, 1);
+        source->Get(AI_MATKEY_COLOR_TRANSPARENT, filter);
+        const bool tinted = std::min({filter.r, filter.g, filter.b}) < 0.999f;
+        if ((illum == 4 || illum == 6 || illum == 7) && (tinted || bare)) {
+          material.transmission = 1.0f;
+          material.transmission_color = glm::vec3(filter.r, filter.g, filter.b);
+          // Glass is smooth whatever its exponent says.
+          material.smoothness = std::max(material.smoothness, 0.9f);
+        } else if (bare) {
+          material.color = glm::vec4(specular.r, specular.g, specular.b, material.color.a);
+          material.metallic = 1.0f;
         }
+      }
+      // glTF's KHR_materials_transmission and _volume: the base color tints
+      // what passes through, and so does the volume over its distance.
+      float transmission = 0.0f;
+      if (source->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmission) == AI_SUCCESS &&
+          transmission > 0.0f) {
+        material.transmission = std::clamp(transmission, 0.0f, 1.0f);
+        material.transmission_color = glm::vec3(color.r, color.g, color.b);
+        aiColor3D attenuation(1, 1, 1);
+        float distance = 0.0f;
+        if (source->Get(AI_MATKEY_VOLUME_ATTENUATION_COLOR, attenuation) == AI_SUCCESS &&
+            source->Get(AI_MATKEY_VOLUME_ATTENUATION_DISTANCE, distance) == AI_SUCCESS &&
+            std::isfinite(distance) && distance > 0.0f) {
+          material.transmission_color *= glm::vec3(attenuation.r, attenuation.g, attenuation.b);
+          material.thickness = distance;
+        }
+      }
+      if (material.transmission > 0.0f) {
+        float ior = 0.0f;
+        // OBJ's Ni defaults to 1, which means nothing was said.
+        if (source->Get(AI_MATKEY_REFRACTI, ior) == AI_SUCCESS && ior > 1.0f) material.ior = ior;
       }
       if (linear_colors) {
         material.color = glm::vec4(LinearToSrgb(material.color.r), LinearToSrgb(material.color.g),
@@ -731,6 +765,10 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
         if (entry.metallic) material.metallic = std::clamp(*entry.metallic, 0.0f, 1.0f);
         if (entry.smoothness) material.smoothness = std::clamp(*entry.smoothness, 0.0f, 1.0f);
         if (entry.emission) material.emission = *entry.emission;
+        if (entry.transmission) material.transmission = std::clamp(*entry.transmission, 0.0f, 1.0f);
+        if (entry.ior) material.ior = std::max(*entry.ior, 1.0f);
+        if (entry.transmission_color) material.transmission_color = *entry.transmission_color;
+        if (entry.thickness) material.thickness = std::max(*entry.thickness, 0.0f);
       }
       model->materials_.push_back(std::move(material));
       if (!collecting) model->material_sources_.push_back(std::move(sources));

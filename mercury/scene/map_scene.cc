@@ -1970,6 +1970,12 @@ RenderMaterial MapScene::MakeRenderMaterial(const MaterialAsset& material, glm::
   if (material.normal_map.IsSet()) result.normal_texture = GetImage(material.normal_map.path, false);
   result.normal_scale = material.normal_scale;
   result.transparent = material.surface == SurfaceType::kTransparent;
+  if (material.surface == SurfaceType::kTransmissive) {
+    result.transmission = std::clamp(material.transmission, 0.0f, 1.0f);
+    result.ior = std::max(material.ior, 1.0f);
+    result.transmission_color = glm::vec3(material.transmission_color);
+    result.thickness = std::max(material.thickness, 0.0f);
+  }
   result.double_sided = material.cull == CullMode::kOff;
   result.unlit = material.unlit;
   return result;

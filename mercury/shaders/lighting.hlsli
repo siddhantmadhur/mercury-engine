@@ -13,6 +13,9 @@
 //                                     per probe of the distance to the
 //                                     nearest surface (mean, mean square)
 //   binding 11 Texture2D<float4>      probe radiance, sharp, for reflections
+//   binding 13 TextureCubeArray<float4> shadow cube transmittance: rgb the
+//                                     light transmissive casters let through,
+//                                     a the nearest one's distance (as above)
 
 #include "lighting_math.hlsli"
 
@@ -22,6 +25,7 @@
 [[vk::binding(8, 0)]] Texture2D<float4> probe_irradiance;
 [[vk::binding(10, 0)]] Texture2D<float2> probe_visibility;
 [[vk::binding(11, 0)]] Texture2D<float4> probe_radiance;
+[[vk::binding(13, 0)]] TextureCubeArray<float4> transmit_cubes;
 
 // ---------------------------------------------------------- cube shadows --
 
@@ -100,6 +104,40 @@ float CubeShadow(uint slot, float3 world_pos, float3 normal, float radius, float
                                                float4(d + t1 * o.x + t2 * o.y, slot), reference);
     }
     return lit / samples;
+}
+
+// The color transmissive casters (glass) leave on the light of shadow slot
+// `slot` at world_pos: white unless the point lies past one of them. Spread
+// over the cone a light of `radius` subtends, like the shadows' penumbra.
+float3 CubeTransmittance(uint slot, float3 world_pos, float3 normal, float radius, float bias,
+                         float2 pixel)
+{
+    if (transmission_params.w < 0.5) return 1.0;
+    float4 cube = shadow_cubes_info[slot];
+    float3 to_point = world_pos + normal * bias * 0.5 - cube.xyz;
+    float receiver = length(to_point);
+    if (receiver >= cube.w) return 1.0;
+    float3 d = to_point / max(receiver, 1e-6);
+    float3 t1 = normalize(abs(d.y) < 0.99 ? cross(d, float3(0, 1, 0)) : cross(d, float3(1, 0, 0)));
+    float3 t2 = cross(d, t1);
+    // The nearest caster straight toward the light: none in front, no tint.
+    // The spread grows with the gap behind it, like the shadows' penumbra.
+    float blocker = transmit_cubes.SampleLevel(clamp_sampler, float4(d, slot), 0).a * cube.w;
+    if (receiver - bias <= blocker) return 1.0;
+    float angle = PixelNoise(pixel) * 6.2831853;
+    float texel = 2.0 / light_info.z;
+    float spread = clamp(radius * (receiver - blocker) / max(blocker, 1e-3) / receiver, texel, 0.3);
+    float3 total = 0.0;
+    [unroll]
+    for (uint i = 0; i < 8; ++i)
+    {
+        float2 o = DiskSample(i, 8, angle) * spread;
+        float4 through = transmit_cubes.SampleLevel(
+            clamp_sampler, float4(d + t1 * o.x + t2 * o.y, slot), 0);
+        float gap = receiver - bias - through.a * cube.w;
+        total += lerp(1.0, through.rgb, saturate(gap / max(bias, 1e-3)));
+    }
+    return total / 8.0;
 }
 
 // ---------------------------------------------------------- light probes --

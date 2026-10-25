@@ -4,6 +4,13 @@
 // the light probe volume, or hemispheric ambient outside one. Normal and
 // emission maps are optional.
 //
+// Transmissive surfaces (glass) let part of the light through: the scene
+// behind them (a copy taken after the opaque pass, view distance in alpha)
+// is sampled along the refracted ray, blurred by roughness and tinted, under
+// a Fresnel reflection. Without that copy (overlays, RenderTextures) they
+// blend over what is behind instead. Transmissive casters tint the light
+// that reaches past them through the transmittance maps.
+//
 // In a probe capture pass (light_info.y) it writes the radiance a probe sees,
 // with the distance in alpha (negative on back faces, so probes inside walls
 // can be found). Writes linear HDR color and a
@@ -14,6 +21,7 @@
 [[vk::binding(3, 0)]] Texture2D<float> shadow_map;
 [[vk::binding(5, 0)]] SamplerState material_sampler;
 [[vk::binding(9, 0)]] Texture2D<float> far_shadow_map;
+[[vk::binding(12, 0)]] Texture2D<float4> sun_transmittance;
 [[vk::binding(0, 1)]] Texture2D textures[];
 
 struct PSOutput
@@ -138,6 +146,70 @@ float CalculateShadow(float3 world_pos, float3 normal, float3 to_light)
     return lerp(near_lit, far_lit, far_weight);
 }
 
+// The color the sun's transmissive casters (the camera's map only) leave on
+// its light at world_pos: white unless the point lies past one.
+float3 SunTransmittance(float3 world_pos, float3 normal, float3 to_light)
+{
+    if (transmission_params.z < 0.5 || shadow_params.x <= 0.0 || far_shadow_params.w > 0.5)
+        return 1.0;
+    float slope = 1.0 - saturate(dot(normal, to_light)) * 0.7;
+    float edge;
+    float3 coord = ShadowCoord(light_view_proj, world_pos, normal,
+                               max(shadow_params.y, 0.01) * slope, edge);
+    if (edge >= 0.998) return 1.0;
+    float texel = 1.0 / shadow_params.x;
+    float3 total = 0.0;
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        float4 through = sun_transmittance.SampleLevel(clamp_sampler,
+                                                       coord.xy + kPoisson[i * 4] * texel * 1.5, 0);
+        total += lerp(1.0, through.rgb, saturate((coord.z - through.a) * 4096.0 - 1.0));
+    }
+    return total * 0.25;
+}
+
+// The scene behind a transmissive surface, seen through it. The ray bends
+// going in, crosses the object `size` across (no farther than what lies
+// behind), bends again coming out and goes on to the scene behind. Where it
+// comes out is as on a ball for a round object (which shows what is behind
+// upside down and small) and as on a slab of glass for a flat one.
+// `travel`: the distance covered inside.
+float3 SceneBehind(float2 pixel, float3 world_pos, float3 V, float3 N, float ior,
+                   float roughness, float size, float roundness, out float travel)
+{
+    uint slot = (uint) transmission_params.x;
+    float2 uv0 = pixel * resolution.zw;
+    float surface_depth = -mul(view, float4(world_pos, 1.0)).z;
+    float behind = max(textures[NonUniformResourceIndex(slot)].SampleLevel(clamp_sampler, uv0, 0).a
+                       - surface_depth, 0.0);
+    float3 T = refract(-V, N, 1.0 / ior);
+    if (dot(T, T) < 1e-6) T = -V;
+    float radius = size * 0.5;
+    travel = min(2.0 * radius * saturate(dot(T, -N)), behind);
+    float3 exit_point = world_pos + T * travel;
+    float3 ball_normal = exit_point - (world_pos - N * radius);
+    float3 exit_normal = dot(ball_normal, ball_normal) > 1e-12 ? normalize(ball_normal) : N;
+    exit_normal = normalize(lerp(N, exit_normal, roundness * roundness));
+    float3 out_dir = refract(T, -exit_normal, ior);
+    if (dot(out_dir, out_dir) < 1e-6) out_dir = reflect(T, -exit_normal);  // total internal reflection
+    float3 target = exit_point + out_dir * max(behind - travel, 0.0);
+    float4 clip = mul(view_proj, float4(target, 1.0));
+    float2 uv = float2(clip.x, -clip.y) / max(clip.w, 1e-5) * 0.5 + 0.5;
+    float lod = min(roughness * roughness * 2.0, 1.0) * max(transmission_params.y - 1.0, 0.0);
+    float4 bent = textures[NonUniformResourceIndex(slot)].SampleLevel(clamp_sampler, uv, lod);
+    // Off screen, landed on something wholly in front of the object (seen
+    // over it, not through it), or on the background where straight behind
+    // is geometry: what is straight behind stands in.
+    const float kBackground = 60000.0;  // scene_copy.ps.hlsl's distance for none
+    if (clip.w <= 0.0 || any(uv < 0.0) || any(uv > 1.0) || bent.a < surface_depth - size ||
+        (bent.a > kBackground && behind + surface_depth < kBackground))
+    {
+        bent = textures[NonUniformResourceIndex(slot)].SampleLevel(clamp_sampler, uv0, lod);
+    }
+    return bent.rgb;
+}
+
 float3 AcesTonemap(float3 x)
 {
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
@@ -195,6 +267,12 @@ PSOutput Main(ModelVSOutput input, float4 position : SV_Position,
     output.normal = float4(view_normal * 0.5 + 0.5, 0.0);
 
     float3 color;
+    // Transmissive: light let through from behind (already in the output's
+    // encoding), and how much of what is behind still shows when it cannot
+    // be sampled (alpha below 1).
+    float3 transmitted = 0.0;
+    bool sampled = false;
+    float coverage = 1.0;
     if ((draw_flags & kFlagUnlit) != 0 || length(input.normal) < 1e-4)
     {
         color = base.rgb + emission;
@@ -207,10 +285,24 @@ PSOutput Main(ModelVSOutput input, float4 position : SV_Position,
         float roughness = clamp(1.0 - data.material.y, 0.045, 1.0);
         float3 albedo = base.rgb;
         float3 F0 = lerp(0.04.xxx, albedo, metallic);
+        const bool transmissive = (draw_flags & kFlagTransmissive) != 0;
+        float transmission = 0.0;
+        float ior = 1.5;
+        if (transmissive)
+        {
+            // Dielectric reflectance from the index of refraction; what passes
+            // through is no longer there to scatter diffusely.
+            transmission = saturate(data.transmission.w) * (1.0 - metallic);
+            ior = max(data.volume.x, 1.0);
+            float f0 = (ior - 1.0) / (ior + 1.0);
+            F0 = lerp((f0 * f0).xxx, albedo, metallic);
+            albedo *= 1.0 - transmission;
+        }
         float NdotV = max(dot(N, V), 1e-4);
         float3 R = reflect(-V, N);
 
-        float shadow = CalculateShadow(input.world_position, surface_normal, L);
+        float3 shadow = CalculateShadow(input.world_position, surface_normal, L) *
+                        SunTransmittance(input.world_position, surface_normal, L);
         float3 direct = DirectLight(N, V, L, light_color.rgb * shadow, albedo, F0, metallic,
                                     roughness);
         const uint point_count = min((uint) flags.w, kMaxPointLights);
@@ -227,7 +319,10 @@ PSOutput Main(ModelVSOutput input, float4 position : SV_Position,
                 float4 shadow_info = point_shadows[i];
                 radiance *= CubeShadow((uint) color.w, input.world_position, surface_normal,
                                        shadow_info.x, shadow_info.y, shadow_info.z > 0.5,
-                                       position.xy);
+                                       position.xy) *
+                            CubeTransmittance((uint) color.w, input.world_position,
+                                              surface_normal, shadow_info.x, shadow_info.y,
+                                              position.xy);
             }
             direct += DirectLight(N, V, to_light * rsqrt(max(distance_sq, 1e-8)), radiance,
                                   albedo, F0, metallic, roughness);
@@ -260,7 +355,10 @@ PSOutput Main(ModelVSOutput input, float4 position : SV_Position,
                 // The rectangle's half-diagonal stands for its size.
                 radiance *= CubeShadow((uint) a2.w, input.world_position, surface_normal,
                                        length(right + up), area_shadow_bias[a].x, a3.w > 0.5,
-                                       position.xy);
+                                       position.xy) *
+                            CubeTransmittance((uint) a2.w, input.world_position, surface_normal,
+                                              length(right + up), area_shadow_bias[a].x,
+                                              position.xy);
             }
             float3 corners[4] = {center - right - up, center + right - up,
                                  center + right + up, center - right + up};
@@ -317,7 +415,31 @@ PSOutput Main(ModelVSOutput input, float4 position : SV_Position,
         float3 ambient = (1.0 - specular_share) * (1.0 - metallic) * albedo * ambient_light
                        + specular_share * reflected_light;
         color = direct + ambient + emission;
-        if (flags.y < 0.5 && (draw_flags & kFlagTransparent) == 0)
+        if (transmission > 0.0)
+        {
+            // What the reflection does not take passes through, tinted: once
+            // for a thin wall, or by the distance covered inside.
+            float3 through = transmission * (1.0 - specular_share);
+            float travel = 0.0;
+            float3 behind = 0.0;
+            if (transmission_params.x > 0.5 && !capture)
+            {
+                behind = SceneBehind(position.xy, input.world_position, V, N, ior, roughness,
+                                     max(data.volume.z, 1e-3), saturate(data.volume.w), travel);
+            }
+            float3 tint = saturate(data.transmission.rgb);
+            if (data.volume.y > 0.0) tint = pow(max(tint, 1e-4), travel / data.volume.y);
+            if (transmission_params.x > 0.5 && !capture)
+            {
+                transmitted = behind * tint * through;
+                sampled = true;
+            }
+            else
+            {
+                coverage = 1.0 - dot(through * tint, 1.0 / 3.0);
+            }
+        }
+        if (flags.y < 0.5 && (draw_flags & (kFlagTransparent | kFlagTransmissive)) == 0)
         {
             const float3 kLuma = float3(0.2126, 0.7152, 0.0722);
             float share = dot(ambient, kLuma) / max(dot(color, kLuma), 1e-6);
@@ -329,7 +451,16 @@ PSOutput Main(ModelVSOutput input, float4 position : SV_Position,
     {
         color = LinearToSrgb(AcesTonemap(color));
     }
-    output.color = float4(color, base.a);
+    // Transmissive surfaces blend premultiplied: what they let through is in
+    // the color, or left to the blend through alpha.
+    if ((draw_flags & kFlagTransmissive) != 0)
+    {
+        output.color = float4(color + transmitted, sampled ? 1.0 : coverage);
+    }
+    else
+    {
+        output.color = float4(color, base.a);
+    }
     if (capture)
     {
         // Signed distance from the probe: back faces mean it is inside.

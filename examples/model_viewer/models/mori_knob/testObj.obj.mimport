@@ -1,0 +1,10 @@
+[mimport]
+
+; The MTL's outer shell (illum 4) gives a bluish Tf and Ni 1.01, which reads
+; as nearly clear; the scene is known as an amber, glossy glass shell over
+; the inner core.
+[material name="OuterMat"]
+transmission = 0.92
+ior = 1.5
+transmission_color = Color(0.95, 0.42, 0.1, 1)
+smoothness = 0.92

@@ -126,6 +126,7 @@ constexpr uint32_t kFlagUnlit = 1;
 constexpr uint32_t kFlagSdfText = 2;
 constexpr uint32_t kFlagClampTexture = 4;
 constexpr uint32_t kFlagTransparent = 8;
+constexpr uint32_t kFlagTransmissive = 16;
 
 constexpr VkPipelineStageFlags2 kDepthStages =
     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
@@ -219,6 +220,18 @@ bool SceneRenderer::Init(Context& context, uint32_t frames_in_flight,
   if (const char* prepass = std::getenv("MERCURY_DEPTH_PREPASS")) {
     depth_prepass_ = std::string(prepass) != "0" ? 1 : 0;
   }
+  // Transmittance maps keep a depth in alpha: 16-bit unorm where it blends,
+  // half floats otherwise.
+  {
+    VkFormatProperties format;
+    vkGetPhysicalDeviceFormatProperties(context.physical_device, VK_FORMAT_R16G16B16A16_UNORM,
+                                        &format);
+    const VkFormatFeatureFlags needed = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT |
+                                        VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    transmit_format_ = (format.optimalTilingFeatures & needed) == needed
+                           ? VK_FORMAT_R16G16B16A16_UNORM
+                           : VK_FORMAT_R16G16B16A16_SFLOAT;
+  }
   if (!CreateLayouts() || !CreatePipelines(shaders) || !CreateFrameResources() ||
       !CreateShadowMap() || !CreateLightingResources()) {
     PDebug::error("Vulkan: could not create the model renderer");
@@ -259,6 +272,8 @@ bool SceneRenderer::CreateLayouts() {
         {9, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {10, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         {11, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        {12, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        {13, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
     };
     VkDescriptorSetLayoutCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -475,7 +490,8 @@ VkPipeline SceneRenderer::BuildPipeline(VkShaderModule vs, VkShaderModule ps,
   depth_stencil.depthWriteEnable = depth_write ? VK_TRUE : VK_FALSE;
   depth_stencil.depthCompareOp = compare;
 
-  // blend: 0 none, 1 alpha, 2 additive. Attachments past color_write_count
+  // blend: 0 none, 1 alpha, 2 additive, 3 premultiplied alpha, 4 multiply
+  // color and keep the smaller alpha. Attachments past color_write_count
   // (when it is set) keep their contents.
   std::vector<VkPipelineColorBlendAttachmentState> blends(colors.size());
   for (size_t i = 0; i < colors.size(); i++) {
@@ -499,6 +515,22 @@ VkPipeline SceneRenderer::BuildPipeline(VkShaderModule vs, VkShaderModule ps,
       attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
       attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
       attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    } else if (i == 0 && blend == 3) {
+      attachment.blendEnable = VK_TRUE;
+      attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      attachment.colorBlendOp = VK_BLEND_OP_ADD;
+      attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    } else if (i == 0 && blend == 4) {
+      attachment.blendEnable = VK_TRUE;
+      attachment.srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
+      attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      attachment.colorBlendOp = VK_BLEND_OP_ADD;
+      attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      attachment.alphaBlendOp = VK_BLEND_OP_MIN;
     }
   }
   VkPipelineColorBlendStateCreateInfo color_blend = {
@@ -556,16 +588,19 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
   VkShaderModule probe_sh_ps = shaders("probe_sh.ps.spv");
   VkShaderModule probe_visibility_ps = shaders("probe_visibility.ps.spv");
   VkShaderModule probe_octa_ps = shaders("probe_octa.ps.spv");
+  VkShaderModule transmit_ps = shaders("shadow_transmit.ps.spv");
+  VkShaderModule scene_copy_ps = shaders("scene_copy.ps.spv");
   auto destroy = [&] {
     for (VkShaderModule m : {model_vs, model_ps, shadow_vs, outline_ps, sky_ps, ssao_ps,
                              blur_ps, down_ps, up_ps, shadow_cube_ps, probe_sh_ps,
-                             probe_visibility_ps, probe_octa_ps}) {
+                             probe_visibility_ps, probe_octa_ps, transmit_ps, scene_copy_ps}) {
       if (m) vkDestroyShaderModule(device, m, nullptr);
     }
   };
   if (!model_vs || !model_ps || !shadow_vs || !outline_ps || !fullscreen_vs_ || !sky_ps ||
       !ssao_ps || !blur_ps || !down_ps || !up_ps || !composite_ps_ || !fxaa_ps_ ||
-      !shadow_cube_ps || !probe_sh_ps || !probe_visibility_ps || !probe_octa_ps) {
+      !shadow_cube_ps || !probe_sh_ps || !probe_visibility_ps || !probe_octa_ps ||
+      !transmit_ps || !scene_copy_ps) {
     destroy();
     return false;
   }
@@ -581,8 +616,21 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
     transparent_[i] =
         BuildPipeline(model_vs, model_ps, true, main_colors, kDepthFormat, 1, true, false,
                       VK_COMPARE_OP_LESS_OR_EQUAL, culls[i], false, model_layout_, 1);
-    ok = ok && opaque_[i] && transparent_[i];
+    // Transmissive surfaces write depth (what blends later sorts against
+    // them) and their normal (no SSAO there).
+    transmissive_[i] =
+        BuildPipeline(model_vs, model_ps, true, main_colors, kDepthFormat, 3, true, true,
+                      VK_COMPARE_OP_LESS_OR_EQUAL, culls[i], false, model_layout_);
+    ok = ok && opaque_[i] && transparent_[i] && transmissive_[i];
   }
+  scene_copy_ = BuildPipeline(fullscreen_vs_, scene_copy_ps, false, {kHdrFormat},
+                              VK_FORMAT_UNDEFINED, 0, false, false, VK_COMPARE_OP_ALWAYS,
+                              VK_CULL_MODE_NONE, false, post_pipeline_layout_);
+  // Every transmissive surface counts, whatever is in front: what lies
+  // behind an opaque caster is in its shadow anyway.
+  shadow_transmit_ = BuildPipeline(model_vs, transmit_ps, true, {transmit_format_},
+                                   VK_FORMAT_UNDEFINED, 4, false, false, VK_COMPARE_OP_ALWAYS,
+                                   VK_CULL_MODE_NONE, false, model_layout_);
   shadow_ = BuildPipeline(shadow_vs, VK_NULL_HANDLE, true, {}, kDepthFormat, 0, true, true,
                           VK_COMPARE_OP_LESS_OR_EQUAL, VK_CULL_MODE_NONE, true, model_layout_);
   outline_mask_ = BuildPipeline(model_vs, outline_ps, true, {kMaskFormat}, VK_FORMAT_UNDEFINED,
@@ -620,7 +668,8 @@ bool SceneRenderer::CreatePipelines(const ShaderLoader& shaders) {
                               VK_FORMAT_UNDEFINED, 0, false, false, VK_COMPARE_OP_ALWAYS,
                               VK_CULL_MODE_NONE, false, post_pipeline_layout_);
   ok = ok && shadow_ && outline_mask_ && sky_ && ssao_ && blur_ && bloom_down_ && bloom_up_ &&
-       shadow_cube_ && probe_capture_ && probe_sh_ && probe_visibility_pass_ && probe_octa_;
+       shadow_cube_ && probe_capture_ && probe_sh_ && probe_visibility_pass_ && probe_octa_ &&
+       scene_copy_ && shadow_transmit_;
   destroy();
   if (ok && context_->gpu_driven) {
     // Without it every view draws from the CPU lists.
@@ -711,8 +760,12 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
   VkDescriptorImageInfo visibility = {VK_NULL_HANDLE, probe_visibility_.View(),
                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-  VkWriteDescriptorSet writes[12] = {};
-  for (int i = 0; i < 12; i++) {
+  VkDescriptorImageInfo sun_transmit = {VK_NULL_HANDLE, sun_transmit_.View(),
+                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkDescriptorImageInfo cube_transmit = {VK_NULL_HANDLE, cube_transmit_.View(),
+                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+  VkWriteDescriptorSet writes[14] = {};
+  for (int i = 0; i < 14; i++) {
     writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[i].dstSet = frame.set;
     writes[i].dstBinding = static_cast<uint32_t>(i);
@@ -740,7 +793,11 @@ void SceneRenderer::UpdateFrameSet(FrameResources& frame) {
   writes[10].pImageInfo = &visibility;
   writes[11].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
   writes[11].pImageInfo = &radiance;
-  vkUpdateDescriptorSets(context_->device, 12, writes, 0, nullptr);
+  writes[12].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  writes[12].pImageInfo = &sun_transmit;
+  writes[13].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  writes[13].pImageInfo = &cube_transmit;
+  vkUpdateDescriptorSets(context_->device, 14, writes, 0, nullptr);
 }
 
 uint32_t SceneRenderer::SlotCapacity() const {
@@ -925,7 +982,11 @@ bool SceneRenderer::CreateLightingResources() {
       !far_shadow_image_.Create(a, d, kFarShadowResolution, kFarShadowResolution, kDepthFormat,
                                 VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
                                     VK_IMAGE_USAGE_SAMPLED_BIT,
-                                VK_IMAGE_ASPECT_DEPTH_BIT)) {
+                                VK_IMAGE_ASPECT_DEPTH_BIT) ||
+      !sun_transmit_.Create(a, d, kShadowResolution, kShadowResolution, transmit_format_, color,
+                            VK_IMAGE_ASPECT_COLOR_BIT) ||
+      !cube_transmit_.CreateCubeArray(a, d, kTransmitCubeResolution, kMaxShadowCubes,
+                                      transmit_format_, color, VK_IMAGE_ASPECT_COLOR_BIT)) {
     return false;
   }
   for (auto& frame : frames_) UpdateFrameSet(frame);
@@ -954,6 +1015,9 @@ void SceneRenderer::Shutdown() {
   shadow_cache_.Reset();
   shadow_cubes_.Reset();
   far_shadow_image_.Reset();
+  sun_transmit_.Reset();
+  cube_transmit_.Reset();
+  transmit_casters_.clear();
   probe_visibility_.Reset();
   probe_atlas_.Reset();
   probe_irradiance_.Reset();
@@ -987,10 +1051,12 @@ void SceneRenderer::Shutdown() {
     destroy_pipeline(opaque_[i]);
     destroy_pipeline(prepass_[i]);
     destroy_pipeline(transparent_[i]);
+    destroy_pipeline(transmissive_[i]);
   }
   for (VkPipeline* p : {&shadow_, &outline_mask_, &sky_, &ssao_, &blur_, &bloom_down_,
                         &bloom_up_, &shadow_cube_, &probe_capture_, &probe_sh_,
-                        &probe_visibility_pass_, &probe_octa_}) {
+                        &probe_visibility_pass_, &probe_octa_, &scene_copy_,
+                        &shadow_transmit_}) {
     destroy_pipeline(*p);
   }
   for (auto& [key, pipeline] : output_pipelines_) vkDestroyPipeline(device, pipeline, nullptr);
@@ -1324,7 +1390,8 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
     TransitionImage(cmd, shadow_cubes_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-    for (VkImage image : {probe_faces_.Get(), probe_visibility_.Get()}) {
+    for (VkImage image : {probe_faces_.Get(), probe_visibility_.Get(), sun_transmit_.Get(),
+                          cube_transmit_.Get()}) {
       TransitionImage(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
                       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
@@ -1353,10 +1420,12 @@ void SceneRenderer::Prepare(VkCommandBuffer cmd, GameScene& scene) {
   UpdateDynamic();
   {
     uint64_t live = 0, triangles = 0;
+    transmit_casters_.clear();
     for (const auto& draw : draws_) {
       if (!draw.alive) continue;
       live++;
       triangles += draw.index_count / 3;
+      if (draw.transmit_shadows) transmit_casters_.push_back(&draw);
     }
     Profiler::SetCounter("draws", static_cast<double>(live));
     Profiler::SetCounter("triangles", static_cast<double>(triangles));
@@ -1666,7 +1735,13 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
     if (material.unlit) flags |= kFlagUnlit;
     if (material.sdf_text) flags |= kFlagSdfText;
     if (material.transparent) flags |= kFlagTransparent;
+    // Alpha blending wins: a surface is not both.
+    const bool transmissive =
+        material.transmission > 0.0f && !material.transparent && !material.unlit;
+    if (transmissive) flags |= kFlagTransmissive;
     record.info = glm::uvec4(texture, flags, bone_offset, proxy.layer);
+    record.transmission = glm::vec4(material.transmission_color, material.transmission);
+    record.volume = glm::vec4(material.ior, material.thickness, 0.0f, 0.0f);
     record.material =
         glm::vec4(material.metallic, material.smoothness, material.normal_scale, 0.0f);
     record.maps = glm::uvec4(TextureSlot(cmd, frame, material.normal_texture),
@@ -1678,9 +1753,11 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
     frame_draw.layer = proxy.layer;
     frame_draw.entity = static_cast<uint32_t>(entity);
     frame_draw.alive = true;
-    frame_draw.transparent = material.transparent;
+    frame_draw.transparent = material.transparent || transmissive;
+    frame_draw.transmissive = transmissive;
     frame_draw.double_sided = material.double_sided || material.sdf_text;
-    frame_draw.cast_shadows = mesh.cast_shadows && !material.transparent;
+    frame_draw.cast_shadows = mesh.cast_shadows && !frame_draw.transparent;
+    frame_draw.transmit_shadows = mesh.cast_shadows && transmissive;
     frame_draw.rendering_layers = mesh.rendering_layers;
     // An odd number of negative scale axes reverses the winding.
     frame_draw.mirrored = det < 0.0f;
@@ -1702,6 +1779,11 @@ void SceneRenderer::BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameS
     if (draw.skin >= 0) half *= 1.5f;  // animated limbs reach past the bind pose's box
     frame_draw.bounds_min = center - half;
     frame_draw.bounds_max = center + half;
+    // How far a ray refracted into it may travel inside (across its narrowest
+    // side), and how round it is (1: a ball, 0: a sheet).
+    const float narrowest = std::min({half.x, half.y, half.z});
+    record.volume.z = 2.0f * narrowest;
+    record.volume.w = narrowest / std::max({half.x, half.y, half.z, 1e-6f});
     WriteCullData(slot);
   }
 }
@@ -1902,7 +1984,7 @@ bool SceneRenderer::CreateTargets(Targets& targets, VkExtent2D extent) {
 
 void SceneRenderer::DestroyTargets(Targets& targets) {
   std::vector<VkDescriptorSet> sets = {targets.ssao_set, targets.blur_set, targets.composite_set,
-                                       targets.fxaa_set, targets.sky_set};
+                                       targets.fxaa_set, targets.sky_set, targets.scene_copy_set};
   sets.insert(sets.end(), targets.bloom_down_sets.begin(), targets.bloom_down_sets.end());
   sets.insert(sets.end(), targets.bloom_up_sets.begin(), targets.bloom_up_sets.end());
   std::erase(sets, VK_NULL_HANDLE);
@@ -1910,13 +1992,103 @@ void SceneRenderer::DestroyTargets(Targets& targets) {
     vkFreeDescriptorSets(context_->device, pool_, static_cast<uint32_t>(sets.size()), sets.data());
   }
   for (vk::Image* image : {&targets.hdr, &targets.normal, &targets.depth, &targets.ao,
-                           &targets.ao_blur, &targets.bloom, &targets.outline, &targets.ldr}) {
+                           &targets.ao_blur, &targets.bloom, &targets.outline, &targets.ldr,
+                           &targets.scene_color}) {
     image->Reset();
   }
+  // Nothing in flight samples it: targets go once the device is idle.
+  if (targets.scene_color_slot != 0) {
+    if (white_.View()) WriteTextureSlot(targets.scene_color_slot, white_.View());
+    free_slots_.push_back(targets.scene_color_slot);
+    targets.scene_color_slot = 0;
+  }
   targets.ssao_set = targets.blur_set = targets.composite_set = targets.fxaa_set =
-      targets.sky_set = VK_NULL_HANDLE;
+      targets.sky_set = targets.scene_copy_set = VK_NULL_HANDLE;
   targets.bloom_down_sets.clear();
   targets.bloom_up_sets.clear();
+}
+
+bool SceneRenderer::EnsureSceneColor(VkCommandBuffer cmd, Targets& targets) {
+  if (targets.scene_color_slot != 0) return true;
+  if (free_slots_.empty() && next_slot_ >= kMaxTextures) return false;
+  const VkExtent2D extent = targets.extent;
+  const uint32_t mips = std::min(
+      kSceneColorMips,
+      static_cast<uint32_t>(std::floor(std::log2(std::max(extent.width, extent.height)))) + 1);
+  if (!targets.scene_color.Create(context_->allocator, context_->device, extent.width,
+                                  extent.height, kHdrFormat,
+                                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                      VK_IMAGE_USAGE_SAMPLED_BIT |
+                                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                      VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                  VK_IMAGE_ASPECT_COLOR_BIT, mips)) {
+    return false;
+  }
+  TransitionImage(cmd, targets.scene_color.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_PIPELINE_STAGE_2_NONE, 0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  targets.scene_copy_set = AllocatePostSet({targets.hdr.View(), targets.depth.View()});
+  if (!free_slots_.empty()) {
+    targets.scene_color_slot = free_slots_.back();
+    free_slots_.pop_back();
+  } else {
+    targets.scene_color_slot = next_slot_++;
+  }
+  WriteTextureSlot(targets.scene_color_slot, targets.scene_color.View());
+  return true;
+}
+
+void SceneRenderer::CopySceneColor(VkCommandBuffer cmd, Targets& targets,
+                                   const RenderCamera& camera) {
+  vk::Image& image = targets.scene_color;
+  const uint32_t mips = image.MipLevels();
+  PostPush push;
+  const glm::mat4 inverse_proj = glm::inverse(camera.projection);
+  for (int i = 0; i < 4; i++) push.p[i] = inverse_proj[i];
+  TransitionImageMips(cmd, image.Get(), VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, kColorAccess);
+  Fullscreen(cmd, scene_copy_, targets.scene_copy_set, image.MipView(0), targets.extent, &push,
+             false);
+  // Each mip halves the one above, for rougher surfaces to see blurrier.
+  TransitionImageMips(cmd, image.Get(), VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, kColorAccess,
+                      VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+  int32_t w = static_cast<int32_t>(targets.extent.width);
+  int32_t h = static_cast<int32_t>(targets.extent.height);
+  for (uint32_t level = 1; level < mips; level++) {
+    TransitionImageMips(cmd, image.Get(), VK_IMAGE_ASPECT_COLOR_BIT, level, 1,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    const int32_t nw = std::max(1, w / 2), nh = std::max(1, h / 2);
+    VkImageBlit blit = {};
+    blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level - 1, 0, 1};
+    blit.srcOffsets[1] = {w, h, 1};
+    blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
+    blit.dstOffsets[1] = {nw, nh, 1};
+    vkCmdBlitImage(cmd, image.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image.Get(),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+    TransitionImageMips(cmd, image.Get(), VK_IMAGE_ASPECT_COLOR_BIT, level, 1,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                        VK_ACCESS_2_TRANSFER_READ_BIT);
+    w = nw;
+    h = nh;
+  }
+  TransitionImageMips(cmd, image.Get(), VK_IMAGE_ASPECT_COLOR_BIT, 0, mips,
+                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                      VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
 SceneRenderer::Targets& SceneRenderer::GetTargets(VkExtent2D extent) {
@@ -2013,7 +2185,13 @@ void SceneRenderer::RenderShadows(VkCommandBuffer cmd, const glm::mat4& light_vi
   }
   if (enabled) {
     GpuScope scope(gpu_timer_, cmd, "sun_shadow");
+    const bool was_valid = shadow_cache_valid_;
+    const ShadowCacheKey before = shadow_cache_key_;
     UpdateSunShadow(cmd, frame, main_camera);
+    UpdateSunTransmittance(cmd, frame, !was_valid || !(before == shadow_cache_key_),
+                           main_camera.culling_mask);
+  } else {
+    sun_transmit_active_ = false;
   }
   // The probes see the scene lit, shadows included, so they come last.
   {
@@ -2223,6 +2401,73 @@ void SceneRenderer::DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk
                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT);
 }
 
+void SceneRenderer::UpdateSunTransmittance(VkCommandBuffer cmd, FrameResources& frame,
+                                           bool redraw, uint32_t layers) {
+  std::vector<const FrameDraw*> casters;
+  bool dynamic = false;
+  for (const FrameDraw* draw : transmit_casters_) {
+    if (!(layers & (1u << (draw->layer & 31)))) continue;
+    casters.push_back(draw);
+    dynamic = dynamic || draw->dynamic;
+  }
+  if (casters.empty()) {
+    sun_transmit_active_ = false;
+    return;
+  }
+  // Still casters stay as drawn until the map moves or the scene changes
+  // (the cache key's static version); moving ones are drawn every frame, and
+  // once more after they stop.
+  if (sun_transmit_active_ && !redraw && !dynamic && !sun_transmit_dynamic_) return;
+  sun_transmit_active_ = true;
+  sun_transmit_dynamic_ = dynamic;
+  RenderCamera camera;
+  FrameUniforms uniforms =
+      CameraUniforms(camera, {kShadowResolution, kShadowResolution}, false, true);
+  uniforms.view_proj = light_view_proj_;
+  const uint32_t offset = PushUniforms(frame, uniforms);
+  ToAttachment(cmd, sun_transmit_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  DrawTransmittance(cmd, frame, sun_transmit_.View(), {kShadowResolution, kShadowResolution},
+                    offset, casters);
+  ToShaderRead(cmd, sun_transmit_.Get());
+}
+
+void SceneRenderer::DrawTransmittance(VkCommandBuffer cmd, FrameResources& frame,
+                                      VkImageView view, VkExtent2D extent,
+                                      uint32_t uniform_offset,
+                                      const std::vector<const FrameDraw*>& casters) {
+  // White: all light passes; alpha 1: no caster nearer than the far plane.
+  VkRenderingAttachmentInfo color = {.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+  color.imageView = view;
+  color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  color.clearValue.color = {{1.0f, 1.0f, 1.0f, 1.0f}};
+  VkRenderingInfo rendering = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO};
+  rendering.renderArea = {{0, 0}, extent};
+  rendering.layerCount = 1;
+  rendering.colorAttachmentCount = 1;
+  rendering.pColorAttachments = &color;
+  vkCmdBeginRendering(cmd, &rendering);
+  SetViewport(cmd, extent);
+  if (!casters.empty()) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_transmit_);
+    const VkDescriptorSet sets[2] = {frame.set, texture_set_};
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets, 1,
+                            &uniform_offset);
+    const VkBuffer buffers[2] = {vertex_buffer_.Get(), instance_buffer_.Get()};
+    const VkDeviceSize offsets[2] = {0, 0};
+    vkCmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+    vkCmdBindIndexBuffer(cmd, index_buffer_.Get(), 0, VK_INDEX_TYPE_UINT32);
+    FrontFace front_face;
+    for (const FrameDraw* draw : casters) {
+      front_face.Set(cmd, draw->mirrored);
+      vkCmdDrawIndexed(cmd, draw->index_count, 1, draw->first_index,
+                       static_cast<int32_t>(draw->geometry->first_vertex), draw->record);
+    }
+  }
+  vkCmdEndRendering(cmd);
+}
+
 // ---------------------------------------------------------------- Lighting --
 
 void SceneRenderer::AssignShadowCubes() {
@@ -2282,6 +2527,8 @@ void SceneRenderer::FillLighting(FrameUniforms& u) const {
         glm::vec4(static_cast<float>(kFarShadowResolution), far_normal_bias_, 0.0f, 0.0f);
   }
   u.gi_params = glm::vec4(visibility_filterable_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+  u.transmission_params = glm::vec4(0.0f, 0.0f, sun_transmit_active_ ? 1.0f : 0.0f,
+                                    cube_transmit_active_ ? 1.0f : 0.0f);
   if (probes_.active) {
     u.gi_min = glm::vec4(probes_.min, 1.0f);
     u.gi_max = glm::vec4(probes_.max, probes_.intensity);
@@ -2301,10 +2548,28 @@ FrameUniforms SceneRenderer::CubeFaceUniforms(glm::vec3 center, uint32_t face, f
 }
 
 void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame) {
-  if (cubes_.empty()) return;
+  if (cubes_.empty()) {
+    cube_transmit_active_ = false;
+    return;
+  }
   // Each slot's casters, and whether anything about them changed since the
   // slot was last drawn: still scenes draw their cubes once.
   std::vector<std::vector<const FrameDraw*>> casters(cubes_.size());
+  std::vector<std::vector<const FrameDraw*>> transmitters(cubes_.size());
+  bool any_transmitters = false;
+  for (size_t slot = 0; slot < cubes_.size(); slot++) {
+    const ShadowCube& cube = cubes_[slot];
+    for (const FrameDraw* draw : transmit_casters_) {
+      if (BoxNear(draw->bounds_min, draw->bounds_max, cube.center, cube.far_clip)) {
+        transmitters[slot].push_back(draw);
+      }
+    }
+    any_transmitters = any_transmitters || !transmitters[slot].empty();
+  }
+  // Turning the transmittance cubes on or off redraws every slot, so none
+  // keeps faces from before.
+  if (any_transmitters != cube_transmit_active_) cube_hashes_.fill(0);
+  cube_transmit_active_ = any_transmitters;
   std::vector<size_t> dirty;
   for (size_t slot = 0; slot < cubes_.size(); slot++) {
     const ShadowCube& cube = cubes_[slot];
@@ -2327,6 +2592,14 @@ void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame
       HashFloats(hash, &records_[draw.record].world[0][0], 16);
       // Skinned meshes change shape without moving.
       if (draw.skinned) {
+        const float frame_value = static_cast<float>(frame_number_);
+        HashFloats(hash, &frame_value, 1);
+      }
+    }
+    for (const FrameDraw* draw : transmitters[slot]) {
+      if (!draw->dynamic) continue;
+      HashFloats(hash, &records_[draw->record].world[0][0], 16);
+      if (draw->skinned) {
         const float frame_value = static_cast<float>(frame_number_);
         HashFloats(hash, &frame_value, 1);
       }
@@ -2384,6 +2657,30 @@ void SceneRenderer::RenderShadowCubes(VkCommandBuffer cmd, FrameResources& frame
     }
   }
   DepthToShaderRead(cmd, shadow_cubes_.Get());
+  if (!cube_transmit_active_) return;
+
+  const VkExtent2D transmit_extent = {kTransmitCubeResolution, kTransmitCubeResolution};
+  ToAttachment(cmd, cube_transmit_.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  for (size_t slot : dirty) {
+    const ShadowCube& cube = cubes_[slot];
+    for (uint32_t face = 0; face < 6; face++) {
+      FrameUniforms uniforms =
+          CubeFaceUniforms(cube.center, face, 0.005f, cube.far_clip, transmit_extent, true);
+      uniforms.light_dir = glm::vec4(cube.normal, cube.one_sided ? 1.0f : 0.0f);
+      uniforms.light_info.z = cube.far_clip;
+      uniforms.shadow_params.w = 1.0f;  // depth is distance over the far clip
+      std::vector<const FrameDraw*> seen;
+      for (const FrameDraw* draw : transmitters[slot]) {
+        if (FaceSees(cube.center, face, draw->bounds_min, draw->bounds_max, cube.far_clip)) {
+          seen.push_back(draw);
+        }
+      }
+      DrawTransmittance(cmd, frame,
+                        cube_transmit_.LayerView(static_cast<uint32_t>(slot) * 6 + face),
+                        transmit_extent, PushUniforms(frame, uniforms), seen);
+    }
+  }
+  ToShaderRead(cmd, cube_transmit_.Get());
 }
 
 bool SceneRenderer::ResolveProbeVolume(ProbeVolumeData& volume) {
@@ -2938,7 +3235,8 @@ void SceneRenderer::FinishProbeSave() {
 }
 
 void SceneRenderer::DrawList(VkCommandBuffer cmd, FrameResources& frame, uint32_t uniform_offset,
-                             const std::vector<const FrameDraw*>& list, bool transparent_pass) {
+                             const std::vector<const FrameDraw*>& list,
+                             const VkPipeline (&pipelines)[2]) {
   if (list.empty()) return;
   const VkDescriptorSet sets[2] = {frame.set, texture_set_};
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model_layout_, 0, 2, sets, 1,
@@ -2950,8 +3248,7 @@ void SceneRenderer::DrawList(VkCommandBuffer cmd, FrameResources& frame, uint32_
   VkPipeline bound = VK_NULL_HANDLE;
   FrontFace front_face;
   for (const FrameDraw* draw : list) {
-    VkPipeline pipeline = transparent_pass ? transparent_[draw->double_sided ? 1 : 0]
-                                           : opaque_[draw->double_sided ? 1 : 0];
+    VkPipeline pipeline = pipelines[draw->double_sided ? 1 : 0];
     if (pipeline != bound) {
       vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
       bound = pipeline;
@@ -2967,12 +3264,30 @@ void SceneRenderer::DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
                                bool clear_depth, bool overlay, bool linear,
                                const LegacyDraws* legacy, VkImageView sky_view, bool has_sky) {
   const VkExtent2D extent = targets.extent;
-  const FrameUniforms uniforms = CameraUniforms(camera, extent, overlay, linear);
-  const uint32_t offset = PushUniforms(frame, uniforms);
+  FrameUniforms uniforms = CameraUniforms(camera, extent, overlay, linear);
   // Opaque draws are culled and drawn on the GPU; transparent ones are
   // sorted here.
   const CulledView culled = CullView(cmd, frame, uniforms.view_proj, kCullAlive | kCullTransparent,
                                      kCullAlive, camera.culling_mask, {});
+  std::vector<const FrameDraw*> opaque, transparent, transmissive;
+  for (const auto& draw : draws_) {
+    if (!draw.alive || !(camera.culling_mask & (1u << (draw.layer & 31)))) continue;
+    if (draw.transmissive) {
+      transmissive.push_back(&draw);
+    } else if (draw.transparent) {
+      transparent.push_back(&draw);
+    } else if (!culled.valid) {
+      opaque.push_back(&draw);
+    }
+  }
+  // Transmissive surfaces refract a copy of the scene behind them; overlays
+  // draw over another camera's image, so they blend instead.
+  const bool refract = !transmissive.empty() && !overlay && EnsureSceneColor(cmd, targets);
+  if (refract) {
+    uniforms.transmission_params.x = static_cast<float>(targets.scene_color_slot);
+    uniforms.transmission_params.y = static_cast<float>(targets.scene_color.MipLevels());
+  }
+  const uint32_t offset = PushUniforms(frame, uniforms);
 
   ToAttachment(cmd, targets.hdr.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   ToAttachment(cmd, targets.normal.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -3053,28 +3368,41 @@ void SceneRenderer::DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
 
   if (legacy && *legacy) (*legacy)(cmd, extent);
 
-  std::vector<const FrameDraw*> opaque, transparent;
-  for (const auto& draw : draws_) {
-    if (!draw.alive || !(camera.culling_mask & (1u << (draw.layer & 31)))) continue;
-    if (draw.transparent) {
-      transparent.push_back(&draw);
-    } else if (!culled.valid) {
-      opaque.push_back(&draw);
-    }
-  }
   if (culled.valid) {
     DrawCulled(cmd, frame, culled, offset, opaque_[0], opaque_[1]);
   } else {
     std::stable_sort(opaque.begin(), opaque.end(), [](const FrameDraw* a, const FrameDraw* b) {
       return a->double_sided < b->double_sided;
     });
-    DrawList(cmd, frame, offset, opaque, false);
+    DrawList(cmd, frame, offset, opaque, opaque_);
   }
-  std::sort(transparent.begin(), transparent.end(), [&](const FrameDraw* a, const FrameDraw* b) {
+  auto far_first = [&](const FrameDraw* a, const FrameDraw* b) {
     const glm::vec3 da = a->center - camera.position, db = b->center - camera.position;
     return glm::dot(da, da) > glm::dot(db, db);
-  });
-  DrawList(cmd, frame, offset, transparent, true);
+  };
+  if (!transmissive.empty()) {
+    if (refract) {
+      // The opaque scene so far is what they see through; then the pass
+      // goes on over it.
+      vkCmdEndRendering(cmd);
+      ToShaderRead(cmd, targets.hdr.Get());
+      DepthToShaderRead(cmd, targets.depth.Get());
+      {
+        GpuScope scope(gpu_timer_, cmd, "scene_copy");
+        CopySceneColor(cmd, targets, camera);
+      }
+      ToAttachment(cmd, targets.hdr.Get(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      DepthToAttachment(cmd, targets.depth.Get());
+      for (auto& c : colors) c.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      depth.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      vkCmdBeginRendering(cmd, &rendering);
+      SetViewport(cmd, extent);
+    }
+    std::sort(transmissive.begin(), transmissive.end(), far_first);
+    DrawList(cmd, frame, offset, transmissive, transmissive_);
+  }
+  std::sort(transparent.begin(), transparent.end(), far_first);
+  DrawList(cmd, frame, offset, transparent, transparent_);
   vkCmdEndRendering(cmd);
 
   ToShaderRead(cmd, targets.hdr.Get());

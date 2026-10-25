@@ -8,6 +8,10 @@
 //   binding 4  shadow sampler        comparison
 //   binding 5  material sampler      repeat, trilinear (anisotropic)
 //   binding 6  clamp sampler         for camera RenderTextures
+//   binding 12 sun transmittance     rgb: light let through by transmissive
+//                                    casters, a: the nearest one's depth
+//   binding 13 cube transmittance    the same per shadow cube, a: distance
+//                                    over the cube's far distance
 // Descriptor set 1:
 //   binding 0  Texture2D[]           every material texture (bindless)
 // Keep in step with FrameUniforms/DrawData in vk_scene_renderer.h.
@@ -43,6 +47,10 @@
     float4x4 far_light_view_proj; // the sun's shadow over the whole scene
     float4 far_shadow_params;     // x: resolution (0: none), y: normal bias, w: use it alone
     float4 gi_params;             // x: the visibility maps filter linearly
+    // x: the scene behind transmissive surfaces (a texture slot: rgb color,
+    // a view distance; 0: none), y: its mips. z: transmissive casters in the
+    // sun's map (1), w: in the shadow cubes (1).
+    float4 transmission_params;
 };
 
 static const uint kMaxPointLights = 16;
@@ -58,12 +66,16 @@ struct DrawData
     uint4 info;       // x: texture index, y: flags, z: first bone (~0: rigid)
     float4 material;  // x: metallic, y: smoothness, z: normal map strength
     uint4 maps;       // x: normal map index, y: emission map index (0: none)
+    float4 transmission;  // rgb: tint (linear), w: share of light passing through
+    float4 volume;        // x: index of refraction, y: thickness (0: thin), z: size,
+                          // w: roundness (1: a ball, 0: a sheet)
 };
 
 static const uint kFlagUnlit = 1;
 static const uint kFlagSdfText = 2;
 static const uint kFlagClampTexture = 4;
 static const uint kFlagTransparent = 8;
+static const uint kFlagTransmissive = 16;
 static const uint kNoSkin = 0xffffffff;
 
 [[vk::binding(1, 0)]] StructuredBuffer<DrawData> draws;

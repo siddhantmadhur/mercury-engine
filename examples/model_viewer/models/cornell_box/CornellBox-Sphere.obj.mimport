@@ -1,0 +1,6 @@
+[mimport]
+
+; Tf 0.1 in these files was meant as "mostly clear"; read as a transmission
+; filter it would make the glass nearly black.
+[material name="rightSphere"]
+transmission_color = Color(0.97, 0.98, 1, 1)

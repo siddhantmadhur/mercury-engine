@@ -372,6 +372,8 @@ if (NOT EMSCRIPTEN)
             "composite.ps.hlsl|ps_6_0|composite.ps.spv"
             "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv"
             "shadow_cube.ps.hlsl|ps_6_0|shadow_cube.ps.spv"
+            "shadow_transmit.ps.hlsl|ps_6_0|shadow_transmit.ps.spv"
+            "scene_copy.ps.hlsl|ps_6_0|scene_copy.ps.spv"
             "probe_sh.ps.hlsl|ps_6_0|probe_sh.ps.spv"
             "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv"
             "probe_octa.ps.hlsl|ps_6_0|probe_octa.ps.spv"

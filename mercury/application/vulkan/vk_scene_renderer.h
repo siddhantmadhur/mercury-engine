@@ -68,6 +68,8 @@ struct FrameUniforms {
   glm::mat4 far_light_view_proj;
   glm::vec4 far_shadow_params;     // resolution (0: none), normal bias, -, use it alone
   glm::vec4 gi_params;             // visibility maps filter linearly
+  // Scene color slot (0: none), its mips, sun and cube transmittance in use.
+  glm::vec4 transmission_params;
 };
 inline constexpr uint32_t kMaxPointLights = 16;
 inline constexpr uint32_t kMaxAreaLights = 4;
@@ -83,8 +85,10 @@ struct DrawData {
   glm::uvec4 info;
   glm::vec4 material;
   glm::uvec4 maps;  // x: normal map slot, y: emission map slot (0: none)
+  glm::vec4 transmission;  // tint, share passing through
+  glm::vec4 volume;        // index of refraction, thickness, size, roundness
 };
-static_assert(sizeof(DrawData) == 224);
+static_assert(sizeof(DrawData) == 256);
 
 // Must match CullData in cull.cs.hlsl.
 struct CullData {
@@ -137,6 +141,10 @@ class SceneRenderer {
   static constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
   static constexpr uint32_t kShadowResolution = 2048;
   static constexpr uint32_t kShadowCubeResolution = 512;
+  // The light transmissive casters let through needs less detail.
+  static constexpr uint32_t kTransmitCubeResolution = 256;
+  // Mips of the scene color transmissive surfaces refract, for roughness.
+  static constexpr uint32_t kSceneColorMips = 7;
   static constexpr uint32_t kFarShadowResolution = 4096;
   static constexpr uint32_t kProbeFaceSize = 16;   // each face a probe captures
   static constexpr uint32_t kMaxProbeBatch = 32;   // probes updated per frame at most
@@ -236,6 +244,11 @@ class SceneRenderer {
     uint32_t bloom_mips = 0;
     vk::Image outline;
     vk::Image ldr;    // composite result before FXAA
+    // The opaque scene, view distance in alpha, for transmissive surfaces
+    // to refract: made on first need, a bindless texture slot.
+    vk::Image scene_color;
+    uint32_t scene_color_slot = 0;
+    VkDescriptorSet scene_copy_set = VK_NULL_HANDLE;
     VkDescriptorSet ssao_set = VK_NULL_HANDLE;
     VkDescriptorSet blur_set = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> bloom_down_sets;  // one per mip
@@ -265,9 +278,11 @@ class SceneRenderer {
     uint32_t layer = 0;   // node layer
     uint32_t entity = 0;
     bool alive = false;   // the slot is in use
-    bool transparent = false;
+    bool transparent = false;  // blended after the opaque pass (transmissive too)
+    bool transmissive = false;  // refracts the scene behind it
     bool double_sided = false;
     bool cast_shadows = true;
+    bool transmit_shadows = false;  // tints the light passing through it
     uint32_t rendering_layers = 0;  // RenderMesh's, for outlines
     bool mirrored = false;  // negative scale: triangles wind the other way
     bool skinned = false;
@@ -396,6 +411,20 @@ class SceneRenderer {
   // Lights, shadow cubes and probes, as every pass sees them.
   void FillLighting(FrameUniforms& u) const;
   void UpdateFrameSet(FrameResources& frame);
+  // The light the transmissive casters let through, into the sun's
+  // transmittance map (as the camera's sun map sees them).
+  void UpdateSunTransmittance(VkCommandBuffer cmd, FrameResources& frame, bool redraw,
+                              uint32_t layers);
+  // Draws `casters` with the transmittance pipeline into `view` (cleared to
+  // white), inside no pass.
+  void DrawTransmittance(VkCommandBuffer cmd, FrameResources& frame, VkImageView view,
+                         VkExtent2D extent, uint32_t uniform_offset,
+                         const std::vector<const FrameDraw*>& casters);
+  // Targets' scene color image and slot, made the first time it is needed.
+  bool EnsureSceneColor(VkCommandBuffer cmd, Targets& targets);
+  // The opaque scene into targets.scene_color and its mips (outside a pass;
+  // hdr and depth are in SHADER_READ_ONLY).
+  void CopySceneColor(VkCommandBuffer cmd, Targets& targets, const RenderCamera& camera);
 
   VkPipeline BuildPipeline(VkShaderModule vs, VkShaderModule ps, bool model_input,
                            const std::vector<VkFormat>& colors, VkFormat depth,
@@ -429,8 +458,9 @@ class SceneRenderer {
                   Targets& targets, bool clear_color, bool clear_depth, bool overlay,
                   bool linear, const LegacyDraws* legacy, VkImageView sky_view, bool has_sky);
   void InitTargets(VkCommandBuffer cmd, Targets& targets);
+  // `pipelines`: [cull back, cull none].
   void DrawList(VkCommandBuffer cmd, FrameResources& frame, uint32_t uniform_offset,
-                const std::vector<const FrameDraw*>& list, bool transparent_pass);
+                const std::vector<const FrameDraw*>& list, const VkPipeline (&pipelines)[2]);
   void DrawOutlineMask(VkCommandBuffer cmd, FrameResources& frame, const RenderCamera& camera,
                        Targets& targets, const RenderSettings& settings);
   void PostProcess(VkCommandBuffer cmd, Targets& targets, const RenderCamera& camera,
@@ -466,6 +496,10 @@ class SceneRenderer {
   int depth_prepass_ = -1;
   uint64_t live_triangles_ = 0;  // in every draw slot, this frame
   VkPipeline transparent_[2] = {};
+  VkPipeline transmissive_[2] = {};  // premultiplied over the scene they refract
+  VkPipeline scene_copy_ = VK_NULL_HANDLE;
+  VkPipeline shadow_transmit_ = VK_NULL_HANDLE;  // into transmittance maps
+  VkFormat transmit_format_ = VK_FORMAT_R16G16B16A16_UNORM;
   VkPipeline shadow_ = VK_NULL_HANDLE;
   VkPipeline outline_mask_ = VK_NULL_HANDLE;
   VkPipeline sky_ = VK_NULL_HANDLE;
@@ -546,6 +580,16 @@ class SceneRenderer {
   // What each slot last drew; a slot whose light and casters are unchanged
   // keeps its faces.
   std::array<uint64_t, kMaxShadowCubes> cube_hashes_ = {};
+
+  // Light let through by transmissive casters (rgb) and the nearest one's
+  // depth (a): one map for the camera's sun map, a cube per shadow slot.
+  vk::Image sun_transmit_;
+  vk::Image cube_transmit_;
+  bool sun_transmit_active_ = false;
+  bool cube_transmit_active_ = false;
+  bool sun_transmit_dynamic_ = false;  // the map holds moving casters
+  // This frame's transmissive draws that cast (tinted) shadows.
+  std::vector<const FrameDraw*> transmit_casters_;
 
   // Light probes: 9 spherical harmonics texels each in the atlas, and the
   // octahedral maps shading reads, made from them.
