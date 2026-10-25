@@ -59,7 +59,9 @@ class EditorScene : public MapScene {
   // ------------------------------------------------------------- editing
   // Call after every change to map_. Changes made while one ImGui widget is
   // held (a drag, typing) become one undo step.
-  void MarkChanged();
+  // `rebuild_scene` false is for a change to one node's Transform, which
+  // SetSelectedTransform hands to the scene alone (see transform_uid_).
+  void MarkChanged(bool rebuild_scene = true);
   void EndFrameEdits();
   void Undo();
   void Redo();
@@ -195,6 +197,10 @@ class EditorScene : public MapScene {
   std::string map_path_;  // res:// path of the open map
   bool dirty_ = false;
   bool scene_dirty_ = true;
+  // The node whose Transform changed since the scene last took it, when
+  // nothing else needs the scene rebuilt: dragging a handle moves one
+  // entity instead of recreating all of them every frame.
+  uint64_t transform_uid_ = 0;
 
   // Undo keeps whole-map snapshots; maps are small text documents.
   std::vector<Map> undo_;

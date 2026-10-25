@@ -198,6 +198,12 @@ void EditorScene::OnFrame(double delta_t) {
   if (IsModelPreloading() && PollModelPreload() && !pending_import_.empty()) {
     FinishModelImport();
   }
+  if (transform_uid_) {
+    // A full rebuild below covers it; otherwise move just that node.
+    const MapNode* moved = map_.FindByUid(transform_uid_);
+    if (!scene_dirty_ && (!moved || !SyncNodeTransform(*moved))) scene_dirty_ = true;
+    transform_uid_ = 0;
+  }
   if (scene_dirty_ && GetProject() && !IsModelPreloading()) {
     if (auto jobs = MissingModels(map_); !jobs.empty()) {
       StartModelPreload(std::move(jobs));
@@ -369,7 +375,7 @@ bool EditorScene::SaveMap() {
 
 // ---------------------------------------------------------------- Editing ---
 
-void EditorScene::MarkChanged() {
+void EditorScene::MarkChanged(bool rebuild_scene) {
   if (!edit_open_) {
     undo_.push_back(last_committed_);
     if (undo_.size() > kMaxUndoSteps) undo_.erase(undo_.begin());
@@ -377,7 +383,7 @@ void EditorScene::MarkChanged() {
     edit_open_ = true;
   }
   dirty_ = true;
-  scene_dirty_ = true;
+  if (rebuild_scene) scene_dirty_ = true;
   tree_changed_ = true;
 }
 

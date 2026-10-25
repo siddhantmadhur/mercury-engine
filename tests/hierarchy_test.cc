@@ -386,3 +386,46 @@ position = Vector3(0, 10, 0)
   // Child interpolated position must be (5, 10, 0)
   EXPECT_EQ(child.GetTransform()->GetInterpolatedPosition(), glm::vec3(5.0f, 10.0f, 0.0f));
 }
+
+// The editor moves one node this way while a handle is dragged, instead of
+// rebuilding the scene every frame: the result must match a rebuild.
+TEST(Hierarchy, SyncNodeTransformMatchesRebuild) {
+  std::string error;
+  auto project = Project::Load(kPong / "pong.mproj", &error);
+  ASSERT_TRUE(project) << error;
+
+  Map map;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+
+[node name="Root"]
+
+[node name="Player" parent="."]
+[component type="Transform" node="Player"]
+position = Vector3(10, 0, 0)
+
+[node name="Weapon" parent="Player"]
+[component type="Transform" node="Player/Weapon"]
+position = Vector3(2, 3, 4)
+)",
+                                 &error))
+      << error;
+
+  MapScene scene(project, MapScene::Mode::kEdit);
+  scene.Instantiate(map);
+
+  MapNode* player = map.GetRoot()->children[0].get();
+  ASSERT_TRUE(player);
+  ComponentData* transform = player->FindComponent("Transform");
+  ASSERT_TRUE(transform);
+  transform->properties.Set("position", glm::vec3(1.0f, 2.0f, 3.0f));
+  transform->properties.Set("rotation", glm::vec3(0.0f, 90.0f, 0.0f));
+  ASSERT_TRUE(scene.SyncNodeTransform(*player));
+
+  const glm::vec3 synced = scene.Find("Player/Weapon").GetTransform()->GetPosition();
+  EXPECT_EQ(scene.Find("Player").GetTransform()->GetPosition(), glm::vec3(1, 2, 3));
+
+  MapScene rebuilt(project, MapScene::Mode::kEdit);
+  rebuilt.Instantiate(map);
+  const glm::vec3 expected = rebuilt.Find("Player/Weapon").GetTransform()->GetPosition();
+  EXPECT_TRUE(glm::all(glm::epsilonEqual(synced, expected, 1e-2f)));
+}

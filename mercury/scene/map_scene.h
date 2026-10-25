@@ -175,6 +175,16 @@ class MapScene : public GameScene {
    */
   void SyncFromMap(const Map& map);
 
+  /**
+   * @brief Apply an edited Transform of one node without rebuilding the scene
+   *
+   * Used by the editor while a handle is dragged: the node's entity (and,
+   * through the hierarchy, its children) takes the node's Transform as it
+   * is in `node`. Returns false when no entity exists for the node, in
+   * which case the caller needs SyncFromMap.
+   */
+  bool SyncNodeTransform(const MapNode& node);
+
   void OnStart() override;
   void OnFrame(double delta_t) override;
   void OnTick(double delta_t) override;
