@@ -27,8 +27,14 @@ constexpr float kHandleHitPixels = 7.0f;
 constexpr float kPi = std::numbers::pi_v<float>;
 const glm::vec3 kAxes[3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
 
-// Handle ids: 0-2 are the X/Y/Z axis handles (or rings), 3 is the center.
+// Handle ids: 0-2 are the X/Y/Z axis handles (or rings), 3 is the center,
+// 4-6 the move tool's plane squares, named by the axis they hold fixed (4 is
+// the YZ plane, 5 the XZ "floor", 6 XY).
 constexpr int kCenterHandle = 3;
+constexpr int kPlaneHandle = 4;
+// The plane squares span this part of the move handles' length.
+constexpr float kPlaneInner = 0.2f;
+constexpr float kPlaneOuter = 0.45f;
 
 ImU32 Rgba(float r, float g, float b, float a) {
   return ImGui::GetColorU32(ImVec4(r, g, b, a));
@@ -105,6 +111,20 @@ void Basis(glm::vec3 axis, glm::vec3& u, glm::vec3& v) {
   v = glm::cross(axis, u);
 }
 
+// Whether `p` is inside the convex quad `q`, wound either way.
+bool InsideQuad(glm::vec2 p, const ImVec2 (&q)[4]) {
+  float sign = 0.0f;
+  for (int i = 0; i < 4; i++) {
+    const glm::vec2 a = V2(q[i]);
+    const glm::vec2 b = V2(q[(i + 1) % 4]);
+    const float cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    if (cross == 0.0f) continue;
+    if (sign != 0.0f && (cross > 0.0f) != (sign > 0.0f)) return false;
+    sign = cross;
+  }
+  return sign != 0.0f;
+}
+
 float WrapAngle(float radians) {
   while (radians > kPi) radians -= 2.0f * kPi;
   while (radians < -kPi) radians += 2.0f * kPi;
@@ -120,6 +140,8 @@ glm::vec3 Round(glm::vec3 value, float step) {
   }
   return glm::round(value / step) * step;
 }
+
+float Round(float value, float step) { return Round(glm::vec3(value), step).x; }
 
 bool GetVec3(const MapNode& node, const char* key, glm::vec3& out) {
   auto transform = node.FindComponent("Transform");
@@ -510,26 +532,44 @@ bool EditorScene::BeginHandleDrag(ImVec2 mouse) {
   GetVec3(*node, "rotation", drag_start_rotation_);
   GetVec3(*node, "scale", drag_start_scale_);
 
+  // The parent's world transform, from the node's world and local ones.
+  drag_parent_rotation_ = glm::normalize(
+      transform->GetRotationQuat() * glm::inverse(transform->GetLocalRotationQuat()));
+  const glm::vec3 local_scale = transform->GetLocalScale();
+  const glm::vec3 world_scale = transform->GetScale();
+  for (int i = 0; i < 3; i++) {
+    drag_parent_scale_[i] = std::abs(local_scale[i]) > 1e-6f
+                                ? world_scale[i] / local_scale[i]
+                                : 1.0f;
+    if (std::abs(drag_parent_scale_[i]) < 1e-6f) drag_parent_scale_[i] = 1.0f;
+  }
+  drag_handle_rotation_ = HandleRotation(*transform);
+
   const Ray ray = ScreenRay(mouse);
   drag_axis_ = hovered_handle_;
   switch (tool_) {
     case Tool::kMove:
-      if (hovered_handle_ == kCenterHandle) {
+      if (hovered_handle_ >= kCenterHandle) {
         drag_ = Drag::kPlane;
-        drag_plane_normal_ = view_2d_ ? glm::vec3(0, 0, 1) : -CameraForward();
+        if (hovered_handle_ == kCenterHandle) {
+          drag_plane_normal_ = view_2d_ ? glm::vec3(0, 0, 1) : -CameraForward();
+        } else {
+          drag_plane_normal_ =
+              drag_handle_rotation_ * kAxes[hovered_handle_ - kPlaneHandle];
+        }
         auto hit = RayPlane(ray.origin, ray.direction, drag_origin_,
                             drag_plane_normal_);
         drag_start_world_ = hit ? *hit : drag_origin_;
       } else {
         drag_ = Drag::kAxis;
-        drag_axis_dir_ = kAxes[hovered_handle_];
+        drag_axis_dir_ = drag_handle_rotation_ * kAxes[hovered_handle_];
         drag_start_param_ = ClosestOnLine(drag_origin_, drag_axis_dir_,
                                           ray.origin, ray.direction);
       }
       break;
     case Tool::kRotate: {
       drag_ = Drag::kRotate;
-      drag_axis_dir_ = kAxes[hovered_handle_];
+      drag_axis_dir_ = drag_handle_rotation_ * kAxes[hovered_handle_];
       ImVec2 center;
       WorldToScreen(drag_origin_, center);
       drag_start_param_ = std::atan2(mouse.y - center.y, mouse.x - center.x);
@@ -550,6 +590,15 @@ bool EditorScene::BeginHandleDrag(ImVec2 mouse) {
       break;
   }
   return true;
+}
+
+glm::quat EditorScene::HandleRotation(const Transform& transform) const {
+  if (handle_space_ == HandleSpace::kGlobal) return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+  return transform.GetRotationQuat();
+}
+
+glm::vec3 EditorScene::WorldDeltaToLocal(glm::vec3 delta) const {
+  return (glm::inverse(drag_parent_rotation_) * delta) / drag_parent_scale_;
 }
 
 void EditorScene::SetSelectedTransform(const char* key, glm::vec3 value) {
@@ -573,25 +622,45 @@ void EditorScene::UpdateDrag(ImVec2 mouse) {
   const Ray ray = ScreenRay(mouse);
   const bool snap = ImGui::GetIO().KeyCtrl;
   const float move_snap = view_2d_ ? 1.0f : 0.5f;
+  // Rotated handles snap the distance moved along them; world-aligned ones
+  // snap the position itself.
+  const bool snap_distance = snap && handle_space_ == HandleSpace::kLocal;
 
   switch (drag_) {
-    case Drag::kBody:
     case Drag::kPlane: {
       auto hit = RayPlane(ray.origin, ray.direction, drag_origin_,
                           drag_plane_normal_);
       if (!hit) return;
-      glm::vec3 position = drag_start_local_ + (*hit - drag_start_world_);
-      if (snap) position = Round(position, move_snap);
+      glm::vec3 delta = *hit - drag_start_world_;
+      const int fixed = drag_axis_ - kPlaneHandle;  // -1 for the center
+      if (snap_distance && fixed >= 0) {
+        glm::vec3 snapped(0.0f);
+        for (int axis = 0; axis < 3; axis++) {
+          if (axis == fixed) continue;
+          const glm::vec3 direction = drag_handle_rotation_ * kAxes[axis];
+          snapped += direction * Round(glm::dot(delta, direction), move_snap);
+        }
+        delta = snapped;
+      }
+      glm::vec3 position = drag_start_local_ + WorldDeltaToLocal(delta);
+      if (snap && !(snap_distance && fixed >= 0)) {
+        const glm::vec3 rounded = Round(position, move_snap);
+        for (int axis = 0; axis < 3; axis++) {
+          if (axis != fixed) position[axis] = rounded[axis];
+        }
+      }
       if (view_2d_) position.z = drag_start_local_.z;
       SetSelectedTransform("position", position);
       break;
     }
     case Drag::kAxis: {
-      const float delta = ClosestOnLine(drag_origin_, drag_axis_dir_, ray.origin,
-                                        ray.direction) -
-                          drag_start_param_;
-      glm::vec3 position = drag_start_local_ + drag_axis_dir_ * delta;
-      if (snap) {
+      float delta = ClosestOnLine(drag_origin_, drag_axis_dir_, ray.origin,
+                                  ray.direction) -
+                    drag_start_param_;
+      if (snap_distance) delta = Round(delta, move_snap);
+      glm::vec3 position =
+          drag_start_local_ + WorldDeltaToLocal(drag_axis_dir_ * delta);
+      if (snap && !snap_distance) {
         position[drag_axis_] = Round(position, move_snap)[drag_axis_];
       }
       SetSelectedTransform("position", position);
@@ -611,16 +680,19 @@ void EditorScene::UpdateDrag(ImVec2 mouse) {
       float degrees = glm::degrees(-drag_accum_) * (tip_faces_camera ? 1.0f : -1.0f);
       if (snap) degrees = std::round(degrees / 15.0f) * 15.0f;
       glm::vec3 euler;
+      const glm::vec3 parent_z = drag_parent_rotation_ * kAxes[2];
       if (drag_axis_ == 2 && drag_start_rotation_.x == 0.0f &&
-          drag_start_rotation_.y == 0.0f) {
+          drag_start_rotation_.y == 0.0f &&
+          glm::dot(drag_axis_dir_, parent_z) > 0.9999f) {
         // Turning a flat object around Z (always so in 2D): keep a plain Z
         // angle rather than an equivalent mix of all three.
         euler = glm::vec3(0.0f, 0.0f, drag_start_rotation_.z + degrees);
       } else {
-        const glm::quat rotation =
-            glm::angleAxis(glm::radians(degrees), drag_axis_dir_) *
-            Transform::EulerToQuat(drag_start_rotation_);
-        euler = Transform::QuatToEuler(rotation);
+        // Turn in world space, then back into the parent's space.
+        const glm::quat world = glm::angleAxis(glm::radians(degrees), drag_axis_dir_) *
+                                drag_parent_rotation_ *
+                                Transform::EulerToQuat(drag_start_rotation_);
+        euler = Transform::QuatToEuler(glm::inverse(drag_parent_rotation_) * world);
       }
       SetSelectedTransform("rotation", Round(euler, 0.01f));
       break;
@@ -650,8 +722,7 @@ void EditorScene::UpdateDrag(ImVec2 mouse) {
 }
 
 void EditorScene::DrawToolHandles(ImDrawList* draw) {
-  const bool dragging_handle = drag_ != Drag::kNone && drag_ != Drag::kBody &&
-                               drag_ != Drag::kOrbit;
+  const bool dragging_handle = drag_ != Drag::kNone && drag_ != Drag::kOrbit;
   if (!dragging_handle) hovered_handle_ = -1;
   MapNode* node = GetSelectedNode();
   if (!node) return;
@@ -664,7 +735,7 @@ void EditorScene::DrawToolHandles(ImDrawList* draw) {
   if (!WorldToScreen(origin, center)) return;
   const glm::vec2 mouse = V2(ImGui::GetIO().MousePos);
   const float world_per_pixel = WorldPerPixel(origin);
-  const bool can_hover = !dragging_handle && drag_ != Drag::kBody &&
+  const bool can_hover = !dragging_handle &&
                          // The viewport goes active on the frame it is clicked.
                          ImGui::IsWindowHovered(
                              ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
@@ -674,6 +745,7 @@ void EditorScene::DrawToolHandles(ImDrawList* draw) {
     return dragging_handle ? drag_axis_ == handle : hovered_handle_ == handle;
   };
 
+  const glm::quat handle_rotation = HandleRotation(*transform);
   if (tool_ == Tool::kRotate) {
     const float radius = kRingPixels * world_per_pixel;
     // Find the ring under the mouse first so it can be highlighted.
@@ -682,7 +754,7 @@ void EditorScene::DrawToolHandles(ImDrawList* draw) {
       for (int axis = 0; axis < 3; axis++) {
         if (view_2d_ && axis != 2) continue;
         glm::vec3 u, v;
-        Basis(kAxes[axis], u, v);
+        Basis(handle_rotation * kAxes[axis], u, v);
         ImVec2 previous;
         bool have_previous = false;
         for (int i = 0; i <= 48; i++) {
@@ -704,26 +776,58 @@ void EditorScene::DrawToolHandles(ImDrawList* draw) {
     }
     for (int axis = 0; axis < 3; axis++) {
       if (view_2d_ && axis != 2) continue;
-      DrawCircle3D(draw, origin, kAxes[axis], radius,
+      DrawCircle3D(draw, origin, handle_rotation * kAxes[axis], radius,
                    AxisColor(axis, active(axis)), active(axis) ? 3.0f : 2.0f);
     }
     draw->AddCircle(center, 3.0f, Rgba(1, 1, 1, 0.8f));
     return;
   }
 
-  // Move handles follow the world axes; scale handles the node's own axes.
+  // Move handles follow the Local/Global setting; scale handles always the
+  // node's own axes.
   const float length = kHandlePixels * world_per_pixel;
-  const glm::quat rotation = transform->GetRotationQuat();
+  const glm::quat rotation =
+      tool_ == Tool::kScale ? transform->GetRotationQuat() : handle_rotation;
   glm::vec3 directions[3];
-  for (int axis = 0; axis < 3; axis++) {
-    directions[axis] = tool_ == Tool::kScale ? rotation * kAxes[axis] : kAxes[axis];
+  for (int axis = 0; axis < 3; axis++) directions[axis] = rotation * kAxes[axis];
+
+  // The move tool's plane squares (3D only: in 2D the center moves in XY),
+  // each in the corner between its two axes that faces the camera.
+  ImVec2 planes[3][4];
+  bool plane_shown[3] = {false, false, false};
+  if (tool_ == Tool::kMove && !view_2d_) {
+    const glm::vec3 to_camera = CameraPosition() - origin;
+    for (int fixed = 0; fixed < 3; fixed++) {
+      // Seen edge-on, a plane can't be dragged sensibly.
+      if (std::abs(glm::dot(directions[fixed], CameraForward())) < 0.15f) continue;
+      glm::vec3 a = directions[(fixed + 1) % 3];
+      glm::vec3 b = directions[(fixed + 2) % 3];
+      if (glm::dot(a, to_camera) < 0.0f) a = -a;
+      if (glm::dot(b, to_camera) < 0.0f) b = -b;
+      const float inner = kPlaneInner * length;
+      const float outer = kPlaneOuter * length;
+      const glm::vec3 corners[4] = {origin + a * inner + b * inner,
+                                    origin + a * outer + b * inner,
+                                    origin + a * outer + b * outer,
+                                    origin + a * inner + b * outer};
+      plane_shown[fixed] = true;
+      for (int i = 0; i < 4; i++) {
+        plane_shown[fixed] &= WorldToScreen(corners[i], planes[fixed][i]);
+      }
+    }
   }
 
-  // Hover: the center square first, then the closest axis.
+  // Hover: the center square first, then the plane squares, then the
+  // closest axis.
   if (can_hover) {
-    if (std::abs(mouse.x - center.x) < 8.0f && std::abs(mouse.y - center.y) < 8.0f) {
+    for (int fixed = 0; fixed < 3; fixed++) {
+      if (plane_shown[fixed] && InsideQuad(mouse, planes[fixed])) {
+        hovered_handle_ = kPlaneHandle + fixed;
+      }
+    }
+    if (std::abs(mouse.x - center.x) < 10.0f && std::abs(mouse.y - center.y) < 10.0f) {
       hovered_handle_ = kCenterHandle;
-    } else {
+    } else if (hovered_handle_ < 0) {
       float best = kHandleHitPixels;
       for (int axis = 0; axis < 3; axis++) {
         if (view_2d_ && axis == 2) continue;
@@ -736,6 +840,15 @@ void EditorScene::DrawToolHandles(ImDrawList* draw) {
         }
       }
     }
+  }
+
+  for (int fixed = 0; fixed < 3; fixed++) {
+    if (!plane_shown[fixed]) continue;
+    const bool on = active(kPlaneHandle + fixed);
+    const ImVec2* q = planes[fixed];
+    draw->AddQuadFilled(q[0], q[1], q[2], q[3],
+                        AxisColor(fixed, on, on ? 0.6f : 0.3f));
+    draw->AddQuad(q[0], q[1], q[2], q[3], AxisColor(fixed, on), 1.5f);
   }
 
   for (int axis = 0; axis < 3; axis++) {
@@ -761,7 +874,13 @@ void EditorScene::DrawToolHandles(ImDrawList* draw) {
     draw->AddTriangleFilled(ImVec2(point.x, point.y), ImVec2(left.x, left.y),
                             ImVec2(right.x, right.y), color);
   }
-  draw->AddRect(ImVec2(center.x - 6, center.y - 6), ImVec2(center.x + 6, center.y + 6),
+  // The center square: the only handle that moves the node freely.
+  const ImVec2 square_min(center.x - 6, center.y - 6);
+  const ImVec2 square_max(center.x + 6, center.y + 6);
+  if (active(kCenterHandle)) {
+    draw->AddRectFilled(square_min, square_max, Rgba(1.0f, 0.85f, 0.2f, 0.35f));
+  }
+  draw->AddRect(square_min, square_max,
                 active(kCenterHandle) ? AxisColor(0, true) : Rgba(1, 1, 1, 0.75f),
                 0.0f, 0, 2.0f);
 }
@@ -1274,6 +1393,12 @@ void EditorScene::DrawSceneToolbar() {
   ImGui::SameLine(0, 2);
   if (toggle("Scale", tool_ == Tool::kScale, "Scale (R)")) tool_ = Tool::kScale;
   ImGui::SameLine(0, 12);
+  const bool local = handle_space_ == HandleSpace::kLocal;
+  if (toggle(local ? "Local###HandleSpace" : "Global###HandleSpace", false,
+             "Move and rotate along the object's own axes or the world's (X)")) {
+    handle_space_ = local ? HandleSpace::kGlobal : HandleSpace::kLocal;
+  }
+  ImGui::SameLine(0, 12);
   if (toggle("2D", view_2d_, "Switch between the 2D and 3D view")) {
     view_2d_ = !view_2d_;
     if (view_2d_) {
@@ -1389,6 +1514,10 @@ void EditorScene::DrawScene() {
     if (ImGui::IsKeyPressed(ImGuiKey_W, false)) tool_ = Tool::kMove;
     if (ImGui::IsKeyPressed(ImGuiKey_E, false)) tool_ = Tool::kRotate;
     if (ImGui::IsKeyPressed(ImGuiKey_R, false)) tool_ = Tool::kScale;
+    if (ImGui::IsKeyPressed(ImGuiKey_X, false)) {
+      handle_space_ = handle_space_ == HandleSpace::kLocal ? HandleSpace::kGlobal
+                                                           : HandleSpace::kLocal;
+    }
   }
 
   HandleSceneCamera(hovered, active);
@@ -1400,8 +1529,7 @@ void EditorScene::DrawScene() {
   DrawToolHandles(draw);
 
   // Left click: with Alt (3D) orbit; on a handle, drag it; anywhere else,
-  // select what is under the mouse and drag it along the ground (3D) or the
-  // z = 0 plane (2D).
+  // select what is under the mouse. Moving it takes the handles.
   const bool over_preview =
       io.MousePos.x >= preview_min_.x && io.MousePos.x < preview_max_.x &&
       io.MousePos.y >= preview_min_.y && io.MousePos.y < preview_max_.y;
@@ -1410,35 +1538,12 @@ void EditorScene::DrawScene() {
     if (io.KeyAlt && !view_2d_) {
       drag_ = Drag::kOrbit;
     } else if (!BeginHandleDrag(io.MousePos)) {
-      MapNode* picked = PickNode(io.MousePos);
-      Select(picked);
+      Select(PickNode(io.MousePos));
       drag_ = Drag::kNone;
-      auto transform =
-          picked ? Objects().GetProperty<Transform>(GetEntityForNode(picked->uid))
-                 : nullptr;
-      if (transform) {
-        drag_origin_ = transform->GetPosition();
-        drag_plane_normal_ = glm::vec3(0, 0, 1);
-        if (!view_2d_) {
-          // Looking along the ground, drag across the view instead.
-          drag_plane_normal_ = std::abs(CameraForward().y) > 0.2f
-                                   ? glm::vec3(0, 1, 0)
-                                   : -CameraForward();
-        }
-        const Ray ray = ScreenRay(io.MousePos);
-        if (auto hit = RayPlane(ray.origin, ray.direction, drag_origin_,
-                                drag_plane_normal_)) {
-          drag_ = Drag::kBody;
-          drag_start_world_ = *hit;
-          drag_start_local_ = glm::vec3(0.0f);
-          GetVec3(*picked, "position", drag_start_local_);
-        }
-      }
     }
   }
   if (drag_ != Drag::kNone && drag_ != Drag::kOrbit && active &&
-      ImGui::IsMouseDragging(ImGuiMouseButton_Left,
-                             drag_ == Drag::kBody ? 3.0f : 0.0f)) {
+      ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
     UpdateDrag(io.MousePos);
   }
   if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) drag_ = Drag::kNone;
@@ -1446,10 +1551,10 @@ void EditorScene::DrawScene() {
   DrawAxisIndicator(draw);
   DrawCameraPreview(draw);
   const char* hint =
-      view_2d_ ? "Drag: move   Ctrl: snap   Right/middle drag: pan   Scroll: zoom"
+      view_2d_ ? "Drag handles: move   Ctrl: snap   Right/middle drag: pan   Scroll: zoom"
                  "   F: focus   W/E/R: move/rotate/scale"
                : "Right drag: look (+WASD/QE: fly)   Alt+drag: orbit   Middle drag:"
-                 " pan   Scroll: zoom   F: focus   W/E/R: tools   Ctrl: snap";
+                 " pan   Scroll: zoom   F: focus   W/E/R: tools   X: local/global   Ctrl: snap";
   draw->AddText(ImVec2(scene_origin_.x + 8, corner.y - ImGui::GetTextLineHeight() - 6),
                 Rgba(1, 1, 1, 0.45f), hint);
   if (!texture) {

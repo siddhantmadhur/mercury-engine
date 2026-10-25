@@ -120,8 +120,11 @@ class EditorScene : public MapScene {
     glm::vec3 direction;
   };
   enum class Tool { kMove, kRotate, kScale };
+  // Whether move and rotate handles follow the node's rotation or the world
+  // axes, like Unity's Local/Global toggle. Scale handles are always local.
+  enum class HandleSpace { kLocal, kGlobal };
   // What a left-drag in the Scene view is changing.
-  enum class Drag { kNone, kBody, kAxis, kPlane, kRotate, kScale, kUniformScale, kOrbit };
+  enum class Drag { kNone, kAxis, kPlane, kRotate, kScale, kUniformScale, kOrbit };
 
   void UpdateEditorCamera();
   glm::vec3 CameraForward() const;
@@ -153,6 +156,10 @@ class EditorScene : public MapScene {
   // Starts a handle drag if the mouse is over one of the selection's handles.
   bool BeginHandleDrag(ImVec2 mouse);
   void UpdateDrag(ImVec2 mouse);
+  // The rotation of the move and rotate handles of `transform`'s node.
+  glm::quat HandleRotation(const Transform& transform) const;
+  // A world-space move of the dragged node in its parent's space.
+  glm::vec3 WorldDeltaToLocal(glm::vec3 delta) const;
   void SetSelectedTransform(const char* key, glm::vec3 value);
   MapNode* PickNode(ImVec2 pixel);
   // Model matrix (position, rotation, scale) and local bounds of what the
@@ -207,6 +214,7 @@ class EditorScene : public MapScene {
   // camera_distance_ away; in 2D it looks straight down -Z.
   bool view_2d_ = true;
   Tool tool_ = Tool::kMove;
+  HandleSpace handle_space_ = HandleSpace::kLocal;
   glm::vec3 camera_target_ = glm::vec3(0.0f);
   float camera_distance_ = 120.0f;
   float camera_yaw_ = 35.0f;     // degrees, 3D only
@@ -226,6 +234,11 @@ class EditorScene : public MapScene {
   glm::vec3 drag_start_local_ = glm::vec3(0.0f);
   glm::vec3 drag_start_rotation_ = glm::vec3(0.0f);
   glm::vec3 drag_start_scale_ = glm::vec3(1.0f);
+  // The parent's world rotation and scale, to turn world moves into the
+  // node's local position and rotation.
+  glm::quat drag_parent_rotation_ = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+  glm::vec3 drag_parent_scale_ = glm::vec3(1.0f);
+  glm::quat drag_handle_rotation_ = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
   float drag_start_param_ = 0.0f;
   float drag_length_ = 1.0f;  // world length of the dragged handle
   float drag_accum_ = 0.0f;   // radians turned so far by a rotate drag
