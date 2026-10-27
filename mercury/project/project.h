@@ -40,6 +40,8 @@ constexpr std::string_view kAssetExtension = ".masset";
 // UI Toolkit documents and style sheets.
 constexpr std::string_view kUxmlExtension = ".uxml";
 constexpr std::string_view kUssExtension = ".uss";
+// Input actions, edited in the Input Actions window (input/input_actions.h).
+constexpr std::string_view kInputActionsExtension = ".minput";
 // Generated per-project data (build info, script schema); never committed.
 constexpr std::string_view kProjectCacheDir = ".mercury";
 
@@ -87,6 +89,7 @@ class Project {
   std::string GetModelConvention() const;
   // [input] actions: res:// path of the project's .minput, or ""
   std::string GetInputActionsPath() const;
+  void SetInputActionsPath(std::string res_path);
 
   /**
    * @brief Layer names from [layers] names = ["Default", ...] (index = layer)

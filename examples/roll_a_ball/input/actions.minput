@@ -1,0 +1,10 @@
+[minput format=1 class="GameInput" header="res://scripts/game_input.h"]
+
+[map name="Player"]
+
+[action name="Player/Move" type="value" control="vector2"]
+bindings = ["<Gamepad>/leftStick"]
+composites = [["2DVector", ["<Keyboard>/w", "<Keyboard>/upArrow"], ["<Keyboard>/s", "<Keyboard>/downArrow"], ["<Keyboard>/a", "<Keyboard>/leftArrow"], ["<Keyboard>/d", "<Keyboard>/rightArrow"]]]
+
+[action name="Player/Jump" type="button"]
+bindings = ["<Keyboard>/space", "<Gamepad>/buttonSouth"]

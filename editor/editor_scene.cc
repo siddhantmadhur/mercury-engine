@@ -40,6 +40,7 @@ constexpr const char* kSceneWindow = "Scene";
 constexpr const char* kProjectWindow = "Project";
 constexpr const char* kConsoleWindow = "Console";
 constexpr const char* kUIBuilderWindow = UIBuilder::kWindowName;
+constexpr const char* kInputActionsWindow = InputActionsWindow::kWindowName;
 constexpr const char* kLoreWindow = LoreVcs::kWindowName;
 constexpr size_t kMaxUndoSteps = 200;
 
@@ -123,7 +124,7 @@ void EditorScene::OnDestroy() {
 void EditorScene::OnTick(double delta_t) {}
 
 bool EditorScene::OnCloseRequested() {
-  if (!dirty_ && !ui_builder_.IsDirty()) return true;
+  if (!dirty_ && !ui_builder_.IsDirty() && !input_actions_.IsDirty()) return true;
   modal_ = Modal::kUnsaved;
   open_modal_ = true;
   after_unsaved_ = AfterSave::kQuit;
@@ -188,6 +189,10 @@ void EditorScene::OnFrame(double delta_t) {
       ui_builder_.Draw(render_host_, &settings_.show_ui_builder);
       if (!settings_.show_ui_builder) settings_.Save();
     }
+    if (settings_.show_input_actions) {
+      input_actions_.Draw(Input(), &settings_.show_input_actions);
+      if (!settings_.show_input_actions) settings_.Save();
+    }
   }
   DrawModals();
   DrawModelLoadingPopup();
@@ -248,6 +253,7 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   release_.Cancel();
   SetProject(project);
   ui_builder_.SetProject(project);
+  input_actions_.SetProject(project);
   lore_.SetProject(project);
   settings_.AddRecentProject(project->GetFile());
   settings_.Save();
@@ -275,6 +281,7 @@ void EditorScene::CloseProject() {
   release_.Cancel();
   SetProject(nullptr);
   ui_builder_.SetProject(nullptr);
+  input_actions_.SetProject(nullptr);
   lore_.SetProject(nullptr);
   map_ = Map();
   map_path_.clear();
@@ -669,6 +676,16 @@ void EditorScene::HandleShortcuts() {
     }
     return;
   }
+  if (settings_.show_input_actions && input_actions_.HasFocus()) {
+    if (chord(ImGuiMod_Ctrl | ImGuiKey_S)) input_actions_.Save();
+    if (typing) return;
+    if (chord(ImGuiMod_Ctrl | ImGuiKey_Z)) input_actions_.Undo();
+    if (chord(ImGuiMod_Ctrl | ImGuiKey_Y) ||
+        chord(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z)) {
+      input_actions_.Redo();
+    }
+    return;
+  }
   if (chord(ImGuiMod_Ctrl | ImGuiKey_S)) SaveMap();
   if (chord(ImGuiMod_Ctrl | ImGuiKey_P)) {
     if (play_.IsBusy()) {
@@ -727,6 +744,7 @@ void EditorScene::BuildDefaultLayout(ImGuiID dockspace) {
   ImGui::DockBuilderDockWindow(kLoreWindow, bottom);
   ImGui::DockBuilderDockWindow(kSceneWindow, center);
   ImGui::DockBuilderDockWindow(kUIBuilderWindow, center);
+  ImGui::DockBuilderDockWindow(kInputActionsWindow, center);
   ImGui::DockBuilderFinish(dockspace);
 }
 
@@ -750,7 +768,7 @@ void EditorScene::DrawMenuBar() {
     }
     ImGui::Separator();
     if (ImGui::MenuItem("Close Project")) {
-      if (dirty_ || ui_builder_.IsDirty()) {
+      if (dirty_ || ui_builder_.IsDirty() || input_actions_.IsDirty()) {
         modal_ = Modal::kUnsaved;
         open_modal_ = true;
         after_unsaved_ = AfterSave::kCloseProject;
@@ -810,6 +828,14 @@ void EditorScene::DrawMenuBar() {
   }
   if (ImGui::BeginMenu("Window")) {
     if (ImGui::MenuItem("UI Builder", nullptr, &settings_.show_ui_builder)) {
+      settings_.Save();
+    }
+    if (ImGui::MenuItem("Input Actions", nullptr, &settings_.show_input_actions)) {
+      // With nothing open yet, show the project's actions.
+      if (settings_.show_input_actions && !input_actions_.IsOpen() &&
+          !project->GetInputActionsPath().empty()) {
+        input_actions_.Open(project->GetInputActionsPath());
+      }
       settings_.Save();
     }
     if (ImGui::MenuItem("Lore", nullptr, &settings_.show_lore)) settings_.Save();
@@ -987,6 +1013,10 @@ void EditorScene::DrawModals() {
         ImGui::Text("%s has unsaved changes (UI Builder).",
                     fs::path(ui_builder_.path()).filename().string().c_str());
       }
+      if (input_actions_.IsDirty()) {
+        ImGui::Text("%s has unsaved changes (Input Actions).",
+                    fs::path(input_actions_.path()).filename().string().c_str());
+      }
       auto proceed = [&] {
         close();
         if (after_unsaved_ == AfterSave::kQuit) QuitScene();
@@ -997,12 +1027,14 @@ void EditorScene::DrawModals() {
       if (ImGui::Button("Save")) {
         const bool map_ok = !dirty_ || SaveMap();
         const bool ui_ok = !ui_builder_.IsDirty() || ui_builder_.Save();
-        if (map_ok && ui_ok) proceed();
+        const bool input_ok = !input_actions_.IsDirty() || input_actions_.Save();
+        if (map_ok && ui_ok && input_ok) proceed();
       }
       ImGui::SameLine();
       if (ImGui::Button("Discard")) {
         dirty_ = false;
         ui_builder_.Close();
+        input_actions_.Close();
         proceed();
       }
       ImGui::SameLine();
@@ -1227,6 +1259,39 @@ void EditorScene::OpenInUIBuilder(const std::string& res_path) {
     }
     ImGui::SetWindowFocus(UIBuilder::kWindowName);
   }
+}
+
+void EditorScene::OpenInInputActions(const std::string& res_path) {
+  if (input_actions_.path() != res_path) {
+    // Like the UI Builder: switching files keeps the edits by saving them.
+    if (input_actions_.IsDirty()) input_actions_.Save();
+    if (!input_actions_.Open(res_path)) return;
+  }
+  if (!settings_.show_input_actions) {
+    settings_.show_input_actions = true;
+    settings_.Save();
+  }
+  ImGui::SetWindowFocus(InputActionsWindow::kWindowName);
+}
+
+void EditorScene::CreateInputActionsFile(const fs::path& dir) {
+  auto project = GetProject();
+  fs::path file = dir / ("actions" + std::string(kInputActionsExtension));
+  for (int i = 2; fs::exists(file); i++) {
+    file = dir / ("actions" + std::to_string(i) + std::string(kInputActionsExtension));
+  }
+  if (!Templates::CreateInputActions(file)) {
+    console_.Error("Could not create " + file.string());
+    return;
+  }
+  const std::string res_path = project->ToResPath(file);
+  console_.Info("Created " + res_path);
+  // The first actions file is the one the game loads.
+  if (project->GetInputActionsPath().empty()) {
+    project->SetInputActionsPath(res_path);
+    project->Save();
+  }
+  OpenInInputActions(res_path);
 }
 
 void EditorScene::CreateUIFile(const fs::path& dir, const std::string& kind) {

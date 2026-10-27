@@ -914,6 +914,7 @@ void EditorScene::DrawProjectBrowser() {
     }
     if (ImGui::MenuItem("Material")) CreateAsset(dir, "Material");
     if (ImGui::MenuItem("Physics Material")) CreateAsset(dir, "PhysicsMaterial");
+    if (ImGui::MenuItem("Input Actions")) CreateInputActionsFile(project->GetRoot() / "input");
     ImGui::SeparatorText("UI Toolkit");
     const fs::path ui_dir = project->GetRoot() / "ui";
     if (ImGui::MenuItem("UI Document (.uxml)")) {
@@ -978,6 +979,7 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
       if (ImGui::MenuItem("New Physics Material")) {
         CreateAsset(folder.path(), "PhysicsMaterial");
       }
+      if (ImGui::MenuItem("New Input Actions")) CreateInputActionsFile(folder.path());
       if (ImGui::MenuItem("New UI Document")) CreateUIFile(folder.path(), "uxml");
       if (ImGui::MenuItem("New Style Sheet")) CreateUIFile(folder.path(), "uss");
       if (ImGui::MenuItem("New Panel Settings")) {
@@ -1016,6 +1018,7 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
     else if (extension == kAssetExtension) color = ImVec4(0.75f, 0.9f, 0.55f, 1.0f);
     else if (extension == kUxmlExtension) color = ImVec4(0.95f, 0.6f, 0.85f, 1.0f);
     else if (extension == kUssExtension) color = ImVec4(0.7f, 0.65f, 1.0f, 1.0f);
+    else if (extension == kInputActionsExtension) color = ImVec4(1.0f, 0.7f, 0.45f, 1.0f);
     else if (extension == ".cc" || extension == ".h" || extension == ".cpp") {
       color = ImVec4(0.95f, 0.8f, 0.5f, 1.0f);
     }
@@ -1050,6 +1053,8 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
         }
       } else if (extension == kUxmlExtension) {
         OpenInUIBuilder(res_path);
+      } else if (extension == kInputActionsExtension) {
+        OpenInInputActions(res_path);
       } else if (extension != kAssetExtension) {
         OpenInExternalEditor(path);
       }
@@ -1061,6 +1066,10 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
       }
       if (extension == kUxmlExtension && ImGui::MenuItem("Open in UI Builder")) {
         OpenInUIBuilder(res_path);
+      }
+      if (extension == kInputActionsExtension &&
+          ImGui::MenuItem("Open in Input Actions")) {
+        OpenInInputActions(res_path);
       }
       if (extension == ".obj" &&
           ImGui::MenuItem("Import into Scene", nullptr, false, !IsModelPreloading())) {
