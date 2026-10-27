@@ -48,6 +48,7 @@ void EditorSettings::Load() {
   }
   if (auto windows = document.Find("windows")) {
     show_ui_builder = windows->properties.GetBool("ui_builder", false);
+    show_input_actions = windows->properties.GetBool("input_actions", false);
     show_lore = windows->properties.GetBool("lore", true);
   }
   if (auto lore = document.Find("lore")) {
@@ -76,6 +77,7 @@ void EditorSettings::Save() const {
   document.Add("recent").properties.Set("projects", projects);
   auto& windows = document.Add("windows").properties;
   windows.Set("ui_builder", show_ui_builder);
+  windows.Set("input_actions", show_input_actions);
   windows.Set("lore", show_lore);
   auto& lore = document.Add("lore").properties;
   lore.Set("executable", lore_executable);

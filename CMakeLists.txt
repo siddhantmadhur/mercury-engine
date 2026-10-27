@@ -167,6 +167,8 @@ add_library(mercury STATIC
         mercury/input/input_actions.cc
         mercury/input/input_script.cc
         mercury/input/input_actions.h
+        mercury/input/input_actions_codegen.cc
+        mercury/input/input_actions_codegen.h
         mercury/project/prefab_cache.cc
         mercury/project/prefab_cache.h
         mercury/properties/model.cc
@@ -424,7 +426,8 @@ add_executable(mercury_test
         tests/gameplay_test.cc
         tests/model_preloader_test.cc
         tests/parallel_load_test.cc
-        tests/model_cache_test.cc)
+        tests/model_cache_test.cc
+        tests/input_actions_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -472,6 +475,8 @@ if (MERCURY_BUILD_EDITOR AND NOT EMSCRIPTEN)
             editor/console.h
             editor/editor_settings.cc
             editor/editor_settings.h
+            editor/input_actions_window.cc
+            editor/input_actions_window.h
             editor/lore_vcs.cc
             editor/lore_vcs.h
             editor/play_session.cc

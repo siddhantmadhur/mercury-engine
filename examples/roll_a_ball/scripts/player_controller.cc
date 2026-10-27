@@ -4,21 +4,28 @@
 
 MERCURY_SCRIPT(PlayerController);
 
+void PlayerController::OnStart() {
+  if (auto* actions = GetInputActions()) input_.emplace(*actions);
+}
+
+void PlayerController::OnFrame(double dt) {
+  if (input_ && input_->Player.Jump->WasPressedThisFrame()) jump_requested_ = true;
+}
+
 void PlayerController::OnTick(double dt) {
-  glm::vec3 direction(0.0f);
-  // The camera looks down -Z, so "up" on screen is -Z.
-  if (IsKeyPressed(GLFW_KEY_W) || IsKeyPressed(GLFW_KEY_UP)) direction.z -= 1;
-  if (IsKeyPressed(GLFW_KEY_S) || IsKeyPressed(GLFW_KEY_DOWN)) direction.z += 1;
-  if (IsKeyPressed(GLFW_KEY_A) || IsKeyPressed(GLFW_KEY_LEFT)) direction.x -= 1;
-  if (IsKeyPressed(GLFW_KEY_D) || IsKeyPressed(GLFW_KEY_RIGHT)) direction.x += 1;
+  if (!input_) return;
+  // The camera looks down -Z, so "up" on screen (Move's +Y) is -Z.
+  const glm::vec2 move = input_->Player.Move->ReadValue<glm::vec2>();
+  const glm::vec3 direction(move.x, 0.0f, -move.y);
   if (direction != glm::vec3(0.0f)) {
-    Physics().AddForce(GetEntity(), glm::normalize(direction) * force);
+    Physics().AddForce(GetEntity(), direction * force);
   }
 
   // Only jump when the ball is resting on something.
   const auto& transform = GetTransform();
   const bool grounded = std::abs(transform.GetVelocity().y) < 0.05f;
-  if (IsKeyJustPressed(GLFW_KEY_SPACE) && grounded) {
+  if (jump_requested_ && grounded) {
     Physics().AddImpulse(GetEntity(), glm::vec3(0.0f, jump_impulse, 0.0f));
   }
+  jump_requested_ = false;
 }

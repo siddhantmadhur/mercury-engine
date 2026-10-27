@@ -32,6 +32,9 @@ std::filesystem::path CreateScript(const std::filesystem::path& project_root,
 bool CreateUxml(const std::filesystem::path& file);
 bool CreateUss(const std::filesystem::path& file);
 
+// Unity's default actions: a Player map with Move, Look, Jump and Fire.
+bool CreateInputActions(const std::filesystem::path& file);
+
 // Writes a .masset of `type` with every field at its default value.
 bool CreateAsset(const std::filesystem::path& file, const std::string& type);
 

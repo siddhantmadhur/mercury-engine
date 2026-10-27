@@ -133,6 +133,10 @@ std::string Project::GetInputActionsPath() const {
   return section ? section->properties.GetString("actions") : "";
 }
 
+void Project::SetInputActionsPath(std::string res_path) {
+  GetOrAddSection("input").properties.Set("actions", std::move(res_path));
+}
+
 namespace {
 std::vector<std::string> ReadNames(const mtext::Section* section) {
   std::vector<std::string> names;

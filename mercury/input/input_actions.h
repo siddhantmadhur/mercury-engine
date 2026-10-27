@@ -5,7 +5,9 @@
  * keys, mouse and gamepad controls, read by value or through callbacks.
  * The project lists its actions file in [input] actions = "res://...".
  *
- *   [minput format=1]
+ *   [minput format=1 class="GameInput" header="res://scripts/game_input.h"]
+ *
+ *   [map name="Player"]
  *
  *   [action name="Player/Jump" type="button"]
  *   bindings = ["<Keyboard>/space", "<Gamepad>/buttonSouth"]
@@ -22,6 +24,10 @@
  *   auto* jump = GetInputActions()->Find("Player/Jump");
  *   jump->performed += [this](const InputAction::CallbackContext&) { Jump(); };
  *   glm::vec2 move = actions->Find("Player/Move")->ReadValue<glm::vec2>();
+ *
+ * [map] sections are optional; they keep empty maps and the map order the
+ * editor's Input Actions window shows. `class` and `header` are where that
+ * window writes the generated C++ header (input_actions_codegen.h).
  */
 #ifndef MERCURY_INPUT_INPUT_ACTIONS_H
 #define MERCURY_INPUT_INPUT_ACTIONS_H
@@ -29,6 +35,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -158,9 +165,53 @@ class InputActionAsset {
   std::vector<std::unique_ptr<InputAction>> actions_;
 };
 
+// What a .minput file holds, without the runtime state: the Input Actions
+// window edits this and InputActionAsset builds its actions from it.
+struct InputActionDesc {
+  struct Composite2D {
+    std::vector<std::string> up, down, left, right;
+    bool operator==(const Composite2D&) const = default;
+  };
+
+  std::string map;
+  std::string name;
+  InputAction::Type type = InputAction::Type::kButton;
+  bool vector2 = false;
+  std::vector<std::string> bindings;
+  std::vector<Composite2D> composites;
+
+  std::string FullName() const { return map.empty() ? name : map + "/" + name; }
+  bool operator==(const InputActionDesc&) const = default;
+};
+
+struct InputActionsDesc {
+  // Every map in order, including maps with no actions yet.
+  std::vector<std::string> maps;
+  std::vector<InputActionDesc> actions;
+  // Generated C++ header: res:// path ("" to not generate) and struct name.
+  std::string header;
+  std::string class_name;
+
+  bool operator==(const InputActionsDesc&) const = default;
+};
+
+bool ParseInputActions(std::string_view source, InputActionsDesc* out,
+                       std::string* error = nullptr);
+std::string SerializeInputActions(const InputActionsDesc& desc);
+// Writes through a temporary file, like mtext::SaveFile.
+bool SaveInputActions(const std::filesystem::path& file, const InputActionsDesc& desc);
+
 // GLFW key for a Unity keyboard control name ("w", "leftShift", "f5");
 // GLFW_KEY_UNKNOWN if there is none.
 int KeyFromControl(std::string_view control);
+
+// Unity keyboard control name for a GLFW key ("leftShift"); "" if none.
+std::string ControlFromKey(int key);
+// Unity gamepad control name for a GLFW_GAMEPAD_BUTTON_* ("buttonSouth").
+std::string ControlFromGamepadButton(int button);
+
+// Every control path ReadControl understands, for binding pickers.
+std::span<const std::string_view> KnownControlPaths();
 
 /**
  * @brief Current value of one control path such as "<Keyboard>/space" or

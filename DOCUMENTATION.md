@@ -85,7 +85,7 @@ Other files:
 
 - `.mprefab`: a node tree in the map format. A map node with `instance="res://gun.mprefab"` copies it; component sections for the instance (or its children) override single values, and `removed=true` drops a component. Scripts copy with `Instantiate(...)`.
 - `.manim`: an animator controller (`[parameter]`, `[layer]`, `[state]` with a clip or a 1D/2D blend tree, `[transition]` with conditions and exit time).
-- `.minput`: input actions (Unity's Input System): `[action name="Player/Jump" type="button"]` with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"`, and 2D vector `composites`. The `.mproj` names it in `[input] actions`.
+- `.minput`: input actions (Unity's Input System): `[action name="Player/Jump" type="button"]` with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"`, and 2D vector `composites`. `[map name="Player"]` sections list the action maps, and the `[minput]` header's `class` and `header` name the generated C++ header. The `.mproj` names it in `[input] actions`. Edit it in **Window > Input Actions**.
 - `.mimport` next to a model: `convention = "unity"` imports it the Unity way (180 degrees about Y, file units); `[import] model_convention` in the `.mproj` sets the default. `scale` resizes it and `max_texture_size` (default 8192) scales larger textures down.
 
 Models bring their own materials: base color and texture, opacity, emission (`Ke`, `map_Ke`), normal maps (or `bump` height maps, converted to normal maps on import) and, for OBJ, glossiness from `Ns`/`Ks`. Texture names are matched case-insensitively.
@@ -200,7 +200,7 @@ void ReflectMethods(Mercury::MethodReflector& m) override {
 Mercury::Event entered;  // entered = [[NodePath("Player"), "Health", "TakeDamage", 15.0]]
 ```
 
-`MERCURY_DATA_ASSET(Type)` registers a reflected struct as a `.masset` type (a ScriptableObject); load one with `Assets().LoadAs<Type>(path)`. `GetInputActions()` returns the project's input actions: `Find("Player/Jump")`, the `performed`/`started`/`canceled` signals and `ReadValue<glm::vec2>()`.
+`MERCURY_DATA_ASSET(Type)` registers a reflected struct as a `.masset` type (a ScriptableObject); load one with `Assets().LoadAs<Type>(path)`. `GetInputActions()` returns the project's input actions: `Find("Player/Jump")`, the `performed`/`started`/`canceled` signals and `ReadValue<glm::vec2>()`. With a generated header (Input Actions window, **Code > Generate C++ Header**), construct it from the asset and use members instead of names, so a renamed action fails to compile: `GameInput input(*GetInputActions()); input.Player.Jump->WasPressedThisFrame();`. Actions update once per frame, so read presses in `OnFrame` and keep them for `OnTick` (see `examples/roll_a_ball/scripts/player_controller.cc`).
 
 Fields listed in `Reflect` appear in the Inspector and are saved in maps. Supported types: bool, int, float, std::string, glm::vec2/vec3, glm::vec4 (a color), `NodeRef`, `AssetRef` and enums (`r.Enum(...)`). The editor never loads game code: after each build it runs `game --dump-schema .mercury/scripts.mschema` to learn the scripts' fields. `.mercury/` holds generated files and should not be committed.
 
@@ -243,6 +243,8 @@ void OnStart() override {
 Controls: Label, Button, Toggle, RadioButton, Slider, SliderInt, ProgressBar, TextField, IntegerField, FloatField, ScrollView, ListView, Foldout, GroupBox, Image. Also `Q<T>()`/`Query<T>()`, trickle-down and bubbling events (`RegisterCallback<ClickEvent>`, `ChangeEvent<T>`, pointer, keyboard, navigation, focus), USS selectors with `:hover`/`:active`/`:focus`/`:checked`/`:disabled`, variables, transitions, 9-slicing, rich text, and `generateVisualContent` with a `Painter2D` for custom drawing. The default look is `mercury/ui/resources/default_theme.uss`, after Unity's runtime theme.
 
 **Window > UI Builder** (or double-clicking a `.uxml`) edits documents visually: style sheets and selectors, the element hierarchy, a control library to drag from, a live canvas drawn by the game's renderer (with a Preview mode) and an Inspector for attributes, classes, bindings and styles. **+ Create** in the Project panel makes new UI documents, style sheets and panel settings.
+
+**Window > Input Actions** (or double-clicking a `.minput`) edits input actions like Unity's Input Actions editor: action maps on the left, the selected map's actions with their bindings and 2D vector composites in the middle (right-click an action to add either), and the selection's properties on the right. A binding's control path can be typed, picked from the list (with search), or set with **Listen** by pressing the key or gamepad button. **Save** (Ctrl+S) writes the `.minput` and, if **Code > Generate C++ Header** is on, a header with a struct per action map (rewritten only when it changes). **Use as Project Actions** sets `[input] actions` in the `.mproj`. **+ Create > Input Actions** makes a file with Unity's default Player map (Move, Look, Jump, Fire); the first one becomes the project's actions.
 
 ## Shipping a game
 

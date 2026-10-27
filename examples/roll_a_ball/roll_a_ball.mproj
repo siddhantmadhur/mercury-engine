@@ -10,3 +10,6 @@ height = 720
 
 [physics]
 gravity = Vector3(0, -9.81, 0)
+
+[input]
+actions = "res://input/actions.minput"

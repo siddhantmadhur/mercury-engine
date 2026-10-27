@@ -4,6 +4,7 @@
 #include <format>
 #include <fstream>
 
+#include "input/input_actions.h"
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
@@ -251,6 +252,39 @@ bool CreateUxml(const fs::path& file) {
 
 bool CreateUss(const fs::path& file) {
   return WriteText(file, "/* Style sheet for UI Toolkit (USS). */\n", nullptr);
+}
+
+bool CreateInputActions(const fs::path& file) {
+  InputActionsDesc desc;
+  desc.maps = {"Player"};
+  InputActionDesc move;
+  move.map = "Player";
+  move.name = "Move";
+  move.type = InputAction::Type::kValue;
+  move.vector2 = true;
+  move.bindings = {"<Gamepad>/leftStick"};
+  move.composites.push_back({{"<Keyboard>/w", "<Keyboard>/upArrow"},
+                             {"<Keyboard>/s", "<Keyboard>/downArrow"},
+                             {"<Keyboard>/a", "<Keyboard>/leftArrow"},
+                             {"<Keyboard>/d", "<Keyboard>/rightArrow"}});
+  InputActionDesc look;
+  look.map = "Player";
+  look.name = "Look";
+  look.type = InputAction::Type::kValue;
+  look.vector2 = true;
+  look.bindings = {"<Mouse>/delta", "<Gamepad>/rightStick"};
+  InputActionDesc jump;
+  jump.map = "Player";
+  jump.name = "Jump";
+  jump.bindings = {"<Keyboard>/space", "<Gamepad>/buttonSouth"};
+  InputActionDesc fire;
+  fire.map = "Player";
+  fire.name = "Fire";
+  fire.bindings = {"<Mouse>/leftButton", "<Gamepad>/rightTrigger"};
+  desc.actions = {move, look, jump, fire};
+  std::error_code ec;
+  fs::create_directories(file.parent_path(), ec);
+  return SaveInputActions(file, desc);
 }
 
 bool CreateAsset(const fs::path& file, const std::string& type) {

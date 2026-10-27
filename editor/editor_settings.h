@@ -13,6 +13,7 @@
  *
  *   [windows]
  *   ui_builder = true
+ *   input_actions = false
  *   lore = true
  *
  *   [lore]
@@ -38,6 +39,8 @@ struct EditorSettings {
   std::vector<std::string> recent_projects;
   // Window > UI Builder.
   bool show_ui_builder = false;
+  // Window > Input Actions.
+  bool show_input_actions = false;
   // Window > Lore.
   bool show_lore = true;
   // The Lore command line tool; empty means "lore" from PATH.
