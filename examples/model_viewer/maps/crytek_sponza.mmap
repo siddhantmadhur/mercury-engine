@@ -1,0 +1,3530 @@
+[mmap format=1]
+
+[ext_resource type="UXML" path="res://ui/hud.uxml" id="1"]
+[ext_resource type="PanelSettings" path="res://ui/panel.masset" id="2"]
+[ext_resource type="PostProcessProfile" path="res://assets/post_sponza.masset" id="3"]
+[ext_resource type="Model" path="res://models/crytek_sponza/sponza.obj" id="4"]
+
+[node name="Sponza"]
+
+[component type="Transform" node="."]
+
+[component type="UIDocument" node="."]
+source_asset = ExtResource("1")
+panel_settings = ExtResource("2")
+
+[component type="SceneHud" node="."]
+title = "Sponza"
+hint = "The camera flies a loop. Space: pause · Esc: menu"
+
+[component type="PostProcessVolume" node="."]
+profile = ExtResource("3")
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(-13, 1.8, 0)
+rotation = Vector3(0, 0, 0)
+
+[component type="Camera" node="Camera"]
+fov = 60
+near_clip = 0.05
+far_clip = 200
+background = Color(0.55, 0.68, 0.85, 1)
+
+[component type="FlythroughCamera" node="Camera"]
+path = NodePath("Path")
+lap_seconds = 70
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+rotation = Vector3(-77.3, 135, -2)
+
+[component type="DirectionalLight" node="Sun"]
+color = Color(1, 0.96, 0.9, 1)
+ambient = Color(0.5, 0.56, 0.68, 1)
+ground_ambient = Color(0.15, 0.13, 0.11, 1)
+shadow_distance = 30
+intensity = 1.3
+
+[node name="Path" parent="."]
+
+[component type="Transform" node="Path"]
+
+[node name="P1" parent="Path"]
+
+[component type="Transform" node="Path/P1"]
+position = Vector3(17.134, 2.282, 0)
+rotation = Vector3(0, 90, 0)
+
+[node name="P2" parent="Path"]
+
+[component type="Transform" node="Path/P2"]
+position = Vector3(-10.587, 2.282, 0)
+rotation = Vector3(0, 90, 0)
+
+[node name="P3" parent="Path"]
+
+[component type="Transform" node="Path/P3"]
+position = Vector3(-11.876, 9.507, 0.001)
+rotation = Vector3(360, -89.98, 0)
+
+[node name="P4" parent="Path"]
+
+[component type="Transform" node="Path/P4"]
+position = Vector3(-10.762, 9.507, -5.969)
+rotation = Vector3(360, -89.98, 0)
+
+[node name="P5" parent="Path"]
+
+[component type="Transform" node="Path/P5"]
+position = Vector3(5.098, 9.507, -5.975)
+rotation = Vector3(180, -15.02, -180)
+
+[node name="P6" parent="Path"]
+
+[component type="Transform" node="Path/P6"]
+position = Vector3(7.186, 9.507, -0.798)
+rotation = Vector3(-179.99, 89.98, -179.99)
+
+[node name="P7" parent="Path"]
+
+[component type="Transform" node="Path/P7"]
+position = Vector3(11.356, 3.518, -0.737)
+rotation = Vector3(-179.99, 89.98, -179.99)
+
+[node name="sponza" parent="."]
+
+[component type="Transform" node="sponza"]
+scale = Vector3(0.015, 0.015, 0.015)
+position = Vector3(0, 0, 0.49)
+
+[node name="sponza_00" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_00"]
+
+[component type="MeshRenderer" node="sponza/sponza_00"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_00"
+
+[node name="sponza_01" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_01"]
+
+[component type="MeshRenderer" node="sponza/sponza_01"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_01"
+
+[node name="sponza_03" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_03"]
+
+[component type="MeshRenderer" node="sponza/sponza_03"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_03"
+
+[node name="sponza_05" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_05"]
+
+[component type="MeshRenderer" node="sponza/sponza_05"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_05"
+
+[node name="sponza_06" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_06"]
+
+[component type="MeshRenderer" node="sponza/sponza_06"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_06"
+
+[node name="sponza_07" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_07"]
+
+[component type="MeshRenderer" node="sponza/sponza_07"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_07"
+
+[node name="sponza_08" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_08"]
+
+[component type="MeshRenderer" node="sponza/sponza_08"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_08"
+
+[node name="sponza_09" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_09"]
+
+[component type="MeshRenderer" node="sponza/sponza_09"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_09"
+
+[node name="sponza_10" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_10"]
+
+[component type="MeshRenderer" node="sponza/sponza_10"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_10"
+
+[node name="sponza_11" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_11"]
+
+[component type="MeshRenderer" node="sponza/sponza_11"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_11"
+
+[node name="sponza_12" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_12"]
+
+[component type="MeshRenderer" node="sponza/sponza_12"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_12"
+
+[node name="sponza_13" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_13"]
+
+[component type="MeshRenderer" node="sponza/sponza_13"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_13"
+
+[node name="sponza_14" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_14"]
+
+[component type="MeshRenderer" node="sponza/sponza_14"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_14"
+
+[node name="sponza_15" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_15"]
+
+[component type="MeshRenderer" node="sponza/sponza_15"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_15"
+
+[node name="sponza_16" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_16"]
+
+[component type="MeshRenderer" node="sponza/sponza_16"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_16"
+
+[node name="sponza_17" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_17"]
+
+[component type="MeshRenderer" node="sponza/sponza_17"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_17"
+
+[node name="sponza_18" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_18"]
+
+[component type="MeshRenderer" node="sponza/sponza_18"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_18"
+
+[node name="sponza_19" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_19"]
+
+[component type="MeshRenderer" node="sponza/sponza_19"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_19"
+
+[node name="sponza_20" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_20"]
+
+[component type="MeshRenderer" node="sponza/sponza_20"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_20"
+
+[node name="sponza_21" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_21"]
+
+[component type="MeshRenderer" node="sponza/sponza_21"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_21"
+
+[node name="sponza_22" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_22"]
+
+[component type="MeshRenderer" node="sponza/sponza_22"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_22"
+
+[node name="sponza_23" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_23"]
+
+[component type="MeshRenderer" node="sponza/sponza_23"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_23"
+
+[node name="sponza_24" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_24"]
+
+[component type="MeshRenderer" node="sponza/sponza_24"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_24"
+
+[node name="sponza_25" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_25"]
+
+[component type="MeshRenderer" node="sponza/sponza_25"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_25"
+
+[node name="sponza_26" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_26"]
+
+[component type="MeshRenderer" node="sponza/sponza_26"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_26"
+
+[node name="sponza_27" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_27"]
+
+[component type="MeshRenderer" node="sponza/sponza_27"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_27"
+
+[node name="sponza_28" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_28"]
+
+[component type="MeshRenderer" node="sponza/sponza_28"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_28"
+
+[node name="sponza_29" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_29"]
+
+[component type="MeshRenderer" node="sponza/sponza_29"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_29"
+
+[node name="sponza_30" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_30"]
+
+[component type="MeshRenderer" node="sponza/sponza_30"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_30"
+
+[node name="sponza_31" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_31"]
+
+[component type="MeshRenderer" node="sponza/sponza_31"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_31"
+
+[node name="sponza_32" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_32"]
+
+[component type="MeshRenderer" node="sponza/sponza_32"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_32"
+
+[node name="sponza_33" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_33"]
+
+[component type="MeshRenderer" node="sponza/sponza_33"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_33"
+
+[node name="sponza_34" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_34"]
+
+[component type="MeshRenderer" node="sponza/sponza_34"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_34"
+
+[node name="sponza_35" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_35"]
+
+[component type="MeshRenderer" node="sponza/sponza_35"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_35"
+
+[node name="sponza_36" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_36"]
+
+[component type="MeshRenderer" node="sponza/sponza_36"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_36"
+
+[node name="sponza_37" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_37"]
+
+[component type="MeshRenderer" node="sponza/sponza_37"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_37"
+
+[node name="sponza_38" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_38"]
+
+[component type="MeshRenderer" node="sponza/sponza_38"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_38"
+
+[node name="sponza_39" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_39"]
+
+[component type="MeshRenderer" node="sponza/sponza_39"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_39"
+
+[node name="sponza_40" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_40"]
+
+[component type="MeshRenderer" node="sponza/sponza_40"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_40"
+
+[node name="sponza_41" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_41"]
+
+[component type="MeshRenderer" node="sponza/sponza_41"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_41"
+
+[node name="sponza_42" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_42"]
+
+[component type="MeshRenderer" node="sponza/sponza_42"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_42"
+
+[node name="sponza_43" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_43"]
+
+[component type="MeshRenderer" node="sponza/sponza_43"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_43"
+
+[node name="sponza_44" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_44"]
+
+[component type="MeshRenderer" node="sponza/sponza_44"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_44"
+
+[node name="sponza_45" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_45"]
+
+[component type="MeshRenderer" node="sponza/sponza_45"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_45"
+
+[node name="sponza_46" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_46"]
+
+[component type="MeshRenderer" node="sponza/sponza_46"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_46"
+
+[node name="sponza_47" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_47"]
+
+[component type="MeshRenderer" node="sponza/sponza_47"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_47"
+
+[node name="sponza_48" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_48"]
+
+[component type="MeshRenderer" node="sponza/sponza_48"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_48"
+
+[node name="sponza_49" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_49"]
+
+[component type="MeshRenderer" node="sponza/sponza_49"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_49"
+
+[node name="sponza_50" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_50"]
+
+[component type="MeshRenderer" node="sponza/sponza_50"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_50"
+
+[node name="sponza_51" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_51"]
+
+[component type="MeshRenderer" node="sponza/sponza_51"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_51"
+
+[node name="sponza_52" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_52"]
+
+[component type="MeshRenderer" node="sponza/sponza_52"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_52"
+
+[node name="sponza_53" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_53"]
+
+[component type="MeshRenderer" node="sponza/sponza_53"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_53"
+
+[node name="sponza_54" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_54"]
+
+[component type="MeshRenderer" node="sponza/sponza_54"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_54"
+
+[node name="sponza_55" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_55"]
+
+[component type="MeshRenderer" node="sponza/sponza_55"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_55"
+
+[node name="sponza_56" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_56"]
+
+[component type="MeshRenderer" node="sponza/sponza_56"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_56"
+
+[node name="sponza_57" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_57"]
+
+[component type="MeshRenderer" node="sponza/sponza_57"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_57"
+
+[node name="sponza_58" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_58"]
+
+[component type="MeshRenderer" node="sponza/sponza_58"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_58"
+
+[node name="sponza_59" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_59"]
+
+[component type="MeshRenderer" node="sponza/sponza_59"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_59"
+
+[node name="sponza_60" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_60"]
+
+[component type="MeshRenderer" node="sponza/sponza_60"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_60"
+
+[node name="sponza_61" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_61"]
+
+[component type="MeshRenderer" node="sponza/sponza_61"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_61"
+
+[node name="sponza_62" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_62"]
+
+[component type="MeshRenderer" node="sponza/sponza_62"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_62"
+
+[node name="sponza_63" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_63"]
+
+[component type="MeshRenderer" node="sponza/sponza_63"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_63"
+
+[node name="sponza_64" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_64"]
+
+[component type="MeshRenderer" node="sponza/sponza_64"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_64"
+
+[node name="sponza_65" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_65"]
+
+[component type="MeshRenderer" node="sponza/sponza_65"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_65"
+
+[node name="sponza_66" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_66"]
+
+[component type="MeshRenderer" node="sponza/sponza_66"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_66"
+
+[node name="sponza_67" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_67"]
+
+[component type="MeshRenderer" node="sponza/sponza_67"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_67"
+
+[node name="sponza_68" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_68"]
+
+[component type="MeshRenderer" node="sponza/sponza_68"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_68"
+
+[node name="sponza_69" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_69"]
+
+[component type="MeshRenderer" node="sponza/sponza_69"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_69"
+
+[node name="sponza_70" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_70"]
+
+[component type="MeshRenderer" node="sponza/sponza_70"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_70"
+
+[node name="sponza_71" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_71"]
+
+[component type="MeshRenderer" node="sponza/sponza_71"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_71"
+
+[node name="sponza_72" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_72"]
+
+[component type="MeshRenderer" node="sponza/sponza_72"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_72"
+
+[node name="sponza_73" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_73"]
+
+[component type="MeshRenderer" node="sponza/sponza_73"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_73"
+
+[node name="sponza_74" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_74"]
+
+[component type="MeshRenderer" node="sponza/sponza_74"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_74"
+
+[node name="sponza_75" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_75"]
+
+[component type="MeshRenderer" node="sponza/sponza_75"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_75"
+
+[node name="sponza_76" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_76"]
+
+[component type="MeshRenderer" node="sponza/sponza_76"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_76"
+
+[node name="sponza_77" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_77"]
+
+[component type="MeshRenderer" node="sponza/sponza_77"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_77"
+
+[node name="sponza_78" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_78"]
+
+[component type="MeshRenderer" node="sponza/sponza_78"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_78"
+
+[node name="sponza_79" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_79"]
+
+[component type="MeshRenderer" node="sponza/sponza_79"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_79"
+
+[node name="sponza_80" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_80"]
+
+[component type="MeshRenderer" node="sponza/sponza_80"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_80"
+
+[node name="sponza_81" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_81"]
+
+[component type="MeshRenderer" node="sponza/sponza_81"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_81"
+
+[node name="sponza_82" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_82"]
+
+[component type="MeshRenderer" node="sponza/sponza_82"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_82"
+
+[node name="sponza_83" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_83"]
+
+[component type="MeshRenderer" node="sponza/sponza_83"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_83"
+
+[node name="sponza_84" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_84"]
+
+[component type="MeshRenderer" node="sponza/sponza_84"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_84"
+
+[node name="sponza_85" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_85"]
+
+[component type="MeshRenderer" node="sponza/sponza_85"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_85"
+
+[node name="sponza_86" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_86"]
+
+[component type="MeshRenderer" node="sponza/sponza_86"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_86"
+
+[node name="sponza_87" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_87"]
+
+[component type="MeshRenderer" node="sponza/sponza_87"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_87"
+
+[node name="sponza_88" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_88"]
+
+[component type="MeshRenderer" node="sponza/sponza_88"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_88"
+
+[node name="sponza_89" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_89"]
+
+[component type="MeshRenderer" node="sponza/sponza_89"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_89"
+
+[node name="sponza_90" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_90"]
+
+[component type="MeshRenderer" node="sponza/sponza_90"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_90"
+
+[node name="sponza_91" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_91"]
+
+[component type="MeshRenderer" node="sponza/sponza_91"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_91"
+
+[node name="sponza_92" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_92"]
+
+[component type="MeshRenderer" node="sponza/sponza_92"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_92"
+
+[node name="sponza_93" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_93"]
+
+[component type="MeshRenderer" node="sponza/sponza_93"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_93"
+
+[node name="sponza_94" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_94"]
+
+[component type="MeshRenderer" node="sponza/sponza_94"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_94"
+
+[node name="sponza_95" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_95"]
+
+[component type="MeshRenderer" node="sponza/sponza_95"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_95"
+
+[node name="sponza_96" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_96"]
+
+[component type="MeshRenderer" node="sponza/sponza_96"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_96"
+
+[node name="sponza_97" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_97"]
+
+[component type="MeshRenderer" node="sponza/sponza_97"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_97"
+
+[node name="sponza_98" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_98"]
+
+[component type="MeshRenderer" node="sponza/sponza_98"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_98"
+
+[node name="sponza_99" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_99"]
+
+[component type="MeshRenderer" node="sponza/sponza_99"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_99"
+
+[node name="sponza_100" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_100"]
+
+[component type="MeshRenderer" node="sponza/sponza_100"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_100"
+
+[node name="sponza_101" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_101"]
+
+[component type="MeshRenderer" node="sponza/sponza_101"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_101"
+
+[node name="sponza_102" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_102"]
+
+[component type="MeshRenderer" node="sponza/sponza_102"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_102"
+
+[node name="sponza_103" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_103"]
+
+[component type="MeshRenderer" node="sponza/sponza_103"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_103"
+
+[node name="sponza_104" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_104"]
+
+[component type="MeshRenderer" node="sponza/sponza_104"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_104"
+
+[node name="sponza_105" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_105"]
+
+[component type="MeshRenderer" node="sponza/sponza_105"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_105"
+
+[node name="sponza_106" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_106"]
+
+[component type="MeshRenderer" node="sponza/sponza_106"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_106"
+
+[node name="sponza_107" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_107"]
+
+[component type="MeshRenderer" node="sponza/sponza_107"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_107"
+
+[node name="sponza_108" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_108"]
+
+[component type="MeshRenderer" node="sponza/sponza_108"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_108"
+
+[node name="sponza_109" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_109"]
+
+[component type="MeshRenderer" node="sponza/sponza_109"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_109"
+
+[node name="sponza_110" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_110"]
+
+[component type="MeshRenderer" node="sponza/sponza_110"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_110"
+
+[node name="sponza_111" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_111"]
+
+[component type="MeshRenderer" node="sponza/sponza_111"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_111"
+
+[node name="sponza_112" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_112"]
+
+[component type="MeshRenderer" node="sponza/sponza_112"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_112"
+
+[node name="sponza_113" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_113"]
+
+[component type="MeshRenderer" node="sponza/sponza_113"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_113"
+
+[node name="sponza_114" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_114"]
+
+[component type="MeshRenderer" node="sponza/sponza_114"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_114"
+
+[node name="sponza_115" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_115"]
+
+[component type="MeshRenderer" node="sponza/sponza_115"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_115"
+
+[node name="sponza_116" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_116"]
+
+[component type="MeshRenderer" node="sponza/sponza_116"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_116"
+
+[node name="sponza_117" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_117"]
+
+[component type="MeshRenderer" node="sponza/sponza_117"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_117"
+
+[node name="sponza_118" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_118"]
+
+[component type="MeshRenderer" node="sponza/sponza_118"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_118"
+
+[node name="sponza_119" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_119"]
+
+[component type="MeshRenderer" node="sponza/sponza_119"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_119"
+
+[node name="sponza_120" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_120"]
+
+[component type="MeshRenderer" node="sponza/sponza_120"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_120"
+
+[node name="sponza_121" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_121"]
+
+[component type="MeshRenderer" node="sponza/sponza_121"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_121"
+
+[node name="sponza_122" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_122"]
+
+[component type="MeshRenderer" node="sponza/sponza_122"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_122"
+
+[node name="sponza_123" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_123"]
+
+[component type="MeshRenderer" node="sponza/sponza_123"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_123"
+
+[node name="sponza_124" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_124"]
+
+[component type="MeshRenderer" node="sponza/sponza_124"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_124"
+
+[node name="sponza_125" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_125"]
+
+[component type="MeshRenderer" node="sponza/sponza_125"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_125"
+
+[node name="sponza_126" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_126"]
+
+[component type="MeshRenderer" node="sponza/sponza_126"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_126"
+
+[node name="sponza_127" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_127"]
+
+[component type="MeshRenderer" node="sponza/sponza_127"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_127"
+
+[node name="sponza_128" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_128"]
+
+[component type="MeshRenderer" node="sponza/sponza_128"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_128"
+
+[node name="sponza_129" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_129"]
+
+[component type="MeshRenderer" node="sponza/sponza_129"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_129"
+
+[node name="sponza_130" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_130"]
+
+[component type="MeshRenderer" node="sponza/sponza_130"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_130"
+
+[node name="sponza_131" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_131"]
+
+[component type="MeshRenderer" node="sponza/sponza_131"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_131"
+
+[node name="sponza_132" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_132"]
+
+[component type="MeshRenderer" node="sponza/sponza_132"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_132"
+
+[node name="sponza_133" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_133"]
+
+[component type="MeshRenderer" node="sponza/sponza_133"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_133"
+
+[node name="sponza_134" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_134"]
+
+[component type="MeshRenderer" node="sponza/sponza_134"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_134"
+
+[node name="sponza_135" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_135"]
+
+[component type="MeshRenderer" node="sponza/sponza_135"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_135"
+
+[node name="sponza_136" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_136"]
+
+[component type="MeshRenderer" node="sponza/sponza_136"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_136"
+
+[node name="sponza_137" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_137"]
+
+[component type="MeshRenderer" node="sponza/sponza_137"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_137"
+
+[node name="sponza_138" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_138"]
+
+[component type="MeshRenderer" node="sponza/sponza_138"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_138"
+
+[node name="sponza_139" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_139"]
+
+[component type="MeshRenderer" node="sponza/sponza_139"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_139"
+
+[node name="sponza_140" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_140"]
+
+[component type="MeshRenderer" node="sponza/sponza_140"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_140"
+
+[node name="sponza_141" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_141"]
+
+[component type="MeshRenderer" node="sponza/sponza_141"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_141"
+
+[node name="sponza_142" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_142"]
+
+[component type="MeshRenderer" node="sponza/sponza_142"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_142"
+
+[node name="sponza_143" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_143"]
+
+[component type="MeshRenderer" node="sponza/sponza_143"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_143"
+
+[node name="sponza_144" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_144"]
+
+[component type="MeshRenderer" node="sponza/sponza_144"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_144"
+
+[node name="sponza_145" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_145"]
+
+[component type="MeshRenderer" node="sponza/sponza_145"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_145"
+
+[node name="sponza_146" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_146"]
+
+[component type="MeshRenderer" node="sponza/sponza_146"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_146"
+
+[node name="sponza_147" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_147"]
+
+[component type="MeshRenderer" node="sponza/sponza_147"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_147"
+
+[node name="sponza_148" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_148"]
+
+[component type="MeshRenderer" node="sponza/sponza_148"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_148"
+
+[node name="sponza_149" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_149"]
+
+[component type="MeshRenderer" node="sponza/sponza_149"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_149"
+
+[node name="sponza_150" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_150"]
+
+[component type="MeshRenderer" node="sponza/sponza_150"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_150"
+
+[node name="sponza_151" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_151"]
+
+[component type="MeshRenderer" node="sponza/sponza_151"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_151"
+
+[node name="sponza_152" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_152"]
+
+[component type="MeshRenderer" node="sponza/sponza_152"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_152"
+
+[node name="sponza_153" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_153"]
+
+[component type="MeshRenderer" node="sponza/sponza_153"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_153"
+
+[node name="sponza_154" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_154"]
+
+[component type="MeshRenderer" node="sponza/sponza_154"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_154"
+
+[node name="sponza_155" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_155"]
+
+[component type="MeshRenderer" node="sponza/sponza_155"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_155"
+
+[node name="sponza_156" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_156"]
+
+[component type="MeshRenderer" node="sponza/sponza_156"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_156"
+
+[node name="sponza_157" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_157"]
+
+[component type="MeshRenderer" node="sponza/sponza_157"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_157"
+
+[node name="sponza_158" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_158"]
+
+[component type="MeshRenderer" node="sponza/sponza_158"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_158"
+
+[node name="sponza_159" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_159"]
+
+[component type="MeshRenderer" node="sponza/sponza_159"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_159"
+
+[node name="sponza_160" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_160"]
+
+[component type="MeshRenderer" node="sponza/sponza_160"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_160"
+
+[node name="sponza_161" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_161"]
+
+[component type="MeshRenderer" node="sponza/sponza_161"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_161"
+
+[node name="sponza_162" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_162"]
+
+[component type="MeshRenderer" node="sponza/sponza_162"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_162"
+
+[node name="sponza_163" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_163"]
+
+[component type="MeshRenderer" node="sponza/sponza_163"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_163"
+
+[node name="sponza_164" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_164"]
+
+[component type="MeshRenderer" node="sponza/sponza_164"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_164"
+
+[node name="sponza_165" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_165"]
+
+[component type="MeshRenderer" node="sponza/sponza_165"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_165"
+
+[node name="sponza_166" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_166"]
+
+[component type="MeshRenderer" node="sponza/sponza_166"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_166"
+
+[node name="sponza_167" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_167"]
+
+[component type="MeshRenderer" node="sponza/sponza_167"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_167"
+
+[node name="sponza_168" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_168"]
+
+[component type="MeshRenderer" node="sponza/sponza_168"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_168"
+
+[node name="sponza_169" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_169"]
+
+[component type="MeshRenderer" node="sponza/sponza_169"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_169"
+
+[node name="sponza_170" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_170"]
+
+[component type="MeshRenderer" node="sponza/sponza_170"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_170"
+
+[node name="sponza_171" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_171"]
+
+[component type="MeshRenderer" node="sponza/sponza_171"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_171"
+
+[node name="sponza_172" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_172"]
+
+[component type="MeshRenderer" node="sponza/sponza_172"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_172"
+
+[node name="sponza_173" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_173"]
+
+[component type="MeshRenderer" node="sponza/sponza_173"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_173"
+
+[node name="sponza_174" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_174"]
+
+[component type="MeshRenderer" node="sponza/sponza_174"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_174"
+
+[node name="sponza_175" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_175"]
+
+[component type="MeshRenderer" node="sponza/sponza_175"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_175"
+
+[node name="sponza_176" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_176"]
+
+[component type="MeshRenderer" node="sponza/sponza_176"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_176"
+
+[node name="sponza_177" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_177"]
+
+[component type="MeshRenderer" node="sponza/sponza_177"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_177"
+
+[node name="sponza_178" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_178"]
+
+[component type="MeshRenderer" node="sponza/sponza_178"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_178"
+
+[node name="sponza_179" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_179"]
+
+[component type="MeshRenderer" node="sponza/sponza_179"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_179"
+
+[node name="sponza_180" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_180"]
+
+[component type="MeshRenderer" node="sponza/sponza_180"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_180"
+
+[node name="sponza_181" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_181"]
+
+[component type="MeshRenderer" node="sponza/sponza_181"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_181"
+
+[node name="sponza_182" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_182"]
+
+[component type="MeshRenderer" node="sponza/sponza_182"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_182"
+
+[node name="sponza_183" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_183"]
+
+[component type="MeshRenderer" node="sponza/sponza_183"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_183"
+
+[node name="sponza_184" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_184"]
+
+[component type="MeshRenderer" node="sponza/sponza_184"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_184"
+
+[node name="sponza_185" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_185"]
+
+[component type="MeshRenderer" node="sponza/sponza_185"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_185"
+
+[node name="sponza_186" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_186"]
+
+[component type="MeshRenderer" node="sponza/sponza_186"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_186"
+
+[node name="sponza_187" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_187"]
+
+[component type="MeshRenderer" node="sponza/sponza_187"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_187"
+
+[node name="sponza_188" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_188"]
+
+[component type="MeshRenderer" node="sponza/sponza_188"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_188"
+
+[node name="sponza_189" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_189"]
+
+[component type="MeshRenderer" node="sponza/sponza_189"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_189"
+
+[node name="sponza_190" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_190"]
+
+[component type="MeshRenderer" node="sponza/sponza_190"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_190"
+
+[node name="sponza_191" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_191"]
+
+[component type="MeshRenderer" node="sponza/sponza_191"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_191"
+
+[node name="sponza_192" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_192"]
+
+[component type="MeshRenderer" node="sponza/sponza_192"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_192"
+
+[node name="sponza_193" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_193"]
+
+[component type="MeshRenderer" node="sponza/sponza_193"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_193"
+
+[node name="sponza_194" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_194"]
+
+[component type="MeshRenderer" node="sponza/sponza_194"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_194"
+
+[node name="sponza_195" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_195"]
+
+[component type="MeshRenderer" node="sponza/sponza_195"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_195"
+
+[node name="sponza_196" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_196"]
+
+[component type="MeshRenderer" node="sponza/sponza_196"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_196"
+
+[node name="sponza_197" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_197"]
+
+[component type="MeshRenderer" node="sponza/sponza_197"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_197"
+
+[node name="sponza_198" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_198"]
+
+[component type="MeshRenderer" node="sponza/sponza_198"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_198"
+
+[node name="sponza_199" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_199"]
+
+[component type="MeshRenderer" node="sponza/sponza_199"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_199"
+
+[node name="sponza_200" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_200"]
+
+[component type="MeshRenderer" node="sponza/sponza_200"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_200"
+
+[node name="sponza_201" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_201"]
+
+[component type="MeshRenderer" node="sponza/sponza_201"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_201"
+
+[node name="sponza_202" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_202"]
+
+[component type="MeshRenderer" node="sponza/sponza_202"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_202"
+
+[node name="sponza_203" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_203"]
+
+[component type="MeshRenderer" node="sponza/sponza_203"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_203"
+
+[node name="sponza_204" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_204"]
+
+[component type="MeshRenderer" node="sponza/sponza_204"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_204"
+
+[node name="sponza_205" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_205"]
+
+[component type="MeshRenderer" node="sponza/sponza_205"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_205"
+
+[node name="sponza_206" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_206"]
+
+[component type="MeshRenderer" node="sponza/sponza_206"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_206"
+
+[node name="sponza_207" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_207"]
+
+[component type="MeshRenderer" node="sponza/sponza_207"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_207"
+
+[node name="sponza_208" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_208"]
+
+[component type="MeshRenderer" node="sponza/sponza_208"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_208"
+
+[node name="sponza_209" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_209"]
+
+[component type="MeshRenderer" node="sponza/sponza_209"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_209"
+
+[node name="sponza_210" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_210"]
+
+[component type="MeshRenderer" node="sponza/sponza_210"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_210"
+
+[node name="sponza_211" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_211"]
+
+[component type="MeshRenderer" node="sponza/sponza_211"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_211"
+
+[node name="sponza_212" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_212"]
+
+[component type="MeshRenderer" node="sponza/sponza_212"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_212"
+
+[node name="sponza_213" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_213"]
+
+[component type="MeshRenderer" node="sponza/sponza_213"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_213"
+
+[node name="sponza_214" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_214"]
+
+[component type="MeshRenderer" node="sponza/sponza_214"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_214"
+
+[node name="sponza_215" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_215"]
+
+[component type="MeshRenderer" node="sponza/sponza_215"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_215"
+
+[node name="sponza_216" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_216"]
+
+[component type="MeshRenderer" node="sponza/sponza_216"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_216"
+
+[node name="sponza_217" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_217"]
+
+[component type="MeshRenderer" node="sponza/sponza_217"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_217"
+
+[node name="sponza_218" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_218"]
+
+[component type="MeshRenderer" node="sponza/sponza_218"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_218"
+
+[node name="sponza_219" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_219"]
+
+[component type="MeshRenderer" node="sponza/sponza_219"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_219"
+
+[node name="sponza_220" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_220"]
+
+[component type="MeshRenderer" node="sponza/sponza_220"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_220"
+
+[node name="sponza_221" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_221"]
+
+[component type="MeshRenderer" node="sponza/sponza_221"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_221"
+
+[node name="sponza_222" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_222"]
+
+[component type="MeshRenderer" node="sponza/sponza_222"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_222"
+
+[node name="sponza_223" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_223"]
+
+[component type="MeshRenderer" node="sponza/sponza_223"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_223"
+
+[node name="sponza_224" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_224"]
+
+[component type="MeshRenderer" node="sponza/sponza_224"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_224"
+
+[node name="sponza_225" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_225"]
+
+[component type="MeshRenderer" node="sponza/sponza_225"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_225"
+
+[node name="sponza_226" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_226"]
+
+[component type="MeshRenderer" node="sponza/sponza_226"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_226"
+
+[node name="sponza_227" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_227"]
+
+[component type="MeshRenderer" node="sponza/sponza_227"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_227"
+
+[node name="sponza_228" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_228"]
+
+[component type="MeshRenderer" node="sponza/sponza_228"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_228"
+
+[node name="sponza_229" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_229"]
+
+[component type="MeshRenderer" node="sponza/sponza_229"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_229"
+
+[node name="sponza_230" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_230"]
+
+[component type="MeshRenderer" node="sponza/sponza_230"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_230"
+
+[node name="sponza_231" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_231"]
+
+[component type="MeshRenderer" node="sponza/sponza_231"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_231"
+
+[node name="sponza_232" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_232"]
+
+[component type="MeshRenderer" node="sponza/sponza_232"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_232"
+
+[node name="sponza_233" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_233"]
+
+[component type="MeshRenderer" node="sponza/sponza_233"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_233"
+
+[node name="sponza_234" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_234"]
+
+[component type="MeshRenderer" node="sponza/sponza_234"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_234"
+
+[node name="sponza_235" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_235"]
+
+[component type="MeshRenderer" node="sponza/sponza_235"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_235"
+
+[node name="sponza_236" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_236"]
+
+[component type="MeshRenderer" node="sponza/sponza_236"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_236"
+
+[node name="sponza_237" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_237"]
+
+[component type="MeshRenderer" node="sponza/sponza_237"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_237"
+
+[node name="sponza_238" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_238"]
+
+[component type="MeshRenderer" node="sponza/sponza_238"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_238"
+
+[node name="sponza_239" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_239"]
+
+[component type="MeshRenderer" node="sponza/sponza_239"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_239"
+
+[node name="sponza_240" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_240"]
+
+[component type="MeshRenderer" node="sponza/sponza_240"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_240"
+
+[node name="sponza_241" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_241"]
+
+[component type="MeshRenderer" node="sponza/sponza_241"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_241"
+
+[node name="sponza_242" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_242"]
+
+[component type="MeshRenderer" node="sponza/sponza_242"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_242"
+
+[node name="sponza_243" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_243"]
+
+[component type="MeshRenderer" node="sponza/sponza_243"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_243"
+
+[node name="sponza_244" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_244"]
+
+[component type="MeshRenderer" node="sponza/sponza_244"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_244"
+
+[node name="sponza_245" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_245"]
+
+[component type="MeshRenderer" node="sponza/sponza_245"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_245"
+
+[node name="sponza_246" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_246"]
+
+[component type="MeshRenderer" node="sponza/sponza_246"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_246"
+
+[node name="sponza_247" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_247"]
+
+[component type="MeshRenderer" node="sponza/sponza_247"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_247"
+
+[node name="sponza_248" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_248"]
+
+[component type="MeshRenderer" node="sponza/sponza_248"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_248"
+
+[node name="sponza_249" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_249"]
+
+[component type="MeshRenderer" node="sponza/sponza_249"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_249"
+
+[node name="sponza_250" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_250"]
+
+[component type="MeshRenderer" node="sponza/sponza_250"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_250"
+
+[node name="sponza_251" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_251"]
+
+[component type="MeshRenderer" node="sponza/sponza_251"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_251"
+
+[node name="sponza_252" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_252"]
+
+[component type="MeshRenderer" node="sponza/sponza_252"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_252"
+
+[node name="sponza_253" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_253"]
+
+[component type="MeshRenderer" node="sponza/sponza_253"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_253"
+
+[node name="sponza_254" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_254"]
+
+[component type="MeshRenderer" node="sponza/sponza_254"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_254"
+
+[node name="sponza_255" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_255"]
+
+[component type="MeshRenderer" node="sponza/sponza_255"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_255"
+
+[node name="sponza_256" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_256"]
+
+[component type="MeshRenderer" node="sponza/sponza_256"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_256"
+
+[node name="sponza_257" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_257"]
+
+[component type="MeshRenderer" node="sponza/sponza_257"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_257"
+
+[node name="sponza_258" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_258"]
+
+[component type="MeshRenderer" node="sponza/sponza_258"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_258"
+
+[node name="sponza_259" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_259"]
+
+[component type="MeshRenderer" node="sponza/sponza_259"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_259"
+
+[node name="sponza_260" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_260"]
+
+[component type="MeshRenderer" node="sponza/sponza_260"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_260"
+
+[node name="sponza_261" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_261"]
+
+[component type="MeshRenderer" node="sponza/sponza_261"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_261"
+
+[node name="sponza_262" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_262"]
+
+[component type="MeshRenderer" node="sponza/sponza_262"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_262"
+
+[node name="sponza_263" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_263"]
+
+[component type="MeshRenderer" node="sponza/sponza_263"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_263"
+
+[node name="sponza_264" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_264"]
+
+[component type="MeshRenderer" node="sponza/sponza_264"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_264"
+
+[node name="sponza_265" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_265"]
+
+[component type="MeshRenderer" node="sponza/sponza_265"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_265"
+
+[node name="sponza_266" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_266"]
+
+[component type="MeshRenderer" node="sponza/sponza_266"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_266"
+
+[node name="sponza_267" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_267"]
+
+[component type="MeshRenderer" node="sponza/sponza_267"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_267"
+
+[node name="sponza_268" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_268"]
+
+[component type="MeshRenderer" node="sponza/sponza_268"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_268"
+
+[node name="sponza_269" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_269"]
+
+[component type="MeshRenderer" node="sponza/sponza_269"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_269"
+
+[node name="sponza_270" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_270"]
+
+[component type="MeshRenderer" node="sponza/sponza_270"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_270"
+
+[node name="sponza_271" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_271"]
+
+[component type="MeshRenderer" node="sponza/sponza_271"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_271"
+
+[node name="sponza_272" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_272"]
+
+[component type="MeshRenderer" node="sponza/sponza_272"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_272"
+
+[node name="sponza_273" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_273"]
+
+[component type="MeshRenderer" node="sponza/sponza_273"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_273"
+
+[node name="sponza_274" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_274"]
+
+[component type="MeshRenderer" node="sponza/sponza_274"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_274"
+
+[node name="sponza_275" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_275"]
+
+[component type="MeshRenderer" node="sponza/sponza_275"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_275"
+
+[node name="sponza_276" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_276"]
+
+[component type="MeshRenderer" node="sponza/sponza_276"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_276"
+
+[node name="sponza_277" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_277"]
+
+[component type="MeshRenderer" node="sponza/sponza_277"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_277"
+
+[node name="sponza_278" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_278"]
+
+[component type="MeshRenderer" node="sponza/sponza_278"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_278"
+
+[node name="sponza_279" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_279"]
+
+[component type="MeshRenderer" node="sponza/sponza_279"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_279"
+
+[node name="sponza_280" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_280"]
+
+[component type="MeshRenderer" node="sponza/sponza_280"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_280"
+
+[node name="sponza_281" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_281"]
+
+[component type="MeshRenderer" node="sponza/sponza_281"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_281"
+
+[node name="sponza_282" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_282"]
+
+[component type="MeshRenderer" node="sponza/sponza_282"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_282"
+
+[node name="sponza_283" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_283"]
+
+[component type="MeshRenderer" node="sponza/sponza_283"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_283"
+
+[node name="sponza_284" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_284"]
+
+[component type="MeshRenderer" node="sponza/sponza_284"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_284"
+
+[node name="sponza_285" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_285"]
+
+[component type="MeshRenderer" node="sponza/sponza_285"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_285"
+
+[node name="sponza_286" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_286"]
+
+[component type="MeshRenderer" node="sponza/sponza_286"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_286"
+
+[node name="sponza_287" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_287"]
+
+[component type="MeshRenderer" node="sponza/sponza_287"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_287"
+
+[node name="sponza_288" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_288"]
+
+[component type="MeshRenderer" node="sponza/sponza_288"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_288"
+
+[node name="sponza_289" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_289"]
+
+[component type="MeshRenderer" node="sponza/sponza_289"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_289"
+
+[node name="sponza_290" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_290"]
+
+[component type="MeshRenderer" node="sponza/sponza_290"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_290"
+
+[node name="sponza_291" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_291"]
+
+[component type="MeshRenderer" node="sponza/sponza_291"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_291"
+
+[node name="sponza_292" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_292"]
+
+[component type="MeshRenderer" node="sponza/sponza_292"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_292"
+
+[node name="sponza_293" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_293"]
+
+[component type="MeshRenderer" node="sponza/sponza_293"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_293"
+
+[node name="sponza_294" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_294"]
+
+[component type="MeshRenderer" node="sponza/sponza_294"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_294"
+
+[node name="sponza_295" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_295"]
+
+[component type="MeshRenderer" node="sponza/sponza_295"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_295"
+
+[node name="sponza_296" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_296"]
+
+[component type="MeshRenderer" node="sponza/sponza_296"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_296"
+
+[node name="sponza_297" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_297"]
+
+[component type="MeshRenderer" node="sponza/sponza_297"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_297"
+
+[node name="sponza_298" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_298"]
+
+[component type="MeshRenderer" node="sponza/sponza_298"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_298"
+
+[node name="sponza_299" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_299"]
+
+[component type="MeshRenderer" node="sponza/sponza_299"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_299"
+
+[node name="sponza_300" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_300"]
+
+[component type="MeshRenderer" node="sponza/sponza_300"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_300"
+
+[node name="sponza_301" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_301"]
+
+[component type="MeshRenderer" node="sponza/sponza_301"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_301"
+
+[node name="sponza_302" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_302"]
+
+[component type="MeshRenderer" node="sponza/sponza_302"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_302"
+
+[node name="sponza_303" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_303"]
+
+[component type="MeshRenderer" node="sponza/sponza_303"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_303"
+
+[node name="sponza_304" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_304"]
+
+[component type="MeshRenderer" node="sponza/sponza_304"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_304"
+
+[node name="sponza_305" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_305"]
+
+[component type="MeshRenderer" node="sponza/sponza_305"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_305"
+
+[node name="sponza_306" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_306"]
+
+[component type="MeshRenderer" node="sponza/sponza_306"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_306"
+
+[node name="sponza_307" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_307"]
+
+[component type="MeshRenderer" node="sponza/sponza_307"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_307"
+
+[node name="sponza_308" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_308"]
+
+[component type="MeshRenderer" node="sponza/sponza_308"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_308"
+
+[node name="sponza_309" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_309"]
+
+[component type="MeshRenderer" node="sponza/sponza_309"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_309"
+
+[node name="sponza_310" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_310"]
+
+[component type="MeshRenderer" node="sponza/sponza_310"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_310"
+
+[node name="sponza_311" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_311"]
+
+[component type="MeshRenderer" node="sponza/sponza_311"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_311"
+
+[node name="sponza_312" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_312"]
+
+[component type="MeshRenderer" node="sponza/sponza_312"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_312"
+
+[node name="sponza_313" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_313"]
+
+[component type="MeshRenderer" node="sponza/sponza_313"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_313"
+
+[node name="sponza_314" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_314"]
+
+[component type="MeshRenderer" node="sponza/sponza_314"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_314"
+
+[node name="sponza_315" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_315"]
+
+[component type="MeshRenderer" node="sponza/sponza_315"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_315"
+
+[node name="sponza_316" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_316"]
+
+[component type="MeshRenderer" node="sponza/sponza_316"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_316"
+
+[node name="sponza_317" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_317"]
+
+[component type="MeshRenderer" node="sponza/sponza_317"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_317"
+
+[node name="sponza_318" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_318"]
+
+[component type="MeshRenderer" node="sponza/sponza_318"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_318"
+
+[node name="sponza_319" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_319"]
+
+[component type="MeshRenderer" node="sponza/sponza_319"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_319"
+
+[node name="sponza_320" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_320"]
+
+[component type="MeshRenderer" node="sponza/sponza_320"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_320"
+
+[node name="sponza_321" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_321"]
+
+[component type="MeshRenderer" node="sponza/sponza_321"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_321"
+
+[node name="sponza_322" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_322"]
+
+[component type="MeshRenderer" node="sponza/sponza_322"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_322"
+
+[node name="sponza_323" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_323"]
+
+[component type="MeshRenderer" node="sponza/sponza_323"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_323"
+
+[node name="sponza_324" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_324"]
+
+[component type="MeshRenderer" node="sponza/sponza_324"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_324"
+
+[node name="sponza_325" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_325"]
+
+[component type="MeshRenderer" node="sponza/sponza_325"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_325"
+
+[node name="sponza_326" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_326"]
+
+[component type="MeshRenderer" node="sponza/sponza_326"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_326"
+
+[node name="sponza_327" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_327"]
+
+[component type="MeshRenderer" node="sponza/sponza_327"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_327"
+
+[node name="sponza_328" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_328"]
+
+[component type="MeshRenderer" node="sponza/sponza_328"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_328"
+
+[node name="sponza_329" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_329"]
+
+[component type="MeshRenderer" node="sponza/sponza_329"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_329"
+
+[node name="sponza_330" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_330"]
+
+[component type="MeshRenderer" node="sponza/sponza_330"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_330"
+
+[node name="sponza_331" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_331"]
+
+[component type="MeshRenderer" node="sponza/sponza_331"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_331"
+
+[node name="sponza_332" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_332"]
+
+[component type="MeshRenderer" node="sponza/sponza_332"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_332"
+
+[node name="sponza_333" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_333"]
+
+[component type="MeshRenderer" node="sponza/sponza_333"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_333"
+
+[node name="sponza_334" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_334"]
+
+[component type="MeshRenderer" node="sponza/sponza_334"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_334"
+
+[node name="sponza_335" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_335"]
+
+[component type="MeshRenderer" node="sponza/sponza_335"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_335"
+
+[node name="sponza_336" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_336"]
+
+[component type="MeshRenderer" node="sponza/sponza_336"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_336"
+
+[node name="sponza_337" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_337"]
+
+[component type="MeshRenderer" node="sponza/sponza_337"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_337"
+
+[node name="sponza_338" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_338"]
+
+[component type="MeshRenderer" node="sponza/sponza_338"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_338"
+
+[node name="sponza_339" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_339"]
+
+[component type="MeshRenderer" node="sponza/sponza_339"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_339"
+
+[node name="sponza_340" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_340"]
+
+[component type="MeshRenderer" node="sponza/sponza_340"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_340"
+
+[node name="sponza_341" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_341"]
+
+[component type="MeshRenderer" node="sponza/sponza_341"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_341"
+
+[node name="sponza_342" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_342"]
+
+[component type="MeshRenderer" node="sponza/sponza_342"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_342"
+
+[node name="sponza_343" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_343"]
+
+[component type="MeshRenderer" node="sponza/sponza_343"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_343"
+
+[node name="sponza_344" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_344"]
+
+[component type="MeshRenderer" node="sponza/sponza_344"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_344"
+
+[node name="sponza_345" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_345"]
+
+[component type="MeshRenderer" node="sponza/sponza_345"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_345"
+
+[node name="sponza_346" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_346"]
+
+[component type="MeshRenderer" node="sponza/sponza_346"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_346"
+
+[node name="sponza_347" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_347"]
+
+[component type="MeshRenderer" node="sponza/sponza_347"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_347"
+
+[node name="sponza_348" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_348"]
+
+[component type="MeshRenderer" node="sponza/sponza_348"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_348"
+
+[node name="sponza_349" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_349"]
+
+[component type="MeshRenderer" node="sponza/sponza_349"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_349"
+
+[node name="sponza_350" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_350"]
+
+[component type="MeshRenderer" node="sponza/sponza_350"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_350"
+
+[node name="sponza_351" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_351"]
+
+[component type="MeshRenderer" node="sponza/sponza_351"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_351"
+
+[node name="sponza_352" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_352"]
+
+[component type="MeshRenderer" node="sponza/sponza_352"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_352"
+
+[node name="sponza_353" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_353"]
+
+[component type="MeshRenderer" node="sponza/sponza_353"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_353"
+
+[node name="sponza_354" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_354"]
+
+[component type="MeshRenderer" node="sponza/sponza_354"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_354"
+
+[node name="sponza_355" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_355"]
+
+[component type="MeshRenderer" node="sponza/sponza_355"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_355"
+
+[node name="sponza_356" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_356"]
+
+[component type="MeshRenderer" node="sponza/sponza_356"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_356"
+
+[node name="sponza_357" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_357"]
+
+[component type="MeshRenderer" node="sponza/sponza_357"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_357"
+
+[node name="sponza_358" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_358"]
+
+[component type="MeshRenderer" node="sponza/sponza_358"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_358"
+
+[node name="sponza_359" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_359"]
+
+[component type="MeshRenderer" node="sponza/sponza_359"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_359"
+
+[node name="sponza_360" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_360"]
+
+[component type="MeshRenderer" node="sponza/sponza_360"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_360"
+
+[node name="sponza_361" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_361"]
+
+[component type="MeshRenderer" node="sponza/sponza_361"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_361"
+
+[node name="sponza_362" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_362"]
+
+[component type="MeshRenderer" node="sponza/sponza_362"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_362"
+
+[node name="sponza_363" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_363"]
+
+[component type="MeshRenderer" node="sponza/sponza_363"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_363"
+
+[node name="sponza_364" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_364"]
+
+[component type="MeshRenderer" node="sponza/sponza_364"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_364"
+
+[node name="sponza_365" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_365"]
+
+[component type="MeshRenderer" node="sponza/sponza_365"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_365"
+
+[node name="sponza_366" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_366"]
+
+[component type="MeshRenderer" node="sponza/sponza_366"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_366"
+
+[node name="sponza_367" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_367"]
+
+[component type="MeshRenderer" node="sponza/sponza_367"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_367"
+
+[node name="sponza_368" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_368"]
+
+[component type="MeshRenderer" node="sponza/sponza_368"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_368"
+
+[node name="sponza_369" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_369"]
+
+[component type="MeshRenderer" node="sponza/sponza_369"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_369"
+
+[node name="sponza_370" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_370"]
+
+[component type="MeshRenderer" node="sponza/sponza_370"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_370"
+
+[node name="sponza_371" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_371"]
+
+[component type="MeshRenderer" node="sponza/sponza_371"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_371"
+
+[node name="sponza_372" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_372"]
+
+[component type="MeshRenderer" node="sponza/sponza_372"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_372"
+
+[node name="sponza_373" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_373"]
+
+[component type="MeshRenderer" node="sponza/sponza_373"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_373"
+
+[node name="sponza_374" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_374"]
+
+[component type="MeshRenderer" node="sponza/sponza_374"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_374"
+
+[node name="sponza_375" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_375"]
+
+[component type="MeshRenderer" node="sponza/sponza_375"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_375"
+
+[node name="sponza_376" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_376"]
+
+[component type="MeshRenderer" node="sponza/sponza_376"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_376"
+
+[node name="sponza_377" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_377"]
+
+[component type="MeshRenderer" node="sponza/sponza_377"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_377"
+
+[node name="sponza_378" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_378"]
+
+[component type="MeshRenderer" node="sponza/sponza_378"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_378"
+
+[node name="sponza_379" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_379"]
+
+[component type="MeshRenderer" node="sponza/sponza_379"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_379"
+
+[node name="sponza_380" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_380"]
+
+[component type="MeshRenderer" node="sponza/sponza_380"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_380"
+
+[node name="sponza_381" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_381"]
+
+[component type="MeshRenderer" node="sponza/sponza_381"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_381"
+
+[node name="sponza_382" parent="sponza"]
+
+[component type="Transform" node="sponza/sponza_382"]
+
+[component type="MeshRenderer" node="sponza/sponza_382"]
+mesh = "model"
+model = ExtResource("4")
+node = "sponza_382"
