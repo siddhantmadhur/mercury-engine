@@ -1,23 +1,14 @@
 /*
  * behaviour.h
  *
- * Base class for game scripts, the C++ version of Unity's MonoBehaviour.
+ * The engine's internal base class for scripts. MapScene runs Behaviours: it calls Awake, OnStart,
+ * OnFrame, OnTick and the collision callbacks, and a Behaviour's Reflect() describes the fields the
+ * Inspector shows and the map saves.
  *
- *   class Ball : public Mercury::Behaviour {
- *    public:
- *     void Reflect(Mercury::Reflector& r) override { r.Field("speed", speed); }
- *     void OnStart() override;
- *     void OnTick(double dt) override;
- *     float speed = 60.0f;
- *   };
- *   MERCURY_SCRIPT(Ball);  // in ball.cc
- *
- * Add the script to a node in the editor (or in the .mmap file) with
- * [component type="Ball" node="..."]. Fields listed in Reflect show up in the
- * editor's Inspector and are saved in the map.
- *
- * Unity names for the callbacks: Awake = Awake, Start = OnStart,
- * Update = OnFrame, LateUpdate = OnLateFrame, FixedUpdate = OnTick.
+ * Game scripts are not written against this class. They are TypeScript classes (see
+ * scripting/ts/behaviour.ts); each one is run by a ScriptBehaviour (scripting/js/), which forwards
+ * every callback to the JavaScript object. Tests of the engine may derive from Behaviour directly
+ * (see tests/test_scripts.h).
  */
 #ifndef MERCURY_SCRIPTING_BEHAVIOUR_H
 #define MERCURY_SCRIPTING_BEHAVIOUR_H
@@ -84,7 +75,7 @@ class Behaviour {
   kEntityId GetEntity() const { return entity_; }
   Transform& GetTransform() const;
   MapScene& GetScene() const { return *scene_; }
-  // The name this script was registered under (MERCURY_SCRIPT).
+  // The name this script was registered under.
   const std::string& GetTypeName() const { return type_name_; }
 
   // Behaviour.enabled: disabled scripts get no OnStart/OnFrame/OnTick.
@@ -187,63 +178,6 @@ std::vector<B*> MapScene::FindObjectsOfType() {
   return result;
 }
 
-/**
- * @brief Register a Behaviour subclass so maps can use it by name
- *
- * Use through MERCURY_SCRIPT(Type) in the script's .cc file.
- */
-template <typename T>
-bool RegisterScript(const char* name) {
-  static_assert(std::is_base_of_v<Behaviour, T>,
-                "MERCURY_SCRIPT types must derive from Mercury::Behaviour");
-  ComponentInfo info;
-  info.name = name;
-  info.category = "Scripts";
-  info.is_script = true;
-  {
-    T instance{};
-    auto reflector = Reflector::Describe();
-    instance.Reflect(reflector);
-    info.fields = reflector.GetFields();
-    MethodReflector methods;
-    instance.ReflectMethods(methods);
-    for (const auto& method : methods.GetMethods()) {
-      info.methods.push_back({method.name, ArgTypeName(method.arg)});
-    }
-  }
-  info.attach = [name = std::string(name)](
-                    MapScene& scene, kEntityId entity,
-                    const mtext::PropertyList& properties) {
-    auto behaviour = std::make_unique<T>();
-    auto reflector = Reflector::Read(properties);
-    behaviour->Reflect(reflector);
-    LogReflectionWarnings(reflector,
-                          scene.GetGameObject(entity).GetPath() + "." + name);
-    scene.AddBehaviour(entity, std::move(behaviour), name);
-  };
-  TypeRegistry::Instance().RegisterComponent(std::move(info));
-  return true;
-}
-
-/**
- * @brief Register a reflected struct as a .masset type, the C++ version of
- * a ScriptableObject. Load it with Assets().LoadAs<T>(path).
- */
-template <typename T>
-bool RegisterDataAsset(const char* name, const char* description = "") {
-  TypeRegistry::Instance().RegisterAssetType(
-      AssetTypeInfo{name, description, DescribeFields<T>(), true});
-  return true;
-}
-
 }  // namespace Mercury
-
-#define MERCURY_SCRIPT(Type)                                    \
-  [[maybe_unused]] static const bool mercury_script_##Type##_ = \
-      ::Mercury::RegisterScript<Type>(#Type)
-
-#define MERCURY_DATA_ASSET(Type)                                    \
-  [[maybe_unused]] static const bool mercury_data_asset_##Type##_ = \
-      ::Mercury::RegisterDataAsset<Type>(#Type)
 
 #endif  // MERCURY_SCRIPTING_BEHAVIOUR_H
