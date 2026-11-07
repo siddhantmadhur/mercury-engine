@@ -12,8 +12,8 @@
 namespace Mercury::Templates {
 
 /**
- * @brief Create <parent>/<name>/ with a .mproj, a main map, a CMakeLists.txt
- * that builds the game against this engine checkout, and empty folders
+ * @brief Create <parent>/<name>/ with a .mproj, a main map, a tsconfig.json
+ * for the TypeScript scripts, and empty folders
  * @return The .mproj path, or empty with `error` filled
  */
 std::filesystem::path CreateProject(const std::filesystem::path& parent,
@@ -21,8 +21,8 @@ std::filesystem::path CreateProject(const std::filesystem::path& parent,
                                     std::string* error);
 
 /**
- * @brief Write scripts/<snake_name>.h and .cc for a Behaviour subclass
- * @return The .cc path, or empty with `error` filled
+ * @brief Write scripts/<snake_name>.ts with a @script() Behaviour class
+ * @return The .ts path, or empty with `error` filled
  */
 std::filesystem::path CreateScript(const std::filesystem::path& project_root,
                                    const std::string& class_name,
