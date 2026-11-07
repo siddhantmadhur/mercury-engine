@@ -47,14 +47,22 @@ SteamDeck or the controllers. Along with support for controller layouts, battery
 
 ## Building
 
+Game scripts are TypeScript, run by an embedded V8. V8 is built from source once, and esbuild
+bundles the scripts.
+
 ### Linux (X11 and Wayland)
 
 ```sh
-./scripts/setup_project_linux.sh        # apt or pacman; installs Vulkan, GLFW deps and DXC
+./scripts/setup_project_linux.sh        # apt or pacman; installs Vulkan, GLFW deps, DXC and esbuild
+./scripts/build_v8.sh                   # builds V8: ~30-60 minutes and ~15 GB of disk, once
 git submodule update --init --recursive
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ```
+
+`build_v8.sh` (see `third_party/v8/README.md`) fetches V8 with depot_tools into the git-ignored
+`third_party/v8/` and builds the version in `third_party/v8/VERSION`. Node and `typescript` are
+optional: when `tsc` is installed, Build also type-checks the scripts.
 
 Debian/Ubuntu don't package DXC, so the setup script downloads the official release into
 `bin/dxc/`, which CMake finds automatically. If you use the
@@ -65,8 +73,16 @@ Debug builds enable `VK_LAYER_KHRONOS_validation` when it is installed.
 ### Windows
 
 Install the [LunarG Vulkan SDK](https://vulkan.lunarg.com) (it provides the loader, validation
-layers and DXC, and sets `VULKAN_SDK`), then configure with CMake or open the folder in Visual
-Studio (`CMakeSettings.json`).
+layers and DXC, and sets `VULKAN_SDK`), then:
+
+1. Run `scripts\build_v8.ps1` in a Visual Studio developer PowerShell (about 30-60 minutes and
+   ~15 GB of disk, once). The engine uses the static CRT (`/MT`) to match V8; if a Debug build
+   complains about `_ITERATOR_DEBUG_LEVEL`, build V8 a second time with `is_debug=true` into
+   `out/debug`.
+2. Download esbuild into `bin\esbuild\`: the `esbuild.exe` inside
+   `https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.28.2.tgz` (`package/esbuild.exe`;
+   SHA-256 of the tarball `7286c3611b6f1f4c4d9ec90adcbc478407ff0d28ead96567f361d53e67613e19`).
+3. Configure with CMake or open the folder in Visual Studio (`CMakeSettings.json`).
 
 ## Issues
 

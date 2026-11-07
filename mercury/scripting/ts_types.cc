@@ -85,6 +85,21 @@ bool IsIdentifier(const std::string& name) {
   return true;
 }
 
+// "apply_root_motion" -> "applyRootMotion": every TypeScript API is camelCase.
+std::string CamelCase(const std::string& name) {
+  std::string out;
+  bool upper = false;
+  for (char c : name) {
+    if (c == '_') {
+      upper = !out.empty();
+    } else {
+      out += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
+      upper = false;
+    }
+  }
+  return out;
+}
+
 std::string Jsdoc(const std::string& text, const std::string& indent) {
   if (text.empty()) return {};
   return std::format("{}/** {} */\n", indent, text);
@@ -104,12 +119,13 @@ std::string GenerateComponentsTs() {
     out += Jsdoc(info->description, "");
     out += std::format("export class {0} extends Component {{\n  static readonly typeName = \"{0}\";\n", info->name);
     for (const FieldInfo& field : info->fields) {
-      if (!IsIdentifier(field.name)) continue;
+      if (!IsIdentifier(CamelCase(field.name))) continue;
       out += "\n" + Jsdoc(field.tooltip, "  ");
       const std::string read = std::format("this.getField(\"{}\", \"{}\")", info->name, field.name);
-      out += std::format("  get {}(): {} {{ return {}; }}\n", field.name, TsType(field), FromNative(field, read));
+      const std::string property = CamelCase(field.name);
+      out += std::format("  get {}(): {} {{ return {}; }}\n", property, TsType(field), FromNative(field, read));
       if (field.runtime_writable) {
-        out += std::format("  set {}(value: {}) {{ this.setField(\"{}\", \"{}\", {}); }}\n", field.name,
+        out += std::format("  set {}(value: {}) {{ this.setField(\"{}\", \"{}\", {}); }}\n", property,
                            TsType(field), info->name, field.name, ToNative(field));
       }
     }

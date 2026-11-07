@@ -15,7 +15,7 @@ What it writes:
   <name>.mproj          layers, tags, physics, input and render settings
 
 Scripts are not translated automatically: a script map (a Python module)
-names the C++ class for each MonoBehaviour and converts its fields. See
+names the TypeScript script class for each MonoBehaviour and converts its fields. See
 convert_script() below for the interface.
 """
 
