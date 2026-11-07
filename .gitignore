@@ -15,3 +15,9 @@ tmp
 
 
 bench/
+
+# V8 is built locally (scripts/build_v8.sh)
+third_party/v8/*
+!third_party/v8/VERSION
+!third_party/v8/args.gn
+!third_party/v8/README.md
