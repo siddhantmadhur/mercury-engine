@@ -10,3 +10,5 @@ v8_enable_sandbox = false          # with pointer compression off, no V8_* defin
 v8_enable_temporal_support = false # avoids the Rust toolchain dependency
 v8_enable_webassembly = false
 symbol_level = 1
+use_sysroot = false              # build against the host libstdc++ (the bundled Debian sysroot lacks <source_location>)
+use_glib = false                 # V8 itself does not need glib; avoids a host dev-package dependency
