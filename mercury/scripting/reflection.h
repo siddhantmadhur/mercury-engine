@@ -70,6 +70,10 @@ struct FieldInfo {
   std::string asset_type;  // kAsset: "Material", "PhysicsMaterial", "Texture"
   std::string tooltip;
   FieldType element_type = FieldType::kString;  // kList: type of each item
+  // A script may change this at run time. False unless the component's system reads the value
+  // every frame; otherwise the write would silently do nothing, so the TypeScript API makes the
+  // field readonly.
+  bool runtime_writable = false;
 };
 
 // Converts a field's value to the Variant stored in files.
@@ -151,8 +155,13 @@ class Reflector {
   Reflector& Enum(const char* name, E& value,
                   std::initializer_list<const char*> names) {
     int index = static_cast<int>(value);
-    EnumImpl(name, index, names);
+    EnumImpl(name, index, std::vector<std::string>(names.begin(), names.end()));
     value = static_cast<E>(index);
+    return *this;
+  }
+  // The same with names known only at run time (script fields).
+  Reflector& Enum(const char* name, int& index, const std::vector<std::string>& names) {
+    EnumImpl(name, index, names);
     return *this;
   }
 
@@ -183,8 +192,7 @@ class Reflector {
   Reflector& VisitList(const char* name, FieldType element, std::vector<T>& member,
                        ToVariant to_variant, FromVariant from_variant);
 
-  void EnumImpl(const char* name, int& index,
-                std::initializer_list<const char*> names);
+  void EnumImpl(const char* name, int& index, const std::vector<std::string>& names);
 
   Mode mode_;
   mtext::PropertyList* properties_;

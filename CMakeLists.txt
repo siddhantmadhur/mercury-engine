@@ -50,6 +50,26 @@ set(MERCURY_GRAPHICS_SOURCES
         mercury/application/vulkan/vk_scene_renderer.h
         mercury/application/vulkan/vma_impl.cc)
 
+# The TypeScript runtime library (mercury/scripting/ts) is embedded in the engine, so a project
+# gets its types without the engine checkout (see WriteTypeScriptTypes).
+file(GLOB_RECURSE MERCURY_TS_FILES CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/mercury/scripting/ts
+        ${CMAKE_CURRENT_SOURCE_DIR}/mercury/scripting/ts/*.ts)
+list(SORT MERCURY_TS_FILES)
+set(MERCURY_TS_DEPENDS "")
+foreach (TS_FILE ${MERCURY_TS_FILES})
+    list(APPEND MERCURY_TS_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/mercury/scripting/ts/${TS_FILE})
+endforeach ()
+add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ts_runtime_files.cc
+        COMMAND ${CMAKE_COMMAND}
+                -DOUT=${CMAKE_CURRENT_BINARY_DIR}/ts_runtime_files.cc
+                -DROOT=${CMAKE_CURRENT_SOURCE_DIR}/mercury/scripting/ts
+                "-DFILES=${MERCURY_TS_FILES}"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedFiles.cmake
+        DEPENDS ${MERCURY_TS_DEPENDS} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedFiles.cmake
+        COMMENT "Embedding the TypeScript runtime"
+        VERBATIM)
+
 add_library(mercury STATIC
         mercury/physics_engine/physics_engine.cc
         mercury/physics_engine/physics_engine.h
@@ -140,6 +160,21 @@ add_library(mercury STATIC
         mercury/scripting/type_registry.cc
         mercury/scripting/type_registry.h
         mercury/scripting/behaviour.h
+        mercury/scripting/ts_types.cc
+        mercury/scripting/ts_types.h
+        mercury/scripting/js/script_runtime.cc
+        mercury/scripting/js/script_runtime.h
+        mercury/scripting/js/script_behaviour.cc
+        mercury/scripting/js/script_behaviour.h
+        mercury/scripting/js/script_builder.cc
+        mercury/scripting/js/script_builder.h
+        mercury/scripting/js/source_map.cc
+        mercury/scripting/js/source_map.h
+        mercury/scripting/js/bindings.h
+        mercury/scripting/js/bindings_core.cc
+        mercury/scripting/js/bindings_ui.cc
+        mercury/scripting/js/bindings_components.cc
+        ${CMAKE_CURRENT_BINARY_DIR}/ts_runtime_files.cc
         mercury/components/components.h
         mercury/components/builtin_types.cc
         mercury/scene/map_scene.cc
@@ -425,7 +460,8 @@ add_executable(mercury_test
         tests/model_preloader_test.cc
         tests/parallel_load_test.cc
         tests/model_cache_test.cc
-        tests/input_actions_test.cc)
+        tests/input_actions_test.cc
+        tests/script_runtime_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -437,6 +473,10 @@ endif ()
 # Command line tools (model inspection for importers)
 add_executable(mercury_model_info tools/model_info.cc)
 target_link_libraries(mercury_model_info mercury)
+
+# The generic game executable: runs any project (its TypeScript is built on demand).
+add_executable(mercury_player mercury/player/main.cc)
+target_link_libraries(mercury_player mercury)
 
 # Games made of a .mproj project (maps, assets and C++ scripts)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGame.cmake)

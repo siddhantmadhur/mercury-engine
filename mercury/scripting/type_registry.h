@@ -29,6 +29,13 @@ class MapScene;
 using AttachFn = std::function<void(MapScene& scene, kEntityId entity,
                                     const mtext::PropertyList& properties)>;
 
+// Run-time access to a built-in component's fields, used by the TypeScript API.
+using HasComponentFn = std::function<bool(MapScene& scene, kEntityId entity)>;
+using GetFieldFn = std::function<bool(MapScene& scene, kEntityId entity,
+                                      std::string_view field, mtext::Variant* out)>;
+using SetFieldFn = std::function<bool(MapScene& scene, kEntityId entity,
+                                      std::string_view field, const mtext::Variant& value)>;
+
 // A method an Event can call (Behaviour::ReflectMethods).
 struct MethodDesc {
   std::string name;
@@ -45,6 +52,10 @@ struct ComponentInfo {
   std::vector<MethodDesc> methods;
   // Null for scripts known only from a schema file (inside the editor).
   AttachFn attach;
+  // Null for scripts and for components that are not stored as a reflected struct.
+  HasComponentFn has;
+  GetFieldFn get_field;
+  SetFieldFn set_field;
 
   const FieldInfo* FindField(std::string_view field) const;
 };
@@ -76,6 +87,8 @@ class TypeRegistry {
 
   // Removes scripts that were loaded from a schema (have no attach function).
   void ClearSchemaScripts();
+  // Removes scripts and data assets that game code registered (ScriptRuntime::Shutdown).
+  void ClearGameTypes();
 
   /**
    * @brief Write every script component and its fields
