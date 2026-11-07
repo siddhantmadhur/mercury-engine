@@ -21,7 +21,6 @@ if [[ ! -d "$DEPOT" ]]; then
   git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$DEPOT"
 fi
 export PATH="$DEPOT:$PATH"
-export DEPOT_TOOLS_UPDATE=0
 
 cd "$V8_ROOT"
 if [[ ! -d v8 ]]; then

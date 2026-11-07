@@ -20,7 +20,6 @@ if (-not (Test-Path $Depot)) {
     git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git $Depot
 }
 $env:PATH = "$Depot;$env:PATH"
-$env:DEPOT_TOOLS_UPDATE = "0"
 $env:DEPOT_TOOLS_WIN_TOOLCHAIN = "0"
 
 Set-Location $V8Root

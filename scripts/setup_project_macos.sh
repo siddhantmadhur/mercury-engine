@@ -64,6 +64,7 @@ install_dxc() {
 }
 
 install_dxc
+"$(dirname "${BASH_SOURCE[0]}")/install_esbuild.sh"
 
 echo
 echo "==> Setup complete! Next steps:"
