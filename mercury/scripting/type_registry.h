@@ -4,9 +4,9 @@
  * Every component and asset type the engine knows about, with its fields.
  *
  * Built-in components register at startup (RegisterBuiltinTypes). Game
- * scripts register from the game executable through MERCURY_SCRIPT. The
- * editor never loads game code, so it learns about scripts from the schema
- * file that the game writes with `--dump-schema`.
+ * scripts register when the player loads the script bundle (ScriptRuntime). The
+ * editor never runs game code, so it learns about scripts from the schema
+ * file that the player writes with `--dump-schema`.
  */
 #ifndef MERCURY_SCRIPTING_TYPE_REGISTRY_H
 #define MERCURY_SCRIPTING_TYPE_REGISTRY_H
@@ -64,7 +64,7 @@ struct AssetTypeInfo {
   std::string name;
   std::string description;
   std::vector<FieldInfo> fields;
-  // Declared by game code (MERCURY_DATA_ASSET), so saved in the schema.
+  // Declared by game code (@dataAsset), so saved in the schema.
   bool from_game = false;
 
   const FieldInfo* FindField(std::string_view field) const;

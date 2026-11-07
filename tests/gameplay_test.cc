@@ -20,6 +20,7 @@
 #include "stb/stb_image_write.h"
 #include "scene/map_scene.h"
 #include "scripting/behaviour.h"
+#include "test_scripts.h"
 #include "ui/controls.h"
 
 using namespace Mercury;
@@ -46,14 +47,14 @@ class TestCounter : public Behaviour {
   int stayed = 0;
   int exited = 0;
 };
-MERCURY_SCRIPT(TestCounter);
+MERCURY_TEST_BEHAVIOUR(TestCounter);
 
 class TestEmitter : public Behaviour {
  public:
   void Reflect(Reflector& r) override { r.Field("fired", fired); }
   Event fired;
 };
-MERCURY_SCRIPT(TestEmitter);
+MERCURY_TEST_BEHAVIOUR(TestEmitter);
 
 // Walks its CharacterController along -Z every tick.
 class TestWalker : public Behaviour {
@@ -64,7 +65,7 @@ class TestWalker : public Behaviour {
   }
   CharacterController* controller = nullptr;
 };
-MERCURY_SCRIPT(TestWalker);
+MERCURY_TEST_BEHAVIOUR(TestWalker);
 
 // Asks for another map from inside OnFrame, as a menu button would.
 class TestMapSwitcher : public Behaviour {
@@ -73,7 +74,7 @@ class TestMapSwitcher : public Behaviour {
   void OnFrame(double) override { LoadMap(next); }
   std::string next;
 };
-MERCURY_SCRIPT(TestMapSwitcher);
+MERCURY_TEST_BEHAVIOUR(TestMapSwitcher);
 
 std::shared_ptr<Project> LoadProject() {
   std::string error;
