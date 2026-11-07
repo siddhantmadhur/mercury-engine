@@ -15,12 +15,21 @@ export enum Key {
   LeftShift = 340, LeftControl = 341, LeftAlt = 342, RightShift = 344, RightControl = 345, RightAlt = 346,
 }
 
+/** Mouse buttons. */
+export enum MouseButton { Left = 0, Right = 1, Middle = 2 }
+
 /** Keyboard and mouse input. */
 export const Input = {
   /** True while the key is held down. */
   isKeyPressed(key: Key): boolean { return __native.isKeyPressed(__native.sceneCurrent(), key); },
   /** True during the tick or frame the key went down. */
   isKeyJustPressed(key: Key): boolean { return __native.isKeyJustPressed(__native.sceneCurrent(), key); },
+  /** True while the mouse button is held down. */
+  isMouseButtonPressed(button: MouseButton): boolean {
+    return __native.isMouseButtonPressed(__native.sceneCurrent(), button);
+  },
+  /** True while the pointer is over in-game UI (so clicks are meant for it). */
+  get isPointerOverUI(): boolean { return __native.isPointerOverUI(__native.sceneCurrent()); },
   /** How far the cursor moved since last frame, in pixels. */
   get cursorDelta(): Vector2 {
     __native.cursorDelta(__native.sceneCurrent());

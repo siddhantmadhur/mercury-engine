@@ -350,8 +350,7 @@ find_program(MERCURY_ESBUILD esbuild
 target_compile_definitions(mercury PUBLIC MERCURY_ESBUILD_PATH="${MERCURY_ESBUILD}")
 # End of esbuild
 
-# Games built outside this folder (see cmake/MercuryGame.cmake) need the same
-# language level and include paths the engine uses.
+# Code that links the engine needs the same language level and include paths.
 target_compile_features(mercury PUBLIC cxx_std_20)
 target_include_directories(mercury PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/mercury"
@@ -478,12 +477,8 @@ target_link_libraries(mercury_model_info mercury)
 add_executable(mercury_player mercury/player/main.cc)
 target_link_libraries(mercury_player mercury)
 
-# Games made of a .mproj project (maps, assets and C++ scripts)
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGame.cmake)
+# Examples that build their worlds in C++ (the project examples run with mercury_player)
 if (MERCURY_BUILD_EXAMPLES)
-    add_subdirectory(examples/model_viewer)
-
-    # Older examples that still build their worlds in code
     add_executable(example_breakout examples/breakout/main.cc
             examples/breakout/breakout_scene.cc
             examples/breakout/breakout_scene.h)

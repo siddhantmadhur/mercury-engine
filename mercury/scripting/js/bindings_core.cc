@@ -546,6 +546,18 @@ void InputKey(const Info& info, int kind) {
 void InputIsKeyPressed(const Info& info) { InputKey(info, 0); }
 void InputIsKeyJustPressed(const Info& info) { InputKey(info, 1); }
 
+void InputMouseButton(const Info& info) {
+  MapScene* scene = ArgScene(info, 0);
+  int button;
+  if (!scene || !ArgInt(info, 1, &button)) return;
+  InputManager* input = scene->Input();
+  Return(info, input && button >= 0 && button <= 2 &&
+                   input->IsPressed(static_cast<MouseButton>(button)));
+}
+void InputPointerOverUi(const Info& info) {
+  if (MapScene* scene = ArgScene(info, 0)) Return(info, scene->GetUI().IsPointerOverUI());
+}
+
 void InputCursorDelta(const Info& info) {
   MapScene* scene = ArgScene(info, 0);
   if (!scene || !scene->Input()) return;
@@ -729,6 +741,8 @@ void InstallCore(v8::Local<v8::Context> context, v8::Local<v8::Object> native) {
   // input
   SetFunction(context, native, "isKeyPressed", InputIsKeyPressed);
   SetFunction(context, native, "isKeyJustPressed", InputIsKeyJustPressed);
+  SetFunction(context, native, "isMouseButtonPressed", InputMouseButton);
+  SetFunction(context, native, "isPointerOverUI", InputPointerOverUi);
   SetFunction(context, native, "cursorDelta", InputCursorDelta);
   SetFunction(context, native, "frameScroll", InputFrameScroll);
   SetFunction(context, native, "inputActionFind", InputActionFind);
