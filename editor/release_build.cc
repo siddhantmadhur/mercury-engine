@@ -5,9 +5,10 @@
 #include <chrono>
 #include <format>
 #include <fstream>
+#include <sstream>
 
 #include "pack/mpack.h"
-#include "serialization/mtext.h"
+#include "scripting/js/script_builder.h"
 
 namespace Mercury {
 
@@ -15,17 +16,15 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// What the release configure names its .mercury/<name>.mcfg, so it doesn't
-// replace the Play build's player.mcfg.
-constexpr std::string_view kReleaseConfig = "player-release";
-constexpr std::string_view kPlayConfig = "player";
+// The minified scripts are built here, so the Play build's game.js stays readable.
+constexpr const char* kReleaseScripts = ".mercury/release";
 
 // Source code and editor files stay out of game.mpack.
 bool IsSourceFile(const fs::path& path) {
   std::string ext = path.extension().string();
   std::transform(ext.begin(), ext.end(), ext.begin(),
                  [](unsigned char c) { return std::tolower(c); });
-  for (const char* skip : {".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp",
+  for (const char* skip : {".ts", ".tsx", ".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp",
                            ".tmp"}) {
     if (ext == skip) return true;
   }
@@ -33,8 +32,9 @@ bool IsSourceFile(const fs::path& path) {
 }
 
 bool IsSkippedAtRoot(const std::string& name) {
-  return name == "scripts" || name == "CMakeLists.txt" || name == "Builds" ||
-         name == "imgui.ini";
+  return name == "scripts" || name == "tsconfig.json" || name == "package.json" ||
+         name == "package-lock.json" || name == "node_modules" || name == "CMakeLists.txt" ||
+         name == "Builds" || name == "imgui.ini";
 }
 
 std::string FormatBytes(uintmax_t bytes) {
@@ -61,17 +61,6 @@ std::pair<uintmax_t, int> ArchiveSizes(const fs::path& dir,
   return {total, count};
 }
 
-// The top-level source folder of an existing CMake build.
-std::string SourceDirOf(const fs::path& build_dir) {
-  std::ifstream cache(build_dir / "CMakeCache.txt");
-  constexpr std::string_view kKey = "CMAKE_HOME_DIRECTORY:INTERNAL=";
-  std::string line;
-  while (std::getline(cache, line)) {
-    if (line.starts_with(kKey)) return line.substr(kKey.size());
-  }
-  return "";
-}
-
 }  // namespace
 
 ReleaseBuild::~ReleaseBuild() {
@@ -87,41 +76,53 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
   if (IsBusy()) return;
   max_archive_bytes_ = max_archive_bytes;
   project_root_ = project.GetRoot();
+  project_name_ = project.GetName();
   output_dir_ = output_dir;
   cancelled_ = false;
   console_.Add(Console::Level::kInfo, Console::Source::kBuild,
                "Build Game: building a Release executable for " +
                    output_dir_.string());
 
-  config_ = ReadConfig(kReleaseConfig);
-  if (config_) {
+  config_ = MakeConfig();
+  if (fs::exists(config_->build_dir + "/CMakeCache.txt")) {
     StartBuild();
   } else {
     StartConfigure();
   }
 }
 
-std::optional<ReleaseBuild::Config> ReleaseBuild::ReadConfig(
-    std::string_view name) const {
-  const fs::path cache = project_root_ / kProjectCacheDir;
-  const std::string base(name);
-  for (const auto& file :
-       {cache / (base + ".mcfg"), cache / (base + "-Release.mcfg"),
-        cache / (base + "-Debug.mcfg"), cache / (base + "-RelWithDebInfo.mcfg")}) {
-    mtext::Document document;
-    if (!mtext::LoadFile(file, document)) continue;
-    auto section = document.Find("player");
-    if (!section) continue;
-    Config config;
-    config.executable = section->properties.GetString("executable");
-    config.build_dir = section->properties.GetString("build_dir");
-    config.source_dir = section->properties.GetString("source_dir");
-    config.target = section->properties.GetString("target");
-    config.spirv_dir = section->properties.GetString("spirv_dir");
-    config.ui_resources = section->properties.GetString("ui_resources");
-    if (!config.executable.empty() && !config.build_dir.empty()) return config;
+ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
+  Config config;
+  config.source_dir = fs::path(MERCURY_ENGINE_DIR).string();
+  config.build_dir = (project_root_ / kProjectCacheDir / "build-release").string();
+  config.ui_resources = (fs::path(config.source_dir) / "mercury" / "ui" / "resources").string();
+  config.spirv_dir = (fs::path(config.build_dir) / "shaders").string();
+  std::string name;
+  for (char c : project_name_) {
+    if (std::isalnum(static_cast<unsigned char>(c))) {
+      name.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    } else if (!name.empty() && name.back() != '_') {
+      name.push_back('_');
+    }
   }
-  return std::nullopt;
+  while (!name.empty() && name.back() == '_') name.pop_back();
+  config.target_name = name.empty() ? "game" : name;
+  return config;
+}
+
+void ReleaseBuild::LocateExecutable() {
+#if defined(_WIN32)
+  const char* file = "mercury_player.exe";
+#else
+  const char* file = "mercury_player";
+#endif
+  std::error_code ec;
+  for (const fs::path& dir : {fs::path(config_->build_dir), fs::path(config_->build_dir) / "Release"}) {
+    if (fs::exists(dir / file, ec)) {
+      config_->executable = (dir / file).string();
+      return;
+    }
+  }
 }
 
 bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
@@ -140,33 +141,17 @@ bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
 }
 
 bool ReleaseBuild::StartConfigure() {
-  // Configure the same CMake project the Play build came from: the project
-  // itself, or for the engine's examples the engine checkout.
-  fs::path source = project_root_;
-  if (auto play = ReadConfig(kPlayConfig)) {
-    source = !play->source_dir.empty() ? fs::path(play->source_dir)
-                                       : fs::path(SourceDirOf(play->build_dir));
-  }
-  if (source.empty() || !fs::exists(source / "CMakeLists.txt")) {
-    Finish(
-        "Build Game needs a CMake project; press Build once so "
-        ".mercury/player.mcfg exists",
-        true);
+  if (!fs::exists(fs::path(config_->source_dir) / "CMakeLists.txt")) {
+    Finish("The engine checkout this editor was built from is missing (" + config_->source_dir + ")",
+           true);
     return false;
   }
   console_.Add(Console::Level::kInfo, Console::Source::kBuild,
-               "Configuring a Release build; the first one takes a while.");
+               "Configuring a Release build of mercury_player; the first one takes a while.");
   std::vector<std::string> args = {
-      "cmake", "-S", source.string(), "-B",
-      (project_root_ / kProjectCacheDir / "build-release").string(),
-      "-DCMAKE_BUILD_TYPE=Release",
-      "-DMERCURY_PLAYER_MCFG=" + std::string(kReleaseConfig)};
-  std::error_code ec;
-  if (!fs::equivalent(source, project_root_, ec)) {
-    // Building inside the engine checkout: skip what the game doesn't need.
-    args.push_back("-DMERCURY_BUILD_TESTS=OFF");
-    args.push_back("-DMERCURY_BUILD_EDITOR=OFF");
-  }
+      "cmake", "-S", config_->source_dir, "-B", config_->build_dir,
+      "-DCMAKE_BUILD_TYPE=Release", "-DMERCURY_BUILD_EXAMPLES=OFF", "-DMERCURY_BUILD_TESTS=OFF",
+      "-DMERCURY_BUILD_EDITOR=OFF"};
   if (os::IsOnPath("ninja")) {
     args.insert(args.begin() + 1, {"-G", "Ninja"});
   }
@@ -176,8 +161,8 @@ bool ReleaseBuild::StartConfigure() {
 }
 
 bool ReleaseBuild::StartBuild() {
-  if (!Launch({"cmake", "--build", config_->build_dir, "--target",
-               config_->target, "--config", "Release"})) {
+  if (!Launch({"cmake", "--build", config_->build_dir, "--target", "mercury_player", "--config",
+               "Release"})) {
     return false;
   }
   state_ = State::kBuilding;
@@ -200,6 +185,17 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
     result.error = std::move(message);
     return result;
   };
+  // The scripts first: minified, in their own folder.
+  {
+    BuildOptions options;
+    options.release = true;
+    options.output_dir = kReleaseScripts;
+    std::string build_log;
+    const bool built = ScriptBuilder::Build(root, options, &build_log);
+    std::istringstream lines(build_log);
+    for (std::string line; std::getline(lines, line);) result.log.push_back(line);
+    if (!built) return fail("building the scripts failed");
+  }
   std::error_code ec;
   fs::create_directories(output_dir, ec);
   if (ec) return fail("could not create " + output_dir.string());
@@ -235,6 +231,13 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
     if (!it->is_regular_file(ec) || IsSourceFile(path)) continue;
     game.Add(path.lexically_relative(root).generic_string(), path);
     game_bytes += it->file_size(ec);
+  }
+  // The bundle and its source map, though hidden folders are skipped above.
+  for (const char* file : {"game.js", "game.js.map"}) {
+    const fs::path bundle = root / kReleaseScripts / file;
+    if (!fs::exists(bundle, ec)) return fail("missing " + bundle.string());
+    game.Add(std::string(".mercury/scripts/") + file, bundle);
+    game_bytes += fs::file_size(bundle, ec);
   }
 
   // engine.mpack: the default UI theme and fonts, and the shaders.
@@ -280,10 +283,10 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
   }
 
   const fs::path exe = config.executable;
-  fs::copy_file(exe, output / exe.filename(),
-                fs::copy_options::overwrite_existing, ec);
+  const fs::path shipped = output / (config.target_name + exe.extension().string());
+  fs::copy_file(exe, shipped, fs::copy_options::overwrite_existing, ec);
   if (ec) return fail("could not copy " + exe.string() + ": " + ec.message());
-  result.log.push_back("Copied " + exe.filename().string());
+  result.log.push_back("Copied the player as " + shipped.filename().string());
   result.ok = true;
   return result;
 }
@@ -345,17 +348,14 @@ void ReleaseBuild::Update() {
   switch (state_) {
     case State::kConfiguring:
       if (code != 0) return Finish("CMake configure (Release) failed", true);
-      config_ = ReadConfig(kReleaseConfig);
-      if (!config_) {
-        return Finish(
-            "CMake ran but did not write .mercury/player-release.mcfg; does "
-            "CMakeLists.txt call mercury_add_game()?",
-            true);
-      }
       StartBuild();
       break;
     case State::kBuilding:
       if (code != 0) return Finish("Release build failed", true);
+      LocateExecutable();
+      if (config_->executable.empty()) {
+        return Finish("The Release build did not produce mercury_player", true);
+      }
       StartPacking();
       break;
     case State::kPacking:

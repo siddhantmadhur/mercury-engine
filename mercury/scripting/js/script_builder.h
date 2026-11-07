@@ -18,6 +18,9 @@ namespace Mercury {
 struct BuildOptions {
   // Minify the bundle (shipped games).
   bool release = false;
+  // Folder (relative to the project) that gets entry.ts, game.js and game.js.map. It must be two
+  // levels deep in the project, because entry.ts imports "../../scripts/...".
+  std::filesystem::path output_dir = ".mercury/scripts";
   // Called with each line of esbuild's and tsc's output as it arrives.
   std::function<void(const std::string& line)> on_line;
 };

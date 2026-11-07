@@ -84,7 +84,7 @@ bool ScriptBuilder::Build(const fs::path& project_dir, const BuildOptions& optio
   }
 
   // The entry file only imports; the @script decorators register the classes when it runs.
-  const fs::path scripts_dir = project_dir / ".mercury" / "scripts";
+  const fs::path scripts_dir = project_dir / options.output_dir;
   std::error_code ec;
   fs::create_directories(scripts_dir, ec);
   std::string entry = "import \"mercury\";\n";
@@ -97,9 +97,10 @@ bool ScriptBuilder::Build(const fs::path& project_dir, const BuildOptions& optio
   }
 
   std::vector<std::string> esbuild = {
-      MERCURY_ESBUILD_PATH, ".mercury/scripts/entry.ts", "--bundle", "--format=iife",
-      "--platform=neutral", "--target=es2023", "--keep-names", "--tsconfig=tsconfig.json",
-      "--sourcemap=external", "--outfile=.mercury/scripts/game.js", "--log-level=warning"};
+      MERCURY_ESBUILD_PATH, (options.output_dir / "entry.ts").generic_string(), "--bundle",
+      "--format=iife", "--platform=neutral", "--target=es2023", "--keep-names",
+      "--tsconfig=tsconfig.json", "--sourcemap=external",
+      "--outfile=" + (options.output_dir / "game.js").generic_string(), "--log-level=warning"};
   if (options.release) esbuild.push_back("--minify");
   if (!Run(esbuild, project_dir, emit)) {
     emit("esbuild failed");

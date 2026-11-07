@@ -1151,6 +1151,14 @@ void EditorScene::DrawConsole() {
     ImGui::TextDisabled("%s", tag);
     ImGui::SameLine();
     ImGui::TextColored(color, "%s", line.text.c_str());
+    // A script position (scripts/ball.ts:42:5) opens the file in the external editor.
+    if (auto script = Console::FindScriptFile(line.text); script && GetProject()) {
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        ImGui::SetTooltip("Open %s", script->c_str());
+        if (ImGui::IsItemClicked()) OpenInExternalEditor(GetProject()->GetRoot() / *script);
+      }
+    }
   }
   // Follow new output unless the user scrolled up to read.
   const size_t version = console_.GetVersion();

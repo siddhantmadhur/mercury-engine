@@ -1,15 +1,13 @@
 /*
  * play_session.h
  *
- * Drives Build and Play from the editor:
+ * Drives Build and Play from the editor, with the mercury_player that sits next to the editor:
  *
- *   configure (only if the project has no build yet)
- *     -> cmake --build <build_dir> --target <game>
- *     -> <game> --dump-schema .mercury/scripts.mschema
- *     -> <game> <project.mproj> --map <current map>      (Play only)
+ *   mercury_player <project.mproj> --build-scripts     (esbuild, and tsc when installed)
+ *     -> mercury_player <project.mproj> --dump-schema .mercury/scripts.mschema
+ *     -> mercury_player <project.mproj> --map <current map>      (Play only)
  *
- * Where to build comes from .mercury/player.mcfg, which mercury_add_game()
- * writes when CMake configures the project.
+ * The build's output (esbuild and tsc messages) streams to the Console.
  */
 #ifndef MERCURY_EDITOR_PLAY_SESSION_H
 #define MERCURY_EDITOR_PLAY_SESSION_H
@@ -27,7 +25,7 @@ namespace Mercury {
 
 class PlaySession {
  public:
-  enum class State { kIdle, kConfiguring, kBuilding, kRunning };
+  enum class State { kIdle, kBuilding, kRunning };
 
   explicit PlaySession(Console& console) : console_(console) {}
 
@@ -48,21 +46,14 @@ class PlaySession {
   static std::filesystem::path SchemaPath(const Project& project);
 
  private:
-  struct PlayerConfig {
-    std::string executable;
-    std::string build_dir;
-    std::string target;
-    std::string config;
-  };
-
   void Begin(const Project& project, bool run);
-  std::optional<PlayerConfig> ReadPlayerConfig() const;
-  bool StartConfigure();
   bool StartBuild();
   bool StartGame();
   bool DumpSchema();
   bool Launch(const std::vector<std::string>& args, Console::Source source);
   void Finish(const std::string& message, bool error);
+  // The player executable next to the editor.
+  static std::filesystem::path PlayerPath();
 
   Console& console_;
   std::unique_ptr<os::Process> process_;
@@ -75,7 +66,6 @@ class PlaySession {
   std::filesystem::path project_file_;
   std::filesystem::path schema_path_;
   std::string map_;
-  std::optional<PlayerConfig> config_;
 };
 
 }  // namespace Mercury
