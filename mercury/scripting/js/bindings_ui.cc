@@ -10,6 +10,7 @@
 #include "scripting/js/bindings.h"
 #include "scripting/js/script_behaviour.h"
 #include "ui/controls.h"
+#include "ui/panel.h"
 #include "ui/ui_document.h"
 
 namespace Mercury {
@@ -171,6 +172,20 @@ void UiClass(const Info& info) {
   element->EnableInClassList(name, enable);
 }
 
+void UiHasClass(const Info& info) {
+  UI::VisualElement* element = ArgElement(info, 0);
+  std::string name;
+  if (!element || !ArgString(info, 1, &name)) return;
+  info.GetReturnValue().Set(element->ClassListContains(name));
+}
+
+// Takes focus away from whichever element has it, so keys go back to the game.
+void UiBlurFocused(const Info& info) {
+  UI::VisualElement* element = ArgElement(info, 0);
+  if (!element || !element->panel()) return;
+  if (auto* focused = element->panel()->focusedElement()) focused->Blur();
+}
+
 void UiFocus(const Info& info) {
   if (UI::VisualElement* element = ArgElement(info, 0)) element->Focus();
 }
@@ -209,6 +224,8 @@ void InstallUi(v8::Local<v8::Context> context, v8::Local<v8::Object> native) {
   SetFunction(context, native, "uiOnToggleChanged", UiOnToggleChanged);
   SetFunction(context, native, "uiClass", UiClass);
   SetFunction(context, native, "uiFocus", UiFocus);
+  SetFunction(context, native, "uiHasClass", UiHasClass);
+  SetFunction(context, native, "uiBlurFocused", UiBlurFocused);
   SetFunction(context, native, "uiSetDisplay", UiSetDisplay);
   SetFunction(context, native, "uiSetDataSource", UiSetDataSource);
 }

@@ -31,9 +31,13 @@ export class VisualElement {
   }
   /** Adds or removes a USS class. */
   enableInClassList(className: string, enable: boolean): void { __native.uiClass(this.handle, className, enable); }
+  /** True if the element has the USS class. */
+  hasClass(className: string): boolean { return __native.uiHasClass(this.handle, className); }
   /** Shows (display: flex) or hides (display: none) the element. */
   set display(visible: boolean) { __native.uiSetDisplay(this.handle, visible); }
   focus(): void { __native.uiFocus(this.handle); }
+  /** Takes focus away from the focused element, so Enter and the arrow keys go back to the game. */
+  blurFocused(): void { __native.uiBlurFocused(this.handle); }
   /**
    * Binds the element and its children to a script: its `@field`s and `@bindable` getters become
    * the binding paths used in the UXML.

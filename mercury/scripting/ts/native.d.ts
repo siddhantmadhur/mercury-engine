@@ -126,6 +126,8 @@ declare const __native: {
   uiOnToggleChanged(handle: number, fn: (value: boolean) => void): void;
   uiClass(handle: number, name: string, enable: boolean): void;
   uiFocus(handle: number): void;
+  uiHasClass(handle: number, name: string): boolean;
+  uiBlurFocused(handle: number): void;
   uiSetDisplay(handle: number, visible: boolean): void;
   uiSetDataSource(handle: number, behaviourId: number): void;
 

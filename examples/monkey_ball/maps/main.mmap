@@ -25,8 +25,8 @@
 
 [component type="GameManager" node="GameManager"]
 player = NodePath("Player")
-fall_limit = -12.0
-time_limit = 65.0
+fallLimit = -12.0
+timeLimit = 65.0
 
 [component type="UIDocument" node="GameManager"]
 source_asset = ExtResource("1")
@@ -72,7 +72,7 @@ linear_damping = 0.05
 angular_damping = 0.15
 
 [component type="PlayerBall" node="Player"]
-camera_node = NodePath("Camera")
+cameraNode = NodePath("Camera")
 
 [node name="StartPlatform" parent="."]
 
@@ -232,7 +232,7 @@ motion_type = "kinematic"
 gravity_factor = 0.0
 
 [component type="RotatingHazard" node="SweeperArm"]
-degrees_per_second = Vector3(0, 55, 0)
+degreesPerSecond = Vector3(0, 55, 0)
 
 [node name="MogulTrack" parent="."]
 
@@ -422,7 +422,7 @@ scale = Vector3(4.8, 3, 1)
 is_trigger = true
 
 [component type="GoalTrigger" node="GoalTrigger"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Pickups" parent="."]
 
@@ -447,7 +447,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana1"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana2" parent="Pickups"]
 
@@ -468,7 +468,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana2"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana3" parent="Pickups"]
 
@@ -489,7 +489,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana3"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana4" parent="Pickups"]
 
@@ -510,7 +510,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana4"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana5" parent="Pickups"]
 
@@ -531,7 +531,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana5"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana6" parent="Pickups"]
 
@@ -552,7 +552,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana6"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana7" parent="Pickups"]
 
@@ -573,7 +573,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana7"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana8" parent="Pickups"]
 
@@ -594,7 +594,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana8"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana9" parent="Pickups"]
 
@@ -615,7 +615,7 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana9"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
 
 [node name="Banana10" parent="Pickups"]
 
@@ -636,4 +636,4 @@ gravity_factor = 0.0
 is_trigger = true
 
 [component type="BananaPickup" node="Pickups/Banana10"]
-game_manager = NodePath("GameManager")
+gameManager = NodePath("GameManager")
