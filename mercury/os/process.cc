@@ -3,8 +3,6 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <shellapi.h>
-#elif defined(__EMSCRIPTEN__)
-// Emscripten web runtime does not support child process spawning
 #else
 #include <fcntl.h>
 #include <signal.h>
@@ -27,8 +25,6 @@ Process::~Process() {
 #if defined(_WIN32)
   if (read_pipe_) CloseHandle(read_pipe_);
   if (process_) CloseHandle(process_);
-#elif defined(__EMSCRIPTEN__)
-  // No file descriptors in Emscripten
 #else
   if (read_fd_ >= 0) close(read_fd_);
 #endif
@@ -191,29 +187,6 @@ bool OpenWithDefaultApp(const std::filesystem::path& path) {
   auto result = ShellExecuteW(nullptr, L"open", path.wstring().c_str(),
                               nullptr, nullptr, SW_SHOWNORMAL);
   return reinterpret_cast<intptr_t>(result) > 32;
-}
-
-#elif defined(__EMSCRIPTEN__)
-
-bool Process::Start(const std::vector<std::string>&,
-                    const std::filesystem::path&,
-                    std::string* error) {
-  if (error) *error = "Subprocess execution is not supported on Web/Emscripten";
-  return false;
-}
-
-void Process::ReadLoop() {}
-void Process::Reap(bool) {}
-bool Process::IsRunning() { return false; }
-void Process::Kill() {}
-
-bool LaunchDetached(const std::vector<std::string>&, std::string* error) {
-  if (error) *error = "Process launch is not supported on Web/Emscripten";
-  return false;
-}
-
-bool OpenWithDefaultApp(const std::filesystem::path&) {
-  return false;
 }
 
 #else  // POSIX

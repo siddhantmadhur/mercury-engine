@@ -48,20 +48,6 @@ function(mercury_add_game TARGET)
     get_target_property(MERCURY_BINARY mercury BINARY_DIR)
     set(MERCURY_UI_RESOURCES "${MERCURY_SOURCE}/mercury/ui/resources")
 
-    if (EMSCRIPTEN)
-        # They are read from MERCURY_UI_RESOURCE_PATH, so ship them at the
-        # same path.
-        set_target_properties(${TARGET} PROPERTIES SUFFIX ".html")
-        target_link_options(${TARGET} PRIVATE
-                "--shell-file" "${CMAKE_SOURCE_DIR}/web/shell.html"
-                # SHELL: keeps CMake from merging the repeated flag.
-                "SHELL:--preload-file ${GAME_PROJECT}@${GAME_PROJECT}"
-                "SHELL:--preload-file ${MERCURY_UI_RESOURCES}@${MERCURY_UI_RESOURCES}"
-                "-sALLOW_MEMORY_GROWTH=1"
-                "-sNO_EXIT_RUNTIME=1"
-        )
-    endif ()
-
     # Multi-config generators (Visual Studio) get one file per configuration.
     get_property(MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
     if (MULTI_CONFIG)

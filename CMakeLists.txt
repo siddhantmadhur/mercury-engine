@@ -23,42 +23,30 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if (EMSCRIPTEN)
-    set(MERCURY_GRAPHICS_WEBGPU ON)
-    set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_wgpu.cpp)
-    set(MERCURY_GRAPHICS_SOURCES
-            mercury/application/webgpu_application.cc
-            mercury/application/webgpu_application.h
-            mercury/application/webgpu/wgpu_ui_renderer.cc
-            mercury/application/webgpu/wgpu_ui_renderer.h)
-    add_compile_options(--use-port=emdawnwebgpu)
-    add_link_options(--use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1)
-else ()
-    set(MERCURY_GRAPHICS_VULKAN ON)
-    if (APPLE)
-        list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew" "/usr/local")
-    endif ()
-    find_package(Vulkan REQUIRED)
-    find_package(Threads REQUIRED)
-    set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
-    set(MERCURY_GRAPHICS_SOURCES
-            mercury/application/vulkan_application.cc
-            mercury/application/vulkan_application.h
-            mercury/application/vulkan/vk_check.h
-            mercury/application/vulkan/vk_context.cc
-            mercury/application/vulkan/vk_context.h
-            mercury/application/vulkan/vk_swapchain.cc
-            mercury/application/vulkan/vk_swapchain.h
-            mercury/application/vulkan/vk_buffer.cc
-            mercury/application/vulkan/vk_buffer.h
-            mercury/application/vulkan/vk_gpu_timer.cc
-            mercury/application/vulkan/vk_gpu_timer.h
-            mercury/application/vulkan/vk_ui_renderer.cc
-            mercury/application/vulkan/vk_ui_renderer.h
-            mercury/application/vulkan/vk_scene_renderer.cc
-            mercury/application/vulkan/vk_scene_renderer.h
-            mercury/application/vulkan/vma_impl.cc)
+set(MERCURY_GRAPHICS_VULKAN ON)
+if (APPLE)
+    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew" "/usr/local")
 endif ()
+find_package(Vulkan REQUIRED)
+find_package(Threads REQUIRED)
+set(IMGUI_BACKEND_SRC third_party/imgui/backends/imgui_impl_vulkan.cpp)
+set(MERCURY_GRAPHICS_SOURCES
+        mercury/application/vulkan_application.cc
+        mercury/application/vulkan_application.h
+        mercury/application/vulkan/vk_check.h
+        mercury/application/vulkan/vk_context.cc
+        mercury/application/vulkan/vk_context.h
+        mercury/application/vulkan/vk_swapchain.cc
+        mercury/application/vulkan/vk_swapchain.h
+        mercury/application/vulkan/vk_buffer.cc
+        mercury/application/vulkan/vk_buffer.h
+        mercury/application/vulkan/vk_gpu_timer.cc
+        mercury/application/vulkan/vk_gpu_timer.h
+        mercury/application/vulkan/vk_ui_renderer.cc
+        mercury/application/vulkan/vk_ui_renderer.h
+        mercury/application/vulkan/vk_scene_renderer.cc
+        mercury/application/vulkan/vk_scene_renderer.h
+        mercury/application/vulkan/vma_impl.cc)
 
 add_library(mercury STATIC
         mercury/physics_engine/physics_engine.cc
@@ -203,11 +191,7 @@ add_library(imgui STATIC
 )
 
 target_include_directories(imgui PUBLIC "third_party/imgui")
-if (EMSCRIPTEN)
-    target_link_libraries(imgui)
-else ()
-    target_link_libraries(imgui glfw Vulkan::Vulkan)
-endif ()
+target_link_libraries(imgui glfw Vulkan::Vulkan)
 
 
 add_subdirectory(third_party/glm)
@@ -222,9 +206,7 @@ file(GLOB_RECURSE JOLT_SOURCE "third_party/JoltPhysics/Jolt/*.cpp")
 
 
 add_library(joltphysics STATIC ${JOLT_SOURCE})
-if (NOT EMSCRIPTEN)
-    target_link_libraries(joltphysics Threads::Threads)
-endif ()
+target_link_libraries(joltphysics Threads::Threads)
 
 include_directories("third_party/JoltPhysics")
 
@@ -241,9 +223,7 @@ target_include_directories(yoga PUBLIC "third_party/yoga")
 add_library(miniaudio STATIC third_party/miniaudio/miniaudio.c)
 target_include_directories(miniaudio PUBLIC "third_party/miniaudio")
 target_compile_definitions(miniaudio PRIVATE MA_NO_ENCODING MA_NO_GENERATION)
-if (NOT EMSCRIPTEN)
-    target_link_libraries(miniaudio Threads::Threads ${CMAKE_DL_LIBS} m)
-endif ()
+target_link_libraries(miniaudio Threads::Threads ${CMAKE_DL_LIBS} m)
 target_link_libraries(mercury miniaudio)
 # End of miniaudio
 
@@ -252,10 +232,8 @@ add_subdirectory(third_party/tinyxml2)
 include_directories("third_party/tinyxml2")
 # End of TinyXML2
 
-if (NOT EMSCRIPTEN)
-    include_directories("third_party/glfw/include")
-    add_subdirectory("third_party/glfw")
-endif ()
+include_directories("third_party/glfw/include")
+add_subdirectory("third_party/glfw")
 
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -287,33 +265,22 @@ target_link_libraries(mercury meshoptimizer)
 include_directories("third_party/VulkanMemoryAllocator/include")
 
 
-if (EMSCRIPTEN)
-    target_compile_definitions(mercury PUBLIC
-            MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
-            MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
-            MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
-            MERCURY_GRAPHICS_WEBGPU=1
-            GLM_FORCE_DEPTH_ZERO_TO_ONE
-    )
-    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 yoga assimp EnTT::EnTT)
-else ()
-    target_compile_definitions(mercury PUBLIC
-            MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
-            MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
-            MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
-            MERCURY_GRAPHICS_VULKAN=1
-            GLFW_INCLUDE_VULKAN=1
-            GLM_FORCE_DEPTH_ZERO_TO_ONE
-    )
-    target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 yoga glfw assimp
-            EnTT::EnTT Vulkan::Vulkan Threads::Threads)
-    if (APPLE)
-        target_link_libraries(mercury
-                "-framework Cocoa"
-                "-framework IOKit"
-                "-framework CoreFoundation"
-                "-framework QuartzCore")
-    endif ()
+target_compile_definitions(mercury PUBLIC
+        MERCURY_SHADER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders"
+        MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+        MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
+        MERCURY_GRAPHICS_VULKAN=1
+        GLFW_INCLUDE_VULKAN=1
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+target_link_libraries(mercury imgui glm::glm joltphysics tinyxml2 yoga glfw assimp
+        EnTT::EnTT Vulkan::Vulkan Threads::Threads)
+if (APPLE)
+    target_link_libraries(mercury
+            "-framework Cocoa"
+            "-framework IOKit"
+            "-framework CoreFoundation"
+            "-framework QuartzCore")
 endif ()
 # Games built outside this folder (see cmake/MercuryGame.cmake) need the same
 # language level and include paths the engine uses.
@@ -333,83 +300,81 @@ if (MSVC)
     message(STATUS "Using Visual Studio Compiler")
 endif ()
 
-if (NOT EMSCRIPTEN)
-    # Compile HLSL -> SPIR-V via DXC at build time. The Y flip is done with a
-    # negative viewport height at draw time, so no -fvk-invert-y here.
-    find_program(DXC dxc
-            HINTS $ENV{VULKAN_SDK}/bin
-                  ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc/bin
-                  ${CMAKE_CURRENT_SOURCE_DIR}/bin/vulkansdk/macOS/bin
-                  /opt/homebrew/bin
-            REQUIRED)
-    set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders)
-    set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/shaders)
-    file(MAKE_DIRECTORY ${SHADER_BIN})
-    set(DXC_COMMON_FLAGS -spirv
-            -fvk-b-shift 0 0    # cbuffer bN -> binding N
-            -fvk-t-shift 10 0   # texture tN -> binding N+10
-            -fvk-s-shift 20 0   # sampler sN -> binding N+20
-            $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Od>
-            $<$<NOT:$<CONFIG:Debug>>:-O3>)
-    # job: src|profile|out
-    set(SHADER_JOBS
-            "main.vs.hlsl|vs_6_0|main.vs.spv"
-            "static.vs.hlsl|vs_6_0|static.vs.spv"
-            "shadow.vs.hlsl|vs_6_0|shadow.vs.spv"
-            "skybox.vs.hlsl|vs_6_0|skybox.vs.spv"
-            "skybox.ps.hlsl|ps_6_0|skybox.ps.spv"
-            "textured.ps.hlsl|ps_6_0|textured.ps.spv"
-            "ui.vs.hlsl|vs_6_0|ui.vs.spv"
-            "ui.ps.hlsl|ps_6_0|ui.ps.spv"
-            "model.vs.hlsl|vs_6_0|model.vs.spv"
-            "model.ps.hlsl|ps_6_0|model.ps.spv"
-            "model_shadow.vs.hlsl|vs_6_0|model_shadow.vs.spv"
-            "outline_mask.ps.hlsl|ps_6_0|outline_mask.ps.spv"
-            "fullscreen.vs.hlsl|vs_6_0|fullscreen.vs.spv"
-            "sky.ps.hlsl|ps_6_0|sky.ps.spv"
-            "ssao.ps.hlsl|ps_6_0|ssao.ps.spv"
-            "blur.ps.hlsl|ps_6_0|blur.ps.spv"
-            "bloom_down.ps.hlsl|ps_6_0|bloom_down.ps.spv"
-            "bloom_up.ps.hlsl|ps_6_0|bloom_up.ps.spv"
-            "composite.ps.hlsl|ps_6_0|composite.ps.spv"
-            "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv"
-            "shadow_cube.ps.hlsl|ps_6_0|shadow_cube.ps.spv"
-            "shadow_transmit.ps.hlsl|ps_6_0|shadow_transmit.ps.spv"
-            "scene_copy.ps.hlsl|ps_6_0|scene_copy.ps.spv"
-            "probe_sh.ps.hlsl|ps_6_0|probe_sh.ps.spv"
-            "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv"
-            "probe_octa.ps.hlsl|ps_6_0|probe_octa.ps.spv"
-            "cull.cs.hlsl|cs_6_0|cull.cs.spv")
-    set(SPV_OUTS "")
-    foreach (JOB ${SHADER_JOBS})
-        string(REPLACE "|" ";" JOB_PARTS "${JOB}")
-        list(GET JOB_PARTS 0 SRC)
-        list(GET JOB_PARTS 1 PROFILE)
-        list(GET JOB_PARTS 2 OUT)
-        add_custom_command(
-                OUTPUT ${SHADER_BIN}/${OUT}
-                COMMAND ${DXC} ${DXC_COMMON_FLAGS}
-                -fspv-target-env=vulkan1.3
-                -T ${PROFILE} -E Main
-                ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
-                DEPENDS ${SHADER_SRC}/${SRC} ${SHADER_SRC}/model_common.hlsli
-                        ${SHADER_SRC}/post_common.hlsli ${SHADER_SRC}/lighting.hlsli
-                        ${SHADER_SRC}/lighting_math.hlsli
-                COMMENT "DXC ${SRC} -> ${OUT}"
-                COMMAND_EXPAND_LISTS)
-        list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})
-    endforeach ()
-    add_custom_target(mercury_shaders DEPENDS ${SPV_OUTS})
-    add_dependencies(mercury mercury_shaders)
-    target_compile_definitions(mercury PUBLIC MERCURY_SPIRV_PATH="${SHADER_BIN}")
-endif ()
+# Compile HLSL -> SPIR-V via DXC at build time. The Y flip is done with a
+# negative viewport height at draw time, so no -fvk-invert-y here.
+find_program(DXC dxc
+        HINTS $ENV{VULKAN_SDK}/bin
+              ${CMAKE_CURRENT_SOURCE_DIR}/bin/dxc/bin
+              ${CMAKE_CURRENT_SOURCE_DIR}/bin/vulkansdk/macOS/bin
+              /opt/homebrew/bin
+        REQUIRED)
+set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/mercury/shaders)
+set(SHADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+file(MAKE_DIRECTORY ${SHADER_BIN})
+set(DXC_COMMON_FLAGS -spirv
+        -fvk-b-shift 0 0    # cbuffer bN -> binding N
+        -fvk-t-shift 10 0   # texture tN -> binding N+10
+        -fvk-s-shift 20 0   # sampler sN -> binding N+20
+        $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Od>
+        $<$<NOT:$<CONFIG:Debug>>:-O3>)
+# job: src|profile|out
+set(SHADER_JOBS
+        "main.vs.hlsl|vs_6_0|main.vs.spv"
+        "static.vs.hlsl|vs_6_0|static.vs.spv"
+        "shadow.vs.hlsl|vs_6_0|shadow.vs.spv"
+        "skybox.vs.hlsl|vs_6_0|skybox.vs.spv"
+        "skybox.ps.hlsl|ps_6_0|skybox.ps.spv"
+        "textured.ps.hlsl|ps_6_0|textured.ps.spv"
+        "ui.vs.hlsl|vs_6_0|ui.vs.spv"
+        "ui.ps.hlsl|ps_6_0|ui.ps.spv"
+        "model.vs.hlsl|vs_6_0|model.vs.spv"
+        "model.ps.hlsl|ps_6_0|model.ps.spv"
+        "model_shadow.vs.hlsl|vs_6_0|model_shadow.vs.spv"
+        "outline_mask.ps.hlsl|ps_6_0|outline_mask.ps.spv"
+        "fullscreen.vs.hlsl|vs_6_0|fullscreen.vs.spv"
+        "sky.ps.hlsl|ps_6_0|sky.ps.spv"
+        "ssao.ps.hlsl|ps_6_0|ssao.ps.spv"
+        "blur.ps.hlsl|ps_6_0|blur.ps.spv"
+        "bloom_down.ps.hlsl|ps_6_0|bloom_down.ps.spv"
+        "bloom_up.ps.hlsl|ps_6_0|bloom_up.ps.spv"
+        "composite.ps.hlsl|ps_6_0|composite.ps.spv"
+        "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv"
+        "shadow_cube.ps.hlsl|ps_6_0|shadow_cube.ps.spv"
+        "shadow_transmit.ps.hlsl|ps_6_0|shadow_transmit.ps.spv"
+        "scene_copy.ps.hlsl|ps_6_0|scene_copy.ps.spv"
+        "probe_sh.ps.hlsl|ps_6_0|probe_sh.ps.spv"
+        "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv"
+        "probe_octa.ps.hlsl|ps_6_0|probe_octa.ps.spv"
+        "cull.cs.hlsl|cs_6_0|cull.cs.spv")
+set(SPV_OUTS "")
+foreach (JOB ${SHADER_JOBS})
+    string(REPLACE "|" ";" JOB_PARTS "${JOB}")
+    list(GET JOB_PARTS 0 SRC)
+    list(GET JOB_PARTS 1 PROFILE)
+    list(GET JOB_PARTS 2 OUT)
+    add_custom_command(
+            OUTPUT ${SHADER_BIN}/${OUT}
+            COMMAND ${DXC} ${DXC_COMMON_FLAGS}
+            -fspv-target-env=vulkan1.3
+            -T ${PROFILE} -E Main
+            ${SHADER_SRC}/${SRC} -Fo ${SHADER_BIN}/${OUT}
+            DEPENDS ${SHADER_SRC}/${SRC} ${SHADER_SRC}/model_common.hlsli
+                    ${SHADER_SRC}/post_common.hlsli ${SHADER_SRC}/lighting.hlsli
+                    ${SHADER_SRC}/lighting_math.hlsli
+            COMMENT "DXC ${SRC} -> ${OUT}"
+            COMMAND_EXPAND_LISTS)
+    list(APPEND SPV_OUTS ${SHADER_BIN}/${OUT})
+endforeach ()
+add_custom_target(mercury_shaders DEPENDS ${SPV_OUTS})
+add_dependencies(mercury mercury_shaders)
+target_compile_definitions(mercury PUBLIC MERCURY_SPIRV_PATH="${SHADER_BIN}")
 
 
 # CREATE NEW BINARIES USING THIS
 
 
 # Unit tests (ctest --test-dir build)
-if (MERCURY_BUILD_TESTS AND NOT EMSCRIPTEN)
+if (MERCURY_BUILD_TESTS)
 enable_testing()
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
@@ -437,10 +402,8 @@ gtest_discover_tests(mercury_test)
 endif ()
 
 # Command line tools (model inspection for importers)
-if (NOT EMSCRIPTEN)
-    add_executable(mercury_model_info tools/model_info.cc)
-    target_link_libraries(mercury_model_info mercury)
-endif ()
+add_executable(mercury_model_info tools/model_info.cc)
+target_link_libraries(mercury_model_info mercury)
 
 # Games made of a .mproj project (maps, assets and C++ scripts)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGame.cmake)
@@ -451,20 +414,18 @@ if (MERCURY_BUILD_EXAMPLES)
     add_subdirectory(examples/model_viewer)
 
     # Older examples that still build their worlds in code
-    if (NOT EMSCRIPTEN)
-        add_executable(example_breakout examples/breakout/main.cc
-                examples/breakout/breakout_scene.cc
-                examples/breakout/breakout_scene.h)
-        target_link_libraries(example_breakout mercury)
+    add_executable(example_breakout examples/breakout/main.cc
+            examples/breakout/breakout_scene.cc
+            examples/breakout/breakout_scene.h)
+    target_link_libraries(example_breakout mercury)
 
-        add_executable(example_space_invaders examples/space_invaders/main.cc
-                examples/space_invaders/space_invaders.cc
-                examples/space_invaders/space_invaders.h)
-        target_link_libraries(example_space_invaders mercury)
-    endif ()
+    add_executable(example_space_invaders examples/space_invaders/main.cc
+            examples/space_invaders/space_invaders.cc
+            examples/space_invaders/space_invaders.h)
+    target_link_libraries(example_space_invaders mercury)
 endif ()
 
-if (MERCURY_BUILD_EDITOR AND NOT EMSCRIPTEN)
+if (MERCURY_BUILD_EDITOR)
     # Everything but main(), so the smoke test can drive the same editor.
     add_library(mercury_editor_lib STATIC
             editor/editor_scene.cc
