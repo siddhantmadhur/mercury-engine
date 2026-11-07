@@ -12,6 +12,7 @@
 #include "scripting/js/script_behaviour.h"
 #include "scripting/js/script_builder.h"
 #include "scripting/js/script_runtime.h"
+#include "scripting/ts_types.h"
 #include "scripting/type_registry.h"
 
 using namespace Mercury;
@@ -299,4 +300,16 @@ radius = 0.3
   EXPECT_EQ(log.find("no controller"), std::string::npos) << log;
   // The controller moved along -Z through the script.
   EXPECT_LT(scene.Find("Player").GetTransform()->GetPosition().z, -2.0f);
+}
+
+TEST_F(ScriptBehaviourTest, GeneratedComponentClassesHaveTheRuntimeMethods) {
+  const std::string ts = GenerateComponentsTs();
+  EXPECT_NE(ts.find("export class Animator extends Component"), std::string::npos);
+  EXPECT_NE(ts.find("setTrigger(name: string): void"), std::string::npos);
+  EXPECT_NE(ts.find("getCurrentState(layer = 0): string"), std::string::npos);
+  EXPECT_NE(ts.find("playOneShot(clip: string"), std::string::npos);
+  EXPECT_NE(ts.find("get isGrounded(): boolean"), std::string::npos);
+  // Field names are camelCase on the TypeScript side.
+  EXPECT_NE(ts.find("get applyRootMotion(): boolean"), std::string::npos);
+  EXPECT_EQ(ts.find("get apply_root_motion"), std::string::npos);
 }
