@@ -99,6 +99,8 @@ std::string GenerateComponentsTs() {
       "import { Color, Vector2, Vector3 } from \"../math\";\n\n";
   for (const ComponentInfo* info : TypeRegistry::Instance().Components()) {
     if (info->is_script || !info->has || !IsIdentifier(info->name)) continue;
+    // These have hand-written classes (gameObject.transform, behaviour.document).
+    if (info->name == "Transform" || info->name == "UIDocument") continue;
     out += Jsdoc(info->description, "");
     out += std::format("export class {0} extends Component {{\n  static readonly typeName = \"{0}\";\n", info->name);
     for (const FieldInfo& field : info->fields) {

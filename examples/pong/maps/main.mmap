@@ -11,7 +11,7 @@
 
 [component type="PongGame" node="."]
 ball = NodePath("Ball")
-show_debug = true
+showDebug = true
 
 [component type="UIDocument" node="."]
 source_asset = ExtResource("1")
@@ -50,8 +50,8 @@ limit = 40.0
 
 [component type="PlayerController" node="Player"]
 speed = 70.0
-up_key = "W"
-down_key = "S"
+upKey = "W"
+downKey = "S"
 
 [node name="Enemy" parent="."]
 
@@ -106,8 +106,8 @@ material = ExtResource("4")
 
 [component type="Ball" node="Ball"]
 speed = 60.0
-min_horizontal = 0.45
-serve_angle = 35.0
+minHorizontal = 0.45
+serveAngle = 35.0
 
 [node name="Walls" parent="."]
 
