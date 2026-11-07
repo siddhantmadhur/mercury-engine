@@ -3,7 +3,7 @@
     <ui:VisualElement class="score-box">
         <ui:Label name="score" class="score">
             <Bindings>
-                <ui:DataBinding property="text" data-source-path="score_text" />
+                <ui:DataBinding property="text" data-source-path="scoreText" />
             </Bindings>
         </ui:Label>
         <ui:Label class="help" text="WASD / arrows: roll · Space: jump · Esc: quit" />

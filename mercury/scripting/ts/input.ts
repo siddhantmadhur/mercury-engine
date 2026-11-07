@@ -59,4 +59,13 @@ export class InputActionAsset {
     const index = __native.inputActionFind(this.scene, name);
     return index < 0 ? null : new InputAction(this.scene, index);
   }
+  /** Like {@link find}, but throws if there is no such action. */
+  require(name: string): InputAction {
+    const action = this.find(name);
+    if (!action) throw new Error(`The project has no input action "${name}"`);
+    return action;
+  }
+  /** Enables every action of a map. */
+  enableMap(map: string): void { __native.inputMapEnable(this.scene, map, true); }
+  disableMap(map: string): void { __native.inputMapEnable(this.scene, map, false); }
 }

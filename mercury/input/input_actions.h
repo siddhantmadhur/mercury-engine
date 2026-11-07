@@ -5,7 +5,7 @@
  * keys, mouse and gamepad controls, read by value or through callbacks.
  * The project lists its actions file in [input] actions = "res://...".
  *
- *   [minput format=1 class="GameInput" header="res://scripts/game_input.h"]
+ *   [minput format=1 class="GameInput" header="res://scripts/generated/game_input.ts"]
  *
  *   [map name="Player"]
  *
@@ -27,7 +27,7 @@
  *
  * [map] sections are optional; they keep empty maps and the map order the
  * editor's Input Actions window shows. `class` and `header` are where that
- * window writes the generated C++ header (input_actions_codegen.h).
+ * window writes the generated TypeScript class (input_actions_codegen.h).
  */
 #ifndef MERCURY_INPUT_INPUT_ACTIONS_H
 #define MERCURY_INPUT_INPUT_ACTIONS_H
@@ -188,7 +188,7 @@ struct InputActionsDesc {
   // Every map in order, including maps with no actions yet.
   std::vector<std::string> maps;
   std::vector<InputActionDesc> actions;
-  // Generated C++ header: res:// path ("" to not generate) and struct name.
+  // Generated TypeScript file: res:// path ("" to not generate) and struct name.
   std::string header;
   std::string class_name;
 

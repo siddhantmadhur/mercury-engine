@@ -1,4 +1,4 @@
-[minput format=1 class="GameInput" header="res://scripts/game_input.h"]
+[minput format=1 class="GameInput" header="res://scripts/generated/game_input.ts"]
 
 [map name="Player"]
 
