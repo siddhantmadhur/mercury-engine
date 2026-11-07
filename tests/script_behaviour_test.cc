@@ -258,3 +258,19 @@ old_name = 3
   for (const auto& w : warnings) found = found || w.find("old_name") != std::string::npos;
   EXPECT_TRUE(found);
 }
+
+TEST_F(ScriptBehaviourTest, DataAssetsLoadIntoTheirClass) {
+  const AssetTypeInfo* type = TypeRegistry::Instance().FindAssetType("LevelData");
+  ASSERT_TRUE(type);
+  EXPECT_TRUE(type->from_game);
+  EXPECT_TRUE(type->FindField("par"));
+
+  MapScene scene(g_project, MapScene::Mode::kPlay);
+  Load(scene, R"([mmap format=1]
+[node name="Root"]
+[node name="U" parent="."]
+[component type="AssetUser" node="U"]
+)");
+  Tick(scene, 1);
+  EXPECT_EQ(Log(), "level 7 Second");
+}

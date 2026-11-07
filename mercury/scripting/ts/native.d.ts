@@ -115,6 +115,8 @@ declare const __native: {
   inputActionEnable(scene: number, index: number, enable: boolean): void;
   inputMapEnable(scene: number, map: string, enable: boolean): void;
 
+  loadDataAsset(scene: number, className: string, path: string): object;
+
   debugBegin(title: string, x: number, y: number): void;
   debugText(text: string): void;
   debugEnd(): void;
