@@ -619,6 +619,16 @@ void InputActionEnable(const Info& info) {
   if (enable) action->Enable(); else action->Disable();
 }
 
+void InputMapEnable(const Info& info) {
+  MapScene* scene = ArgScene(info, 0);
+  std::string map;
+  bool enable;
+  if (!scene || !ArgString(info, 1, &map) || !ArgBool(info, 2, &enable)) return;
+  InputActionAsset* asset = scene->GetInputActions();
+  if (!asset) return;
+  if (enable) asset->EnableMap(map); else asset->DisableMap(map);
+}
+
 // --- debug window -------------------------------------------------------------------------
 
 void DebugBegin(const Info& info) {
@@ -725,6 +735,7 @@ void InstallCore(v8::Local<v8::Context> context, v8::Local<v8::Object> native) {
   SetFunction(context, native, "inputActionRead", InputActionRead);
   SetFunction(context, native, "inputActionState", InputActionState);
   SetFunction(context, native, "inputActionEnable", InputActionEnable);
+  SetFunction(context, native, "inputMapEnable", InputMapEnable);
   // debug window
   SetFunction(context, native, "debugBegin", DebugBegin);
   SetFunction(context, native, "debugText", DebugText);
