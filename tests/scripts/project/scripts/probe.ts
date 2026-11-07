@@ -1,6 +1,6 @@
 import {
-  Behaviour, Debug, Event, GameObject, NodeRef, Scene, Vector3, bindable, callable, enumField,
-  field, int, script,
+  Assets, Behaviour, Debug, Event, GameObject, NodeRef, Scene, Vector3, bindable, callable,
+  dataAsset, enumField, field, int, script,
 } from "mercury";
 
 // What happened, in order; tests read it back with `globalThis.__log`.
@@ -86,4 +86,19 @@ class Base extends Behaviour {
 @script()
 class Derived extends Base {
   @field() derivedField = 2;
+}
+
+// A ScriptableObject-style asset type.
+@dataAsset()
+class LevelData {
+  @field() par = 3;
+  @field() title = "First";
+}
+
+@script()
+class AssetUser extends Behaviour {
+  onStart(): void {
+    const level = Assets.load(LevelData, "res://assets/level.masset");
+    log.push(`level ${level.par} ${level.title}`);
+  }
 }

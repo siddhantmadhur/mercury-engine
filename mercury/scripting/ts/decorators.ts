@@ -124,6 +124,8 @@ interface Pending {
 }
 
 const pending: Pending[] = [];
+// The registered name of each data asset class, for Assets.load.
+const dataAssetNames = new Map<Function, string>();
 
 const CALLBACKS = [
   "awake", "onEnable", "onDisable", "onStart", "onFrame", "onLateFrame", "onTick",
@@ -144,6 +146,7 @@ function register(dataAsset: boolean, name: string | undefined) {
     }
     // The class name is a string literal after lowering, so minification cannot change it.
     const scriptName = name ?? String(context.name);
+    if (dataAsset) dataAssetNames.set(value, scriptName);
     pending.push({
       name: scriptName,
       ctor: value as new () => unknown,
@@ -233,3 +236,16 @@ export function finalizeScripts(): void {
     }
   }
 }
+
+/** Loading project assets. */
+export const Assets = {
+  /**
+   * Loads a `.masset` file as an instance of a `@dataAsset` class (Unity's ScriptableObject):
+   * `Assets.load(LevelData, "res://assets/level1.masset")`.
+   */
+  load<T extends object>(type: new () => T, path: string): T {
+    const name = dataAssetNames.get(type);
+    if (!name) throw new Error(`${type.name} is not a @dataAsset class`);
+    return __native.loadDataAsset(__native.sceneCurrent(), name, path) as T;
+  },
+};

@@ -641,6 +641,30 @@ void InputMapEnable(const Info& info) {
   if (enable) asset->EnableMap(map); else asset->DisableMap(map);
 }
 
+// loadDataAsset(scene, className, path) -> an instance of the @dataAsset class filled from the
+// .masset file.
+void LoadDataAsset(const Info& info) {
+  MapScene* scene = ArgScene(info, 0);
+  std::string class_name, path;
+  if (!scene || !ArgString(info, 1, &class_name) || !ArgString(info, 2, &path)) return;
+  const ScriptClass* script_class = ScriptRuntime::Instance().FindScriptClass(class_name);
+  if (!script_class || !script_class->data_asset) {
+    Throw(info.GetIsolate(), class_name + " is not a @dataAsset class");
+    return;
+  }
+  auto asset = scene->Assets().Load(path);
+  if (!asset) {
+    Throw(info.GetIsolate(), "Could not load " + path);
+    return;
+  }
+  auto holder = ScriptBehaviour::Create(*script_class, nullptr, entt::null);
+  if (!holder) return;
+  auto reflector = Reflector::Read(asset->properties);
+  holder->Reflect(reflector);
+  LogReflectionWarnings(reflector, asset->path);
+  info.GetReturnValue().Set(holder->Instance());
+}
+
 // --- debug window -------------------------------------------------------------------------
 
 void DebugBegin(const Info& info) {
@@ -750,6 +774,7 @@ void InstallCore(v8::Local<v8::Context> context, v8::Local<v8::Object> native) {
   SetFunction(context, native, "inputActionState", InputActionState);
   SetFunction(context, native, "inputActionEnable", InputActionEnable);
   SetFunction(context, native, "inputMapEnable", InputMapEnable);
+  SetFunction(context, native, "loadDataAsset", LoadDataAsset);
   // debug window
   SetFunction(context, native, "debugBegin", DebugBegin);
   SetFunction(context, native, "debugText", DebugText);
