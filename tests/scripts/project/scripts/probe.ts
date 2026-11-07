@@ -1,5 +1,5 @@
 import {
-  Assets, Behaviour, Debug, Event, GameObject, NodeRef, Scene, Vector3, bindable, callable,
+  Assets, AudioSource, Behaviour, CharacterController, Debug, Event, GameObject, NodeRef, Scene, Vector3, bindable, callable,
   dataAsset, enumField, field, int, script,
 } from "mercury";
 
@@ -100,5 +100,18 @@ class AssetUser extends Behaviour {
   onStart(): void {
     const level = Assets.load(LevelData, "res://assets/level.masset");
     log.push(`level ${level.par} ${level.title}`);
+  }
+}
+
+// Uses the runtime methods of engine components.
+@script()
+class ComponentUser extends Behaviour {
+  onTick(): void {
+    const controller = this.gameObject.getComponent(CharacterController);
+    if (!controller) { log.push("no controller"); return; }
+    controller.move(new Vector3(0, -0.05, -0.1));
+    log.push(`grounded ${controller.isGrounded} v ${controller.velocity.length >= 0}`);
+    const audio = this.gameObject.getComponent(AudioSource);
+    log.push(`audio ${audio === null}`);
   }
 }

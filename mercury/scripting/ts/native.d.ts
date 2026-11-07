@@ -135,6 +135,17 @@ declare const __native: {
   uiSetDisplay(handle: number, visible: boolean): void;
   uiSetDataSource(handle: number, behaviourId: number): void;
 
+  animatorSet(scene: number, entity: number, kind: number, name: string, value?: number | boolean): void;
+  animatorGet(scene: number, entity: number, kind: number, name: string): number | boolean;
+  animatorPlay(scene: number, entity: number, state: string, layer: number, time: number): void;
+  animatorState(scene: number, entity: number, layer: number): string;
+  audioCall(scene: number, entity: number, op: number): boolean | undefined;
+  audioPlayOneShot(scene: number, entity: number, clip: string, volume: number): void;
+  audioSet(scene: number, entity: number, property: string, value: number | boolean | string): void;
+  characterMove(scene: number, entity: number, x: number, y: number, z: number): number;
+  characterGrounded(scene: number, entity: number): boolean;
+  characterVelocity(scene: number, entity: number): void;
+
   // Generic component access (generated component classes use these).
   componentHas(scene: number, entity: number, type: string): boolean;
   componentGet(scene: number, entity: number, type: string, field: string): unknown;

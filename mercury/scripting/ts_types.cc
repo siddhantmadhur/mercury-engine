@@ -107,6 +107,56 @@ std::string Jsdoc(const std::string& text, const std::string& indent) {
 
 }  // namespace
 
+// Hand-written members merged into the generated classes (the runtime methods of components).
+const char* ExtraMembers(const std::string& component) {
+  if (component == "Animator") {
+    return R"(
+  /** Sets a float parameter of the controller. */
+  setFloat(name: string, value: number): void { __native.animatorSet(this.gameObject.sceneSerial, this.gameObject.entity, 0, name, value); }
+  setInteger(name: string, value: number): void { __native.animatorSet(this.gameObject.sceneSerial, this.gameObject.entity, 1, name, value); }
+  setBool(name: string, value: boolean): void { __native.animatorSet(this.gameObject.sceneSerial, this.gameObject.entity, 2, name, value); }
+  setTrigger(name: string): void { __native.animatorSet(this.gameObject.sceneSerial, this.gameObject.entity, 3, name); }
+  resetTrigger(name: string): void { __native.animatorSet(this.gameObject.sceneSerial, this.gameObject.entity, 4, name); }
+  getFloat(name: string): number { return __native.animatorGet(this.gameObject.sceneSerial, this.gameObject.entity, 0, name) as number; }
+  getInteger(name: string): number { return __native.animatorGet(this.gameObject.sceneSerial, this.gameObject.entity, 1, name) as number; }
+  getBool(name: string): boolean { return __native.animatorGet(this.gameObject.sceneSerial, this.gameObject.entity, 2, name) as boolean; }
+  /** Jumps a layer straight to a state (all layers when `layer` is -1). */
+  play(state: string, layer = -1, normalizedTime = 0): void { __native.animatorPlay(this.gameObject.sceneSerial, this.gameObject.entity, state, layer, normalizedTime); }
+  /** The name of the layer's current state. */
+  getCurrentState(layer = 0): string { return __native.animatorState(this.gameObject.sceneSerial, this.gameObject.entity, layer); }
+)";
+  }
+  if (component == "AudioSource") {
+    return R"(
+  play(): void { __native.audioCall(this.gameObject.sceneSerial, this.gameObject.entity, 0); }
+  stop(): void { __native.audioCall(this.gameObject.sceneSerial, this.gameObject.entity, 1); }
+  pause(): void { __native.audioCall(this.gameObject.sceneSerial, this.gameObject.entity, 2); }
+  unPause(): void { __native.audioCall(this.gameObject.sceneSerial, this.gameObject.entity, 3); }
+  get isPlaying(): boolean { return __native.audioCall(this.gameObject.sceneSerial, this.gameObject.entity, 4) as boolean; }
+  /** Plays a clip once, on top of whatever is playing. */
+  playOneShot(clip: string, volumeScale = 1): void { __native.audioPlayOneShot(this.gameObject.sceneSerial, this.gameObject.entity, clip, volumeScale); }
+  setVolume(volume: number): void { __native.audioSet(this.gameObject.sceneSerial, this.gameObject.entity, "volume", volume); }
+  setPitch(pitch: number): void { __native.audioSet(this.gameObject.sceneSerial, this.gameObject.entity, "pitch", pitch); }
+  setLoop(loop: boolean): void { __native.audioSet(this.gameObject.sceneSerial, this.gameObject.entity, "loop", loop); }
+  setMute(mute: boolean): void { __native.audioSet(this.gameObject.sceneSerial, this.gameObject.entity, "mute", mute); }
+  setClip(clip: string): void { __native.audioSet(this.gameObject.sceneSerial, this.gameObject.entity, "clip", clip); }
+)";
+  }
+  if (component == "CharacterController") {
+    return R"(
+  /** Moves the controller by `motion`, stopping at obstacles; returns the collision flags. */
+  move(motion: Vector3): number { return __native.characterMove(this.gameObject.sceneSerial, this.gameObject.entity, motion.x, motion.y, motion.z); }
+  get isGrounded(): boolean { return __native.characterGrounded(this.gameObject.sceneSerial, this.gameObject.entity); }
+  get velocity(): Vector3 {
+    __native.characterVelocity(this.gameObject.sceneSerial, this.gameObject.entity);
+    const s = __native.scratch;
+    return new Vector3(s[0], s[1], s[2]);
+  }
+)";
+  }
+  return "";
+}
+
 std::string GenerateComponentsTs() {
   std::string out =
       "// Generated from the engine's TypeRegistry. Do not edit: it is rewritten on every build.\n"
@@ -129,12 +179,14 @@ std::string GenerateComponentsTs() {
                            TsType(field), info->name, field.name, ToNative(field));
       }
     }
+    out += ExtraMembers(info->name);
     out += "}\n\n";
   }
   return out;
 }
 
 bool WriteTypeScriptTypes(const fs::path& out_dir, std::string* error) {
+  RegisterBuiltinTypes();  // the component classes are generated from the registry
   const fs::path root = out_dir / "mercury";
   for (size_t i = 0; i < kTsRuntimeFileCount; i++) {
     const EmbeddedFile& file = kTsRuntimeFiles[i];
