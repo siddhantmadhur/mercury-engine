@@ -460,7 +460,8 @@ add_executable(mercury_test
         tests/parallel_load_test.cc
         tests/model_cache_test.cc
         tests/input_actions_test.cc
-        tests/script_runtime_test.cc)
+        tests/script_runtime_test.cc
+        tests/script_behaviour_test.cc)
 target_link_libraries(mercury_test mercury GTest::gtest_main)
 target_compile_definitions(mercury_test PRIVATE
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"

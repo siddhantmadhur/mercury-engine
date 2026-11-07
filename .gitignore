@@ -21,3 +21,4 @@ third_party/v8/*
 !third_party/v8/VERSION
 !third_party/v8/args.gn
 !third_party/v8/README.md
+tests/scripts/project/.mercury/

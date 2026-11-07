@@ -301,8 +301,6 @@ void MapScene::OnAudioSourceDestroyed(entt::registry& registry, kEntityId entity
 }
 
 MapScene::~MapScene() {
-  // Scripts hold the serial, never the pointer; from here on they see "scene unloaded".
-  ScriptRuntime::Instance().UnregisterScene(serial_);
   // The registry outlives ui_, so stop hearing about its UIDocuments.
   GetRegistry().on_destroy<UIDocument>().disconnect(this);
   GetRegistry().on_destroy<AudioSource>().disconnect(this);
@@ -313,6 +311,8 @@ MapScene::~MapScene() {
     if (behaviour->awoken_) behaviour->OnDestroy();
   }
   behaviours_.clear();
+  // Scripts hold the serial, never the pointer; from here on they see "scene unloaded".
+  ScriptRuntime::Instance().UnregisterScene(serial_);
 }
 
 void MapScene::OnUIDocumentDestroyed(entt::registry& registry, kEntityId entity) {

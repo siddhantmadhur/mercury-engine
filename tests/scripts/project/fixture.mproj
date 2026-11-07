@@ -1,0 +1,8 @@
+[project]
+name = "ScriptFixture"
+engine_version = "dev"
+
+[window]
+title = "ScriptFixture"
+width = 320
+height = 240
