@@ -274,3 +274,29 @@ TEST_F(ScriptBehaviourTest, DataAssetsLoadIntoTheirClass) {
   Tick(scene, 1);
   EXPECT_EQ(Log(), "level 7 Second");
 }
+
+TEST_F(ScriptBehaviourTest, EngineComponentsHaveRuntimeMethods) {
+  MapScene scene(g_project, MapScene::Mode::kPlay);
+  Load(scene, R"([mmap format=1]
+[node name="Root"]
+[node name="Floor" parent="."]
+[component type="Transform" node="Floor"]
+position = Vector3(0, -0.5, 0)
+[component type="BoxCollider" node="Floor"]
+size = Vector3(40, 1, 40)
+[node name="Player" parent="."]
+[component type="Transform" node="Player"]
+position = Vector3(0, 1, 0)
+[component type="CharacterController" node="Player"]
+height = 1.8
+radius = 0.3
+[component type="ComponentUser" node="Player"]
+)");
+  Tick(scene, 30);
+  const std::string log = Log();
+  EXPECT_NE(log.find("grounded true v true"), std::string::npos) << log;
+  EXPECT_NE(log.find("audio true"), std::string::npos) << log;
+  EXPECT_EQ(log.find("no controller"), std::string::npos) << log;
+  // The controller moved along -Z through the script.
+  EXPECT_LT(scene.Find("Player").GetTransform()->GetPosition().z, -2.0f);
+}

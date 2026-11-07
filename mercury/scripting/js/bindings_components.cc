@@ -6,6 +6,9 @@
  * with the component and field name.
  */
 #include "scripting/js/bindings.h"
+#include "animation/animator.h"
+#include "audio/audio_system.h"
+#include "components/components.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury::js {
@@ -199,6 +202,130 @@ void ComponentAdd(const Info& info) {
   }
 }
 
+// --- runtime methods of Animator, AudioSource and CharacterController ----------------------------
+
+template <typename T>
+T* ArgComponent(const Info& info, int i = 0) {
+  auto object = ArgGameObject(info, i);
+  if (!object) return nullptr;
+  T* component = object->GetComponent<T>();
+  if (!component) Throw(info.GetIsolate(), "The object has no such component");
+  return component;
+}
+
+// animatorSet(scene, entity, kind, name, value): kind 0 float, 1 integer, 2 bool, 3 trigger,
+// 4 reset trigger
+void AnimatorSet(const Info& info) {
+  auto* animator = ArgComponent<Animator>(info);
+  int kind;
+  std::string name;
+  if (!animator || !ArgInt(info, 2, &kind) || !ArgString(info, 3, &name)) return;
+  double number = 0;
+  bool flag = false;
+  if (kind <= 1 && !ArgNumber(info, 4, &number)) return;
+  if (kind == 2 && !ArgBool(info, 4, &flag)) return;
+  switch (kind) {
+    case 0: animator->SetFloat(name, static_cast<float>(number)); break;
+    case 1: animator->SetInteger(name, static_cast<int>(number)); break;
+    case 2: animator->SetBool(name, flag); break;
+    case 3: animator->SetTrigger(name); break;
+    default: animator->ResetTrigger(name); break;
+  }
+}
+
+// animatorGet(scene, entity, kind, name): kind 0 float, 1 integer, 2 bool
+void AnimatorGet(const Info& info) {
+  auto* animator = ArgComponent<Animator>(info);
+  int kind;
+  std::string name;
+  if (!animator || !ArgInt(info, 2, &kind) || !ArgString(info, 3, &name)) return;
+  if (kind == 0) info.GetReturnValue().Set(static_cast<double>(animator->GetFloat(name)));
+  else if (kind == 1) info.GetReturnValue().Set(static_cast<double>(animator->GetInteger(name)));
+  else info.GetReturnValue().Set(animator->GetBool(name));
+}
+
+void AnimatorPlay(const Info& info) {
+  auto* animator = ArgComponent<Animator>(info);
+  std::string state;
+  int layer;
+  double time;
+  if (!animator || !ArgString(info, 2, &state) || !ArgInt(info, 3, &layer) ||
+      !ArgNumber(info, 4, &time)) {
+    return;
+  }
+  animator->Play(state, layer, static_cast<float>(time));
+}
+
+void AnimatorState(const Info& info) {
+  auto* animator = ArgComponent<Animator>(info);
+  int layer;
+  if (animator && ArgInt(info, 2, &layer)) {
+    info.GetReturnValue().Set(Str(info.GetIsolate(), animator->GetCurrentState(layer)));
+  }
+}
+
+// audioCall(scene, entity, op): 0 play, 1 stop, 2 pause, 3 unpause, 4 isPlaying
+void AudioCall(const Info& info) {
+  auto* source = ArgComponent<AudioSource>(info);
+  int op;
+  if (!source || !ArgInt(info, 2, &op)) return;
+  switch (op) {
+    case 0: source->Play(); break;
+    case 1: source->Stop(); break;
+    case 2: source->Pause(); break;
+    case 3: source->UnPause(); break;
+    default: info.GetReturnValue().Set(source->IsPlaying()); break;
+  }
+}
+
+void AudioPlayOneShot(const Info& info) {
+  auto* source = ArgComponent<AudioSource>(info);
+  std::string clip;
+  double volume;
+  if (source && ArgString(info, 2, &clip) && ArgNumber(info, 3, &volume)) {
+    source->PlayOneShot(AssetRef{clip}, static_cast<float>(volume));
+  }
+}
+
+// audioSet(scene, entity, property, value): "volume", "pitch", "loop", "mute", "clip"
+void AudioSet(const Info& info) {
+  auto* source = ArgComponent<AudioSource>(info);
+  std::string property;
+  if (!source || !ArgString(info, 2, &property)) return;
+  double number = 0;
+  bool flag = false;
+  std::string text;
+  if (property == "volume" && ArgNumber(info, 3, &number)) source->SetVolume(static_cast<float>(number));
+  else if (property == "pitch" && ArgNumber(info, 3, &number)) source->SetPitch(static_cast<float>(number));
+  else if (property == "loop" && ArgBool(info, 3, &flag)) source->SetLoop(flag);
+  else if (property == "mute" && ArgBool(info, 3, &flag)) source->SetMute(flag);
+  else if (property == "clip" && ArgString(info, 3, &text)) source->SetClip(AssetRef{text});
+}
+
+void CharacterMove(const Info& info) {
+  auto* controller = ArgComponent<CharacterController>(info);
+  glm::vec3 motion;
+  double x, y, z;
+  if (!controller || !ArgNumber(info, 2, &x) || !ArgNumber(info, 3, &y) || !ArgNumber(info, 4, &z)) return;
+  motion = glm::vec3(x, y, z);
+  info.GetReturnValue().Set(static_cast<double>(controller->Move(motion)));
+}
+
+void CharacterGrounded(const Info& info) {
+  if (auto* controller = ArgComponent<CharacterController>(info)) {
+    info.GetReturnValue().Set(controller->IsGrounded());
+  }
+}
+
+void CharacterVelocity(const Info& info) {
+  if (auto* controller = ArgComponent<CharacterController>(info)) {
+    glm::vec3 v = controller->GetVelocity();
+    Scratch()[0] = v.x;
+    Scratch()[1] = v.y;
+    Scratch()[2] = v.z;
+  }
+}
+
 }  // namespace
 
 void InstallComponents(v8::Local<v8::Context> context, v8::Local<v8::Object> native) {
@@ -206,6 +333,16 @@ void InstallComponents(v8::Local<v8::Context> context, v8::Local<v8::Object> nat
   SetFunction(context, native, "componentGet", ComponentGet);
   SetFunction(context, native, "componentSet", ComponentSet);
   SetFunction(context, native, "componentAdd", ComponentAdd);
+  SetFunction(context, native, "animatorSet", AnimatorSet);
+  SetFunction(context, native, "animatorGet", AnimatorGet);
+  SetFunction(context, native, "animatorPlay", AnimatorPlay);
+  SetFunction(context, native, "animatorState", AnimatorState);
+  SetFunction(context, native, "audioCall", AudioCall);
+  SetFunction(context, native, "audioPlayOneShot", AudioPlayOneShot);
+  SetFunction(context, native, "audioSet", AudioSet);
+  SetFunction(context, native, "characterMove", CharacterMove);
+  SetFunction(context, native, "characterGrounded", CharacterGrounded);
+  SetFunction(context, native, "characterVelocity", CharacterVelocity);
 }
 
 }  // namespace Mercury::js
