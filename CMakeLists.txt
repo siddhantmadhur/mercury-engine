@@ -9,6 +9,8 @@ option(MERCURY_BUILD_TESTS "Build the unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(MERCURY_BUILD_EDITOR "Build mercury_editor" ${PROJECT_IS_TOP_LEVEL})
 
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
+# V8 is built with the static CRT.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
 include_directories("third_party")
 include_directories("shaders")
@@ -282,6 +284,37 @@ if (APPLE)
             "-framework CoreFoundation"
             "-framework QuartzCore")
 endif ()
+# V8 (embedded JavaScript engine for TypeScript game scripts), built by scripts/build_v8.sh
+set(MERCURY_V8_DIR "${CMAKE_SOURCE_DIR}/third_party/v8/v8" CACHE PATH "V8 checkout")
+if (MSVC)
+    set(MERCURY_V8_LIB "${MERCURY_V8_DIR}/out/release/obj/v8_monolith.lib")
+else ()
+    set(MERCURY_V8_LIB "${MERCURY_V8_DIR}/out/release/obj/libv8_monolith.a")
+endif ()
+if (NOT EXISTS "${MERCURY_V8_LIB}")
+    message(FATAL_ERROR "V8 not found at ${MERCURY_V8_LIB}, run scripts/build_v8.sh")
+endif ()
+add_library(v8_monolith STATIC IMPORTED)
+add_library(v8::monolith ALIAS v8_monolith)
+set_target_properties(v8_monolith PROPERTIES IMPORTED_LOCATION "${MERCURY_V8_LIB}")
+target_include_directories(v8_monolith INTERFACE "${MERCURY_V8_DIR}/include")
+if (EXISTS "${MERCURY_V8_DIR}/out/release/gen/include/v8-gn.h")
+    target_include_directories(v8_monolith INTERFACE "${MERCURY_V8_DIR}/out/release/gen/include")
+endif ()
+target_link_libraries(v8_monolith INTERFACE Threads::Threads ${CMAKE_DL_LIBS})
+if (WIN32)
+    target_link_libraries(v8_monolith INTERFACE winmm dbghelp)
+endif ()
+target_link_libraries(mercury v8::monolith)
+# End of V8
+
+# esbuild bundles the TypeScript scripts (see scripts/install_esbuild.sh)
+find_program(MERCURY_ESBUILD esbuild
+        HINTS ${CMAKE_SOURCE_DIR}/bin/esbuild
+        REQUIRED)
+target_compile_definitions(mercury PUBLIC MERCURY_ESBUILD_PATH="${MERCURY_ESBUILD}")
+# End of esbuild
+
 # Games built outside this folder (see cmake/MercuryGame.cmake) need the same
 # language level and include paths the engine uses.
 target_compile_features(mercury PUBLIC cxx_std_20)

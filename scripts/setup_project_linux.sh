@@ -74,6 +74,7 @@ else
 fi
 
 install_dxc
+"$(dirname "${BASH_SOURCE[0]}")/install_esbuild.sh"
 
 echo
 echo "Done. Next:"
