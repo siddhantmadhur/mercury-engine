@@ -135,9 +135,7 @@ fs::path CacheDir() {
     if (const char* custom = std::getenv("MERCURY_CACHE_DIR"); custom && *custom) {
       return fs::path(custom);
     }
-#if defined(__EMSCRIPTEN__)
-    return fs::path();
-#elif defined(_WIN32)
+#if defined(_WIN32)
     if (const char* local = std::getenv("LOCALAPPDATA")) base = fs::path(local) / "Mercury";
 #elif defined(__APPLE__)
     if (const char* home = std::getenv("HOME")) base = fs::path(home) / "Library" / "Caches";
@@ -180,8 +178,6 @@ fs::path ExecutableDir() {
     return fs::current_path(ec);
   }
   return fs::weakly_canonical(fs::path(buffer.c_str()), ec).parent_path();
-#elif defined(__EMSCRIPTEN__)
-  return fs::current_path(ec);
 #else
   const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
   if (ec) return fs::current_path(ec);

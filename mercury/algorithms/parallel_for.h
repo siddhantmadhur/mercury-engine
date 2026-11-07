@@ -19,13 +19,9 @@
 
 namespace Mercury {
 
-// Cores worth using; 1 where there are no threads (Emscripten).
+// Cores worth using.
 inline size_t WorkerThreadCount() {
-#if defined(__EMSCRIPTEN__)
-  return 1;
-#else
   return std::max<size_t>(1, std::thread::hardware_concurrency());
-#endif
 }
 
 /**
