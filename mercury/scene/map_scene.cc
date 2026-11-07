@@ -12,6 +12,7 @@
 #include "properties/camera.h"
 #include "properties/primitives.h"
 #include "scripting/behaviour.h"
+#include "scripting/js/script_runtime.h"
 #include "scripting/type_registry.h"
 #include "ui/ui_document.h"
 
@@ -211,6 +212,8 @@ bool Behaviour::IsKeyJustPressed(Key key) const {
 MapScene::MapScene(std::shared_ptr<Project> project, Mode mode)
     : project_(std::move(project)), mode_(mode), prefabs_(project_) {
   RegisterBuiltinTypes();
+  serial_ = ScriptRuntime::NextSceneSerial();
+  ScriptRuntime::Instance().RegisterScene(serial_, this);
   assets_ = std::make_unique<AssetDatabase>(project_);
   default_camera_ = player_camera_;
   ui_.resources().SetResolver([this](std::string_view path) {
@@ -298,6 +301,8 @@ void MapScene::OnAudioSourceDestroyed(entt::registry& registry, kEntityId entity
 }
 
 MapScene::~MapScene() {
+  // Scripts hold the serial, never the pointer; from here on they see "scene unloaded".
+  ScriptRuntime::Instance().UnregisterScene(serial_);
   // The registry outlives ui_, so stop hearing about its UIDocuments.
   GetRegistry().on_destroy<UIDocument>().disconnect(this);
   GetRegistry().on_destroy<AudioSource>().disconnect(this);
@@ -315,6 +320,8 @@ void MapScene::OnUIDocumentDestroyed(entt::registry& registry, kEntityId entity)
     if (document->root) ui_.RemoveDocument(document->root);
     document->root = nullptr;
     document->panel = nullptr;
+    // Scripts hold handles to elements of this document.
+    InvalidateUiHandles();
   }
 }
 
@@ -968,6 +975,8 @@ void MapScene::OnTick(double delta_t) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled()) behaviour->OnTick(dt);
   }
+  ScriptRuntime::Instance().SetCurrentScene(serial_);
+  ScriptRuntime::Instance().PumpTimers();
   DestroyPending();
   Time::EndTick();
 }
