@@ -79,9 +79,7 @@ layers and DXC, and sets `VULKAN_SDK`), then:
    ~15 GB of disk, once). The engine uses the static CRT (`/MT`) to match V8; if a Debug build
    complains about `_ITERATOR_DEBUG_LEVEL`, build V8 a second time with `is_debug=true` into
    `out/debug`.
-2. Download esbuild into `bin\esbuild\`: the `esbuild.exe` inside
-   `https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.28.2.tgz` (`package/esbuild.exe`;
-   SHA-256 of the tarball `7286c3611b6f1f4c4d9ec90adcbc478407ff0d28ead96567f361d53e67613e19`).
+2. Run `scripts\install_esbuild.ps1` (downloads esbuild 0.28.2 into `bin\esbuild\` and checks its SHA-256).
 3. Configure with CMake or open the folder in Visual Studio (`CMakeSettings.json`).
 
 ## Issues

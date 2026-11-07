@@ -29,8 +29,10 @@ git fetch --depth 1 origin "refs/tags/${Version}:refs/tags/${Version}" 2>$null
 git checkout $Version
 gclient sync -D --no-history
 
-$Args = ((Get-Content (Join-Path $V8Root "args.gn")) | Where-Object { $_.Trim() -ne "" }) -join "`n"
-gn gen $Out --args="$Args`ntarget_cpu=`"x64`""
+# use_sysroot and use_glib are Linux settings; leave them out on Windows.
+$GnArgs = ((Get-Content (Join-Path $V8Root "args.gn")) |
+    Where-Object { $_.Trim() -ne "" -and $_ -notmatch '^\s*(use_sysroot|use_glib)\b' }) -join "`n"
+gn gen $Out --args="$GnArgs`ntarget_cpu=`"x64`""
 ninja -C $Out v8_monolith
 Set-Content $Stamp $Version
 Write-Host "Built $Lib"
