@@ -31,6 +31,11 @@ git fetch --depth 1 origin "refs/tags/$VERSION:refs/tags/$VERSION" 2>/dev/null |
 git checkout "$VERSION"
 gclient sync -D --no-history
 
+# Chromium's build emits ELF CREL relocations when it links with lld, and GNU ld (which links
+# the engine) cannot read them. Switch them off in the checkout (idempotent).
+sed -i 's/if (is_linux \&\& use_lld \&\& current_cpu != "arm" \&\& current_cpu != "s390x") {/if (false \&\& is_linux \&\& use_lld \&\& current_cpu != "arm" \&\& current_cpu != "s390x") {/' \
+  build/config/compiler/BUILD.gn
+
 case "$(uname -m)" in
   arm64|aarch64) CPU=arm64 ;;
   *) CPU=x64 ;;
