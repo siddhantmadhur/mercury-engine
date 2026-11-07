@@ -105,6 +105,8 @@ declare const __native: {
 
   isKeyPressed(scene: number, key: number): boolean;
   isKeyJustPressed(scene: number, key: number): boolean;
+  isMouseButtonPressed(scene: number, button: number): boolean;
+  isPointerOverUI(scene: number): boolean;
   cursorDelta(scene: number): void;
   frameScroll(scene: number): void;
   inputActionFind(scene: number, name: string): number;

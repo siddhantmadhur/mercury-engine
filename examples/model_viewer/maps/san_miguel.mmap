@@ -34,7 +34,7 @@ background = Color(0.55, 0.68, 0.85, 1)
 
 [component type="FlythroughCamera" node="Camera"]
 path = NodePath("Path")
-lap_seconds = 90
+lapSeconds = 90
 
 [node name="Sun" parent="."]
 

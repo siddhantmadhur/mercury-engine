@@ -15,12 +15,12 @@
             </ui:Label>
             <ui:Label class="info__fps">
                 <Bindings>
-                    <ui:DataBinding property="text" data-source-path="fps_text" />
+                    <ui:DataBinding property="text" data-source-path="fpsText" />
                 </Bindings>
             </ui:Label>
             <ui:Label class="info__lap">
                 <Bindings>
-                    <ui:DataBinding property="text" data-source-path="lap_text" />
+                    <ui:DataBinding property="text" data-source-path="lapText" />
                 </Bindings>
             </ui:Label>
         </ui:VisualElement>
