@@ -527,5 +527,10 @@ if (MERCURY_BUILD_EDITOR)
         # Replays scripted input into the editor; see the file for the format.
         add_executable(mercury_editor_smoke tests/editor_smoke.cc)
         target_link_libraries(mercury_editor_smoke mercury_editor_lib)
+        add_executable(mercury_editor_test tests/editor_templates_test.cc)
+        target_link_libraries(mercury_editor_test mercury_editor_lib GTest::gtest_main)
+        target_compile_definitions(mercury_editor_test PRIVATE
+                MERCURY_TEST_CACHE_DIR="${CMAKE_CURRENT_BINARY_DIR}/test_cache")
+        add_test(NAME mercury_editor_test COMMAND mercury_editor_test)
     endif ()
 endif ()
