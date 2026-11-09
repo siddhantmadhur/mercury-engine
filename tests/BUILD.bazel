@@ -1,0 +1,47 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_test(
+    name = "mercury_test",
+    srcs = [
+        "gameplay_test.cc",
+        "hierarchy_test.cc",
+        "input_actions_test.cc",
+        "map_test.cc",
+        "model_cache_test.cc",
+        "model_preloader_test.cc",
+        "mpack_test.cc",
+        "mtext_test.cc",
+        "parallel_load_test.cc",
+        "physics_constraints_test.cc",
+        "primitives_test.cc",
+        "reflection_test.cc",
+        "script_behaviour_test.cc",
+        "script_runtime_test.cc",
+        "test_paths.h",
+        "test_scripts.h",
+        "ui_test.cc",
+    ],
+    deps = [
+        "//mercury:mercury",
+        "//third_party/googletest:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "editor_test",
+    srcs = [
+        "editor_templates_test.cc",
+        "test_paths.h",
+    ],
+    deps = [
+        "//editor:editor_lib",
+        "//third_party/googletest:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "editor_smoke",
+    srcs = ["editor_smoke.cc"],
+    data = ["//mercury/shaders:shaders"],
+    deps = ["//editor:editor_lib"],
+)

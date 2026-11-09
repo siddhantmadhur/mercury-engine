@@ -1,0 +1,73 @@
+module(
+    name = "mercury",
+    version = "0.0.0",
+)
+
+# V8 is fetched by scripts/fetch_v8.sh (depot_tools) into a git-ignored
+# checkout. Its own Bazel files build the static v8 library; see
+# scripts/v8_bazel_compat.py for the small embedding patch.
+bazel_dep(name = "v8", version = "0.0.0")
+local_path_override(
+    module_name = "v8",
+    path = "third_party/v8/v8",
+)
+
+# V8's Bazel build generates source (Torque, snapshots) with Python 3.11.
+bazel_dep(name = "rules_python", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_foreign_cc", version = "0.17.0")
+
+# V8 asks for this patch in its own MODULE.bazel, but overrides are only
+# allowed in the root module.
+single_version_override(
+    module_name = "highway",
+    patch_strip = 1,
+    patches = ["//third_party/v8:patches/highway_rules_cc.patch"],
+)
+
+# Xcode 26's clang writes SDKSettings.json into every .d file; Bazel's header
+# discovery rejects that absolute path. Strip it in the toolchain wrapper.
+single_version_override(
+    module_name = "rules_cc",
+    patch_strip = 1,
+    patches = ["//third_party/patches:rules_cc_xcode26.patch"],
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.11",
+)
+use_repo(python, "python_3_11")
+
+# --------------------------------------------------------------------------
+# Third-party dependencies keep their own build systems. These repositories
+# expose the existing submodule checkouts, and rules_foreign_cc runs their
+# CMake builds (see third_party/BUILD.bazel).
+# --------------------------------------------------------------------------
+
+local_source_repo = use_repo_rule("//third_party:repositories.bzl", "local_source_repo")
+
+local_source_repo(name = "glfw_src", path = "third_party/glfw")
+local_source_repo(name = "assimp_src", path = "third_party/assimp")
+local_source_repo(name = "jolt_src", path = "third_party/JoltPhysics")
+local_source_repo(name = "yoga_src", path = "third_party/yoga")
+local_source_repo(name = "tinyxml2_src", path = "third_party/tinyxml2")
+local_source_repo(name = "meshoptimizer_src", path = "third_party/meshoptimizer")
+local_source_repo(name = "miniaudio_src", path = "third_party/miniaudio")
+
+vulkan_repo = use_repo_rule("//third_party:repositories.bzl", "vulkan_repo")
+
+vulkan_repo(name = "vulkan")
+
+dxc_repo = use_repo_rule("//third_party:repositories.bzl", "dxc_repo")
+
+dxc_repo(name = "dxc")
+
+v8_gn_repo = use_repo_rule("//third_party:repositories.bzl", "v8_gn_repo")
+
+v8_gn_repo(name = "v8_gn")
+
+build_config_repo = use_repo_rule("//third_party:repositories.bzl", "build_config_repo")
+
+build_config_repo(name = "mercury_config")
