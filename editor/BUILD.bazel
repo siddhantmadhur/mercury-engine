@@ -1,3 +1,5 @@
+load("@mercury_config//:defs.bzl", "COPTS")
+
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
@@ -16,6 +18,7 @@ cc_library(
         "ui_builder.cc",
     ],
     hdrs = glob(["*.h"]),
+    copts = COPTS,
     includes = ["."],
     deps = ["//mercury:mercury"],
 )

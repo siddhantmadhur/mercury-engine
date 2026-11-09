@@ -14,6 +14,7 @@
 #include "scripting/js/script_runtime.h"
 #include "scripting/ts_types.h"
 #include "scripting/type_registry.h"
+#include "test_paths.h"
 
 using namespace Mercury;
 namespace fs = std::filesystem;
@@ -29,7 +30,7 @@ class ScriptBehaviourTest : public ::testing::Test {
     static std::once_flag once;
     std::call_once(once, [] {
       const fs::path source = fs::path(MERCURY_SOURCE_DIR) / "tests/scripts/project";
-      const fs::path work = fs::path(MERCURY_TEST_CACHE_DIR) / "script_project";
+      const fs::path work = Mercury::test::CacheDir() / "script_project";
       std::error_code ec;
       fs::remove_all(work, ec);
       fs::create_directories(work.parent_path(), ec);

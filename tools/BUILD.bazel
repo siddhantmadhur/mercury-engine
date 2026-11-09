@@ -1,3 +1,4 @@
+load("@mercury_config//:defs.bzl", "COPTS")
 load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:public"])
@@ -12,5 +13,6 @@ py_binary(
 cc_binary(
     name = "model_info",
     srcs = ["model_info.cc"],
+    copts = COPTS,
     deps = ["//mercury:mercury"],
 )

@@ -10,13 +10,14 @@
 #include "scripting/js/script_builder.h"
 #include "scripting/ts_types.h"
 #include "templates.h"
+#include "test_paths.h"
 
 using namespace Mercury;
 namespace fs = std::filesystem;
 
 namespace {
 fs::path WorkDir(const char* name) {
-  const fs::path dir = fs::path(MERCURY_TEST_CACHE_DIR) / name;
+  const fs::path dir = Mercury::test::CacheDir() / name;
   std::error_code ec;
   fs::remove_all(dir, ec);
   fs::create_directories(dir, ec);

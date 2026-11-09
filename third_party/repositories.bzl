@@ -16,14 +16,18 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 # --------------------------------------------------------------------------
 
 def _local_source_repo_impl(ctx):
-    ctx.symlink(ctx.workspace_root.get_child(ctx.attr.path), ".")
+    # Stage the checkout under src/ rather than symlinking it to the repository
+    # root: repository_ctx files written at the root would otherwise land inside
+    # the (read-only) submodule.
+    ctx.symlink(ctx.workspace_root.get_child(ctx.attr.path), "src")
+    ctx.file("REPO.bazel", "")
     ctx.file(
         "BUILD.bazel",
         """package(default_visibility = ["//visibility:public"])
 
 filegroup(
     name = "all",
-    srcs = glob(["**"]),
+    srcs = glob(["src/**"]),
 )
 """,
     )
@@ -62,7 +66,7 @@ def _find_vulkan(ctx):
     if include_dir == None:
         pkg = ctx.execute(["pkg-config", "--cflags-only-I", "vulkan"])
         if pkg.return_code == 0:
-            for flag in pkg.stdout.split():
+            for flag in pkg.stdout.split(" "):
                 if flag.startswith("-I"):
                     candidate = ctx.path(flag[2:])
                     if candidate.get_child("vulkan/vulkan.h").exists:
@@ -82,7 +86,7 @@ def _find_vulkan(ctx):
     if lib_dir == None:
         pkg = ctx.execute(["pkg-config", "--libs-only-L", "vulkan"])
         if pkg.return_code == 0:
-            for flag in pkg.stdout.split():
+            for flag in pkg.stdout.split(" "):
                 if flag.startswith("-L"):
                     candidate = ctx.path(flag[2:])
                     for lib in ["libvulkan.dylib", "libvulkan.so", "vulkan-1.lib"]:
@@ -121,13 +125,17 @@ def _find_vulkan(ctx):
 def _vulkan_repo_impl(ctx):
     include_dir, linkopts = _find_vulkan(ctx)
     ctx.symlink(include_dir, "include")
+    ctx.file("REPO.bazel", "")
     ctx.file(
         "BUILD.bazel",
         """package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "vulkan",
-    hdrs = glob(["include/vulkan/**"]),
+    hdrs = glob([
+        "include/vk_video/**",
+        "include/vulkan/**",
+    ]),
     includes = ["include"],
     linkopts = {linkopts},
 )
@@ -170,6 +178,7 @@ def _find_dxc(ctx):
 
 def _dxc_repo_impl(ctx):
     dxc = _find_dxc(ctx)
+    ctx.file("REPO.bazel", "")
     ctx.file(
         "dxc.sh",
         "#!/bin/sh\nexec {} \"$@\"\n".format(dxc),
@@ -192,6 +201,45 @@ dxc_repo = repository_rule(
 )
 
 
+def _yoga_wrapper_repo_impl(ctx):
+    ctx.symlink(ctx.workspace_root.get_child("third_party/yoga"), "yoga_src")
+    ctx.file("REPO.bazel", "")
+    ctx.file(
+        "CMakeLists.txt",
+        """cmake_minimum_required(VERSION 3.20)
+project(mercury_yoga LANGUAGES CXX)
+
+set(YOGA_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/yoga_src)
+add_subdirectory(${YOGA_SOURCE}/yoga yoga_build)
+
+install(TARGETS yogacore ARCHIVE DESTINATION lib)
+install(
+    DIRECTORY ${YOGA_SOURCE}/yoga/
+    DESTINATION include/yoga
+    FILES_MATCHING PATTERN "*.h"
+)
+""",
+    )
+    ctx.file(
+        "BUILD.bazel",
+        """package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all",
+    srcs = glob([
+        "CMakeLists.txt",
+        "yoga_src/**",
+    ]),
+)
+""",
+    )
+
+yoga_wrapper_repo = repository_rule(
+    implementation = _yoga_wrapper_repo_impl,
+    local = True,
+)
+
+
 # --------------------------------------------------------------------------
 # GN fallback V8 (scripts/build_v8.sh)
 # --------------------------------------------------------------------------
@@ -209,6 +257,7 @@ def _v8_gn_repo_impl(ctx):
     gen = root.get_child("out/release/gen/include")
     if gen.exists:
         ctx.symlink(gen, "gen_include")
+    ctx.file("REPO.bazel", "")
     ctx.file(
         "BUILD.bazel",
         """package(default_visibility = ["//visibility:public"])
@@ -264,17 +313,32 @@ def _config_repo_impl(ctx):
         "GLFW_INCLUDE_VULKAN": "1",
         "GLM_FORCE_DEPTH_ZERO_TO_ONE": "1",
     }
-    lines = [
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-        "cc_library(",
-        '    name = "config",',
-        "    defines = [",
+    numeric_defines = [
+        "MERCURY_GRAPHICS_VULKAN",
+        "GLFW_INCLUDE_VULKAN",
+        "GLM_FORCE_DEPTH_ZERO_TO_ONE",
     ]
+    lines = []
     for name, value in values.items():
-        lines.append("        %s," % json.encode(name + "=" + value))
-    lines += ["    ],", ")", ""]
-    ctx.file("BUILD.bazel", "\n".join(lines))
+        if name in numeric_defines:
+            lines.append("-D%s=%s" % (name, value))
+        else:
+            # copts are shell-tokenized by Bazel; backslash-escape the quotes
+            # so the compiler receives a C string literal.
+            lines.append('-D%s=\\"%s\\"' % (name, value))
+    defs = "COPTS = [\n"
+    for line in lines:
+        defs += "    %s,\n" % json.encode(line)
+    defs += "]\n"
+    ctx.file("REPO.bazel", "")
+    ctx.file("defs.bzl", defs)
+    ctx.file(
+        "BUILD.bazel",
+        """package(default_visibility = ["//visibility:public"])
+
+exports_files(["defs.bzl"])
+""",
+    )
 
 build_config_repo = repository_rule(
     implementation = _config_repo_impl,
