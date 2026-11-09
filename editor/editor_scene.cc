@@ -861,9 +861,8 @@ void EditorScene::DrawToolbar() {
     ImGui::PopStyleColor();
     const auto release_state = release_.GetState();
     const char* status =
-        release_state == ReleaseBuild::State::kConfiguring ? "Configuring Release..."
-        : release_state == ReleaseBuild::State::kBuilding  ? "Building game..."
-                                                           : "Packing...";
+        release_state == ReleaseBuild::State::kBuilding ? "Building game..."
+                                                        : "Packing...";
     ImGui::TextDisabled("%s", status);
   } else if (state == PlaySession::State::kIdle) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.22f, 1.0f));
@@ -1171,8 +1170,8 @@ void EditorScene::DrawLauncher() {
       to_open = mproj.string();
     }
   }
-  ImGui::TextDisabled("Creates <location>/<name>/ with a map, folders and a "
-                      "CMakeLists.txt");
+  ImGui::TextDisabled("Creates <location>/<name>/ with a map, folders and "
+                      "TypeScript scripts");
 
   // Errors from opening or creating appear here before a Console exists.
   auto lines = console_.Snapshot();

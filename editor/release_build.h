@@ -14,9 +14,8 @@
  *
  * Steps, each started from Update():
  *
- *   configure a Release build of the engine's mercury_player (only the first time),
- *     in <project>/.mercury/build-release
- *     -> cmake --build <release build> --target mercury_player --config Release
+ *   build a Release mercury_player with Bazel, in the engine checkout
+ *     -> bazel build -c opt //mercury:mercury_player
  *     -> on a worker thread: minify the scripts (esbuild), pack the files, copy the player
  *
  * The scripts are packed as the minified .mercury/scripts/game.js; the .ts sources stay out. The
@@ -41,7 +40,7 @@ namespace Mercury {
 
 class ReleaseBuild {
  public:
-  enum class State { kIdle, kConfiguring, kBuilding, kPacking };
+  enum class State { kIdle, kBuilding, kPacking };
 
   explicit ReleaseBuild(Console& console) : console_(console) {}
   ~ReleaseBuild();
@@ -66,7 +65,6 @@ class ReleaseBuild {
  private:
   struct Config {
     std::string executable;  // the Release mercury_player
-    std::string build_dir;
     std::string source_dir;  // the engine checkout
     std::string target_name;  // what the shipped executable is called
     std::string spirv_dir;
@@ -80,9 +78,8 @@ class ReleaseBuild {
 
   // Where the Release player will be, from the engine checkout this editor was built from.
   Config MakeConfig() const;
-  // Finds the built player (a multi-config generator puts it in a Release/ folder).
+  // Finds the built player.
   void LocateExecutable();
-  bool StartConfigure();
   bool StartBuild();
   void StartPacking();
   static PackResult Pack(Config config, std::filesystem::path project_root,

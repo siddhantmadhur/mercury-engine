@@ -1,7 +1,8 @@
 /*
  * play_session.h
  *
- * Drives Build and Play from the editor, with the mercury_player that sits next to the editor:
+ * Drives Build and Play from the editor, with the mercury_player build from the
+ * same checkout (next to the editor, or in bazel-bin/mercury):
  *
  *   mercury_player <project.mproj> --build-scripts     (esbuild, and tsc when installed)
  *     -> mercury_player <project.mproj> --dump-schema .mercury/scripts.mschema
