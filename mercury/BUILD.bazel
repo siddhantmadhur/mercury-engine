@@ -1,0 +1,56 @@
+load("//tools:embed_files.bzl", "embed_files")
+
+package(default_visibility = ["//visibility:public"])
+
+embed_files(
+    name = "ts_runtime_files",
+    out = "ts_runtime_files.cc",
+    root = "mercury/scripting/ts",
+    srcs = glob(["scripting/ts/**/*.ts"]),
+)
+
+cc_library(
+    name = "mercury",
+    srcs = glob(
+        ["**/*.cc"],
+        exclude = ["player/main.cc"],
+    ) + [":ts_runtime_files"],
+    hdrs = glob(["**/*.h"]),
+    copts = select({
+        "@platforms//os:macos": ["-Wno-deprecated-declarations"],
+        "//conditions:default": [],
+    }),
+    data = ["//mercury/shaders:shaders"],
+    includes = ["."],
+    linkopts = select({
+        "@platforms//os:macos": [
+            "-framework CoreFoundation",
+        ],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "@mercury_config//:config",
+        "@vulkan//:vulkan",
+        "//third_party/v8:v8",
+        "//third_party:assimp",
+        "//third_party:entt",
+        "//third_party:glfw",
+        "//third_party:glm",
+        "//third_party:imgui",
+        "//third_party:jolt",
+        "//third_party:meshoptimizer",
+        "//third_party:miniaudio",
+        "//third_party:nanosvg",
+        "//third_party:stb",
+        "//third_party:tinyxml2",
+        "//third_party:vulkan_memory_allocator",
+        "//third_party:yoga",
+    ],
+)
+
+cc_binary(
+    name = "mercury_player",
+    srcs = ["player/main.cc"],
+    data = ["//mercury/shaders:shaders"],
+    deps = [":mercury"],
+)

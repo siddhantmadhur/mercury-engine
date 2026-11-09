@@ -1,0 +1,31 @@
+--- a/cc/private/toolchain/osx_cc_wrapper.sh.tpl
++++ b/cc/private/toolchain/osx_cc_wrapper.sh.tpl
+@@ -85,12 +85,28 @@
+     esac
+ done
+ 
++# Xcode 26's clang records SDKSettings.json in the dependency file. It is not
++# a header, and Bazel rejects the absolute path when it validates includes.
++DEP_FILE=
++previous=
++for i in "$@"; do
++    if [ "$previous" = "-MF" ]; then
++        DEP_FILE=$i
++    fi
++    previous=$i
++done
++
+ # Set-up the environment
+ %{env}
+ 
+ # Call the C++ compiler
+ %{cc} "$@"
+ 
++# Drop the SDK metadata file from the depfile (see above).
++if [ -n "${DEP_FILE-}" ] && [ -f "$DEP_FILE" ]; then
++    $SED -i '' '/SDKSettings\.json/d' "$DEP_FILE" || true
++fi
++
+ # Generate an empty file if header processing succeeded.
+ case $OUTPUT in
+     *.h.processed)

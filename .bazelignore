@@ -1,0 +1,10 @@
+# Local V8 checkout: Bazel builds it as an external module, not as packages of
+# the main workspace.
+third_party/v8/v8
+third_party/v8/depot_tools
+
+# Generated CMake/baseline output, if present.
+build
+build-*
+tmp
+out

@@ -1,0 +1,28 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "editor_lib",
+    srcs = [
+        "console.cc",
+        "editor_scene.cc",
+        "editor_settings.cc",
+        "input_actions_window.cc",
+        "lore_vcs.cc",
+        "panels.cc",
+        "play_session.cc",
+        "release_build.cc",
+        "scene_view.cc",
+        "templates.cc",
+        "ui_builder.cc",
+    ],
+    hdrs = glob(["*.h"]),
+    includes = ["."],
+    deps = ["//mercury:mercury"],
+)
+
+cc_binary(
+    name = "mercury_editor",
+    srcs = ["main.cc"],
+    data = ["//mercury/shaders:shaders"],
+    deps = [":editor_lib"],
+)
