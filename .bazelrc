@@ -4,6 +4,15 @@ common --enable_bzlmod
 # configuration. Use -c dbg when debugging the engine (V8 is then rebuilt).
 build --compilation_mode=opt
 
+# V8 is ~1,300 translation units at -O2 (built for both the target and the exec
+# configuration), and some of them (Turboshaft, Maglev, CSA builtins) need
+# gigabytes each. Bazel defaults to one job per core, which can push a 16-32 GB
+# machine into swap until the Bazel server itself dies with
+# `OutOfMemoryError: sysctl (Cannot allocate memory)`. Half the cores keeps
+# the peak bounded; raise it with `--jobs=N` on the command line on a machine
+# with more RAM.
+build --jobs=HOST_CPUS*.5
+
 # Mercury is C++20 (no modules).
 build --cxxopt=-std=c++20
 build --host_cxxopt=-std=c++20
