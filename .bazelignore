@@ -3,6 +3,13 @@
 third_party/v8/v8
 third_party/v8/depot_tools
 
+# Bundled test-only copy inside assimp; not part of Mercury's build.
+third_party/assimp/contrib/googletest
+
+# Upstream googletest test packages assume they are the repo root.
+third_party/googletest/googletest/test
+third_party/googletest/googlemock/test
+
 # Generated CMake/baseline output, if present.
 build
 build-*
