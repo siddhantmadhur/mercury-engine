@@ -26,6 +26,7 @@ cc_library(
 cc_binary(
     name = "mercury_editor",
     srcs = ["main.cc"],
+    copts = COPTS,
     data = ["//mercury/shaders:shaders"],
     deps = [":editor_lib"],
 )

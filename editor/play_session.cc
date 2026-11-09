@@ -24,10 +24,19 @@ void PlaySession::Build(const Project& project) { Begin(project, false); }
 
 fs::path PlaySession::PlayerPath() {
 #if defined(_WIN32)
-  return os::ExecutableDir() / "mercury_player.exe";
+  const char* file = "mercury_player.exe";
 #else
-  return os::ExecutableDir() / "mercury_player";
+  const char* file = "mercury_player";
 #endif
+  const fs::path dir = os::ExecutableDir();
+  std::error_code ec;
+  // CMake/installed builds put them side by side; Bazel puts the player in
+  // bazel-bin/mercury and the editor in bazel-bin/editor.
+  for (const fs::path& candidate :
+       {dir / file, dir.parent_path() / "mercury" / file}) {
+    if (fs::exists(candidate, ec)) return candidate;
+  }
+  return dir / file;
 }
 
 void PlaySession::Begin(const Project& project, bool run) {
@@ -37,8 +46,8 @@ void PlaySession::Begin(const Project& project, bool run) {
   schema_path_ = SchemaPath(project);
   run_after_build_ = run;
   if (!fs::exists(PlayerPath())) {
-    Finish("mercury_player was not found next to the editor (" + PlayerPath().string() +
-               "); build the mercury_player target",
+    Finish("mercury_player was not found next to the editor or in ../mercury (" +
+               PlayerPath().string() + "); build the mercury_player target",
            true);
     return;
   }

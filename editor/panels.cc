@@ -952,7 +952,10 @@ void EditorScene::DrawProjectDirectory(const fs::path& dir) {
     const std::string name = entry.path().filename().string();
     if (name.starts_with(".")) continue;  // .mercury, .git, ...
     if (entry.is_directory(ec)) {
-      if (name == "build" || name.starts_with("cmake-build")) continue;
+      if (name == "build" || name.starts_with("cmake-build") ||
+          name.starts_with("bazel-")) {
+        continue;
+      }
       folders.push_back(entry);
     } else {
       files.push_back(entry);

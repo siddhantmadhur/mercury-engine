@@ -34,6 +34,8 @@ bool IsSourceFile(const fs::path& path) {
 bool IsSkippedAtRoot(const std::string& name) {
   return name == "scripts" || name == "tsconfig.json" || name == "package.json" ||
          name == "package-lock.json" || name == "node_modules" || name == "CMakeLists.txt" ||
+         name == "MODULE.bazel" || name == "MODULE.bazel.lock" || name == "WORKSPACE" ||
+         name == "WORKSPACE.bazel" || name.starts_with("bazel-") ||
          name == "Builds" || name == "imgui.ini";
 }
 
@@ -44,6 +46,12 @@ std::string FormatBytes(uintmax_t bytes) {
     return std::format("{:.1f} MB", bytes / (1024.0 * 1024.0));
   }
   return std::format("{:.2f} GB", bytes / (1024.0 * 1024.0 * 1024.0));
+}
+
+// Bazelisk honors .bazelversion; plain bazel may not.
+std::string FindBazel() {
+  if (os::IsOnPath("bazelisk")) return "bazelisk";
+  return "bazel";
 }
 
 // Total size of <dir>/<base>.mpack and its _NNN archives, and how many there
@@ -84,19 +92,19 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
                    output_dir_.string());
 
   config_ = MakeConfig();
-  if (fs::exists(config_->build_dir + "/CMakeCache.txt")) {
-    StartBuild();
-  } else {
-    StartConfigure();
+  if (!fs::exists(fs::path(config_->source_dir) / "MODULE.bazel")) {
+    Finish("The engine checkout this editor was built from is missing (" + config_->source_dir + ")",
+           true);
+    return;
   }
+  StartBuild();
 }
 
 ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
   Config config;
   config.source_dir = fs::path(MERCURY_ENGINE_DIR).string();
-  config.build_dir = (project_root_ / kProjectCacheDir / "build-release").string();
   config.ui_resources = (fs::path(config.source_dir) / "mercury" / "ui" / "resources").string();
-  config.spirv_dir = (fs::path(config.build_dir) / "shaders").string();
+  config.spirv_dir = (fs::path(config.source_dir) / "bazel-bin" / "mercury" / "shaders").string();
   std::string name;
   for (char c : project_name_) {
     if (std::isalnum(static_cast<unsigned char>(c))) {
@@ -117,7 +125,9 @@ void ReleaseBuild::LocateExecutable() {
   const char* file = "mercury_player";
 #endif
   std::error_code ec;
-  for (const fs::path& dir : {fs::path(config_->build_dir), fs::path(config_->build_dir) / "Release"}) {
+  for (const fs::path& dir :
+       {fs::path(config_->source_dir) / "bazel-bin" / "mercury",
+        fs::path(config_->source_dir) / "bazel-bin"}) {
     if (fs::exists(dir / file, ec)) {
       config_->executable = (dir / file).string();
       return;
@@ -132,7 +142,8 @@ bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
 
   process_ = std::make_unique<os::Process>();
   std::string error;
-  if (!process_->Start(args, project_root_, &error)) {
+  const fs::path working_dir = config_ ? fs::path(config_->source_dir) : project_root_;
+  if (!process_->Start(args, working_dir, &error)) {
     process_.reset();
     Finish(error, true);
     return false;
@@ -140,29 +151,10 @@ bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
   return true;
 }
 
-bool ReleaseBuild::StartConfigure() {
-  if (!fs::exists(fs::path(config_->source_dir) / "CMakeLists.txt")) {
-    Finish("The engine checkout this editor was built from is missing (" + config_->source_dir + ")",
-           true);
-    return false;
-  }
-  console_.Add(Console::Level::kInfo, Console::Source::kBuild,
-               "Configuring a Release build of mercury_player; the first one takes a while.");
-  std::vector<std::string> args = {
-      "cmake", "-S", config_->source_dir, "-B", config_->build_dir,
-      "-DCMAKE_BUILD_TYPE=Release", "-DMERCURY_BUILD_EXAMPLES=OFF", "-DMERCURY_BUILD_TESTS=OFF",
-      "-DMERCURY_BUILD_EDITOR=OFF"};
-  if (os::IsOnPath("ninja")) {
-    args.insert(args.begin() + 1, {"-G", "Ninja"});
-  }
-  if (!Launch(args)) return false;
-  state_ = State::kConfiguring;
-  return true;
-}
-
 bool ReleaseBuild::StartBuild() {
-  if (!Launch({"cmake", "--build", config_->build_dir, "--target", "mercury_player", "--config",
-               "Release"})) {
+  console_.Add(Console::Level::kInfo, Console::Source::kBuild,
+               "Building a Release mercury_player with Bazel; the first one takes a while.");
+  if (!Launch({FindBazel(), "build", "-c", "opt", "//mercury:mercury_player"})) {
     return false;
   }
   state_ = State::kBuilding;
@@ -346,10 +338,6 @@ void ReleaseBuild::Update() {
   process_.reset();
 
   switch (state_) {
-    case State::kConfiguring:
-      if (code != 0) return Finish("CMake configure (Release) failed", true);
-      StartBuild();
-      break;
     case State::kBuilding:
       if (code != 0) return Finish("Release build failed", true);
       LocateExecutable();
