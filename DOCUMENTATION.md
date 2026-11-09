@@ -38,12 +38,14 @@ tsconfig.json           tells TypeScript tools where the "mercury" module is (co
 .mercury/               generated: types/, scripts/game.js (not committed)
 ```
 
-There is no `CMakeLists.txt`: every project runs with the same executable, `mercury_player`.
+There is no per-game build file: every project runs with the same executable, `mercury_player`.
 
 Open a project with the editor:
 
 ```sh
-./build/mercury_editor examples/pong/pong.mproj    # or no argument for the project launcher
+bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
+# or: ./bazel-bin/editor/mercury_editor examples/pong/pong.mproj
+# or no argument for the project launcher
 ```
 
 The editor has a Hierarchy, Inspector, Scene view, Project browser and Console. It has no code editor: write scripts in any IDE and set the command that opens them under Project > External editor command. Lines in the Console that name a script (`scripts/ball.ts:42:5`, from a script error, esbuild or tsc) open that file when clicked.
@@ -54,7 +56,7 @@ The editor has a Hierarchy, Inspector, Scene view, Project browser and Console. 
   - 3D: right drag looks around (W/A/S/D/Q/E to fly, Shift for speed), Alt + left drag orbits, middle drag pans, wheel zooms.
 - **Play** saves the map, builds the scripts and runs the game as its own process (`mercury_player <project> --map <map>`), with output in the Console. **Build** only builds the scripts, which refreshes the script list the Inspector uses. There is no hot reload: Play restarts the game.
 
-Run a project without the editor with `./build/mercury_player examples/pong/pong.mproj [--map res://maps/x.mmap]`. It builds the scripts first if they changed. `--build-scripts` only builds, `--write-types` writes the TypeScript types (see Editor setup below) and `--dump-schema file` writes the scripts' fields.
+Run a project without the editor with `bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj [--map res://maps/x.mmap]` (or `./bazel-bin/mercury/mercury_player ...`). It builds the scripts first if they changed. `--build-scripts` only builds, `--write-types` writes the TypeScript types (see Editor setup below) and `--dump-schema file` writes the scripts' fields.
 
 ## File formats
 
@@ -120,7 +122,7 @@ A node's position is relative to its parent; maps are flattened to world positio
 
 ## Rendering
 
-Rendering uses Vulkan 1.3 with dynamic rendering. Shaders are written in HLSL (`mercury/shaders/`) and compiled to SPIR-V by DXC at build time (CMake finds `dxc` in `bin/dxc/`, `VULKAN_SDK` or the system). Shader files are named by stage: `*.vs.hlsl` vertex, `*.ps.hlsl` pixel, `*.cs.hlsl` compute, with shared code in `*.hlsli`.
+Rendering uses Vulkan 1.3 with dynamic rendering. Shaders are written in HLSL (`mercury/shaders/`) and compiled to SPIR-V by DXC at build time (Bazel's shader rule finds `dxc` in `bin/dxc/`, `VULKAN_SDK` or the system). Shader files are named by stage: `*.vs.hlsl` vertex, `*.ps.hlsl` pixel, `*.cs.hlsl` compute, with shared code in `*.hlsli`.
 
 ### Frame outline
 
@@ -310,7 +312,7 @@ The format is described in `mercury/pack/mpack.h`. The reader and the VFS that m
 
 ## Testing
 
-- `ctest --test-dir build` runs unit tests for the formats, maps, reflection, primitive meshes, rotations, `.mpack` archives, the UI Toolkit (USS, UXML, cascade, layout, events, bindings, drawing) gameplay (events, triggers, raycasts, CharacterController, prefabs, models, animator controllers, input scripts), the script runtime (evaluation, errors, promises, the watchdog, source maps) and TypeScript scripts as behaviours (`tests/script_behaviour_test.cc`, with fixtures in `tests/scripts/`). Each example has an input script in `examples/<name>/tests/` that plays it: `MERCURY_INPUT_SCRIPT=examples/pong/tests/play.input ./build/mercury_player examples/pong/pong.mproj`.
-- `mercury_editor_smoke <project> <script>` replays scripted input into the editor.
+- `bazelisk test //tests/...` runs unit tests for the formats, maps, reflection, primitive meshes, rotations, `.mpack` archives, the UI Toolkit (USS, UXML, cascade, layout, events, bindings, drawing) gameplay (events, triggers, raycasts, CharacterController, prefabs, models, animator controllers, input scripts), the script runtime (evaluation, errors, promises, the watchdog, source maps) and TypeScript scripts as behaviours (`tests/script_behaviour_test.cc`, with fixtures in `tests/scripts/`). Each example has an input script in `examples/<name>/tests/` that plays it: `MERCURY_INPUT_SCRIPT=examples/pong/tests/play.input ./bazel-bin/mercury/mercury_player examples/pong/pong.mproj`.
+- `./bazel-bin/tests/editor_smoke <project> <script>` replays scripted input into the editor.
 - `MERCURY_INPUT_SCRIPT=walk.txt` does the same for a game (`120 press w`, `200 look 30 0`, `240 tap f`, `260 capture shot.png`, `300 quit`; see `mercury/input/input_script.h`), stepping exactly 1/60 s per frame so runs repeat.
 - `MERCURY_CAPTURE=frame.png` (plus `MERCURY_CAPTURE_FRAME=n` and `MERCURY_CAPTURE_QUIT=1`) on any Mercury program saves a screenshot of a frame.

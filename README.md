@@ -47,40 +47,56 @@ SteamDeck or the controllers. Along with support for controller layouts, battery
 
 ## Building
 
-Game scripts are TypeScript, run by an embedded V8. V8 is built from source once, and esbuild
-bundles the scripts.
+Game scripts are TypeScript, run by an embedded V8. V8 is fetched once with depot_tools and is
+built by Bazel from V8's own Bazel files. esbuild bundles the scripts.
+
+The build requires [Bazelisk](https://github.com/bazelbuild/bazelisk); the repository pins Bazel
+in `.bazelversion`. CMake and Ninja are still used, but only to build the third-party dependencies
+through `rules_foreign_cc`.
+
+### macOS (Apple Silicon)
+
+```sh
+./scripts/setup_project_macos.sh        # Homebrew: Bazelisk, CMake, Ninja, MoltenVK, Vulkan, DXC
+bazelisk build //mercury:mercury_player
+bazelisk test //tests/...
+bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+```
+
+V8's first Bazel build takes 30-60 minutes. If V8's Bazel build cannot be used on your Xcode/host
+combination, build the GN fallback once and select it:
+
+```sh
+./scripts/build_v8.sh
+bazelisk build //mercury:mercury_player --define=v8_backend=gn
+```
 
 ### Linux (X11 and Wayland)
 
 ```sh
-./scripts/setup_project_linux.sh        # apt or pacman; installs Vulkan, GLFW deps, DXC and esbuild
-./scripts/build_v8.sh                   # builds V8: ~30-60 minutes and ~15 GB of disk, once
-git submodule update --init --recursive
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
+./scripts/setup_project_linux.sh        # apt or pacman; Vulkan, GLFW deps, DXC, esbuild, Bazelisk
+bazelisk build //mercury:mercury_player
+bazelisk test //tests/...
+bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
 ```
 
-`build_v8.sh` (see `third_party/v8/README.md`) fetches V8 with depot_tools into the git-ignored
-`third_party/v8/` and builds the version in `third_party/v8/VERSION`. Node and `typescript` are
-optional: when `tsc` is installed, Build also type-checks the scripts.
+`scripts/fetch_v8.sh` (see `third_party/v8/README.md`) fetches the version in
+`third_party/v8/VERSION`. Node and `typescript` are optional: when `tsc` is installed, Build also
+type-checks the scripts.
 
 Debian/Ubuntu don't package DXC, so the setup script downloads the official release into
-`bin/dxc/`, which CMake finds automatically. If you use the
-[LunarG Vulkan SDK](https://vulkan.lunarg.com) instead, set `VULKAN_SDK` and its `dxc` is used.
+`bin/dxc/`. If you use the [LunarG Vulkan SDK](https://vulkan.lunarg.com) instead, set
+`VULKAN_SDK` and its `dxc` is used.
 
 Debug builds enable `VK_LAYER_KHRONOS_validation` when it is installed.
 
 ### Windows
 
-Install the [LunarG Vulkan SDK](https://vulkan.lunarg.com) (it provides the loader, validation
-layers and DXC, and sets `VULKAN_SDK`), then:
-
-1. Run `scripts\build_v8.ps1` in a Visual Studio developer PowerShell (about 30-60 minutes and
-   ~15 GB of disk, once). The engine uses the static CRT (`/MT`) to match V8; if a Debug build
-   complains about `_ITERATOR_DEBUG_LEVEL`, build V8 a second time with `is_debug=true` into
-   `out/debug`.
-2. Run `scripts\install_esbuild.ps1` (downloads esbuild 0.28.2 into `bin\esbuild\` and checks its SHA-256).
-3. Configure with CMake or open the folder in Visual Studio (`CMakeSettings.json`).
+Install the [LunarG Vulkan SDK](https://vulkan.lunarg.com) (loader, validation layers and DXC, and
+it sets `VULKAN_SDK`), Bazelisk, CMake and Ninja. Fetch V8 with `scripts/fetch_v8.sh` (for example
+from Git Bash) or use the GN fallback via `scripts/build_v8.ps1` and `--define=v8_backend=gn`.
+Windows Bazel support is not validated yet; CMake and Ninja are only needed to build the
+dependencies through `rules_foreign_cc`.
 
 ## Issues
 

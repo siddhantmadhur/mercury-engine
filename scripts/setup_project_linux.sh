@@ -8,8 +8,8 @@
 # for package installs.
 #
 # DXC: Arch packages it (directx-shader-compiler). Debian/Ubuntu do not, so the
-# official Linux release is downloaded into bin/dxc/ (git-ignored), which
-# CMake searches automatically. If you have the LunarG Vulkan SDK installed and
+# official Linux release is downloaded into bin/dxc/ (git-ignored), where
+# Bazel's shader rule finds it. If you have the LunarG Vulkan SDK installed and
 # VULKAN_SDK set, its dxc is used instead and this download is skipped.
 
 set -euo pipefail
@@ -21,19 +21,36 @@ DXC_ARCHIVE="linux_dxc_2026_09_28.x86_x64.tar.gz"
 install_apt() {
   sudo apt-get update
   sudo apt-get install -y \
-    build-essential cmake ninja-build git curl \
+    build-essential cmake ninja-build git curl pkg-config python3 \
     libvulkan-dev vulkan-validationlayers vulkan-tools spirv-tools \
     libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-    libwayland-dev libxkbcommon-dev wayland-protocols pkg-config
+    libwayland-dev libxkbcommon-dev wayland-protocols
 }
 
 install_pacman() {
   sudo pacman -S --needed --noconfirm \
-    base-devel cmake ninja git curl \
+    base-devel cmake ninja git curl pkgconf python \
     vulkan-icd-loader vulkan-headers vulkan-validation-layers vulkan-tools \
     spirv-tools directx-shader-compiler \
     libx11 libxrandr libxinerama libxcursor libxi \
-    wayland libxkbcommon wayland-protocols pkgconf
+    wayland libxkbcommon wayland-protocols
+}
+
+install_bazelisk() {
+  if command -v bazelisk >/dev/null 2>&1; then
+    return
+  fi
+  case "$(uname -m)" in
+    x86_64) ARCH=amd64 ;;
+    aarch64|arm64) ARCH=arm64 ;;
+    *) echo "No Bazelisk build for $(uname -m)" >&2; exit 1 ;;
+  esac
+  echo "==> Installing Bazelisk into bin/ ..."
+  mkdir -p "${PROJECT_ROOT}/bin"
+  curl -fL "https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${ARCH}" \
+    -o "${PROJECT_ROOT}/bin/bazelisk"
+  chmod +x "${PROJECT_ROOT}/bin/bazelisk"
+  echo "Add ${PROJECT_ROOT}/bin to PATH to use 'bazelisk'."
 }
 
 install_dxc() {
@@ -74,10 +91,13 @@ else
 fi
 
 install_dxc
+install_bazelisk
 "$(dirname "${BASH_SOURCE[0]}")/install_esbuild.sh"
+"$(dirname "${BASH_SOURCE[0]}")/fetch_v8.sh"
 
 echo
 echo "Done. Next:"
 echo "  git submodule update --init --recursive"
-echo "  cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug"
-echo "  cmake --build build"
+echo "  bazelisk build //mercury:mercury_player"
+echo "  bazelisk test //tests/..."
+echo "  bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj"
