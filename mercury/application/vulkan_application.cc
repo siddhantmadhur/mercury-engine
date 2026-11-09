@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
@@ -28,7 +29,7 @@ namespace Mercury {
 
 namespace {
 
-// Descriptor bindings; must match the register shifts in CMakeLists.txt and
+// Descriptor bindings; must match the register shifts in tools/shader.bzl and
 // the mapping documented at the top of each shader.
 constexpr uint32_t kCameraBinding = 0;          // b0
 constexpr uint32_t kAtlasBinding = 10;          // t0
@@ -2374,6 +2375,12 @@ void VulkanApplication::WriteCapture() {
       std::swap(pixels[i], pixels[i + 2]);
   }
   for (size_t i = 3; i < pixels.size(); i += 4) pixels[i] = 255;
+  {
+    // A capture into a folder that does not exist yet (captures/shot.png) makes it.
+    std::error_code ec;
+    const std::filesystem::path parent = std::filesystem::path(capture_path_).parent_path();
+    if (!parent.empty()) std::filesystem::create_directories(parent, ec);
+  }
   if (stbi_write_png(capture_path_.c_str(), static_cast<int>(w),
                      static_cast<int>(h), 4, pixels.data(),
                      static_cast<int>(w) * 4)) {

@@ -1,9 +1,9 @@
 # Serve and play: the player paddle moves up and down while the AI chases the ball.
-10 capture /tmp/claude-1000/pong_start.png
+10 capture captures/pong_start.png
 30 press w
 90 release w
 90 press s
 200 release s
-300 capture /tmp/claude-1000/pong_mid.png
-900 capture /tmp/claude-1000/pong_late.png
+300 capture captures/pong_mid.png
+900 capture captures/pong_late.png
 901 quit

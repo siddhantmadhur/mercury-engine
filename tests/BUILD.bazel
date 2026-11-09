@@ -22,6 +22,24 @@ cc_test(
         "test_paths.h",
         "test_scripts.h",
         "ui_test.cc",
+        "user_path_test.cc",
+    ],
+    copts = COPTS,
+    deps = [
+        "//mercury:mercury",
+        "//third_party/googletest:gtest_main",
+    ],
+)
+
+# Builds and loads each example project, so it needs a script runtime of its own. It reads the
+# examples through MERCURY_SOURCE_DIR, which Bazel cannot see, so "external" keeps it from being
+# served from the test cache after an example changes.
+cc_test(
+    name = "example_projects_test",
+    tags = ["external"],
+    srcs = [
+        "example_projects_test.cc",
+        "test_paths.h",
     ],
     copts = COPTS,
     deps = [

@@ -27,6 +27,11 @@ cc_binary(
     name = "mercury_editor",
     srcs = ["main.cc"],
     copts = COPTS,
-    data = ["//mercury/shaders:shaders"],
+    # Play and Build run the game through mercury_player, which the editor finds next to itself
+    # (PlaySession::PlayerPath), so building the editor builds the player too.
+    data = [
+        "//mercury:mercury_player",
+        "//mercury/shaders:shaders",
+    ],
     deps = [":editor_lib"],
 )

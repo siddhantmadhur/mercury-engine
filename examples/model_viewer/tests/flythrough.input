@@ -1,6 +1,6 @@
 # The camera flies the conference room loop; Space pauses it.
-90 capture /tmp/claude-1000/mv_fly_start.png
-600 capture /tmp/claude-1000/mv_fly_mid.png
+90 capture captures/mv_fly_start.png
+600 capture captures/mv_fly_mid.png
 610 tap space
-700 capture /tmp/claude-1000/mv_fly_paused.png
+700 capture captures/mv_fly_paused.png
 701 quit

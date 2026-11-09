@@ -155,6 +155,15 @@ fs::path CacheDir() {
   return dir;
 }
 
+fs::path UserPath(const fs::path& path) {
+  std::error_code ec;
+  if (path.empty() || path.is_absolute() || fs::exists(path, ec)) return path;
+  const char* base = std::getenv("BUILD_WORKING_DIRECTORY");
+  if (!base || !*base) return path;
+  const fs::path candidate = fs::path(base) / path;
+  return fs::exists(candidate, ec) ? candidate : path;
+}
+
 fs::path ExecutableDir() {
   std::error_code ec;
 #if defined(_WIN32)

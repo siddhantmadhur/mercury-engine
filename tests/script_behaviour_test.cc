@@ -3,11 +3,18 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <fstream>
 #include <mutex>
+#include <regex>
+#include <set>
+#include <sstream>
 
 #include "debugger/debugger.h"
+#include <glm/gtc/quaternion.hpp>
+
 #include "project/map.h"
 #include "project/project.h"
+#include "properties/transform.h"
 #include "scene/map_scene.h"
 #include "scripting/js/script_behaviour.h"
 #include "scripting/js/script_builder.h"
@@ -292,13 +299,25 @@ position = Vector3(0, 1, 0)
 [component type="CharacterController" node="Player"]
 height = 1.8
 radius = 0.3
+[component type="AudioSource" node="Player"]
+[component type="Animator" node="Player"]
 [component type="ComponentUser" node="Player"]
 )");
+  std::vector<std::string> errors;
+  PDebug::SetSink([&](PDebug::Level level, const std::string& message) {
+    if (level == PDebug::Level::kError) errors.push_back(message);
+  });
   Tick(scene, 30);
+  PDebug::SetSink({});
+  EXPECT_TRUE(errors.empty()) << errors[0];
   const std::string log = Log();
   EXPECT_NE(log.find("grounded true v true"), std::string::npos) << log;
-  EXPECT_NE(log.find("audio true"), std::string::npos) << log;
+  // The setters reach the component's fields. (Nothing plays: the tests have no audio device.)
+  EXPECT_NE(log.find("audio v0.25 p1.5 ltrue mtrue playing false"), std::string::npos) << log;
+  EXPECT_NE(log.find("anim number number boolean string"), std::string::npos) << log;
   EXPECT_EQ(log.find("no controller"), std::string::npos) << log;
+  EXPECT_EQ(log.find("no audio"), std::string::npos) << log;
+  EXPECT_EQ(log.find("no animator"), std::string::npos) << log;
   // The controller moved along -Z through the script.
   EXPECT_LT(scene.Find("Player").GetTransform()->GetPosition().z, -2.0f);
 }
@@ -313,4 +332,87 @@ TEST_F(ScriptBehaviourTest, GeneratedComponentClassesHaveTheRuntimeMethods) {
   // Field names are camelCase on the TypeScript side.
   EXPECT_NE(ts.find("get applyRootMotion(): boolean"), std::string::npos);
   EXPECT_EQ(ts.find("get apply_root_motion"), std::string::npos);
+}
+
+// native.d.ts is what the TypeScript runtime is checked against; the natives V8 really has are
+// whatever bindings_*.cc registered. A native that is declared but missing fails only when a
+// script calls it, and one that is registered but not declared is dead code.
+TEST_F(ScriptBehaviourTest, DeclaredNativesMatchTheRegisteredOnes) {
+  std::ifstream file(fs::path(MERCURY_SOURCE_DIR) / "mercury/scripting/ts/native.d.ts");
+  ASSERT_TRUE(file);
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  const std::string text = buffer.str();
+  const size_t start = text.find("declare const __native: {");
+  ASSERT_NE(start, std::string::npos);
+
+  std::set<std::string> declared;
+  static const std::regex member(R"(\n  (?:readonly )?(\w+)\s*[(:])");
+  for (std::sregex_iterator it(text.begin() + start, text.end(), member), end; it != end; ++it) {
+    declared.insert((*it)[1]);
+  }
+  ASSERT_GT(declared.size(), 50u);
+
+  std::set<std::string> registered;
+  std::stringstream keys(Run("Object.keys(__native).join(',')"));
+  for (std::string key; std::getline(keys, key, ',');) registered.insert(key);
+
+  for (const auto& name : declared) {
+    EXPECT_TRUE(registered.count(name)) << "declared in native.d.ts but not registered: " << name;
+  }
+  for (const auto& name : registered) {
+    EXPECT_TRUE(declared.count(name)) << "registered but not declared in native.d.ts: " << name;
+  }
+}
+
+// The TypeScript Quaternion has to agree with the engine's Transform, or every script that sets a
+// rotation turns the wrong way.
+TEST_F(ScriptBehaviourTest, QuaternionMatchesTheEnginesEulerConvention) {
+  const glm::vec3 samples[] = {{0, 0, 0},    {90, 0, 0},   {0, 90, 0},  {0, 0, 90},
+                               {30, 45, 60}, {-20, 150, 5}, {15, -70, 120}};
+  const glm::vec3 probes[] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {0.3f, -2.0f, 5.0f}};
+  for (const glm::vec3& euler : samples) {
+    const glm::quat expected = Transform::EulerToQuat(euler);
+    const std::string script = std::format(
+        "(() => {{ const q = __math.Quaternion.euler({}, {}, {}); return [q.x, q.y, q.z, q.w].join(','); }})()", euler.x,
+        euler.y, euler.z);
+    std::stringstream parts(Run(script));
+    std::string part;
+    std::vector<float> got;
+    while (std::getline(parts, part, ',')) got.push_back(std::stof(part));
+    ASSERT_EQ(got.size(), 4u);
+    // q and -q are the same rotation: compare what they do to vectors.
+    const glm::quat actual(got[3], got[0], got[1], got[2]);
+    for (const glm::vec3& v : probes) {
+      const glm::vec3 a = expected * v;
+      const glm::vec3 b = actual * v;
+      EXPECT_NEAR(a.x, b.x, 1e-4f) << "euler " << euler.x << "," << euler.y << "," << euler.z;
+      EXPECT_NEAR(a.y, b.y, 1e-4f);
+      EXPECT_NEAR(a.z, b.z, 1e-4f);
+    }
+    // rotate() agrees with the engine too.
+    std::stringstream rotated(Run(std::format(
+        "(() => {{ const r = __math.Quaternion.euler({}, {}, {}).rotate(new __math.Vector3(0.3, -2, 5)); "
+        "return [r.x, r.y, r.z].join(','); }})()",
+        euler.x, euler.y, euler.z)));
+    const glm::vec3 want = expected * glm::vec3(0.3f, -2.0f, 5.0f);
+    for (int i = 0; i < 3; i++) {
+      ASSERT_TRUE(std::getline(rotated, part, ','));
+      EXPECT_NEAR(std::stof(part), want[i], 1e-4f);
+    }
+  }
+}
+
+// eulerAngles is the inverse of euler (up to the representation of the same rotation).
+TEST_F(ScriptBehaviourTest, QuaternionEulerAnglesRoundTrip) {
+  const glm::vec3 samples[] = {{0, 0, 0}, {30, 45, 60}, {-20, 80, 5}, {15, -70, 120}, {-60, 10, -170}};
+  for (const glm::vec3& euler : samples) {
+    const std::string result = Run(std::format(
+        "(() => {{ const e = __math.Quaternion.euler({}, {}, {}).eulerAngles; "
+        "const q = __math.Quaternion.euler(e.x, e.y, e.z); "
+        "const r = __math.Quaternion.euler({}, {}, {}); "
+        "return Math.abs(q.x*r.x + q.y*r.y + q.z*r.z + q.w*r.w) > 0.99999; }})()",
+        euler.x, euler.y, euler.z, euler.x, euler.y, euler.z));
+    EXPECT_EQ(result, "true") << euler.x << "," << euler.y << "," << euler.z;
+  }
 }

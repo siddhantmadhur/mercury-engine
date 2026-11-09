@@ -19,7 +19,7 @@ struct EmbeddedFile {
   const unsigned char* data;
   size_t size;
 };
-// The files of mercury/scripting/ts/, embedded at build time (see cmake/EmbedFiles.cmake).
+// The files of mercury/scripting/ts/, embedded at build time (see tools/embed_files.py).
 extern const EmbeddedFile kTsRuntimeFiles[];
 extern const size_t kTsRuntimeFileCount;
 
