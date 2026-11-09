@@ -1,11 +1,13 @@
 import {
-  Assets, AudioSource, Behaviour, CharacterController, Debug, Event, GameObject, NodeRef, Scene, Vector3, bindable, callable,
+  Animator, Assets, AudioSource, Behaviour, CharacterController, Debug, Event, GameObject, NodeRef, Quaternion, Scene, Vector3, bindable, callable,
   dataAsset, enumField, field, int, script,
 } from "mercury";
 
 // What happened, in order; tests read it back with `globalThis.__log`.
 const log: string[] = [];
 (globalThis as any).__log = log;
+// The math classes, for tests that compare them with the engine's own (glm) results.
+(globalThis as any).__math = { Quaternion, Vector3 };
 
 @script()
 class Probe extends Behaviour {
@@ -112,6 +114,26 @@ class ComponentUser extends Behaviour {
     controller.move(new Vector3(0, -0.05, -0.1));
     log.push(`grounded ${controller.isGrounded} v ${controller.velocity.length >= 0}`);
     const audio = this.gameObject.getComponent(AudioSource);
-    log.push(`audio ${audio === null}`);
+    if (!audio) { log.push("no audio"); return; }
+    audio.setVolume(0.25);
+    audio.setPitch(1.5);
+    audio.setLoop(true);
+    audio.setMute(true);
+    audio.setClip("res://none.wav");
+    audio.play();
+    audio.pause();
+    audio.unPause();
+    audio.stop();
+    audio.playOneShot("res://none.wav", 0.5);
+    log.push(`audio v${audio.volume} p${audio.pitch} l${audio.loop} m${audio.mute} playing ${audio.isPlaying}`);
+    const animator = this.gameObject.getComponent(Animator);
+    if (!animator) { log.push("no animator"); return; }
+    animator.setFloat("speed", 2);
+    animator.setInteger("count", 3);
+    animator.setBool("armed", true);
+    animator.setTrigger("jump");
+    animator.resetTrigger("jump");
+    animator.play("Idle");
+    log.push(`anim ${typeof animator.getFloat("speed")} ${typeof animator.getInteger("count")} ${typeof animator.getBool("armed")} ${typeof animator.getCurrentState()}`);
   }
 }

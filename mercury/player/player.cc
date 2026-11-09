@@ -102,7 +102,7 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
       PrintUsage(argv[0]);
       return 0;
     } else if (!arg.starts_with("--")) {
-      project_path = std::string(arg);
+      project_path = os::UserPath(std::string(arg)).string();
       project_given = true;
     } else {
       PDebug::error("Unknown option {}", arg);

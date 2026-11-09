@@ -11,7 +11,7 @@ namespace Mercury::vk {
 
 namespace {
 
-// Must match the register shifts in CMakeLists.txt; see ui.ps.hlsl.
+// Must match the register shifts in tools/shader.bzl; see ui.ps.hlsl.
 constexpr uint32_t kTextureBinding = 10;  // t0
 constexpr uint32_t kSamplerBinding = 20;  // s0
 constexpr uint32_t kMaxTextures = 512;

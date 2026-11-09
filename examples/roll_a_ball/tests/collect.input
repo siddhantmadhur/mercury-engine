@@ -1,5 +1,5 @@
 # Roll the ball around and jump; the pickups near the start get collected.
-10 capture /tmp/claude-1000/roll_start.png
+10 capture captures/roll_start.png
 20 press d
 120 release d
 130 tap space
@@ -7,6 +7,6 @@
 260 release w
 270 press a
 400 release a
-401 capture /tmp/claude-1000/roll_mid.png
-700 capture /tmp/claude-1000/roll_end.png
+401 capture captures/roll_mid.png
+700 capture captures/roll_end.png
 701 quit

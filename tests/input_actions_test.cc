@@ -1,5 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
 #include "GLFW/glfw3.h"
 #include "input/input_actions.h"
 #include "input/input_actions_codegen.h"
@@ -12,7 +16,7 @@ InputActionsDesc SampleActions() {
   InputActionsDesc desc;
   desc.maps = {"Player", "UI", "Empty"};
   desc.class_name = "GameInput";
-  desc.header = "res://scripts/game_input.h";
+  desc.header = "res://scripts/game_input.ts";
   InputActionDesc jump;
   jump.map = "Player";
   jump.name = "Jump";
@@ -132,4 +136,30 @@ TEST(InputActionsCodegen, ReportsNameCollisions) {
   desc.actions = {a, b};
   const auto header = GenerateInputActionsTypeScript(desc, "GameInput", "x");
   EXPECT_EQ(header.errors.size(), 2u);
+}
+
+// The generated file checked in with roll_a_ball must be what the editor would write today, or
+// the next save in the Input Actions window rewrites it (and a hand edit is silently lost).
+TEST(InputActionsCodegen, RollABallHeaderIsUpToDate) {
+  const std::filesystem::path root =
+      std::filesystem::path(MERCURY_SOURCE_DIR) / "examples/roll_a_ball";
+  auto read = [](const std::filesystem::path& file) {
+    std::ifstream in(file, std::ios::binary);
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+  };
+  const std::string minput = read(root / "input/actions.minput");
+  ASSERT_FALSE(minput.empty());
+  InputActionsDesc desc;
+  std::string error;
+  ASSERT_TRUE(ParseInputActions(minput, &desc, &error)) << error;
+  const std::string class_name = desc.class_name.empty() ? "GameInput" : desc.class_name;
+  const auto generated = GenerateInputActionsTypeScript(desc, class_name, "res://input/actions.minput");
+  EXPECT_TRUE(generated.errors.empty());
+  EXPECT_EQ(generated.source, read(root / "scripts/generated/game_input.ts"));
+  // And the .minput survives a save/parse round trip.
+  InputActionsDesc again;
+  ASSERT_TRUE(ParseInputActions(SerializeInputActions(desc), &again, &error)) << error;
+  EXPECT_EQ(SerializeInputActions(again), SerializeInputActions(desc));
 }

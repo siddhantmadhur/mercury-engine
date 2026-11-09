@@ -2,7 +2,7 @@
  * process.h
  *
  * Runs a child process with its stdout and stderr captured line by line. The
- * editor uses it to build the game with CMake and to run the player.
+ * editor uses it to build the game scripts and to run the player.
  */
 #ifndef MERCURY_OS_PROCESS_H
 #define MERCURY_OS_PROCESS_H

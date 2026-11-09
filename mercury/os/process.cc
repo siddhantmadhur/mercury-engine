@@ -215,7 +215,7 @@ bool Process::Start(const std::vector<std::string>& args,
 #endif
 
   // Own process group, so Kill() also stops whatever the child starts
-  // (cmake -> ninja -> compilers).
+  // (a build tool and the programs it starts).
   posix_spawnattr_t attributes;
   posix_spawnattr_init(&attributes);
   posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);

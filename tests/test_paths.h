@@ -1,5 +1,5 @@
 // Test-only path helpers. Bazel gives each test its own TEST_TMPDIR; fall back
-// to the CMake-style cache directory when the macro is defined.
+// to the system temp directory when MERCURY_TEST_CACHE_DIR is not set.
 #ifndef MERCURY_TESTS_TEST_PATHS_H
 #define MERCURY_TESTS_TEST_PATHS_H
 
