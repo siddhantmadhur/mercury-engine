@@ -1,5 +1,9 @@
 common --enable_bzlmod
 
+# Optimized by default so a plain `bazelisk build`/`test` reuses the same V8
+# configuration. Use -c dbg when debugging the engine (V8 is then rebuilt).
+build --compilation_mode=opt
+
 # Mercury is C++20 (no modules).
 build --cxxopt=-std=c++20
 build --host_cxxopt=-std=c++20
