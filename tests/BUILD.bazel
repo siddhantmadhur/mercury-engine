@@ -1,3 +1,5 @@
+load("@mercury_config//:defs.bzl", "COPTS")
+
 package(default_visibility = ["//visibility:public"])
 
 cc_test(
@@ -21,6 +23,7 @@ cc_test(
         "test_scripts.h",
         "ui_test.cc",
     ],
+    copts = COPTS,
     deps = [
         "//mercury:mercury",
         "//third_party/googletest:gtest_main",
@@ -33,6 +36,7 @@ cc_test(
         "editor_templates_test.cc",
         "test_paths.h",
     ],
+    copts = COPTS,
     deps = [
         "//editor:editor_lib",
         "//third_party/googletest:gtest_main",
@@ -42,6 +46,7 @@ cc_test(
 cc_binary(
     name = "editor_smoke",
     srcs = ["editor_smoke.cc"],
+    copts = COPTS,
     data = ["//mercury/shaders:shaders"],
     deps = ["//editor:editor_lib"],
 )

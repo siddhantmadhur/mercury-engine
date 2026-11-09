@@ -35,7 +35,7 @@ def main() -> None:
         data = path.read_bytes()
         bytes_text = "".join(f"0x{byte:02x}," for byte in data) or "0x00,"
         content.append(
-            f"static const unsigned char kFile{index}[] = " + bytes_text + "0};"
+            f"static const unsigned char kFile{index}[] = {{{bytes_text}0}};"
         )
         table.append(f'    {{"{relative}", kFile{index}, {len(data)}}},')
         content.append("")

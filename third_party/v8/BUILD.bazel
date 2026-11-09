@@ -2,7 +2,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["patches/highway_rules_cc.patch"])
 
-# The default backend is V8's own Bazel build (@v8//:noicu/v8). If that
+# The default backend is V8's own Bazel build (@v8//:v8_noicu). If that
 # cannot be made to work on a host, --define=v8_backend=gn uses the monolithic
 # library produced by scripts/build_v8.sh instead.
 config_setting(
@@ -14,6 +14,6 @@ alias(
     name = "v8",
     actual = select({
         ":use_gn_monolith": "@v8_gn//:v8",
-        "//conditions:default": "@v8//:noicu/v8",
+        "//conditions:default": "@v8//:v8_noicu",
     }),
 )

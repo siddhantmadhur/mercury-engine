@@ -49,11 +49,16 @@ cc_library(
 cc_library(
     name = "assimp_headers",
     hdrs = glob([
+        "assimp/code/**/*.h",
+        "assimp/code/**/*.inl",
         "assimp/include/**/*.h",
         "assimp/include/**/*.hpp",
         "assimp/include/**/*.inl",
     ]),
-    includes = ["assimp/include"],
+    includes = [
+        ".",
+        "assimp/include",
+    ],
 )
 
 cc_library(
@@ -180,6 +185,12 @@ cmake(
         "BUILD_SHARED_LIBS": "OFF",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
+    generate_args = select({
+        # assimp's bundled zlib defines fdopen() NULL on macOS, which breaks
+        # the SDK's declaration. The old CMake build applied this to zlibstatic.
+        "@platforms//os:macos": ["-DCMAKE_C_FLAGS:STRING=-Dfdopen=fdopen"],
+        "//conditions:default": [],
+    }),
     lib_source = "@assimp_src//:all",
     out_static_libs = [
         "libassimp.a",
@@ -206,8 +217,16 @@ cmake(
         "BUILD_SHARED_LIBS": "OFF",
         "CPP_EXCEPTIONS_ENABLED": "OFF",
         "CPP_RTTI_ENABLED": "OFF",
+        "DEBUG_RENDERER_IN_DEBUG_AND_RELEASE": "OFF",
         "ENABLE_ALL_WARNINGS": "OFF",
+        "ENABLE_OBJECT_STREAM": "OFF",
         "INTERPROCEDURAL_OPTIMIZATION": "OFF",
+        "PROFILER_IN_DEBUG_AND_RELEASE": "OFF",
+        "JPH_USE_CPU_COMPUTE": "OFF",
+        "JPH_USE_DX12": "OFF",
+        "JPH_USE_DXC": "OFF",
+        "JPH_USE_MTL": "OFF",
+        "JPH_USE_VK": "OFF",
         "TARGET_HELLO_WORLD": "OFF",
         "TARGET_PERFORMANCE_TEST": "OFF",
         "TARGET_SAMPLES": "OFF",
@@ -223,6 +242,11 @@ cmake(
 
 cc_library(
     name = "jolt",
+    # These are Jolt's PUBLIC compile definitions for a Release build with
+    # defaults; Jolt's version check aborts if the client disagrees.
+    defines = [
+        "JPH_OBJECT_LAYER_BITS=16",
+    ],
     linkopts = select({
         "@platforms//os:linux": ["-lpthread"],
         "//conditions:default": [],
@@ -240,9 +264,8 @@ cmake(
         "BUILD_SHARED_LIBS": "OFF",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
-    lib_source = "@yoga_src//:all",
+    lib_source = "@yoga_wrapper//:all",
     out_static_libs = ["libyogacore.a"],
-    working_directory = "yoga",
 )
 
 cc_library(

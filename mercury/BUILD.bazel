@@ -1,3 +1,4 @@
+load("@mercury_config//:defs.bzl", "COPTS")
 load("//tools:embed_files.bzl", "embed_files")
 
 package(default_visibility = ["//visibility:public"])
@@ -16,7 +17,7 @@ cc_library(
         exclude = ["player/main.cc"],
     ) + [":ts_runtime_files"],
     hdrs = glob(["**/*.h"]),
-    copts = select({
+    copts = COPTS + select({
         "@platforms//os:macos": ["-Wno-deprecated-declarations"],
         "//conditions:default": [],
     }),
@@ -29,7 +30,6 @@ cc_library(
         "//conditions:default": [],
     }),
     deps = [
-        "@mercury_config//:config",
         "@vulkan//:vulkan",
         "//third_party/v8:v8",
         "//third_party:assimp",
