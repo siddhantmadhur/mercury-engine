@@ -26,6 +26,24 @@ void Console::AddProcessOutput(Source source, std::string text) {
   Add(level, source, std::move(text));
 }
 
+std::optional<std::string> Console::FindScriptFile(const std::string& text) {
+  size_t from = 0;
+  while (true) {
+    const size_t at = text.find("scripts/", from);
+    if (at == std::string::npos) return std::nullopt;
+    from = at + 1;
+    // The path runs to ".ts" followed by ':' or '('.
+    const size_t ts = text.find(".ts", at);
+    if (ts == std::string::npos) return std::nullopt;
+    const size_t end = ts + 3;
+    if (end >= text.size() || (text[end] != ':' && text[end] != '(')) continue;
+    // Something must follow that looks like a line number.
+    if (end + 1 >= text.size() || !std::isdigit(static_cast<unsigned char>(text[end + 1]))) continue;
+    // A path in a stack frame may start with "../../" (relative to .mercury/types): keep "scripts/".
+    return text.substr(at, end - at);
+  }
+}
+
 void Console::Clear() {
   std::lock_guard lock(mutex_);
   lines_.clear();

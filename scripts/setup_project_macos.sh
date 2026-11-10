@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Installs everything needed to build Mercury on macOS (MoltenVK Vulkan backend):
-# build tools (cmake, ninja), Vulkan loader + headers, MoltenVK, submodules,
-# and DXC (DirectX Shader Compiler for HLSL -> SPIR-V).
+# build tools (Bazelisk, cmake, ninja), Vulkan loader + headers, MoltenVK,
+# Python for V8's build, submodules, DXC (HLSL -> SPIR-V) and esbuild.
 #
 # Run from anywhere in the repository.
 
@@ -19,7 +19,7 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 
 echo "==> Installing build tools and Vulkan dependencies via Homebrew..."
-brew install cmake ninja molten-vk vulkan-loader vulkan-headers
+brew install bazelisk cmake ninja pkg-config molten-vk vulkan-loader vulkan-headers
 
 # 2. Update submodules
 echo "==> Updating git submodules..."
@@ -64,8 +64,13 @@ install_dxc() {
 }
 
 install_dxc
+"$(dirname "${BASH_SOURCE[0]}")/install_esbuild.sh"
+
+# 4. Fetch V8 sources (Bazel builds it on demand).
+"$(dirname "${BASH_SOURCE[0]}")/fetch_v8.sh"
 
 echo
 echo "==> Setup complete! Next steps:"
-echo "  cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug"
-echo "  cmake --build build"
+echo "  bazelisk build //mercury:mercury_player"
+echo "  bazelisk test //tests/..."
+echo "  bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj"

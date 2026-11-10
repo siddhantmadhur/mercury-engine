@@ -8,6 +8,7 @@
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
+#include "scripting/ts_types.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury::Templates {
@@ -153,29 +154,10 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
     return {};
   }
 
-  const std::string target = ToTargetName(name);
-  const std::string engine_dir = fs::path(MERCURY_ENGINE_DIR).generic_string();
-  const std::string cmake = std::format(
-      R"(# Builds the game executable. The editor runs this when you press Play.
-cmake_minimum_required(VERSION 3.30)
-project({0} LANGUAGES CXX C)
-
-set(MERCURY_ENGINE_DIR "{1}" CACHE PATH "Mercury engine checkout")
-add_subdirectory(${{MERCURY_ENGINE_DIR}} mercury-engine EXCLUDE_FROM_ALL)
-
-# Compiles every .cc file in scripts/ into the game.
-mercury_add_game({2} PROJECT ${{CMAKE_CURRENT_SOURCE_DIR}})
-)",
-      ToTargetName(name), engine_dir, target);
-  if (!WriteText(root / "CMakeLists.txt", cmake, error)) return {};
+  // Types for the editor's language server and the config that points at them.
+  if (!WriteDefaultTsconfig(root, error)) return {};
   if (!WriteText(root / ".gitignore",
-                 "# Build output and editor caches\n.mercury/\n", error)) {
-    return {};
-  }
-  // clangd only looks for compile_commands.json next to the sources and in
-  // build/, so point it at the build the editor configures.
-  if (!WriteText(root / ".clangd",
-                 "CompileFlags:\n  CompilationDatabase: .mercury/build\n",
+                 "# Build output, generated types and editor caches\n.mercury/\nnode_modules/\n",
                  error)) {
     return {};
   }
@@ -192,53 +174,28 @@ mercury_add_game({2} PROJECT ${{CMAKE_CURRENT_SOURCE_DIR}})
 fs::path CreateScript(const fs::path& project_root,
                       const std::string& class_name, std::string* error) {
   if (!IsValidIdentifier(class_name)) {
-    if (error) *error = "\"" + class_name + "\" is not a valid C++ class name";
+    if (error) *error = "\"" + class_name + "\" is not a valid TypeScript class name";
     return {};
   }
-  const std::string file_name = ToSnakeCase(class_name);
-  const fs::path header = project_root / "scripts" / (file_name + ".h");
-  const fs::path source = project_root / "scripts" / (file_name + ".cc");
-  if (fs::exists(header) || fs::exists(source)) {
-    if (error) *error = header.filename().string() + " already exists";
+  const fs::path source = project_root / "scripts" / (ToSnakeCase(class_name) + ".ts");
+  if (fs::exists(source)) {
+    if (error) *error = source.filename().string() + " already exists";
     return {};
   }
-  std::string guard = file_name;
-  for (auto& c : guard) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+  const std::string text = std::format(
+      R"(import {{ Behaviour, script, field }} from "mercury";
 
-  const std::string header_text = std::format(
-      R"(#ifndef {0}_H
-#define {0}_H
+@script()
+class {0} extends Behaviour {{
+  /** Shown in the Inspector and saved in the map. */
+  @field() speed = 1;
 
-#include "scripting/behaviour.h"
-
-class {1} : public Mercury::Behaviour {{
- public:
-  // Fields listed here appear in the editor's Inspector and are saved in maps.
-  void Reflect(Mercury::Reflector& r) override {{
-    r.Field("speed", speed);
-  }}
-
-  void OnStart() override;
-  void OnTick(double dt) override;
-
-  float speed = 1.0f;
-}};
-
-#endif  // {0}_H
+  onStart(): void {{}}
+  onTick(dt: number): void {{}}
+}}
 )",
-      guard, class_name);
-  const std::string source_text = std::format(
-      R"(#include "{0}.h"
-
-MERCURY_SCRIPT({1});
-
-void {1}::OnStart() {{}}
-
-void {1}::OnTick(double dt) {{}}
-)",
-      file_name, class_name);
-  if (!WriteText(header, header_text, error)) return {};
-  if (!WriteText(source, source_text, error)) return {};
+      class_name);
+  if (!WriteText(source, text, error)) return {};
   return source;
 }
 

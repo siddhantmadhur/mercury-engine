@@ -27,6 +27,25 @@ ComponentInfo MakeInfo(const char* name, const char* category,
   info.category = category;
   info.description = description;
   info.fields = DescribeFields<T>();
+  info.has = [](MapScene& scene, kEntityId entity) {
+    return scene.Objects().GetProperty<T>(entity) != nullptr;
+  };
+  info.get_field = [](MapScene& scene, kEntityId entity, std::string_view field,
+                      mtext::Variant* out) {
+    T* value = scene.Objects().GetProperty<T>(entity);
+    if (!value) return false;
+    auto reflector = Reflector::Get(field, out);
+    value->Reflect(reflector);
+    return reflector.Found();
+  };
+  info.set_field = [](MapScene& scene, kEntityId entity, std::string_view field,
+                      const mtext::Variant& in) {
+    T* value = scene.Objects().GetProperty<T>(entity);
+    if (!value) return false;
+    auto reflector = Reflector::Set(field, in);
+    value->Reflect(reflector);
+    return reflector.Found();
+  };
   return info;
 }
 

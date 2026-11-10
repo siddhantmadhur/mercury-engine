@@ -3,13 +3,13 @@
     <ui:VisualElement class="scoreboard" picking-mode="Ignore">
         <ui:Label name="player-score" class="score">
             <Bindings>
-                <ui:DataBinding property="text" data-source-path="player_wins" />
+                <ui:DataBinding property="text" data-source-path="playerWins" />
             </Bindings>
         </ui:Label>
         <ui:VisualElement class="divider" />
         <ui:Label name="enemy-score" class="score">
             <Bindings>
-                <ui:DataBinding property="text" data-source-path="enemy_wins" />
+                <ui:DataBinding property="text" data-source-path="enemyWins" />
             </Bindings>
         </ui:Label>
     </ui:VisualElement>

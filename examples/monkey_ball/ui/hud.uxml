@@ -7,21 +7,21 @@
                 <ui:Label class="stat__name" text="TIME" />
                 <ui:Label name="time" class="stat__value" text="0.00 s">
                     <Bindings>
-                        <ui:DataBinding property="text" data-source-path="time_text" />
+                        <ui:DataBinding property="text" data-source-path="timeText" />
                     </Bindings>
                 </ui:Label>
             </ui:VisualElement>
             <ui:ProgressBar name="time-bar" class="time-bar" high-value="65">
                 <Bindings>
-                    <ui:DataBinding property="value" data-source-path="time_remaining" />
-                    <ui:DataBinding property="high-value" data-source-path="time_limit" />
+                    <ui:DataBinding property="value" data-source-path="timeRemaining" />
+                    <ui:DataBinding property="high-value" data-source-path="timeLimit" />
                 </Bindings>
             </ui:ProgressBar>
             <ui:VisualElement class="stat">
                 <ui:Label class="stat__name" text="BANANAS" />
                 <ui:Label name="bananas" class="stat__value stat__value--banana" text="0 / 0">
                     <Bindings>
-                        <ui:DataBinding property="text" data-source-path="bananas_text" />
+                        <ui:DataBinding property="text" data-source-path="bananasText" />
                     </Bindings>
                 </ui:Label>
             </ui:VisualElement>

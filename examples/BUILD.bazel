@@ -1,0 +1,27 @@
+load("@mercury_config//:defs.bzl", "COPTS")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_binary(
+    name = "breakout",
+    srcs = [
+        "breakout/breakout_scene.cc",
+        "breakout/breakout_scene.h",
+        "breakout/main.cc",
+        "common/example_utils.h",
+    ],
+    copts = COPTS,
+    deps = ["//mercury:mercury"],
+)
+
+cc_binary(
+    name = "space_invaders",
+    srcs = [
+        "common/example_utils.h",
+        "space_invaders/main.cc",
+        "space_invaders/space_invaders.cc",
+        "space_invaders/space_invaders.h",
+    ],
+    copts = COPTS,
+    deps = ["//mercury:mercury"],
+)

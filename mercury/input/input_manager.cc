@@ -124,11 +124,9 @@ void InputManager::SetCursorLocked(bool locked) {
   if (!window_) return;
   if (locked) {
     glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-#if !defined(__EMSCRIPTEN__)
     if (glfwRawMouseMotionSupported()) {
       glfwSetInputMode(window_, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
     }
-#endif
   } else {
     glfwSetInputMode(window_, GLFW_CURSOR,
                      cursor_visible_ ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
@@ -142,7 +140,6 @@ void InputManager::SetCursorVisible(bool visible) {
 
 void InputManager::PollGamepads() {
   gamepad_ = GamepadState{};
-#if !defined(__EMSCRIPTEN__)
   for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; jid++) {
     if (!glfwJoystickIsGamepad(jid)) continue;
     GLFWgamepadstate state;
@@ -157,7 +154,6 @@ void InputManager::PollGamepads() {
         (gamepad_.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] + 1.0f) * 0.5f;
     break;
   }
-#endif
 }
 void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
                                         double yoffset) {

@@ -14,12 +14,13 @@
  *
  * Steps, each started from Update():
  *
- *   configure a Release build (only the first time), next to the Play build
- *     -> cmake --build <release build> --target <game> --config Release
- *     -> pack the files (on a worker thread) and copy the executable
+ *   build a Release mercury_player with Bazel, in the engine checkout
+ *     -> bazel build -c opt //mercury:mercury_player
+ *     -> on a worker thread: minify the scripts (esbuild), pack the files, copy the player
  *
- * The executable finds game.mpack next to itself and runs from it (see
- * RunPlayer). Build and Play are unchanged and keep using loose files.
+ * The scripts are packed as the minified .mercury/scripts/game.js; the .ts sources stay out. The
+ * executable finds game.mpack next to itself and runs from it (see RunPlayer). Build and Play
+ * are unchanged and keep using loose files.
  */
 #ifndef MERCURY_EDITOR_RELEASE_BUILD_H
 #define MERCURY_EDITOR_RELEASE_BUILD_H
@@ -39,7 +40,7 @@ namespace Mercury {
 
 class ReleaseBuild {
  public:
-  enum class State { kIdle, kConfiguring, kBuilding, kPacking };
+  enum class State { kIdle, kBuilding, kPacking };
 
   explicit ReleaseBuild(Console& console) : console_(console) {}
   ~ReleaseBuild();
@@ -63,10 +64,9 @@ class ReleaseBuild {
 
  private:
   struct Config {
-    std::string executable;
-    std::string build_dir;
-    std::string source_dir;
-    std::string target;
+    std::string executable;  // the Release mercury_player
+    std::string source_dir;  // the engine checkout
+    std::string target_name;  // what the shipped executable is called
     std::string spirv_dir;
     std::string ui_resources;
   };
@@ -76,10 +76,10 @@ class ReleaseBuild {
     std::string error;
   };
 
-  // .mercury/<name>.mcfg, or the per-configuration file a multi-config
-  // generator writes.
-  std::optional<Config> ReadConfig(std::string_view name) const;
-  bool StartConfigure();
+  // Where the Release player will be, from the engine checkout this editor was built from.
+  Config MakeConfig() const;
+  // Finds the built player.
+  void LocateExecutable();
   bool StartBuild();
   void StartPacking();
   static PackResult Pack(Config config, std::filesystem::path project_root,
@@ -95,6 +95,7 @@ class ReleaseBuild {
   bool cancelled_ = false;
 
   std::filesystem::path project_root_;
+  std::string project_name_;
   std::filesystem::path output_dir_;
   uint64_t max_archive_bytes_ = 0;
   std::optional<Config> config_;

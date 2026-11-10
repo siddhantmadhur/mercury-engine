@@ -61,7 +61,7 @@ std::string PartLabel(const std::vector<std::string>& paths) {
 }
 
 // Writes `text` unless the file already holds it, so a save that changes
-// nothing in the header does not rebuild every script that includes it.
+// nothing in the generated file does not rebuild every script that imports it.
 bool WriteIfChanged(const fs::path& file, const std::string& text) {
   if (auto current = os::ReadText(file); current && *current == text) return true;
   std::error_code ec;
@@ -137,7 +137,7 @@ bool InputActionsWindow::Save() {
 
 bool InputActionsWindow::WriteHeader() {
   const std::string class_name = desc_.class_name.empty() ? "GameInput" : desc_.class_name;
-  auto header = GenerateInputActionsHeader(desc_, class_name, path_);
+  auto header = GenerateInputActionsTypeScript(desc_, class_name, path_);
   header_errors_ = std::move(header.errors);
   if (!header_errors_.empty()) {
     for (const auto& e : header_errors_) console_.Error("Input Actions: " + e);
@@ -408,24 +408,24 @@ void InputActionsWindow::DrawToolbar() {
   if (ImGui::MenuItem("Save", "Ctrl+S", false, open && dirty_)) Save();
   if (ImGui::BeginMenu("Code", open)) {
     bool generate = !desc_.header.empty();
-    if (ImGui::Checkbox("Generate C++ Header", &generate)) {
+    if (ImGui::Checkbox("Generate TypeScript", &generate)) {
       Checkpoint();
       if (generate) {
         if (desc_.class_name.empty()) desc_.class_name = "GameInput";
-        desc_.header = "res://scripts/" + Templates::ToSnakeCase(desc_.class_name) + ".h";
+        desc_.header = "res://scripts/generated/" + Templates::ToSnakeCase(desc_.class_name) + ".ts";
       } else {
         desc_.header.clear();
       }
       MarkChanged();
     }
-    ImGui::SetItemTooltip("Write a header with a struct per action map when saving,\n"
+    ImGui::SetItemTooltip("Write a TypeScript class with a member per action map when saving,\n"
                           "like Unity's Generate C# Class");
     ImGui::BeginDisabled(!generate);
     ImGui::SetNextItemWidth(260);
     if (ImGui::InputText("Class Name", &desc_.class_name)) MarkChanged();
     if (ImGui::IsItemActivated()) Checkpoint();
     ImGui::SetNextItemWidth(260);
-    if (ImGui::InputText("Header", &desc_.header)) MarkChanged();
+    if (ImGui::InputText("File", &desc_.header)) MarkChanged();
     if (ImGui::IsItemActivated()) Checkpoint();
     if (ImGui::MenuItem("Generate Now")) WriteHeader();
     ImGui::EndDisabled();
@@ -704,22 +704,22 @@ void InputActionsWindow::DrawActionProperties(InputActionDesc& action) {
   ImGui::SeparatorText("In scripts");
   const std::string member =
       desc_.header.empty()
-          ? std::format("GetInputActions()->Find(\"{}\")", action.FullName())
+          ? std::format("this.inputActions.find(\"{}\")", action.FullName())
           : std::format("input.{}.{}", InputActionIdentifier(action.map),
                         InputActionIdentifier(action.name));
   std::string usage;
   if (action.type == InputAction::Type::kButton) {
-    usage = member + "->WasPressedThisFrame()";
+    usage = member + (desc_.header.empty() ? "?.wasPressedThisFrame" : ".wasPressedThisFrame");
   } else if (action.vector2) {
-    usage = member + "->ReadValue<glm::vec2>()";
+    usage = member + (desc_.header.empty() ? "?.readVector2()" : ".readVector2()");
   } else {
-    usage = member + "->ReadValue<float>()";
+    usage = member + (desc_.header.empty() ? "?.readFloat()" : ".readFloat()");
   }
   ImGui::TextDisabled("%s", usage.c_str());
   if (ImGui::IsItemClicked()) ImGui::SetClipboardText(usage.c_str());
   ImGui::SetItemTooltip("Click to copy");
   if (desc_.header.empty()) {
-    ImGui::TextDisabled("Code > Generate C++ Header for typed access.");
+    ImGui::TextDisabled("Code > Generate TypeScript for typed access.");
   }
   for (const auto& error : header_errors_) {
     ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", error.c_str());

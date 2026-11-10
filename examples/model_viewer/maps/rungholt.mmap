@@ -36,7 +36,7 @@ skybox = ExtResource("4")
 
 [component type="FlythroughCamera" node="Camera"]
 path = NodePath("Path")
-lap_seconds = 90
+lapSeconds = 90
 
 [node name="Sun" parent="."]
 

@@ -9,6 +9,7 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include "os/process.h"
 #include "properties/camera.h"
+#include "scripting/ts_types.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
 
@@ -268,10 +269,11 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   if (main_map.empty() || !OpenMap(main_map)) {
     NewMap("");
   }
-  if (!fs::exists(project->GetCacheDir() / "player.mcfg") &&
-      !fs::exists(project->GetRoot() / "CMakeLists.txt")) {
-    console_.Warn(
-        "This project has no CMakeLists.txt, so Play cannot build it yet.");
+  // Types and tsconfig.json for the editor's language server (VS Code, Neovim, Zed...).
+  std::string types_error;
+  if (!WriteDefaultTsconfig(project->GetRoot(), &types_error) ||
+      !WriteTypeScriptTypes(project->GetRoot() / ".mercury" / "types", &types_error)) {
+    console_.Warn("Could not write the TypeScript types: " + types_error);
   }
   return true;
 }
@@ -859,9 +861,8 @@ void EditorScene::DrawToolbar() {
     ImGui::PopStyleColor();
     const auto release_state = release_.GetState();
     const char* status =
-        release_state == ReleaseBuild::State::kConfiguring ? "Configuring Release..."
-        : release_state == ReleaseBuild::State::kBuilding  ? "Building game..."
-                                                           : "Packing...";
+        release_state == ReleaseBuild::State::kBuilding ? "Building game..."
+                                                        : "Packing...";
     ImGui::TextDisabled("%s", status);
   } else if (state == PlaySession::State::kIdle) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.22f, 1.0f));
@@ -871,14 +872,13 @@ void EditorScene::DrawToolbar() {
     ImGui::PopStyleColor();
     ImGui::SetItemTooltip("Save, build and run the game (Ctrl+P)");
     if (ImGui::Button("Build")) play_.Build(*project);
-    ImGui::SetItemTooltip("Compile the scripts and refresh the Inspector");
+    ImGui::SetItemTooltip("Build the scripts and refresh the Inspector");
   } else {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
     if (ImGui::Button("  Stop  ")) play_.Stop();
     ImGui::PopStyleColor();
-    const char* status = state == PlaySession::State::kConfiguring ? "Configuring..."
-                         : state == PlaySession::State::kBuilding  ? "Building..."
-                                                                   : "Game running";
+    const char* status = state == PlaySession::State::kBuilding ? "Building scripts..."
+                                                                : "Game running";
     ImGui::TextDisabled("%s", status);
   }
 
@@ -942,7 +942,7 @@ void EditorScene::DrawModals() {
 
   switch (modal_) {
     case Modal::kNewScript: {
-      ImGui::TextUnformatted("C++ class name for the new script:");
+      ImGui::TextUnformatted("TypeScript class name for the new script:");
       if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
       const bool enter = ImGui::InputText("##name", new_name_, sizeof(new_name_),
                                           ImGuiInputTextFlags_EnterReturnsTrue);
@@ -1170,8 +1170,8 @@ void EditorScene::DrawLauncher() {
       to_open = mproj.string();
     }
   }
-  ImGui::TextDisabled("Creates <location>/<name>/ with a map, folders and a "
-                      "CMakeLists.txt");
+  ImGui::TextDisabled("Creates <location>/<name>/ with a map, folders and "
+                      "TypeScript scripts");
 
   // Errors from opening or creating appear here before a Console exists.
   auto lines = console_.Snapshot();

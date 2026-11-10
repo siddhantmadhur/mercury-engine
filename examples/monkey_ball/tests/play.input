@@ -1,0 +1,14 @@
+# Roll forward, jump, orbit the camera, pause and resume, then restart the stage.
+10 capture captures/monkey_start.png
+20 press w
+200 tap space
+300 press e
+380 release e
+420 release w
+430 capture captures/monkey_mid.png
+440 tap escape
+450 capture captures/monkey_pause.png
+460 tap escape
+470 tap r
+480 capture captures/monkey_restart.png
+481 quit

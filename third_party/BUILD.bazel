@@ -1,0 +1,356 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+package(default_visibility = ["//visibility:public"])
+
+# --------------------------------------------------------------------------
+# Header-only dependencies
+#
+# They keep their existing include layout so engine sources do not change:
+#   #include "stb/stb_image.h", <glm/glm.hpp>, "nanosvg/src/nanosvg.h", ...
+# --------------------------------------------------------------------------
+
+cc_library(
+    name = "stb",
+    hdrs = glob(["stb/*.h"]),
+    includes = ["."],
+)
+
+cc_library(
+    name = "nanosvg",
+    hdrs = glob(["nanosvg/src/*.h"]),
+    includes = ["."],
+)
+
+cc_library(
+    name = "glm",
+    hdrs = glob([
+        "glm/glm/**/*.h",
+        "glm/glm/**/*.hpp",
+        "glm/glm/**/*.inl",
+    ]),
+    includes = ["."],
+)
+
+cc_library(
+    name = "vulkan_memory_allocator",
+    hdrs = glob(["VulkanMemoryAllocator/include/*.h"]),
+    includes = ["VulkanMemoryAllocator/include"],
+)
+
+cc_library(
+    name = "jolt_headers",
+    hdrs = glob([
+        "JoltPhysics/Jolt/**/*.h",
+        "JoltPhysics/Jolt/**/*.inl",
+    ]),
+    includes = ["JoltPhysics"],
+)
+
+cc_library(
+    name = "assimp_headers",
+    hdrs = glob([
+        "assimp/code/**/*.h",
+        "assimp/code/**/*.inl",
+        "assimp/include/**/*.h",
+        "assimp/include/**/*.hpp",
+        "assimp/include/**/*.inl",
+    ]),
+    includes = [
+        ".",
+        "assimp/include",
+    ],
+)
+
+cc_library(
+    name = "yoga_headers",
+    hdrs = glob(["yoga/yoga/**/*.h"]),
+    includes = ["yoga"],
+)
+
+cc_library(
+    name = "tinyxml2_headers",
+    hdrs = glob(["tinyxml2/*.h"]),
+    includes = ["tinyxml2"],
+)
+
+cc_library(
+    name = "meshoptimizer_headers",
+    hdrs = glob(["meshoptimizer/src/*.h"]),
+    includes = ["."],
+)
+
+cc_library(
+    name = "miniaudio_headers",
+    hdrs = glob(["miniaudio/*.h"]),
+    includes = ["."],
+)
+
+cc_library(
+    name = "glfw_headers",
+    hdrs = glob(["glfw/include/**/*.h"]),
+    includes = ["glfw/include"],
+)
+
+# entt is a Bazel package of its own (third_party/entt/BUILD.bazel is
+# upstream) and its target already exposes <entt/entt.hpp>.
+alias(
+    name = "entt",
+    actual = "//third_party/entt:entt",
+)
+
+# --------------------------------------------------------------------------
+# imgui (no upstream CMakeLists; the backend sources are selected here, like
+# the old CMake build did)
+# --------------------------------------------------------------------------
+
+cc_library(
+    name = "imgui",
+    srcs = glob(["imgui/*.cpp"]) + [
+        "imgui/backends/imgui_impl_glfw.cpp",
+        "imgui/backends/imgui_impl_vulkan.cpp",
+        "imgui/misc/cpp/imgui_stdlib.cpp",
+    ],
+    hdrs = glob([
+        "imgui/*.h",
+        "imgui/backends/*.h",
+        "imgui/misc/cpp/*.h",
+    ]),
+    includes = [
+        ".",
+        "imgui",
+    ],
+    deps = [
+        ":glfw",
+        "@vulkan//:vulkan",
+    ],
+)
+
+# --------------------------------------------------------------------------
+# Dependencies built by their own CMakeLists through rules_foreign_cc
+# --------------------------------------------------------------------------
+
+cmake(
+    name = "glfw_build",
+    build_args = ["-j4"],
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "OFF",
+        "GLFW_BUILD_DOCS": "OFF",
+        "GLFW_BUILD_EXAMPLES": "OFF",
+        "GLFW_BUILD_TESTS": "OFF",
+        "GLFW_INSTALL": "ON",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+    },
+    lib_source = "@glfw_src//:all",
+    out_static_libs = ["libglfw3.a"],
+)
+
+cc_library(
+    name = "glfw",
+    hdrs = [],
+    linkopts = select({
+        "@platforms//os:macos": [
+            "-framework Cocoa",
+            "-framework IOKit",
+            "-framework CoreFoundation",
+            "-framework QuartzCore",
+        ],
+        "@platforms//os:linux": [
+            "-ldl",
+            "-lm",
+            "-lpthread",
+            "-lX11",
+            "-lXrandr",
+            "-lXi",
+            "-lXcursor",
+            "-lXinerama",
+            "-lwayland-client",
+        ],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":glfw_build",
+        ":glfw_headers",
+    ],
+)
+
+cmake(
+    name = "assimp_build",
+    build_args = ["-j4"],
+    cache_entries = {
+        "ASSIMP_BUILD_ASSIMP_TOOLS": "OFF",
+        "ASSIMP_BUILD_TESTS": "OFF",
+        "ASSIMP_BUILD_ZLIB": "ON",
+        "ASSIMP_INSTALL_PDB": "OFF",
+        "ASSIMP_WARNINGS_AS_ERRORS": "OFF",
+        "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+    },
+    generate_args = select({
+        # assimp's bundled zlib defines fdopen() NULL on macOS, which breaks
+        # the SDK's declaration. The old CMake build applied this to zlibstatic.
+        "@platforms//os:macos": ["-DCMAKE_C_FLAGS:STRING=-Dfdopen=fdopen"],
+        "//conditions:default": [],
+    }),
+    lib_source = "@assimp_src//:all",
+    out_static_libs = [
+        "libassimp.a",
+        "libzlibstatic.a",
+    ],
+)
+
+cc_library(
+    name = "assimp",
+    linkopts = select({
+        "@platforms//os:linux": ["-ldl", "-lpthread"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":assimp_build",
+        ":assimp_headers",
+    ],
+)
+
+cmake(
+    name = "jolt_build",
+    build_args = ["-j4"],
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "OFF",
+        "CPP_EXCEPTIONS_ENABLED": "OFF",
+        "CPP_RTTI_ENABLED": "OFF",
+        "DEBUG_RENDERER_IN_DEBUG_AND_RELEASE": "OFF",
+        "ENABLE_ALL_WARNINGS": "OFF",
+        "ENABLE_OBJECT_STREAM": "OFF",
+        "INTERPROCEDURAL_OPTIMIZATION": "OFF",
+        "PROFILER_IN_DEBUG_AND_RELEASE": "OFF",
+        "JPH_USE_CPU_COMPUTE": "OFF",
+        "JPH_USE_DX12": "OFF",
+        "JPH_USE_DXC": "OFF",
+        "JPH_USE_MTL": "OFF",
+        "JPH_USE_VK": "OFF",
+        "TARGET_HELLO_WORLD": "OFF",
+        "TARGET_PERFORMANCE_TEST": "OFF",
+        "TARGET_SAMPLES": "OFF",
+        "TARGET_UNIT_TESTS": "OFF",
+        "TARGET_VIEWER": "OFF",
+        "USE_ASSERTS": "OFF",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+    },
+    lib_source = "@jolt_src//:all",
+    out_static_libs = ["libJolt.a"],
+    working_directory = "Build",
+)
+
+cc_library(
+    name = "jolt",
+    # These are Jolt's PUBLIC compile definitions for a Release build with
+    # defaults; Jolt's version check aborts if the client disagrees.
+    defines = [
+        "JPH_OBJECT_LAYER_BITS=16",
+    ],
+    linkopts = select({
+        "@platforms//os:linux": ["-lpthread"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":jolt_build",
+        ":jolt_headers",
+    ],
+)
+
+cmake(
+    name = "yoga_build",
+    build_args = ["-j4"],
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+    },
+    lib_source = "@yoga_wrapper//:all",
+    out_static_libs = ["libyogacore.a"],
+)
+
+cc_library(
+    name = "yoga",
+    deps = [
+        ":yoga_build",
+        ":yoga_headers",
+    ],
+)
+
+cmake(
+    name = "tinyxml2_build",
+    build_args = ["-j4"],
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "tinyxml2_BUILD_TESTING": "OFF",
+    },
+    lib_source = "@tinyxml2_src//:all",
+    out_static_libs = ["libtinyxml2.a"],
+)
+
+cc_library(
+    name = "tinyxml2",
+    deps = [
+        ":tinyxml2_build",
+        ":tinyxml2_headers",
+    ],
+)
+
+cmake(
+    name = "meshoptimizer_build",
+    build_args = ["-j4"],
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "MESHOPT_BUILD_DEMO": "OFF",
+        "MESHOPT_BUILD_GLTFPACK": "OFF",
+        "MESHOPT_BUILD_SHARED_LIBS": "OFF",
+        "MESHOPT_INSTALL": "ON",
+        "MESHOPT_WERROR": "OFF",
+    },
+    lib_source = "@meshoptimizer_src//:all",
+    out_static_libs = ["libmeshoptimizer.a"],
+)
+
+cc_library(
+    name = "meshoptimizer",
+    deps = [
+        ":meshoptimizer_build",
+        ":meshoptimizer_headers",
+    ],
+)
+
+cmake(
+    name = "miniaudio_build",
+    build_args = ["-j4"],
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "MINIAUDIO_BUILD_EXAMPLES": "OFF",
+        "MINIAUDIO_BUILD_TESTS": "OFF",
+        "MINIAUDIO_BUILD_TOOLS": "OFF",
+        "MINIAUDIO_NO_ENCODING": "ON",
+        "MINIAUDIO_NO_GENERATION": "ON",
+        "MINIAUDIO_NO_LIBOPUS": "ON",
+        "MINIAUDIO_NO_LIBVORBIS": "ON",
+    },
+    lib_source = "@miniaudio_src//:all",
+    out_static_libs = ["libminiaudio.a"],
+)
+
+cc_library(
+    name = "miniaudio",
+    linkopts = select({
+        "@platforms//os:linux": ["-ldl", "-lm", "-lpthread"],
+        "@platforms//os:macos": [
+            "-framework AudioToolbox",
+            "-framework CoreAudio",
+            "-framework CoreFoundation",
+        ],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":miniaudio_build",
+        ":miniaudio_headers",
+    ],
+)

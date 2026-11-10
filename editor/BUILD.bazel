@@ -1,0 +1,37 @@
+load("@mercury_config//:defs.bzl", "COPTS")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "editor_lib",
+    srcs = [
+        "console.cc",
+        "editor_scene.cc",
+        "editor_settings.cc",
+        "input_actions_window.cc",
+        "lore_vcs.cc",
+        "panels.cc",
+        "play_session.cc",
+        "release_build.cc",
+        "scene_view.cc",
+        "templates.cc",
+        "ui_builder.cc",
+    ],
+    hdrs = glob(["*.h"]),
+    copts = COPTS,
+    includes = ["."],
+    deps = ["//mercury:mercury"],
+)
+
+cc_binary(
+    name = "mercury_editor",
+    srcs = ["main.cc"],
+    copts = COPTS,
+    # Play and Build run the game through mercury_player, which the editor finds next to itself
+    # (PlaySession::PlayerPath), so building the editor builds the player too.
+    data = [
+        "//mercury:mercury_player",
+        "//mercury/shaders:shaders",
+    ],
+    deps = [":editor_lib"],
+)

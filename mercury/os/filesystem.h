@@ -52,6 +52,11 @@ bool IsPacked(const fs::path& path);
 // The folder holding the running executable.
 fs::path ExecutableDir();
 
+// A path the user typed on the command line. `bazel run` starts programs inside the runfiles
+// tree and puts the folder the user ran it from in BUILD_WORKING_DIRECTORY, so a relative path
+// that does not exist from the current folder is tried from there. Other paths come back as given.
+fs::path UserPath(const fs::path& path);
+
 // A folder for files the engine can rebuild (imported models, settled light
 // probes): MERCURY_CACHE_DIR, or the platform's cache folder plus "mercury".
 // Created on first use; empty when there is none (the web).

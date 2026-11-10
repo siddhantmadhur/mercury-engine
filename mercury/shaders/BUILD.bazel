@@ -1,0 +1,45 @@
+load("//tools:shader.bzl", "hlsl_shaders")
+
+package(default_visibility = ["//visibility:public"])
+
+# DXC shifts match the register mapping documented in the shaders and in
+# mercury/application/vulkan_application.cc.
+hlsl_shaders(
+    name = "spv",
+    hdrs = glob(["*.hlsli"]),
+    jobs = [
+        "main.vs.hlsl|vs_6_0|main.vs.spv",
+        "static.vs.hlsl|vs_6_0|static.vs.spv",
+        "shadow.vs.hlsl|vs_6_0|shadow.vs.spv",
+        "skybox.vs.hlsl|vs_6_0|skybox.vs.spv",
+        "skybox.ps.hlsl|ps_6_0|skybox.ps.spv",
+        "textured.ps.hlsl|ps_6_0|textured.ps.spv",
+        "ui.vs.hlsl|vs_6_0|ui.vs.spv",
+        "ui.ps.hlsl|ps_6_0|ui.ps.spv",
+        "model.vs.hlsl|vs_6_0|model.vs.spv",
+        "model.ps.hlsl|ps_6_0|model.ps.spv",
+        "model_shadow.vs.hlsl|vs_6_0|model_shadow.vs.spv",
+        "outline_mask.ps.hlsl|ps_6_0|outline_mask.ps.spv",
+        "fullscreen.vs.hlsl|vs_6_0|fullscreen.vs.spv",
+        "sky.ps.hlsl|ps_6_0|sky.ps.spv",
+        "ssao.ps.hlsl|ps_6_0|ssao.ps.spv",
+        "blur.ps.hlsl|ps_6_0|blur.ps.spv",
+        "bloom_down.ps.hlsl|ps_6_0|bloom_down.ps.spv",
+        "bloom_up.ps.hlsl|ps_6_0|bloom_up.ps.spv",
+        "composite.ps.hlsl|ps_6_0|composite.ps.spv",
+        "fxaa.ps.hlsl|ps_6_0|fxaa.ps.spv",
+        "shadow_cube.ps.hlsl|ps_6_0|shadow_cube.ps.spv",
+        "shadow_transmit.ps.hlsl|ps_6_0|shadow_transmit.ps.spv",
+        "scene_copy.ps.hlsl|ps_6_0|scene_copy.ps.spv",
+        "probe_sh.ps.hlsl|ps_6_0|probe_sh.ps.spv",
+        "probe_visibility.ps.hlsl|ps_6_0|probe_visibility.ps.spv",
+        "probe_octa.ps.hlsl|ps_6_0|probe_octa.ps.spv",
+        "cull.cs.hlsl|cs_6_0|cull.cs.spv",
+    ],
+    srcs = glob(["*.hlsl"]),
+)
+
+filegroup(
+    name = "shaders",
+    srcs = [":spv"],
+)

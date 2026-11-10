@@ -83,6 +83,13 @@ void TypeRegistry::ClearSchemaScripts() {
   });
 }
 
+void TypeRegistry::ClearGameTypes() {
+  std::erase_if(components_, [](const ComponentInfo& info) {
+    return info.is_script && info.attach;
+  });
+  std::erase_if(asset_types_, [](const AssetTypeInfo& info) { return info.from_game; });
+}
+
 bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {
   mtext::Document document;
   document.Add("mschema").attributes.Set("format", 1);

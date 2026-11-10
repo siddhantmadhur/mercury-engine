@@ -198,6 +198,9 @@ class MapScene : public GameScene {
   bool HasParent(kEntityId entity) const;
   void SetEntityParent(kEntityId entity, kEntityId new_parent, bool keep_world_transform = true);
 
+  // Scripts refer to a scene by this number, never by pointer.
+  uint32_t GetSerial() const { return serial_; }
+
   Mode GetMode() const { return mode_; }
   bool IsEditMode() const { return mode_ == Mode::kEdit; }
 
@@ -365,6 +368,7 @@ class MapScene : public GameScene {
   void DestroyPending();
   void OnUIDocumentDestroyed(entt::registry& registry, kEntityId entity);
 
+  uint32_t serial_ = 0;
   std::shared_ptr<Project> project_;
   std::unique_ptr<AssetDatabase> assets_;
   Mode mode_;

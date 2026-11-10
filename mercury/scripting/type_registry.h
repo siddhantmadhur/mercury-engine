@@ -4,9 +4,9 @@
  * Every component and asset type the engine knows about, with its fields.
  *
  * Built-in components register at startup (RegisterBuiltinTypes). Game
- * scripts register from the game executable through MERCURY_SCRIPT. The
- * editor never loads game code, so it learns about scripts from the schema
- * file that the game writes with `--dump-schema`.
+ * scripts register when the player loads the script bundle (ScriptRuntime). The
+ * editor never runs game code, so it learns about scripts from the schema
+ * file that the player writes with `--dump-schema`.
  */
 #ifndef MERCURY_SCRIPTING_TYPE_REGISTRY_H
 #define MERCURY_SCRIPTING_TYPE_REGISTRY_H
@@ -29,6 +29,13 @@ class MapScene;
 using AttachFn = std::function<void(MapScene& scene, kEntityId entity,
                                     const mtext::PropertyList& properties)>;
 
+// Run-time access to a built-in component's fields, used by the TypeScript API.
+using HasComponentFn = std::function<bool(MapScene& scene, kEntityId entity)>;
+using GetFieldFn = std::function<bool(MapScene& scene, kEntityId entity,
+                                      std::string_view field, mtext::Variant* out)>;
+using SetFieldFn = std::function<bool(MapScene& scene, kEntityId entity,
+                                      std::string_view field, const mtext::Variant& value)>;
+
 // A method an Event can call (Behaviour::ReflectMethods).
 struct MethodDesc {
   std::string name;
@@ -45,6 +52,10 @@ struct ComponentInfo {
   std::vector<MethodDesc> methods;
   // Null for scripts known only from a schema file (inside the editor).
   AttachFn attach;
+  // Null for scripts and for components that are not stored as a reflected struct.
+  HasComponentFn has;
+  GetFieldFn get_field;
+  SetFieldFn set_field;
 
   const FieldInfo* FindField(std::string_view field) const;
 };
@@ -53,7 +64,7 @@ struct AssetTypeInfo {
   std::string name;
   std::string description;
   std::vector<FieldInfo> fields;
-  // Declared by game code (MERCURY_DATA_ASSET), so saved in the schema.
+  // Declared by game code (@dataAsset), so saved in the schema.
   bool from_game = false;
 
   const FieldInfo* FindField(std::string_view field) const;
@@ -76,6 +87,8 @@ class TypeRegistry {
 
   // Removes scripts that were loaded from a schema (have no attach function).
   void ClearSchemaScripts();
+  // Removes scripts and data assets that game code registered (ScriptRuntime::Shutdown).
+  void ClearGameTypes();
 
   /**
    * @brief Write every script component and its fields

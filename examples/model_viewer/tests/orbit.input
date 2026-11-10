@@ -1,0 +1,11 @@
+# Orbit the bunny with the mouse, zoom, reset, then go back to the menu with Esc.
+60 capture captures/mv_bunny_start.png
+70 mouse left down
+72 look 120 20
+80 look 80 -10
+85 mouse left up
+90 tap r
+130 capture captures/mv_bunny_orbit.png
+140 tap escape
+260 capture captures/mv_menu.png
+261 quit

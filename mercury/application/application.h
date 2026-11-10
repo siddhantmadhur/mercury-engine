@@ -57,7 +57,6 @@ class Application : public RenderHost {
    */
   void StepFrame();
 
-  void CheckCanvasResize();
 
   virtual bool IsDeviceReady() const { return true; }
 

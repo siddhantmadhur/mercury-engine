@@ -4,8 +4,8 @@
 #include <format>
 #include <thread>
 
+#include "os/filesystem.h"
 #include "scripting/type_registry.h"
-#include "serialization/mtext.h"
 
 namespace Mercury {
 
@@ -22,40 +22,36 @@ void PlaySession::Play(const Project& project, const std::string& map_res_path) 
 
 void PlaySession::Build(const Project& project) { Begin(project, false); }
 
+fs::path PlaySession::PlayerPath() {
+#if defined(_WIN32)
+  const char* file = "mercury_player.exe";
+#else
+  const char* file = "mercury_player";
+#endif
+  const fs::path dir = os::ExecutableDir();
+  std::error_code ec;
+  // CMake/installed builds put them side by side; Bazel puts the player in
+  // bazel-bin/mercury and the editor in bazel-bin/editor.
+  for (const fs::path& candidate :
+       {dir / file, dir.parent_path() / "mercury" / file}) {
+    if (fs::exists(candidate, ec)) return candidate;
+  }
+  return dir / file;
+}
+
 void PlaySession::Begin(const Project& project, bool run) {
   if (IsBusy()) return;
   project_root_ = project.GetRoot();
   project_file_ = project.GetFile();
   schema_path_ = SchemaPath(project);
   run_after_build_ = run;
-
-  config_ = ReadPlayerConfig();
-  if (config_) {
-    StartBuild();
-  } else {
-    StartConfigure();
+  if (!fs::exists(PlayerPath())) {
+    Finish("mercury_player was not found next to the editor or in ../mercury (" +
+               PlayerPath().string() + "); build the mercury_player target",
+           true);
+    return;
   }
-}
-
-std::optional<PlaySession::PlayerConfig> PlaySession::ReadPlayerConfig() const {
-  const fs::path cache = project_root_ / kProjectCacheDir;
-  std::vector<fs::path> candidates = {cache / "player.mcfg",
-                                      cache / "player-Debug.mcfg",
-                                      cache / "player-RelWithDebInfo.mcfg",
-                                      cache / "player-Release.mcfg"};
-  for (const auto& file : candidates) {
-    mtext::Document document;
-    if (!mtext::LoadFile(file, document)) continue;
-    auto section = document.Find("player");
-    if (!section) continue;
-    PlayerConfig config;
-    config.executable = section->properties.GetString("executable");
-    config.build_dir = section->properties.GetString("build_dir");
-    config.target = section->properties.GetString("target");
-    config.config = section->properties.GetString("config");
-    if (!config.executable.empty() && !config.build_dir.empty()) return config;
-  }
-  return std::nullopt;
+  StartBuild();
 }
 
 bool PlaySession::Launch(const std::vector<std::string>& args,
@@ -75,34 +71,8 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
   return true;
 }
 
-bool PlaySession::StartConfigure() {
-  if (!fs::exists(project_root_ / "CMakeLists.txt")) {
-    Finish(
-        "This project has no build yet and no CMakeLists.txt. Configure it with "
-        "CMake (mercury_add_game) so .mercury/player.mcfg exists.",
-        true);
-    return false;
-  }
-  console_.Info("No build found for this project; configuring it with CMake.");
-  std::vector<std::string> args = {
-      "cmake", "-S", project_root_.string(), "-B",
-      (project_root_ / kProjectCacheDir / "build").string(),
-      "-DCMAKE_BUILD_TYPE=Debug"};
-  if (os::IsOnPath("ninja")) {
-    args.insert(args.begin() + 1, {"-G", "Ninja"});
-  }
-  if (!Launch(args, Console::Source::kBuild)) return false;
-  state_ = State::kConfiguring;
-  return true;
-}
-
 bool PlaySession::StartBuild() {
-  std::vector<std::string> args = {"cmake", "--build", config_->build_dir,
-                                   "--target", config_->target};
-  if (!config_->config.empty()) {
-    args.push_back("--config");
-    args.push_back(config_->config);
-  }
+  std::vector<std::string> args = {PlayerPath().string(), project_file_.string(), "--build-scripts"};
   if (!Launch(args, Console::Source::kBuild)) return false;
   state_ = State::kBuilding;
   return true;
@@ -111,7 +81,7 @@ bool PlaySession::StartBuild() {
 bool PlaySession::DumpSchema() {
   os::Process dump;
   std::string error;
-  if (!dump.Start({config_->executable, "--dump-schema", schema_path_.string()},
+  if (!dump.Start({PlayerPath().string(), project_file_.string(), "--dump-schema", schema_path_.string()},
                   project_root_, &error)) {
     console_.Error("Could not read the game's scripts: " + error);
     return false;
@@ -133,7 +103,7 @@ bool PlaySession::DumpSchema() {
 }
 
 bool PlaySession::StartGame() {
-  std::vector<std::string> args = {config_->executable, project_file_.string()};
+  std::vector<std::string> args = {PlayerPath().string(), project_file_.string()};
   if (!map_.empty()) {
     args.push_back("--map");
     args.push_back(map_);
@@ -180,19 +150,8 @@ void PlaySession::Update() {
   process_.reset();
 
   switch (state_) {
-    case State::kConfiguring:
-      if (code != 0) return Finish("CMake configure failed", true);
-      config_ = ReadPlayerConfig();
-      if (!config_) {
-        return Finish(
-            "CMake ran but did not write .mercury/player.mcfg; does "
-            "CMakeLists.txt call mercury_add_game()?",
-            true);
-      }
-      StartBuild();
-      break;
     case State::kBuilding:
-      if (code != 0) return Finish("Build failed", true);
+      if (code != 0) return Finish("Build failed: fix the errors above", true);
       DumpSchema();
       if (run_after_build_) {
         console_.Info("Build succeeded; starting the game");
