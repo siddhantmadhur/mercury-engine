@@ -8,6 +8,7 @@ Mercury is a game-engine built with C++ for performant games
 
 - [Goal](#goal)
 - [Support](#support)
+- [Architecture](#architecture)
 - [Building](#building)
 - [Issues](#issues)
 - [Contributing](#contributing)
@@ -45,28 +46,126 @@ written in HLSL and compiled to SPIR-V with DXC at build time.
 [^1]: The goal is to have SteamOS specific features like support for those touchpads on the
 SteamDeck or the controllers. Along with support for controller layouts, battery modes and more.
 
+## Architecture
+
+A game is a project (`.mproj`) of maps (`.mmap`), assets, UI documents and TypeScript scripts. The
+player (or the editor's Play button) loads a map into an EnTT scene and runs a fixed-step tick plus a
+per-frame render. Scripts run in an embedded V8; everything native (physics, audio, rendering) sits
+behind the engine, and scripts reach it only through a small checked `__native` API.
+
+```mermaid
+flowchart TD
+    subgraph Content["Project on disk"]
+        direction LR
+        MAP[".mmap maps / .mprefab"]
+        ASSETS["Models, textures, audio, SVG"]
+        UIDOC[".uxml / .uss UI"]
+        TS["TypeScript scripts"]
+    end
+
+    ESB["esbuild + tsc<br/>bundle game.js + source map"]
+    TS --> ESB
+
+    subgraph Engine["Mercury runtime (C++20)"]
+        APP["Application loop<br/>GLFW window, input, fixed tick + frame"]
+        SCENE["MapScene<br/>EnTT entities + components"]
+        SCRIPT["Script runtime<br/>V8 isolate, Behaviours, __native bindings"]
+        PHYS["Physics<br/>Jolt: rigidbodies, colliders, character controller"]
+        AUDIO["Audio<br/>miniaudio"]
+        UI["UI Toolkit<br/>UXML via tinyxml2, layout via Yoga"]
+        REND["Renderer<br/>Vulkan 1.3, GPU culling, shadows, GI probes, post-processing"]
+    end
+
+    MAP --> SCENE
+    UIDOC --> UI
+    ESB --> SCRIPT
+    ASSETS -->|"Assimp, stb_image, nanosvg, meshoptimizer"| SCENE
+
+    APP --> SCENE
+    SCENE <-->|"callbacks and component access"| SCRIPT
+    SCENE --> PHYS
+    SCENE --> AUDIO
+    SCENE --> UI
+    SCENE --> REND
+    UI -->|"draw data"| REND
+    SCRIPT --> UI
+
+    SHADERS["HLSL shaders<br/>DXC to SPIR-V at build time"] --> REND
+    REND --> GPU["Vulkan driver<br/>MoltenVK on macOS<br/>memory via VMA"]
+
+    subgraph Tools["Executables"]
+        PLAYER["mercury_player<br/>runs a project, or a packed game"]
+        EDITOR["mercury_editor<br/>Dear ImGui: hierarchy, scene view, inspector"]
+    end
+    PLAYER --> APP
+    EDITOR --> APP
+    EDITOR -->|"Play / Build: launches"| PLAYER
+```
+
+| Layer | Dependency | Used for |
+|---|---|---|
+| Scripting | [V8](https://v8.dev), [esbuild](https://esbuild.github.io) | Run TypeScript game scripts; bundle them with source maps |
+| Scene | [EnTT](https://github.com/skypjack/entt), [GLM](https://github.com/g-truc/glm) | Entity-component storage, math |
+| Physics | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Rigid bodies, colliders, character controller |
+| Rendering | Vulkan 1.3, [VMA](https://github.com/GPUOpen-LibrariesAndPlugins/VulkanMemoryAllocator), [DXC](https://github.com/microsoft/DirectXShaderCompiler), [GLFW](https://www.glfw.org) | Drawing, GPU memory, HLSL to SPIR-V, window and input |
+| Assets | [Assimp](https://github.com/assimp/assimp), [stb](https://github.com/nothings/stb), [nanosvg](https://github.com/memononen/nanosvg), [meshoptimizer](https://github.com/zeux/meshoptimizer) | Models, images, SVG, mesh simplification |
+| UI | [Yoga](https://github.com/facebook/yoga), [tinyxml2](https://github.com/leethomason/tinyxml2) | Flexbox layout, UXML parsing |
+| Audio | [miniaudio](https://miniaud.io) | Playback with 3D attenuation |
+| Editor | [Dear ImGui](https://github.com/ocornut/imgui) | Editor panels (also debug overlays) |
+| Build | [Bazel](https://bazel.build) | Builds everything, runs the tests |
+
 ## Building
+
+Game scripts are TypeScript, run by an embedded V8. V8 is fetched once with depot_tools and is
+built by Bazel from V8's own Bazel files. esbuild bundles the scripts.
+
+The build requires [Bazelisk](https://github.com/bazelbuild/bazelisk); the repository pins Bazel
+in `.bazelversion`. CMake and Ninja are still used, but only to build the third-party dependencies
+through `rules_foreign_cc`.
+
+### macOS (Apple Silicon)
+
+```sh
+./scripts/setup_project_macos.sh        # Homebrew: Bazelisk, CMake, Ninja, MoltenVK, Vulkan, DXC
+bazelisk build //mercury:mercury_player
+bazelisk test //tests/...
+bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+```
+
+V8's first Bazel build takes 30-60 minutes. If V8's Bazel build cannot be used on your Xcode/host
+combination, build the GN fallback once and select it:
+
+```sh
+./scripts/build_v8.sh
+bazelisk build //mercury:mercury_player --define=v8_backend=gn
+```
 
 ### Linux (X11 and Wayland)
 
 ```sh
-./scripts/setup_project_linux.sh        # apt or pacman; installs Vulkan, GLFW deps and DXC
-git submodule update --init --recursive
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
+./scripts/setup_project_linux.sh        # apt or pacman; Vulkan, GLFW deps, DXC, esbuild, Bazelisk
+bazelisk build //mercury:mercury_player
+bazelisk test //tests/...
+bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
 ```
 
+`scripts/fetch_v8.sh` (see `third_party/v8/README.md`) fetches the version in
+`third_party/v8/VERSION`. Node and `typescript` are optional: when `tsc` is installed, Build also
+type-checks the scripts.
+
 Debian/Ubuntu don't package DXC, so the setup script downloads the official release into
-`bin/dxc/`, which CMake finds automatically. If you use the
-[LunarG Vulkan SDK](https://vulkan.lunarg.com) instead, set `VULKAN_SDK` and its `dxc` is used.
+`bin/dxc/`. If you use the [LunarG Vulkan SDK](https://vulkan.lunarg.com) instead, set
+`VULKAN_SDK` and its `dxc` is used.
 
 Debug builds enable `VK_LAYER_KHRONOS_validation` when it is installed.
 
 ### Windows
 
-Install the [LunarG Vulkan SDK](https://vulkan.lunarg.com) (it provides the loader, validation
-layers and DXC, and sets `VULKAN_SDK`), then configure with CMake or open the folder in Visual
-Studio (`CMakeSettings.json`).
+Install the [LunarG Vulkan SDK](https://vulkan.lunarg.com) (loader, validation layers and DXC, and
+it sets `VULKAN_SDK`), Bazelisk, CMake and Ninja. Fetch V8 with `scripts/fetch_v8.sh` (for example
+from Git Bash) or use the GN fallback via `scripts/build_v8.ps1` and `--define=v8_backend=gn`.
+Windows Bazel support is not validated yet; CMake and Ninja are only needed to build the
+dependencies through `rules_foreign_cc`.
 
 ## Issues
 

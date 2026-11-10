@@ -13,5 +13,27 @@ GOAL.md
 game
 tmp
 
+.DS_Store
 
 bench/
+
+# V8 is built locally (scripts/fetch_v8.sh, then Bazel)
+third_party/v8/*
+!third_party/v8/VERSION
+!third_party/v8/args.gn
+!third_party/v8/README.md
+!third_party/v8/BUILD.bazel
+!third_party/v8/patches/
+!third_party/v8/patches/**
+tests/scripts/project/.mercury/
+
+# Bazel convenience symlinks and outputs
+bazel-*
+compile_commands.json
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Screenshots from input-script replays (examples/*/tests/*.input)
+captures/

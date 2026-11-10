@@ -15,11 +15,6 @@
 #include <cstdlib>
 #include <format>
 
-#if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
-#include <emscripten/html5.h>
-#endif
-
 #include "debugger/debugger.h"
 #include "debugger/profiler.h"
 #include "properties/texture2d.h"
@@ -58,35 +53,12 @@ bool Application::Initialize() {
     return false;
   }
 
-#if defined(__EMSCRIPTEN__)
-  double css_width = EM_ASM_DOUBLE({
-    var c = document.getElementById('canvas');
-    if (c) {
-      c.style.removeProperty('width');
-      c.style.removeProperty('height');
-    }
-    return window.innerWidth || 1280.0;
-  });
-  double css_height = EM_ASM_DOUBLE({
-    return window.innerHeight || 720.0;
-  });
-  if (css_width > 0.0 && css_height > 0.0) {
-    double dpr = EM_ASM_DOUBLE({
-      return Math.min(window.devicePixelRatio || 1.0, 2.0);
-    });
-    width_ = static_cast<float>(std::round(css_width * dpr));
-    height_ = static_cast<float>(std::round(css_height * dpr));
-    emscripten_set_canvas_element_size("#canvas", static_cast<int>(width_),
-                                       static_cast<int>(height_));
-  }
-#else
   GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
   const GLFWvidmode* videoMode =
       primaryMonitor ? glfwGetVideoMode(primaryMonitor) : nullptr;
   if (videoMode == nullptr) {
     PDebug::warn("Could not query glfw video mode");
   }
-#endif
 
   if (game_scene_) {
     game_scene_->SetWidth(width_);
@@ -108,24 +80,11 @@ bool Application::Initialize() {
     return false;
   }
 
-#if defined(__EMSCRIPTEN__)
-  EM_ASM({
-    var c = document.getElementById('canvas');
-    if (c) {
-      c.style.removeProperty('width');
-      c.style.removeProperty('height');
-    }
-    if (typeof Browser !== 'undefined') {
-      Browser.resizeCanvas = true;
-    }
-  });
-#else
   if (videoMode != nullptr) {
     const int32_t windowLeft = videoMode->width / 2 - width_ / 2;
     const int32_t windowTop = videoMode->height / 2 - height_ / 2;
     glfwSetWindowPos(window_, windowLeft, windowTop);
   }
-#endif
 
   glfwSetWindowUserPointer(window_, this);
   glfwSetFramebufferSizeCallback(window_, HandleResize);
@@ -164,7 +123,6 @@ bool Application::Initialize() {
 }
 
 void Application::StepFrame() {
-  CheckCanvasResize();
   if (!game_scene_) return;
   if (!IsDeviceReady()) {
     glfwPollEvents();
@@ -210,11 +168,9 @@ void Application::StepFrame() {
       input_manager.SetFramebufferScale(
           glm::vec2(float(fb_w) / window_w, float(fb_h) / window_h));
     }
-#if !defined(__EMSCRIPTEN__)
     float content_x = 1.0f, content_y = 1.0f;
     glfwGetWindowContentScale(window_, &content_x, &content_y);
     input_manager.SetContentScale(content_x);
-#endif
   }
   input_manager.PollGamepads();
   if (!input_script_.IsEmpty()) {
@@ -268,9 +224,7 @@ void Application::StepFrame() {
   glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
   if (framebuffer_width == 0 || framebuffer_height == 0) {
     ImGui::EndFrame();
-#if !defined(__EMSCRIPTEN__)
     glfwWaitEventsTimeout(0.05);
-#endif
     return;
   }
 
@@ -304,7 +258,6 @@ int Application::Run() {
   }
   game_scene_->OnStart();
 
-#if !defined(__EMSCRIPTEN__)
   if (const char* script = std::getenv("MERCURY_INPUT_SCRIPT")) {
     std::string error;
     if (input_script_.Load(script, &error)) {
@@ -313,7 +266,6 @@ int Application::Run() {
       PDebug::error("Input script: {}", error);
     }
   }
-#endif
 
   if (current_cursor) {
     GLFWcursor* cursor = glfwCreateCursor(current_cursor, 10, 8);
@@ -324,12 +276,6 @@ int Application::Run() {
     }
   }
 
-#if defined(__EMSCRIPTEN__)
-  emscripten_set_main_loop_arg(
-      [](void* arg) { static_cast<Application*>(arg)->StepFrame(); }, this, 0,
-      1);
-  return 0;
-#else
   while (!game_scene_->ShouldQuit()) {
     if (glfwWindowShouldClose(window_)) {
       if (game_scene_->OnCloseRequested()) break;
@@ -338,7 +284,6 @@ int Application::Run() {
     StepFrame();
   }
   return 0;
-#endif
 }
 
 Application::~Application() {
@@ -396,62 +341,6 @@ void Application::OnResize(int32_t width, int32_t height) {
     game_scene_->SetWidth(width);
     game_scene_->SetHeight(height);
   }
-}
-
-void Application::CheckCanvasResize() {
-#if defined(__EMSCRIPTEN__)
-  double css_width = EM_ASM_DOUBLE({
-    var c = document.getElementById('canvas');
-    if (c) {
-      c.style.removeProperty('width');
-      c.style.removeProperty('height');
-    }
-    return window.innerWidth || (c ? c.clientWidth : 0);
-  });
-  double css_height = EM_ASM_DOUBLE({
-    return window.innerHeight || (document.getElementById('canvas') ? document.getElementById('canvas').clientHeight : 0);
-  });
-
-  if (css_width <= 0.0 || css_height <= 0.0) {
-    return;
-  }
-
-  double dpr = EM_ASM_DOUBLE({
-    return Math.min(window.devicePixelRatio || 1.0, 2.0);
-  });
-
-  int target_width = static_cast<int>(std::round(css_width * dpr));
-  int target_height = static_cast<int>(std::round(css_height * dpr));
-
-  int cur_canvas_w = EM_ASM_INT({
-    var c = document.getElementById('canvas');
-    return c ? c.width : 0;
-  });
-  int cur_canvas_h = EM_ASM_INT({
-    var c = document.getElementById('canvas');
-    return c ? c.height : 0;
-  });
-
-  if (target_width > 0 && target_height > 0 &&
-      (target_width != cur_canvas_w || target_height != cur_canvas_h ||
-       target_width != static_cast<int>(width_) ||
-       target_height != static_cast<int>(height_))) {
-    emscripten_set_canvas_element_size("#canvas", target_width, target_height);
-    EM_ASM({
-      if (typeof GLFW !== 'undefined' && GLFW.active) {
-        GLFW.active.framebufferWidth = $0;
-        GLFW.active.framebufferHeight = $1;
-        GLFW.active.width = $2;
-        GLFW.active.height = $3;
-      }
-      if (typeof Browser !== 'undefined' && Browser.updateResizeListeners) {
-        Browser.updateResizeListeners();
-      }
-    }, target_width, target_height, static_cast<int>(std::round(css_width)), static_cast<int>(std::round(css_height)));
-
-    OnResize(target_width, target_height);
-  }
-#endif
 }
 
 }  // namespace Mercury

@@ -40,8 +40,7 @@ class ModelPreloader {
   ModelPreloader(const ModelPreloader&) = delete;
   ModelPreloader& operator=(const ModelPreloader&) = delete;
 
-  // Starts loading; a load already in progress is cancelled first. Without
-  // threads (Emscripten) the models are loaded before this returns.
+  // Starts loading; a load already in progress is cancelled first.
   void Start(std::vector<Job> jobs);
 
   // Stops after the models being loaded now and drops every result.

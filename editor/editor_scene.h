@@ -10,7 +10,7 @@
  *
  * The editor edits a Map (the data in a .mmap file) and mirrors it into an
  * edit-mode MapScene for drawing. Game code is never loaded here: Play builds
- * the project with CMake and runs the game as its own process.
+ * the scripts and runs the game as its own process.
  */
 #ifndef MERCURY_EDITOR_EDITOR_SCENE_H
 #define MERCURY_EDITOR_EDITOR_SCENE_H

@@ -8,6 +8,7 @@
 
 #include "application/default_application.h"
 #include "editor_scene.h"
+#include "os/filesystem.h"
 
 int main(int argc, char** argv) {
   std::filesystem::path project;
@@ -17,7 +18,7 @@ int main(int argc, char** argv) {
     if (arg == "--map" && i + 1 < argc) {
       map = argv[++i];
     } else {
-      project = arg;
+      project = Mercury::os::UserPath(arg);
     }
   }
 

@@ -1,14 +1,16 @@
 /*
  * player.h
  *
- * Entry point of a game built with mercury_add_game(). The generated main()
- * just calls RunPlayer:
+ * The generic game executable (mercury_player). It runs any project:
  *
- *   game [project.mproj] [--map res://maps/other.mmap] [--dump-schema file]
+ *   mercury_player [project.mproj] [--map res://maps/other.mmap]
+ *                  [--dump-schema file] [--write-types] [--build-scripts]
  *
- * Without arguments the project the game was built from is used.
- * --dump-schema writes the fields of every compiled-in script and exits; the
- * editor runs this after each build so its Inspector knows the scripts.
+ * Without a project it runs the shipped game packs next to the executable.
+ * Loose projects have their TypeScript built first when it is out of date.
+ * --dump-schema writes the fields of every script in the bundle and exits (the editor runs this
+ * after each build so its Inspector knows the scripts). --write-types writes the types an editor
+ * needs (.mercury/types and tsconfig.json) and exits; --build-scripts only builds.
  */
 #ifndef MERCURY_PLAYER_PLAYER_H
 #define MERCURY_PLAYER_PLAYER_H

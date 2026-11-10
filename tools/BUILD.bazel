@@ -1,0 +1,18 @@
+load("@mercury_config//:defs.bzl", "COPTS")
+load("@rules_python//python:defs.bzl", "py_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+py_binary(
+    name = "embed_files",
+    srcs = ["embed_files.py"],
+    main = "embed_files.py",
+    python_version = "3.11",
+)
+
+cc_binary(
+    name = "model_info",
+    srcs = ["model_info.cc"],
+    copts = COPTS,
+    deps = ["//mercury:mercury"],
+)

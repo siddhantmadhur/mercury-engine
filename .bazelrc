@@ -1,0 +1,29 @@
+common --enable_bzlmod
+
+# Optimized by default so a plain `bazelisk build`/`test` reuses the same V8
+# configuration. Use -c dbg when debugging the engine (V8 is then rebuilt).
+build --compilation_mode=opt
+
+# V8 is ~1,300 translation units at -O2 (built for both the target and the exec
+# configuration), and some of them (Turboshaft, Maglev, CSA builtins) need
+# gigabytes each. Bazel defaults to one job per core, which can push a 16-32 GB
+# machine into swap until the Bazel server itself dies with
+# `OutOfMemoryError: sysctl (Cannot allocate memory)`. Half the cores keeps
+# the peak bounded; raise it with `--jobs=N` on the command line on a machine
+# with more RAM.
+build --jobs=HOST_CPUS*.5
+
+# Mercury is C++20 (no modules).
+build --cxxopt=-std=c++20
+build --host_cxxopt=-std=c++20
+
+# V8 must match the engine's ABI. The GN build turns pointer compression and
+# the sandbox off; keep the Bazel build the same. Intl is avoided by depending
+# on V8's noicu target.
+build --@v8//:v8_enable_pointer_compression=false
+# Metagen needs Chromium's bundled libclang/LLVM; V8's normal Torque
+# generation does not, and Mercury does not need metagen's experiments.
+build --@v8//:v8_use_metagen=false
+
+# std::format is available from macOS 13.3.
+build:macos --macos_minimum_os=13.3

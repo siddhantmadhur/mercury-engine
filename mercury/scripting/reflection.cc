@@ -288,8 +288,7 @@ Reflector& Reflector::Field(const char* name, Event& value) {
 }
 
 void Reflector::EnumImpl(const char* name, int& index,
-                         std::initializer_list<const char*> names) {
-  std::vector<std::string> values(names.begin(), names.end());
+                         const std::vector<std::string>& values) {
   auto name_of = [&](int i) -> std::string {
     return i >= 0 && i < static_cast<int>(values.size()) ? values[i] : "";
   };

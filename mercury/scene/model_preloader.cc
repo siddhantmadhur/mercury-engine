@@ -18,15 +18,11 @@ void ModelPreloader::Start(std::vector<Job> jobs) {
   active_ = true;
   if (jobs_.empty()) return;
 
-#if defined(__EMSCRIPTEN__)
-  Work();
-#else
   const size_t cores = std::max(1u, std::thread::hardware_concurrency());
   const size_t count = std::clamp<size_t>(cores > 1 ? cores - 1 : 1, 1, 4);
   for (size_t i = 0; i < std::min(count, jobs_.size()); i++) {
     workers_.emplace_back([this] { Work(); });
   }
-#endif
 }
 
 void ModelPreloader::Work() {

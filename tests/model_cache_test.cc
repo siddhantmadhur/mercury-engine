@@ -9,6 +9,7 @@
 #include <random>
 
 #include "properties/model.h"
+#include "test_paths.h"
 
 using namespace Mercury;
 
@@ -21,7 +22,7 @@ void SetCacheDir(const fs::path& dir);
 // Every test in this binary caches the models it imports in the build
 // folder (MERCURY_TEST_CACHE_DIR), not in the user's cache.
 const bool kTestCacheDir = [] {
-  if (!std::getenv("MERCURY_CACHE_DIR")) SetCacheDir(MERCURY_TEST_CACHE_DIR);
+  if (!std::getenv("MERCURY_CACHE_DIR")) SetCacheDir(Mercury::test::CacheDir().string());
   return true;
 }();
 

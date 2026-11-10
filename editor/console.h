@@ -10,6 +10,7 @@
 
 #include <deque>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,10 @@ class Console {
   void Info(std::string text) { Add(Level::kInfo, Source::kEditor, std::move(text)); }
   void Warn(std::string text) { Add(Level::kWarning, Source::kEditor, std::move(text)); }
   void Error(std::string text) { Add(Level::kError, Source::kEditor, std::move(text)); }
+
+  // The script file a line points at: "scripts/ball.ts:42:5" (a stack trace or esbuild) and
+  // "scripts/ball.ts(42,5)" (tsc). Returns the project-relative path, e.g. "scripts/ball.ts".
+  static std::optional<std::string> FindScriptFile(const std::string& text);
 
   void Clear();
   std::vector<Line> Snapshot();
