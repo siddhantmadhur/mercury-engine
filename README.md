@@ -127,7 +127,7 @@ dependencies through `rules_foreign_cc`.
 
 ## Issues
 
-Any bugs related to the game engine can be reported at [issues.reocelot.com](https://issues.reocelot.com)
+Any bugs related to the game engine can be reported to my email: [smadhur@reocelot.com](mailto:smadhur@reocelot.com)
 
 ## Contributing
 
@@ -143,7 +143,8 @@ a [git patch](https://git-scm.com/book/en/v2/Distributed-Git-Contributing-to-a-P
 
 Official repositories for the code:
 
-- https://github.com/siddhantmadhur/mercury-engine [main]
+- https://git.smadhur.dev/mercury-engine.git [main]
+- https://github.com/siddhantmadhur/mercury-engine [mirror]
 
 ## Documentation
 
