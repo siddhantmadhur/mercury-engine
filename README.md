@@ -6,14 +6,19 @@ Mercury is a game-engine built with C++ for performant games
 
 ## Table of Contents
 
-- [Goal](#goal)
-- [Support](#support)
-- [Architecture](#architecture)
-- [Building](#building)
-- [Issues](#issues)
-- [Contributing](#contributing)
-- [Documentation](#documentation)
-- [LICENSE](#license)
+- [Mercury](#mercury)
+  - [Table of Contents](#table-of-contents)
+  - [Goal](#goal)
+  - [Support](#support)
+  - [Architecture](#architecture)
+  - [Building](#building)
+    - [macOS (Apple Silicon)](#macos-apple-silicon)
+    - [Linux (X11 and Wayland)](#linux-x11-and-wayland)
+    - [Windows](#windows)
+  - [Issues](#issues)
+  - [Contributing](#contributing)
+  - [Documentation](#documentation)
+  - [License](#license)
 
 ## Goal
 
@@ -53,54 +58,7 @@ player (or the editor's Play button) loads a map into an EnTT scene and runs a f
 per-frame render. Scripts run in an embedded V8; everything native (physics, audio, rendering) sits
 behind the engine, and scripts reach it only through a small checked `__native` API.
 
-```mermaid
-flowchart TD
-    subgraph Content["Project on disk"]
-        direction LR
-        MAP[".mmap maps / .mprefab"]
-        ASSETS["Models, textures, audio, SVG"]
-        UIDOC[".uxml / .uss UI"]
-        TS["TypeScript scripts"]
-    end
-
-    ESB["esbuild + tsc<br/>bundle game.js + source map"]
-    TS --> ESB
-
-    subgraph Engine["Mercury runtime (C++20)"]
-        APP["Application loop<br/>GLFW window, input, fixed tick + frame"]
-        SCENE["MapScene<br/>EnTT entities + components"]
-        SCRIPT["Script runtime<br/>V8 isolate, Behaviours, __native bindings"]
-        PHYS["Physics<br/>Jolt: rigidbodies, colliders, character controller"]
-        AUDIO["Audio<br/>miniaudio"]
-        UI["UI Toolkit<br/>UXML via tinyxml2, layout via Yoga"]
-        REND["Renderer<br/>Vulkan 1.3, GPU culling, shadows, GI probes, post-processing"]
-    end
-
-    MAP --> SCENE
-    UIDOC --> UI
-    ESB --> SCRIPT
-    ASSETS -->|"Assimp, stb_image, nanosvg, meshoptimizer"| SCENE
-
-    APP --> SCENE
-    SCENE <-->|"callbacks and component access"| SCRIPT
-    SCENE --> PHYS
-    SCENE --> AUDIO
-    SCENE --> UI
-    SCENE --> REND
-    UI -->|"draw data"| REND
-    SCRIPT --> UI
-
-    SHADERS["HLSL shaders<br/>DXC to SPIR-V at build time"] --> REND
-    REND --> GPU["Vulkan driver<br/>MoltenVK on macOS<br/>memory via VMA"]
-
-    subgraph Tools["Executables"]
-        PLAYER["mercury_player<br/>runs a project, or a packed game"]
-        EDITOR["mercury_editor<br/>Dear ImGui: hierarchy, scene view, inspector"]
-    end
-    PLAYER --> APP
-    EDITOR --> APP
-    EDITOR -->|"Play / Build: launches"| PLAYER
-```
+<img width="735" height="1328" alt="Architecture diagram for Mercury Engine showing how its constructed." src="assets/architecture_graph.png">
 
 | Layer | Dependency | Used for |
 |---|---|---|
