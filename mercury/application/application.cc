@@ -9,9 +9,10 @@
 #endif
 
 #include <GLFW/glfw3.h>
-#include <imgui/imgui.h>
-#include <imgui/backends/imgui_impl_glfw.h>
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <format>
 
@@ -45,6 +46,21 @@ Application::Application(const std::string& window_title, float initial_width,
 }
 
 bool Application::Initialize() {
+  start_time_ = std::chrono::steady_clock::now();
+  time_elapsed_ = 0.0;
+
+  if (game_scene_) {
+    game_scene_->SetWidth(width_);
+    game_scene_->SetHeight(height_);
+    game_scene_->SetInputManager(&input_manager);
+    game_scene_->SetRenderHost(this);
+  }
+
+  if (headless_) {
+    input_manager.Initialize(nullptr);
+    return true;
+  }
+
 #if defined(MERCURY_GRAPHICS_VULKAN)
   glfwInitVulkanLoader(vkGetInstanceProcAddr);
 #endif
@@ -58,13 +74,6 @@ bool Application::Initialize() {
       primaryMonitor ? glfwGetVideoMode(primaryMonitor) : nullptr;
   if (videoMode == nullptr) {
     PDebug::warn("Could not query glfw video mode");
-  }
-
-  if (game_scene_) {
-    game_scene_->SetWidth(width_);
-    game_scene_->SetHeight(height_);
-    game_scene_->SetInputManager(&input_manager);
-    game_scene_->SetRenderHost(this);
   }
 
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
@@ -114,23 +123,20 @@ bool Application::Initialize() {
     input_manager.HandleCursorEnterCallback(win, entered);
   });
 
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  // The backend initializes the ImGui GLFW platform layer (e.g.
-  // ImGui_ImplGlfw_InitForVulkan) once its device exists.
-
   return true;
 }
 
 void Application::StepFrame() {
   if (!game_scene_) return;
   if (!IsDeviceReady()) {
-    glfwPollEvents();
+    if (!headless_) glfwPollEvents();
     return;
   }
 
   Profiler::BeginFrame();
-  double current_time = glfwGetTime() * 1000;
+  const auto now = std::chrono::steady_clock::now();
+  const double current_time =
+      std::chrono::duration<double, std::milli>(now - start_time_).count();
   auto frametime = current_time - time_elapsed_;
   delta_time_ = frametime;
   // Scripted input and benchmarks replay the same way however fast frames
@@ -151,16 +157,17 @@ void Application::StepFrame() {
       total += fps_sliding_window_[i];
     }
     double average = total / fps_sliding_window_.size();
-    average_fps_ = std::round(1000 / average);
+    average_fps_ =
+        average > 0.0 ? static_cast<int>(std::round(1000.0 / average)) : 0;
   }
 
   const int tick_rate = std::max(1, game_scene_->GetTicksPerSecond());
   const double kTickMs = 1000.0 / tick_rate;
   time_since_last_tick_ += delta_time_;
 
-  input_manager.BeginFrame();
-  glfwPollEvents();
-  {
+  if (!headless_) {
+    input_manager.BeginFrame();
+    glfwPollEvents();
     int window_w = 0, window_h = 0, fb_w = 0, fb_h = 0;
     glfwGetWindowSize(window_, &window_w, &window_h);
     glfwGetFramebufferSize(window_, &fb_w, &fb_h);
@@ -171,20 +178,13 @@ void Application::StepFrame() {
     float content_x = 1.0f, content_y = 1.0f;
     glfwGetWindowContentScale(window_, &content_x, &content_y);
     input_manager.SetContentScale(content_x);
+    input_manager.PollGamepads();
   }
-  input_manager.PollGamepads();
   if (!input_script_.IsEmpty()) {
     InputScript::Hooks hooks;
     hooks.capture = [this](const std::string& file) { RequestCapture(file); };
     hooks.quit = [this] { quit_after_frame_ = true; };
     input_script_.Apply(script_frame_++, input_manager, window_, hooks);
-  }
-  ImGuiNewFrame();
-  ImGui_ImplGlfw_NewFrame();
-  ImGui::NewFrame();
-  {
-    const ImGuiIO& io = ImGui::GetIO();
-    input_manager.SetImGuiCapture(io.WantCaptureMouse, io.WantCaptureKeyboard);
   }
 
   {
@@ -218,17 +218,17 @@ void Application::StepFrame() {
   }
 
   // A minimized window has a 0x0 framebuffer, which most backends cannot create
-  // swapchains or targets for. Close out the ImGui frame without drawing.
-  int framebuffer_width = 0;
-  int framebuffer_height = 0;
-  glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
-  if (framebuffer_width == 0 || framebuffer_height == 0) {
-    ImGui::EndFrame();
-    glfwWaitEventsTimeout(0.05);
-    return;
+  // swapchains or targets for.
+  if (!headless_ && window_) {
+    int framebuffer_width = 0;
+    int framebuffer_height = 0;
+    glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
+    if (framebuffer_width == 0 || framebuffer_height == 0) {
+      glfwWaitEventsTimeout(0.05);
+      return;
+    }
   }
 
-  Profiler::DrawOverlay();
   // The benchmark is done: a screenshot of this frame if asked for, then quit.
   if (Profiler::BenchFinished() && !quit_after_frame_) {
     if (const char* capture = std::getenv("MERCURY_BENCH_CAPTURE")) RequestCapture(capture);
@@ -239,6 +239,11 @@ void Application::StepFrame() {
     Render();
   }
   Profiler::EndFrame();
+  if (headless_) {
+    // Hosted UI (e.g. wxWidgets) injects input between StepFrame() calls; clear
+    // per-frame deltas only after this frame has finished consuming them.
+    input_manager.BeginFrame();
+  }
   if (quit_after_frame_) Quit();
 }
 
@@ -246,17 +251,19 @@ void Application::RequestCapture(const std::string& file) {
   PDebug::warn("This renderer cannot save captures ({})", file);
 }
 
-int Application::Run() {
+bool Application::StartHosted() {
   if (!Initialize()) {
     PDebug::error("Could not initialize application");
-    return 1;
+    return false;
   }
 
   if (!OnLoad()) {
     PDebug::error("Could not load application");
-    return 1;
+    return false;
   }
-  game_scene_->OnStart();
+  if (game_scene_) {
+    game_scene_->OnStart();
+  }
 
   if (const char* script = std::getenv("MERCURY_INPUT_SCRIPT")) {
     std::string error;
@@ -266,8 +273,15 @@ int Application::Run() {
       PDebug::error("Input script: {}", error);
     }
   }
+  return true;
+}
 
-  if (current_cursor) {
+int Application::Run() {
+  if (!StartHosted()) {
+    return 1;
+  }
+
+  if (!headless_ && window_ && current_cursor) {
     GLFWcursor* cursor = glfwCreateCursor(current_cursor, 10, 8);
     if (cursor) {
       glfwSetCursor(window_, cursor);
@@ -276,8 +290,8 @@ int Application::Run() {
     }
   }
 
-  while (!game_scene_->ShouldQuit()) {
-    if (glfwWindowShouldClose(window_)) {
+  while (game_scene_ && !game_scene_->ShouldQuit()) {
+    if (!headless_ && window_ && glfwWindowShouldClose(window_)) {
       if (game_scene_->OnCloseRequested()) break;
       glfwSetWindowShouldClose(window_, GLFW_FALSE);
     }
@@ -288,8 +302,10 @@ int Application::Run() {
 
 Application::~Application() {
   PDebug::info("Application shutting down...");
-  glfwDestroyWindow(window_);
-  glfwTerminate();
+  if (!headless_) {
+    if (window_) glfwDestroyWindow(window_);
+    glfwTerminate();
+  }
 }
 
 void Application::HandleResize(GLFWwindow* window, int32_t width,
@@ -319,14 +335,26 @@ void Application::SetPointer(std::string file_path) {
     PDebug::error("Could not read file: {}", file_path);
   }
 }
-void Application::Quit() const { glfwSetWindowShouldClose(window_, true); }
+void Application::Quit() const {
+  if (window_) glfwSetWindowShouldClose(window_, true);
+  else if (game_scene_) game_scene_->QuitScene();
+}
 void Application::SetWindowTitle(const std::string& title) {
   title_ = title;
   if (window_) glfwSetWindowTitle(window_, title.c_str());
+  if (title_callback_) title_callback_(title);
 }
 void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {
   this->game_scene_ = std::move(game_scene);
+  if (game_scene_) {
+    game_scene_->SetWidth(width_);
+    game_scene_->SetHeight(height_);
+    game_scene_->SetInputManager(&input_manager);
+    game_scene_->SetRenderHost(this);
+  }
 }
+
+InputManager& Application::GetInputManager() { return input_manager; }
 
 int32_t Application::GetHeight() const { return height_; }
 

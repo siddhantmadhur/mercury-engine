@@ -47,7 +47,7 @@ class Context {
   bool image_cube_array = false;  // cube array views (light shadows)
 
  private:
-  bool CreateInstance();
+  bool CreateInstance(bool need_surface);
   bool PickPhysicalDevice();
   bool CreateDevice();
   bool CreateAllocator();

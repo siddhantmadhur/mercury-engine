@@ -11,6 +11,8 @@
 #define MERCURYENGINE_APPLICATION_H
 #include <input/input_manager.h>
 
+#include <chrono>
+#include <functional>
 #include <queue>
 #include <string>
 #include <string_view>
@@ -26,7 +28,6 @@
 constexpr int kTicksPerSec = 60;
 
 namespace Mercury {
-static InputManager input_manager_;
 
 /**
  * @brief Create a new cross-platform application using GLFW
@@ -56,6 +57,25 @@ class Application : public RenderHost {
    * @brief Advances simulation and renders a single frame
    */
   void StepFrame();
+
+  /**
+   * Runs without creating a GLFW window or swapchain; Vulkan renders solely to
+   * offscreen targets that the host (e.g. wxWidgets editor) copies out.
+   */
+  void EnableHeadlessMode(bool headless = true) { headless_ = headless; }
+  bool IsHeadless() const { return headless_; }
+
+  /**
+   * Initializes the application, renderer, and active scene without entering
+   * a blocking GLFW event loop (for external UI event loops).
+   */
+  bool StartHosted();
+
+  InputManager& GetInputManager();
+  const std::string& GetWindowTitle() const { return title_; }
+  void SetTitleCallback(std::function<void(const std::string&)> cb) {
+    title_callback_ = std::move(cb);
+  }
 
 
   virtual bool IsDeviceReady() const { return true; }
@@ -97,8 +117,7 @@ class Application : public RenderHost {
    * @brief Runs after the scene is processed and renders the primitives
    *
    * Once the scene is finished running it returns primitives that are then
-   * rendered by the backend. It also needs to implement how ImGui is rendered
-   * Runs once every frame
+   * rendered by the backend. Runs once every frame
    */
   virtual void Render() = 0;  // Renders objects
 
@@ -112,9 +131,6 @@ class Application : public RenderHost {
    * This needs to be modified with per-renderer implementation
    */
   virtual void OnResize(int32_t width, int32_t height);
-
-  // Per-backend ImGui frame begin (e.g. ImGui_ImplVulkan_NewFrame).
-  virtual void ImGuiNewFrame() = 0;
 
   // Saves the frame being rendered now to a PNG, for scripted input
   // (MERCURY_INPUT_SCRIPT). Backends without readback log a warning.
@@ -157,6 +173,9 @@ class Application : public RenderHost {
   double time_elapsed_ = 0.0f;
   int64_t last_tick_ = 0;
   double time_since_last_tick_ = 0.0f;
+  bool headless_ = false;
+  std::chrono::steady_clock::time_point start_time_;
+  std::function<void(const std::string&)> title_callback_;
 };
 }  // namespace Mercury
 

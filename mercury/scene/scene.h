@@ -11,6 +11,7 @@
 
 #ifndef MERCURYENGINE_SCENE_H
 #define MERCURYENGINE_SCENE_H
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -28,33 +29,45 @@ struct UIDrawData;
 /**
  * @brief What a scene may ask of the application that renders it
  *
- * The editor uses this to draw the scene into a texture shown inside an
- * ImGui panel instead of straight to the window.
+ * The editor uses this to draw the scene into offscreen render targets and
+ * copy RGBA pixels into native editor viewports instead of straight to a window.
  */
 class RenderHost {
  public:
   virtual ~RenderHost() = default;
 
-  // Render the scene into an offscreen texture instead of the window.
+  // Render the scene into an offscreen target instead of the window.
   virtual void EnableSceneTexture(bool enabled) {}
-  // Size of the offscreen texture; takes effect from the next frame.
+  // Size of the offscreen target; takes effect on the rendered frame.
   virtual void SetSceneViewportSize(int width, int height) {}
-  // ImTextureID of the offscreen texture, or 0 before it exists.
-  virtual uint64_t GetSceneTexture() const { return 0; }
+  // Copy the latest rendered offscreen scene as RGBA8 pixels (width * height * 4).
+  virtual bool CopyScenePixels(int& width, int& height,
+                               std::vector<uint8_t>& rgba_out,
+                               uint64_t* frame_id = nullptr) {
+    return false;
+  }
   // Also render this frame from `camera` (an entity with a Camera and a
-  // Transform) into a separate width x height texture; entt::null skips it.
+  // Transform) into a separate width x height target; entt::null skips it.
   // Call every frame the preview is shown.
   virtual void SetPreviewCamera(kEntityId camera, int width, int height) {}
-  // ImTextureID of the preview texture, or 0 before it exists.
-  virtual uint64_t GetPreviewTexture() const { return 0; }
-  // Also render a UI draw list into a separate width x height texture over
+  // Copy the latest rendered camera preview as RGBA8 pixels.
+  virtual bool CopyPreviewPixels(int& width, int& height,
+                                 std::vector<uint8_t>& rgba_out,
+                                 uint64_t* frame_id = nullptr) {
+    return false;
+  }
+  // Also render a UI draw list into a separate width x height target over
   // `background` (the editor's UI Builder canvas). Call every frame it is
   // shown; the draw data must stay alive until the frame is rendered.
   virtual void SetUIPreview(const UI::UIDrawData* draw_data, int width, int height,
                             glm::vec4 background) {}
-  // ImTextureID of the UI preview texture, or 0 before it exists.
-  virtual uint64_t GetUIPreviewTexture() const { return 0; }
-  // The FPS overlay drawn in the top-left corner.
+  // Copy the latest rendered UI Builder canvas as RGBA8 pixels.
+  virtual bool CopyUIPreviewPixels(int& width, int& height,
+                                   std::vector<uint8_t>& rgba_out,
+                                   uint64_t* frame_id = nullptr) {
+    return false;
+  }
+  // The FPS overlay / telemetry toggle.
   virtual void SetShowRenderStats(bool show) {}
   virtual int GetAverageFps() const { return 0; }
   virtual void SetWindowTitle(const std::string& title) {}
@@ -222,8 +235,8 @@ class GameScene {
   const std::string& GetSkyboxPath() const { return skybox_path_; }
   void SetSkyboxPath(std::string path) { skybox_path_ = std::move(path); }
 
-  // The game's UI Toolkit triangles for this frame (drawn over the scene,
-  // under ImGui), or null when there is none.
+  // The game's UI Toolkit triangles for this frame (drawn over the scene), or
+  // null when there is none.
   virtual const UI::UIDrawData* GetUIDrawData() const { return nullptr; }
 
   // Post-processing for the frame.

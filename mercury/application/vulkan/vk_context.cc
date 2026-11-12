@@ -81,11 +81,13 @@ namespace Mercury::vk {
 Context::~Context() { Destroy(); }
 
 bool Context::Init(GLFWwindow* window) {
-  if (!CreateInstance()) return false;
+  if (!CreateInstance(window != nullptr)) return false;
 
-  if (!VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface))) {
-    PDebug::error("Vulkan: could not create window surface");
-    return false;
+  if (window != nullptr) {
+    if (!VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface))) {
+      PDebug::error("Vulkan: could not create window surface");
+      return false;
+    }
   }
 
   if (!PickPhysicalDevice()) return false;
@@ -94,7 +96,7 @@ bool Context::Init(GLFWwindow* window) {
   return true;
 }
 
-bool Context::CreateInstance() {
+bool Context::CreateInstance(bool need_surface) {
   uint32_t loader_version = VK_API_VERSION_1_0;
   vkEnumerateInstanceVersion(&loader_version);
   if (loader_version < kMinApiVersion) {
@@ -121,15 +123,17 @@ bool Context::CreateInstance() {
     }
   }
 
-  uint32_t glfw_extension_count = 0;
-  const char** glfw_extensions =
-      glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-  if (glfw_extensions == nullptr) {
-    PDebug::error("Vulkan: GLFW found no surface extensions for this platform");
-    return false;
+  std::vector<const char*> extensions;
+  if (need_surface) {
+    uint32_t glfw_extension_count = 0;
+    const char** glfw_extensions =
+        glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+    if (glfw_extensions == nullptr) {
+      PDebug::error("Vulkan: GLFW found no surface extensions for this platform");
+      return false;
+    }
+    extensions.assign(glfw_extensions, glfw_extensions + glfw_extension_count);
   }
-  std::vector<const char*> extensions(glfw_extensions,
-                                      glfw_extensions + glfw_extension_count);
 
   VkInstanceCreateFlags create_flags = 0;
   if (has_portability_enumeration) {
@@ -196,7 +200,8 @@ bool Context::PickPhysicalDevice() {
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(candidate, &properties);
     if (properties.apiVersion < kMinApiVersion) continue;
-    if (!HasDeviceExtension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+    if (surface != VK_NULL_HANDLE &&
+        !HasDeviceExtension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
       continue;
     }
 
@@ -263,12 +268,14 @@ bool Context::PickPhysicalDevice() {
                                              families.data());
     int family = -1;
     for (uint32_t i = 0; i < family_count; ++i) {
-      VkBool32 present = VK_FALSE;
-      vkGetPhysicalDeviceSurfaceSupportKHR(candidate, i, surface, &present);
-      if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && present) {
-        family = static_cast<int>(i);
-        break;
+      if (!(families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) continue;
+      if (surface != VK_NULL_HANDLE) {
+        VkBool32 present = VK_FALSE;
+        vkGetPhysicalDeviceSurfaceSupportKHR(candidate, i, surface, &present);
+        if (!present) continue;
       }
+      family = static_cast<int>(i);
+      break;
     }
     if (family < 0) continue;
 
@@ -313,7 +320,10 @@ bool Context::CreateDevice() {
   VkPhysicalDeviceProperties properties;
   vkGetPhysicalDeviceProperties(physical_device, &properties);
 
-  std::vector<const char*> extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  std::vector<const char*> extensions;
+  if (surface != VK_NULL_HANDLE) {
+    extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  }
   if (HasDeviceExtension(physical_device, "VK_KHR_portability_subset")) {
     extensions.push_back("VK_KHR_portability_subset");
   }
