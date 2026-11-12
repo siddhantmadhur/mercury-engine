@@ -11,9 +11,8 @@
 #include "project/map.h"
 #include "project/project.h"
 #include "scene/map_scene.h"
-#include "scripting/js/script_builder.h"
-#include "scripting/js/script_runtime.h"
-#include "scripting/ts_types.h"
+#include "scripting/as/script_builder.h"
+#include "scripting/as/script_runtime.h"
 #include "scripting/type_registry.h"
 #include "ui/resources.h"
 
@@ -24,7 +23,7 @@ namespace {
 void PrintUsage(const char* program) {
   PDebug::info(
       "usage: {} [project.mproj] [--map res://maps/name.mmap] "
-      "[--dump-schema file] [--write-types] [--build-scripts]",
+      "[--dump-schema file] [--build-scripts]",
       program);
 }
 
@@ -82,7 +81,6 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
   std::string map_path;
   std::string schema_path;
   bool project_given = false;
-  bool write_types = false;
   bool build_scripts = false;
 
   for (int i = 1; i < argc; i++) {
@@ -94,8 +92,6 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
       if (auto value = next()) map_path = value;
     } else if (arg == "--dump-schema") {
       if (auto value = next()) schema_path = value;
-    } else if (arg == "--write-types") {
-      write_types = true;
     } else if (arg == "--build-scripts") {
       build_scripts = true;
     } else if (arg == "--help" || arg == "-h") {
@@ -127,46 +123,24 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
     return 1;
   }
   const fs::path root = project->GetRoot();
-  // Loose files (not a shipped game): the scripts may need building.
-  const bool loose = !os::IsPacked(root / ".mercury" / "scripts" / "game.js");
 
-  if (write_types) {
-    if (!WriteDefaultTsconfig(root, &error) || !WriteTypeScriptTypes(root / ".mercury" / "types", &error)) {
-      PDebug::error("{}", error);
-      return 1;
-    }
-    PDebug::info("Wrote {}", (root / ".mercury" / "types").string());
-    return 0;
-  }
-  if (loose && (build_scripts || !ScriptBuilder::IsUpToDate(root))) {
-    BuildOptions options;
-    options.on_line = [](const std::string& line) { PDebug::info("{}", line); };
-    if (!ScriptBuilder::Build(root, options)) {
-      PDebug::error("Building the scripts failed");
-      return 1;
-    }
-  }
-  if (build_scripts) return 0;
-
-  // V8 lives from here to the end of the function; the scene and its scripts are destroyed first.
+  // AngelScript lives from here to the end of the function; the scene and its
+  // scripts are destroyed first.
   struct RuntimeGuard {
     ~RuntimeGuard() { ScriptRuntime::Instance().Shutdown(); }
-  };
+  } runtime_guard;
   if (!ScriptRuntime::Instance().Initialize()) {
     PDebug::error("Could not start the script engine");
     return 1;
   }
-  RuntimeGuard runtime_guard;
-  const fs::path bundle = ScriptBuilder::BundlePath(root);
-  if (os::Exists(bundle)) {
-    if (!ScriptRuntime::Instance().LoadBundle(bundle.string(),
-                                              ScriptBuilder::SourceMapPath(root).string())) {
-      PDebug::error("Could not load the scripts");
-      return 1;
-    }
-  } else {
-    PDebug::warn("{} not found: running without scripts", bundle.string());
+
+  BuildOptions options;
+  options.on_line = [](const std::string& line) { PDebug::info("{}", line); };
+  if (!ScriptBuilder::Build(root, options)) {
+    PDebug::error("Building the scripts failed");
+    return 1;
   }
+  if (build_scripts) return 0;
 
   if (!schema_path.empty()) {
     if (!TypeRegistry::Instance().SaveSchema(schema_path)) {

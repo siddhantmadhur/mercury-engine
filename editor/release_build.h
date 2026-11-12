@@ -16,11 +16,10 @@
  *
  *   build a Release mercury_player with Bazel, in the engine checkout
  *     -> bazel build -c opt //mercury:mercury_player
- *     -> on a worker thread: minify the scripts (esbuild), pack the files, copy the player
+ *     -> on a worker thread: compile the scripts, pack the files, copy the player
  *
- * The scripts are packed as the minified .mercury/scripts/game.js; the .ts sources stay out. The
- * executable finds game.mpack next to itself and runs from it (see RunPlayer). Build and Play
- * are unchanged and keep using loose files.
+ * The .as scripts are packed as sources; the executable finds game.mpack next to itself and
+ * runs from it (see RunPlayer). Build and Play are unchanged and keep using loose files.
  */
 #ifndef MERCURY_EDITOR_RELEASE_BUILD_H
 #define MERCURY_EDITOR_RELEASE_BUILD_H

@@ -1,21 +1,13 @@
 load("@mercury_config//:defs.bzl", "COPTS")
-load("//tools:embed_files.bzl", "embed_files")
 
 package(default_visibility = ["//visibility:public"])
-
-embed_files(
-    name = "ts_runtime_files",
-    out = "ts_runtime_files.cc",
-    root = "mercury/scripting/ts",
-    srcs = glob(["scripting/ts/**/*.ts"]),
-)
 
 cc_library(
     name = "mercury",
     srcs = glob(
         ["**/*.cc"],
         exclude = ["player/main.cc"],
-    ) + [":ts_runtime_files"],
+    ) + ["scripting/as/api_prelude.inc"],
     hdrs = glob(["**/*.h"]),
     copts = COPTS + select({
         "@platforms//os:macos": ["-Wno-deprecated-declarations"],
@@ -24,15 +16,13 @@ cc_library(
     data = ["//mercury/shaders:shaders"],
     includes = ["."],
     linkopts = select({
-        "@platforms//os:macos": [
-            "-framework CoreFoundation",
-        ],
+        "@platforms//os:macos": ["-framework CoreFoundation"],
         "//conditions:default": [],
     }),
     deps = [
         "@vulkan//:vulkan",
-        "//third_party/v8:v8",
         "//third_party:assimp",
+        "//third_party:angelscript",
         "//third_party:entt",
         "//third_party:glfw",
         "//third_party:glm",

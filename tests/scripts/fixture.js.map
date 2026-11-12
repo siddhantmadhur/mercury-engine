@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["scripts/ball.ts"],
-  "sourcesContent": ["export class Ball {\n  speed = 3;\n  onTick(dt: number): void {\n    const step = this.speed * dt;\n    if (step > 100) {\n      throw new Error(\"too fast\");\n    }\n  }\n}\n"],
-  "mappings": ";;;;;AAAO,MAAM,OAAN,MAAW;AAAA,IAAlB,OAAkB;AAAA;AAAA;AAAA,IAChB,QAAQ;AAAA,IACR,OAAO,IAAkB;AACvB,YAAM,OAAO,KAAK,QAAQ;AAC1B,UAAI,OAAO,KAAK;AACd,cAAM,IAAI,MAAM,UAAU;AAAA,MAC5B;AAAA,IACF;AAAA,EACF;",
-  "names": []
-}

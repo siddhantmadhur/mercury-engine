@@ -36,8 +36,8 @@ class Console {
   void Warn(std::string text) { Add(Level::kWarning, Source::kEditor, std::move(text)); }
   void Error(std::string text) { Add(Level::kError, Source::kEditor, std::move(text)); }
 
-  // The script file a line points at: "scripts/ball.ts:42:5" (a stack trace or esbuild) and
-  // "scripts/ball.ts(42,5)" (tsc). Returns the project-relative path, e.g. "scripts/ball.ts".
+  // The script file a line points at: "scripts/ball.as:42:5" (an AngelScript exception).
+  // Returns the project-relative path, e.g. "scripts/ball.as".
   static std::optional<std::string> FindScriptFile(const std::string& text);
 
   void Clear();

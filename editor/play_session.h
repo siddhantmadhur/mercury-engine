@@ -4,11 +4,11 @@
  * Drives Build and Play from the editor, with the mercury_player build from the
  * same checkout (next to the editor, or in bazel-bin/mercury):
  *
- *   mercury_player <project.mproj> --build-scripts     (esbuild, and tsc when installed)
+ *   mercury_player <project.mproj> --build-scripts     (AngelScript compile)
  *     -> mercury_player <project.mproj> --dump-schema .mercury/scripts.mschema
  *     -> mercury_player <project.mproj> --map <current map>      (Play only)
  *
- * The build's output (esbuild and tsc messages) streams to the Console.
+ * The build's output (compiler messages) streams to the Console.
  */
 #ifndef MERCURY_EDITOR_PLAY_SESSION_H
 #define MERCURY_EDITOR_PLAY_SESSION_H

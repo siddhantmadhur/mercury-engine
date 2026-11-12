@@ -8,7 +8,6 @@
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
-#include "scripting/ts_types.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury::Templates {
@@ -154,10 +153,9 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
     return {};
   }
 
-  // Types for the editor's language server and the config that points at them.
-  if (!WriteDefaultTsconfig(root, error)) return {};
+  // Build output and editor caches are generated, so keep them out of git.
   if (!WriteText(root / ".gitignore",
-                 "# Build output, generated types and editor caches\n.mercury/\nnode_modules/\n",
+                 "# Build output and editor caches\n.mercury/\n",
                  error)) {
     return {};
   }
@@ -174,24 +172,23 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
 fs::path CreateScript(const fs::path& project_root,
                       const std::string& class_name, std::string* error) {
   if (!IsValidIdentifier(class_name)) {
-    if (error) *error = "\"" + class_name + "\" is not a valid TypeScript class name";
+    if (error) *error = "\"" + class_name + "\" is not a valid AngelScript class name";
     return {};
   }
-  const fs::path source = project_root / "scripts" / (ToSnakeCase(class_name) + ".ts");
+  const fs::path source = project_root / "scripts" / (ToSnakeCase(class_name) + ".as");
   if (fs::exists(source)) {
     if (error) *error = source.filename().string() + " already exists";
     return {};
   }
   const std::string text = std::format(
-      R"(import {{ Behaviour, script, field }} from "mercury";
+      R"([script]
+class {0} : Behaviour
+{{
+    [field tooltip="Shown in the Inspector and saved in the map."]
+    float speed = 1.0f;
 
-@script()
-class {0} extends Behaviour {{
-  /** Shown in the Inspector and saved in the map. */
-  @field() speed = 1;
-
-  onStart(): void {{}}
-  onTick(dt: number): void {{}}
+    void onStart() {{}}
+    void onTick(double dt) {{}}
 }}
 )",
       class_name);

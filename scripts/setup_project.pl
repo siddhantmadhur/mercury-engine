@@ -6,7 +6,7 @@
 #          + validation layers, GLFW's X11/Wayland dependencies, and DXC
 #          (HLSL -> SPIR-V).
 #   macOS  (MoltenVK backend): build tools (Bazelisk, cmake, ninja), Vulkan
-#          loader + headers, MoltenVK, submodules, DXC and esbuild.
+#          loader + headers, MoltenVK, submodules and DXC.
 #
 # Windows is not supported yet: this script prints "OS not supported".
 #
@@ -49,8 +49,6 @@ sub setup_linux {
 
     install_dxc_linux();
     install_bazelisk();
-    run($^X, File::Spec->catfile($PROJECT_ROOT, 'scripts', 'install_esbuild.pl'));
-    run($^X, File::Spec->catfile($PROJECT_ROOT, 'scripts', 'fetch_v8.pl'));
 
     print "\nDone. Next:\n";
     print "  git submodule update --init --recursive\n";
@@ -163,10 +161,6 @@ sub setup_macos {
     run('git', '-C', $PROJECT_ROOT, 'submodule', 'update', '--init', '--recursive');
 
     install_dxc_macos();
-    run($^X, File::Spec->catfile($PROJECT_ROOT, 'scripts', 'install_esbuild.pl'));
-
-    # Fetch V8 sources (Bazel builds it on demand).
-    run($^X, File::Spec->catfile($PROJECT_ROOT, 'scripts', 'fetch_v8.pl'));
 
     print "\n==> Setup complete! Next steps:\n";
     print "  bazelisk build //mercury:mercury_player\n";

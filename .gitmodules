@@ -40,3 +40,6 @@
 [submodule "third_party/meshoptimizer"]
 	path = third_party/meshoptimizer
 	url = https://github.com/zeux/meshoptimizer.git
+[submodule "third_party/angelscript"]
+	path = third_party/angelscript
+	url = https://github.com/anjo76/angelscript.git

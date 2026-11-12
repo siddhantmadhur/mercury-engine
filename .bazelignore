@@ -1,8 +1,3 @@
-# Local V8 checkout: Bazel builds it as an external module, not as packages of
-# the main workspace.
-third_party/v8/v8
-third_party/v8/depot_tools
-
 # Bundled test-only copy inside assimp; not part of Mercury's build.
 third_party/assimp/contrib/googletest
 

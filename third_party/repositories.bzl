@@ -4,7 +4,7 @@ The dependencies stay in their git submodules and keep their own build systems
 (CMake). These rules only expose the existing checkout to Bazel as a local,
 read-only source tree; rules_foreign_cc then runs the dependency's CMake build.
 
-Also provides small local repositories for host tools (Vulkan, DXC, esbuild)
+Also provides small local repositories for host tools (Vulkan, DXC)
 and the generated build configuration (absolute checkout/asset paths).
 """
 
@@ -241,65 +241,11 @@ yoga_wrapper_repo = repository_rule(
 
 
 # --------------------------------------------------------------------------
-# GN fallback V8 (scripts/build_v8.sh)
-# --------------------------------------------------------------------------
-
-def _v8_gn_repo_impl(ctx):
-    root = ctx.workspace_root.get_child("third_party/v8/v8")
-    lib = root.get_child("out/release/obj/libv8_monolith.a")
-    if not lib.exists:
-        fail(
-            "The GN V8 monolith was not found at {}. Run scripts/build_v8.sh " +
-            "or use V8's Bazel backend (remove --define=v8_backend=gn).".format(lib),
-        )
-    ctx.symlink(root.get_child("include"), "include")
-    ctx.symlink(lib, "libv8_monolith.a")
-    gen = root.get_child("out/release/gen/include")
-    if gen.exists:
-        ctx.symlink(gen, "gen_include")
-    ctx.file("REPO.bazel", "")
-    ctx.file(
-        "BUILD.bazel",
-        """package(default_visibility = ["//visibility:public"])
-
-cc_import(
-    name = "lib",
-    hdrs = glob(["include/**/*.h"]),
-    static_library = "libv8_monolith.a",
-)
-
-cc_library(
-    name = "v8",
-    includes = [
-        "include",
-        "gen_include",
-    ],
-    linkopts = select({
-        "@platforms//os:macos": ["-pthread"],
-        "@platforms//os:linux": ["-ldl", "-lpthread"],
-        "//conditions:default": [],
-    }),
-    deps = [":lib"],
-)
-""",
-    )
-
-v8_gn_repo = repository_rule(
-    implementation = _v8_gn_repo_impl,
-    local = True,
-)
-
-
-# --------------------------------------------------------------------------
 # Generated build configuration
 # --------------------------------------------------------------------------
 
 def _config_repo_impl(ctx):
     root = str(ctx.workspace_root)
-    is_windows = ctx.os.name.lower().startswith("windows")
-    esbuild = paths.join(root, "bin/esbuild/esbuild" + (".exe" if is_windows else ""))
-    if not ctx.path(esbuild).exists:
-        fail("esbuild was not found at {}. Run scripts/install_esbuild.* first.".format(esbuild))
 
     values = {
         "MERCURY_ENGINE_DIR": root,
@@ -308,7 +254,6 @@ def _config_repo_impl(ctx):
         "MERCURY_ASSET_PATH": paths.join(root, "examples/assets"),
         "MERCURY_UI_RESOURCE_PATH": paths.join(root, "mercury/ui/resources"),
         "MERCURY_SPIRV_PATH": paths.join(root, "bazel-bin/mercury/shaders"),
-        "MERCURY_ESBUILD_PATH": esbuild,
         "MERCURY_GRAPHICS_VULKAN": "1",
         "GLFW_INCLUDE_VULKAN": "1",
         "GLM_FORCE_DEPTH_ZERO_TO_ONE": "1",
