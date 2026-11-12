@@ -3,9 +3,9 @@ module(
     version = "0.0.0",
 )
 
-# V8 is fetched by scripts/fetch_v8.sh (depot_tools) into a git-ignored
+# V8 is fetched by scripts/fetch_v8.pl (depot_tools) into a git-ignored
 # checkout. Its own Bazel files build the static v8 library; see
-# scripts/v8_bazel_compat.py for the small embedding patch.
+# scripts/v8_bazel_compat.pl for the small embedding patch.
 bazel_dep(name = "v8", version = "0.0.0")
 local_path_override(
     module_name = "v8",

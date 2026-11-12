@@ -6,8 +6,8 @@ Mercury embeds V8 to run TypeScript game scripts. V8 is pinned to the version in
 
 ## Normal build (Bazel)
 
-Run `scripts/fetch_v8.sh`. It uses depot_tools to fetch the pinned V8 and applies
-`scripts/v8_bazel_compat.py`, a small patch that lets V8's own Bazel files build
+Run `scripts/fetch_v8.pl`. It uses depot_tools to fetch the pinned V8 and applies
+`scripts/v8_bazel_compat.pl`, a small patch that lets V8's own Bazel files build
 inside Mercury's toolchain (host libc++ instead of Chromium's, no root-only
 module overrides, no Linux-only LLVM toolchain).
 
@@ -23,7 +23,7 @@ the TypeScript runtime were written against.
 
 ## GN fallback
 
-`scripts/build_v8.sh` still builds the GN monolith
+`scripts/build_v8.pl` still builds the GN monolith
 (`v8/out/release/obj/libv8_monolith.a`) for hosts where V8's Bazel build cannot
 be used. Select it with:
 

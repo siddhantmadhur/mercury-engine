@@ -84,7 +84,7 @@ through `rules_foreign_cc`.
 ### macOS (Apple Silicon)
 
 ```sh
-./scripts/setup_project_macos.sh        # Homebrew: Bazelisk, CMake, Ninja, MoltenVK, Vulkan, DXC
+./scripts/setup_project.pl              # detects macOS; Homebrew: Bazelisk, CMake, Ninja, MoltenVK, Vulkan, DXC
 bazelisk build //mercury:mercury_player
 bazelisk test //tests/...
 bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
@@ -94,20 +94,20 @@ V8's first Bazel build takes 30-60 minutes. If V8's Bazel build cannot be used o
 combination, build the GN fallback once and select it:
 
 ```sh
-./scripts/build_v8.sh
+./scripts/build_v8.pl
 bazelisk build //mercury:mercury_player --define=v8_backend=gn
 ```
 
 ### Linux (X11 and Wayland)
 
 ```sh
-./scripts/setup_project_linux.sh        # apt or pacman; Vulkan, GLFW deps, DXC, esbuild, Bazelisk
+./scripts/setup_project.pl              # detects Linux; apt or pacman: Vulkan, GLFW deps, DXC, esbuild, Bazelisk
 bazelisk build //mercury:mercury_player
 bazelisk test //tests/...
 bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
 ```
 
-`scripts/fetch_v8.sh` (see `third_party/v8/README.md`) fetches the version in
+`scripts/fetch_v8.pl` (see `third_party/v8/README.md`) fetches the version in
 `third_party/v8/VERSION`. Node and `typescript` are optional: when `tsc` is installed, Build also
 type-checks the scripts.
 
@@ -119,11 +119,7 @@ Debug builds enable `VK_LAYER_KHRONOS_validation` when it is installed.
 
 ### Windows
 
-Install the [LunarG Vulkan SDK](https://vulkan.lunarg.com) (loader, validation layers and DXC, and
-it sets `VULKAN_SDK`), Bazelisk, CMake and Ninja. Fetch V8 with `scripts/fetch_v8.sh` (for example
-from Git Bash) or use the GN fallback via `scripts/build_v8.ps1` and `--define=v8_backend=gn`.
-Windows Bazel support is not validated yet; CMake and Ninja are only needed to build the
-dependencies through `rules_foreign_cc`.
+Windows is not currently supported. The setup scripts print `OS not supported` and exit.
 
 ## Issues
 
