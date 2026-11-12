@@ -27,7 +27,7 @@ Source layout under `mercury/`: `application`, `scene`, `components`, `pipelines
 
 ## Projects and the editor
 
-Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples. `examples/model_viewer` loads scenes from the McGuire Computer Graphics Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through benchmark cameras that report per-lap frame rates. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu.
+Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples; `examples/breakout` and `examples/space_invaders` are the classic arcade games built the same way. `examples/model_viewer` loads scenes from the McGuire Computer Graphics Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through benchmark cameras that report per-lap frame rates. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu. Every example is an AngelScript project (`scripts/*.as`), and each has a replay in `tests/`.
 
 ```
 pong.mproj              project settings (name, main map, window size)

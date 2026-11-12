@@ -1,0 +1,9 @@
+[project]
+name = "Breakout"
+main_map = "res://maps/main.mmap"
+engine_version = "dev"
+
+[window]
+title = "Breakout"
+width = 1280
+height = 720
