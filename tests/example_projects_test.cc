@@ -115,6 +115,7 @@ TEST_P(ExampleProjectTest, BuildsLoadsAndMapsMatchTheScripts) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Examples, ExampleProjectTest,
-                         ::testing::Values("pong", "roll_a_ball", "monkey_ball", "model_viewer"));
+                         ::testing::Values("pong", "roll_a_ball", "monkey_ball", "model_viewer", "breakout",
+                          "space_invaders"));
 
 }  // namespace

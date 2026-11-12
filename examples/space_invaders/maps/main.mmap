@@ -1,0 +1,860 @@
+[mmap format=1]
+
+[ext_resource type="Material" path="res://assets/white.masset" id="1"]
+[ext_resource type="Material" path="res://assets/player.masset" id="2"]
+[ext_resource type="Material" path="res://assets/enemy.masset" id="3"]
+[ext_resource type="PhysicsMaterial" path="res://assets/frictionless.masset" id="4"]
+
+[node name="SpaceInvaders"]
+
+[component type="Transform" node="."]
+
+[component type="SpaceGame" node="."]
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+
+[component type="Camera" node="Camera"]
+fit_height = 256.0
+
+[node name="Player" parent="."]
+
+[component type="Transform" node="Player"]
+position = Vector3(0, -104, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Player"]
+material = ExtResource("2")
+
+[component type="Rigidbody" node="Player"]
+motion_type = "dynamic"
+allowed_dofs = "translation_x"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+[component type="BoxCollider" node="Player"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+[component type="SpacePlayer" node="Player"]
+speed = 90.0
+
+
+[node name="Walls" parent="."]
+
+[component type="Transform" node="Walls"]
+
+[node name="Left" parent="Walls"]
+
+[component type="Transform" node="Walls/Left"]
+position = Vector3(-112, 0, 0)
+
+[component type="PlaneCollider" node="Walls/Left"]
+normal = Vector3(1, 0, 0)
+
+
+[node name="Right" parent="Walls"]
+
+[component type="Transform" node="Walls/Right"]
+position = Vector3(112, 0, 0)
+
+[component type="PlaneCollider" node="Walls/Right"]
+normal = Vector3(-1, 0, 0)
+
+
+[node name="Roof" parent="Walls" tag="Roof"]
+
+[component type="Transform" node="Walls/Roof"]
+position = Vector3(0, 128, 0)
+
+[component type="PlaneCollider" node="Walls/Roof"]
+normal = Vector3(0, -1, 0)
+
+
+[node name="Enemies" parent="."]
+
+[component type="Transform" node="Enemies"]
+
+[node name="Enemy_0_0" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_0"]
+position = Vector3(70.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_0"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_0"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_0_1" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_1"]
+position = Vector3(50.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_1"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_1"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_0_2" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_2"]
+position = Vector3(30.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_2"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_2"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_0_3" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_3"]
+position = Vector3(10.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_3"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_3"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_0_4" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_4"]
+position = Vector3(-10.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_4"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_4"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_0_5" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_5"]
+position = Vector3(-30.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_5"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_5"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_0_6" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_6"]
+position = Vector3(-50.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_6"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_6"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_0_7" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_0_7"]
+position = Vector3(-70.0, 104.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_0_7"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_0_7"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_0" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_0"]
+position = Vector3(70.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_0"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_0"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_1" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_1"]
+position = Vector3(50.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_1"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_1"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_2" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_2"]
+position = Vector3(30.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_2"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_2"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_3" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_3"]
+position = Vector3(10.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_3"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_3"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_4" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_4"]
+position = Vector3(-10.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_4"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_4"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_5" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_5"]
+position = Vector3(-30.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_5"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_5"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_6" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_6"]
+position = Vector3(-50.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_6"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_6"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_1_7" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_1_7"]
+position = Vector3(-70.0, 84.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_1_7"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_1_7"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_0" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_0"]
+position = Vector3(70.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_0"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_0"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_1" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_1"]
+position = Vector3(50.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_1"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_1"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_2" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_2"]
+position = Vector3(30.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_2"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_2"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_3" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_3"]
+position = Vector3(10.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_3"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_3"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_4" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_4"]
+position = Vector3(-10.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_4"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_4"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_5" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_5"]
+position = Vector3(-30.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_5"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_5"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_6" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_6"]
+position = Vector3(-50.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_6"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_6"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_2_7" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_2_7"]
+position = Vector3(-70.0, 64.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_2_7"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_2_7"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_0" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_0"]
+position = Vector3(70.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_0"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_0"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_1" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_1"]
+position = Vector3(50.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_1"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_1"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_2" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_2"]
+position = Vector3(30.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_2"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_2"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_3" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_3"]
+position = Vector3(10.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_3"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_3"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_4" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_4"]
+position = Vector3(-10.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_4"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_4"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_5" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_5"]
+position = Vector3(-30.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_5"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_5"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_6" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_6"]
+position = Vector3(-50.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_6"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_6"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_3_7" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_3_7"]
+position = Vector3(-70.0, 44.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_3_7"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_3_7"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_0" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_0"]
+position = Vector3(70.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_0"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_0"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_1" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_1"]
+position = Vector3(50.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_1"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_1"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_2" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_2"]
+position = Vector3(30.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_2"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_2"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_3" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_3"]
+position = Vector3(10.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_3"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_3"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_4" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_4"]
+position = Vector3(-10.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_4"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_4"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_5" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_5"]
+position = Vector3(-30.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_5"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_5"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_6" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_6"]
+position = Vector3(-50.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_6"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_6"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Enemy_4_7" parent="Enemies" tag="Enemy"]
+
+[component type="Transform" node="Enemies/Enemy_4_7"]
+position = Vector3(-70.0, 24.0, 0)
+scale = Vector3(16, 16, 1)
+
+[component type="SpriteRenderer" node="Enemies/Enemy_4_7"]
+material = ExtResource("3")
+
+[component type="BoxCollider" node="Enemies/Enemy_4_7"]
+size = Vector3(14, 14, 10)
+material = ExtResource("4")
+
+
+[node name="Pellets" parent="."]
+
+[component type="Transform" node="Pellets"]
+
+[node name="Pellet_0" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_0"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_0"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_0"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_0"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_0"]
+
+
+[node name="Pellet_1" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_1"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_1"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_1"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_1"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_1"]
+
+
+[node name="Pellet_2" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_2"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_2"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_2"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_2"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_2"]
+
+
+[node name="Pellet_3" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_3"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_3"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_3"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_3"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_3"]
+
+
+[node name="Pellet_4" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_4"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_4"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_4"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_4"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_4"]
+
+
+[node name="Pellet_5" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_5"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_5"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_5"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_5"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_5"]
+
+
+[node name="Pellet_6" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_6"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_6"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_6"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_6"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_6"]
+
+
+[node name="Pellet_7" parent="Pellets" tag="Pellet"]
+
+[component type="Transform" node="Pellets/Pellet_7"]
+position = Vector3(0, 1000, 0)
+scale = Vector3(1, 6, 1)
+
+[component type="SpriteRenderer" node="Pellets/Pellet_7"]
+material = ExtResource("1")
+
+[component type="Rigidbody" node="Pellets/Pellet_7"]
+motion_type = "dynamic"
+allowed_dofs = "translation_y"
+motion_quality = "linear_cast"
+gravity_factor = 0.0
+linear_damping = 0.0
+angular_damping = 0.0
+allow_sleeping = false
+
+
+[component type="BoxCollider" node="Pellets/Pellet_7"]
+size = Vector3(1, 1, 10)
+material = ExtResource("4")
+
+
+[component type="SpacePellet" node="Pellets/Pellet_7"]
+

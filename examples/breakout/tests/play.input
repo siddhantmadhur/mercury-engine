@@ -1,0 +1,6 @@
+# Move the paddle and let the ball bounce for a few seconds.
+10 press d
+90 release d
+120 press a
+200 release a
+300 quit

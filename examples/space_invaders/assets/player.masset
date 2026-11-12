@@ -1,0 +1,3 @@
+[masset type="Material" format=1]
+color = Color(1, 1, 1, 1)
+texture = Resource("res://assets/space_invaders/player.png")
