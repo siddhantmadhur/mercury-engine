@@ -5,8 +5,15 @@ common --enable_bzlmod
 build --compilation_mode=opt
 
 # Mercury is C++20 (no modules).
-build --cxxopt=-std=c++20
-build --host_cxxopt=-std=c++20
+build --cxxopt=-std=c++20 --action_env=CCACHE_DISABLE=1
+build --host_cxxopt=-std=c++20 --host_action_env=CCACHE_DISABLE=1
 
 # std::format is available from macOS 13.3.
 build:macos --macos_minimum_os=13.3
+
+# rules_cc_autoconf runs its probe actions with a minimal environment (no
+# PATH). A ccache wrapper in PATH cannot find the real compiler there, so use
+# the unwrapped system compilers for Bazel's local toolchain. Override with
+# --repo_env=CC=... --repo_env=CXX=... if your compilers live elsewhere.
+build --repo_env=CC=/usr/bin/cc
+build --repo_env=CXX=/usr/bin/c++
