@@ -137,7 +137,7 @@ bool InputActionsWindow::Save() {
 
 bool InputActionsWindow::WriteHeader() {
   const std::string class_name = desc_.class_name.empty() ? "GameInput" : desc_.class_name;
-  auto header = GenerateInputActionsTypeScript(desc_, class_name, path_);
+  auto header = GenerateInputActionsAngelScript(desc_, class_name, path_);
   header_errors_ = std::move(header.errors);
   if (!header_errors_.empty()) {
     for (const auto& e : header_errors_) console_.Error("Input Actions: " + e);
@@ -408,17 +408,17 @@ void InputActionsWindow::DrawToolbar() {
   if (ImGui::MenuItem("Save", "Ctrl+S", false, open && dirty_)) Save();
   if (ImGui::BeginMenu("Code", open)) {
     bool generate = !desc_.header.empty();
-    if (ImGui::Checkbox("Generate TypeScript", &generate)) {
+    if (ImGui::Checkbox("Generate AngelScript", &generate)) {
       Checkpoint();
       if (generate) {
         if (desc_.class_name.empty()) desc_.class_name = "GameInput";
-        desc_.header = "res://scripts/generated/" + Templates::ToSnakeCase(desc_.class_name) + ".ts";
+        desc_.header = "res://scripts/generated/" + Templates::ToSnakeCase(desc_.class_name) + ".as";
       } else {
         desc_.header.clear();
       }
       MarkChanged();
     }
-    ImGui::SetItemTooltip("Write a TypeScript class with a member per action map when saving,\n"
+    ImGui::SetItemTooltip("Write an AngelScript namespace with a constant per action when saving,\n"
                           "like Unity's Generate C# Class");
     ImGui::BeginDisabled(!generate);
     ImGui::SetNextItemWidth(260);
@@ -702,24 +702,26 @@ void InputActionsWindow::DrawActionProperties(InputActionDesc& action) {
 
   // How a script reads it, through the generated header or by name.
   ImGui::SeparatorText("In scripts");
+  const std::string class_name =
+      desc_.class_name.empty() ? "GameInput" : InputActionIdentifier(desc_.class_name);
   const std::string member =
       desc_.header.empty()
-          ? std::format("this.inputActions.find(\"{}\")", action.FullName())
-          : std::format("input.{}.{}", InputActionIdentifier(action.map),
-                        InputActionIdentifier(action.name));
+          ? std::format("Input::FindAction(\"{}\")", action.FullName())
+          : std::format("Input::RequireAction({}::{}.{})", class_name,
+                        InputActionIdentifier(action.map), InputActionIdentifier(action.name));
   std::string usage;
   if (action.type == InputAction::Type::kButton) {
-    usage = member + (desc_.header.empty() ? "?.wasPressedThisFrame" : ".wasPressedThisFrame");
+    usage = member + ".wasPressedThisFrame";
   } else if (action.vector2) {
-    usage = member + (desc_.header.empty() ? "?.readVector2()" : ".readVector2()");
+    usage = member + ".ReadVector2()";
   } else {
-    usage = member + (desc_.header.empty() ? "?.readFloat()" : ".readFloat()");
+    usage = member + ".ReadFloat()";
   }
   ImGui::TextDisabled("%s", usage.c_str());
   if (ImGui::IsItemClicked()) ImGui::SetClipboardText(usage.c_str());
   ImGui::SetItemTooltip("Click to copy");
   if (desc_.header.empty()) {
-    ImGui::TextDisabled("Code > Generate TypeScript for typed access.");
+    ImGui::TextDisabled("Code > Generate AngelScript for typed access.");
   }
   for (const auto& error : header_errors_) {
     ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", error.c_str());

@@ -53,16 +53,17 @@ SteamDeck or the controllers. Along with support for controller layouts, battery
 
 ## Architecture
 
-A game is a project (`.mproj`) of maps (`.mmap`), assets, UI documents and TypeScript scripts. The
+A game is a project (`.mproj`) of maps (`.mmap`), assets, UI documents and AngelScript scripts. The
 player (or the editor's Play button) loads a map into an EnTT scene and runs a fixed-step tick plus a
-per-frame render. Scripts run in an embedded V8; everything native (physics, audio, rendering) sits
-behind the engine, and scripts reach it only through a small checked `__native` API.
+per-frame render. Scripts are compiled by an embedded [AngelScript](https://www.angelcode.com/angelscript/)
+engine; everything native (physics, audio, rendering) sits behind the engine, and scripts reach it
+only through a small checked native API.
 
 <img width="735" height="1328" alt="Architecture diagram for Mercury Engine showing how its constructed." src="assets/architecture_graph.png">
 
 | Layer | Dependency | Used for |
 |---|---|---|
-| Scripting | [V8](https://v8.dev), [esbuild](https://esbuild.github.io) | Run TypeScript game scripts; bundle them with source maps |
+| Scripting | [AngelScript](https://www.angelcode.com/angelscript/) | Compile and run `.as` game scripts |
 | Scene | [EnTT](https://github.com/skypjack/entt), [GLM](https://github.com/g-truc/glm) | Entity-component storage, math |
 | Physics | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Rigid bodies, colliders, character controller |
 | Rendering | Vulkan 1.3, [VMA](https://github.com/GPUOpen-LibrariesAndPlugins/VulkanMemoryAllocator), [DXC](https://github.com/microsoft/DirectXShaderCompiler), [GLFW](https://www.glfw.org) | Drawing, GPU memory, HLSL to SPIR-V, window and input |
@@ -74,8 +75,8 @@ behind the engine, and scripts reach it only through a small checked `__native` 
 
 ## Building
 
-Game scripts are TypeScript, run by an embedded V8. V8 is fetched once with depot_tools and is
-built by Bazel from V8's own Bazel files. esbuild bundles the scripts.
+Game scripts are AngelScript (`.as`). AngelScript is a C++ library built directly by Bazel from
+the pinned `third_party/angelscript` submodule; there is no external code generation or bundler.
 
 The build requires [Bazelisk](https://github.com/bazelbuild/bazelisk); the repository pins Bazel
 in `.bazelversion`. CMake and Ninja are still used, but only to build the third-party dependencies
@@ -90,26 +91,14 @@ bazelisk test //tests/...
 bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
 ```
 
-V8's first Bazel build takes 30-60 minutes. If V8's Bazel build cannot be used on your Xcode/host
-combination, build the GN fallback once and select it:
-
-```sh
-./scripts/build_v8.pl
-bazelisk build //mercury:mercury_player --define=v8_backend=gn
-```
-
 ### Linux (X11 and Wayland)
 
 ```sh
-./scripts/setup_project.pl              # detects Linux; apt or pacman: Vulkan, GLFW deps, DXC, esbuild, Bazelisk
+./scripts/setup_project.pl              # detects Linux; apt or pacman: Vulkan, GLFW deps, DXC, Bazelisk
 bazelisk build //mercury:mercury_player
 bazelisk test //tests/...
 bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
 ```
-
-`scripts/fetch_v8.pl` (see `third_party/v8/README.md`) fetches the version in
-`third_party/v8/VERSION`. Node and `typescript` are optional: when `tsc` is installed, Build also
-type-checks the scripts.
 
 Debian/Ubuntu don't package DXC, so the setup script downloads the official release into
 `bin/dxc/`. If you use the [LunarG Vulkan SDK](https://vulkan.lunarg.com) instead, set

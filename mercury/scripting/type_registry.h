@@ -29,7 +29,7 @@ class MapScene;
 using AttachFn = std::function<void(MapScene& scene, kEntityId entity,
                                     const mtext::PropertyList& properties)>;
 
-// Run-time access to a built-in component's fields, used by the TypeScript API.
+// Run-time access to a built-in component's fields, used by the script API.
 using HasComponentFn = std::function<bool(MapScene& scene, kEntityId entity)>;
 using GetFieldFn = std::function<bool(MapScene& scene, kEntityId entity,
                                       std::string_view field, mtext::Variant* out)>;

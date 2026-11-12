@@ -12,7 +12,7 @@
 #include "properties/camera.h"
 #include "properties/primitives.h"
 #include "scripting/behaviour.h"
-#include "scripting/js/script_runtime.h"
+#include "scripting/as/script_runtime.h"
 #include "scripting/type_registry.h"
 #include "ui/ui_document.h"
 

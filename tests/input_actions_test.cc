@@ -16,7 +16,7 @@ InputActionsDesc SampleActions() {
   InputActionsDesc desc;
   desc.maps = {"Player", "UI", "Empty"};
   desc.class_name = "GameInput";
-  desc.header = "res://scripts/game_input.ts";
+  desc.header = "res://scripts/game_input.as";
   InputActionDesc jump;
   jump.map = "Player";
   jump.name = "Jump";
@@ -110,19 +110,16 @@ TEST(InputActionsCodegen, MakesIdentifiers) {
 }
 
 TEST(InputActionsCodegen, GeneratesOneClassPerMap) {
-  const auto generated = GenerateInputActionsTypeScript(SampleActions(), "GameInput",
+  const auto generated = GenerateInputActionsAngelScript(SampleActions(), "GameInput",
                                                         "res://input/actions.minput");
   EXPECT_TRUE(generated.errors.empty());
   const std::string& s = generated.source;
-  EXPECT_NE(s.find("export class GameInput {"), std::string::npos);
-  EXPECT_NE(s.find("export class GameInputPlayerActions {"), std::string::npos);
-  EXPECT_NE(s.find("readonly Jump: InputAction;"), std::string::npos);
-  EXPECT_NE(s.find("export class GameInputEmptyActions {"), std::string::npos);
-  EXPECT_NE(s.find("PlayerMove: \"Player/Move\""), std::string::npos);
-  EXPECT_NE(s.find("this.Jump = asset.require(\"Player/Jump\");"), std::string::npos);
-  EXPECT_NE(s.find("this.Submit = asset.require(\"UI/Submit\");"), std::string::npos);
-  EXPECT_NE(s.find("this.Player = new GameInputPlayerActions(asset);"), std::string::npos);
-  EXPECT_NE(s.find("enableMap(\"Player\")"), std::string::npos);
+  EXPECT_NE(s.find("namespace GameInput"), std::string::npos);
+  EXPECT_NE(s.find("namespace Player"), std::string::npos);
+  EXPECT_NE(s.find("const string Jump = \"Player/Jump\";"), std::string::npos);
+  EXPECT_NE(s.find("const string Submit = \"UI/Submit\";"), std::string::npos);
+  EXPECT_NE(s.find("void EnablePlayer()"), std::string::npos);
+  EXPECT_NE(s.find("Input::EnableMap(Player::Map, true)"), std::string::npos);
 }
 
 TEST(InputActionsCodegen, ReportsNameCollisions) {
@@ -134,7 +131,7 @@ TEST(InputActionsCodegen, ReportsNameCollisions) {
   InputActionDesc b = a;
   b.name = "fire-1";
   desc.actions = {a, b};
-  const auto header = GenerateInputActionsTypeScript(desc, "GameInput", "x");
+  const auto header = GenerateInputActionsAngelScript(desc, "GameInput", "x");
   EXPECT_EQ(header.errors.size(), 2u);
 }
 
@@ -155,9 +152,9 @@ TEST(InputActionsCodegen, RollABallHeaderIsUpToDate) {
   std::string error;
   ASSERT_TRUE(ParseInputActions(minput, &desc, &error)) << error;
   const std::string class_name = desc.class_name.empty() ? "GameInput" : desc.class_name;
-  const auto generated = GenerateInputActionsTypeScript(desc, class_name, "res://input/actions.minput");
+  const auto generated = GenerateInputActionsAngelScript(desc, class_name, "res://input/actions.minput");
   EXPECT_TRUE(generated.errors.empty());
-  EXPECT_EQ(generated.source, read(root / "scripts/generated/game_input.ts"));
+  EXPECT_EQ(generated.source, read(root / "scripts/generated/game_input.as"));
   // And the .minput survives a save/parse round trip.
   InputActionsDesc again;
   ASSERT_TRUE(ParseInputActions(SerializeInputActions(desc), &again, &error)) << error;

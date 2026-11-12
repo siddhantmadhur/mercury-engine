@@ -4,13 +4,13 @@
  * The generic game executable (mercury_player). It runs any project:
  *
  *   mercury_player [project.mproj] [--map res://maps/other.mmap]
- *                  [--dump-schema file] [--write-types] [--build-scripts]
+ *                  [--dump-schema file] [--build-scripts]
  *
  * Without a project it runs the shipped game packs next to the executable.
- * Loose projects have their TypeScript built first when it is out of date.
- * --dump-schema writes the fields of every script in the bundle and exits (the editor runs this
- * after each build so its Inspector knows the scripts). --write-types writes the types an editor
- * needs (.mercury/types and tsconfig.json) and exits; --build-scripts only builds.
+ * Loose projects have their AngelScript compiled in-process before they run.
+ * --dump-schema writes the fields of every script and exits (the editor runs
+ * this after each build so its Inspector knows the scripts); --build-scripts
+ * only compiles and exits.
  */
 #ifndef MERCURY_PLAYER_PLAYER_H
 #define MERCURY_PLAYER_PLAYER_H

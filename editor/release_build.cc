@@ -8,7 +8,7 @@
 #include <sstream>
 
 #include "pack/mpack.h"
-#include "scripting/js/script_builder.h"
+#include "scripting/as/script_builder.h"
 
 namespace Mercury {
 
@@ -16,24 +16,19 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// The minified scripts are built here, so the Play build's game.js stays readable.
-constexpr const char* kReleaseScripts = ".mercury/release";
-
 // Source code and editor files stay out of game.mpack.
 bool IsSourceFile(const fs::path& path) {
   std::string ext = path.extension().string();
   std::transform(ext.begin(), ext.end(), ext.begin(),
                  [](unsigned char c) { return std::tolower(c); });
-  for (const char* skip : {".ts", ".tsx", ".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp",
-                           ".tmp"}) {
+  for (const char* skip : {".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp", ".tmp"}) {
     if (ext == skip) return true;
   }
   return false;
 }
 
 bool IsSkippedAtRoot(const std::string& name) {
-  return name == "scripts" || name == "tsconfig.json" || name == "package.json" ||
-         name == "package-lock.json" || name == "node_modules" || name == "CMakeLists.txt" ||
+  return name == "CMakeLists.txt" ||
          name == "MODULE.bazel" || name == "MODULE.bazel.lock" || name == "WORKSPACE" ||
          name == "WORKSPACE.bazel" || name.starts_with("bazel-") ||
          name == "Builds" || name == "imgui.ini";
@@ -177,11 +172,10 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
     result.error = std::move(message);
     return result;
   };
-  // The scripts first: minified, in their own folder.
+  // Compile the scripts in-process; the .as sources are packed with the game.
   {
     BuildOptions options;
     options.release = true;
-    options.output_dir = kReleaseScripts;
     std::string build_log;
     const bool built = ScriptBuilder::Build(root, options, &build_log);
     std::istringstream lines(build_log);
@@ -224,14 +218,6 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
     game.Add(path.lexically_relative(root).generic_string(), path);
     game_bytes += it->file_size(ec);
   }
-  // The bundle and its source map, though hidden folders are skipped above.
-  for (const char* file : {"game.js", "game.js.map"}) {
-    const fs::path bundle = root / kReleaseScripts / file;
-    if (!fs::exists(bundle, ec)) return fail("missing " + bundle.string());
-    game.Add(std::string(".mercury/scripts/") + file, bundle);
-    game_bytes += fs::file_size(bundle, ec);
-  }
-
   // engine.mpack: the default UI theme and fonts, and the shaders.
   mpack::Writer engine;
   uintmax_t engine_bytes = 0;

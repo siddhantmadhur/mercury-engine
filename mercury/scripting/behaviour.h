@@ -5,9 +5,8 @@
  * OnFrame, OnTick and the collision callbacks, and a Behaviour's Reflect() describes the fields the
  * Inspector shows and the map saves.
  *
- * Game scripts are not written against this class. They are TypeScript classes (see
- * scripting/ts/behaviour.ts); each one is run by a ScriptBehaviour (scripting/js/), which forwards
- * every callback to the JavaScript object. Tests of the engine may derive from Behaviour directly
+ * Game scripts are not written against this class. They are AngelScript classes (mercury/scripting/as); each one is run by a ScriptBehaviour,
+ * which forwards every callback to the script object. Tests of the engine may derive from Behaviour directly
  * (see tests/test_scripts.h).
  */
 #ifndef MERCURY_SCRIPTING_BEHAVIOUR_H

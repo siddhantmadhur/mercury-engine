@@ -2,6 +2,58 @@ load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
 
 package(default_visibility = ["//visibility:public"])
 
+# rules_foreign_cc's CMake toolchain leaves CMAKE_RANLIB empty on some hosts
+# (notably Fedora), which turns the archive step into `ccache :`. Pin the
+# system ranlib on Linux and macOS.
+CMAKE_RANLIB_ARGS = select({
+    "@platforms//os:linux": ["-DCMAKE_RANLIB=/usr/bin/ranlib"],
+    "@platforms//os:macos": ["-DCMAKE_RANLIB=/usr/bin/ranlib"],
+    "//conditions:default": [],
+})
+
+
+# AngelScript is a plain C++ library with no code generation or external
+# build system. It lives in its own git submodule, so the target is declared in
+# this package (the submodule itself has no BUILD file).
+cc_library(
+    name = "angelscript",
+    srcs = glob([
+        "angelscript/sdk/angelscript/source/*.cpp",
+        "angelscript/sdk/add_on/scriptbuilder/*.cpp",
+        "angelscript/sdk/add_on/scriptarray/*.cpp",
+        "angelscript/sdk/add_on/scriptstdstring/*.cpp",
+        "angelscript/sdk/add_on/scriptmath/*.cpp",
+        "angelscript/sdk/add_on/scriptdictionary/*.cpp",
+    ]) + select({
+        "@platforms//cpu:aarch64": glob([
+            "angelscript/sdk/angelscript/source/*_arm64_gcc.S",
+        ]),
+        "//conditions:default": [],
+    }),
+    hdrs = glob([
+        "angelscript/sdk/angelscript/include/*.h",
+        "angelscript/sdk/angelscript/source/*.h",
+        "angelscript/sdk/add_on/scriptbuilder/*.h",
+        "angelscript/sdk/add_on/scriptarray/*.h",
+        "angelscript/sdk/add_on/scriptstdstring/*.h",
+        "angelscript/sdk/add_on/scriptmath/*.h",
+        "angelscript/sdk/add_on/scriptdictionary/*.h",
+    ]),
+    copts = [
+        "-std=c++17",
+        "-Wno-unused-parameter",
+    ],
+    includes = [
+        "angelscript/sdk/angelscript/include",
+        "angelscript/sdk/add_on",
+    ],
+    linkopts = select({
+        "@platforms//os:linux": ["-lpthread"],
+        "@platforms//os:macos": ["-lpthread"],
+        "//conditions:default": [],
+    }),
+)
+
 # --------------------------------------------------------------------------
 # Header-only dependencies
 #
@@ -28,7 +80,7 @@ cc_library(
         "glm/glm/**/*.hpp",
         "glm/glm/**/*.inl",
     ]),
-    includes = ["."],
+    includes = ["glm"],
 )
 
 cc_library(
@@ -132,14 +184,24 @@ cc_library(
 cmake(
     name = "glfw_build",
     build_args = ["-j4"],
+    generate_args = CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
         "GLFW_BUILD_DOCS": "OFF",
         "GLFW_BUILD_EXAMPLES": "OFF",
         "GLFW_BUILD_TESTS": "OFF",
         "GLFW_INSTALL": "ON",
+        "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
+    # rules_foreign_cc gives pkg-config only its own dependency prefix; on
+    # Linux the X11/Wayland .pc files live in the system directories.
+    env = select({
+        "@platforms//os:linux": {
+            "PKG_CONFIG_PATH": "/usr/lib64/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig:/usr/share/pkgconfig",
+        },
+        "//conditions:default": {},
+    }),
     lib_source = "@glfw_src//:all",
     out_static_libs = ["libglfw3.a"],
 )
@@ -183,12 +245,17 @@ cmake(
         "ASSIMP_INSTALL_PDB": "OFF",
         "ASSIMP_WARNINGS_AS_ERRORS": "OFF",
         "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
     generate_args = select({
         # assimp's bundled zlib defines fdopen() NULL on macOS, which breaks
         # the SDK's declaration. The old CMake build applied this to zlibstatic.
-        "@platforms//os:macos": ["-DCMAKE_C_FLAGS:STRING=-Dfdopen=fdopen"],
+        "@platforms//os:macos": [
+            "-DCMAKE_RANLIB=/usr/bin/ranlib",
+            "-DCMAKE_C_FLAGS:STRING=-Dfdopen=fdopen",
+        ],
+        "@platforms//os:linux": ["-DCMAKE_RANLIB=/usr/bin/ranlib"],
         "//conditions:default": [],
     }),
     lib_source = "@assimp_src//:all",
@@ -213,6 +280,7 @@ cc_library(
 cmake(
     name = "jolt_build",
     build_args = ["-j4"],
+    generate_args = CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
         "CPP_EXCEPTIONS_ENABLED": "OFF",
@@ -233,6 +301,7 @@ cmake(
         "TARGET_UNIT_TESTS": "OFF",
         "TARGET_VIEWER": "OFF",
         "USE_ASSERTS": "OFF",
+        "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
     lib_source = "@jolt_src//:all",
@@ -260,8 +329,10 @@ cc_library(
 cmake(
     name = "yoga_build",
     build_args = ["-j4"],
+    generate_args = CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
     lib_source = "@yoga_wrapper//:all",
@@ -279,8 +350,10 @@ cc_library(
 cmake(
     name = "tinyxml2_build",
     build_args = ["-j4"],
+    generate_args = CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
         "tinyxml2_BUILD_TESTING": "OFF",
     },
@@ -299,8 +372,10 @@ cc_library(
 cmake(
     name = "meshoptimizer_build",
     build_args = ["-j4"],
+    generate_args = CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
         "MESHOPT_BUILD_DEMO": "OFF",
         "MESHOPT_BUILD_GLTFPACK": "OFF",
@@ -323,8 +398,10 @@ cc_library(
 cmake(
     name = "miniaudio_build",
     build_args = ["-j4"],
+    generate_args = CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
         "MINIAUDIO_BUILD_EXAMPLES": "OFF",
         "MINIAUDIO_BUILD_TESTS": "OFF",

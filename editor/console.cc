@@ -32,14 +32,13 @@ std::optional<std::string> Console::FindScriptFile(const std::string& text) {
     const size_t at = text.find("scripts/", from);
     if (at == std::string::npos) return std::nullopt;
     from = at + 1;
-    // The path runs to ".ts" followed by ':' or '('.
-    const size_t ts = text.find(".ts", at);
-    if (ts == std::string::npos) return std::nullopt;
-    const size_t end = ts + 3;
+    // The path runs to ".as" followed by ':' or '('.
+    const size_t as = text.find(".as", at);
+    if (as == std::string::npos) return std::nullopt;
+    const size_t end = as + 3;
     if (end >= text.size() || (text[end] != ':' && text[end] != '(')) continue;
     // Something must follow that looks like a line number.
     if (end + 1 >= text.size() || !std::isdigit(static_cast<unsigned char>(text[end + 1]))) continue;
-    // A path in a stack frame may start with "../../" (relative to .mercury/types): keep "scripts/".
     return text.substr(at, end - at);
   }
 }

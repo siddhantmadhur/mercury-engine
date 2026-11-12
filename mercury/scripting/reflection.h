@@ -71,7 +71,7 @@ struct FieldInfo {
   std::string tooltip;
   FieldType element_type = FieldType::kString;  // kList: type of each item
   // A script may change this at run time. False unless the component's system reads the value
-  // every frame; otherwise the write would silently do nothing, so the TypeScript API makes the
+  // every frame; otherwise the write would silently do nothing, so the script API makes the
   // field readonly.
   bool runtime_writable = false;
 };

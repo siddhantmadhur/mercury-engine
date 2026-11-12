@@ -1,4 +1,4 @@
-// Registers C++ Behaviours for engine tests. Game scripts are TypeScript; these stand in for
+// Registers C++ Behaviours for engine tests. Game scripts are AngelScript; these stand in for
 // them when a test is about MapScene itself rather than the script runtime.
 #ifndef MERCURY_TESTS_TEST_SCRIPTS_H
 #define MERCURY_TESTS_TEST_SCRIPTS_H
@@ -10,7 +10,7 @@
 
 namespace Mercury {
 
-// Lets maps use the Behaviour subclass T by name, like a TypeScript @script would.
+// Lets maps use the Behaviour subclass T by name, like an AngelScript [script] class would.
 template <typename T>
 bool RegisterTestBehaviour(const char* name) {
   static_assert(std::is_base_of_v<Behaviour, T>, "test behaviours must derive from Behaviour");

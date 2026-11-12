@@ -17,14 +17,6 @@ tmp
 
 bench/
 
-# V8 is built locally (scripts/fetch_v8.pl, then Bazel)
-third_party/v8/*
-!third_party/v8/VERSION
-!third_party/v8/args.gn
-!third_party/v8/README.md
-!third_party/v8/BUILD.bazel
-!third_party/v8/patches/
-!third_party/v8/patches/**
 tests/scripts/project/.mercury/
 
 # Bazel convenience symlinks and outputs

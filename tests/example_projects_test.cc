@@ -1,4 +1,4 @@
-// Checks every example project as a whole: its TypeScript builds, its scripts load, and every
+// Checks every example project as a whole: its AngelScript compiles, its scripts load, and every
 // map only uses components, properties and resources that exist. A map property that does not
 // match a script field (say `fall_limit` against `fallLimit`) is otherwise ignored without a word
 // and the script runs on its defaults.
@@ -18,8 +18,8 @@
 #include "os/process.h"
 #include "project/map.h"
 #include "project/project.h"
-#include "scripting/js/script_builder.h"
-#include "scripting/js/script_runtime.h"
+#include "scripting/as/script_builder.h"
+#include "scripting/as/script_runtime.h"
 #include "scripting/type_registry.h"
 #include "test_paths.h"
 
@@ -51,13 +51,13 @@ TEST_P(ExampleProjectTest, BuildsLoadsAndMapsMatchTheScripts) {
   const fs::path source = fs::path(MERCURY_SOURCE_DIR) / "examples" / name;
   ASSERT_TRUE(fs::is_directory(source)) << source;
 
-  // Build in a copy so the source tree gets no .mercury folder. Only what esbuild and the map
+  // Build in a copy so the source tree gets no .mercury folder. Only what the compiler and the map
   // checks need is copied: some examples carry hundreds of megabytes of models.
   const fs::path work = Mercury::test::CacheDir() / "example_projects" / name;
   std::error_code ec;
   fs::remove_all(work, ec);
   fs::create_directories(work, ec);
-  for (const std::string& part : std::vector<std::string>{"scripts", "maps", "tsconfig.json", name + ".mproj"}) {
+  for (const std::string& part : std::vector<std::string>{"scripts", "maps", name + ".mproj"}) {
     if (!fs::exists(source / part)) continue;
     fs::copy(source / part, work / part, fs::copy_options::recursive, ec);
     ASSERT_FALSE(ec) << part << ": " << ec.message();
@@ -65,22 +65,9 @@ TEST_P(ExampleProjectTest, BuildsLoadsAndMapsMatchTheScripts) {
 
   std::string log;
   ASSERT_TRUE(ScriptBuilder::Build(work, {}, &log)) << log;
-  // esbuild does not check types. When tsc is installed the build runs it; without it the test
-  // says so, and fails if MERCURY_REQUIRE_TSC is set (CI should set it). This looks for tsc the
-  // way ScriptBuilder does rather than reading the build log, which mentions it only once per
-  // process.
-  const bool has_tsc =
-      fs::exists(work / "node_modules" / ".bin" / "tsc", ec) || os::IsOnPath("tsc");
-  if (!has_tsc) {
-    EXPECT_EQ(std::getenv("MERCURY_REQUIRE_TSC"), nullptr)
-        << name << ": MERCURY_REQUIRE_TSC is set but tsc was not found";
-    std::cerr << "[  NOTE   ] " << name << ": TypeScript was NOT type checked (tsc not found)\n";
-  }
-
   RegisterBuiltinTypes();
   ASSERT_TRUE(ScriptRuntime::Instance().Initialize());
-  ASSERT_TRUE(ScriptRuntime::Instance().LoadBundle(ScriptBuilder::BundlePath(work).string(),
-                                                   ScriptBuilder::SourceMapPath(work).string()));
+  ASSERT_TRUE(ScriptRuntime::Instance().LoadScripts(work));
 
   std::string error;
   auto project = Project::Load(work / (name + ".mproj"), &error);
