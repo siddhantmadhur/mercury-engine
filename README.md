@@ -79,7 +79,8 @@ Game scripts are AngelScript (`.as`). AngelScript is a C++ library built directl
 the pinned `third_party/angelscript` submodule; there is no external code generation or bundler.
 
 The build requires [Bazelisk](https://github.com/bazelbuild/bazelisk); the repository pins Bazel
-in `.bazelversion`. CMake and Ninja are still used, but only to build the third-party dependencies
+in `.bazelversion`. Build the player with `bazelisk build //:mercury_player` (or
+`//mercury:mercury_player`); a bare `bazel build` has no implicit target in Bazel 8. CMake and Ninja are still used, but only to build the third-party dependencies
 through `rules_foreign_cc`.
 
 ### macOS (Apple Silicon)

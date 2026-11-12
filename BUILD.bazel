@@ -1,1 +1,23 @@
 package(default_visibility = ["//visibility:public"])
+
+# Convenience entry points from the repository root. The real targets live in
+# //mercury, //editor and //tests; Bazel 8 has no implicit target for a bare
+# `bazel build`, so name one explicitly (or use //...).
+alias(
+    name = "mercury_player",
+    actual = "//mercury:mercury_player",
+)
+
+alias(
+    name = "editor",
+    actual = "//editor:mercury_editor",
+)
+
+test_suite(
+    name = "tests",
+    tests = [
+        "//tests:editor_test",
+        "//tests:example_projects_test",
+        "//tests:mercury_test",
+    ],
+)
