@@ -7,7 +7,7 @@
 #include <map>
 #include <memory>
 
-#include "imstb_rectpack.h"
+#include "stb/stb_rect_pack.h"
 
 #include "properties/texture2d.h"
 #include <vector>

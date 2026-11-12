@@ -4,6 +4,7 @@
 
 #ifndef MERCURYENGINE_INPUT_MANAGER_H
 #define MERCURYENGINE_INPUT_MANAGER_H
+#include <functional>
 #include <map>
 #include <string>
 #include <string_view>
@@ -105,14 +106,26 @@ class InputManager {
   float GetContentScale() const { return content_scale_; }
   void SetContentScale(float scale) { content_scale_ = scale; }
 
-  // Whether Dear ImGui (dev/debug windows) wants the mouse or keyboard this
-  // frame; the in-game UI ignores input while it does.
-  void SetImGuiCapture(bool mouse, bool keyboard) {
-    imgui_wants_mouse_ = mouse;
-    imgui_wants_keyboard_ = keyboard;
+  // Whether an external editor UI owns the mouse or keyboard this frame; the
+  // in-game UI and gameplay input ignore events while it does.
+  void SetExternalUICapture(bool mouse, bool keyboard) {
+    external_ui_wants_mouse_ = mouse;
+    external_ui_wants_keyboard_ = keyboard;
   }
-  bool ImGuiWantsMouse() const { return imgui_wants_mouse_; }
-  bool ImGuiWantsKeyboard() const { return imgui_wants_keyboard_; }
+  bool ExternalUIWantsMouse() const { return external_ui_wants_mouse_; }
+  bool ExternalUIWantsKeyboard() const { return external_ui_wants_keyboard_; }
+
+  // Direct host event injection (for non-GLFW hosts such as wxWidgets).
+  void InjectKeyEvent(int glfw_key, int action, int mods = 0);
+  void InjectCharEvent(char32_t codepoint);
+  void InjectMouseButtonEvent(int button, int action, int mods = 0);
+  void InjectCursorPos(double xpos, double ypos);
+  void InjectScroll(double xoffset, double yoffset);
+  void InjectCursorEnter(bool entered);
+
+  static void SetClipboardHooks(std::function<std::string()> get_fn,
+                                std::function<void(const std::string&)> set_fn);
+  void SetCursorLockHook(std::function<void(bool locked, bool visible)> hook);
 
   static std::string GetClipboard();
   static void SetClipboard(const std::string& text);
@@ -148,9 +161,10 @@ class InputManager {
   bool cursor_inside_ = true;
   glm::vec2 framebuffer_scale_ = glm::vec2(1.0f);
   float content_scale_ = 1.0f;
-  bool imgui_wants_mouse_ = false;
-  bool imgui_wants_keyboard_ = false;
+  bool external_ui_wants_mouse_ = false;
+  bool external_ui_wants_keyboard_ = false;
   GLFWwindow* window_ = nullptr;
+  std::function<void(bool locked, bool visible)> cursor_lock_hook_;
   glm::vec2 frame_mouse_delta_ = glm::vec2(0.0f);
   glm::vec2 frame_scroll_ = glm::vec2(0.0f);
   bool have_mouse_position_ = false;

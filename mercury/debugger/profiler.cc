@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "debugger/debugger.h"
-#include "imgui.h"
 
 namespace Mercury::Profiler {
 
@@ -205,31 +204,24 @@ bool BenchFinished() {
   return s.bench_done;
 }
 
-void DrawOverlay() {
-  if (!GetConfig().overlay) return;
+std::string SummaryText() {
+  if (!GetConfig().overlay) return {};
   State& s = GetState();
   std::lock_guard lock(s.mutex);
-  ImGui::SetNextWindowBgAlpha(0.6f);
-  ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
-  ImGui::Begin("Profiler", nullptr,
-               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing);
-  ImGui::Text("frame %.2f ms (%.0f fps)", s.smooth_frame_ms,
-              1000.0 / std::max(s.smooth_frame_ms, 1e-6));
+  std::ostringstream out;
+  out << std::format("frame {:.2f} ms ({:.0f} fps)\n", s.smooth_frame_ms,
+                     1000.0 / std::max(s.smooth_frame_ms, 1e-6));
   for (int pass = 0; pass < 2; pass++) {
-    ImGui::Separator();
-    ImGui::TextUnformatted(pass == 0 ? "CPU" : "GPU");
+    out << (pass == 0 ? "CPU:\n" : "GPU:\n");
     for (const auto& [name, stat] : s.stats) {
       if (stat.gpu != (pass == 1)) continue;
-      ImGui::Text("  %-26s %7.3f ms", name.c_str(), stat.smooth);
+      out << std::format("  {:<26} {:7.3f} ms\n", name, stat.smooth);
     }
   }
-  if (!s.counters.empty()) {
-    ImGui::Separator();
-    for (const auto& [name, value] : s.counters) {
-      ImGui::Text("  %-26s %.0f", name.c_str(), value);
-    }
+  for (const auto& [name, value] : s.counters) {
+    out << std::format("  {:<26} {:.0f}\n", name, value);
   }
-  ImGui::End();
+  return out.str();
 }
 
 }  // namespace Mercury::Profiler

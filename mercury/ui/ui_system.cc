@@ -80,8 +80,8 @@ void UISystem::ProcessInput(const InputManager& input) {
   // The cursor is in window coordinates; panels work in framebuffer pixels.
   frame.pointer = const_cast<InputManager&>(input).GetCursorPos() * input.GetFramebufferScale();
   frame.pointer_inside = input.IsCursorInWindow();
-  frame.mouse_available = !input.ImGuiWantsMouse();
-  frame.keyboard_available = !input.ImGuiWantsKeyboard();
+  frame.mouse_available = !input.ExternalUIWantsMouse();
+  frame.keyboard_available = !input.ExternalUIWantsKeyboard();
 
   UIInputFrame pointer_events = frame;
   UIInputFrame key_events = frame;

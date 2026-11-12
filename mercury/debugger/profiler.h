@@ -24,6 +24,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 namespace Mercury::Profiler {
@@ -50,9 +51,8 @@ double FixedDeltaMs();
 // The benchmark measured its frames: time to quit.
 bool BenchFinished();
 
-// ImGui window with the latest timings, if MERCURY_PROFILER is set. Call
-// between ImGui::NewFrame and ImGui::Render.
-void DrawOverlay();
+// Latest timings formatted for display, or empty if MERCURY_PROFILER is not set.
+std::string SummaryText();
 
 class Scope {
  public:

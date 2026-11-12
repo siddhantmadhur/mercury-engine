@@ -26,7 +26,6 @@ cc_library(
         "//third_party:entt",
         "//third_party:glfw",
         "//third_party:glm",
-        "//third_party:imgui",
         "//third_party:jolt",
         "//third_party:meshoptimizer",
         "//third_party:miniaudio",

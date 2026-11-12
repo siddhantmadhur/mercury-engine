@@ -223,8 +223,8 @@ glm::vec2 ReadControl(const InputManager& const_input, std::string_view path) {
   if (!control.empty() && control[0] == '/') control.remove_prefix(1);
 
   if (device == "keyboard") {
-    // Text input in dev windows should not move the player.
-    if (input.ImGuiWantsKeyboard()) return glm::vec2(0.0f);
+    // Text input in editor UI panels should not move the player.
+    if (input.ExternalUIWantsKeyboard()) return glm::vec2(0.0f);
     const std::string name = Lower(control);
     if (name == "anykey") {
       for (int key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; key++) {
@@ -257,7 +257,7 @@ glm::vec2 ReadControl(const InputManager& const_input, std::string_view path) {
     if (name == "scroll") return input.GetFrameScroll();
     if (name == "scroll/y") return {input.GetFrameScroll().y, 0.0f};
     if (name == "position") return input.GetCursorPos();
-    if (input.ImGuiWantsMouse()) return glm::vec2(0.0f);
+    if (input.ExternalUIWantsMouse()) return glm::vec2(0.0f);
     if (name == "leftbutton" || name == "press") {
       return {input.IsPressed(MouseButton::kLeft) ? 1.0f : 0.0f, 0.0f};
     }

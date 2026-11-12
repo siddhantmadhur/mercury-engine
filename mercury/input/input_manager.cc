@@ -4,13 +4,22 @@
 
 #include "input_manager.h"
 
-#include "imgui.h"
-
 #include <algorithm>
 #include <cctype>
 #include <string>
 
 namespace Mercury {
+namespace {
+std::function<std::string()>& ClipboardGetter() {
+  static std::function<std::string()> fn;
+  return fn;
+}
+std::function<void(const std::string&)>& ClipboardSetter() {
+  static std::function<void(const std::string&)> fn;
+  return fn;
+}
+}  // namespace
+
 InputManager::InputManager() {}
 
 void InputManager::Initialize(GLFWwindow* window) {
@@ -120,6 +129,10 @@ void InputManager::HandleCursorCallback(GLFWwindow* window, double xpos,
 
 void InputManager::SetCursorLocked(bool locked) {
   cursor_locked_ = locked;
+  if (cursor_lock_hook_) {
+    cursor_lock_hook_(cursor_locked_, cursor_visible_);
+    return;
+  }
   if (!window_) window_ = glfwGetCurrentContext();
   if (!window_) return;
   if (locked) {
@@ -138,8 +151,21 @@ void InputManager::SetCursorVisible(bool visible) {
   if (!cursor_locked_) SetCursorLocked(false);
 }
 
+void InputManager::SetCursorLockHook(
+    std::function<void(bool locked, bool visible)> hook) {
+  cursor_lock_hook_ = std::move(hook);
+}
+
+void InputManager::SetClipboardHooks(
+    std::function<std::string()> get_fn,
+    std::function<void(const std::string&)> set_fn) {
+  ClipboardGetter() = std::move(get_fn);
+  ClipboardSetter() = std::move(set_fn);
+}
+
 void InputManager::PollGamepads() {
   gamepad_ = GamepadState{};
+  if (!window_) return;
   for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; jid++) {
     if (!glfwJoystickIsGamepad(jid)) continue;
     GLFWgamepadstate state;
@@ -177,12 +203,41 @@ void InputManager::HandleCursorEnterCallback(GLFWwindow* window, int entered) {
 }
 
 std::string InputManager::GetClipboard() {
+  if (auto& fn = ClipboardGetter()) return fn();
   const char* text = glfwGetClipboardString(nullptr);
   return text ? text : "";
 }
 
 void InputManager::SetClipboard(const std::string& text) {
+  if (auto& fn = ClipboardSetter()) {
+    fn(text);
+    return;
+  }
   glfwSetClipboardString(nullptr, text.c_str());
+}
+
+void InputManager::InjectKeyEvent(int glfw_key, int action, int mods) {
+  HandleKeyCallback(nullptr, glfw_key, 0, action, mods);
+}
+
+void InputManager::InjectCharEvent(char32_t codepoint) {
+  HandleCharCallback(nullptr, static_cast<unsigned int>(codepoint));
+}
+
+void InputManager::InjectMouseButtonEvent(int button, int action, int mods) {
+  HandleMouseButtonCallback(nullptr, button, action, mods);
+}
+
+void InputManager::InjectCursorPos(double xpos, double ypos) {
+  HandleCursorCallback(nullptr, xpos, ypos);
+}
+
+void InputManager::InjectScroll(double xoffset, double yoffset) {
+  HandleScrollCallback(nullptr, xoffset, yoffset);
+}
+
+void InputManager::InjectCursorEnter(bool entered) {
+  HandleCursorEnterCallback(nullptr, entered ? 1 : 0);
 }
 #define GET_ACTION(a) \
   a == GLFW_PRESS ? kJustPressed : a == GLFW_REPEAT ? kContinuous : kReleased
@@ -219,10 +274,7 @@ float InputManager::GetScroll() { return this->scroll_offset_.y; }
 void InputManager::SetHoveringOverUI(bool new_value) {
   this->is_hovering_on_ui_ = new_value;
 }
-bool InputManager::IsHoveringOnUI() {
-  bool is_hovering = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
-  return is_hovering;
-}
+bool InputManager::IsHoveringOnUI() { return is_hovering_on_ui_; }
 void InputManager::SetKeyRepeat(Key k) { repeated_keys_[k] = true; }
 
 }  // namespace Mercury

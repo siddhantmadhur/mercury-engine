@@ -39,22 +39,26 @@ class VulkanApplication : public Application {
 
   void EnableSceneTexture(bool enabled) override;
   void SetSceneViewportSize(int width, int height) override;
-  uint64_t GetSceneTexture() const override;
+  bool CopyScenePixels(int& width, int& height, std::vector<uint8_t>& rgba_out,
+                       uint64_t* frame_id = nullptr) override;
   void SetPreviewCamera(kEntityId camera, int width, int height) override;
-  uint64_t GetPreviewTexture() const override;
+  bool CopyPreviewPixels(int& width, int& height,
+                         std::vector<uint8_t>& rgba_out,
+                         uint64_t* frame_id = nullptr) override;
   void SetUIPreview(const UI::UIDrawData* draw_data, int width, int height,
                     glm::vec4 background) override;
-  uint64_t GetUIPreviewTexture() const override;
+  bool CopyUIPreviewPixels(int& width, int& height,
+                           std::vector<uint8_t>& rgba_out,
+                           uint64_t* frame_id = nullptr) override;
   void SetShowRenderStats(bool show) override { show_render_stats_ = show; }
 
  protected:
   bool OnLoad() override;      // Runs when the application is created
   void Render() override;      // Renders objects
-  bool Initialize() override;  // Creates the device, swapchain and ImGui
+  bool Initialize() override;  // Creates the device and swapchain (if windowed)
   void OnNewTick() override;
 
   void OnResize(int32_t width, int32_t height) override;
-  void ImGuiNewFrame() override;
 
  private:
   static constexpr uint32_t kFramesInFlight = 2;
@@ -89,6 +93,17 @@ class VulkanApplication : public Application {
     vk::Buffer atlas_staging;
   };
 
+  struct OffscreenTarget {
+    vk::Image color;
+    vk::Image depth;
+    vk::Buffer readback;
+    VkExtent2D extent = {0, 0};
+    VkExtent2D readback_extent = {0, 0};
+    bool has_pixels = false;
+    uint64_t frame_id = 0;
+  };
+
+  VkFormat ColorFormat() const;
   bool CreateFrameResources();
   bool CreateDescriptors();
   bool CreatePipelines();
@@ -99,7 +114,6 @@ class VulkanApplication : public Application {
   void UpdateSkyboxImage();
   bool CreateAtlasImage(uint32_t width, uint32_t height);
   void WriteDescriptorSets();
-  bool InitImGui();
   void RecreateSwapchain();
   VkShaderModule LoadShaderModule(const std::string& file_name) const;
 
@@ -124,20 +138,17 @@ class VulkanApplication : public Application {
                         bool draw_static, UINT static_index_count,
                         bool draw_instanced);
 
-  // Records a whole pass into an offscreen color + depth target and leaves
-  // the color image ready for ImGui to sample.
-  void RecordOffscreenPass(VkCommandBuffer cmd, FrameData& frame,
-                           vk::Image& color, vk::Image& depth,
-                           VkClearColorValue clear, VkDescriptorSet camera_set,
-                           const glm::mat4x4* sky_matrix, bool draw_static,
-                           UINT static_index_count, bool draw_instanced);
-
-  // (Re)creates an offscreen color + depth target and its ImGui texture.
+  // (Re)creates an offscreen color + depth + readback target.
   // Waits for the device to go idle, so it only runs between frames.
-  bool CreateOffscreenTarget(VkExtent2D extent, vk::Image& color,
-                             vk::Image& depth, VkDescriptorSet& imgui_set);
-  void DestroyOffscreenTarget(vk::Image& color, vk::Image& depth,
-                              VkDescriptorSet& imgui_set);
+  bool CreateOffscreenTarget(VkExtent2D extent, OffscreenTarget& target);
+  void DestroyOffscreenTarget(OffscreenTarget& target);
+  void RecordTargetReadback(VkCommandBuffer cmd, OffscreenTarget& target,
+                            VkImageLayout current_layout,
+                            VkPipelineStageFlags2 src_stage,
+                            VkAccessFlags2 src_access);
+  bool CopyTargetPixels(OffscreenTarget& target, int& width, int& height,
+                        std::vector<uint8_t>& rgba_out, uint64_t* frame_id,
+                        bool force_opaque_alpha);
 
   // (Re)creates the offscreen scene target at scene_requested_.
   void RecreateSceneTarget();
@@ -212,8 +223,6 @@ class VulkanApplication : public Application {
   vk::Image atlas_image_;
   VkImageLayout atlas_layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
 
-  bool imgui_glfw_initialized_ = false;
-  bool imgui_vulkan_initialized_ = false;
   bool overflow_logged_ = false;
 
   CameraCBuffer camera_ = {};
@@ -231,23 +240,18 @@ class VulkanApplication : public Application {
   bool layout_dirty_ = true;
   entt::registry* hooked_registry_ = nullptr;
 
-  // Offscreen scene target, shown by the editor inside an ImGui window.
+  // Offscreen scene target, copied out to the host editor viewport.
   bool scene_texture_enabled_ = false;
   bool scene_target_dirty_ = false;
   VkExtent2D scene_requested_ = {0, 0};
-  vk::Image scene_color_;
-  vk::Image scene_depth_;
-  VkSampler scene_sampler_ = VK_NULL_HANDLE;  // also samples the preview
-  VkDescriptorSet scene_texture_set_ = VK_NULL_HANDLE;
+  OffscreenTarget scene_target_;
 
   // Editor camera preview: the scene seen from preview_camera_, which the
   // editor sets every frame it shows the preview (reset after each frame).
   kEntityId preview_camera_ = entt::null;
   bool preview_target_dirty_ = false;
   VkExtent2D preview_requested_ = {0, 0};
-  vk::Image preview_color_;
-  vk::Image preview_depth_;
-  VkDescriptorSet preview_texture_set_ = VK_NULL_HANDLE;
+  OffscreenTarget preview_target_;
 
   // UI Toolkit: the game's UI over the scene, and the editor's UI Builder
   // canvas drawn into its own target (reset after each frame).
@@ -260,7 +264,7 @@ class VulkanApplication : public Application {
   // editor, or without camera components) the current camera alone.
   std::vector<RenderCamera> FrameCameras(VkExtent2D extent);
   // Draws `cameras` with the model renderer (and the older draws) into an
-  // image of the swapchain's format, leaving it as a color attachment.
+  // image of ColorFormat(), leaving it as a color attachment.
   void RenderSceneTo(VkCommandBuffer cmd, FrameData& frame,
                      const std::vector<RenderCamera>& cameras, VkImage image,
                      VkImageView view, VkExtent2D extent, VkImageLayout layout,
@@ -270,9 +274,9 @@ class VulkanApplication : public Application {
   glm::vec4 ui_preview_background_ = glm::vec4(0.0f);
   bool ui_preview_target_dirty_ = false;
   VkExtent2D ui_preview_requested_ = {0, 0};
-  vk::Image ui_preview_color_;
-  vk::Image ui_preview_depth_;
-  VkDescriptorSet ui_preview_texture_set_ = VK_NULL_HANDLE;
+  OffscreenTarget ui_preview_target_;
+  VkFence last_submitted_fence_ = VK_NULL_HANDLE;
+  bool readback_synced_ = true;
 
   bool show_render_stats_ = true;
 
