@@ -88,6 +88,10 @@ through `rules_foreign_cc`.
 
 ### macOS (Apple Silicon)
 
+Mercury requires macOS 26.0 or later; builds are stamped with that deployment
+target so the packaged `.app` runs on any macOS 26 release. See the
+`--macos_minimum_os` comment in `.bazelrc`.
+
 ```sh
 ./scripts/setup_project.pl              # detects macOS; Homebrew: Bazelisk, CMake, Ninja, MoltenVK, Vulkan, DXC
 bazelisk build //mercury:mercury_player

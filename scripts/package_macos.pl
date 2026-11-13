@@ -45,7 +45,7 @@ die "cannot resolve the repository root\n" unless defined $REPO;
 my %opt = (
     target       => 'player',
     version      => '1.0.0',
-    min_macos    => '13.3',
+    min_macos    => '26.0',
     pack_size_mb => 256,
     identity     => '-',
 );
@@ -101,7 +101,7 @@ usage: $name --project PATH/TO/game.mproj [options]
   --display-name NAME   name shown in Finder (default: --name)
   --bundle-id ID        CFBundleIdentifier (default: dev.smadhur.<name>)
   --version VERSION     CFBundleShortVersionString (default: 1.0.0)
-  --min-macos VERSION   LSMinimumSystemVersion (default: 13.3)
+  --min-macos VERSION   LSMinimumSystemVersion (default: 26.0)
   --output DIR          where to write the .app (default: Builds/)
   --icon PATH           .icns, or a .png to convert with sips/iconutil
   --identity IDENTITY   codesign identity; "-" signs ad-hoc (default)
@@ -230,7 +230,11 @@ unless ($skip_build) {
     fail("Bazelisk was not found; install it with ./scripts/setup_project.pl")
         unless $bazel;
     log_line("Building $bazel_target (Release)");
-    run_or_die($bazel, 'build', '-c', 'opt', $bazel_target);
+    # The deployment target must match LSMinimumSystemVersion below. Bazel
+    # otherwise stamps the installed SDK version (e.g. 27.0) into the binary
+    # and macOS refuses to launch it on older systems.
+    run_or_die($bazel, 'build', '-c', 'opt',
+        "--macos_minimum_os=$opt{min_macos}", $bazel_target);
 }
 
 my $source_exe =
@@ -911,6 +915,32 @@ sub verify_bundle {
     run_or_die('plutil', '-lint', '-s', File::Spec->catfile($app_dir, 'Contents', 'Info.plist'));
     run_or_die('codesign', '--verify', '--deep', '--strict', $app_dir) unless $no_sign;
 
+    # macOS shows "You can't open this version of this software on this version
+    # of this Mac" when a binary's deployment target is newer than the machine,
+    # so the executable must not advertise more than LSMinimumSystemVersion.
+    my $exe_min = minimum_os($exe);
+    if (defined $exe_min && version_cmp($exe_min, $opt{min_macos}) > 0) {
+        fail("$exe was built for macOS $exe_min but the bundle advertises "
+            . "$opt{min_macos}; rebuild with --macos_minimum_os=$opt{min_macos} "
+            . "or raise --min-macos to $exe_min");
+    }
+
+    # Bundled third-party libraries (MoltenVK, Vulkan loader, wxWidgets) come
+    # prebuilt and can set their own, higher floor. Report it rather than
+    # shipping an app whose Info.plist claims a lower version than it needs.
+    my @newer;
+    for my $file (glob(File::Spec->catfile($fw, '*'))) {
+        next unless -f $file;
+        my $min = minimum_os($file);
+        push @newer, basename($file) . " (macOS $min)"
+            if defined $min && version_cmp($min, $opt{min_macos}) > 0;
+    }
+    if (@newer) {
+        log_line("  warning: these bundled libraries need a newer macOS than "
+            . "$opt{min_macos}:");
+        log_line("    $_") for @newer;
+    }
+
     # Nothing in the app may point at the checkout or Homebrew.
     my @leaks;
     for my $file ($exe, glob(File::Spec->catfile($fw, '*'))) {
@@ -951,4 +981,29 @@ sub slurp {
     my $text = <$fh>;
     close $fh;
     return defined $text ? $text : '';
+}
+
+# The lowest macOS release a Mach-O file can run on, from LC_BUILD_VERSION
+# (or LC_VERSION_MIN_MACOSX in very old binaries). Returns undef when the file
+# cannot be inspected.
+sub minimum_os {
+    my ($path) = @_;
+    return undef unless which('vtool');
+    my $out = capture('vtool', '-show-build', $path);
+    return $1 if $out =~ /^\s*minos\s+([0-9]+(?:\.[0-9]+)*)/m;
+    return $1 if $out =~ /^\s*version\s+([0-9]+(?:\.[0-9]+)*)/m;
+    return undef;
+}
+
+# Compares dotted version strings numerically (-1, 0 or 1).
+sub version_cmp {
+    my ($a, $b) = @_;
+    my @left  = split /\./, $a;
+    my @right = split /\./, $b;
+    while (@left || @right) {
+        my $x = shift @left  // 0;
+        my $y = shift @right // 0;
+        return $x <=> $y if $x != $y;
+    }
+    return 0;
 }
