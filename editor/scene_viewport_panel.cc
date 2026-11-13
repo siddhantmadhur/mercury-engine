@@ -41,11 +41,10 @@ CameraPreviewFrame::CameraPreviewFrame(wxWindow* parent, EditorScene& scene,
               wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT),
       scene_(scene),
       on_closed_(std::move(on_closed)) {
-  ApplyDarkPalette(this);
   canvas_ = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                         wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
   canvas_->SetBackgroundStyle(wxBG_STYLE_PAINT);
-  canvas_->SetBackgroundColour(Colors::kBgCanvas);
+  canvas_->SetBackgroundColour(wxColour(24, 26, 30));
 
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   sizer->Add(canvas_, 1, wxEXPAND);
@@ -72,7 +71,7 @@ void CameraPreviewFrame::SyncFromController() {
 void CameraPreviewFrame::OnPaint(wxPaintEvent&) {
   wxAutoBufferedPaintDC dc(canvas_);
   const wxSize sz = canvas_->GetClientSize();
-  dc.SetBrush(wxBrush(Colors::kBgCanvas));
+  dc.SetBrush(wxBrush(wxColour(24, 26, 30)));
   dc.SetPen(*wxTRANSPARENT_PEN);
   dc.DrawRectangle(0, 0, sz.x, sz.y);
 
@@ -103,7 +102,7 @@ void CameraPreviewFrame::OnPaint(wxPaintEvent&) {
     }
     dc.DrawBitmap(bitmap_, ox, oy, false);
   } else {
-    dc.SetTextForeground(Colors::kTextMuted);
+    dc.SetTextForeground(wxColour(170, 175, 185));
     dc.DrawText("No camera preview available", 14, 14);
   }
 }
@@ -120,28 +119,26 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY),
       scene_(scene),
       overlay_font_(wxFontInfo(9).Family(wxFONTFAMILY_SWISS)) {
-  ApplyDarkPalette(this);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
-  // Dark viewport HUD toolbar
   auto* bar = new wxPanel(this, wxID_ANY);
-  bar->SetBackgroundColour(Colors::kBgHeader);
   auto* bs = new wxBoxSizer(wxHORIZONTAL);
 
-  auto make_btn = [&](const wxString& label, const wxString& tip) {
-    auto* b = new wxButton(bar, wxID_ANY, label, wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
+  auto make_toggle = [&](const wxString& label, const wxString& tip) {
+    auto* b = new wxToggleButton(bar, wxID_ANY, label, wxDefaultPosition,
+                                 wxDefaultSize, wxBU_EXACTFIT);
     b->SetToolTip(tip);
-    StyleButton(b);
     return b;
   };
 
-  move_btn_ = make_btn("Move", "Translate gizmo (W)");
-  rotate_btn_ = make_btn("Rotate", "Rotate gizmo (E)");
-  scale_btn_ = make_btn("Scale", "Scale gizmo (R)");
-  space_btn_ = make_btn("Local", "Toggle Local / Global handle space (X)");
-  mode_2d_btn_ = make_btn("2D", "Toggle 2D / 3D scene camera");
-  frame_btn_ = make_btn("Frame", "Frame selected node or map (F)");
+  move_btn_ = make_toggle("Move", "Translate gizmo (W)");
+  rotate_btn_ = make_toggle("Rotate", "Rotate gizmo (E)");
+  scale_btn_ = make_toggle("Scale", "Scale gizmo (R)");
+  space_btn_ = make_toggle("Local", "Toggle Local / Global handle space (X)");
+  mode_2d_btn_ = make_toggle("2D", "Toggle 2D / 3D scene camera");
+  frame_btn_ = new wxButton(bar, wxID_ANY, "Frame", wxDefaultPosition,
+                            wxDefaultSize, wxBU_EXACTFIT);
+  frame_btn_->SetToolTip("Frame selected node or map (F)");
 
   bs->Add(move_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
   bs->Add(rotate_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -151,7 +148,6 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
   bs->Add(frame_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
   status_lbl_ = new wxStaticText(bar, wxID_ANY, wxEmptyString);
-  status_lbl_->SetForegroundColour(Colors::kAccentAmber);
   bs->Add(status_lbl_, 1, wxALIGN_CENTER_VERTICAL);
 
   auto* bar_wrap = new wxBoxSizer(wxVERTICAL);
@@ -162,27 +158,27 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
   canvas_ = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                         wxBORDER_NONE | wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE);
   canvas_->SetBackgroundStyle(wxBG_STYLE_PAINT);
-  canvas_->SetBackgroundColour(Colors::kBgCanvas);
+  canvas_->SetBackgroundColour(wxColour(24, 26, 30));
   root->Add(canvas_, 1, wxEXPAND);
   SetSizer(root);
 
-  move_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+  move_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.SetTool(EditorScene::Tool::kMove);
     SyncToolbarState();
   });
-  rotate_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+  rotate_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.SetTool(EditorScene::Tool::kRotate);
     SyncToolbarState();
   });
-  scale_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+  scale_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.SetTool(EditorScene::Tool::kScale);
     SyncToolbarState();
   });
-  space_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+  space_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.ToggleHandleSpace();
     SyncToolbarState();
   });
-  mode_2d_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+  mode_2d_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.ToggleView2D();
     SyncToolbarState();
   });
@@ -270,15 +266,13 @@ void SceneViewportPanel::SyncToolbarState() {
   const auto space = scene_.GetHandleSpace();
   const bool view_2d = scene_.IsView2D();
 
-  StyleButton(move_btn_, tool == EditorScene::Tool::kMove, Colors::kAccentBlue);
-  StyleButton(rotate_btn_, tool == EditorScene::Tool::kRotate,
-              Colors::kAccentBlue);
-  StyleButton(scale_btn_, tool == EditorScene::Tool::kScale, Colors::kAccentBlue);
-  StyleButton(space_btn_, space == EditorScene::HandleSpace::kGlobal,
-              Colors::kAccentAmber);
+  move_btn_->SetValue(tool == EditorScene::Tool::kMove);
+  rotate_btn_->SetValue(tool == EditorScene::Tool::kRotate);
+  scale_btn_->SetValue(tool == EditorScene::Tool::kScale);
+  space_btn_->SetValue(space == EditorScene::HandleSpace::kGlobal);
   space_btn_->SetLabel(space == EditorScene::HandleSpace::kGlobal ? "Global"
                                                                   : "Local");
-  StyleButton(mode_2d_btn_, view_2d, Colors::kAccentBlue);
+  mode_2d_btn_->SetValue(view_2d);
   mode_2d_btn_->SetLabel(view_2d ? "2D" : "3D");
 
   last_tool_ = tool;
@@ -342,7 +336,7 @@ void SceneViewportPanel::SyncFromController(float dt) {
 void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
   wxAutoBufferedPaintDC dc(canvas_);
   const wxSize sz = canvas_->GetClientSize();
-  dc.SetBrush(wxBrush(Colors::kBgCanvas));
+  dc.SetBrush(wxBrush(wxColour(24, 26, 30)));
   dc.SetPen(*wxTRANSPARENT_PEN);
   dc.DrawRectangle(0, 0, sz.x, sz.y);
 
@@ -407,10 +401,10 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
     const int y = sz.y - pip_h - header_h - margin;
     if (x >= 8 && y >= 8) {
       gc->SetBrush(wxBrush(wxColour(24, 26, 30, 235)));
-      gc->SetPen(wxPen(Colors::kBorderStrong, 1));
+      gc->SetPen(wxPen(wxColour(90, 96, 108), 1));
       gc->DrawRoundedRectangle(x, y, pip_w, pip_h + header_h, 4.0);
 
-      gc->SetFont(overlay_font_, Colors::kTextPrimary);
+      gc->SetFont(overlay_font_, wxColour(228, 231, 236));
       gc->DrawText(wxString::FromUTF8(last_preview_info_.label), x + 8, y + 3);
 
       const wxString pop_lbl = "Pop Out";
@@ -422,10 +416,10 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
       const int bw = static_cast<int>(tw) + 8;
       const int bh = header_h - 4;
       pip_popout_rect_ = wxRect(bx, by, bw, bh);
-      gc->SetBrush(wxBrush(Colors::kBgControl));
-      gc->SetPen(wxPen(Colors::kBorderStrong, 1));
+      gc->SetBrush(wxBrush(wxColour(55, 60, 68)));
+      gc->SetPen(wxPen(wxColour(90, 96, 108), 1));
       gc->DrawRoundedRectangle(bx, by, bw, bh, 3.0);
-      gc->SetFont(overlay_font_, Colors::kTextPrimary);
+      gc->SetFont(overlay_font_, wxColour(228, 231, 236));
       gc->DrawText(pop_lbl, bx + 4, by + 1);
 
       if (preview_bmp_.IsOk()) {

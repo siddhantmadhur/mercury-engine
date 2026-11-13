@@ -141,7 +141,6 @@ UIBuilderFrame::UIBuilderFrame(wxWindow* parent, EditorScene& scene,
     : wxFrame(parent, wxID_ANY, "UI Builder", wxDefaultPosition,
               wxSize(1280, 780), wxDEFAULT_FRAME_STYLE),
       on_closed_(std::move(on_closed)) {
-  ApplyDarkPalette(this);
   panel_ = new UIBuilderPanel(this, scene);
   panel_->SetPoppedOut(true);
   panel_->SetOnPopout([this](bool want_pop) {
@@ -169,7 +168,6 @@ UIBuilderPanel::UIBuilderPanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY),
       scene_(scene),
       overlay_font_(wxFontInfo(9).Family(wxFONTFAMILY_SWISS)) {
-  ApplyDarkPalette(this);
   auto& builder = scene_.UIBuilderRef();
   builder.list_files = [this](const std::vector<std::string>& exts) {
     return scene_.ListProjectFiles(exts);
@@ -182,7 +180,6 @@ void UIBuilderPanel::SetPoppedOut(bool popped_out) {
   popped_out_ = popped_out;
   if (popout_btn_) {
     popout_btn_->SetLabel(popped_out_ ? "Dock" : "Pop Out");
-    StyleButton(popout_btn_, popped_out_, Colors::kAccentBlue);
   }
 }
 
@@ -191,23 +188,18 @@ void UIBuilderPanel::BuildLayout() {
 
   // Top bar
   auto* bar = new wxPanel(this, wxID_ANY);
-  bar->SetBackgroundColour(Colors::kBgHeader);
   auto* bs = new wxBoxSizer(wxHORIZONTAL);
 
-  auto mkbtn = [&](const wxString& txt, bool primary = false,
-                   const wxColour& accent = Colors::kBgControl) {
-    auto* b = new wxButton(bar, wxID_ANY, txt, wxDefaultPosition, wxDefaultSize,
-                           wxBU_EXACTFIT);
-    StyleButton(b, primary, accent);
-    return b;
+  auto mkbtn = [&](const wxString& txt) {
+    return new wxButton(bar, wxID_ANY, txt, wxDefaultPosition, wxDefaultSize,
+                        wxBU_EXACTFIT);
   };
 
   file_lbl_ = new wxStaticText(bar, wxID_ANY, "(no file)", wxDefaultPosition,
                                wxSize(130, -1), wxST_ELLIPSIZE_MIDDLE);
   file_lbl_->SetFont(HeaderFont(0));
-  file_lbl_->SetForegroundColour(Colors::kTextPrimary);
 
-  save_btn_ = mkbtn("Save", true, Colors::kAccentGreen);
+  save_btn_ = mkbtn("Save");
   revert_btn_ = mkbtn("Revert");
   close_btn_ = mkbtn("Close");
   undo_btn_ = mkbtn("Undo");
@@ -216,17 +208,15 @@ void UIBuilderPanel::BuildLayout() {
   del_btn_ = mkbtn("Delete");
 
   preview_cb_ = new wxCheckBox(bar, wxID_ANY, "Preview");
-  preview_cb_->SetForegroundColour(Colors::kTextPrimary);
 
   wxArrayString preset_labels;
   for (const auto& p : kPresets) preset_labels.Add(p.label);
   preset_choice_ = new wxChoice(bar, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                 preset_labels);
-  StyleChoice(preset_choice_);
 
-  canvas_w_ = new DragNumberCtrl(bar, "W", Colors::kBorderStrong, 1280, 2, true, 0);
+  canvas_w_ = new DragNumberCtrl(bar, "W", wxNullColour, 1280, 2, true, 0);
   canvas_w_->SetMinSize(wxSize(76, 22));
-  canvas_h_ = new DragNumberCtrl(bar, "H", Colors::kBorderStrong, 720, 2, true, 0);
+  canvas_h_ = new DragNumberCtrl(bar, "H", wxNullColour, 720, 2, true, 0);
   canvas_h_->SetMinSize(wxSize(76, 22));
 
   bg_swatch_ = new ColorSwatchCtrl(bar, scene_.UIBuilderRef().Background());
@@ -235,7 +225,6 @@ void UIBuilderPanel::BuildLayout() {
 
   theme_choice_ = new wxChoice(bar, wxID_ANY);
   theme_choice_->SetMinSize(wxSize(110, -1));
-  StyleChoice(theme_choice_);
 
   auto* fit_btn = mkbtn("Fit");
   auto* one_btn = mkbtn("1:1");
@@ -266,13 +255,12 @@ void UIBuilderPanel::BuildLayout() {
   root->Add(bar, 0, wxEXPAND);
 
   empty_banner_ = new wxPanel(this, wxID_ANY);
-  empty_banner_->SetBackgroundColour(Colors::kBgPanel);
   auto* ebs = new wxBoxSizer(wxVERTICAL);
   auto* em = new wxStaticText(
       empty_banner_, wxID_ANY,
       "Open a .uxml file: double-click it in the Project browser, or select a "
       "UIDocument component and click \"Edit in UI Builder\".");
-  em->SetForegroundColour(Colors::kTextSecondary);
+  em->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   ebs->Add(em, 0, wxALL, 20);
   empty_banner_->SetSizer(ebs);
   root->Add(empty_banner_, 1, wxEXPAND);
@@ -284,7 +272,6 @@ void UIBuilderPanel::BuildLayout() {
 
   // Left pane: StyleSheets | Hierarchy | Library
   auto* left_pane = new wxPanel(main_split_, wxID_ANY);
-  left_pane->SetBackgroundColour(Colors::kBgPanel);
   auto* left_split1 = new wxSplitterWindow(left_pane, wxID_ANY,
                                            wxDefaultPosition, wxDefaultSize,
                                            wxSP_LIVE_UPDATE);
@@ -292,16 +279,13 @@ void UIBuilderPanel::BuildLayout() {
 
   // Top-left: StyleSheets
   auto* sheets_panel = new wxPanel(left_split1, wxID_ANY);
-  sheets_panel->SetBackgroundColour(Colors::kBgPanel);
   auto* shs = new wxBoxSizer(wxVERTICAL);
 
   auto* sh_hdr = new wxBoxSizer(wxHORIZONTAL);
   auto* sh_lbl = new wxStaticText(sheets_panel, wxID_ANY, "StyleSheets");
-  sh_lbl->SetForegroundColour(Colors::kTextSecondary);
   auto* add_sheet_btn =
       new wxButton(sheets_panel, wxID_ANY, "+ Sheet", wxDefaultPosition,
                    wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(add_sheet_btn);
   sh_hdr->Add(sh_lbl, 1, wxALIGN_CENTER_VERTICAL);
   sh_hdr->Add(add_sheet_btn, 0);
   shs->Add(sh_hdr, 0, wxEXPAND | wxALL, 4);
@@ -311,20 +295,16 @@ void UIBuilderPanel::BuildLayout() {
                                  wxDefaultPosition, wxDefaultSize,
                                  wxTE_PROCESS_ENTER);
   new_selector_->SetHint(".button or #title");
-  StyleTextCtrl(new_selector_);
   auto* add_rule_btn =
       new wxButton(sheets_panel, wxID_ANY, "+", wxDefaultPosition,
                    wxSize(24, 22), wxBU_EXACTFIT);
-  StyleButton(add_rule_btn);
   sel_row->Add(new_selector_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
   sel_row->Add(add_rule_btn, 0, wxALIGN_CENTER_VERTICAL);
   shs->Add(sel_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
 
   sheets_tree_ = new wxTreeCtrl(
       sheets_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE | wxBORDER_NONE);
-  sheets_tree_->SetBackgroundColour(Colors::kBgCanvas);
-  sheets_tree_->SetForegroundColour(Colors::kTextPrimary);
+      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
   shs->Add(sheets_tree_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   sheets_panel->SetSizer(shs);
 
@@ -335,34 +315,25 @@ void UIBuilderPanel::BuildLayout() {
   left_split2->SetMinimumPaneSize(100);
 
   auto* hier_panel = new wxPanel(left_split2, wxID_ANY);
-  hier_panel->SetBackgroundColour(Colors::kBgPanel);
   auto* hs = new wxBoxSizer(wxVERTICAL);
   auto* hl = new wxStaticText(hier_panel, wxID_ANY, "Hierarchy");
-  hl->SetForegroundColour(Colors::kTextSecondary);
   hs->Add(hl, 0, wxALL, 4);
   hier_tree_ = new wxTreeCtrl(
       hier_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE | wxBORDER_NONE);
-  hier_tree_->SetBackgroundColour(Colors::kBgCanvas);
-  hier_tree_->SetForegroundColour(Colors::kTextPrimary);
+      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
   hs->Add(hier_tree_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   hier_panel->SetSizer(hs);
 
   auto* lib_panel = new wxPanel(left_split2, wxID_ANY);
-  lib_panel->SetBackgroundColour(Colors::kBgPanel);
   auto* lbs = new wxBoxSizer(wxVERTICAL);
   auto* ll = new wxStaticText(lib_panel, wxID_ANY, "Library");
-  ll->SetForegroundColour(Colors::kTextSecondary);
   lbs->Add(ll, 0, wxALL, 4);
   lib_search_ = new wxTextCtrl(lib_panel, wxID_ANY);
   lib_search_->SetHint("Search controls...");
-  StyleTextCtrl(lib_search_);
   lbs->Add(lib_search_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   lib_tree_ = new wxTreeCtrl(
       lib_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE | wxBORDER_NONE);
-  lib_tree_->SetBackgroundColour(Colors::kBgCanvas);
-  lib_tree_->SetForegroundColour(Colors::kTextPrimary);
+      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
   lbs->Add(lib_tree_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   lib_panel->SetSizer(lbs);
 
@@ -387,19 +358,15 @@ void UIBuilderPanel::BuildLayout() {
                         wxDefaultSize,
                         wxBORDER_NONE | wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE);
   canvas_->SetBackgroundStyle(wxBG_STYLE_PAINT);
-  canvas_->SetBackgroundColour(Colors::kBgCanvas);
+  canvas_->SetBackgroundColour(wxColour(24, 26, 30));
 
   code_tabs_ = new wxNotebook(center_split, wxID_ANY);
-  code_tabs_->SetBackgroundColour(Colors::kBgPanel);
-  code_tabs_->SetForegroundColour(Colors::kTextPrimary);
 
   center_split->SplitHorizontally(canvas_, code_tabs_, 460);
 
   inspector_scroll_ = new wxScrolledWindow(
       right_split, wxID_ANY, wxDefaultPosition, wxDefaultSize,
       wxVSCROLL | wxBORDER_NONE);
-  inspector_scroll_->SetBackgroundColour(Colors::kBgPanel);
-  inspector_scroll_->SetForegroundColour(Colors::kTextPrimary);
   inspector_scroll_->SetScrollRate(0, 14);
   inspector_sizer_ = new wxBoxSizer(wxVERTICAL);
   inspector_scroll_->SetSizer(inspector_sizer_);
@@ -758,7 +725,7 @@ void UIBuilderPanel::BuildLayout() {
   canvas_->Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
     wxAutoBufferedPaintDC dc(canvas_);
     const wxSize sz = canvas_->GetClientSize();
-    dc.SetBrush(wxBrush(Colors::kBgCanvas));
+    dc.SetBrush(wxBrush(wxColour(24, 26, 30)));
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.DrawRectangle(0, 0, sz.x, sz.y);
 
@@ -1285,8 +1252,6 @@ void UIBuilderPanel::RefreshCodeTabs() {
         code_tabs_, wxID_ANY, wxString::FromUTF8(content), wxDefaultPosition,
         wxDefaultSize,
         wxTE_MULTILINE | wxTE_READONLY | wxHSCROLL | wxBORDER_NONE);
-    txt->SetBackgroundColour(Colors::kBgCanvas);
-    txt->SetForegroundColour(Colors::kTextPrimary);
     txt->SetFont(MonospaceFont());
     code_tabs_->AddPage(txt, title);
   };
@@ -1324,36 +1289,33 @@ void UIBuilderPanel::RefreshInspector() {
   if (sel.kind == UIBuilder::Selection::Kind::kDocument) {
     auto* h = new wxStaticText(inspector_scroll_, wxID_ANY, "UI Document");
     h->SetFont(HeaderFont(1));
-    h->SetForegroundColour(Colors::kTextPrimary);
     inspector_sizer_->Add(h, 0, wxALL, 10);
 
     auto* p = new wxStaticText(inspector_scroll_, wxID_ANY,
                                wxString::FromUTF8(ub.path()));
-    p->SetForegroundColour(Colors::kTextSecondary);
+    p->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     inspector_sizer_->Add(p, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
 
     auto* info = new wxStaticText(
         inspector_scroll_, wxID_ANY,
         "Configure canvas dimensions, background, and theme from the toolbar.");
-    info->SetForegroundColour(Colors::kTextMuted);
+    info->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     info->Wrap(250);
     inspector_sizer_->Add(info, 0, wxLEFT | wxRIGHT, 10);
   } else if (!node && !rule) {
     auto* msg = new wxStaticText(inspector_scroll_, wxID_ANY,
                                  "Select an element or selector.");
-    msg->SetForegroundColour(Colors::kTextMuted);
+    msg->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     inspector_sizer_->Add(msg, 0, wxALL, 10);
   } else {
     // Selector or Element Header
     if (rule) {
       auto* h_lbl = new wxStaticText(inspector_scroll_, wxID_ANY, "Selector");
-      h_lbl->SetForegroundColour(Colors::kTextSecondary);
       inspector_sizer_->Add(h_lbl, 0, wxLEFT | wxRIGHT | wxTOP, 8);
 
       auto* s_edit = new wxTextCtrl(
           inspector_scroll_, wxID_ANY, wxString::FromUTF8(rule->SelectorText()),
           wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
-      StyleTextCtrl(s_edit);
       const int sh_idx = sel.sheet;
       s_edit->Bind(wxEVT_TEXT_ENTER, [this, s_edit, sh_idx](wxCommandEvent&) {
         auto& u = scene_.UIBuilderRef();
@@ -1367,7 +1329,6 @@ void UIBuilderPanel::RefreshInspector() {
           inspector_scroll_, wxID_ANY,
           wxString::FromUTF8(UIBuilder::NodeLabel(*node)));
       hdr->SetFont(HeaderFont(1));
-      hdr->SetForegroundColour(Colors::kTextPrimary);
       inspector_sizer_->Add(hdr, 0, wxALL, 8);
 
       const UI::UxmlTypeInfo* type =
@@ -1398,10 +1359,8 @@ void UIBuilderPanel::RefreshInspector() {
                                       wxDefaultPosition, wxDefaultSize,
                                       wxTE_PROCESS_ENTER);
         cls_in->SetHint("class-name");
-        StyleTextCtrl(cls_in);
         auto* add_btn = new wxButton(cb, wxID_ANY, "Add", wxDefaultPosition,
                                      wxDefaultSize, wxBU_EXACTFIT);
-        StyleButton(add_btn);
         auto do_add_cls = [this, cls_in, elem_path, classes]() mutable {
           std::string name = cls_in->GetValue().ToStdString();
           if (name.starts_with('.')) name = name.substr(1);
@@ -1428,7 +1387,6 @@ void UIBuilderPanel::RefreshInspector() {
           auto* chip = new wxButton(
               cb, wxID_ANY, wxString::FromUTF8("." + classes[i] + "  x"),
               wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-          StyleButton(chip);
           chip->Bind(wxEVT_BUTTON, [this, elem_path, classes, i](wxCommandEvent&) mutable {
             classes.erase(classes.begin() + static_cast<ptrdiff_t>(i));
             if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
@@ -1443,11 +1401,9 @@ void UIBuilderPanel::RefreshInspector() {
           auto* ex_row = new wxBoxSizer(wxHORIZONTAL);
           auto* ex_in = new wxTextCtrl(cb, wxID_ANY);
           ex_in->SetHint("new-class");
-          StyleTextCtrl(ex_in);
           auto* ex_btn = new wxButton(cb, wxID_ANY, "Extract Styles",
                                       wxDefaultPosition, wxDefaultSize,
                                       wxBU_EXACTFIT);
-          StyleButton(ex_btn);
           ex_btn->Bind(wxEVT_BUTTON, [this, ex_in, elem_path](wxCommandEvent&) {
             std::string nm = ex_in->GetValue().ToStdString();
             if (nm.starts_with('.')) nm = nm.substr(1);
@@ -1487,8 +1443,7 @@ void UIBuilderPanel::RefreshInspector() {
                                        wxString::FromUTF8(desc.name),
                                        wxDefaultPosition, wxSize(108, -1),
                                        wxST_ELLIPSIZE_END);
-          lbl->SetForegroundColour(stored ? Colors::kTextPrimary
-                                          : Colors::kTextSecondary);
+          if (stored) lbl->SetFont(ab->GetFont().Bold());
           lbl->Bind(wxEVT_RIGHT_DOWN, [this, lbl, elem_path,
                                        name = desc.name, has = stored != nullptr](wxMouseEvent&) {
             wxMenu m;
@@ -1523,7 +1478,7 @@ void UIBuilderPanel::RefreshInspector() {
               break;
             }
             case FieldType::kInt: {
-              auto* dn = new DragNumberCtrl(ab, wxEmptyString, Colors::kBorderStrong,
+              auto* dn = new DragNumberCtrl(ab, wxEmptyString, wxNullColour,
                                             std::atoi(val.c_str()), 1, true, 0);
               dn->SetCallbacks(
                   [this]() {
@@ -1544,7 +1499,7 @@ void UIBuilderPanel::RefreshInspector() {
             }
             case FieldType::kFloat: {
               auto* dn = new DragNumberCtrl(
-                  ab, wxEmptyString, Colors::kBorderStrong,
+                  ab, wxEmptyString, wxNullColour,
                   std::strtof(val.c_str(), nullptr), 0.1, false, 4);
               dn->SetCallbacks(
                   [this]() {
@@ -1571,7 +1526,6 @@ void UIBuilderPanel::RefreshInspector() {
               }
               auto* ch = new wxChoice(ab, wxID_ANY, wxDefaultPosition,
                                       wxDefaultSize, opts);
-              StyleChoice(ch);
               if (sel_idx != wxNOT_FOUND) ch->SetSelection(sel_idx);
               ch->Bind(wxEVT_CHOICE, [ch, desc, apply_attr](wxCommandEvent&) {
                 const int idx = ch->GetSelection();
@@ -1598,7 +1552,6 @@ void UIBuilderPanel::RefreshInspector() {
               auto* txt = new wxTextCtrl(ab, wxID_ANY, wxString::FromUTF8(val),
                                          wxDefaultPosition, wxDefaultSize,
                                          wxTE_PROCESS_ENTER);
-              StyleTextCtrl(txt);
               txt->Bind(wxEVT_TEXT_ENTER, [txt, apply_attr](wxCommandEvent&) {
                 apply_attr(txt->GetValue().ToStdString(), false);
               });
@@ -1642,16 +1595,13 @@ void UIBuilderPanel::RefreshInspector() {
                                          wxDefaultPosition, wxSize(78, -1),
                                          wxTE_PROCESS_ENTER);
           prop_in->SetHint("prop");
-          StyleTextCtrl(prop_in);
           auto* path_in = new wxTextCtrl(bb, wxID_ANY,
                                          wxString::FromUTF8(b.data_source_path),
                                          wxDefaultPosition, wxDefaultSize,
                                          wxTE_PROCESS_ENTER);
           path_in->SetHint("data.path");
-          StyleTextCtrl(path_in);
           auto* rem = new wxButton(bb, wxID_ANY, "x", wxDefaultPosition,
                                    wxSize(22, 22), wxBU_EXACTFIT);
-          StyleButton(rem);
 
           auto commit_b = [this, elem_path, i, prop_in, path_in]() {
             if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
@@ -1679,7 +1629,6 @@ void UIBuilderPanel::RefreshInspector() {
         auto* add_b = new wxButton(bb, wxID_ANY, "+ Add Binding",
                                    wxDefaultPosition, wxDefaultSize,
                                    wxBU_EXACTFIT);
-        StyleButton(add_b);
         add_b->Bind(wxEVT_BUTTON, [this, elem_path](wxCommandEvent&) {
           if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
             scene_.UIBuilderRef().AddBinding(*n);
@@ -1709,7 +1658,8 @@ void UIBuilderPanel::RefreshInspector() {
         wxBoxSizer* ms = match_sec->BodySizer();
         if (matches.empty()) {
           auto* none = new wxStaticText(mb, wxID_ANY, "None");
-          none->SetForegroundColour(Colors::kTextMuted);
+          none->SetForegroundColour(
+              wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
           ms->Add(none, 0);
         } else {
           for (const auto& m : matches) {
@@ -1717,7 +1667,6 @@ void UIBuilderPanel::RefreshInspector() {
             auto* btn = new wxButton(
                 mb, wxID_ANY, wxString::FromUTF8(m.selector_text),
                 wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-            StyleButton(btn);
             btn->Enable(m.sheet_index >= 0);
             btn->SetToolTip(wxString::FromUTF8(m.tooltip));
             btn->Bind(wxEVT_BUTTON, [this, s = m.sheet_index,
@@ -1727,7 +1676,8 @@ void UIBuilderPanel::RefreshInspector() {
             });
             auto* f = new wxStaticText(mb, wxID_ANY,
                                        wxString::FromUTF8(m.sheet_file));
-            f->SetForegroundColour(Colors::kTextMuted);
+            f->SetForegroundColour(
+                wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
             row->Add(btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
             row->Add(f, 1, wxALIGN_CENTER_VERTICAL);
             ms->Add(row, 0, wxEXPAND | wxBOTTOM, 3);
@@ -1810,8 +1760,7 @@ void UIBuilderPanel::RefreshInspector() {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
         auto* lbl = new wxStaticText(gb, wxID_ANY, pname, wxDefaultPosition,
                                      wxSize(108, -1), wxST_ELLIPSIZE_END);
-        lbl->SetForegroundColour(is_set ? Colors::kTextPrimary
-                                        : Colors::kTextSecondary);
+        if (is_set) lbl->SetFont(gb->GetFont().Bold());
         lbl->Bind(wxEVT_RIGHT_DOWN, [this, lbl, resolve_target, pname,
                                      is_set](wxMouseEvent&) {
           wxMenu m;
@@ -1829,7 +1778,7 @@ void UIBuilderPanel::RefreshInspector() {
           auto [tn, tr] = resolve_target();
           if (!tn && !tr) return;
           scene_.UIBuilderRef().SetStyle(tn, tr, pname, text_val, coalesced);
-          lbl->SetForegroundColour(Colors::kTextPrimary);
+          lbl->SetFont(lbl->GetFont().Bold());
           lbl->Refresh();
           last_doc_rev_ = scene_.UIBuilderRef().DocRevision();
         };
@@ -1843,7 +1792,6 @@ void UIBuilderPanel::RefreshInspector() {
           auto* tc = new wxTextCtrl(gb, wxID_ANY, wxString::FromUTF8(t),
                                     wxDefaultPosition, wxDefaultSize,
                                     wxTE_PROCESS_ENTER);
-          StyleTextCtrl(tc);
           tc->Bind(wxEVT_TEXT_ENTER, [tc, apply_style](wxCommandEvent&) {
             apply_style(tc->GetValue().ToStdString(), false);
           });
@@ -1862,7 +1810,6 @@ void UIBuilderPanel::RefreshInspector() {
           for (const auto& k : kws) opts.Add(wxString::FromUTF8(k));
           auto* ch =
               new wxChoice(gb, wxID_ANY, wxDefaultPosition, wxDefaultSize, opts);
-          StyleChoice(ch);
           const int cur = std::get<int>(val);
           if (cur >= 0 && cur < static_cast<int>(kws.size())) {
             ch->SetSelection(cur);
@@ -1877,9 +1824,8 @@ void UIBuilderPanel::RefreshInspector() {
         } else if (std::holds_alternative<UI::Length>(val)) {
           auto len = std::get<UI::Length>(val);
           auto* lp = new wxPanel(gb, wxID_ANY);
-          lp->SetBackgroundColour(gb->GetBackgroundColour());
           auto* ls = new wxBoxSizer(wxHORIZONTAL);
-          auto* num = new DragNumberCtrl(lp, wxEmptyString, Colors::kBorderStrong,
+          auto* num = new DragNumberCtrl(lp, wxEmptyString, wxNullColour,
                                          len.value, 1.0, false, 2);
           wxArrayString units;
           units.Add("px");
@@ -1890,7 +1836,6 @@ void UIBuilderPanel::RefreshInspector() {
           if (allow_none) units.Add("none");
           auto* u_ch = new wxChoice(lp, wxID_ANY, wxDefaultPosition,
                                     wxSize(56, -1), units);
-          StyleChoice(u_ch);
           int u_sel = 0;
           if (len.unit == UI::Length::Unit::kPercent) u_sel = 1;
           else if (len.unit == UI::Length::Unit::kAuto) u_sel = 2;
@@ -1929,7 +1874,7 @@ void UIBuilderPanel::RefreshInspector() {
           const float f = std::get<float>(val);
           const double step =
               id == UI::StylePropertyId::kOpacity ? 0.01 : 0.1;
-          auto* dn = new DragNumberCtrl(gb, wxEmptyString, Colors::kBorderStrong,
+          auto* dn = new DragNumberCtrl(gb, wxEmptyString, wxNullColour,
                                         f, step, false, 3);
           dn->SetCallbacks(
               [this]() {
@@ -1967,7 +1912,7 @@ void UIBuilderPanel::RefreshInspector() {
           ed = vf;
         } else if (std::holds_alternative<UI::Rotate>(val)) {
           const auto rot = std::get<UI::Rotate>(val);
-          auto* dn = new DragNumberCtrl(gb, wxEmptyString, Colors::kBorderStrong,
+          auto* dn = new DragNumberCtrl(gb, wxEmptyString, wxNullColour,
                                         rot.degrees, 0.5, false, 2);
           dn->SetCallbacks(
               [this]() {
@@ -1989,7 +1934,6 @@ void UIBuilderPanel::RefreshInspector() {
           auto* tc = new wxTextCtrl(
               gb, wxID_ANY, wxString::FromUTF8(UI::FormatStyleValue(id, val)),
               wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
-          StyleTextCtrl(tc);
           tc->Bind(wxEVT_TEXT_ENTER, [tc, apply_style](wxCommandEvent&) {
             apply_style(tc->GetValue().ToStdString(), false);
           });
@@ -2016,14 +1960,11 @@ void UIBuilderPanel::RefreshInspector() {
         auto* vl = new wxStaticText(vb, wxID_ANY, wxString::FromUTF8(d.property),
                                     wxDefaultPosition, wxSize(108, -1),
                                     wxST_ELLIPSIZE_END);
-        vl->SetForegroundColour(Colors::kTextPrimary);
         auto* vc = new wxTextCtrl(vb, wxID_ANY, wxString::FromUTF8(d.value),
                                   wxDefaultPosition, wxDefaultSize,
                                   wxTE_PROCESS_ENTER);
-        StyleTextCtrl(vc);
         auto* vrem = new wxButton(vb, wxID_ANY, "x", wxDefaultPosition,
                                   wxSize(22, 22), wxBU_EXACTFIT);
-        StyleButton(vrem);
 
         const int sh_idx = sel.sheet;
         const int rl_idx = sel.rule;
@@ -2060,10 +2001,8 @@ void UIBuilderPanel::RefreshInspector() {
       auto* add_var_row = new wxBoxSizer(wxHORIZONTAL);
       auto* new_v = new wxTextCtrl(vb, wxID_ANY);
       new_v->SetHint("--my-color");
-      StyleTextCtrl(new_v);
       auto* add_vb = new wxButton(vb, wxID_ANY, "Add", wxDefaultPosition,
                                   wxDefaultSize, wxBU_EXACTFIT);
-      StyleButton(add_vb);
       const int sh_idx = sel.sheet;
       const int rl_idx = sel.rule;
       add_vb->Bind(wxEVT_BUTTON, [this, new_v, sh_idx, rl_idx](wxCommandEvent&) {

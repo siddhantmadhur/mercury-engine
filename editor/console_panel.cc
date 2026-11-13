@@ -29,24 +29,19 @@ const char* SourceTag(Console::Source src) {
 
 ConsolePanel::ConsolePanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY), scene_(scene) {
-  ApplyDarkPalette(this);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* header_wrap = new wxPanel(this, wxID_ANY);
-  header_wrap->SetBackgroundColour(Colors::kBgHeader);
   auto* bar = new wxPanel(header_wrap, wxID_ANY);
-  bar->SetBackgroundColour(Colors::kBgHeader);
   auto* bar_sizer = new wxBoxSizer(wxHORIZONTAL);
 
   auto* clear_btn = new wxButton(bar, wxID_ANY, "Clear", wxDefaultPosition,
                                  wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(clear_btn);
   bar_sizer->Add(clear_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
   auto add_cb = [&](const char* label, bool initial) {
     auto* cb = new wxCheckBox(bar, wxID_ANY, label);
     cb->SetValue(initial);
-    cb->SetForegroundColour(Colors::kTextPrimary);
     cb->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
       filter_dirty_ = true;
       RebuildList(false);
@@ -63,7 +58,6 @@ ConsolePanel::ConsolePanel(wxWindow* parent, EditorScene& scene)
 
   search_ = new wxTextCtrl(bar, wxID_ANY);
   search_->SetHint("Filter console...");
-  StyleTextCtrl(search_);
   search_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
     filter_dirty_ = true;
     RebuildList(false);
@@ -80,8 +74,6 @@ ConsolePanel::ConsolePanel(wxWindow* parent, EditorScene& scene)
   list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                          wxLC_REPORT | wxLC_NO_HEADER | wxLC_SINGLE_SEL |
                              wxBORDER_NONE);
-  list_->SetBackgroundColour(Colors::kBgCanvas);
-  list_->SetForegroundColour(Colors::kTextPrimary);
   list_->SetFont(MonospaceFont());
   list_->InsertColumn(0, "Source", wxLIST_FORMAT_LEFT, 78);
   list_->InsertColumn(1, "Message", wxLIST_FORMAT_LEFT, 700);
@@ -170,17 +162,21 @@ void ConsolePanel::RebuildList(bool force_scroll) {
 
   list_->Freeze();
   list_->DeleteAllItems();
+  const wxColour win_bg = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+  const bool dark_theme =
+      (win_bg.Red() * 299 + win_bg.Green() * 587 + win_bg.Blue() * 114) <
+      128000;
   for (size_t i = 0; i < visible_lines_.size(); ++i) {
     const auto& line = visible_lines_[i];
     const long row = list_->InsertItem(static_cast<long>(i),
                                        wxString::FromUTF8(SourceTag(line.source)));
     list_->SetItem(row, 1, wxString::FromUTF8(line.text));
     if (line.level == Console::Level::kWarning) {
-      list_->SetItemTextColour(row, wxColour(245, 200, 90));
+      list_->SetItemTextColour(
+          row, dark_theme ? wxColour(245, 200, 90) : wxColour(165, 100, 0));
     } else if (line.level == Console::Level::kError) {
-      list_->SetItemTextColour(row, wxColour(245, 115, 115));
-    } else {
-      list_->SetItemTextColour(row, Colors::kTextPrimary);
+      list_->SetItemTextColour(
+          row, dark_theme ? wxColour(245, 115, 115) : wxColour(185, 35, 35));
     }
   }
   if (!visible_lines_.empty() && (force_scroll || was_at_bottom) &&

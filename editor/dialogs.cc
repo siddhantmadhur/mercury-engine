@@ -33,16 +33,13 @@ std::optional<std::string> PromptTextDialog(wxWindow* parent,
                                             const wxString& initial_value,
                                             const wxString& confirm_label) {
   wxDialog dlg(parent, wxID_ANY, title, wxDefaultPosition, wxSize(420, -1));
-  ApplyDarkPalette(&dlg);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* lbl = new wxStaticText(&dlg, wxID_ANY, label);
-  lbl->SetForegroundColour(Colors::kTextSecondary);
   root->Add(lbl, 0, wxLEFT | wxRIGHT | wxTOP, 14);
 
   auto* input = new wxTextCtrl(&dlg, wxID_ANY, initial_value, wxDefaultPosition,
                                wxDefaultSize, wxTE_PROCESS_ENTER);
-  StyleTextCtrl(input);
   root->Add(input, 0, wxEXPAND | wxALL, 14);
   input->SetSelection(-1, -1);
   input->SetFocus();
@@ -50,8 +47,6 @@ std::optional<std::string> PromptTextDialog(wxWindow* parent,
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* ok = new wxButton(&dlg, wxID_OK, confirm_label);
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
-  StyleButton(ok, true, Colors::kAccentBlue);
-  StyleButton(cancel);
   ok->SetDefault();
   btns->AddStretchSpacer();
   btns->Add(cancel, 0, wxRIGHT, 8);
@@ -76,28 +71,23 @@ std::optional<std::string> PromptTextDialog(wxWindow* parent,
 std::optional<std::string> ShowNewScriptDialog(wxWindow* parent) {
   wxDialog dlg(parent, wxID_ANY, "New Script", wxDefaultPosition,
                wxSize(440, -1));
-  ApplyDarkPalette(&dlg);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* lbl = new wxStaticText(&dlg, wxID_ANY, "Class Name (AngelScript):");
-  lbl->SetForegroundColour(Colors::kTextSecondary);
   root->Add(lbl, 0, wxLEFT | wxRIGHT | wxTOP, 14);
 
   auto* input = new wxTextCtrl(&dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
                                wxDefaultSize, wxTE_PROCESS_ENTER);
-  StyleTextCtrl(input);
   root->Add(input, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
 
   auto* preview =
       new wxStaticText(&dlg, wxID_ANY, "Enter a valid C++/AngelScript class name");
-  preview->SetForegroundColour(Colors::kTextSecondary);
+  preview->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   root->Add(preview, 0, wxLEFT | wxRIGHT | wxTOP, 8);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* ok = new wxButton(&dlg, wxID_OK, "Create");
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
-  StyleButton(ok, true, Colors::kAccentBlue);
-  StyleButton(cancel);
   ok->Enable(false);
   ok->SetDefault();
   btns->AddStretchSpacer();
@@ -111,14 +101,18 @@ std::optional<std::string> ShowNewScriptDialog(wxWindow* parent) {
     ok->Enable(valid);
     if (name.empty()) {
       preview->SetLabel("Enter a valid C++/AngelScript class name");
-      preview->SetForegroundColour(Colors::kTextSecondary);
+      preview->SetForegroundColour(
+          wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+      preview->SetFont(dlg.GetFont());
     } else if (valid) {
       preview->SetLabel(wxString::FromUTF8(
           "Will create: scripts/" + Templates::ToSnakeCase(name) + ".as"));
-      preview->SetForegroundColour(Colors::kAccentGreen);
+      preview->SetForegroundColour(wxNullColour);
+      preview->SetFont(dlg.GetFont());
     } else {
       preview->SetLabel("Invalid identifier (letters, digits, underscores; cannot start with digit)");
-      preview->SetForegroundColour(Colors::kAccentRed);
+      preview->SetForegroundColour(wxNullColour);
+      preview->SetFont(dlg.GetFont().Bold());
     }
   };
   input->Bind(wxEVT_TEXT, [&](wxCommandEvent&) { update(); });
@@ -142,14 +136,12 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
 
   wxDialog dlg(parent, wxID_ANY, "Build Game (Release)", wxDefaultPosition,
                wxSize(520, -1));
-  ApplyDarkPalette(&dlg);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* desc = new wxStaticText(
       &dlg, wxID_ANY,
       "Creates a shippable folder containing the Release player executable and "
       "packed .mpack archives.");
-  desc->SetForegroundColour(Colors::kTextSecondary);
   desc->Wrap(480);
   root->Add(desc, 0, wxLEFT | wxRIGHT | wxTOP, 14);
 
@@ -157,21 +149,17 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   grid->AddGrowableCol(1, 1);
 
   auto* out_lbl = new wxStaticText(&dlg, wxID_ANY, "Output Folder:");
-  out_lbl->SetForegroundColour(Colors::kTextSecondary);
   auto* out_row = new wxBoxSizer(wxHORIZONTAL);
   const std::string default_out =
       project->GetBuildOutput().empty()
           ? ReleaseBuild::DefaultOutput(*project)
           : project->GetBuildOutput();
   auto* out_ctrl = new wxTextCtrl(&dlg, wxID_ANY, wxString::FromUTF8(default_out));
-  StyleTextCtrl(out_ctrl);
   auto* browse = new wxButton(&dlg, wxID_ANY, "Browse...");
-  StyleButton(browse);
   out_row->Add(out_ctrl, 1, wxEXPAND | wxRIGHT, 6);
   out_row->Add(browse, 0);
 
   auto* pack_lbl = new wxStaticText(&dlg, wxID_ANY, "Pack Split Size:");
-  pack_lbl->SetForegroundColour(Colors::kTextSecondary);
   wxArrayString pack_choices;
   int pack_sel = 0;
   for (size_t i = 0; i < EditorScene::kNumPackSizes; ++i) {
@@ -182,7 +170,6 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   }
   auto* pack_choice = new wxChoice(&dlg, wxID_ANY, wxDefaultPosition,
                                    wxDefaultSize, pack_choices);
-  StyleChoice(pack_choice);
   pack_choice->SetSelection(pack_sel);
 
   grid->Add(out_lbl, 0, wxALIGN_CENTER_VERTICAL);
@@ -206,8 +193,6 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* ok = new wxButton(&dlg, wxID_OK, "Build Release");
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
-  StyleButton(ok, true, Colors::kAccentAmber);
-  StyleButton(cancel);
   ok->SetDefault();
   btns->AddStretchSpacer();
   btns->Add(cancel, 0, wxRIGHT, 8);
@@ -230,28 +215,23 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
 bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   wxDialog dlg(parent, wxID_ANY, "Editor Settings", wxDefaultPosition,
                wxSize(560, -1));
-  ApplyDarkPalette(&dlg);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* grid = new wxFlexGridSizer(2, 10, 12);
   grid->AddGrowableCol(1, 1);
 
   auto* ed_lbl = new wxStaticText(&dlg, wxID_ANY, "External Script Editor:");
-  ed_lbl->SetForegroundColour(Colors::kTextSecondary);
   auto* ed_ctrl = new wxTextCtrl(
       &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().external_editor));
-  StyleTextCtrl(ed_ctrl);
   ed_ctrl->SetToolTip(
       "Command template with {project} and {file} placeholders. Leave empty "
       "for system default app.");
 
   auto* preset_lbl = new wxStaticText(&dlg, wxID_ANY, "Presets:");
-  preset_lbl->SetForegroundColour(Colors::kTextSecondary);
   auto* preset_row = new wxBoxSizer(wxHORIZONTAL);
   auto add_preset = [&](const char* name, const char* cmd) {
     auto* btn = new wxButton(&dlg, wxID_ANY, name, wxDefaultPosition,
                              wxDefaultSize, wxBU_EXACTFIT);
-    StyleButton(btn);
     btn->Bind(wxEVT_BUTTON, [ed_ctrl, cmd](wxCommandEvent&) {
       ed_ctrl->SetValue(cmd);
     });
@@ -263,16 +243,12 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   add_preset("Sublime", "subl {project} {file}");
 
   auto* lore_exe_lbl = new wxStaticText(&dlg, wxID_ANY, "Lore Executable:");
-  lore_exe_lbl->SetForegroundColour(Colors::kTextSecondary);
   auto* lore_exe_ctrl = new wxTextCtrl(
       &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_executable));
-  StyleTextCtrl(lore_exe_ctrl);
 
   auto* lore_srv_lbl = new wxStaticText(&dlg, wxID_ANY, "Lore Server URL:");
-  lore_srv_lbl->SetForegroundColour(Colors::kTextSecondary);
   auto* lore_srv_ctrl = new wxTextCtrl(
       &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_server));
-  StyleTextCtrl(lore_srv_ctrl);
 
   grid->Add(ed_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(ed_ctrl, 1, wxEXPAND);
@@ -287,8 +263,6 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* ok = new wxButton(&dlg, wxID_OK, "Save Settings");
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
-  StyleButton(ok, true, Colors::kAccentBlue);
-  StyleButton(cancel);
   ok->SetDefault();
   btns->AddStretchSpacer();
   btns->Add(cancel, 0, wxRIGHT, 8);
@@ -311,11 +285,9 @@ UnsavedChoice ShowUnsavedChangesDialog(wxWindow* parent,
                                        const wxString& message) {
   wxDialog dlg(parent, wxID_ANY, "Unsaved Changes", wxDefaultPosition,
                wxSize(420, -1));
-  ApplyDarkPalette(&dlg);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* lbl = new wxStaticText(&dlg, wxID_ANY, message);
-  lbl->SetForegroundColour(Colors::kTextPrimary);
   lbl->Wrap(380);
   root->Add(lbl, 0, wxALL, 16);
 
@@ -323,9 +295,6 @@ UnsavedChoice ShowUnsavedChangesDialog(wxWindow* parent,
   auto* save = new wxButton(&dlg, wxID_YES, "Save");
   auto* dont_save = new wxButton(&dlg, wxID_NO, "Don't Save");
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
-  StyleButton(save, true, Colors::kAccentBlue);
-  StyleButton(dont_save);
-  StyleButton(cancel);
   save->SetDefault();
   save->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { dlg.EndModal(wxID_YES); });
   dont_save->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { dlg.EndModal(wxID_NO); });
@@ -349,7 +318,6 @@ UnsavedChoice ShowUnsavedChangesDialog(wxWindow* parent,
 bool ShowDeleteConfirmDialog(wxWindow* parent, const fs::path& target) {
   wxDialog dlg(parent, wxID_ANY, "Confirm Delete", wxDefaultPosition,
                wxSize(420, -1));
-  ApplyDarkPalette(&dlg);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   const wxString kind = fs::is_directory(target) ? "folder" : "file";
@@ -357,15 +325,12 @@ bool ShowDeleteConfirmDialog(wxWindow* parent, const fs::path& target) {
       &dlg, wxID_ANY,
       wxString::Format("Delete %s '%s' from disk? This cannot be undone.", kind,
                        wxString::FromUTF8(target.filename().string())));
-  lbl->SetForegroundColour(Colors::kTextPrimary);
   lbl->Wrap(380);
   root->Add(lbl, 0, wxALL, 16);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* del = new wxButton(&dlg, wxID_OK, "Delete");
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
-  StyleButton(del, true, Colors::kAccentRed);
-  StyleButton(cancel);
   cancel->SetDefault();
   btns->AddStretchSpacer();
   btns->Add(cancel, 0, wxRIGHT, 8);
@@ -382,34 +347,27 @@ std::optional<std::string> ShowAddComponentDialog(wxWindow* parent,
                                                   const MapNode& node) {
   wxDialog dlg(parent, wxID_ANY, "Add Component", wxDefaultPosition,
                wxSize(360, 460), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
-  ApplyDarkPalette(&dlg);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* search = new wxTextCtrl(&dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
                                 wxDefaultSize, wxTE_PROCESS_ENTER);
   search->SetHint("Search components...");
-  StyleTextCtrl(search);
   root->Add(search, 0, wxEXPAND | wxALL, 10);
 
   auto* list = new wxListCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                               wxLC_REPORT | wxLC_NO_HEADER | wxLC_SINGLE_SEL |
                                   wxBORDER_SIMPLE);
-  list->SetBackgroundColour(Colors::kBgCanvas);
-  list->SetForegroundColour(Colors::kTextPrimary);
   list->InsertColumn(0, "Component", wxLIST_FORMAT_LEFT, 320);
   root->Add(list, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
 
   auto* info_lbl = new wxStaticText(&dlg, wxID_ANY, wxEmptyString);
-  info_lbl->SetForegroundColour(Colors::kTextSecondary);
+  info_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   root->Add(info_lbl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* new_script = new wxButton(&dlg, wxID_ANY, "New Script...");
   auto* add_btn = new wxButton(&dlg, wxID_OK, "Add");
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
-  StyleButton(new_script);
-  StyleButton(add_btn, true, Colors::kAccentBlue);
-  StyleButton(cancel);
   add_btn->Enable(false);
   btns->Add(new_script, 0);
   btns->AddStretchSpacer();
@@ -452,10 +410,9 @@ std::optional<std::string> ShowAddComponentDialog(wxWindow* parent,
       const long idx =
           list->InsertItem(static_cast<long>(i), wxString::FromUTF8(rows[i].name));
       if (rows[i].is_header) {
-        list->SetItemTextColour(idx, Colors::kTextMuted);
-        list->SetItemBackgroundColour(idx, Colors::kBgHeader);
-      } else {
-        list->SetItemTextColour(idx, Colors::kTextPrimary);
+        list->SetItemTextColour(
+            idx, wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+        list->SetItemFont(idx, list->GetFont().Bold());
       }
     }
     add_btn->Enable(false);
