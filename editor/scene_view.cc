@@ -146,16 +146,20 @@ bool GetVec3(const MapNode& node, const char* key, glm::vec3& out) {
 // ----------------------------------------------------------------- Camera ---
 
 void EditorScene::SetSceneViewportSize(glm::vec2 size) {
-  scene_size_ = glm::max(size, glm::vec2(1.0f));
+  size = glm::max(size, glm::vec2(1.0f));
+  if (size == scene_size_) return;
+  scene_size_ = size;
   if (render_host_) {
     render_host_->SetSceneViewportSize(static_cast<int>(scene_size_.x),
                                        static_cast<int>(scene_size_.y));
   }
+  RequestViewRedraw();
 }
 
 void EditorScene::ToggleHandleSpace() {
   handle_space_ = handle_space_ == HandleSpace::kLocal ? HandleSpace::kGlobal
                                                        : HandleSpace::kLocal;
+  RequestViewRedraw();
 }
 
 void EditorScene::SetView2D(bool view_2d) {
@@ -167,7 +171,9 @@ void EditorScene::SetView2D(bool view_2d) {
     camera_yaw_ = 35.0f;
     camera_pitch_ = -25.0f;
   }
+  editor_camera_dirty_ = true;
   UpdateEditorCamera();
+  RequestViewRedraw();
 }
 
 const char* EditorScene::GetHintText() const {
@@ -190,6 +196,7 @@ glm::vec3 EditorScene::CameraPosition() const {
 }
 
 void EditorScene::UpdateEditorCamera() {
+  if (!editor_camera_dirty_) return;
   const kEntityId entity = GetDefaultCamera();
   auto transform = Objects().GetProperty<Transform>(entity);
   auto camera = Objects().GetProperty<Camera>(entity);
@@ -203,6 +210,7 @@ void EditorScene::UpdateEditorCamera() {
                                 : glm::vec3(camera_pitch_, camera_yaw_, 0.0f));
   transform->SnapInterpolation();
   transform->ClearTransformations();
+  editor_camera_dirty_ = false;
 }
 
 glm::mat4 EditorScene::GetViewProjection() const {
@@ -548,17 +556,33 @@ void EditorScene::UpdateHoveredHandle(glm::vec2 local_mouse, bool hovered,
                                       bool alt_down, bool right_down) {
   const bool dragging_handle = drag_ != Drag::kNone && drag_ != Drag::kOrbit;
   if (dragging_handle) return;
+  const int previous_handle = hovered_handle_;
+  auto finish = [&]() {
+    if (hovered_handle_ != previous_handle) RequestViewRedraw();
+  };
   hovered_handle_ = -1;
-  if (!hovered || alt_down || right_down) return;
+  if (!hovered || alt_down || right_down) {
+    finish();
+    return;
+  }
   MapNode* node = GetSelectedNode();
-  if (!node) return;
+  if (!node) {
+    finish();
+    return;
+  }
   kEntityId entity = GetEntityForNode(node->uid);
   auto transform = Objects().GetProperty<Transform>(entity);
-  if (!transform) return;
+  if (!transform) {
+    finish();
+    return;
+  }
 
   const glm::vec3 origin = transform->GetPosition();
   glm::vec2 center;
-  if (!WorldToScreen(origin, center)) return;
+  if (!WorldToScreen(origin, center)) {
+    finish();
+    return;
+  }
   const float world_per_pixel = WorldPerPixel(origin);
   const glm::quat handle_rotation = HandleRotation(*transform);
 
@@ -587,6 +611,7 @@ void EditorScene::UpdateHoveredHandle(glm::vec2 local_mouse, bool hovered,
         have_previous = ok;
       }
     }
+    finish();
     return;
   }
 
@@ -637,6 +662,7 @@ void EditorScene::UpdateHoveredHandle(glm::vec2 local_mouse, bool hovered,
       }
     }
   }
+  finish();
 }
 
 bool EditorScene::BeginHandleDrag(glm::vec2 mouse) {
@@ -713,6 +739,7 @@ bool EditorScene::BeginHandleDrag(glm::vec2 mouse) {
       }
       break;
   }
+  RequestViewRedraw();
   return true;
 }
 
@@ -841,9 +868,7 @@ void EditorScene::UpdateDrag(glm::vec2 mouse, bool snap) {
   }
 }
 
-void EditorScene::DrawToolHandles(OverlayCanvas& draw, glm::vec2 local_mouse,
-                                  bool can_hover) {
-  UpdateHoveredHandle(local_mouse, can_hover, false, false);
+void EditorScene::DrawToolHandles(OverlayCanvas& draw) {
   const bool dragging_handle = IsDraggingHandle();
   MapNode* node = GetSelectedNode();
   if (!node) return;
@@ -1255,7 +1280,9 @@ void EditorScene::RenderOverlays(OverlayCanvas& canvas, glm::vec2 local_mouse,
   UpdateEditorCamera();
   DrawGrid(canvas);
   DrawAllGizmos(canvas);
-  DrawToolHandles(canvas, local_mouse, hovered && !alt_down && !right_down);
+  UpdateHoveredHandle(local_mouse, hovered && !alt_down && !right_down,
+                      alt_down, right_down);
+  DrawToolHandles(canvas);
   DrawAxisIndicator(canvas);
 }
 
@@ -1315,7 +1342,9 @@ void EditorScene::OnViewportWheel(float wheel_steps, glm::vec2 local_mouse) {
     camera_distance_ *= std::pow(0.85f, wheel_steps);
     camera_distance_ = std::clamp(camera_distance_, 0.05f, 100000.0f);
   }
+  editor_camera_dirty_ = true;
   UpdateEditorCamera();
+  RequestViewRedraw();
 }
 
 void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down,
@@ -1329,11 +1358,13 @@ void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down
   const glm::vec3 right = orientation * glm::vec3(1, 0, 0);
   const glm::vec3 up = orientation * glm::vec3(0, 1, 0);
 
+  bool changed = false;
   const bool pan = middle_down || (view_2d_ && right_down);
   if (pan && mouse_delta != glm::vec2(0.0f)) {
     const float world_per_pixel = WorldPerPixel(camera_target_);
     camera_target_ -= right * mouse_delta.x * world_per_pixel;
     camera_target_ += up * mouse_delta.y * world_per_pixel;
+    changed = true;
   }
   if (view_2d_) {
     glm::vec2 key_pan(0.0f);
@@ -1352,17 +1383,23 @@ void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down
           std::max(camera_distance_ * 0.85f, 12.0f) * (shift_down ? 2.5f : 1.0f);
       const glm::vec2 dir = glm::normalize(key_pan);
       camera_target_ += (right * dir.x + up * dir.y) * pan_speed * dt;
+      changed = true;
     }
-    UpdateEditorCamera();
+    if (changed) {
+      editor_camera_dirty_ = true;
+      UpdateEditorCamera();
+      RequestViewRedraw();
+    }
     return;
   }
 
-  if (right_down) {
+  if (right_down && mouse_delta != glm::vec2(0.0f)) {
     const glm::vec3 eye = CameraPosition();
     camera_yaw_ -= mouse_delta.x * 0.25f;
     camera_pitch_ =
         std::clamp(camera_pitch_ - mouse_delta.y * 0.25f, -89.0f, 89.0f);
     camera_target_ = eye + CameraForward() * camera_distance_;
+    changed = true;
   }
 
   glm::vec3 move(0.0f);
@@ -1382,14 +1419,20 @@ void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down
     const float speed =
         std::max(camera_distance_, 2.0f) * (shift_down ? 3.0f : 1.0f);
     camera_target_ += glm::normalize(move) * speed * dt;
+    changed = true;
   }
 
-  if (drag_ == Drag::kOrbit && left_down) {
+  if (drag_ == Drag::kOrbit && left_down && mouse_delta != glm::vec2(0.0f)) {
     camera_yaw_ -= mouse_delta.x * 0.3f;
     camera_pitch_ =
         std::clamp(camera_pitch_ - mouse_delta.y * 0.3f, -89.0f, 89.0f);
+    changed = true;
   }
-  UpdateEditorCamera();
+  if (changed) {
+    editor_camera_dirty_ = true;
+    UpdateEditorCamera();
+    RequestViewRedraw();
+  }
 }
 
 void EditorScene::OnViewportMouseDown(glm::vec2 local_mouse, int button,
@@ -1404,6 +1447,7 @@ void EditorScene::OnViewportMouseDown(glm::vec2 local_mouse, int button,
     Select(PickNode(local_mouse));
     drag_ = Drag::kNone;
   }
+  RequestViewRedraw();
 }
 
 void EditorScene::OnViewportMouseDrag(glm::vec2 local_mouse, bool ctrl_snap) {
@@ -1416,6 +1460,7 @@ void EditorScene::OnViewportMouseUp() {
   if (IsDraggingHandle()) {
     CommitEdit();
   }
+  if (drag_ != Drag::kNone) RequestViewRedraw();
   drag_ = Drag::kNone;
 }
 
@@ -1445,12 +1490,16 @@ void EditorScene::FrameSelected() {
   }
   if (view_2d_) {
     camera_target_ = glm::vec3(center.x, center.y, 0.0f);
+    editor_camera_dirty_ = true;
     UpdateEditorCamera();
+    RequestViewRedraw();
     return;
   }
   camera_target_ = center;
   camera_distance_ = radius / std::sin(glm::radians(kEditorFov) / 2.0f) * 1.3f;
+  editor_camera_dirty_ = true;
   UpdateEditorCamera();
+  RequestViewRedraw();
 }
 
 bool EditorScene::MapLooks3D() const {
@@ -1514,7 +1563,9 @@ void EditorScene::FrameMap() {
                            ? fit_height * 1.15f / 2.0f /
                                  std::tan(glm::radians(kEditorFov) / 2.0f)
                            : 120.0f;
+    editor_camera_dirty_ = true;
     UpdateEditorCamera();
+    RequestViewRedraw();
     return;
   }
   camera_yaw_ = 35.0f;
@@ -1522,13 +1573,17 @@ void EditorScene::FrameMap() {
   if (min.x > max.x) {
     camera_target_ = glm::vec3(0.0f);
     camera_distance_ = 12.0f;
+    editor_camera_dirty_ = true;
     UpdateEditorCamera();
+    RequestViewRedraw();
     return;
   }
   camera_target_ = (min + max) * 0.5f;
   camera_distance_ =
       std::clamp(glm::length(max - min) * 0.8f, 6.0f, 10000.0f);
+  editor_camera_dirty_ = true;
   UpdateEditorCamera();
+  RequestViewRedraw();
 }
 
 }  // namespace Mercury

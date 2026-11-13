@@ -213,7 +213,7 @@ void HierarchyPanel::SyncFromController() {
     map_label_->SetLabel(wxString::FromUTF8(map_name));
     last_map_label_ = map_name;
   }
-  if (scene_.MapRevision() != last_map_rev_ || filter_dirty_) {
+  if (scene_.HierarchyRevision() != last_hierarchy_rev_ || filter_dirty_) {
     RebuildTree();
   } else if (scene_.SelectionRevision() != last_sel_rev_) {
     syncing_selection_ = true;
@@ -311,7 +311,7 @@ void HierarchyPanel::RebuildTree() {
   tree_->Thaw();
   syncing_selection_ = false;
 
-  last_map_rev_ = scene_.MapRevision();
+  last_hierarchy_rev_ = scene_.HierarchyRevision();
   last_sel_rev_ = scene_.SelectionRevision();
   filter_dirty_ = false;
 }

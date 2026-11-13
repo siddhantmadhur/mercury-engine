@@ -12,6 +12,7 @@
 #include <wx/aui/aui.h>
 #include <wx/wx.h>
 
+#include <chrono>
 #include <functional>
 #include <string>
 
@@ -47,6 +48,13 @@ class EditorFrame : public wxFrame {
   ~EditorFrame() override;
 
   void SyncFromController(float dt);
+  // Split so the app can drive the Vulkan viewport canvas from its own
+  // unlocked loop while the rest of the editor UI stays at 60fps.
+  void SyncPanels(float dt);
+  void SyncViewports(float dt);
+  // True while the scene viewport is being navigated/dragged, so the app
+  // should render it at an unlocked frame rate.
+  bool WantsUnlockedViewportFps() const;
   void SaveLayoutPerspective();
   bool ConfirmDiscardOrSave(const wxString& action_prompt);
   void DestroyChildFrames();
@@ -59,7 +67,7 @@ class EditorFrame : public wxFrame {
   void BuildToolbar();
   void BuildAuiPanes();
   void SetupMenuBindings();
-  void RefreshToolbarAndStatus(float dt);
+  void RefreshToolbarAndStatus();
   void SyncWindowMenuChecks();
 
   void TogglePane(const char* pane_name, bool show);
@@ -135,9 +143,8 @@ class EditorFrame : public wxFrame {
   wxMenuItem* mi_input_actions_ = nullptr;
   wxMenuItem* mi_cam_preview_ = nullptr;
 
-  float fps_accum_ = 0.0f;
-  int fps_frames_ = 0;
-  float fps_display_ = 0.0f;
+  int last_game_fps_ = -1;
+  std::chrono::steady_clock::time_point last_fps_update_{};
 };
 
 }  // namespace Mercury::EditorUI

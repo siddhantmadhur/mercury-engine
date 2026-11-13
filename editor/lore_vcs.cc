@@ -355,6 +355,7 @@ void LoreVcs::LockPaths(const std::vector<std::string>& paths, bool lock) {
 }
 
 bool LoreVcs::IsLocked(const fs::path& path) const {
+  if (locks_.empty() || !project_) return false;
   return locks_.contains(RelativePath(path));
 }
 

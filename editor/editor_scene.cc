@@ -74,31 +74,33 @@ bool EditorScene::OnCloseRequested() { return !HasUnsavedChanges(); }
 
 // ------------------------------------------------------------------ Frame ---
 
-void EditorScene::OnFrame(double delta_t) {
+void EditorScene::OnFrame(double /*delta_t*/) {
   play_.Update();
   release_.Update();
   lore_.Update();
   if (play_.TakeSchemaUpdated()) LoadScriptSchema();
-
-  if (GetProject() && settings_.show_ui_builder && ui_builder_.IsOpen()) {
-    const float dt = static_cast<float>(delta_t) / 1000.0f;
-    ui_builder_.UpdatePreview(render_host_, dt);
-  }
 
   if (IsModelPreloading() && PollModelPreload() && !pending_import_.empty()) {
     FinishModelImport();
   }
   if (transform_uid_) {
     const MapNode* moved = map_.FindByUid(transform_uid_);
-    if (!scene_dirty_ && (!moved || !SyncNodeTransform(*moved))) scene_dirty_ = true;
+    if (!scene_dirty_ && (!moved || !SyncNodeTransform(*moved))) {
+      scene_dirty_ = true;
+    } else {
+      RequestViewRedraw();
+    }
     transform_uid_ = 0;
   }
   if (scene_dirty_ && GetProject() && !IsModelPreloading()) {
     if (auto jobs = MissingModels(map_); !jobs.empty()) {
       StartModelPreload(std::move(jobs));
+      RequestViewRedraw();
     } else {
       SyncFromMap(map_);
       scene_dirty_ = false;
+      editor_camera_dirty_ = true;
+      RequestViewRedraw();
     }
   }
   UpdateEditorCamera();
@@ -187,10 +189,19 @@ void EditorScene::CloseProject() {
   ++schema_revision_;
   ++selection_revision_;
   ++map_revision_;
+  ++hierarchy_revision_;
 }
 
 bool EditorScene::HasUnsavedChanges() const {
   return dirty_ || ui_builder_.IsDirty() || input_actions_.IsDirty();
+}
+
+void EditorScene::RequestViewRedraw() { ++view_revision_; }
+
+bool EditorScene::NeedsContinuousRedraw() const {
+  // Scripts run in the editor scene too, so keep the viewport live while any
+  // of them is active. Background model loads also change what is drawn.
+  return IsModelPreloading() || HasActiveBehaviours();
 }
 
 void EditorScene::DiscardAllChanges() {
@@ -253,6 +264,7 @@ bool EditorScene::OpenMap(const std::string& res_path) {
   console_.Info("Opened " + res_path);
   ++selection_revision_;
   ++map_revision_;
+  ++hierarchy_revision_;
   return true;
 }
 
@@ -277,6 +289,7 @@ void EditorScene::NewMap(const std::string& res_path) {
   ++selection_revision_;
   if (!res_path.empty()) SaveMap();
   ++map_revision_;
+  ++hierarchy_revision_;
 }
 
 bool EditorScene::SaveMap() {
@@ -356,6 +369,7 @@ void EditorScene::MarkChanged(bool rebuild_scene, bool coalesced) {
   dirty_ = true;
   if (rebuild_scene) scene_dirty_ = true;
   ++map_revision_;
+  RequestViewRedraw();
 }
 
 void EditorScene::NotifyTransformEdited(uint64_t uid, bool coalesced) {
@@ -374,6 +388,8 @@ void EditorScene::Undo() {
   scene_dirty_ = true;
   ++selection_revision_;
   ++map_revision_;
+  ++hierarchy_revision_;
+  RequestViewRedraw();
 }
 
 void EditorScene::Redo() {
@@ -387,6 +403,8 @@ void EditorScene::Redo() {
   scene_dirty_ = true;
   ++selection_revision_;
   ++map_revision_;
+  ++hierarchy_revision_;
+  RequestViewRedraw();
 }
 
 MapNode* EditorScene::GetSelectedNode() {
@@ -403,6 +421,7 @@ void EditorScene::Select(const MapNode* node) {
   selected_uid_ = next;
   if (node) selected_asset_.clear();
   ++selection_revision_;
+  RequestViewRedraw();
 }
 
 void EditorScene::SelectAsset(const std::string& res_path) {
@@ -410,6 +429,7 @@ void EditorScene::SelectAsset(const std::string& res_path) {
   selected_asset_ = res_path;
   selected_uid_ = 0;
   ++selection_revision_;
+  RequestViewRedraw();
 }
 
 uint64_t EditorScene::ConsumeRenameRequest() {
@@ -423,6 +443,7 @@ MapNode* EditorScene::CreateNode(MapNode* parent, const std::string& name) {
   node->components.push_back({"Transform", {}});
   Select(node);
   MarkChanged();
+  ++hierarchy_revision_;
   return node;
 }
 
@@ -430,6 +451,7 @@ bool EditorScene::RenameNode(MapNode* node, const std::string& name) {
   if (!node || name.empty() || name == node->name) return false;
   map_.RenameNode(node, name);
   MarkChanged();
+  ++hierarchy_revision_;
   return true;
 }
 
@@ -438,6 +460,7 @@ bool EditorScene::ReparentNode(MapNode* node, MapNode* new_parent, int index) {
   if (!new_parent) new_parent = map_.GetRoot();
   if (!map_.ReparentNode(node, new_parent, index)) return false;
   MarkChanged();
+  ++hierarchy_revision_;
   return true;
 }
 
@@ -526,6 +549,7 @@ void EditorScene::FinishModelImport() {
   }
   Select(parent);
   MarkChanged();
+  ++hierarchy_revision_;
   console_.Info("Imported " + std::to_string(parts.size()) + " objects from " +
                 res_path);
 }
@@ -634,6 +658,7 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
 
   Select(node);
   MarkChanged();
+  ++hierarchy_revision_;
   return node;
 }
 
@@ -644,6 +669,7 @@ void EditorScene::DeleteSelected() {
   map_.RemoveNode(node);
   Select(parent);
   MarkChanged();
+  ++hierarchy_revision_;
 }
 
 void EditorScene::DuplicateSelected() {
@@ -652,6 +678,7 @@ void EditorScene::DuplicateSelected() {
   if (MapNode* copy = map_.DuplicateNode(node)) {
     Select(copy);
     MarkChanged();
+    ++hierarchy_revision_;
   }
 }
 

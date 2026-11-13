@@ -278,6 +278,9 @@ class MapScene : public GameScene {
   // Called by Behaviour::SetEnabled.
   void OnBehaviourEnabledChanged(Behaviour& behaviour);
   const std::vector<Behaviour*>& GetBehaviours(kEntityId entity) const;
+  // True while at least one script is running (started and enabled), so the
+  // scene may change on its own every frame.
+  bool HasActiveBehaviours() const;
 
   // Loads (once) a texture owned by the scene; nullptr if it can't be read.
   Texture2D* GetTexture(std::string_view res_path);

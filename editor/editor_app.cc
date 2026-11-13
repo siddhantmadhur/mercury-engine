@@ -9,6 +9,13 @@
 
 namespace Mercury::EditorUI {
 
+namespace {
+// ~60 fps editor UI/simulation. The scene canvas gets its own higher-rate
+// timer while the user is interacting with it.
+constexpr int kFrameIntervalMs = 16;
+constexpr int kViewportIntervalMs = 4;
+}  // namespace
+
 bool MercuryEditorApp::OnInit() {
   wxInitAllImageHandlers();
   SetAppName("Mercury Editor");
@@ -50,12 +57,19 @@ bool MercuryEditorApp::OnInit() {
   }
 
   last_tick_ = std::chrono::steady_clock::now();
-  Bind(wxEVT_IDLE, &MercuryEditorApp::OnIdle, this);
+  frame_timer_.SetOwner(this);
+  Bind(wxEVT_TIMER, &MercuryEditorApp::OnTimer, this, frame_timer_.GetId());
+  viewport_timer_.SetOwner(this);
+  Bind(wxEVT_TIMER, &MercuryEditorApp::OnViewportTimer, this,
+       viewport_timer_.GetId());
+  frame_timer_.Start(kFrameIntervalMs);
   return true;
 }
 
 int MercuryEditorApp::OnExit() {
   shutting_down_ = true;
+  frame_timer_.Stop();
+  viewport_timer_.Stop();
   launcher_frame_ = nullptr;
   editor_frame_ = nullptr;
   scene_ = nullptr;
@@ -103,6 +117,8 @@ void MercuryEditorApp::ShowEditorFrame() {
       },
       [this]() {
         shutting_down_ = true;
+        frame_timer_.Stop();
+        viewport_timer_.Stop();
       });
   editor_frame_->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& evt) {
     if (evt.GetEventObject() == editor_frame_) editor_frame_ = nullptr;
@@ -116,7 +132,7 @@ void MercuryEditorApp::ShowEditorFrame() {
   }
 }
 
-void MercuryEditorApp::OnIdle(wxIdleEvent& evt) {
+void MercuryEditorApp::OnTimer(wxTimerEvent& /*evt*/) {
   if (shutting_down_ || in_tick_ || !application_ || !scene_) return;
   wxWindow* active_win = editor_frame_
                              ? static_cast<wxWindow*>(editor_frame_)
@@ -126,12 +142,28 @@ void MercuryEditorApp::OnIdle(wxIdleEvent& evt) {
       top && top->IsIconized()) {
     return;
   }
-  in_tick_ = true;
 
   const auto now = std::chrono::steady_clock::now();
   float dt = std::chrono::duration<float>(now - last_tick_).count();
   last_tick_ = now;
   if (dt < 0.0f || dt > 0.25f) dt = 0.016f;
+
+  const bool want_viewport =
+      editor_frame_ && editor_frame_->WantsUnlockedViewportFps();
+  if (!want_viewport) viewport_timer_.Stop();
+
+  in_tick_ = true;
+  if (want_viewport) {
+    // The viewport timer owns StepFrame at an unlocked rate while the user
+    // navigates or drags the scene. Keep the rest of the editor at 60 fps.
+    if (!viewport_timer_.IsRunning()) {
+      last_viewport_tick_ = now;
+      viewport_timer_.Start(kViewportIntervalMs);
+    }
+    editor_frame_->SyncPanels(dt);
+    in_tick_ = false;
+    return;
+  }
 
   application_->StepFrame();
 
@@ -140,7 +172,26 @@ void MercuryEditorApp::OnIdle(wxIdleEvent& evt) {
   }
 
   in_tick_ = false;
-  if (!shutting_down_) evt.RequestMore(true);
+}
+
+void MercuryEditorApp::OnViewportTimer(wxTimerEvent& /*evt*/) {
+  if (shutting_down_ || in_tick_ || !application_ || !editor_frame_) return;
+  if (!editor_frame_->IsShown() || editor_frame_->IsIconized() ||
+      !editor_frame_->WantsUnlockedViewportFps()) {
+    viewport_timer_.Stop();
+    return;
+  }
+
+  in_tick_ = true;
+  const auto now = std::chrono::steady_clock::now();
+  float dt = std::chrono::duration<float>(now - last_viewport_tick_).count();
+  last_viewport_tick_ = now;
+  if (dt <= 0.0f || dt > 0.25f) dt = 0.016f;
+
+  application_->StepFrame();
+  editor_frame_->SyncViewports(dt);
+
+  in_tick_ = false;
 }
 
 }  // namespace Mercury::EditorUI
