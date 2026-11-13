@@ -10,17 +10,13 @@
 #include <format>
 #include <sstream>
 
-#include "scripting/as/api_prelude.inc"
-#include "scripting/as/bindings.h"
+#include "scripting/as/script_api.h"
 #include "scripting/as/script_behaviour.h"
 #include "scripting/type_registry.h"
 #include "debugger/debugger.h"
 #include "math/time.h"
 
-#include "scriptarray/scriptarray.h"
 #include "scriptbuilder/scriptbuilder.h"
-#include "scriptmath/scriptmath.h"
-#include "scriptstdstring/scriptstdstring.h"
 
 namespace Mercury {
 
@@ -194,14 +190,7 @@ bool ScriptRuntime::Initialize() {
     timeout_seconds_ = std::atof(timeout);
   }
 
-  RegisterStdString(engine_);
-  RegisterScriptArray(engine_, true);
-  RegisterScriptMath(engine_);
-
-  engine_->RegisterInterface("IBehaviour");
-  engine_->RegisterInterface("IDataAsset");
-
-  as::InstallAll(engine_);
+  ConfigureScriptEngine(engine_);
 
   return engine_ != nullptr;
 }
@@ -270,7 +259,7 @@ bool ScriptRuntime::BuildFromSections(
     PDebug::error("Could not start the script module {}", module_name);
     return false;
   }
-  builder.AddSectionFromMemory("<engine>", kApiPreludeSource);
+  builder.AddSectionFromMemory("<engine>", ApiPreludeSource());
   for (const auto& [name, text] : sections) {
     const int result = builder.AddSectionFromMemory(name.c_str(), text.c_str());
     if (result < 0) {
@@ -562,7 +551,7 @@ bool ScriptRuntime::RunString(std::string_view source, std::string_view name,
       std::format("eval_{}", reinterpret_cast<uintptr_t>(&source));
   CScriptBuilder builder;
   if (builder.StartNewModule(engine_, module_name.c_str()) < 0) return false;
-  builder.AddSectionFromMemory("<engine>", kApiPreludeSource);
+  builder.AddSectionFromMemory("<engine>", ApiPreludeSource());
   builder.AddSectionFromMemory(std::string(name).c_str(),
                                std::string(source).c_str());
   compile_failed_ = false;

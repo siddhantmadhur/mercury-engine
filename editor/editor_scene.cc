@@ -760,7 +760,8 @@ bool EditorScene::CreateScript(const std::string& class_name) {
   }
   console_.Info("Created " + file.string() +
                 ". Build to add it to the Add Component menu.");
-  OpenInExternalEditor(file);
+  ++script_files_revision_;
+  OpenScriptFile(file);
   return true;
 }
 
@@ -783,6 +784,7 @@ bool EditorScene::DeleteProjectPath(const fs::path& target) {
   }
   selected_asset_.clear();
   ++selection_revision_;
+  ++script_files_revision_;
   return true;
 }
 
@@ -893,6 +895,24 @@ void EditorScene::CreateUIFile(const fs::path& dir, const std::string& kind) {
   const std::string res_path = project->ToResPath(file);
   console_.Info("Created " + res_path);
   if (uxml) OpenInUIBuilder(res_path);
+}
+
+void EditorScene::OpenScriptFile(const fs::path& file, int line) {
+  if (settings_.open_scripts_in_editor && file.extension() == ".as") {
+    pending_script_ = file;
+    pending_script_line_ = line;
+    return;
+  }
+  OpenInExternalEditor(file);
+}
+
+bool EditorScene::ConsumeScriptOpenRequest(fs::path* file, int* line) {
+  if (pending_script_.empty()) return false;
+  if (file) *file = pending_script_;
+  if (line) *line = pending_script_line_;
+  pending_script_.clear();
+  pending_script_line_ = 0;
+  return true;
 }
 
 void EditorScene::OpenInExternalEditor(const fs::path& file) {

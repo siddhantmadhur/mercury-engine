@@ -1,14 +1,17 @@
 #include "editor_frame.h"
 
 #include <wx/aui/floatpane.h>
+#include <wx/bookctrl.h>
 #include <wx/choice.h>
 #include <wx/combobox.h>
 #include <wx/filedlg.h>
 #include <wx/listctrl.h>
 #include <wx/menu.h>
+#include <wx/notebook.h>
 #include <wx/slider.h>
 #include <wx/spinctrl.h>
 #include <wx/statline.h>
+#include <wx/stc/stc.h>
 #include <wx/textentry.h>
 #include <wx/weakref.h>
 
@@ -20,6 +23,7 @@
 #include "create_menu.h"
 #include "dialogs.h"
 #include "editor_icons.h"
+#include "script_editor_panel.h"
 #include "wx_theme.h"
 
 namespace Mercury::EditorUI {
@@ -47,8 +51,13 @@ enum MenuId {
   kIdProjectBuildScripts,
   kIdProjectTogglePlay,
 
+  kIdScriptGoToMethod,
+  kIdScriptFind,
+  kIdScriptReplace,
+
   kIdWinHierarchy,
   kIdWinScene,
+  kIdWinScriptEditor,
   kIdWinInspector,
   kIdWinProject,
   kIdWinConsole,
@@ -299,9 +308,17 @@ void EditorFrame::BuildMenuBar() {
   proj_menu->Append(kIdProjectTogglePlay, "Play / Stop\tF5");
   mb->Append(proj_menu, "&Project");
 
+  auto* script_menu = new wxMenu();
+  script_menu->Append(kIdScriptGoToMethod, "Go to Method...");
+  script_menu->Append(kIdScriptFind, "Find in Script...");
+  script_menu->Append(kIdScriptReplace, "Replace in Script...");
+  mb->Append(script_menu, "&Script");
+
   window_menu_ = new wxMenu();
   mi_hierarchy_ = window_menu_->AppendCheckItem(kIdWinHierarchy, "Hierarchy");
   mi_scene_ = window_menu_->AppendCheckItem(kIdWinScene, "Scene Viewport");
+  mi_script_ =
+      window_menu_->AppendCheckItem(kIdWinScriptEditor, "Script Editor");
   mi_inspector_ = window_menu_->AppendCheckItem(kIdWinInspector, "Inspector");
   mi_project_ = window_menu_->AppendCheckItem(kIdWinProject, "Project Browser");
   mi_console_ = window_menu_->AppendCheckItem(kIdWinConsole, "Console");
@@ -333,6 +350,7 @@ void EditorFrame::BuildToolbar() {
 
   build_scripts_btn_ = new wxButton(toolbar_, wxID_ANY, "Build Scripts");
   build_scripts_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (script_editor_panel_ && !script_editor_panel_->SaveAllDirty()) return;
     if (auto p = scene_.GetProject()) scene_.PlayRef().Build(*p);
   });
 
@@ -343,7 +361,12 @@ void EditorFrame::BuildToolbar() {
 
   save_btn_ = new wxButton(toolbar_, wxID_ANY, "Save");
   save_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    scene_.SaveAllDirty();
+    if (script_editor_panel_ && script_editor_panel_->IsEditorFocused()) {
+      script_editor_panel_->SaveActive();
+    } else {
+      scene_.SaveAllDirty();
+      if (script_editor_panel_) script_editor_panel_->SaveAllDirty();
+    }
     RefreshToolbarAndStatus();
   });
 
@@ -383,8 +406,18 @@ void EditorFrame::BuildToolbar() {
 }
 
 void EditorFrame::BuildAuiPanes() {
+  center_tabs_ = new wxNotebook(this, wxID_ANY, wxDefaultPosition,
+                                wxDefaultSize, wxNB_TOP | wxBORDER_NONE);
+  scene_panel_ = new SceneViewportPanel(center_tabs_, scene_);
+  script_editor_panel_ = new ScriptEditorPanel(center_tabs_, scene_);
+  center_tabs_->AddPage(scene_panel_, "Scene", true);
+  center_tabs_->AddPage(script_editor_panel_, "Script", false);
+  center_tabs_->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& evt) {
+    SyncWindowMenuChecks();
+    evt.Skip();
+  });
+
   hierarchy_panel_ = new HierarchyPanel(this, scene_);
-  scene_panel_ = new SceneViewportPanel(this, scene_);
   inspector_panel_ = new InspectorPanel(this, scene_);
   project_panel_ = new ProjectBrowserPanel(this, scene_);
   console_panel_ = new ConsolePanel(this, scene_);
@@ -411,9 +444,8 @@ void EditorFrame::BuildAuiPanes() {
                              .MinSize(wxSize(-1, 38))
                              .BestSize(wxSize(-1, 38)));
 
-  aui_.AddPane(
-      scene_panel_,
-      wxAuiPaneInfo().Name("scene").Caption("Scene Viewport").CenterPane());
+  aui_.AddPane(center_tabs_,
+               wxAuiPaneInfo().Name("scene").Caption("Editor").CenterPane());
 
   aui_.AddPane(hierarchy_panel_, wxAuiPaneInfo()
                                      .Name("hierarchy")
@@ -530,7 +562,15 @@ void EditorFrame::SetupMenuBindings() {
   Bind(
       wxEVT_MENU, [this](wxCommandEvent&) { HandleOpenMap(); }, kIdFileOpenMap);
   Bind(
-      wxEVT_MENU, [this](wxCommandEvent&) { scene_.SaveAllDirty(); },
+      wxEVT_MENU,
+      [this](wxCommandEvent&) {
+        if (script_editor_panel_ && script_editor_panel_->IsEditorFocused()) {
+          script_editor_panel_->SaveActive();
+        } else {
+          scene_.SaveAllDirty();
+          if (script_editor_panel_) script_editor_panel_->SaveAllDirty();
+        }
+      },
       kIdFileSave);
   Bind(
       wxEVT_MENU, [this](wxCommandEvent&) { HandleSaveMapAs(); },
@@ -544,12 +584,16 @@ void EditorFrame::SetupMenuBindings() {
       kIdFileBuildGame);
   Bind(
       wxEVT_MENU,
-      [this](wxCommandEvent&) { ShowPreferencesDialog(this, scene_); },
+      [this](wxCommandEvent&) {
+        if (ShowPreferencesDialog(this, scene_) && script_editor_panel_) {
+          script_editor_panel_->ApplySettings();
+        }
+      },
       kIdFilePreferences);
   Bind(
       wxEVT_MENU,
       [this](wxCommandEvent&) {
-        if (!ConfirmDiscardOrSave("Close this project?")) return;
+        if (!ConfirmDiscardOrSave("Close this project?", true)) return;
         SaveLayoutPerspective();
         DestroyChildFrames();
         scene_.CloseProject();
@@ -583,12 +627,35 @@ void EditorFrame::SetupMenuBindings() {
   Bind(
       wxEVT_MENU,
       [this](wxCommandEvent&) {
+        if (script_editor_panel_ && !script_editor_panel_->SaveAllDirty())
+          return;
         if (auto p = scene_.GetProject()) scene_.PlayRef().Build(*p);
       },
       kIdProjectBuildScripts);
   Bind(
       wxEVT_MENU, [this](wxCommandEvent&) { HandleTogglePlay(); },
       kIdProjectTogglePlay);
+  Bind(
+      wxEVT_MENU,
+      [this](wxCommandEvent&) {
+        ShowScriptEditor();
+        if (script_editor_panel_) script_editor_panel_->ShowGoToMethod();
+      },
+      kIdScriptGoToMethod);
+  Bind(
+      wxEVT_MENU,
+      [this](wxCommandEvent&) {
+        ShowScriptEditor();
+        if (script_editor_panel_) script_editor_panel_->ShowFindBar(false);
+      },
+      kIdScriptFind);
+  Bind(
+      wxEVT_MENU,
+      [this](wxCommandEvent&) {
+        ShowScriptEditor();
+        if (script_editor_panel_) script_editor_panel_->ShowFindBar(true);
+      },
+      kIdScriptReplace);
 
   Bind(
       wxEVT_MENU,
@@ -598,6 +665,15 @@ void EditorFrame::SetupMenuBindings() {
       wxEVT_MENU,
       [this](wxCommandEvent& evt) { TogglePane("scene", evt.IsChecked()); },
       kIdWinScene);
+  Bind(
+      wxEVT_MENU,
+      [this](wxCommandEvent& evt) {
+        if (evt.IsChecked())
+          ShowScriptEditor();
+        else
+          ShowSceneView();
+      },
+      kIdWinScriptEditor);
   Bind(
       wxEVT_MENU,
       [this](wxCommandEvent& evt) { TogglePane("inspector", evt.IsChecked()); },
@@ -744,6 +820,36 @@ void EditorFrame::DockAllFloatingPanels() {
   SyncWindowMenuChecks();
 }
 
+void EditorFrame::ShowScriptEditor() {
+  if (!center_tabs_ || !script_editor_panel_) return;
+  auto& pane = aui_.GetPane("scene");
+  if (pane.IsOk()) {
+    pane.Show(true);
+    aui_.Update();
+  }
+  center_tabs_->SetSelection(1);
+  script_editor_panel_->Show();
+  script_editor_panel_->Layout();
+  script_editor_panel_->SetFocus();
+  SyncWindowMenuChecks();
+}
+
+void EditorFrame::ShowSceneView() {
+  if (!center_tabs_) return;
+  center_tabs_->SetSelection(0);
+  SyncWindowMenuChecks();
+}
+
+void EditorFrame::OpenPendingScript() {
+  if (!script_editor_panel_) return;
+  std::filesystem::path file;
+  int line = 0;
+  while (scene_.ConsumeScriptOpenRequest(&file, &line)) {
+    ShowScriptEditor();
+    script_editor_panel_->OpenFile(file, line);
+  }
+}
+
 void EditorFrame::ShowCameraPreviewPopout(bool show) {
   if (show) {
     if (!camera_preview_frame_) {
@@ -855,6 +961,8 @@ void EditorFrame::SyncWindowMenuChecks() {
   };
   mi_hierarchy_->Check(is_shown("hierarchy"));
   mi_scene_->Check(is_shown("scene"));
+  mi_script_->Check(is_shown("scene") && center_tabs_ &&
+                    center_tabs_->GetSelection() == 1);
   mi_inspector_->Check(is_shown("inspector"));
   mi_project_->Check(is_shown("project"));
   mi_console_->Check(is_shown("console"));
@@ -870,6 +978,7 @@ void EditorFrame::HandleTogglePlay() {
   if (!proj) return;
   auto& play = scene_.PlayRef();
   if (play.GetState() == PlaySession::State::kIdle) {
+    if (script_editor_panel_ && !script_editor_panel_->SaveAllDirty()) return;
     if (scene_.IsDirty()) scene_.SaveMap();
     play.Play(*proj, scene_.GetMapPath());
   } else {
@@ -917,14 +1026,19 @@ void EditorFrame::HandleSaveMapAs() {
   }
 }
 
-bool EditorFrame::ConfirmDiscardOrSave(const wxString& action_prompt) {
-  if (!scene_.HasUnsavedChanges()) return true;
+bool EditorFrame::ConfirmDiscardOrSave(const wxString& action_prompt,
+                                       bool include_scripts) {
+  const bool scene_dirty = scene_.HasUnsavedChanges();
+  const bool scripts_dirty = include_scripts && script_editor_panel_ &&
+                             script_editor_panel_->HasDirty();
+  if (!scene_dirty && !scripts_dirty) return true;
   UnsavedChoice choice = ShowUnsavedChangesDialog(
       this, action_prompt + "\nYou have unsaved changes.");
   if (choice == UnsavedChoice::kCancel) return false;
   if (choice == UnsavedChoice::kSave) {
-    if (!scene_.SaveAllDirty()) return false;
-  } else {
+    if (scene_dirty && !scene_.SaveAllDirty()) return false;
+    if (scripts_dirty && !script_editor_panel_->SaveAllDirty()) return false;
+  } else if (scene_dirty) {
     scene_.DiscardAllChanges();
   }
   return true;
@@ -993,7 +1107,8 @@ void EditorFrame::OnCharHook(wxKeyEvent& evt) {
   }
   wxWindow* focus = wxWindow::FindFocus();
   if (IsDescendantOf(focus, ui_builder_panel_) ||
-      IsDescendantOf(focus, input_actions_panel_)) {
+      IsDescendantOf(focus, input_actions_panel_) ||
+      IsDescendantOf(focus, script_editor_panel_)) {
     if (scene_panel_) scene_panel_->ResetKeyState();
     evt.Skip();
     return;
@@ -1054,7 +1169,7 @@ void EditorFrame::OnClose(wxCloseEvent& evt) {
     evt.Skip();
     return;
   }
-  if (evt.CanVeto() && !ConfirmDiscardOrSave("Exit Mercury Editor?")) {
+  if (evt.CanVeto() && !ConfirmDiscardOrSave("Exit Mercury Editor?", true)) {
     evt.Veto();
     return;
   }
@@ -1089,7 +1204,9 @@ void EditorFrame::RefreshToolbarAndStatus() {
                                 : (pstate != PlaySession::State::kBuilding);
   const bool busy = play.IsBusy() || scene_.ReleaseRef().IsBusy();
   const bool build_enabled = !busy && scene_.GetProject() != nullptr;
-  const bool save_enabled = scene_.HasUnsavedChanges();
+  const bool save_enabled =
+      scene_.HasUnsavedChanges() ||
+      (script_editor_panel_ && script_editor_panel_->HasDirty());
   const bool undo_enabled = scene_.CanUndo();
   const bool redo_enabled = scene_.CanRedo();
 
@@ -1161,6 +1278,8 @@ void EditorFrame::SyncPanels(float dt) {
 
   if (scene_.ConsumeUIBuilderFocusRequest()) RevealUIBuilder();
   if (scene_.ConsumeInputActionsFocusRequest()) RevealInputActions();
+  OpenPendingScript();
+  if (script_editor_panel_) script_editor_panel_->Sync();
 
   RefreshToolbarAndStatus();
 

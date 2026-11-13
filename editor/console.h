@@ -44,7 +44,14 @@ class Console {
 
   // The script file a line points at: "scripts/ball.as:42:5" (an AngelScript
   // exception). Returns the project-relative path, e.g. "scripts/ball.as".
+  struct ScriptLocation {
+    std::string path;
+    int line = 0;
+    int column = 0;
+  };
   static std::optional<std::string> FindScriptFile(const std::string& text);
+  static std::optional<ScriptLocation> FindScriptLocation(
+      const std::string& text);
 
   void Clear();
   std::vector<Line> Snapshot();

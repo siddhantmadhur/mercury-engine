@@ -27,21 +27,42 @@ void Console::AddProcessOutput(Source source, std::string text) {
 }
 
 std::optional<std::string> Console::FindScriptFile(const std::string& text) {
+  auto location = FindScriptLocation(text);
+  if (!location) return std::nullopt;
+  return location->path;
+}
+
+std::optional<Console::ScriptLocation> Console::FindScriptLocation(
+    const std::string& text) {
   size_t from = 0;
   while (true) {
     const size_t at = text.find("scripts/", from);
     if (at == std::string::npos) return std::nullopt;
     from = at + 1;
-    // The path runs to ".as" followed by ':' or '('.
     const size_t as = text.find(".as", at);
     if (as == std::string::npos) return std::nullopt;
     const size_t end = as + 3;
     if (end >= text.size() || (text[end] != ':' && text[end] != '(')) continue;
-    // Something must follow that looks like a line number.
     if (end + 1 >= text.size() ||
         !std::isdigit(static_cast<unsigned char>(text[end + 1])))
       continue;
-    return text.substr(at, end - at);
+    ScriptLocation location;
+    location.path = text.substr(at, end - at);
+    size_t cursor = end + 1;
+    while (cursor < text.size() &&
+           std::isdigit(static_cast<unsigned char>(text[cursor]))) {
+      location.line = location.line * 10 + (text[cursor] - '0');
+      ++cursor;
+    }
+    if (cursor < text.size() && text[cursor] == ':') {
+      ++cursor;
+      while (cursor < text.size() &&
+             std::isdigit(static_cast<unsigned char>(text[cursor]))) {
+        location.column = location.column * 10 + (text[cursor] - '0');
+        ++cursor;
+      }
+    }
+    return location;
   }
 }
 

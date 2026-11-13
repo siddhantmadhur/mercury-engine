@@ -194,6 +194,11 @@ class EditorScene : public MapScene {
   bool CreateFolder(const std::filesystem::path& dir, const std::string& name);
   bool DeleteProjectPath(const std::filesystem::path& target);
   void OpenInExternalEditor(const std::filesystem::path& file);
+  // Opens a code file according to the editor preference: built-in script
+  // editor for .as files, otherwise the external editor command.
+  void OpenScriptFile(const std::filesystem::path& file, int line = 0);
+  bool ConsumeScriptOpenRequest(std::filesystem::path* file, int* line);
+  uint64_t ScriptFilesRevision() const { return script_files_revision_; }
   void OpenInUIBuilder(const std::string& res_path);
   void OpenInInputActions(const std::string& res_path);
   bool ConsumeUIBuilderFocusRequest();
@@ -335,6 +340,9 @@ class EditorScene : public MapScene {
   std::string selected_asset_;
   uint64_t rename_uid_ = 0;
   std::string pending_import_;
+  std::filesystem::path pending_script_;
+  int pending_script_line_ = 0;
+  uint64_t script_files_revision_ = 1;
 
   bool focus_ui_builder_ = false;
   bool focus_input_actions_ = false;

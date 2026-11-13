@@ -61,6 +61,16 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "script_editor_test",
+    srcs = ["script_editor_test.cc"],
+    copts = COPTS,
+    deps = [
+        "//editor:editor_lib",
+        "//third_party/googletest:gtest_main",
+    ],
+)
+
 cc_binary(
     name = "editor_smoke",
     srcs = ["editor_smoke.cc"],

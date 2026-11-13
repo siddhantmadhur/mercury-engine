@@ -195,7 +195,7 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
     } else if (ext == kInputActionsExtension) {
       scene_.OpenInInputActions(res_path);
     } else if (ext != kAssetExtension) {
-      scene_.OpenInExternalEditor(p);
+      scene_.OpenScriptFile(p);
     }
   });
 
@@ -616,6 +616,9 @@ void ProjectBrowserPanel::ShowFileContextMenu(const fs::path& file,
         "Import into Scene",
         [this, res_path]() { scene_.ImportModel(res_path); },
         !scene_.IsModelPreloading());
+  }
+  if (ext == ".as" && scene_.Settings().open_scripts_in_editor) {
+    bind("Open", [this, file]() { scene_.OpenScriptFile(file); });
   }
   bind("Open in External Editor",
        [this, file]() { scene_.OpenInExternalEditor(file); });
