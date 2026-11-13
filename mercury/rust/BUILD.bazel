@@ -1,0 +1,60 @@
+load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
+load("@mercury_config//:defs.bzl", "COPTS")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["defs.bzl"])
+
+cc_library(
+    name = "bindings_hdrs",
+    hdrs = ["bindings.h"],
+    includes = [".."],
+    deps = ["@cxx.rs//:core"],
+)
+
+rust_cxx_bridge(
+    name = "ffi_bridge",
+    src = "ffi.rs",
+    deps = [":bindings_hdrs"],
+)
+
+rust_library(
+    name = "mercury_kernel",
+    srcs = [
+        "error.rs",
+        "ffi.rs",
+        "fs.rs",
+        "lib.rs",
+        "log.rs",
+        "prelude.rs",
+    ],
+    crate_name = "mercury_kernel",
+    crate_root = "lib.rs",
+    edition = "2024",
+    link_deps = [":ffi_bridge"],
+    deps = [
+        "@cxx.rs//:cxx",
+    ],
+)
+
+cc_library(
+    name = "bridge",
+    srcs = [
+        "bindings.cc",
+        "bridge.cc",
+    ],
+    hdrs = [
+        "bindings.h",
+        "bridge.h",
+    ],
+    copts = COPTS,
+    includes = [".."],
+    linkstatic = True,
+    deps = [
+        ":ffi_bridge",
+        "//mercury:core_headers",
+        "@cxx.rs//:core",
+    ],
+)

@@ -1,6 +1,35 @@
 load("@mercury_config//:defs.bzl", "COPTS")
+load("@rules_rust//rust:defs.bzl", "rust_static_library")
+load("//mercury/rust:defs.bzl", "mercury_rust_feature")
 
 package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "core_headers",
+    hdrs = [
+        "debugger/debugger.h",
+        "os/filesystem.h",
+        "pack/mpack.h",
+    ],
+    includes = ["."],
+)
+
+mercury_rust_feature(
+    name = "os_filesystem_rs",
+    src = "os/filesystem.rs",
+    cc_deps = [":core_headers"],
+)
+
+rust_static_library(
+    name = "mercury_rust",
+    srcs = ["rust_modules.rs"],
+    crate_root = "rust_modules.rs",
+    edition = "2024",
+    deps = [
+        ":os_filesystem_rs",
+        "//mercury/rust:mercury_kernel",
+    ],
+)
 
 cc_library(
     name = "mercury",
@@ -20,6 +49,9 @@ cc_library(
         "//conditions:default": [],
     }),
     deps = [
+        ":mercury_rust",
+        ":os_filesystem_rs_bridge",
+        "//mercury/rust:bridge",
         "@vulkan//:vulkan",
         "//third_party:assimp",
         "//third_party:angelscript",

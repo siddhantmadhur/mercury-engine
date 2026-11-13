@@ -7,10 +7,21 @@ module(
 # the only scripting dependency; there is no code generation, Python toolchain
 # or external build system involved.
 
-bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "bazel_skylib", version = "1.9.2")
 bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_foreign_cc", version = "0.17.0")
+bazel_dep(name = "rules_rust", version = "0.75.0")
+bazel_dep(name = "cxx.rs", version = "1.0.205")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = ["1.99.0"],
+)
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
 
 # Xcode 26's clang writes SDKSettings.json into every .d file; Bazel's header
 # discovery rejects that absolute path. Strip it in the toolchain wrapper.

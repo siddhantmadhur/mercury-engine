@@ -10,6 +10,7 @@
 #include "pack/mpack.h"
 #include "project/map.h"
 #include "project/project.h"
+#include "rust/bridge.h"
 #include "scene/map_scene.h"
 #include "scripting/as/script_builder.h"
 #include "scripting/as/script_runtime.h"
@@ -115,6 +116,7 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
   }
 
   RegisterBuiltinTypes();
+  Mercury::rust::Init();
 
   if (!project_given && !MountShippedPacks(project_path)) return 1;
   if (project_path.empty()) {
