@@ -1,3 +1,7 @@
+# Stale local V8 checkout from before the AngelScript migration; it is no
+# longer a submodule or a Bazel dependency.
+third_party/v8
+
 # Bundled test-only copy inside assimp; not part of Mercury's build.
 third_party/assimp/contrib/googletest
 
