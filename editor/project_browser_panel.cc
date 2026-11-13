@@ -35,18 +35,6 @@ bool ShouldSkipDirName(const std::string& name) {
          name.starts_with("cmake-build") || name.starts_with("bazel-");
 }
 
-wxColour ColorForExtension(const std::string& ext) {
-  if (ext == kMapExtension) return wxColour(140, 204, 255);
-  if (ext == kAssetExtension) return wxColour(191, 230, 140);
-  if (ext == kUxmlExtension) return wxColour(242, 153, 217);
-  if (ext == kUssExtension) return wxColour(179, 166, 255);
-  if (ext == kInputActionsExtension) return wxColour(255, 179, 115);
-  if (ext == ".cc" || ext == ".h" || ext == ".cpp" || ext == ".as") {
-    return wxColour(242, 204, 128);
-  }
-  return Colors::kTextPrimary;
-}
-
 uint64_t NowMs() {
   using namespace std::chrono;
   return static_cast<uint64_t>(
@@ -74,27 +62,23 @@ std::string ComputeDirSignature(const fs::path& root) {
 
 ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY), scene_(scene) {
-  ApplyDarkPalette(this);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* bar = new wxPanel(this, wxID_ANY);
-  bar->SetBackgroundColour(Colors::kBgHeader);
   auto* bar_sizer = new wxBoxSizer(wxHORIZONTAL);
 
   auto* create_btn = new wxButton(bar, wxID_ANY, "+ Create", wxDefaultPosition,
                                   wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(create_btn);
   bar_sizer->Add(create_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
   path_label_ = new wxStaticText(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
                                  wxDefaultSize, wxST_ELLIPSIZE_START);
-  path_label_->SetForegroundColour(Colors::kTextSecondary);
+  path_label_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   bar_sizer->Add(path_label_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
 
   search_ = new wxTextCtrl(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
                            wxSize(160, -1));
   search_->SetHint("Search files...");
-  StyleTextCtrl(search_);
   bar_sizer->Add(search_, 0, wxALIGN_CENTER_VERTICAL);
 
   auto* bar_wrap = new wxBoxSizer(wxVERTICAL);
@@ -104,19 +88,14 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
 
   splitter_ = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition,
                                    wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
-  splitter_->SetBackgroundColour(Colors::kBgCanvas);
   splitter_->SetMinimumPaneSize(110);
 
   dir_tree_ = new wxTreeCtrl(splitter_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                              wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT |
                                  wxTR_SINGLE | wxBORDER_NONE);
-  dir_tree_->SetBackgroundColour(Colors::kBgPanel);
-  dir_tree_->SetForegroundColour(Colors::kTextPrimary);
 
   file_list_ = new wxListCtrl(splitter_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                               wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
-  file_list_->SetBackgroundColour(Colors::kBgCanvas);
-  file_list_->SetForegroundColour(Colors::kTextPrimary);
   file_list_->InsertColumn(0, "Name", wxLIST_FORMAT_LEFT, 220);
   file_list_->InsertColumn(1, "Location / Status", wxLIST_FORMAT_LEFT, 160);
 
@@ -418,7 +397,6 @@ void ProjectBrowserPanel::RebuildFileList() {
     if (!needle.empty()) meta = project->ToResPath(p.parent_path());
     if (locked) meta += " (locked)";
     file_list_->SetItem(row, 1, wxString::FromUTF8(meta));
-    file_list_->SetItemTextColour(row, ColorForExtension(ext));
     if (selected) {
       file_list_->SetItemState(row, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
     }

@@ -133,7 +133,6 @@ std::string CompositeSummary(const InputActionDesc::Composite2D& comp) {
 wxStaticText* MakeSectionHeader(wxWindow* parent, const wxString& title) {
   auto* lbl = new wxStaticText(parent, wxID_ANY, title);
   lbl->SetFont(HeaderFont());
-  lbl->SetForegroundColour(Colors::kTextPrimary);
   return lbl;
 }
 
@@ -141,7 +140,6 @@ wxStaticText* MakeSectionHeader(wxWindow* parent, const wxString& title) {
 
 InputActionsPanel::InputActionsPanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY), scene_(scene) {
-  ApplyDarkPalette(this);
   BuildLayout();
   Bind(wxEVT_CHAR_HOOK, &InputActionsPanel::OnCharHook, this);
   RefreshAll(true);
@@ -152,15 +150,11 @@ void InputActionsPanel::BuildLayout() {
 
   // Row 1: File, Save, Undo/Redo, Use as Project Actions, Pop Out
   auto* bar1 = new wxPanel(this);
-  ApplyDarkPalette(bar1);
-  bar1->SetBackgroundColour(Colors::kBgCanvas);
   auto* bar1_s = new wxBoxSizer(wxHORIZONTAL);
 
   auto* file_lbl = new wxStaticText(bar1, wxID_ANY, "File:");
-  file_lbl->SetForegroundColour(Colors::kTextSecondary);
   file_choice_ = new wxChoice(bar1, wxID_ANY);
   file_choice_->SetMinSize(wxSize(210, -1));
-  StyleChoice(file_choice_);
   file_choice_->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) {
     int idx = file_choice_->GetSelection();
     if (idx >= 0 && static_cast<size_t>(idx) < minput_files_.size()) {
@@ -171,7 +165,6 @@ void InputActionsPanel::BuildLayout() {
 
   new_file_btn_ = new wxButton(bar1, wxID_ANY, "+ New .minput",
                                wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(new_file_btn_);
   new_file_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     auto proj = scene_.GetProject();
     if (!proj) return;
@@ -182,7 +175,6 @@ void InputActionsPanel::BuildLayout() {
 
   save_btn_ = new wxButton(bar1, wxID_ANY, "Save", wxDefaultPosition,
                            wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(save_btn_, true);
   save_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().Save();
     RefreshAll(true);
@@ -190,7 +182,6 @@ void InputActionsPanel::BuildLayout() {
 
   undo_btn_ = new wxButton(bar1, wxID_ANY, "Undo", wxDefaultPosition,
                            wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(undo_btn_);
   undo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().Undo();
     RefreshAll(true);
@@ -198,7 +189,6 @@ void InputActionsPanel::BuildLayout() {
 
   redo_btn_ = new wxButton(bar1, wxID_ANY, "Redo", wxDefaultPosition,
                            wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(redo_btn_);
   redo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().Redo();
     RefreshAll(true);
@@ -207,7 +197,6 @@ void InputActionsPanel::BuildLayout() {
   project_actions_btn_ =
       new wxButton(bar1, wxID_ANY, "Use as Project Actions",
                    wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(project_actions_btn_);
   project_actions_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().SetAsProjectActions();
     RefreshTopBar();
@@ -215,11 +204,10 @@ void InputActionsPanel::BuildLayout() {
 
   project_actions_lbl_ =
       new wxStaticText(bar1, wxID_ANY, "Project Actions (Active)");
-  project_actions_lbl_->SetForegroundColour(Colors::kAccentGreen);
+  project_actions_lbl_->SetFont(bar1->GetFont().Bold());
 
   popout_btn_ = new wxButton(bar1, wxID_ANY, "Pop Out", wxDefaultPosition,
                              wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(popout_btn_);
   popout_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     if (on_popout_) on_popout_(!popped_out_);
   });
@@ -240,12 +228,9 @@ void InputActionsPanel::BuildLayout() {
 
   // Row 2: AngelScript codegen settings
   codegen_bar_ = new wxPanel(this);
-  ApplyDarkPalette(codegen_bar_);
-  codegen_bar_->SetBackgroundColour(Colors::kBgCanvas);
   auto* cg_s = new wxBoxSizer(wxHORIZONTAL);
 
   gen_cb_ = new wxCheckBox(codegen_bar_, wxID_ANY, "Generate AngelScript");
-  gen_cb_->SetForegroundColour(Colors::kTextPrimary);
   gen_cb_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& evt) {
     if (syncing_) return;
     scene_.InputActionsRef().SetGenerateHeader(evt.IsChecked());
@@ -253,10 +238,8 @@ void InputActionsPanel::BuildLayout() {
   });
 
   auto* cls_lbl = new wxStaticText(codegen_bar_, wxID_ANY, "Class:");
-  cls_lbl->SetForegroundColour(Colors::kTextSecondary);
   class_edit_ = new wxTextCtrl(codegen_bar_, wxID_ANY, "", wxDefaultPosition,
                                wxSize(130, -1));
-  StyleTextCtrl(class_edit_);
   class_edit_->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& evt) {
     scene_.InputActionsRef().BeginEdit();
     evt.Skip();
@@ -273,10 +256,8 @@ void InputActionsPanel::BuildLayout() {
   });
 
   auto* hdr_lbl = new wxStaticText(codegen_bar_, wxID_ANY, "Header:");
-  hdr_lbl->SetForegroundColour(Colors::kTextSecondary);
   header_edit_ = new wxTextCtrl(codegen_bar_, wxID_ANY, "", wxDefaultPosition,
                                 wxSize(240, -1));
-  StyleTextCtrl(header_edit_);
   header_edit_->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& evt) {
     scene_.InputActionsRef().BeginEdit();
     evt.Skip();
@@ -294,14 +275,13 @@ void InputActionsPanel::BuildLayout() {
 
   write_header_btn_ = new wxButton(codegen_bar_, wxID_ANY, "Write Header",
                                    wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(write_header_btn_);
   write_header_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().WriteHeader();
     RefreshTopBar();
   });
 
   header_err_lbl_ = new wxStaticText(codegen_bar_, wxID_ANY, "");
-  header_err_lbl_->SetForegroundColour(Colors::kAccentRed);
+  header_err_lbl_->SetFont(codegen_bar_->GetFont().Bold());
 
   cg_s->Add(gen_cb_, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
   cg_s->AddSpacer(8);
@@ -316,13 +296,12 @@ void InputActionsPanel::BuildLayout() {
 
   // Empty banner
   empty_banner_ = new wxPanel(this);
-  ApplyDarkPalette(empty_banner_);
   auto* eb_s = new wxBoxSizer(wxVERTICAL);
   auto* eb_lbl = new wxStaticText(
       empty_banner_, wxID_ANY,
       "Open a .minput file from Project Browser or the File selector above, "
       "or click + New .minput.");
-  eb_lbl->SetForegroundColour(Colors::kTextSecondary);
+  eb_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   eb_s->AddStretchSpacer();
   eb_s->Add(eb_lbl, 0, wxALIGN_CENTER_HORIZONTAL);
   eb_s->AddStretchSpacer();
@@ -333,13 +312,10 @@ void InputActionsPanel::BuildLayout() {
   left_split_ = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition,
                                      wxDefaultSize,
                                      wxSP_LIVE_UPDATE | wxSP_3DSASH);
-  ApplyDarkPalette(left_split_);
   left_split_->SetMinimumPaneSize(170);
 
   // Left: Action Maps
   auto* maps_pane = new wxPanel(left_split_);
-  ApplyDarkPalette(maps_pane);
-  maps_pane->SetBackgroundColour(Colors::kBgCanvas);
   auto* maps_s = new wxBoxSizer(wxVERTICAL);
   auto* maps_hdr = new wxBoxSizer(wxHORIZONTAL);
   maps_hdr->Add(MakeSectionHeader(maps_pane, "Action Maps"), 0,
@@ -351,17 +327,12 @@ void InputActionsPanel::BuildLayout() {
                                  wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
   del_map_btn_ = new wxButton(maps_pane, wxID_ANY, "-", wxDefaultPosition,
                               wxSize(26, 22));
-  StyleButton(add_map_btn_);
-  StyleButton(rename_map_btn_);
-  StyleButton(del_map_btn_);
   maps_hdr->Add(add_map_btn_, 0, wxRIGHT, 2);
   maps_hdr->Add(rename_map_btn_, 0, wxRIGHT, 2);
   maps_hdr->Add(del_map_btn_, 0);
   maps_s->Add(maps_hdr, 0, wxEXPAND | wxALL, 4);
 
   maps_list_ = new wxListBox(maps_pane, wxID_ANY);
-  ApplyDarkPalette(maps_list_);
-  maps_list_->SetBackgroundColour(Colors::kBgInput);
   maps_s->Add(maps_list_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   maps_pane->SetSizer(maps_s);
 
@@ -407,13 +378,10 @@ void InputActionsPanel::BuildLayout() {
   right_split_ = new wxSplitterWindow(left_split_, wxID_ANY, wxDefaultPosition,
                                       wxDefaultSize,
                                       wxSP_LIVE_UPDATE | wxSP_3DSASH);
-  ApplyDarkPalette(right_split_);
   right_split_->SetMinimumPaneSize(220);
 
   // Middle: Actions & Bindings
   auto* act_pane = new wxPanel(right_split_);
-  ApplyDarkPalette(act_pane);
-  act_pane->SetBackgroundColour(Colors::kBgPanel);
   auto* act_s = new wxBoxSizer(wxVERTICAL);
   auto* act_hdr = new wxBoxSizer(wxHORIZONTAL);
   act_hdr->Add(MakeSectionHeader(act_pane, "Actions & Bindings"), 0,
@@ -432,11 +400,6 @@ void InputActionsPanel::BuildLayout() {
                           wxDefaultSize, wxBU_EXACTFIT);
   del_btn_ = new wxButton(act_pane, wxID_ANY, "Del", wxDefaultPosition,
                           wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(add_action_btn_);
-  StyleButton(add_binding_btn_);
-  StyleButton(add_comp_btn_);
-  StyleButton(dup_btn_);
-  StyleButton(del_btn_);
   act_btns->Add(add_action_btn_, 0, wxRIGHT, 2);
   act_btns->Add(add_binding_btn_, 0, wxRIGHT, 2);
   act_btns->Add(add_comp_btn_, 0, wxRIGHT, 2);
@@ -447,8 +410,6 @@ void InputActionsPanel::BuildLayout() {
   actions_tree_ = new wxTreeCtrl(
       act_pane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
       wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_HIDE_ROOT | wxTR_SINGLE);
-  ApplyDarkPalette(actions_tree_);
-  actions_tree_->SetBackgroundColour(Colors::kBgInput);
   act_s->Add(actions_tree_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   act_pane->SetSizer(act_s);
 
@@ -491,15 +452,11 @@ void InputActionsPanel::BuildLayout() {
 
   // Right: Properties
   auto* prop_pane = new wxPanel(right_split_);
-  ApplyDarkPalette(prop_pane);
-  prop_pane->SetBackgroundColour(Colors::kBgCanvas);
   auto* prop_root = new wxBoxSizer(wxVERTICAL);
   prop_root->Add(MakeSectionHeader(prop_pane, "Properties"), 0, wxALL, 6);
   prop_root->Add(new wxStaticLine(prop_pane), 0, wxEXPAND | wxLEFT | wxRIGHT, 6);
 
   props_scroll_ = new wxScrolledWindow(prop_pane, wxID_ANY);
-  ApplyDarkPalette(props_scroll_);
-  props_scroll_->SetBackgroundColour(Colors::kBgCanvas);
   props_scroll_->SetScrollRate(0, 14);
   props_sizer_ = new wxBoxSizer(wxVERTICAL);
   props_scroll_->SetSizer(props_sizer_);
@@ -604,7 +561,7 @@ void InputActionsPanel::RefreshActionsTree() {
     wxTreeItemId act_id = actions_tree_->AppendItem(
         root, wxString::FromUTF8(ActionSummary(act)), -1, -1,
         new SelectionItemData(a_sel));
-    actions_tree_->SetItemTextColour(act_id, Colors::kTextPrimary);
+    actions_tree_->SetItemFont(act_id, actions_tree_->GetFont().Bold());
     if (cur_sel == a_sel) to_select = act_id;
 
     for (size_t b = 0; b < act.bindings.size(); ++b) {
@@ -617,7 +574,6 @@ void InputActionsPanel::RefreshActionsTree() {
       wxTreeItemId b_id = actions_tree_->AppendItem(
           act_id, wxString::FromUTF8(label), -1, -1,
           new SelectionItemData(b_sel));
-      actions_tree_->SetItemTextColour(b_id, Colors::kTextSecondary);
       if (cur_sel == b_sel) to_select = b_id;
     }
 
@@ -628,7 +584,6 @@ void InputActionsPanel::RefreshActionsTree() {
       wxTreeItemId c_id = actions_tree_->AppendItem(
           act_id, wxString::FromUTF8("[2D] " + CompositeSummary(act.composites[c])),
           -1, -1, new SelectionItemData(c_sel));
-      actions_tree_->SetItemTextColour(c_id, Colors::kAccentBlue);
       if (cur_sel == c_sel) to_select = c_id;
     }
     actions_tree_->Expand(act_id);
@@ -784,7 +739,7 @@ void InputActionsPanel::RefreshProperties() {
     auto* hint = new wxStaticText(
         props_scroll_, wxID_ANY,
         "Select an action, binding, or 2D vector composite to inspect.");
-    hint->SetForegroundColour(Colors::kTextSecondary);
+    hint->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     props_sizer_->Add(hint, 0, wxALL, 4);
     props_scroll_->Thaw();
     props_scroll_->Layout();
@@ -798,19 +753,17 @@ void InputActionsPanel::RefreshProperties() {
     auto* name_row = new wxBoxSizer(wxHORIZONTAL);
     auto* nl = new wxStaticText(props_scroll_, wxID_ANY, "Name:",
                                 wxDefaultPosition, wxSize(95, -1));
-    nl->SetForegroundColour(Colors::kTextSecondary);
     auto* name_ctrl = new wxTextCtrl(props_scroll_, wxID_ANY,
                                      wxString::FromUTF8(act.name),
                                      wxDefaultPosition, wxDefaultSize,
                                      wxTE_PROCESS_ENTER);
-    StyleTextCtrl(name_ctrl);
     name_row->Add(nl, 0, wxALIGN_CENTER_VERTICAL);
     name_row->Add(name_ctrl, 1, wxEXPAND);
     props_sizer_->Add(name_row, 0, wxEXPAND | wxBOTTOM, 4);
 
     dup_name_lbl_ = new wxStaticText(props_scroll_, wxID_ANY,
                                      "Action name already exists in this map.");
-    dup_name_lbl_->SetForegroundColour(Colors::kAccentRed);
+    dup_name_lbl_->SetFont(props_scroll_->GetFont().Bold());
     dup_name_lbl_->Show(false);
     props_sizer_->Add(dup_name_lbl_, 0, wxBOTTOM, 6);
 
@@ -849,13 +802,11 @@ void InputActionsPanel::RefreshProperties() {
     auto* type_row = new wxBoxSizer(wxHORIZONTAL);
     auto* tl = new wxStaticText(props_scroll_, wxID_ANY, "Action Type:",
                                 wxDefaultPosition, wxSize(95, -1));
-    tl->SetForegroundColour(Colors::kTextSecondary);
     auto* type_choice = new wxChoice(props_scroll_, wxID_ANY);
     type_choice->Append("Button");
     type_choice->Append("Value");
     type_choice->Append("PassThrough");
     type_choice->SetSelection(static_cast<int>(act.type));
-    StyleChoice(type_choice);
     type_choice->Bind(wxEVT_CHOICE, [this, aidx](wxCommandEvent& evt) {
       scene_.InputActionsRef().SetActionType(
           aidx, static_cast<InputAction::Type>(evt.GetSelection()));
@@ -869,12 +820,10 @@ void InputActionsPanel::RefreshProperties() {
     auto* ctrl_row = new wxBoxSizer(wxHORIZONTAL);
     auto* cl = new wxStaticText(props_scroll_, wxID_ANY, "Control Type:",
                                 wxDefaultPosition, wxSize(95, -1));
-    cl->SetForegroundColour(Colors::kTextSecondary);
     auto* ctrl_choice = new wxChoice(props_scroll_, wxID_ANY);
     ctrl_choice->Append("Axis / Button");
     ctrl_choice->Append("Vector2");
     ctrl_choice->SetSelection(act.vector2 ? 1 : 0);
-    StyleChoice(ctrl_choice);
     ctrl_choice->Bind(wxEVT_CHOICE, [this, aidx](wxCommandEvent& evt) {
       scene_.InputActionsRef().SetActionVector2(aidx, evt.GetSelection() == 1);
       RefreshAll(true);
@@ -887,8 +836,6 @@ void InputActionsPanel::RefreshProperties() {
     auto* qbtns = new wxBoxSizer(wxHORIZONTAL);
     auto* ab = new wxButton(props_scroll_, wxID_ANY, "Add Binding");
     auto* ac = new wxButton(props_scroll_, wxID_ANY, "Add 2D Vector Composite");
-    StyleButton(ab);
-    StyleButton(ac);
     ab->Bind(wxEVT_BUTTON, [this, aidx](wxCommandEvent&) {
       scene_.InputActionsRef().AddBinding(aidx);
       RefreshAll(true);
@@ -906,21 +853,18 @@ void InputActionsPanel::RefreshProperties() {
     if (!snippet.empty()) {
       auto* ul = new wxStaticText(props_scroll_, wxID_ANY,
                                   "AngelScript Usage:");
-      ul->SetForegroundColour(Colors::kTextSecondary);
       props_sizer_->Add(ul, 0, wxBOTTOM, 4);
 
       auto* code = new wxTextCtrl(
           props_scroll_, wxID_ANY, wxString::FromUTF8(snippet),
           wxDefaultPosition, wxSize(-1, 68),
           wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
-      StyleTextCtrl(code);
       code->SetFont(MonospaceFont(9));
       props_sizer_->Add(code, 0, wxEXPAND | wxBOTTOM, 4);
 
       auto* copy_btn = new wxButton(props_scroll_, wxID_ANY, "Copy Snippet",
                                     wxDefaultPosition, wxDefaultSize,
                                     wxBU_EXACTFIT);
-      StyleButton(copy_btn);
       copy_btn->Bind(wxEVT_BUTTON, [snippet](wxCommandEvent&) {
         if (wxTheClipboard->Open()) {
           wxTheClipboard->SetData(
@@ -940,14 +884,12 @@ void InputActionsPanel::RefreshProperties() {
       auto* title = new wxStaticText(
           props_scroll_, wxID_ANY,
           wxString::FromUTF8("Binding on " + act.FullName()));
-      title->SetForegroundColour(Colors::kTextSecondary);
       props_sizer_->Add(title, 0, wxBOTTOM, 8);
 
       auto* row = new wxBoxSizer(wxHORIZONTAL);
       auto* edit = new wxTextCtrl(props_scroll_, wxID_ANY,
                                   wxString::FromUTF8(path), wxDefaultPosition,
                                   wxDefaultSize, wxTE_PROCESS_ENTER);
-      StyleTextCtrl(edit);
       edit->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& evt) {
         editing_prop_text_ = true;
         scene_.InputActionsRef().BeginEdit();
@@ -974,7 +916,6 @@ void InputActionsPanel::RefreshProperties() {
       auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...",
                                     wxDefaultPosition, wxDefaultSize,
                                     wxBU_EXACTFIT);
-      StyleButton(pick_btn);
       pick_btn->Bind(wxEVT_BUTTON, [this, pick_btn, aidx, bidx](wxCommandEvent&) {
         ShowControlPickerMenu(pick_btn, [this, aidx, bidx](const std::string& p) {
           scene_.InputActionsRef().SetBindingPath(aidx, bidx, p, false);
@@ -988,7 +929,6 @@ void InputActionsPanel::RefreshProperties() {
       auto* listen_btn = new wxButton(
           props_scroll_, wxID_ANY, listening ? "Listening..." : "Listen",
           wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-      StyleButton(listen_btn, listening);
       listen_btn->Bind(wxEVT_BUTTON, [this, listening, aidx, bidx](wxCommandEvent&) {
         if (listening) {
           StopListen();
@@ -1006,7 +946,7 @@ void InputActionsPanel::RefreshProperties() {
         auto* lhint = new wxStaticText(
             props_scroll_, wxID_ANY,
             "Press a keyboard key or gamepad button/trigger (Esc to cancel)...");
-        lhint->SetForegroundColour(Colors::kAccentAmber);
+        lhint->SetFont(props_scroll_->GetFont().Bold());
         props_sizer_->Add(lhint, 0);
       }
     }
@@ -1020,7 +960,6 @@ void InputActionsPanel::RefreshProperties() {
       auto* title = new wxStaticText(
           props_scroll_, wxID_ANY,
           wxString::FromUTF8("2D Vector Composite on " + act.FullName()));
-      title->SetForegroundColour(Colors::kTextSecondary);
       props_sizer_->Add(title, 0, wxBOTTOM, 8);
 
       const char* part_names[4] = {"Up", "Down", "Left", "Right"};
@@ -1031,11 +970,9 @@ void InputActionsPanel::RefreshProperties() {
         auto* p_hdr = new wxBoxSizer(wxHORIZONTAL);
         auto* pl = new wxStaticText(props_scroll_, wxID_ANY, part_names[p]);
         pl->SetFont(HeaderFont());
-        pl->SetForegroundColour(Colors::kTextPrimary);
         auto* add_p = new wxButton(props_scroll_, wxID_ANY, "+ Add",
                                    wxDefaultPosition, wxDefaultSize,
                                    wxBU_EXACTFIT);
-        StyleButton(add_p);
         add_p->Bind(wxEVT_BUTTON, [this, aidx, cidx, p](wxCommandEvent&) {
           scene_.InputActionsRef().AddCompositePartPath(aidx, cidx, p);
           RefreshAll(true);
@@ -1052,7 +989,6 @@ void InputActionsPanel::RefreshProperties() {
                                       wxString::FromUTF8(vec[idx]),
                                       wxDefaultPosition, wxDefaultSize,
                                       wxTE_PROCESS_ENTER);
-          StyleTextCtrl(edit);
           edit->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& evt) {
             editing_prop_text_ = true;
             scene_.InputActionsRef().BeginEdit();
@@ -1072,7 +1008,6 @@ void InputActionsPanel::RefreshProperties() {
           auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...",
                                         wxDefaultPosition, wxDefaultSize,
                                         wxBU_EXACTFIT);
-          StyleButton(pick_btn);
           pick_btn->Bind(wxEVT_BUTTON,
                          [this, pick_btn, aidx, cidx, p, idx](wxCommandEvent&) {
                            ShowControlPickerMenu(
@@ -1091,7 +1026,6 @@ void InputActionsPanel::RefreshProperties() {
           auto* listen_btn = new wxButton(
               props_scroll_, wxID_ANY, listening ? "..." : "Listen",
               wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-          StyleButton(listen_btn, listening);
           listen_btn->Bind(wxEVT_BUTTON,
                            [this, listening, aidx, cidx, p, idx](wxCommandEvent&) {
                              if (listening) {
@@ -1104,7 +1038,6 @@ void InputActionsPanel::RefreshProperties() {
 
           auto* rem_btn = new wxButton(props_scroll_, wxID_ANY, "-",
                                        wxDefaultPosition, wxSize(26, 22));
-          StyleButton(rem_btn);
           rem_btn->Bind(wxEVT_BUTTON, [this, aidx, cidx, p, idx](wxCommandEvent&) {
             scene_.InputActionsRef().RemoveCompositePartPath(aidx, cidx, p, idx);
             RefreshAll(true);
@@ -1183,7 +1116,6 @@ InputActionsFrame::InputActionsFrame(wxWindow* parent, EditorScene& scene,
     : wxFrame(parent, wxID_ANY, "Input Actions", wxDefaultPosition,
               wxSize(980, 620)),
       on_closed_(std::move(on_closed)) {
-  ApplyDarkPalette(this);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   panel_ = new InputActionsPanel(this, scene);
   panel_->SetPoppedOut(true);

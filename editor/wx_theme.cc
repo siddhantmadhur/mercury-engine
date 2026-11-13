@@ -15,30 +15,6 @@ namespace {
 wxColour ToWx(OverlayColor c) { return wxColour(c.r, c.g, c.b, c.a); }
 }  // namespace
 
-void ApplyDarkPalette(wxWindow* window) {
-  if (!window) return;
-  window->SetBackgroundColour(Colors::kBgPanel);
-  window->SetForegroundColour(Colors::kTextPrimary);
-}
-
-void StyleButton(wxButton* btn, bool primary, const wxColour& accent) {
-  if (!btn) return;
-  btn->SetBackgroundColour(primary ? accent : Colors::kBgControl);
-  btn->SetForegroundColour(Colors::kTextPrimary);
-}
-
-void StyleTextCtrl(wxTextCtrl* ctrl) {
-  if (!ctrl) return;
-  ctrl->SetBackgroundColour(Colors::kBgInput);
-  ctrl->SetForegroundColour(Colors::kTextPrimary);
-}
-
-void StyleChoice(wxChoice* choice) {
-  if (!choice) return;
-  choice->SetBackgroundColour(Colors::kBgControl);
-  choice->SetForegroundColour(Colors::kTextPrimary);
-}
-
 wxFont MonospaceFont(int point_delta) {
   wxFont font(wxFontInfo(9 + point_delta).Family(wxFONTFAMILY_TELETYPE));
   return font;
@@ -204,221 +180,11 @@ void WxOverlayCanvas::AddText(glm::vec2 pos, OverlayColor color,
 
 glm::vec2 WxOverlayCanvas::MeasureText(const std::string& text) const {
   if (!gc_ || text.empty()) return glm::vec2(0.0f);
-  gc_->SetFont(font_, Colors::kTextPrimary);
+  gc_->SetFont(font_, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
   double w = 0.0;
   double h = 0.0;
   gc_->GetTextExtent(wxString::FromUTF8(text), &w, &h);
   return glm::vec2(static_cast<float>(w), static_cast<float>(h));
-}
-
-// ------------------------------------------------------------------ AUI Art ---
-
-DarkDockArt::DarkDockArt() {
-  SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, Colors::kBgCanvas);
-  SetColour(wxAUI_DOCKART_SASH_COLOUR, Colors::kBgCanvas);
-  SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_COLOUR, Colors::kBgHeader);
-  SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_GRADIENT_COLOUR, Colors::kBgHeader);
-  SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_TEXT_COLOUR, Colors::kTextSecondary);
-  SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_COLOUR, wxColour(44, 52, 66));
-  SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_GRADIENT_COLOUR, wxColour(44, 52, 66));
-  SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_TEXT_COLOUR, Colors::kTextPrimary);
-  SetColour(wxAUI_DOCKART_BORDER_COLOUR, Colors::kBorder);
-  SetColour(wxAUI_DOCKART_GRIPPER_COLOUR, Colors::kBorderStrong);
-  SetMetric(wxAUI_DOCKART_CAPTION_SIZE, 22);
-  SetMetric(wxAUI_DOCKART_SASH_SIZE, 4);
-  SetMetric(wxAUI_DOCKART_PANE_BORDER_SIZE, 1);
-  SetFont(wxAUI_DOCKART_CAPTION_FONT, HeaderFont(-1));
-}
-
-void DarkDockArt::DrawBackground(wxDC& dc, wxWindow* /*window*/,
-                                 int /*orientation*/, const wxRect& rect) {
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(Colors::kBgCanvas));
-  dc.DrawRectangle(rect);
-}
-
-void DarkDockArt::DrawSash(wxDC& dc, wxWindow* /*window*/, int /*orientation*/,
-                           const wxRect& rect) {
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(Colors::kBgCanvas));
-  dc.DrawRectangle(rect);
-  dc.SetPen(wxPen(Colors::kBorder));
-  if (rect.width <= 6) {
-    int cx = rect.x + rect.width / 2;
-    dc.DrawLine(cx, rect.y, cx, rect.y + rect.height);
-  } else if (rect.height <= 6) {
-    int cy = rect.y + rect.height / 2;
-    dc.DrawLine(rect.x, cy, rect.x + rect.width, cy);
-  }
-}
-
-void DarkDockArt::DrawBorder(wxDC& dc, wxWindow* /*window*/, const wxRect& rect,
-                             wxAuiPaneInfo& /*pane*/) {
-  dc.SetPen(wxPen(Colors::kBorder));
-  dc.SetBrush(*wxTRANSPARENT_BRUSH);
-  dc.DrawRectangle(rect);
-}
-
-void DarkDockArt::DrawCaption(wxDC& dc, wxWindow* window, const wxString& text,
-                              const wxRect& rect, wxAuiPaneInfo& pane) {
-  const bool active = (pane.state & wxAuiPaneInfo::optionActive) != 0;
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(active ? wxColour(42, 48, 58) : Colors::kBgHeader));
-  dc.DrawRectangle(rect);
-
-  // Subtle top accent line on active pane.
-  if (active) {
-    dc.SetPen(wxPen(Colors::kAccentAmber, 2));
-    dc.DrawLine(rect.x, rect.y + 1, rect.x + rect.width, rect.y + 1);
-  }
-  dc.SetPen(wxPen(Colors::kBorder));
-  dc.DrawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width,
-              rect.y + rect.height - 1);
-
-  dc.SetFont(m_captionFont);
-  dc.SetTextForeground(active ? Colors::kTextPrimary : Colors::kTextSecondary);
-  wxRect text_rect = rect;
-  text_rect.Deflate(8, 0);
-  text_rect.width = std::max(0, text_rect.width - 24);
-  const wxString clipped = wxControl::Ellipsize(text, dc, wxELLIPSIZE_END,
-                                                text_rect.width);
-  dc.DrawLabel(clipped, text_rect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-  (void)window;
-}
-
-DarkTabArt::DarkTabArt() {
-  SetColour(Colors::kBgCanvas);
-  SetActiveColour(Colors::kBgPanel);
-  SetNormalFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-  SetSelectedFont(HeaderFont());
-  SetMeasuringFont(HeaderFont());
-}
-
-wxAuiTabArt* DarkTabArt::Clone() { return new DarkTabArt(*this); }
-
-void DarkTabArt::DrawBackground(wxDC& dc, wxWindow* /*wnd*/,
-                                const wxRect& rect) {
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(Colors::kBgCanvas));
-  dc.DrawRectangle(rect);
-  dc.SetPen(wxPen(Colors::kBorder));
-  dc.DrawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width,
-              rect.y + rect.height - 1);
-}
-
-void DarkTabArt::DrawTab(wxDC& dc, wxWindow* wnd,
-                         const wxAuiNotebookPage& pane, const wxRect& in_rect,
-                         int close_button_state, wxRect* out_tab_rect,
-                         wxRect* out_button_rect, int* x_extent) {
-  int measured_offset = 0;
-  wxSize tab_size = GetTabSize(dc, wnd, pane.caption, pane.bitmap, pane.active,
-                               close_button_state, &measured_offset);
-  wxCoord tab_width = std::min(tab_size.x, in_rect.width);
-  wxCoord tab_height = in_rect.height;
-  wxRect tab_rect(in_rect.x, in_rect.y, tab_width, tab_height);
-  if (out_tab_rect) *out_tab_rect = tab_rect;
-  if (x_extent) *x_extent = tab_width + 2;
-
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(pane.active ? Colors::kBgPanel : Colors::kBgHeader));
-  dc.DrawRectangle(tab_rect.x, tab_rect.y + 2, tab_rect.width,
-                   tab_rect.height - 2);
-
-  if (pane.active) {
-    dc.SetPen(wxPen(Colors::kAccentAmber, 2));
-    dc.DrawLine(tab_rect.x, tab_rect.y + 2, tab_rect.x + tab_rect.width,
-                tab_rect.y + 2);
-  }
-  dc.SetPen(wxPen(Colors::kBorder));
-  dc.DrawLine(tab_rect.x + tab_rect.width - 1, tab_rect.y + 3,
-              tab_rect.x + tab_rect.width - 1, tab_rect.y + tab_rect.height);
-
-  dc.SetFont(pane.active ? m_selectedFont : m_normalFont);
-  dc.SetTextForeground(pane.active ? Colors::kTextPrimary
-                                   : Colors::kTextSecondary);
-  wxRect caption_rect = tab_rect;
-  caption_rect.Deflate(10, 2);
-  if (close_button_state != wxAUI_BUTTON_STATE_HIDDEN && out_button_rect) {
-    const int btn_size = 14;
-    wxRect btn_rect(tab_rect.GetRight() - btn_size - 6,
-                    tab_rect.y + (tab_rect.height - btn_size) / 2, btn_size,
-                    btn_size);
-    *out_button_rect = btn_rect;
-    caption_rect.width = std::max(0, caption_rect.width - btn_size - 6);
-    dc.SetPen(wxPen(close_button_state == wxAUI_BUTTON_STATE_HOVER
-                        ? Colors::kTextPrimary
-                        : Colors::kTextMuted,
-                    1));
-    dc.DrawLine(btn_rect.x + 3, btn_rect.y + 3, btn_rect.x + btn_size - 3,
-                btn_rect.y + btn_size - 3);
-    dc.DrawLine(btn_rect.x + btn_size - 3, btn_rect.y + 3, btn_rect.x + 3,
-                btn_rect.y + btn_size - 3);
-  } else if (out_button_rect) {
-    *out_button_rect = wxRect();
-  }
-  const wxString clipped = wxControl::Ellipsize(pane.caption, dc,
-                                                wxELLIPSIZE_END,
-                                                caption_rect.width);
-  dc.DrawLabel(clipped, caption_rect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-}
-
-DarkToolBarArt::DarkToolBarArt() {
-  SetTextOrientation(wxAUI_TBTOOL_TEXT_RIGHT);
-  SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-}
-
-wxAuiToolBarArt* DarkToolBarArt::Clone() { return new DarkToolBarArt(*this); }
-
-void DarkToolBarArt::DrawBackground(wxDC& dc, wxWindow* /*wnd*/,
-                                    const wxRect& rect) {
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(Colors::kBgHeader));
-  dc.DrawRectangle(rect);
-  dc.SetPen(wxPen(Colors::kBorder));
-  dc.DrawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width,
-              rect.y + rect.height - 1);
-}
-
-void DarkToolBarArt::DrawPlainBackground(wxDC& dc, wxWindow* wnd,
-                                         const wxRect& rect) {
-  DrawBackground(dc, wnd, rect);
-}
-
-void DarkToolBarArt::DrawSeparator(wxDC& dc, wxWindow* /*wnd*/,
-                                   const wxRect& rect) {
-  dc.SetPen(wxPen(Colors::kBorderStrong));
-  const int cx = rect.x + rect.width / 2;
-  dc.DrawLine(cx, rect.y + 5, cx, rect.y + rect.height - 5);
-}
-
-void DarkToolBarArt::DrawButton(wxDC& dc, wxWindow* /*wnd*/,
-                                const wxAuiToolBarItem& item,
-                                const wxRect& rect) {
-  wxRect r = rect;
-  r.Deflate(1, 3);
-  const bool active = item.IsSticky() ||
-                      (item.GetState() & wxAUI_BUTTON_STATE_CHECKED) != 0;
-  const bool hover = (item.GetState() & wxAUI_BUTTON_STATE_HOVER) != 0;
-  const bool pressed = (item.GetState() & wxAUI_BUTTON_STATE_PRESSED) != 0;
-  const bool disabled = (item.GetState() & wxAUI_BUTTON_STATE_DISABLED) != 0;
-
-  if (pressed || active) {
-    dc.SetPen(wxPen(Colors::kAccentAmber));
-    dc.SetBrush(wxBrush(wxColour(64, 52, 38)));
-    dc.DrawRoundedRectangle(r, 3);
-  } else if (hover && !disabled) {
-    dc.SetPen(wxPen(Colors::kBorderStrong));
-    dc.SetBrush(wxBrush(Colors::kBgControlHover));
-    dc.DrawRoundedRectangle(r, 3);
-  } else {
-    dc.SetPen(wxPen(Colors::kBorder));
-    dc.SetBrush(wxBrush(Colors::kBgControl));
-    dc.DrawRoundedRectangle(r, 3);
-  }
-
-  dc.SetFont(m_font);
-  dc.SetTextForeground(disabled ? Colors::kTextMuted : Colors::kTextPrimary);
-  dc.DrawLabel(item.GetLabel(), r, wxALIGN_CENTER);
 }
 
 // --------------------------------------------------------- CollapsibleSection
@@ -434,7 +200,6 @@ CollapsibleSection::CollapsibleSection(
       expanded_(expanded),
       on_context_(std::move(on_context_menu)),
       on_toggle_(std::move(on_toggle)) {
-  SetBackgroundColour(Colors::kBgPanel);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   header_ = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 24),
@@ -454,7 +219,6 @@ CollapsibleSection::CollapsibleSection(
   });
 
   body_ = new wxPanel(this, wxID_ANY);
-  body_->SetBackgroundColour(Colors::kBgPanel);
   body_sizer_ = new wxBoxSizer(wxVERTICAL);
   body_->SetSizer(body_sizer_);
   body_->Show(expanded_);
@@ -500,16 +264,22 @@ void CollapsibleSection::UpdateLayout() {
 void CollapsibleSection::OnPaintHeader(wxPaintEvent&) {
   wxAutoBufferedPaintDC dc(header_);
   const wxSize sz = header_->GetClientSize();
+  const wxColour bg = wxSystemSettings::GetColour(
+      hovered_ ? wxSYS_COLOUR_BTNHIGHLIGHT : wxSYS_COLOUR_BTNFACE);
+  const wxColour border = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+  const wxColour fg = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT);
+  const wxColour muted = wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
+
   dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(hovered_ ? Colors::kBgControlHover : Colors::kBgHeader));
+  dc.SetBrush(wxBrush(bg));
   dc.DrawRectangle(0, 0, sz.x, sz.y);
 
-  dc.SetPen(wxPen(Colors::kBorder));
+  dc.SetPen(wxPen(border));
   dc.DrawLine(0, 0, sz.x, 0);
   dc.DrawLine(0, sz.y - 1, sz.x, sz.y - 1);
 
-  // Subtle disclosure triangle.
-  dc.SetBrush(wxBrush(Colors::kTextSecondary));
+  // Disclosure triangle.
+  dc.SetBrush(wxBrush(fg));
   dc.SetPen(*wxTRANSPARENT_PEN);
   wxPoint tri[3];
   if (expanded_) {
@@ -524,12 +294,12 @@ void CollapsibleSection::OnPaintHeader(wxPaintEvent&) {
   dc.DrawPolygon(3, tri);
 
   dc.SetFont(HeaderFont());
-  dc.SetTextForeground(Colors::kTextPrimary);
+  dc.SetTextForeground(fg);
   dc.DrawText(title_, 22, (sz.y - dc.GetCharHeight()) / 2);
 
   if (!badge_.IsEmpty()) {
     dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-    dc.SetTextForeground(Colors::kTextSecondary);
+    dc.SetTextForeground(muted);
     const wxSize bsz = dc.GetTextExtent(badge_);
     dc.DrawText(badge_, sz.x - bsz.x - 8, (sz.y - bsz.y) / 2);
   }
@@ -555,7 +325,6 @@ DragNumberCtrl::DragNumberCtrl(wxWindow* parent, const wxString& label,
       step_(step),
       integer_only_(integer_only),
       precision_(precision) {
-  SetBackgroundColour(Colors::kBgInput);
   auto* sizer = new wxBoxSizer(wxHORIZONTAL);
 
   if (!label_.IsEmpty()) {
@@ -569,18 +338,17 @@ DragNumberCtrl::DragNumberCtrl(wxWindow* parent, const wxString& label,
     tag_->Bind(wxEVT_LEFT_UP, &DragNumberCtrl::OnTagMouse, this);
     tag_->Bind(wxEVT_MOTION, &DragNumberCtrl::OnTagMouse, this);
     tag_->Bind(wxEVT_MOUSE_CAPTURE_LOST, &DragNumberCtrl::OnCaptureLost, this);
-    sizer->Add(tag_, 0, wxEXPAND);
+    sizer->Add(tag_, 0, wxEXPAND | wxRIGHT, 2);
   }
 
   text_ = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                         wxSize(56, 22), wxTE_PROCESS_ENTER | wxBORDER_NONE);
-  StyleTextCtrl(text_);
+                         wxSize(56, -1), wxTE_PROCESS_ENTER);
   text_->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) { CommitText(); });
   text_->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) {
     CommitText();
     e.Skip();
   });
-  sizer->Add(text_, 1, wxEXPAND | wxLEFT, 4);
+  sizer->Add(text_, 1, wxEXPAND);
 
   SetSizer(sizer);
   SyncText();
@@ -637,16 +405,22 @@ void DragNumberCtrl::CommitText() {
 void DragNumberCtrl::OnTagPaint(wxPaintEvent&) {
   wxAutoBufferedPaintDC dc(tag_);
   const wxSize sz = tag_->GetClientSize();
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.SetBrush(wxBrush(Colors::kBgControl));
+  const wxColour bg = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+  const wxColour border = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+  const wxColour fg = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT);
+
+  dc.SetPen(wxPen(border));
+  dc.SetBrush(wxBrush(bg));
   dc.DrawRectangle(0, 0, sz.x, sz.y);
 
-  // Colored left accent stripe like Source 2 / Blender / Glacier vector bars.
-  dc.SetBrush(wxBrush(tag_color_));
-  dc.DrawRectangle(0, 0, 3, sz.y);
+  if (tag_color_.IsOk()) {
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(tag_color_));
+    dc.DrawRectangle(1, 1, 3, std::max(0, sz.y - 2));
+  }
 
   dc.SetFont(HeaderFont(-1));
-  dc.SetTextForeground(Colors::kTextPrimary);
+  dc.SetTextForeground(fg);
   const wxSize tsz = dc.GetTextExtent(label_);
   dc.DrawText(label_, std::max(5, (sz.x - tsz.x) / 2), (sz.y - tsz.y) / 2);
 }
@@ -685,7 +459,6 @@ void DragNumberCtrl::OnCaptureLost(wxMouseCaptureLostEvent&) {
 
 Vec2Field::Vec2Field(wxWindow* parent, glm::vec2 value, double step)
     : wxPanel(parent, wxID_ANY) {
-  SetBackgroundColour(Colors::kBgPanel);
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   x_ = new DragNumberCtrl(this, "X", Colors::kAxisX, value.x, step);
   y_ = new DragNumberCtrl(this, "Y", Colors::kAxisY, value.y, step);
@@ -721,7 +494,6 @@ bool Vec2Field::IsEditingText() const {
 
 Vec3Field::Vec3Field(wxWindow* parent, glm::vec3 value, double step)
     : wxPanel(parent, wxID_ANY) {
-  SetBackgroundColour(Colors::kBgPanel);
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   x_ = new DragNumberCtrl(this, "X", Colors::kAxisX, value.x, step);
   y_ = new DragNumberCtrl(this, "Y", Colors::kAxisY, value.y, step);
@@ -785,7 +557,7 @@ void ColorSwatchCtrl::OnPaint(wxPaintEvent&) {
   auto to_u8 = [](float f) -> unsigned char {
     return static_cast<unsigned char>(std::clamp(f, 0.0f, 1.0f) * 255.0f + 0.5f);
   };
-  dc.SetPen(wxPen(Colors::kBorderStrong));
+  dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
   dc.SetBrush(wxBrush(wxColour(to_u8(rgba_.r), to_u8(rgba_.g), to_u8(rgba_.b))));
   dc.DrawRectangle(0, 0, sz.x, sz.y);
 

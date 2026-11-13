@@ -9,6 +9,7 @@
 #ifndef MERCURY_EDITOR_SCENE_VIEWPORT_PANEL_H
 #define MERCURY_EDITOR_SCENE_VIEWPORT_PANEL_H
 
+#include <wx/tglbtn.h>
 #include <wx/wx.h>
 
 #include <cstdint>
@@ -64,11 +65,11 @@ class SceneViewportPanel : public wxPanel {
 
   EditorScene& scene_;
 
-  wxButton* move_btn_ = nullptr;
-  wxButton* rotate_btn_ = nullptr;
-  wxButton* scale_btn_ = nullptr;
-  wxButton* space_btn_ = nullptr;
-  wxButton* mode_2d_btn_ = nullptr;
+  wxToggleButton* move_btn_ = nullptr;
+  wxToggleButton* rotate_btn_ = nullptr;
+  wxToggleButton* scale_btn_ = nullptr;
+  wxToggleButton* space_btn_ = nullptr;
+  wxToggleButton* mode_2d_btn_ = nullptr;
   wxButton* frame_btn_ = nullptr;
   wxStaticText* status_lbl_ = nullptr;
   wxPanel* canvas_ = nullptr;

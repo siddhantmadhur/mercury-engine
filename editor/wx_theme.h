@@ -1,16 +1,13 @@
 /*
  * wx_theme.h
  *
- * Dark Source 2 / IOI Glacier visual theme, AUI dock/tab/toolbar art providers,
- * reusable retained-mode inspector controls (CollapsibleSection, DragNumberCtrl,
- * Vec2Field, Vec3Field, ColorSwatchCtrl), and RGBA8 -> wxBitmap conversion.
+ * Shared fonts, reusable retained-mode inspector controls (CollapsibleSection,
+ * DragNumberCtrl, Vec2Field, Vec3Field, ColorSwatchCtrl), RGBA8 -> wxBitmap
+ * conversion, and WxOverlayCanvas for viewport overlays.
  */
 #ifndef MERCURY_EDITOR_WX_THEME_H
 #define MERCURY_EDITOR_WX_THEME_H
 
-#include <wx/aui/aui.h>
-#include <wx/aui/auibar.h>
-#include <wx/aui/tabart.h>
 #include <wx/graphics.h>
 #include <wx/wx.h>
 
@@ -27,40 +24,17 @@
 
 namespace Mercury::EditorUI {
 
-// Source 2 Hammer / IOI Glacier inspired dark neutral studio palette.
+// Axis indicator colors for 3D gizmos / Vec2 / Vec3 fields.
 namespace Colors {
-inline const wxColour kBgCanvas(24, 26, 29);        // #181A1D
-inline const wxColour kBgPanel(32, 34, 38);         // #202226
-inline const wxColour kBgHeader(40, 43, 48);        // #282B30
-inline const wxColour kBgControl(45, 49, 56);       // #2D3138
-inline const wxColour kBgControlHover(55, 60, 69);  // #373C45
-inline const wxColour kBgInput(27, 29, 33);         // #1B1D21
-inline const wxColour kBgSelected(44, 75, 115);     // #2C4B73
-inline const wxColour kBgRowAlt(36, 39, 44);        // #24272C
-inline const wxColour kBorder(60, 65, 74);          // #3C414A
-inline const wxColour kBorderStrong(78, 84, 96);    // #4E5460
-inline const wxColour kTextPrimary(228, 231, 236);  // #E4E7EC
-inline const wxColour kTextSecondary(154, 161, 174);// #9AA1AE
-inline const wxColour kTextMuted(109, 116, 130);    // #6D7482
-inline const wxColour kAccentAmber(217, 130, 43);   // #D9822B (Source 2)
-inline const wxColour kAccentBlue(76, 142, 218);    // #4C8EDA (Glacier)
-inline const wxColour kAccentGreen(62, 155, 86);    // #3E9B56
-inline const wxColour kAccentRed(201, 74, 74);      // #C94A4A
-inline const wxColour kAxisX(224, 85, 69);          // #E05545
-inline const wxColour kAxisY(104, 184, 72);         // #68B848
-inline const wxColour kAxisZ(74, 143, 226);         // #4A8FE2
+inline const wxColour kAxisX(224, 85, 69);
+inline const wxColour kAxisY(104, 184, 72);
+inline const wxColour kAxisZ(74, 143, 226);
 }  // namespace Colors
 
-void ApplyDarkPalette(wxWindow* window);
-void StyleButton(wxButton* btn, bool primary = false,
-                 const wxColour& accent = Colors::kBgControl);
-void StyleTextCtrl(wxTextCtrl* ctrl);
-void StyleChoice(wxChoice* choice);
 wxFont MonospaceFont(int point_delta = 0);
 wxFont HeaderFont(int point_delta = 0);
 
-// Fast RGBA8 -> wxBitmap conversion. Reuses internal wxImage buffers via caller
-// helper if desired; alpha channel is only populated when `with_alpha` is true.
+// Fast RGBA8 -> wxBitmap conversion.
 wxBitmap RgbaToWxBitmap(const uint8_t* rgba, int width, int height,
                         bool with_alpha = false);
 
@@ -97,46 +71,9 @@ class WxOverlayCanvas : public OverlayCanvas {
   wxFont font_;
 };
 
-// ------------------------------------------------------------------ AUI Art ---
-
-class DarkDockArt : public wxAuiDefaultDockArt {
- public:
-  DarkDockArt();
-  void DrawBorder(wxDC& dc, wxWindow* window, const wxRect& rect,
-                  wxAuiPaneInfo& pane) override;
-  void DrawCaption(wxDC& dc, wxWindow* window, const wxString& text,
-                   const wxRect& rect, wxAuiPaneInfo& pane) override;
-  void DrawSash(wxDC& dc, wxWindow* window, int orientation,
-                const wxRect& rect) override;
-  void DrawBackground(wxDC& dc, wxWindow* window, int orientation,
-                      const wxRect& rect) override;
-};
-
-class DarkTabArt : public wxAuiGenericTabArt {
- public:
-  DarkTabArt();
-  wxAuiTabArt* Clone() override;
-  void DrawBackground(wxDC& dc, wxWindow* wnd, const wxRect& rect) override;
-  void DrawTab(wxDC& dc, wxWindow* wnd, const wxAuiNotebookPage& pane,
-               const wxRect& in_rect, int close_button_state, wxRect* out_tab_rect,
-               wxRect* out_button_rect, int* x_extent) override;
-};
-
-class DarkToolBarArt : public wxAuiDefaultToolBarArt {
- public:
-  DarkToolBarArt();
-  wxAuiToolBarArt* Clone() override;
-  void DrawBackground(wxDC& dc, wxWindow* wnd, const wxRect& rect) override;
-  void DrawPlainBackground(wxDC& dc, wxWindow* wnd,
-                           const wxRect& rect) override;
-  void DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& item,
-                  const wxRect& rect) override;
-  void DrawSeparator(wxDC& dc, wxWindow* wnd, const wxRect& rect) override;
-};
-
 // --------------------------------------------------------- Custom Controls ---
 
-// Source 2 / Glacier style collapsible inspector card.
+// Collapsible inspector card.
 class CollapsibleSection : public wxPanel {
  public:
   CollapsibleSection(wxWindow* parent, const wxString& title,
@@ -171,11 +108,11 @@ class CollapsibleSection : public wxPanel {
   std::function<void(bool)> on_toggle_;
 };
 
-// Drag-scrubbable scalar control with color-coded axis/label handle + text entry.
+// Drag-scrubbable scalar control with handle + native text entry.
 class DragNumberCtrl : public wxPanel {
  public:
   DragNumberCtrl(wxWindow* parent, const wxString& label = wxEmptyString,
-                 const wxColour& tag_color = Colors::kBorderStrong,
+                 const wxColour& tag_color = wxNullColour,
                  double value = 0.0, double step = 0.05,
                  bool integer_only = false, int precision = 3);
 

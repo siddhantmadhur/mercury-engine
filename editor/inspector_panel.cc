@@ -35,13 +35,10 @@ std::string AssetLabel(const std::string& res_path) {
 
 InspectorPanel::InspectorPanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY), scene_(scene) {
-  ApplyDarkPalette(this);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   scroll_ = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                  wxVSCROLL | wxBORDER_NONE);
-  scroll_->SetBackgroundColour(Colors::kBgPanel);
-  scroll_->SetForegroundColour(Colors::kTextPrimary);
   scroll_->SetScrollRate(0, 14);
 
   content_sizer_ = new wxBoxSizer(wxVERTICAL);
@@ -132,7 +129,7 @@ void InspectorPanel::RebuildNow() {
   } else {
     auto* empty = new wxStaticText(scroll_, wxID_ANY,
                                    "Select a node or an asset");
-    empty->SetForegroundColour(Colors::kTextMuted);
+    empty->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     content_sizer_->Add(empty, 0, wxALL, 12);
   }
 
@@ -147,18 +144,16 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
   if (!project) return;
 
   auto* header = new wxPanel(scroll_, wxID_ANY);
-  header->SetBackgroundColour(Colors::kBgHeader);
   auto* hs = new wxBoxSizer(wxVERTICAL);
 
   auto* title = new wxStaticText(
       header, wxID_ANY,
       wxString::FromUTF8(fs::path(res_path).filename().string()));
   title->SetFont(HeaderFont(1));
-  title->SetForegroundColour(Colors::kTextPrimary);
   hs->Add(title, 0, wxBOTTOM, 2);
 
   auto* sub = new wxStaticText(header, wxID_ANY, wxString::FromUTF8(res_path));
-  sub->SetForegroundColour(Colors::kTextSecondary);
+  sub->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   hs->Add(sub, 0);
 
   auto* hwrap = new wxBoxSizer(wxVERTICAL);
@@ -168,7 +163,6 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
 
   if (!res_path.ends_with(kAssetExtension)) {
     auto* open_btn = new wxButton(scroll_, wxID_ANY, "Open in External Editor");
-    StyleButton(open_btn);
     open_btn->Bind(wxEVT_BUTTON, [this, project, res_path](wxCommandEvent&) {
       scene_.OpenInExternalEditor(project->Resolve(res_path));
     });
@@ -180,7 +174,7 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
   std::string error;
   if (!LoadAssetFile(project->Resolve(res_path), *asset, &error)) {
     auto* err = new wxStaticText(scroll_, wxID_ANY, wxString::FromUTF8(error));
-    err->SetForegroundColour(Colors::kAccentRed);
+    err->SetFont(err->GetFont().Bold());
     content_sizer_->Add(err, 0, wxALL, 8);
     return;
   }
@@ -188,7 +182,7 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
 
   auto* type_lbl = new wxStaticText(
       scroll_, wxID_ANY, wxString::FromUTF8("Type: " + asset->type));
-  type_lbl->SetForegroundColour(Colors::kTextSecondary);
+  type_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   content_sizer_->Add(type_lbl, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
   const AssetTypeInfo* info =
@@ -204,7 +198,7 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
     }
   } else {
     auto* unk = new wxStaticText(scroll_, wxID_ANY, "Unknown asset type");
-    unk->SetForegroundColour(Colors::kTextMuted);
+    unk->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     content_sizer_->Add(unk, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
   }
 
@@ -236,14 +230,12 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
   const uint64_t node_uid = node.uid;
 
   auto* header = new wxPanel(scroll_, wxID_ANY);
-  header->SetBackgroundColour(Colors::kBgHeader);
   auto* hs = new wxBoxSizer(wxVERTICAL);
 
   auto* name_ctrl = new wxTextCtrl(header, wxID_ANY,
                                    wxString::FromUTF8(node.name),
                                    wxDefaultPosition, wxDefaultSize,
                                    wxTE_PROCESS_ENTER);
-  StyleTextCtrl(name_ctrl);
   name_ctrl->SetFont(HeaderFont(1));
   auto commit_name = [this, node_uid, name_ctrl]() {
     MapNode* target = scene_.GetMap().FindByUid(node_uid);
@@ -266,7 +258,7 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
   auto* path_lbl = new wxStaticText(
       header, wxID_ANY, wxString::FromUTF8("Path: " + node.GetPath()),
       wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
-  path_lbl->SetForegroundColour(Colors::kTextSecondary);
+  path_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   hs->Add(path_lbl, 0, wxEXPAND);
 
   auto* hwrap = new wxBoxSizer(wxVERTICAL);
@@ -352,7 +344,7 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
           body, wxID_ANY,
           "This component type is not known. If it is a script, press Build. "
           "Its values are kept as they are.");
-      msg->SetForegroundColour(Colors::kTextSecondary);
+      msg->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
       msg->Wrap(260);
       bs->Add(msg, 0, wxEXPAND | wxBOTTOM, 6);
     }
@@ -401,7 +393,6 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
           source ? source->Get<mtext::Resource>() : nullptr;
       std::string ui_path = resource ? resource->path : "";
       uidoc_btn = new wxButton(body, wxID_ANY, "Edit in UI Builder");
-      StyleButton(uidoc_btn, true, Colors::kAccentBlue);
       uidoc_btn->Enable(!ui_path.empty());
       uidoc_btn->Bind(wxEVT_BUTTON, [this, node_uid, i](wxCommandEvent&) {
         MapNode* target = scene_.GetMap().FindByUid(node_uid);
@@ -457,7 +448,6 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
   }
 
   auto* add_btn = new wxButton(scroll_, wxID_ANY, "Add Component");
-  StyleButton(add_btn, true, Colors::kAccentAmber);
   add_btn->SetMinSize(wxSize(200, 28));
   add_btn->Bind(wxEVT_BUTTON, [this, node_uid](wxCommandEvent&) {
     MapNode* target = scene_.GetMap().FindByUid(node_uid);
@@ -494,8 +484,7 @@ void InspectorPanel::AddFieldRow(
                                  wxString::FromUTF8(field.name),
                                  wxDefaultPosition, wxSize(118, -1),
                                  wxST_ELLIPSIZE_END);
-  label->SetForegroundColour(overridden ? Colors::kTextPrimary
-                                        : Colors::kTextSecondary);
+  if (overridden) label->SetFont(parent->GetFont().Bold());
   if (!field.tooltip.empty()) {
     label->SetToolTip(wxString::FromUTF8(field.tooltip));
   }
@@ -516,7 +505,7 @@ void InspectorPanel::AddFieldRow(
   // For lists and events, put the label above or on the left; left aligns cleanly.
   row->Add(label, 0, wxALIGN_TOP | wxTOP | wxRIGHT, 3);
 
-  auto write_fn = [this, label, &props, field, on_prop_changed,
+  auto write_fn = [this, label, parent, &props, field, on_prop_changed,
                    comp_type](const mtext::Variant& new_val, bool coalesced) {
     if (new_val == field.default_value) {
       props.Remove(field.name);
@@ -525,8 +514,7 @@ void InspectorPanel::AddFieldRow(
     }
     const mtext::Variant* cur = props.Get(field.name);
     const bool now_over = cur && !(*cur == field.default_value);
-    label->SetForegroundColour(now_over ? Colors::kTextPrimary
-                                        : Colors::kTextSecondary);
+    label->SetFont(now_over ? parent->GetFont().Bold() : parent->GetFont());
     label->Refresh();
     on_prop_changed(coalesced);
 
@@ -564,7 +552,7 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
     }
     case FieldType::kInt: {
       const int v = static_cast<int>(current.ToInt().value_or(0));
-      auto* ctrl = new DragNumberCtrl(parent, wxEmptyString, Colors::kBorderStrong,
+      auto* ctrl = new DragNumberCtrl(parent, wxEmptyString, wxNullColour,
                                       static_cast<double>(v), 1.0, true, 0);
       ctrl->SetCallbacks(
           [this]() {
@@ -584,7 +572,7 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
     }
     case FieldType::kFloat: {
       const double v = current.ToFloat().value_or(0.0);
-      auto* ctrl = new DragNumberCtrl(parent, wxEmptyString, Colors::kBorderStrong,
+      auto* ctrl = new DragNumberCtrl(parent, wxEmptyString, wxNullColour,
                                       v, 0.05, false, 4);
       ctrl->SetCallbacks(
           [this]() {
@@ -604,7 +592,6 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
       auto* ctrl = new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(s),
                                   wxDefaultPosition, wxDefaultSize,
                                   wxTE_PROCESS_ENTER);
-      StyleTextCtrl(ctrl);
       auto commit = [ctrl, write_fn]() {
         write_fn(mtext::Variant(ctrl->GetValue().ToStdString()), false);
       };
@@ -669,7 +656,6 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
       }
       auto* choice = new wxChoice(parent, wxID_ANY, wxDefaultPosition,
                                   wxDefaultSize, choices);
-      StyleChoice(choice);
       if (sel != wxNOT_FOUND) choice->SetSelection(sel);
       choice->Bind(wxEVT_CHOICE, [choice, field, write_fn](wxCommandEvent&) {
         const int idx = choice->GetSelection();
@@ -728,7 +714,6 @@ wxWindow* InspectorPanel::CreateNodePicker(
 
   auto* choice = new wxChoice(parent, wxID_ANY, wxDefaultPosition,
                               wxDefaultSize, labels);
-  StyleChoice(choice);
   if (sel != wxNOT_FOUND) choice->SetSelection(sel);
   if (!current_path.empty()) {
     choice->SetToolTip(wxString::FromUTF8(current_path));
@@ -798,7 +783,6 @@ wxWindow* InspectorPanel::CreateAssetPicker(
 
   auto* choice = new wxChoice(parent, wxID_ANY, wxDefaultPosition,
                               wxDefaultSize, labels);
-  StyleChoice(choice);
   if (sel != wxNOT_FOUND) choice->SetSelection(sel);
   if (!current_path.empty()) {
     choice->SetToolTip(wxString::FromUTF8(current_path));
@@ -833,7 +817,6 @@ wxPanel* InspectorPanel::CreateListEditor(wxWindow* parent,
   if (auto* arr = current.Get<mtext::Array>()) *items = *arr;
 
   auto* panel = new wxPanel(parent, wxID_ANY);
-  panel->SetBackgroundColour(parent->GetBackgroundColour());
   auto* sizer = new wxBoxSizer(wxVERTICAL);
 
   auto* top = new wxBoxSizer(wxHORIZONTAL);
@@ -841,12 +824,11 @@ wxPanel* InspectorPanel::CreateListEditor(wxWindow* parent,
       panel, wxID_ANY,
       wxString::Format("%zu item%s", items->size(),
                        items->size() == 1 ? "" : "s"));
-  count_lbl->SetForegroundColour(Colors::kTextSecondary);
+  count_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   top->Add(count_lbl, 1, wxALIGN_CENTER_VERTICAL);
 
   auto* add_btn = new wxButton(panel, wxID_ANY, "+", wxDefaultPosition,
                                wxSize(24, 22), wxBU_EXACTFIT);
-  StyleButton(add_btn);
   add_btn->Bind(wxEVT_BUTTON, [this, items, field, write_fn](wxCommandEvent&) {
     mtext::Variant item;
     switch (field.element_type) {
@@ -877,7 +859,6 @@ wxPanel* InspectorPanel::CreateListEditor(wxWindow* parent,
     auto* row = new wxBoxSizer(wxHORIZONTAL);
     auto* rem_btn = new wxButton(panel, wxID_ANY, "x", wxDefaultPosition,
                                  wxSize(22, 22), wxBU_EXACTFIT);
-    StyleButton(rem_btn);
     rem_btn->Bind(wxEVT_BUTTON, [this, items, i, write_fn](wxCommandEvent&) {
       if (i < items->size()) {
         items->erase(items->begin() + static_cast<ptrdiff_t>(i));
@@ -910,7 +891,6 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
       Event::FromVariant(current).value_or(std::vector<EventCall>{}));
 
   auto* panel = new wxPanel(parent, wxID_ANY);
-  panel->SetBackgroundColour(parent->GetBackgroundColour());
   auto* sizer = new wxBoxSizer(wxVERTICAL);
 
   auto* top = new wxBoxSizer(wxHORIZONTAL);
@@ -918,12 +898,11 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
       panel, wxID_ANY,
       wxString::Format("%zu call%s", calls->size(),
                        calls->size() == 1 ? "" : "s"));
-  count_lbl->SetForegroundColour(Colors::kTextSecondary);
+  count_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   top->Add(count_lbl, 1, wxALIGN_CENTER_VERTICAL);
 
   auto* add_btn = new wxButton(panel, wxID_ANY, "+", wxDefaultPosition,
                                wxSize(24, 22), wxBU_EXACTFIT);
-  StyleButton(add_btn);
   add_btn->Bind(wxEVT_BUTTON, [this, calls, write_fn](wxCommandEvent&) {
     calls->emplace_back();
     write_fn(Event::ToVariant(*calls), false);
@@ -935,14 +914,13 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
   const auto& registry = TypeRegistry::Instance();
 
   for (size_t i = 0; i < calls->size(); ++i) {
-    auto* box = new wxPanel(panel, wxID_ANY);
-    box->SetBackgroundColour(Colors::kBgRowAlt);
+    auto* box = new wxPanel(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                            wxBORDER_SIMPLE);
     auto* bs = new wxBoxSizer(wxVERTICAL);
 
     auto* line1 = new wxBoxSizer(wxHORIZONTAL);
     auto* rem_btn = new wxButton(box, wxID_ANY, "x", wxDefaultPosition,
                                  wxSize(22, 22), wxBU_EXACTFIT);
-    StyleButton(rem_btn);
     rem_btn->Bind(wxEVT_BUTTON, [this, calls, i, write_fn](wxCommandEvent&) {
       if (i < calls->size()) {
         calls->erase(calls->begin() + static_cast<ptrdiff_t>(i));
@@ -1005,7 +983,6 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
 
     auto* method_choice = new wxChoice(box, wxID_ANY, wxDefaultPosition,
                                          wxDefaultSize, method_labels);
-    StyleChoice(method_choice);
     if (m_sel != wxNOT_FOUND) method_choice->SetSelection(m_sel);
     method_choice->Bind(
         wxEVT_CHOICE, [this, method_choice, options, calls, i,
@@ -1132,11 +1109,10 @@ void InspectorPanel::AddLockGroupRow(
   cb_y->SetForegroundColour(Colors::kAxisY);
   cb_z->SetForegroundColour(Colors::kAxisZ);
 
-  auto update_label = [label, cb_x, cb_y, cb_z]() {
+  auto update_label = [label, parent, cb_x, cb_y, cb_z]() {
     const bool any =
         cb_x->GetValue() || cb_y->GetValue() || cb_z->GetValue();
-    label->SetForegroundColour(any ? Colors::kTextPrimary
-                                   : Colors::kTextSecondary);
+    label->SetFont(any ? parent->GetFont().Bold() : parent->GetFont());
     label->Refresh();
   };
   update_label();
@@ -1195,7 +1171,7 @@ void InspectorPanel::AddRawPropertyRow(
   auto* label = new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(prop.key),
                                  wxDefaultPosition, wxSize(118, -1),
                                  wxST_ELLIPSIZE_END);
-  label->SetForegroundColour(Colors::kAccentAmber);
+  label->SetFont(label->GetFont().Italic());
   label->SetToolTip(
       "Not a field of this component. Edit the raw value or right-click to "
       "remove it.");
@@ -1210,7 +1186,6 @@ void InspectorPanel::AddRawPropertyRow(
   auto* ctrl = new wxTextCtrl(
       parent, wxID_ANY, wxString::FromUTF8(mtext::WriteValue(prop.value)),
       wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
-  StyleTextCtrl(ctrl);
   ctrl->Bind(wxEVT_TEXT_ENTER, [ctrl, on_commit](wxCommandEvent&) {
     on_commit(ctrl->GetValue().ToStdString());
   });

@@ -99,19 +99,16 @@ EditorFrame::EditorFrame(EditorScene& scene,
       on_exit_app_(std::move(on_exit_app)),
       aui_(this, wxAUI_MGR_DEFAULT | wxAUI_MGR_ALLOW_ACTIVE_PANE |
                      wxAUI_MGR_LIVE_RESIZE) {
-  ApplyDarkPalette(this);
-  aui_.SetArtProvider(new DarkDockArt());
-
   BuildMenuBar();
   BuildToolbar();
   BuildAuiPanes();
   SetupMenuBindings();
 
-  // Dark status bar for live hints & path info
+  // Status bar for live hints & path info
   CreateStatusBar(2);
   if (auto* sb = GetStatusBar()) {
-    ApplyDarkPalette(sb);
-    sb->SetStatusWidths(2, new int[2]{-1, 280});
+    const int widths[2] = {-1, 280};
+    sb->SetStatusWidths(2, widths);
   }
 
   Bind(wxEVT_CHAR_HOOK, &EditorFrame::OnCharHook, this);
@@ -233,19 +230,15 @@ void EditorFrame::BuildMenuBar() {
 
 void EditorFrame::BuildToolbar() {
   toolbar_ = new wxPanel(this);
-  ApplyDarkPalette(toolbar_);
-  toolbar_->SetBackgroundColour(Colors::kBgHeader);
   auto* s = new wxBoxSizer(wxHORIZONTAL);
 
   play_btn_ = new wxButton(toolbar_, wxID_ANY, "Play (F5)", wxDefaultPosition,
                            wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(play_btn_, false, Colors::kAccentGreen);
   play_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { HandleTogglePlay(); });
 
   build_scripts_btn_ =
       new wxButton(toolbar_, wxID_ANY, "Build Scripts", wxDefaultPosition,
                    wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(build_scripts_btn_);
   build_scripts_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     if (auto p = scene_.GetProject()) scene_.PlayRef().Build(*p);
   });
@@ -253,14 +246,12 @@ void EditorFrame::BuildToolbar() {
   build_game_btn_ =
       new wxButton(toolbar_, wxID_ANY, "Build Game...", wxDefaultPosition,
                    wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(build_game_btn_);
   build_game_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     ShowReleaseBuildDialog(this, scene_);
   });
 
   save_btn_ = new wxButton(toolbar_, wxID_ANY, "Save", wxDefaultPosition,
                            wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(save_btn_, true);
   save_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.SaveAllDirty();
     RefreshToolbarAndStatus(0.0f);
@@ -270,16 +261,13 @@ void EditorFrame::BuildToolbar() {
                            wxDefaultSize, wxBU_EXACTFIT);
   redo_btn_ = new wxButton(toolbar_, wxID_ANY, "Redo", wxDefaultPosition,
                            wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(undo_btn_);
-  StyleButton(redo_btn_);
   undo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { scene_.Undo(); });
   redo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { scene_.Redo(); });
 
   map_status_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "");
-  map_status_lbl_->SetForegroundColour(Colors::kTextSecondary);
 
   fps_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "0.0 fps");
-  fps_lbl_->SetForegroundColour(Colors::kTextMuted);
+  fps_lbl_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 
   s->AddSpacer(6);
   s->Add(save_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
@@ -834,15 +822,12 @@ void EditorFrame::RefreshToolbarAndStatus(float dt) {
   const auto pstate = play.GetState();
   if (pstate == PlaySession::State::kIdle) {
     play_btn_->SetLabel("Play (F5)");
-    play_btn_->SetBackgroundColour(Colors::kAccentGreen);
     play_btn_->Enable(scene_.GetProject() != nullptr);
   } else if (pstate == PlaySession::State::kBuilding) {
     play_btn_->SetLabel("Building...");
-    play_btn_->SetBackgroundColour(Colors::kAccentAmber);
     play_btn_->Enable(false);
   } else {
     play_btn_->SetLabel("Stop (F5)");
-    play_btn_->SetBackgroundColour(Colors::kAccentRed);
     play_btn_->Enable(true);
   }
 

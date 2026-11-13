@@ -30,23 +30,20 @@ std::string ToLower(std::string s) {
 
 HierarchyPanel::HierarchyPanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY), scene_(scene) {
-  ApplyDarkPalette(this);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* bar = new wxPanel(this, wxID_ANY);
-  bar->SetBackgroundColour(Colors::kBgHeader);
   auto* bar_sizer = new wxBoxSizer(wxHORIZONTAL);
 
   auto* create_btn = new wxButton(bar, wxID_ANY, "+ Create", wxDefaultPosition,
                                   wxDefaultSize, wxBU_EXACTFIT);
-  StyleButton(create_btn);
   create_btn->SetToolTip(
       "Add a node to the map; right-click a node to add a child");
   bar_sizer->Add(create_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
   map_label_ = new wxStaticText(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
                                 wxDefaultSize, wxST_ELLIPSIZE_END);
-  map_label_->SetForegroundColour(Colors::kTextSecondary);
+  map_label_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   bar_sizer->Add(map_label_, 1, wxALIGN_CENTER_VERTICAL);
 
   auto* wrap_bar = new wxBoxSizer(wxVERTICAL);
@@ -56,15 +53,12 @@ HierarchyPanel::HierarchyPanel(wxWindow* parent, EditorScene& scene)
 
   search_ = new wxTextCtrl(this, wxID_ANY);
   search_->SetHint("Search hierarchy...");
-  StyleTextCtrl(search_);
   root->Add(search_, 0, wxEXPAND | wxALL, 4);
 
   tree_ = new wxTreeCtrl(
       this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
       wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_EDIT_LABELS |
           wxTR_SINGLE | wxBORDER_NONE);
-  tree_->SetBackgroundColour(Colors::kBgCanvas);
-  tree_->SetForegroundColour(Colors::kTextPrimary);
   root->Add(tree_, 1, wxEXPAND);
   SetSizer(root);
 
