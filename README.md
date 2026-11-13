@@ -95,6 +95,17 @@ bazelisk test //tests/...
 bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
 ```
 
+To ship a game as a self-contained `.app` bundle:
+
+```sh
+./scripts/package_macos.pl --project examples/pong/pong.mproj
+open Builds/Pong.app
+```
+
+The bundle carries the player, MoltenVK, the Vulkan loader and the project's `.mpack`
+archives; it does not read anything from this checkout. See
+[Shipping a game](DOCUMENTATION.md#shipping-a-game).
+
 ### Linux (X11 and Wayland)
 
 ```sh

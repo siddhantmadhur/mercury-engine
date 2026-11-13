@@ -31,9 +31,16 @@ void PrintUsage(const char* program) {
 // next to the executable. If there are any, mounts them and sets
 // `project_path` to the project inside. False if the packs are unusable.
 bool MountShippedPacks(std::string& project_path) {
-  const fs::path dir = os::ExecutableDir();
-  const fs::path game_file = mpack::ArchivePath(dir, mpack::kGamePackName, 0);
+  fs::path dir = os::ExecutableDir();
+  // A .app bundle keeps the packs in Contents/Resources instead of next to the
+  // executable.
+  const fs::path resources = os::BundleResourcesDir();
   std::error_code ec;
+  if (!resources.empty() &&
+      fs::exists(mpack::ArchivePath(resources, mpack::kGamePackName, 0), ec)) {
+    dir = resources;
+  }
+  const fs::path game_file = mpack::ArchivePath(dir, mpack::kGamePackName, 0);
   if (!fs::exists(game_file, ec)) return true;
 
   std::string error;

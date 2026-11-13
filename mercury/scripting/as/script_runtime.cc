@@ -6,15 +6,14 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <fstream>
 #include <format>
-#include <sstream>
 
 #include "scripting/as/script_api.h"
 #include "scripting/as/script_behaviour.h"
 #include "scripting/type_registry.h"
 #include "debugger/debugger.h"
 #include "math/time.h"
+#include "os/filesystem.h"
 
 #include "scriptbuilder/scriptbuilder.h"
 
@@ -25,11 +24,9 @@ namespace {
 std::atomic<uint32_t> g_next_scene_serial{1};
 
 std::string ReadTextFile(const std::filesystem::path& path) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) return {};
-  std::ostringstream text;
-  text << in.rdbuf();
-  return text.str();
+  // Reads through the mounted .mpack when the game is running from a pack.
+  auto text = os::ReadText(path);
+  return text ? std::move(*text) : std::string();
 }
 
 std::string Trim(std::string_view text) {
@@ -505,15 +502,11 @@ bool ScriptRuntime::LoadScripts(const std::filesystem::path& project_root) {
   if (module_ && loaded_project_ == project) return true;
   const std::filesystem::path scripts = project_root / "scripts";
   std::vector<std::filesystem::path> files;
-  std::error_code ec;
-  if (std::filesystem::is_directory(scripts, ec)) {
-    for (const auto& entry :
-         std::filesystem::recursive_directory_iterator(scripts, ec)) {
-      if (!entry.is_regular_file(ec)) continue;
-      if (entry.path().extension() != ".as") continue;
-      if (entry.path().filename().string().starts_with(".")) continue;
-      files.push_back(entry.path());
-    }
+  for (const std::string& relative : os::ListFilesRecursive(scripts)) {
+    const std::filesystem::path path(relative);
+    if (path.extension() != ".as") continue;
+    if (path.filename().string().starts_with(".")) continue;
+    files.push_back(scripts / path);
   }
   std::sort(files.begin(), files.end());
 
@@ -523,7 +516,7 @@ bool ScriptRuntime::LoadScripts(const std::filesystem::path& project_root) {
     std::string text = ReadTextFile(file);
     if (text.empty()) continue;
     const std::string name =
-        std::filesystem::relative(file, project_root, ec).generic_string();
+        file.lexically_relative(project_root).generic_string();
     sections.emplace_back(name, std::move(text));
   }
   const bool ok = BuildFromSections(sections, "game", true);

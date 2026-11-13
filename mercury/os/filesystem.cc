@@ -132,6 +132,35 @@ std::vector<std::string> ListDirectory(const fs::path& dir) {
   return names;
 }
 
+std::vector<std::string> ListFilesRecursive(const fs::path& dir) {
+  std::set<std::string> files;
+  std::string key = Normalize(dir);
+  if (key == ".") key.clear();
+  if (!key.empty() && !key.ends_with('/')) key += '/';
+  {
+    std::shared_lock lock(g_mounts_mutex);
+    for (auto it = g_mounts.rbegin(); it != g_mounts.rend(); ++it) {
+      if (!key.starts_with(it->prefix)) continue;
+      const std::string folder =
+          it->entry_prefix + key.substr(it->prefix.size());
+      for (const mpack::Entry& entry : it->pack->GetEntries()) {
+        if (entry.path.starts_with(folder))
+          files.insert(entry.path.substr(folder.size()));
+      }
+    }
+  }
+  std::error_code ec;
+  const fs::path root = dir.empty() ? fs::path(".") : dir;
+  for (auto it = fs::recursive_directory_iterator(
+           root, fs::directory_options::skip_permission_denied, ec);
+       it != fs::recursive_directory_iterator(); it.increment(ec)) {
+    if (ec) break;
+    if (it->is_regular_file(ec))
+      files.insert(it->path().lexically_relative(root).generic_string());
+  }
+  return {files.begin(), files.end()};
+}
+
 fs::path CacheDir() {
   const fs::path dir = [] {
     fs::path base;
@@ -197,6 +226,38 @@ fs::path ExecutableDir() {
   const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
   if (ec) return fs::current_path(ec);
   return exe.parent_path();
+#endif
+}
+
+fs::path BundleResourcesDir() {
+#if !defined(__APPLE__)
+  return {};
+#else
+  const fs::path exe_dir = ExecutableDir();
+  if (exe_dir.filename() != "MacOS" ||
+      exe_dir.parent_path().filename() != "Contents") {
+    return {};
+  }
+  const fs::path app = exe_dir.parent_path().parent_path();
+  if (app.extension() != ".app") return {};
+  const fs::path resources = app / "Contents" / "Resources";
+  std::error_code ec;
+  return fs::is_directory(resources, ec) ? resources : fs::path();
+#endif
+}
+
+void UseBundledVulkanDriver() {
+#if defined(__APPLE__)
+  if (std::getenv("VK_DRIVER_FILES") || std::getenv("VK_ICD_FILENAMES")) return;
+  const fs::path resources = BundleResourcesDir();
+  if (resources.empty()) return;
+  const fs::path icd = resources / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+  std::error_code ec;
+  if (!fs::exists(icd, ec)) return;
+  // Both are read by the loader: newer versions prefer VK_DRIVER_FILES,
+  // older ones only know VK_ICD_FILENAMES.
+  setenv("VK_DRIVER_FILES", icd.c_str(), 1);
+  setenv("VK_ICD_FILENAMES", icd.c_str(), 1);
 #endif
 }
 

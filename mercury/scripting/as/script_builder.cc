@@ -8,6 +8,7 @@
 #include <system_error>
 
 #include "debugger/debugger.h"
+#include "os/filesystem.h"
 #include "scripting/as/script_runtime.h"
 
 namespace Mercury {
@@ -26,15 +27,12 @@ void Emit(const BuildOptions& options, std::string* log,
 
 std::vector<fs::path> ScriptBuilder::ScriptFiles(const fs::path& project_dir) {
   std::vector<fs::path> files;
-  std::error_code ec;
-  const fs::path scripts = project_dir / "scripts";
-  if (!fs::is_directory(scripts, ec)) return files;
-  for (const auto& entry : fs::recursive_directory_iterator(scripts, ec)) {
-    if (!entry.is_regular_file(ec)) continue;
-    if (entry.path().extension() != ".as") continue;
-    const std::string name = entry.path().filename().string();
-    if (name.starts_with(".")) continue;
-    files.push_back(entry.path());
+  for (const std::string& name :
+       os::ListFilesRecursive(project_dir / "scripts")) {
+    const fs::path relative(name);
+    if (relative.extension() != ".as") continue;
+    if (relative.filename().string().starts_with(".")) continue;
+    files.push_back(project_dir / "scripts" / relative);
   }
   std::sort(files.begin(), files.end());
   return files;
@@ -62,15 +60,20 @@ bool ScriptBuilder::Build(const fs::path& project_dir,
     Emit(options, log, "Script compilation failed");
     return false;
   }
-  std::error_code ec;
-  fs::create_directories(StampPath(project_dir).parent_path(), ec);
-  std::ofstream stamp(StampPath(project_dir), std::ios::trunc);
-  stamp << "1\n";
+  // A shipped game reads its scripts from a mounted .mpack; the project root
+  // is then inside the (signed, read-only) app bundle, so leave it untouched.
+  if (!os::HasMounts()) {
+    std::error_code ec;
+    fs::create_directories(StampPath(project_dir).parent_path(), ec);
+    std::ofstream stamp(StampPath(project_dir), std::ios::trunc);
+    stamp << "1\n";
+  }
   Emit(options, log, "Scripts compiled");
   return true;
 }
 
 bool ScriptBuilder::IsUpToDate(const fs::path& project_dir) {
+  if (os::HasMounts()) return false;
   std::error_code ec;
   const fs::path stamp = StampPath(project_dir);
   if (!fs::exists(stamp, ec)) return false;

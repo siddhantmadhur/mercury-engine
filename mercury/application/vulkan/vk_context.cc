@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "debugger/debugger.h"
+#include "os/filesystem.h"
 #include "vk_check.h"
 
 namespace Mercury::vk {
@@ -81,6 +82,9 @@ namespace Mercury::vk {
 Context::~Context() { Destroy(); }
 
 bool Context::Init(GLFWwindow* window) {
+  // A bundled app carries its own MoltenVK; the loader has to be told before
+  // it scans for drivers.
+  os::UseBundledVulkanDriver();
   if (!CreateInstance(window != nullptr)) return false;
 
   if (window != nullptr) {
