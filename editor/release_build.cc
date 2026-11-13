@@ -31,7 +31,7 @@ bool IsSkippedAtRoot(const std::string& name) {
   return name == "CMakeLists.txt" ||
          name == "MODULE.bazel" || name == "MODULE.bazel.lock" || name == "WORKSPACE" ||
          name == "WORKSPACE.bazel" || name.starts_with("bazel-") ||
-         name == "Builds" || name == "imgui.ini";
+         name == "Builds";
 }
 
 std::string FormatBytes(uintmax_t bytes) {

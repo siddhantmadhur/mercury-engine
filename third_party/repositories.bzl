@@ -149,6 +149,94 @@ vulkan_repo = repository_rule(
 
 
 # --------------------------------------------------------------------------
+# wxWidgets (system wx-config)
+# --------------------------------------------------------------------------
+
+def _find_wx_config(ctx):
+    env = ctx.os.environ
+    if env.get("WX_CONFIG"):
+        candidate = env["WX_CONFIG"]
+        if ctx.path(candidate).exists:
+            return candidate
+    for name in ["wx-config", "wx-config-gtk3", "wx-config-3.2"]:
+        found = ctx.which(name)
+        if found:
+            return str(found)
+    for candidate in ["/usr/bin/wx-config", "/usr/local/bin/wx-config", "/opt/homebrew/bin/wx-config"]:
+        if ctx.path(candidate).exists:
+            return candidate
+    fail("wx-config was not found. Install wxWidgets/wxGTK development packages (e.g. libwxgtk3.2-dev or wxGTK-devel).")
+
+
+def _wxwidgets_repo_impl(ctx):
+    wx_config = _find_wx_config(ctx)
+
+    cflags_res = ctx.execute([wx_config, "--cxxflags"])
+    if cflags_res.return_code != 0:
+        fail("wx-config --cxxflags failed: " + cflags_res.stderr)
+
+    libs_res = ctx.execute([wx_config, "--libs", "core,base,aui,propgrid,adv,richtext"])
+    if libs_res.return_code != 0:
+        libs_res = ctx.execute([wx_config, "--libs"])
+        if libs_res.return_code != 0:
+            fail("wx-config --libs failed: " + libs_res.stderr)
+
+    includes = []
+    hdr_globs = []
+    defines = []
+    copts = []
+
+    inc_idx = 0
+    for token in cflags_res.stdout.replace("\n", " ").replace("\t", " ").split(" "):
+        if not token:
+            continue
+        if token.startswith("-I"):
+            inc_path = token[2:]
+            if inc_path:
+                inc_dir = "inc_{}".format(inc_idx)
+                inc_idx += 1
+                ctx.symlink(inc_path, inc_dir)
+                includes.append(inc_dir)
+                hdr_globs.append(inc_dir + "/**")
+        elif token.startswith("-D"):
+            defines.append(token[2:])
+        elif not token.startswith("-std="):
+            copts.append(token)
+
+    linkopts = []
+    for token in libs_res.stdout.replace("\n", " ").replace("\t", " ").split(" "):
+        if token:
+            linkopts.append(token)
+
+    ctx.file("REPO.bazel", "")
+    ctx.file(
+        "BUILD.bazel",
+        """package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "wxwidgets",
+    hdrs = glob({hdr_globs}),
+    includes = {includes},
+    defines = {defines},
+    copts = {copts},
+    linkopts = {linkopts},
+)
+""".format(
+            hdr_globs = repr(hdr_globs),
+            includes = repr(includes),
+            defines = repr(defines),
+            copts = repr(copts),
+            linkopts = repr(linkopts),
+        ),
+    )
+
+wxwidgets_repo = repository_rule(
+    implementation = _wxwidgets_repo_impl,
+    local = True,
+)
+
+
+# --------------------------------------------------------------------------
 # DXC (HLSL -> SPIR-V)
 # --------------------------------------------------------------------------
 

@@ -53,8 +53,8 @@ class Behaviour {
   virtual void OnDisable() {}
   // Before the first tick or frame the script is enabled for.
   virtual void OnStart() {}
-  // Every rendered frame. dt in seconds. ImGui calls are allowed here for
-  // developer/debug windows; player-facing UI belongs in a UIDocument.
+  // Every rendered frame. dt in seconds. Player-facing UI belongs in a
+  // UIDocument.
   virtual void OnFrame(double dt) {}
   // Every frame after every script's OnFrame (Unity's LateUpdate).
   virtual void OnLateFrame(double dt) {}

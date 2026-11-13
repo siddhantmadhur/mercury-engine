@@ -74,14 +74,13 @@ struct UIInputEvent {
 struct UIInputFrame {
   glm::vec2 pointer{-1.0f};
   bool pointer_inside = true;  // false when the cursor left the window
-  // False when something else (e.g. an ImGui dev window) wants the mouse
-  // or keyboard this frame.
+  // False when another UI layer wants the mouse or keyboard this frame.
   bool mouse_available = true;
   bool keyboard_available = true;
   std::vector<UIInputEvent> events;
 };
 
-// Clipboard access, provided by the host (GLFW in games, ImGui in the editor).
+// Clipboard access, provided by the host (GLFW in games, wxWidgets in the editor).
 struct UIClipboard {
   std::function<std::string()> get;
   std::function<void(const std::string&)> set;

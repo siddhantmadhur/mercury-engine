@@ -63,7 +63,8 @@ sub install_apt {
         'build-essential', 'cmake', 'ninja-build', 'git', 'curl', 'pkg-config', 'python3',
         'libvulkan-dev', 'vulkan-validationlayers', 'vulkan-tools', 'spirv-tools',
         'libx11-dev', 'libxrandr-dev', 'libxinerama-dev', 'libxcursor-dev', 'libxi-dev',
-        'libwayland-dev', 'libxkbcommon-dev', 'wayland-protocols');
+        'libwayland-dev', 'libxkbcommon-dev', 'wayland-protocols',
+        'libwxgtk3.2-dev');
 }
 
 sub install_pacman {
@@ -72,7 +73,8 @@ sub install_pacman {
         'vulkan-icd-loader', 'vulkan-headers', 'vulkan-validation-layers', 'vulkan-tools',
         'spirv-tools', 'directx-shader-compiler',
         'libx11', 'libxrandr', 'libxinerama', 'libxcursor', 'libxi',
-        'wayland', 'libxkbcommon', 'wayland-protocols');
+        'wayland', 'libxkbcommon', 'wayland-protocols',
+        'wxwidgets-gtk3');
 }
 
 sub install_bazelisk {
@@ -155,7 +157,7 @@ sub setup_macos {
 
     print "==> Installing build tools and Vulkan dependencies via Homebrew...\n";
     run('brew', 'install', 'bazelisk', 'cmake', 'ninja', 'pkg-config',
-        'molten-vk', 'vulkan-loader', 'vulkan-headers');
+        'molten-vk', 'vulkan-loader', 'vulkan-headers', 'wxwidgets');
 
     print "==> Updating git submodules...\n";
     run('git', '-C', $PROJECT_ROOT, 'submodule', 'update', '--init', '--recursive');

@@ -6,7 +6,7 @@
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
 
-// Our own copy: Dear ImGui compiles its stb_truetype as static functions.
+// Built with static linkage to keep stb_truetype symbols translation-unit local.
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include "stb/stb_truetype.h"
