@@ -17,6 +17,7 @@ cc_test(
         "physics_constraints_test.cc",
         "primitives_test.cc",
         "reflection_test.cc",
+        "rust_bridge_test.cc",
         "script_behaviour_test.cc",
         "script_runtime_test.cc",
         "test_paths.h",
