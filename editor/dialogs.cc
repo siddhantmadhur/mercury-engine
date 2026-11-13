@@ -494,6 +494,8 @@ std::optional<std::string> ShowAddComponentDialog(wxWindow* parent,
     dlg.EndModal(wxID_OK);
   });
 
+  dlg.SetSizerAndFit(root);
+  dlg.SetSize(wxSize(420, 460));
   search->SetFocus();
   dlg.CenterOnParent();
   if (dlg.ShowModal() != wxID_OK) return std::nullopt;
