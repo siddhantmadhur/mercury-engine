@@ -8,8 +8,15 @@ build --compilation_mode=opt
 build --cxxopt=-std=c++20 --action_env=CCACHE_DISABLE=1
 build --host_cxxopt=-std=c++20 --host_action_env=CCACHE_DISABLE=1
 
-# std::format is available from macOS 13.3.
-build:macos --macos_minimum_os=13.3
+# The engine's runtime floor is macOS 26.0: std::from_chars for floating point
+# is only available from 26.0 in Apple's libc++, and the prebuilt MoltenVK /
+# Vulkan loader / wxWidgets libraries the app bundles are built for 26.0 too.
+#
+# This has to apply to every macOS build, not just --config=macos: without it
+# Bazel adopts the SDK version as the deployment target, so building with Xcode
+# 27 stamps `minos 27.0` into the binaries and macOS refuses to launch them
+# ("You can't open this version of this software on this version of this Mac").
+build --macos_minimum_os=26.0
 
 # rules_cc_autoconf runs its probe actions with a minimal environment (no
 # PATH). A ccache wrapper in PATH cannot find the real compiler there, so use

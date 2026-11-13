@@ -11,6 +11,16 @@ CMAKE_RANLIB_ARGS = select({
     "//conditions:default": [],
 })
 
+# rules_foreign_cc does not forward Bazel's --macos_minimum_os to CMake, so
+# dependency archives would otherwise be compiled for the host's macOS version
+# (the linker then warns "built for newer 'macOS' version"). CMake initialises
+# CMAKE_OSX_DEPLOYMENT_TARGET from this environment variable. Keep the value in
+# sync with --macos_minimum_os in .bazelrc.
+CMAKE_DEPLOYMENT_ENV = select({
+    "@platforms//os:macos": {"MACOSX_DEPLOYMENT_TARGET": "26.0"},
+    "//conditions:default": {},
+})
+
 
 # AngelScript is a plain C++ library with no code generation or external
 # build system. It lives in its own git submodule, so the target is declared in
@@ -180,6 +190,7 @@ cmake(
         "@platforms//os:linux": {
             "PKG_CONFIG_PATH": "/usr/lib64/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig:/usr/share/pkgconfig",
         },
+        "@platforms//os:macos": {"MACOSX_DEPLOYMENT_TARGET": "26.0"},
         "//conditions:default": {},
     }),
     lib_source = "@glfw_src//:all",
@@ -238,6 +249,7 @@ cmake(
         "@platforms//os:linux": ["-DCMAKE_RANLIB=/usr/bin/ranlib"],
         "//conditions:default": [],
     }),
+    env = CMAKE_DEPLOYMENT_ENV,
     lib_source = "@assimp_src//:all",
     out_static_libs = [
         "libassimp.a",
@@ -284,6 +296,7 @@ cmake(
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
+    env = CMAKE_DEPLOYMENT_ENV,
     lib_source = "@jolt_src//:all",
     out_static_libs = ["libJolt.a"],
     working_directory = "Build",
@@ -315,6 +328,7 @@ cmake(
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
     },
+    env = CMAKE_DEPLOYMENT_ENV,
     lib_source = "@yoga_wrapper//:all",
     out_static_libs = ["libyogacore.a"],
 )
@@ -337,6 +351,7 @@ cmake(
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
         "tinyxml2_BUILD_TESTING": "OFF",
     },
+    env = CMAKE_DEPLOYMENT_ENV,
     lib_source = "@tinyxml2_src//:all",
     out_static_libs = ["libtinyxml2.a"],
 )
@@ -363,6 +378,7 @@ cmake(
         "MESHOPT_INSTALL": "ON",
         "MESHOPT_WERROR": "OFF",
     },
+    env = CMAKE_DEPLOYMENT_ENV,
     lib_source = "@meshoptimizer_src//:all",
     out_static_libs = ["libmeshoptimizer.a"],
 )
@@ -391,6 +407,7 @@ cmake(
         "MINIAUDIO_NO_LIBOPUS": "ON",
         "MINIAUDIO_NO_LIBVORBIS": "ON",
     },
+    env = CMAKE_DEPLOYMENT_ENV,
     lib_source = "@miniaudio_src//:all",
     out_static_libs = ["libminiaudio.a"],
 )
