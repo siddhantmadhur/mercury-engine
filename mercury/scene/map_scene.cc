@@ -1723,6 +1723,13 @@ const std::vector<Behaviour*>& MapScene::GetBehaviours(kEntityId entity) const {
   return it == behaviours_by_entity_.end() ? kNone : it->second;
 }
 
+bool MapScene::HasActiveBehaviours() const {
+  for (const auto& behaviour : behaviours_) {
+    if (behaviour->started_ && behaviour->IsActiveAndEnabled()) return true;
+  }
+  return false;
+}
+
 void MapScene::Destroy(GameObject object) {
   if (object.GetScene() != this || !object.IsValid()) return;
   if (std::find(pending_destroy_.begin(), pending_destroy_.end(),

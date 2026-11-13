@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
+#include <string_view>
 
 #include "dialogs.h"
 #include "dnd_payloads.h"
@@ -44,7 +46,15 @@ uint64_t NowMs() {
 
 std::string ComputeDirSignature(const fs::path& root) {
   std::error_code ec;
-  std::string sig;
+  // FNV-1a over every path: cheaper than building a potentially huge string
+  // of the whole project tree, which this used to do several times a second.
+  uint64_t hash = 1469598103934665603ull;
+  auto mix = [&hash](std::string_view text) {
+    for (unsigned char c : text) {
+      hash ^= c;
+      hash *= 1099511628211ull;
+    }
+  };
   for (auto it = fs::recursive_directory_iterator(root, ec);
        it != fs::recursive_directory_iterator(); it.increment(ec)) {
     if (ec) break;
@@ -53,10 +63,10 @@ std::string ComputeDirSignature(const fs::path& root) {
       it.disable_recursion_pending();
       continue;
     }
-    sig += it->path().string();
-    sig.push_back('\n');
+    mix(it->path().string());
+    hash ^= '\n';
   }
-  return sig;
+  return std::to_string(hash);
 }
 
 }  // namespace
@@ -259,7 +269,7 @@ void ProjectBrowserPanel::SyncFromController() {
   const bool project_changed = project->GetRoot() != last_project_root_;
   const uint64_t now = NowMs();
   bool fs_changed = false;
-  if (project_changed || now - last_scan_ms_ >= 650) {
+  if (project_changed || now - last_scan_ms_ >= 1000) {
     last_scan_ms_ = now;
     const std::string sig = ComputeDirSignature(project->GetRoot());
     if (sig != last_signature_) {
@@ -268,8 +278,10 @@ void ProjectBrowserPanel::SyncFromController() {
     }
   }
 
-  const bool rev_changed = scene_.MapRevision() != last_map_rev_ ||
-                           scene_.SelectionRevision() != last_sel_rev_ ||
+  // MapRevision changes on every transform edit (including every tick of a
+  // handle drag), which must not rebuild the file list. The list only depends
+  // on the filesystem, the current selection and Lore lock state.
+  const bool rev_changed = scene_.SelectionRevision() != last_sel_rev_ ||
                            scene_.LoreRef().StateRevision() != last_lore_rev_;
   if (project_changed || fs_changed) {
     RefreshAll(true);
@@ -379,6 +391,9 @@ void ProjectBrowserPanel::RebuildFileList() {
   });
 
   visible_files_ = std::move(found);
+  const bool lore_repo = scene_.LoreRef().IsRepository();
+  const std::string selected_asset = scene_.GetSelectedAsset();
+  const std::string map_path = scene_.GetMapPath();
   file_list_->Freeze();
   file_list_->DeleteAllItems();
   for (size_t i = 0; i < visible_files_.size(); ++i) {
@@ -386,9 +401,8 @@ void ProjectBrowserPanel::RebuildFileList() {
     const std::string name = p.filename().string();
     const std::string ext = ToLower(p.extension().string());
     const std::string res_path = project->ToResPath(p);
-    const bool locked = scene_.LoreRef().IsLocked(p);
-    const bool selected = res_path == scene_.GetSelectedAsset() ||
-                          res_path == scene_.GetMapPath();
+    const bool locked = lore_repo && scene_.LoreRef().IsLocked(p);
+    const bool selected = res_path == selected_asset || res_path == map_path;
 
     wxString label = wxString::FromUTF8(name);
     if (locked) label += "  [locked]";
@@ -404,7 +418,6 @@ void ProjectBrowserPanel::RebuildFileList() {
   }
   file_list_->Thaw();
 
-  last_map_rev_ = scene_.MapRevision();
   last_sel_rev_ = scene_.SelectionRevision();
   last_lore_rev_ = scene_.LoreRef().StateRevision();
 }

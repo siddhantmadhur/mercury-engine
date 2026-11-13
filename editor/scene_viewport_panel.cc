@@ -122,17 +122,30 @@ void CameraPreviewFrame::SyncFromController() {
   const wxSize sz = canvas_->GetClientSize();
   if (sz.x < 4 || sz.y < 4) return;
   auto info = scene_.UpdatePreviewCamera(sz.x, sz.y);
+  bool needs_repaint = false;
   if (info.label != last_label_) {
     last_label_ = info.label;
     SetTitle(info.label.empty()
                  ? wxString("Camera Preview")
                  : wxString::FromUTF8("Camera Preview — " + info.label));
+    needs_repaint = true;
   }
-  canvas_->Refresh(false);
-  canvas_->Update();
+  const uint64_t view_revision = scene_.ViewRevision();
+  if (view_revision != last_view_revision_ || scene_.NeedsContinuousRedraw()) {
+    last_view_revision_ = view_revision;
+    needs_repaint = true;
+    // The newest readback slot may not be ready on the first paint; paint
+    // once more so the preview ends on the latest frame.
+    redraw_once_more_ = true;
+  }
+  if (needs_repaint) canvas_->Refresh(false);
 }
 
 void CameraPreviewFrame::OnPaint(wxPaintEvent&) {
+  if (redraw_once_more_) {
+    redraw_once_more_ = false;
+    canvas_->Refresh(false);
+  }
   wxAutoBufferedPaintDC dc(canvas_);
   const wxSize sz = canvas_->GetClientSize();
   dc.SetBrush(wxBrush(wxColour(24, 26, 30)));
@@ -274,10 +287,17 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
     ResetKeyState();
     evt.Skip();
   });
-  canvas_->Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) { hovered_ = true; });
-  canvas_->Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) { hovered_ = false; });
+  canvas_->Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) {
+    hovered_ = true;
+    overlay_dirty_ = true;
+  });
+  canvas_->Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) {
+    hovered_ = false;
+    overlay_dirty_ = true;
+  });
   canvas_->Bind(wxEVT_MOUSE_CAPTURE_LOST, [this](wxMouseCaptureLostEvent&) {
     left_down_ = right_down_ = middle_down_ = false;
+    overlay_dirty_ = true;
     ResetKeyState();
     scene_.OnViewportMouseUp();
   });
@@ -323,6 +343,7 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
 
 void SceneViewportPanel::SetPreviewPoppedOut(bool popped_out) {
   preview_popped_out_ = popped_out;
+  scene_.RequestViewRedraw();
   canvas_->Refresh(false);
 }
 
@@ -332,6 +353,14 @@ void SceneViewportPanel::FocusCanvas() {
 
 bool SceneViewportPanel::IsCanvasFocused() const {
   return canvas_ && canvas_->HasFocus();
+}
+
+bool SceneViewportPanel::WantsUnlockedFps() const {
+  // The higher-rate render timer only runs while the user is interacting with
+  // the viewport or the scene is changing on its own. A static view stays at
+  // the 60 fps editor timer, so the editor does not burn CPU while idle.
+  return left_down_ || right_down_ || middle_down_ || nav_mask_ != 0 ||
+         scene_.IsDragging() || scene_.NeedsContinuousRedraw();
 }
 
 void SceneViewportPanel::ResetKeyState() {
@@ -418,16 +447,27 @@ void SceneViewportPanel::SyncFromController(float dt) {
   scene_.UpdateViewportNavigation(delta, left_down_, right_down_, middle_down_,
                                   nav_mask_, shift_down_, dt);
 
-  scene_.UpdateHoveredHandle(local_mouse_, hovered_, alt_down_, right_down_);
-
   if (!preview_popped_out_) {
     last_preview_info_ = scene_.UpdatePreviewCamera();
   } else {
     last_preview_info_ = {};
   }
 
-  canvas_->Refresh(false);
-  canvas_->Update();
+  const uint64_t view_revision = scene_.ViewRevision();
+  const bool view_changed = view_revision != last_view_revision_;
+  const bool continuous = scene_.NeedsContinuousRedraw();
+  if (view_changed || continuous) {
+    copy_scene_pixels_ = true;
+    copy_preview_pixels_ = true;
+    extra_copy_ = true;
+  }
+  const bool needs_repaint =
+      overlay_dirty_ || view_changed || continuous || copy_scene_pixels_;
+  overlay_dirty_ = false;
+  last_view_revision_ = view_revision;
+  if (needs_repaint) {
+    canvas_->Refresh(false);
+  }
 }
 
 void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
@@ -435,12 +475,16 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
   const wxSize sz = canvas_->GetClientSize();
 
   RenderHost* host = scene_.GetRenderHost();
-  if (host) {
+  const bool extra_copy = extra_copy_;
+  extra_copy_ = false;
+  if (host && copy_scene_pixels_) {
     int w = 0;
     int h = 0;
     uint64_t fid = 0;
     const bool copied = host->CopyScenePixels(w, h, scene_pixels_, &fid);
     if (copied && w > 0 && h > 0) {
+      // Get the frame that was rendered for the change on the next tick.
+      copy_scene_pixels_ = extra_copy;
       if (!scene_bmp_.IsOk() || fid != scene_frame_id_ ||
           scene_bmp_.GetWidth() != w || scene_bmp_.GetHeight() != h) {
         scene_frame_id_ = fid;
@@ -489,8 +533,10 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
     int pw = 0;
     int ph = 0;
     uint64_t pfid = 0;
-    if (host->CopyPreviewPixels(pw, ph, preview_pixels_, &pfid) && pw > 0 &&
+    if (copy_preview_pixels_ &&
+        host->CopyPreviewPixels(pw, ph, preview_pixels_, &pfid) && pw > 0 &&
         ph > 0) {
+      copy_preview_pixels_ = extra_copy;
       if (!preview_bmp_.IsOk() || pfid != preview_frame_id_ ||
           preview_bmp_.GetWidth() != pw || preview_bmp_.GetHeight() != ph) {
         preview_frame_id_ = pfid;
@@ -547,6 +593,7 @@ void SceneViewportPanel::ReleaseMouseIfCaptured() {
 
 void SceneViewportPanel::OnCanvasMouseDown(wxMouseEvent& evt) {
   canvas_->SetFocus();
+  overlay_dirty_ = true;
   shift_down_ = evt.ShiftDown();
   alt_down_ = evt.AltDown();
   ctrl_down_ = evt.ControlDown();
@@ -576,6 +623,7 @@ void SceneViewportPanel::OnCanvasMouseDown(wxMouseEvent& evt) {
 }
 
 void SceneViewportPanel::OnCanvasMouseUp(wxMouseEvent& evt) {
+  overlay_dirty_ = true;
   shift_down_ = evt.ShiftDown();
   alt_down_ = evt.AltDown();
   ctrl_down_ = evt.ControlDown();
@@ -594,6 +642,7 @@ void SceneViewportPanel::OnCanvasMouseUp(wxMouseEvent& evt) {
 }
 
 void SceneViewportPanel::OnCanvasMouseMove(wxMouseEvent& evt) {
+  overlay_dirty_ = true;
   shift_down_ = evt.ShiftDown();
   alt_down_ = evt.AltDown();
   ctrl_down_ = evt.ControlDown();
@@ -612,6 +661,7 @@ void SceneViewportPanel::OnCanvasMouseMove(wxMouseEvent& evt) {
 }
 
 void SceneViewportPanel::OnCanvasWheel(wxMouseEvent& evt) {
+  overlay_dirty_ = true;
   shift_down_ = evt.ShiftDown();
   alt_down_ = evt.AltDown();
   ctrl_down_ = evt.ControlDown();
@@ -627,6 +677,7 @@ void SceneViewportPanel::OnCanvasWheel(wxMouseEvent& evt) {
 }
 
 bool SceneViewportPanel::HandleKeyDown(wxKeyEvent& evt) {
+  overlay_dirty_ = true;
   const int kc = evt.GetKeyCode();
   shift_down_ = evt.ShiftDown() || kc == WXK_SHIFT;
   alt_down_ = evt.AltDown() || kc == WXK_ALT;
@@ -686,6 +737,7 @@ bool SceneViewportPanel::HandleKeyDown(wxKeyEvent& evt) {
 }
 
 void SceneViewportPanel::HandleKeyUp(wxKeyEvent& evt) {
+  overlay_dirty_ = true;
   const int kc = evt.GetKeyCode();
   shift_down_ = (kc == WXK_SHIFT) ? false : evt.ShiftDown();
   alt_down_ = (kc == WXK_ALT) ? false : evt.AltDown();

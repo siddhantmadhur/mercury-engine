@@ -41,6 +41,8 @@ class CameraPreviewFrame : public wxFrame {
   std::vector<uint8_t> pixels_;
   wxBitmap bitmap_;
   uint64_t last_frame_id_ = 0;
+  uint64_t last_view_revision_ = 0;
+  bool redraw_once_more_ = false;
   std::string last_label_;
 };
 
@@ -51,6 +53,9 @@ class SceneViewportPanel : public wxPanel {
   void SyncFromController(float dt);
   void SetPreviewPoppedOut(bool popped_out);
   bool IsPreviewPoppedOut() const { return preview_popped_out_; }
+  // True while the user is actively moving the view or a script/model load is
+  // changing the scene, so the app can drive the canvas at an unlocked rate.
+  bool WantsUnlockedFps() const;
   void SetOnPopoutPreview(std::function<void(bool)> cb) {
     on_popout_preview_ = std::move(cb);
   }
@@ -91,6 +96,15 @@ class SceneViewportPanel : public wxPanel {
   std::vector<uint8_t> scene_pixels_;
   wxBitmap scene_bmp_;
   uint64_t scene_frame_id_ = 0;
+  // Set when the 3D scene may have changed. Moving the mouse only redraws the
+  // overlays, and reusing the cached bitmap avoids a full GPU->CPU readback
+  // and RGBA->RGB conversion for every mouse event.
+  bool copy_scene_pixels_ = true;
+  // The readback may still return the previous frame right after a change
+  // (the newest slot's fence is not necessarily signalled yet). Copy once more
+  // on the next tick so the viewport ends on the latest frame.
+  bool extra_copy_ = false;
+  bool copy_preview_pixels_ = true;
 
   std::vector<uint8_t> preview_pixels_;
   wxBitmap preview_bmp_;
@@ -108,6 +122,10 @@ class SceneViewportPanel : public wxPanel {
   bool left_down_ = false;
   bool right_down_ = false;
   bool middle_down_ = false;
+  // Repaint when input changes the overlay (mouse position, modifiers) instead
+  // of repainting from the frame timer unconditionally.
+  bool overlay_dirty_ = true;
+  uint64_t last_view_revision_ = 0;
 
   int nav_mask_ = 0;
   bool shift_down_ = false;

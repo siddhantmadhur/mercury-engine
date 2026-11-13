@@ -1,9 +1,10 @@
 /*
  * editor_app.h
  *
- * wxApp entrypoint hosting headless DefaultApplication + EditorScene, driving
- * StepFrame() via wxEVT_IDLE, and managing LauncherFrame <-> EditorFrame
- * transitions.
+ * wxApp entrypoint hosting headless DefaultApplication + EditorScene. The
+ * editor UI runs from a 60 fps timer; the scene canvas runs from a higher-rate
+ * timer while it is being interacted with. Also manages LauncherFrame <->
+ * EditorFrame transitions.
  */
 #ifndef MERCURY_EDITOR_EDITOR_APP_H
 #define MERCURY_EDITOR_EDITOR_APP_H
@@ -27,7 +28,10 @@ class MercuryEditorApp : public wxApp {
   int FilterEvent(wxEvent& evt) override;
 
  private:
-  void OnIdle(wxIdleEvent& evt);
+  void OnTimer(wxTimerEvent& evt);
+  // Drives the Vulkan scene canvas at a higher rate while the user is
+  // interacting with it. The editor UI itself stays on the 60 fps timer.
+  void OnViewportTimer(wxTimerEvent& evt);
   void ShowLauncherFrame();
   void ShowEditorFrame();
 
@@ -37,7 +41,13 @@ class MercuryEditorApp : public wxApp {
   LauncherFrame* launcher_frame_ = nullptr;
   EditorFrame* editor_frame_ = nullptr;
 
+  // 60 fps editor UI / simulation timer.
+  wxTimer frame_timer_;
+  // Unlocked viewport render/present timer, only running while the scene
+  // canvas is being navigated or dragged.
+  wxTimer viewport_timer_;
   std::chrono::steady_clock::time_point last_tick_;
+  std::chrono::steady_clock::time_point last_viewport_tick_;
   bool in_tick_ = false;
   bool shutting_down_ = false;
 };

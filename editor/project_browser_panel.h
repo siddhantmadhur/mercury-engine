@@ -59,7 +59,6 @@ class ProjectBrowserPanel : public wxPanel {
   std::vector<std::filesystem::path> visible_files_;
   std::unordered_map<std::string, wxTreeItemId> path_to_tree_;
 
-  uint64_t last_map_rev_ = 0;
   uint64_t last_sel_rev_ = 0;
   uint64_t last_lore_rev_ = 0;
   uint64_t last_scan_ms_ = 0;

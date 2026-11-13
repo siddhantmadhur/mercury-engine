@@ -148,6 +148,18 @@ class EditorScene : public MapScene {
   uint64_t MapRevision() const { return map_revision_; }
   uint64_t SelectionRevision() const { return selection_revision_; }
   uint64_t SchemaRevision() const { return schema_revision_; }
+  // Changes only when nodes are added, removed, renamed or reparented. The
+  // hierarchy panel uses this instead of MapRevision so moving a node's
+  // transform (which bumps MapRevision every drag tick) does not rebuild the
+  // whole tree.
+  uint64_t HierarchyRevision() const { return hierarchy_revision_; }
+  // Bumped whenever the rendered scene/overlay view changes (camera, tools,
+  // selection, scene content) so the viewport repaints only when needed.
+  uint64_t ViewRevision() const { return view_revision_; }
+  // True while the scene may change without an edit (running scripts or an
+  // in-flight model load), so the viewport must keep repainting.
+  bool NeedsContinuousRedraw() const;
+  void RequestViewRedraw();
 
   // Selection & Hierarchy editing
   MapNode* GetSelectedNode();
@@ -204,9 +216,17 @@ class EditorScene : public MapScene {
   void SetSceneViewportSize(glm::vec2 size);
   glm::vec2 GetSceneViewportSize() const { return scene_size_; }
   Tool GetTool() const { return tool_; }
-  void SetTool(Tool tool) { tool_ = tool; }
+  void SetTool(Tool tool) {
+    if (tool_ == tool) return;
+    tool_ = tool;
+    RequestViewRedraw();
+  }
   HandleSpace GetHandleSpace() const { return handle_space_; }
-  void SetHandleSpace(HandleSpace space) { handle_space_ = space; }
+  void SetHandleSpace(HandleSpace space) {
+    if (handle_space_ == space) return;
+    handle_space_ = space;
+    RequestViewRedraw();
+  }
   void ToggleHandleSpace();
   bool IsView2D() const { return view_2d_; }
   void SetView2D(bool view_2d);
@@ -267,8 +287,7 @@ class EditorScene : public MapScene {
   void DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
                       const NodeInfo& info);
   void DrawAllGizmos(OverlayCanvas& draw);
-  void DrawToolHandles(OverlayCanvas& draw, glm::vec2 local_mouse,
-                       bool can_hover);
+  void DrawToolHandles(OverlayCanvas& draw);
   void DrawAxisIndicator(OverlayCanvas& draw);
   bool BeginHandleDrag(glm::vec2 mouse);
   void UpdateDrag(glm::vec2 mouse, bool snap);
@@ -306,6 +325,11 @@ class EditorScene : public MapScene {
   uint64_t map_revision_ = 1;
   uint64_t selection_revision_ = 1;
   uint64_t schema_revision_ = 1;
+  uint64_t hierarchy_revision_ = 1;
+  uint64_t view_revision_ = 1;
+  // The editor camera transform only needs syncing into the scene after the
+  // view state or the scene itself changed.
+  bool editor_camera_dirty_ = true;
 
   uint64_t selected_uid_ = 0;
   std::string selected_asset_;

@@ -209,7 +209,7 @@ EditorFrame::EditorFrame(EditorScene& scene,
   aui_.Bind(wxEVT_AUI_PANE_BUTTON, &EditorFrame::OnAuiPaneButton, this);
 
   SyncWindowMenuChecks();
-  RefreshToolbarAndStatus(0.0f);
+  RefreshToolbarAndStatus();
   CentreOnScreen();
 }
 
@@ -345,7 +345,7 @@ void EditorFrame::BuildToolbar() {
   save_btn_ = new wxButton(toolbar_, wxID_ANY, "Save");
   save_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.SaveAllDirty();
-    RefreshToolbarAndStatus(0.0f);
+    RefreshToolbarAndStatus();
   });
 
   undo_btn_ = new wxButton(toolbar_, wxID_ANY, "Undo");
@@ -362,8 +362,9 @@ void EditorFrame::BuildToolbar() {
 
   map_status_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "");
 
-  fps_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "0.0 fps");
+  fps_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "0 fps");
   fps_lbl_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  fps_lbl_->SetToolTip("Game renderer frames per second");
 
   s->AddSpacer(6);
   s->Add(save_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
@@ -1066,7 +1067,7 @@ void EditorFrame::OnClose(wxCloseEvent& evt) {
   evt.Skip();
 }
 
-void EditorFrame::RefreshToolbarAndStatus(float dt) {
+void EditorFrame::RefreshToolbarAndStatus() {
   auto& play = scene_.PlayRef();
   const auto pstate = play.GetState();
   if (!toolbar_synced_once_ || pstate != last_play_state_) {
@@ -1123,13 +1124,16 @@ void EditorFrame::RefreshToolbarAndStatus(float dt) {
     last_map_label_ = std::move(map_lbl);
   }
 
-  fps_accum_ += dt;
-  fps_frames_++;
-  if (fps_accum_ >= 0.5f) {
-    fps_display_ = static_cast<float>(fps_frames_) / fps_accum_;
-    fps_accum_ = 0.0f;
-    fps_frames_ = 0;
-    fps_lbl_->SetLabel(wxString::Format("%.1f fps", fps_display_));
+  const auto now = std::chrono::steady_clock::now();
+  if (!status_synced_once_ ||
+      now - last_fps_update_ >= std::chrono::milliseconds(500)) {
+    last_fps_update_ = now;
+    const int game_fps =
+        scene_.GetRenderHost() ? scene_.GetRenderHost()->GetAverageFps() : 0;
+    if (!status_synced_once_ || game_fps != last_game_fps_) {
+      fps_lbl_->SetLabel(wxString::Format("%d fps", game_fps));
+      last_game_fps_ = game_fps;
+    }
   }
 
   if (auto* sb = GetStatusBar()) {
@@ -1150,18 +1154,20 @@ void EditorFrame::RefreshToolbarAndStatus(float dt) {
 }
 
 void EditorFrame::SyncFromController(float dt) {
+  SyncPanels(dt);
+  SyncViewports(dt);
+}
+
+void EditorFrame::SyncPanels(float dt) {
   if (closing_) return;
 
   if (scene_.ConsumeUIBuilderFocusRequest()) RevealUIBuilder();
   if (scene_.ConsumeInputActionsFocusRequest()) RevealInputActions();
 
-  RefreshToolbarAndStatus(dt);
+  RefreshToolbarAndStatus();
 
   if (hierarchy_panel_ && hierarchy_panel_->IsShownOnScreen()) {
     hierarchy_panel_->SyncFromController();
-  }
-  if (scene_panel_ && scene_panel_->IsShownOnScreen()) {
-    scene_panel_->SyncFromController(dt);
   }
   if (inspector_panel_ && inspector_panel_->IsShownOnScreen()) {
     inspector_panel_->SyncFromController();
@@ -1182,9 +1188,23 @@ void EditorFrame::SyncFromController(float dt) {
     input_actions_panel_->SyncFromController(dt);
   }
 
-  if (camera_preview_frame_) camera_preview_frame_->SyncFromController();
   if (ui_builder_frame_) ui_builder_frame_->SyncFromController(dt);
   if (input_actions_frame_) input_actions_frame_->SyncFromController(dt);
+}
+
+void EditorFrame::SyncViewports(float dt) {
+  if (closing_) return;
+  if (scene_panel_ && scene_panel_->IsShownOnScreen()) {
+    scene_panel_->SyncFromController(dt);
+  }
+  if (camera_preview_frame_) camera_preview_frame_->SyncFromController();
+}
+
+bool EditorFrame::WantsUnlockedViewportFps() const {
+  if (closing_ || !scene_panel_ || !scene_panel_->IsShownOnScreen()) {
+    return false;
+  }
+  return scene_panel_->WantsUnlockedFps();
 }
 
 }  // namespace Mercury::EditorUI
