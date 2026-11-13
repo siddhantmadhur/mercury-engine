@@ -75,6 +75,10 @@ class EditorScene : public MapScene {
     kFlyA = 1 << 3,
     kFlyE = 1 << 4,
     kFlyQ = 1 << 5,
+    kNavUp = 1 << 6,
+    kNavDown = 1 << 7,
+    kNavLeft = 1 << 8,
+    kNavRight = 1 << 9,
   };
 
   struct PackSizeOption {
@@ -207,6 +211,8 @@ class EditorScene : public MapScene {
   bool IsView2D() const { return view_2d_; }
   void SetView2D(bool view_2d);
   void ToggleView2D() { SetView2D(!view_2d_); }
+  const glm::vec3& GetCameraTarget() const { return camera_target_; }
+  glm::vec3 GetCameraPosition() const { return CameraPosition(); }
   const char* GetHintText() const;
   void FrameSelected();
   void FrameMap();

@@ -9,6 +9,7 @@
 #include <cctype>
 #include <vector>
 
+#include "editor_icons.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
 #include "wx_theme.h"
@@ -230,8 +231,8 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   auto* preset_lbl = new wxStaticText(&dlg, wxID_ANY, "Presets:");
   auto* preset_row = new wxBoxSizer(wxHORIZONTAL);
   auto add_preset = [&](const char* name, const char* cmd) {
-    auto* btn = new wxButton(&dlg, wxID_ANY, name, wxDefaultPosition,
-                             wxDefaultSize, wxBU_EXACTFIT);
+    auto* btn = new wxButton(&dlg, wxID_ANY, name);
+    ApplyButtonPadding(btn, 8);
     btn->Bind(wxEVT_BUTTON, [ed_ctrl, cmd](wxCommandEvent&) {
       ed_ctrl->SetValue(cmd);
     });

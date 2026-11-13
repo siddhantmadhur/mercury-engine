@@ -117,6 +117,7 @@ class UIBuilderFrame : public wxFrame {
 
   UIBuilderPanel* Panel() { return panel_; }
   void SyncFromController(float dt);
+  void ClearOnClosed() { on_closed_ = nullptr; }
 
  private:
   UIBuilderPanel* panel_ = nullptr;

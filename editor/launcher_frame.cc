@@ -10,6 +10,7 @@
 #include <filesystem>
 
 #include "dialogs.h"
+#include "editor_icons.h"
 #include "templates.h"
 #include "wx_theme.h"
 
@@ -74,9 +75,8 @@ void LauncherFrame::BuildLayout() {
   title_box->Add(title, 0);
   title_box->Add(sub, 0, wxTOP, 2);
 
-  auto* prefs_btn = new wxButton(hdr, wxID_ANY, "Preferences...",
-                                 wxDefaultPosition, wxDefaultSize,
-                                 wxBU_EXACTFIT);
+  auto* prefs_btn = new wxButton(hdr, wxID_ANY, "Preferences...");
+  ApplyButtonIconAndPadding(prefs_btn, EditorIcon::kPreferences);
   prefs_btn->Bind(wxEVT_BUTTON,
                   [this](wxCommandEvent&) { ShowPreferencesDialog(this, scene_); });
 
@@ -99,12 +99,10 @@ void LauncherFrame::BuildLayout() {
   rec_hdr->Add(rec_lbl, 0, wxALIGN_CENTER_VERTICAL);
   rec_hdr->AddStretchSpacer();
 
-  auto* open_file_btn = new wxButton(left, wxID_ANY, "Open .mproj...",
-                                     wxDefaultPosition, wxDefaultSize,
-                                     wxBU_EXACTFIT);
-  auto* open_dir_btn = new wxButton(left, wxID_ANY, "Open Folder...",
-                                    wxDefaultPosition, wxDefaultSize,
-                                    wxBU_EXACTFIT);
+  auto* open_file_btn = new wxButton(left, wxID_ANY, "Open .mproj...");
+  ApplyButtonIconAndPadding(open_file_btn, EditorIcon::kOpenFolder);
+  auto* open_dir_btn = new wxButton(left, wxID_ANY, "Open Folder...");
+  ApplyButtonIconAndPadding(open_dir_btn, EditorIcon::kOpenFolder);
   rec_hdr->Add(open_file_btn, 0, wxRIGHT, 4);
   rec_hdr->Add(open_dir_btn, 0);
   left_s->Add(rec_hdr, 0, wxEXPAND | wxALL, 8);
@@ -117,7 +115,9 @@ void LauncherFrame::BuildLayout() {
 
   auto* rec_foot = new wxBoxSizer(wxHORIZONTAL);
   open_recent_btn_ = new wxButton(left, wxID_ANY, "Open Selected");
+  ApplyButtonIconAndPadding(open_recent_btn_, EditorIcon::kOpenFolder);
   remove_recent_btn_ = new wxButton(left, wxID_ANY, "Remove");
+  ApplyButtonIconAndPadding(remove_recent_btn_, EditorIcon::kDelete);
   open_recent_btn_->Enable(false);
   remove_recent_btn_->Enable(false);
   rec_foot->Add(open_recent_btn_, 0, wxRIGHT, 6);
@@ -232,9 +232,8 @@ void LauncherFrame::BuildLayout() {
   auto* f_row = new wxBoxSizer(wxHORIZONTAL);
   new_folder_ctrl_ = new wxTextCtrl(
       right, wxID_ANY, wxString::FromUTF8(EditorSettings::HomeDir().string()));
-  auto* browse_btn = new wxButton(right, wxID_ANY, "Browse...",
-                                  wxDefaultPosition, wxDefaultSize,
-                                  wxBU_EXACTFIT);
+  auto* browse_btn = new wxButton(right, wxID_ANY, "Browse...");
+  ApplyButtonPadding(browse_btn, 10);
   browse_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     wxDirDialog dlg(this, "Choose Parent Folder",
                     new_folder_ctrl_->GetValue());
@@ -247,6 +246,7 @@ void LauncherFrame::BuildLayout() {
   right_s->Add(f_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 6);
 
   auto* create_btn = new wxButton(right, wxID_ANY, "Create Project");
+  ApplyButtonIconAndPadding(create_btn, EditorIcon::kCreate, 12);
   create_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     const std::string name = new_name_ctrl_->GetValue().ToStdString();
     const std::string folder = new_folder_ctrl_->GetValue().ToStdString();

@@ -10,6 +10,7 @@
 
 #include "dialogs.h"
 #include "dnd_payloads.h"
+#include "editor_icons.h"
 #include "project/asset_database.h"
 #include "scripting/event.h"
 #include "scripting/type_registry.h"
@@ -163,6 +164,7 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
 
   if (!res_path.ends_with(kAssetExtension)) {
     auto* open_btn = new wxButton(scroll_, wxID_ANY, "Open in External Editor");
+    ApplyButtonIconAndPadding(open_btn, EditorIcon::kPopOut);
     open_btn->Bind(wxEVT_BUTTON, [this, project, res_path](wxCommandEvent&) {
       scene_.OpenInExternalEditor(project->Resolve(res_path));
     });
@@ -393,6 +395,7 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
           source ? source->Get<mtext::Resource>() : nullptr;
       std::string ui_path = resource ? resource->path : "";
       uidoc_btn = new wxButton(body, wxID_ANY, "Edit in UI Builder");
+      ApplyButtonIconAndPadding(uidoc_btn, EditorIcon::kPopOut);
       uidoc_btn->Enable(!ui_path.empty());
       uidoc_btn->Bind(wxEVT_BUTTON, [this, node_uid, i](wxCommandEvent&) {
         MapNode* target = scene_.GetMap().FindByUid(node_uid);
@@ -448,7 +451,8 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
   }
 
   auto* add_btn = new wxButton(scroll_, wxID_ANY, "Add Component");
-  add_btn->SetMinSize(wxSize(200, 28));
+  ApplyButtonIconAndPadding(add_btn, EditorIcon::kCreate, 14);
+  add_btn->SetMinSize(wxSize(200, 30));
   add_btn->Bind(wxEVT_BUTTON, [this, node_uid](wxCommandEvent&) {
     MapNode* target = scene_.GetMap().FindByUid(node_uid);
     if (!target) return;
