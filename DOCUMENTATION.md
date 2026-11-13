@@ -346,6 +346,15 @@ Builds/Pong/game.mindex   index of game.mpack and the archives below
 
 The format is described in `mercury/pack/mpack.h`. The reader and the VFS that mounts packs (`mercury/os/filesystem.h`) are in the engine; the packing step is in `editor/release_build.cc`.
 
+On macOS, `scripts/package_macos.pl` wraps that output in a self-contained `.app`:
+
+```sh
+./scripts/package_macos.pl --project examples/pong/pong.mproj
+open Builds/Pong.app
+```
+
+It builds the Release player with Bazel, writes `game.mpack`/`engine.mpack` (the same format, with the same split, compression and CRC rules as Build Game) and puts them in `Contents/Resources`. The player, the Vulkan loader (`libvulkan`) and MoltenVK are copied into the bundle, their install names are rewritten to `@rpath`, and a relative `vulkan/icd.d/MoltenVK_icd.json` tells the loader to use the bundled driver, so nothing points at the checkout or Homebrew. The bundle is ad-hoc signed by default; pass `--identity "Developer ID Application: ..."` for a distributable, hardened-runtime signature and `--zip` to also produce a zip for `ditto`/notarization. `--target editor` packages the editor instead.
+
 ## Importing a Unity project
 
 `scripts/unity_import/unity_import.py` converts a Unity project's scenes, prefabs, materials, ScriptableObjects, animator controllers, input actions, UXML/USS, panel settings and volume profiles to Mercury files, and copies models, textures, sounds and fonts. Unity's left-handed axes become Mercury's by mirroring Z. Scripts are ported by hand; a Python script map tells the importer which AngelScript script ([script] class) takes each C# script and how to convert its fields. `project-iso-mercury/import/run_import.sh` is a complete example, and `python3 -m unittest discover -s scripts/unity_import` tests the conversions.

@@ -46,11 +46,22 @@ bool Exists(const fs::path& path);
 // Names of the files directly in `dir`, from mounted packs and from disk
 // (each once, packs first; folders are not listed).
 std::vector<std::string> ListDirectory(const fs::path& dir);
+// Paths of every file below `dir`, relative to it and '/'-separated, from
+// mounted packs and from disk (each once, sorted).
+std::vector<std::string> ListFilesRecursive(const fs::path& dir);
 // True if `path` is served from a mounted pack.
 bool IsPacked(const fs::path& path);
 
 // The folder holding the running executable.
 fs::path ExecutableDir();
+
+// The Contents/Resources folder of the .app bundle holding the running
+// executable, or an empty path when the program is not in a bundle.
+fs::path BundleResourcesDir();
+
+// Points the Vulkan loader at the MoltenVK ICD shipped inside the .app bundle.
+// Does nothing outside a bundle or when the caller already chose driver files.
+void UseBundledVulkanDriver();
 
 // A path the user typed on the command line. `bazel run` starts programs inside
 // the runfiles tree and puts the folder the user ran it from in
