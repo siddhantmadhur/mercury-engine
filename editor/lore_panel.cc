@@ -6,6 +6,7 @@
 #include <filesystem>
 
 #include "dialogs.h"
+#include "editor_icons.h"
 #include "wx_theme.h"
 
 namespace Mercury::EditorUI {
@@ -196,14 +197,14 @@ void LorePanel::RebuildUi() {
   busy_lbl_->SetFont(busy_lbl_->GetFont().Bold());
   bs->Add(busy_lbl_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
-  auto* sync_btn = new wxButton(bar, wxID_ANY, "Sync", wxDefaultPosition,
-                                wxDefaultSize, wxBU_EXACTFIT);
-  push_btn_ = new wxButton(bar, wxID_ANY, "Push", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
-  auto* refresh_btn = new wxButton(bar, wxID_ANY, "Refresh", wxDefaultPosition,
-                                   wxDefaultSize, wxBU_EXACTFIT);
-  auto* opt_btn = new wxButton(bar, wxID_ANY, "Options", wxDefaultPosition,
-                               wxDefaultSize, wxBU_EXACTFIT);
+  auto* sync_btn = new wxButton(bar, wxID_ANY, "Sync");
+  ApplyButtonIconAndPadding(sync_btn, EditorIcon::kSync);
+  push_btn_ = new wxButton(bar, wxID_ANY, "Push");
+  ApplyButtonIconAndPadding(push_btn_, EditorIcon::kPush);
+  auto* refresh_btn = new wxButton(bar, wxID_ANY, "Refresh");
+  ApplyButtonIconAndPadding(refresh_btn, EditorIcon::kRefresh);
+  auto* opt_btn = new wxButton(bar, wxID_ANY, "Options");
+  ApplyButtonIconAndPadding(opt_btn, EditorIcon::kOptions);
 
   bs->Add(sync_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
   bs->Add(push_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -247,9 +248,8 @@ void LorePanel::RebuildUi() {
 
   auto* st_hdr = new wxBoxSizer(wxHORIZONTAL);
   auto* st_lbl = new wxStaticText(left_pane, wxID_ANY, "Staged Changes");
-  auto* unstage_btn =
-      new wxButton(left_pane, wxID_ANY, "Unstage", wxDefaultPosition,
-                   wxDefaultSize, wxBU_EXACTFIT);
+  auto* unstage_btn = new wxButton(left_pane, wxID_ANY, "Unstage");
+  ApplyButtonPadding(unstage_btn, 8);
   st_hdr->Add(st_lbl, 1, wxALIGN_CENTER_VERTICAL);
   st_hdr->Add(unstage_btn, 0);
   ls->Add(st_hdr, 0, wxEXPAND | wxALL, 4);
@@ -262,9 +262,8 @@ void LorePanel::RebuildUi() {
 
   auto* un_hdr = new wxBoxSizer(wxHORIZONTAL);
   auto* un_lbl = new wxStaticText(left_pane, wxID_ANY, "Unstaged Changes");
-  auto* stage_all_btn =
-      new wxButton(left_pane, wxID_ANY, "Stage All", wxDefaultPosition,
-                   wxDefaultSize, wxBU_EXACTFIT);
+  auto* stage_all_btn = new wxButton(left_pane, wxID_ANY, "Stage All");
+  ApplyButtonPadding(stage_all_btn, 8);
   un_hdr->Add(un_lbl, 1, wxALIGN_CENTER_VERTICAL);
   un_hdr->Add(stage_all_btn, 0);
   ls->Add(un_hdr, 0, wxEXPAND | wxALL, 4);
@@ -293,7 +292,9 @@ void LorePanel::RebuildUi() {
 
   auto* cbtns = new wxBoxSizer(wxHORIZONTAL);
   commit_btn_ = new wxButton(right_pane, wxID_ANY, "Commit");
+  ApplyButtonIconAndPadding(commit_btn_, EditorIcon::kCommit);
   commit_push_btn_ = new wxButton(right_pane, wxID_ANY, "Commit & Push");
+  ApplyButtonIconAndPadding(commit_push_btn_, EditorIcon::kPush);
   cbtns->Add(commit_btn_, 1, wxRIGHT, 6);
   cbtns->Add(commit_push_btn_, 1);
   rhs->Add(cbtns, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
@@ -323,6 +324,7 @@ void LorePanel::RebuildUi() {
 
   auto* hactions = new wxBoxSizer(wxHORIZONTAL);
   auto* sync_rev_btn = new wxButton(htop, wxID_ANY, "Sync to Selected Rev");
+  ApplyButtonIconAndPadding(sync_rev_btn, EditorIcon::kSync);
   hactions->Add(sync_rev_btn, 0);
   hts->Add(hactions, 0, wxLEFT | wxRIGHT | wxBOTTOM, 4);
 

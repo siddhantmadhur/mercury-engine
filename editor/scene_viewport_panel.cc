@@ -10,6 +10,7 @@
 
 #include "scene/scene.h"
 #include "dnd_payloads.h"
+#include "editor_icons.h"
 #include "wx_theme.h"
 
 namespace Mercury::EditorUI {
@@ -30,23 +31,85 @@ bool IsModelExt(const std::string& ext) {
          ext == ".dae" || ext == ".ply";
 }
 
+int NavBitForKeyCode(int kc) {
+  switch (kc) {
+    case 'W':
+    case 'w':
+      return EditorScene::kFlyW;
+    case 'S':
+    case 's':
+      return EditorScene::kFlyS;
+    case 'D':
+    case 'd':
+      return EditorScene::kFlyD;
+    case 'A':
+    case 'a':
+      return EditorScene::kFlyA;
+    case 'E':
+    case 'e':
+      return EditorScene::kFlyE;
+    case 'Q':
+    case 'q':
+      return EditorScene::kFlyQ;
+    case WXK_UP:
+      return EditorScene::kNavUp;
+    case WXK_DOWN:
+      return EditorScene::kNavDown;
+    case WXK_LEFT:
+      return EditorScene::kNavLeft;
+    case WXK_RIGHT:
+      return EditorScene::kNavRight;
+    default:
+      return 0;
+  }
+}
+
 }  // namespace
+
+// A focusable raw canvas surface so keyboard & arrow events work reliably under
+// GTK/Wayland without container tab-traversal intercepting keys.
+class ViewportCanvas : public wxWindow {
+ public:
+  explicit ViewportCanvas(wxWindow* parent)
+      : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                 wxBORDER_NONE | wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE) {
+    SetCanFocus(true);
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetBackgroundColour(wxColour(24, 26, 30));
+  }
+
+  bool AcceptsFocus() const override { return true; }
+  bool AcceptsFocusFromKeyboard() const override { return true; }
+};
 
 // ------------------------------------------------------ CameraPreviewFrame ---
 
 CameraPreviewFrame::CameraPreviewFrame(wxWindow* parent, EditorScene& scene,
                                        std::function<void()> on_closed)
     : wxFrame(parent, wxID_ANY, "Camera Preview", wxDefaultPosition,
-              wxSize(420, 260),
+              wxSize(420, 290),
               wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT),
       scene_(scene),
       on_closed_(std::move(on_closed)) {
+  auto* top_bar = new wxPanel(this);
+  auto* top_sizer = new wxBoxSizer(wxHORIZONTAL);
+  auto* lbl = new wxStaticText(top_bar, wxID_ANY, "Live Camera Preview");
+  auto* dock_btn = new wxButton(top_bar, wxID_ANY, "Dock");
+  dock_btn->SetToolTip("Dock preview back into Scene Viewport");
+  ApplyButtonIconAndPadding(dock_btn, EditorIcon::kDock, 10, 14);
+  dock_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
+
+  top_sizer->Add(lbl, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
+  top_sizer->Add(dock_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 4);
+  top_bar->SetSizer(top_sizer);
+
   canvas_ = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                         wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE);
   canvas_->SetBackgroundStyle(wxBG_STYLE_PAINT);
   canvas_->SetBackgroundColour(wxColour(24, 26, 30));
 
   auto* sizer = new wxBoxSizer(wxVERTICAL);
+  sizer->Add(top_bar, 0, wxEXPAND);
   sizer->Add(canvas_, 1, wxEXPAND);
   SetSizer(sizer);
 
@@ -108,9 +171,11 @@ void CameraPreviewFrame::OnPaint(wxPaintEvent&) {
 }
 
 void CameraPreviewFrame::OnClose(wxCloseEvent& evt) {
-  Hide();
-  if (on_closed_) on_closed_();
-  evt.Veto();
+  if (auto cb = std::move(on_closed_)) {
+    on_closed_ = nullptr;
+    cb();
+  }
+  evt.Skip();
 }
 
 // ------------------------------------------------------ SceneViewportPanel ---
@@ -125,8 +190,7 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
   auto* bs = new wxBoxSizer(wxHORIZONTAL);
 
   auto make_toggle = [&](const wxString& label, const wxString& tip) {
-    auto* b = new wxToggleButton(bar, wxID_ANY, label, wxDefaultPosition,
-                                 wxDefaultSize, wxBU_EXACTFIT);
+    auto* b = new wxToggleButton(bar, wxID_ANY, label);
     b->SetToolTip(tip);
     return b;
   };
@@ -136,9 +200,13 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
   scale_btn_ = make_toggle("Scale", "Scale gizmo (R)");
   space_btn_ = make_toggle("Local", "Toggle Local / Global handle space (X)");
   mode_2d_btn_ = make_toggle("2D", "Toggle 2D / 3D scene camera");
-  frame_btn_ = new wxButton(bar, wxID_ANY, "Frame", wxDefaultPosition,
-                            wxDefaultSize, wxBU_EXACTFIT);
+  frame_btn_ = new wxButton(bar, wxID_ANY, "Frame");
   frame_btn_->SetToolTip("Frame selected node or map (F)");
+
+  ApplyButtonIconAndPadding(move_btn_, EditorIcon::kMove, 10, 14);
+  ApplyButtonIconAndPadding(rotate_btn_, EditorIcon::kRotate, 10, 14);
+  ApplyButtonIconAndPadding(scale_btn_, EditorIcon::kScale, 10, 14);
+  ApplyButtonIconAndPadding(frame_btn_, EditorIcon::kFrame, 10, 14);
 
   bs->Add(move_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
   bs->Add(rotate_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -155,36 +223,39 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
   bar->SetSizer(bar_wrap);
   root->Add(bar, 0, wxEXPAND);
 
-  canvas_ = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                        wxBORDER_NONE | wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE);
-  canvas_->SetBackgroundStyle(wxBG_STYLE_PAINT);
-  canvas_->SetBackgroundColour(wxColour(24, 26, 30));
+  canvas_ = new ViewportCanvas(this);
   root->Add(canvas_, 1, wxEXPAND);
   SetSizer(root);
 
   move_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.SetTool(EditorScene::Tool::kMove);
     SyncToolbarState();
+    FocusCanvas();
   });
   rotate_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.SetTool(EditorScene::Tool::kRotate);
     SyncToolbarState();
+    FocusCanvas();
   });
   scale_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.SetTool(EditorScene::Tool::kScale);
     SyncToolbarState();
+    FocusCanvas();
   });
   space_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.ToggleHandleSpace();
     SyncToolbarState();
+    FocusCanvas();
   });
   mode_2d_btn_->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
     scene_.ToggleView2D();
     SyncToolbarState();
+    FocusCanvas();
   });
   frame_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     if (scene_.GetSelectedNode()) scene_.FrameSelected();
     else scene_.FrameMap();
+    FocusCanvas();
   });
 
   canvas_->Bind(wxEVT_PAINT, &SceneViewportPanel::OnPaintCanvas, this);
@@ -197,10 +268,16 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
   canvas_->Bind(wxEVT_MOTION, &SceneViewportPanel::OnCanvasMouseMove, this);
   canvas_->Bind(wxEVT_MOUSEWHEEL, &SceneViewportPanel::OnCanvasWheel, this);
   canvas_->Bind(wxEVT_KEY_DOWN, &SceneViewportPanel::OnCanvasKeyDown, this);
+  canvas_->Bind(wxEVT_KEY_UP, &SceneViewportPanel::OnCanvasKeyUp, this);
+  canvas_->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& evt) {
+    ResetKeyState();
+    evt.Skip();
+  });
   canvas_->Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) { hovered_ = true; });
   canvas_->Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) { hovered_ = false; });
   canvas_->Bind(wxEVT_MOUSE_CAPTURE_LOST, [this](wxMouseCaptureLostEvent&) {
     left_down_ = right_down_ = middle_down_ = false;
+    ResetKeyState();
     scene_.OnViewportMouseUp();
   });
 
@@ -248,6 +325,21 @@ void SceneViewportPanel::SetPreviewPoppedOut(bool popped_out) {
   canvas_->Refresh(false);
 }
 
+void SceneViewportPanel::FocusCanvas() {
+  if (canvas_) canvas_->SetFocus();
+}
+
+bool SceneViewportPanel::IsCanvasFocused() const {
+  return canvas_ && canvas_->HasFocus();
+}
+
+void SceneViewportPanel::ResetKeyState() {
+  nav_mask_ = 0;
+  shift_down_ = false;
+  alt_down_ = false;
+  ctrl_down_ = false;
+}
+
 bool SceneViewportPanel::HandleDroppedResPath(const std::string& res_path) {
   const std::string ext = LowerExt(res_path);
   if (ext == ".mmap") {
@@ -270,11 +362,24 @@ void SceneViewportPanel::SyncToolbarState() {
   rotate_btn_->SetValue(tool == EditorScene::Tool::kRotate);
   scale_btn_->SetValue(tool == EditorScene::Tool::kScale);
   space_btn_->SetValue(space == EditorScene::HandleSpace::kGlobal);
-  space_btn_->SetLabel(space == EditorScene::HandleSpace::kGlobal ? "Global"
-                                                                  : "Local");
+  if (!toolbar_synced_once_ || space != last_space_) {
+    space_btn_->SetLabel(space == EditorScene::HandleSpace::kGlobal ? "Global"
+                                                                    : "Local");
+    ApplyButtonIconAndPadding(space_btn_,
+                              space == EditorScene::HandleSpace::kGlobal
+                                  ? EditorIcon::kGlobalSpace
+                                  : EditorIcon::kLocalSpace,
+                              10, 14);
+  }
   mode_2d_btn_->SetValue(view_2d);
-  mode_2d_btn_->SetLabel(view_2d ? "2D" : "3D");
+  if (!toolbar_synced_once_ || view_2d != last_2d_) {
+    mode_2d_btn_->SetLabel(view_2d ? "2D" : "3D");
+    ApplyButtonIconAndPadding(
+        mode_2d_btn_, view_2d ? EditorIcon::kView2D : EditorIcon::kView3D,
+        10, 14);
+  }
 
+  toolbar_synced_once_ = true;
   last_tool_ = tool;
   last_space_ = space;
   last_2d_ = view_2d;
@@ -301,28 +406,15 @@ void SceneViewportPanel::SyncFromController(float dt) {
     status_lbl_->SetLabel(wxEmptyString);
   }
 
-  // Gather WASDQE camera fly keys when canvas is focused & right-mouse held
-  int wasdqe = 0;
-  if (right_down_ && canvas_->HasFocus()) {
-    if (wxGetKeyState(static_cast<wxKeyCode>('W'))) wasdqe |= EditorScene::kFlyW;
-    if (wxGetKeyState(static_cast<wxKeyCode>('S'))) wasdqe |= EditorScene::kFlyS;
-    if (wxGetKeyState(static_cast<wxKeyCode>('D'))) wasdqe |= EditorScene::kFlyD;
-    if (wxGetKeyState(static_cast<wxKeyCode>('A'))) wasdqe |= EditorScene::kFlyA;
-    if (wxGetKeyState(static_cast<wxKeyCode>('E'))) wasdqe |= EditorScene::kFlyE;
-    if (wxGetKeyState(static_cast<wxKeyCode>('Q'))) wasdqe |= EditorScene::kFlyQ;
-  }
-
   glm::vec2 delta(0.0f, 0.0f);
   if (mouse_pos_valid_) {
     delta = local_mouse_ - prev_mouse_;
     prev_mouse_ = local_mouse_;
   }
-  const bool shift_down = wxGetKeyState(WXK_SHIFT);
   scene_.UpdateViewportNavigation(delta, left_down_, right_down_, middle_down_,
-                                  wasdqe, shift_down, dt);
+                                  nav_mask_, shift_down_, dt);
 
-  const bool alt_down = wxGetKeyState(WXK_ALT);
-  scene_.UpdateHoveredHandle(local_mouse_, hovered_, alt_down, right_down_);
+  scene_.UpdateHoveredHandle(local_mouse_, hovered_, alt_down_, right_down_);
 
   if (!preview_popped_out_) {
     last_preview_info_ = scene_.UpdatePreviewCamera();
@@ -362,8 +454,7 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
   }
 
   WxOverlayCanvas overlay(gc.get(), overlay_font_);
-  const bool alt_down = wxGetKeyState(WXK_ALT);
-  scene_.RenderOverlays(overlay, local_mouse_, hovered_, alt_down, right_down_);
+  scene_.RenderOverlays(overlay, local_mouse_, hovered_, alt_down_, right_down_);
 
   // Bottom-left navigation hint pill
   if (const char* hint = scene_.GetHintText(); hint && *hint) {
@@ -435,6 +526,10 @@ void SceneViewportPanel::ReleaseMouseIfCaptured() {
 
 void SceneViewportPanel::OnCanvasMouseDown(wxMouseEvent& evt) {
   canvas_->SetFocus();
+  shift_down_ = evt.ShiftDown();
+  alt_down_ = evt.AltDown();
+  ctrl_down_ = evt.ControlDown();
+
   const wxPoint p = evt.GetPosition();
   local_mouse_ = {static_cast<float>(p.x), static_cast<float>(p.y)};
   prev_mouse_ = local_mouse_;
@@ -460,6 +555,10 @@ void SceneViewportPanel::OnCanvasMouseDown(wxMouseEvent& evt) {
 }
 
 void SceneViewportPanel::OnCanvasMouseUp(wxMouseEvent& evt) {
+  shift_down_ = evt.ShiftDown();
+  alt_down_ = evt.AltDown();
+  ctrl_down_ = evt.ControlDown();
+
   if (evt.LeftUp()) {
     left_down_ = false;
     scene_.OnViewportMouseUp();
@@ -474,6 +573,10 @@ void SceneViewportPanel::OnCanvasMouseUp(wxMouseEvent& evt) {
 }
 
 void SceneViewportPanel::OnCanvasMouseMove(wxMouseEvent& evt) {
+  shift_down_ = evt.ShiftDown();
+  alt_down_ = evt.AltDown();
+  ctrl_down_ = evt.ControlDown();
+
   const wxPoint p = evt.GetPosition();
   local_mouse_ = {static_cast<float>(p.x), static_cast<float>(p.y)};
   if (!mouse_pos_valid_) {
@@ -488,6 +591,10 @@ void SceneViewportPanel::OnCanvasMouseMove(wxMouseEvent& evt) {
 }
 
 void SceneViewportPanel::OnCanvasWheel(wxMouseEvent& evt) {
+  shift_down_ = evt.ShiftDown();
+  alt_down_ = evt.AltDown();
+  ctrl_down_ = evt.ControlDown();
+
   const wxPoint p = evt.GetPosition();
   local_mouse_ = {static_cast<float>(p.x), static_cast<float>(p.y)};
   const int delta = evt.GetWheelDelta();
@@ -498,41 +605,85 @@ void SceneViewportPanel::OnCanvasWheel(wxMouseEvent& evt) {
   }
 }
 
-void SceneViewportPanel::OnCanvasKeyDown(wxKeyEvent& evt) {
-  if (right_down_ || evt.ControlDown() || evt.AltDown()) {
-    evt.Skip();
-    return;
+bool SceneViewportPanel::HandleKeyDown(wxKeyEvent& evt) {
+  const int kc = evt.GetKeyCode();
+  shift_down_ = evt.ShiftDown() || kc == WXK_SHIFT;
+  alt_down_ = evt.AltDown() || kc == WXK_ALT;
+  ctrl_down_ = evt.ControlDown() || kc == WXK_CONTROL;
+
+  if (evt.ControlDown() || evt.AltDown()) {
+    return false;
   }
-  switch (evt.GetKeyCode()) {
+
+  if (const int bit = NavBitForKeyCode(kc)) {
+    nav_mask_ |= bit;
+    // Arrow keys always pan/move the map directly.
+    if (kc == WXK_UP || kc == WXK_DOWN || kc == WXK_LEFT || kc == WXK_RIGHT) {
+      return true;
+    }
+    // While RMB is held, WASDQE flies/pans instead of switching gizmos.
+    if (right_down_) {
+      return true;
+    }
+  }
+
+  if (right_down_) {
+    return false;
+  }
+
+  switch (kc) {
     case 'W':
     case 'w':
       scene_.SetTool(EditorScene::Tool::kMove);
       SyncToolbarState();
-      return;
+      return true;
     case 'E':
     case 'e':
       scene_.SetTool(EditorScene::Tool::kRotate);
       SyncToolbarState();
-      return;
+      return true;
     case 'R':
     case 'r':
       scene_.SetTool(EditorScene::Tool::kScale);
       SyncToolbarState();
-      return;
+      return true;
     case 'X':
     case 'x':
+    case 'G':
+    case 'g':
       scene_.ToggleHandleSpace();
       SyncToolbarState();
-      return;
+      return true;
     case 'F':
     case 'f':
       if (scene_.GetSelectedNode()) scene_.FrameSelected();
       else scene_.FrameMap();
-      return;
+      return true;
     default:
-      evt.Skip();
-      return;
+      return false;
   }
+}
+
+void SceneViewportPanel::HandleKeyUp(wxKeyEvent& evt) {
+  const int kc = evt.GetKeyCode();
+  shift_down_ = (kc == WXK_SHIFT) ? false : evt.ShiftDown();
+  alt_down_ = (kc == WXK_ALT) ? false : evt.AltDown();
+  ctrl_down_ = (kc == WXK_CONTROL) ? false : evt.ControlDown();
+
+  if (const int bit = NavBitForKeyCode(kc)) {
+    nav_mask_ &= ~bit;
+  }
+}
+
+void SceneViewportPanel::OnCanvasKeyDown(wxKeyEvent& evt) {
+  if (!HandleKeyDown(evt)) {
+    evt.Skip();
+  }
+}
+
+void SceneViewportPanel::OnCanvasKeyUp(wxKeyEvent& evt) {
+  HandleKeyUp(evt);
+  evt.Skip();
 }
 
 }  // namespace Mercury::EditorUI

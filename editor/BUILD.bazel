@@ -10,6 +10,7 @@ cc_library(
         "dialogs.cc",
         "editor_app.cc",
         "editor_frame.cc",
+        "editor_icons.cc",
         "editor_scene.cc",
         "editor_settings.cc",
         "hierarchy_panel.cc",

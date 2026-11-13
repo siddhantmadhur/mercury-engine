@@ -27,6 +27,19 @@
 
 namespace Mercury::EditorUI {
 
+class EditorFrame;
+
+class MercuryAuiManager : public wxAuiManager {
+ public:
+  MercuryAuiManager(EditorFrame* owner, unsigned int flags);
+
+  wxAuiFloatingFrame* CreateFloatingFrame(wxWindow* parent,
+                                          const wxAuiPaneInfo& p) override;
+
+ private:
+  EditorFrame* owner_ = nullptr;
+};
+
 class EditorFrame : public wxFrame {
  public:
   EditorFrame(EditorScene& scene, std::function<void()> on_close_project,
@@ -37,6 +50,9 @@ class EditorFrame : public wxFrame {
   void SaveLayoutPerspective();
   bool ConfirmDiscardOrSave(const wxString& action_prompt);
   void DestroyChildFrames();
+  void DockPane(const wxString& pane_name);
+  void DockAllFloatingPanels();
+  void NotifyGlobalKeyUp(wxKeyEvent& evt);
 
  private:
   void BuildMenuBar();
@@ -60,12 +76,13 @@ class EditorFrame : public wxFrame {
   void OnCharHook(wxKeyEvent& evt);
   void OnClose(wxCloseEvent& evt);
   void OnAuiPaneClose(wxAuiManagerEvent& evt);
+  void OnAuiPaneButton(wxAuiManagerEvent& evt);
 
   EditorScene& scene_;
   std::function<void()> on_close_project_;
   std::function<void()> on_exit_app_;
 
-  wxAuiManager aui_;
+  MercuryAuiManager aui_;
   wxString default_perspective_;
   bool closing_ = false;
 
@@ -79,6 +96,8 @@ class EditorFrame : public wxFrame {
   wxButton* redo_btn_ = nullptr;
   wxStaticText* map_status_lbl_ = nullptr;
   wxStaticText* fps_lbl_ = nullptr;
+  bool toolbar_synced_once_ = false;
+  PlaySession::State last_play_state_ = PlaySession::State::kIdle;
 
   // Docked panels
   HierarchyPanel* hierarchy_panel_ = nullptr;

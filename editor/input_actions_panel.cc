@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "dialogs.h"
+#include "editor_icons.h"
 #include "input/input_actions.h"
 #include "wx_theme.h"
 
@@ -163,8 +164,8 @@ void InputActionsPanel::BuildLayout() {
     }
   });
 
-  new_file_btn_ = new wxButton(bar1, wxID_ANY, "+ New .minput",
-                               wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+  new_file_btn_ = new wxButton(bar1, wxID_ANY, "New .minput");
+  ApplyButtonIconAndPadding(new_file_btn_, EditorIcon::kNewFile);
   new_file_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     auto proj = scene_.GetProject();
     if (!proj) return;
@@ -173,30 +174,30 @@ void InputActionsPanel::BuildLayout() {
     RefreshAll(true);
   });
 
-  save_btn_ = new wxButton(bar1, wxID_ANY, "Save", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
+  save_btn_ = new wxButton(bar1, wxID_ANY, "Save");
+  ApplyButtonIconAndPadding(save_btn_, EditorIcon::kSave);
   save_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().Save();
     RefreshAll(true);
   });
 
-  undo_btn_ = new wxButton(bar1, wxID_ANY, "Undo", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
+  undo_btn_ = new wxButton(bar1, wxID_ANY, "Undo");
+  ApplyButtonIconAndPadding(undo_btn_, EditorIcon::kUndo);
   undo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().Undo();
     RefreshAll(true);
   });
 
-  redo_btn_ = new wxButton(bar1, wxID_ANY, "Redo", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
+  redo_btn_ = new wxButton(bar1, wxID_ANY, "Redo");
+  ApplyButtonIconAndPadding(redo_btn_, EditorIcon::kRedo);
   redo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().Redo();
     RefreshAll(true);
   });
 
   project_actions_btn_ =
-      new wxButton(bar1, wxID_ANY, "Use as Project Actions",
-                   wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+      new wxButton(bar1, wxID_ANY, "Use as Project Actions");
+  ApplyButtonPadding(project_actions_btn_, 10);
   project_actions_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().SetAsProjectActions();
     RefreshTopBar();
@@ -206,8 +207,8 @@ void InputActionsPanel::BuildLayout() {
       new wxStaticText(bar1, wxID_ANY, "Project Actions (Active)");
   project_actions_lbl_->SetFont(bar1->GetFont().Bold());
 
-  popout_btn_ = new wxButton(bar1, wxID_ANY, "Pop Out", wxDefaultPosition,
-                             wxDefaultSize, wxBU_EXACTFIT);
+  popout_btn_ = new wxButton(bar1, wxID_ANY, "Pop Out");
+  ApplyButtonIconAndPadding(popout_btn_, EditorIcon::kPopOut);
   popout_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     if (on_popout_) on_popout_(!popped_out_);
   });
@@ -273,8 +274,8 @@ void InputActionsPanel::BuildLayout() {
     evt.Skip();
   });
 
-  write_header_btn_ = new wxButton(codegen_bar_, wxID_ANY, "Write Header",
-                                   wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+  write_header_btn_ = new wxButton(codegen_bar_, wxID_ANY, "Write Header");
+  ApplyButtonPadding(write_header_btn_, 10);
   write_header_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().WriteHeader();
     RefreshTopBar();
@@ -323,8 +324,8 @@ void InputActionsPanel::BuildLayout() {
   maps_hdr->AddStretchSpacer();
   add_map_btn_ = new wxButton(maps_pane, wxID_ANY, "+", wxDefaultPosition,
                               wxSize(26, 22));
-  rename_map_btn_ = new wxButton(maps_pane, wxID_ANY, "Ren",
-                                 wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+  rename_map_btn_ = new wxButton(maps_pane, wxID_ANY, "Ren");
+  ApplyButtonPadding(rename_map_btn_, 8);
   del_map_btn_ = new wxButton(maps_pane, wxID_ANY, "-", wxDefaultPosition,
                               wxSize(26, 22));
   maps_hdr->Add(add_map_btn_, 0, wxRIGHT, 2);
@@ -390,16 +391,16 @@ void InputActionsPanel::BuildLayout() {
   act_s->Add(act_hdr, 0, wxEXPAND | wxALL, 4);
 
   auto* act_btns = new wxBoxSizer(wxHORIZONTAL);
-  add_action_btn_ = new wxButton(act_pane, wxID_ANY, "+ Action",
-                                 wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-  add_binding_btn_ = new wxButton(act_pane, wxID_ANY, "+ Binding",
-                                  wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-  add_comp_btn_ = new wxButton(act_pane, wxID_ANY, "+ 2DVec",
-                               wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-  dup_btn_ = new wxButton(act_pane, wxID_ANY, "Dup", wxDefaultPosition,
-                          wxDefaultSize, wxBU_EXACTFIT);
-  del_btn_ = new wxButton(act_pane, wxID_ANY, "Del", wxDefaultPosition,
-                          wxDefaultSize, wxBU_EXACTFIT);
+  add_action_btn_ = new wxButton(act_pane, wxID_ANY, "Action");
+  ApplyButtonIconAndPadding(add_action_btn_, EditorIcon::kCreate, 8, 13, 5);
+  add_binding_btn_ = new wxButton(act_pane, wxID_ANY, "Binding");
+  ApplyButtonIconAndPadding(add_binding_btn_, EditorIcon::kCreate, 8, 13, 5);
+  add_comp_btn_ = new wxButton(act_pane, wxID_ANY, "2DVec");
+  ApplyButtonIconAndPadding(add_comp_btn_, EditorIcon::kCreate, 8, 13, 5);
+  dup_btn_ = new wxButton(act_pane, wxID_ANY, "Dup");
+  ApplyButtonIconAndPadding(dup_btn_, EditorIcon::kDuplicate, 8, 13, 5);
+  del_btn_ = new wxButton(act_pane, wxID_ANY, "Del");
+  ApplyButtonIconAndPadding(del_btn_, EditorIcon::kDelete, 8, 13, 5);
   act_btns->Add(add_action_btn_, 0, wxRIGHT, 2);
   act_btns->Add(add_binding_btn_, 0, wxRIGHT, 2);
   act_btns->Add(add_comp_btn_, 0, wxRIGHT, 2);
@@ -862,9 +863,8 @@ void InputActionsPanel::RefreshProperties() {
       code->SetFont(MonospaceFont(9));
       props_sizer_->Add(code, 0, wxEXPAND | wxBOTTOM, 4);
 
-      auto* copy_btn = new wxButton(props_scroll_, wxID_ANY, "Copy Snippet",
-                                    wxDefaultPosition, wxDefaultSize,
-                                    wxBU_EXACTFIT);
+      auto* copy_btn = new wxButton(props_scroll_, wxID_ANY, "Copy Snippet");
+      ApplyButtonPadding(copy_btn, 10);
       copy_btn->Bind(wxEVT_BUTTON, [snippet](wxCommandEvent&) {
         if (wxTheClipboard->Open()) {
           wxTheClipboard->SetData(
@@ -913,9 +913,8 @@ void InputActionsPanel::RefreshProperties() {
         evt.Skip();
       });
 
-      auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...",
-                                    wxDefaultPosition, wxDefaultSize,
-                                    wxBU_EXACTFIT);
+      auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...");
+      ApplyButtonPadding(pick_btn, 8);
       pick_btn->Bind(wxEVT_BUTTON, [this, pick_btn, aidx, bidx](wxCommandEvent&) {
         ShowControlPickerMenu(pick_btn, [this, aidx, bidx](const std::string& p) {
           scene_.InputActionsRef().SetBindingPath(aidx, bidx, p, false);
@@ -927,8 +926,8 @@ void InputActionsPanel::RefreshProperties() {
           listen_.kind == ListenTarget::Kind::kBinding &&
           listen_.action == aidx && listen_.index == bidx;
       auto* listen_btn = new wxButton(
-          props_scroll_, wxID_ANY, listening ? "Listening..." : "Listen",
-          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+          props_scroll_, wxID_ANY, listening ? "Listening..." : "Listen");
+      ApplyButtonPadding(listen_btn, 8);
       listen_btn->Bind(wxEVT_BUTTON, [this, listening, aidx, bidx](wxCommandEvent&) {
         if (listening) {
           StopListen();
@@ -970,9 +969,8 @@ void InputActionsPanel::RefreshProperties() {
         auto* p_hdr = new wxBoxSizer(wxHORIZONTAL);
         auto* pl = new wxStaticText(props_scroll_, wxID_ANY, part_names[p]);
         pl->SetFont(HeaderFont());
-        auto* add_p = new wxButton(props_scroll_, wxID_ANY, "+ Add",
-                                   wxDefaultPosition, wxDefaultSize,
-                                   wxBU_EXACTFIT);
+        auto* add_p = new wxButton(props_scroll_, wxID_ANY, "Add");
+        ApplyButtonIconAndPadding(add_p, EditorIcon::kCreate, 8, 13, 5);
         add_p->Bind(wxEVT_BUTTON, [this, aidx, cidx, p](wxCommandEvent&) {
           scene_.InputActionsRef().AddCompositePartPath(aidx, cidx, p);
           RefreshAll(true);
@@ -1005,9 +1003,8 @@ void InputActionsPanel::RefreshProperties() {
             evt.Skip();
           });
 
-          auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...",
-                                        wxDefaultPosition, wxDefaultSize,
-                                        wxBU_EXACTFIT);
+          auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...");
+          ApplyButtonPadding(pick_btn, 8);
           pick_btn->Bind(wxEVT_BUTTON,
                          [this, pick_btn, aidx, cidx, p, idx](wxCommandEvent&) {
                            ShowControlPickerMenu(
@@ -1024,8 +1021,8 @@ void InputActionsPanel::RefreshProperties() {
               listen_.action == aidx && listen_.index == cidx &&
               listen_.part == p && listen_.part_idx == idx;
           auto* listen_btn = new wxButton(
-              props_scroll_, wxID_ANY, listening ? "..." : "Listen",
-              wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+              props_scroll_, wxID_ANY, listening ? "..." : "Listen");
+          ApplyButtonPadding(listen_btn, 8);
           listen_btn->Bind(wxEVT_BUTTON,
                            [this, listening, aidx, cidx, p, idx](wxCommandEvent&) {
                              if (listening) {
@@ -1079,12 +1076,15 @@ void InputActionsPanel::RefreshAll(bool rebuild_props) {
 }
 
 void InputActionsPanel::SetPoppedOut(bool popped_out) {
+  const bool changed = (popped_out_ != popped_out);
   popped_out_ = popped_out;
   if (popout_btn_) {
     popout_btn_->SetLabel(popped_out_ ? "Dock" : "Pop Out");
-    popout_btn_->Show(!popped_out_);
+    ApplyButtonIconAndPadding(
+        popout_btn_, popped_out_ ? EditorIcon::kDock : EditorIcon::kPopOut);
+    popout_btn_->Show(true);
   }
-  Layout();
+  if (changed) Layout();
 }
 
 void InputActionsPanel::SyncFromController(float /*dt*/) {
@@ -1119,11 +1119,17 @@ InputActionsFrame::InputActionsFrame(wxWindow* parent, EditorScene& scene,
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   panel_ = new InputActionsPanel(this, scene);
   panel_->SetPoppedOut(true);
+  panel_->SetOnPopout([this](bool want_pop) {
+    if (!want_pop) Close();
+  });
   sizer->Add(panel_, 1, wxEXPAND);
   SetSizer(sizer);
 
   Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& evt) {
-    if (on_closed_) on_closed_();
+    if (auto cb = std::move(on_closed_)) {
+      on_closed_ = nullptr;
+      cb();
+    }
     evt.Skip();
   });
 }

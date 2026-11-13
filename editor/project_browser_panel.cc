@@ -8,6 +8,7 @@
 
 #include "dialogs.h"
 #include "dnd_payloads.h"
+#include "editor_icons.h"
 #include "os/process.h"
 #include "project/project.h"
 #include "wx_theme.h"
@@ -67,8 +68,8 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
   auto* bar = new wxPanel(this, wxID_ANY);
   auto* bar_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-  auto* create_btn = new wxButton(bar, wxID_ANY, "+ Create", wxDefaultPosition,
-                                  wxDefaultSize, wxBU_EXACTFIT);
+  auto* create_btn = new wxButton(bar, wxID_ANY, "Create");
+  ApplyButtonIconAndPadding(create_btn, EditorIcon::kCreate);
   bar_sizer->Add(create_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
   path_label_ = new wxStaticText(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,

@@ -25,6 +25,7 @@ class MercuryEditorApp : public wxApp {
  public:
   bool OnInit() override;
   int OnExit() override;
+  int FilterEvent(wxEvent& evt) override;
 
  private:
   void OnTimer(wxTimerEvent& evt);

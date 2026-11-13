@@ -172,11 +172,11 @@ void EditorScene::SetView2D(bool view_2d) {
 
 const char* EditorScene::GetHintText() const {
   return view_2d_
-             ? "Drag handles: move   Ctrl: snap   Right/middle drag: pan   "
+             ? "Drag handles: move   Ctrl: snap   Arrows/Right-drag: pan   "
                "Scroll: zoom   F: focus   W/E/R: move/rotate/scale"
-             : "Right drag: look (+WASD/QE: fly)   Alt+drag: orbit   Middle "
-               "drag: pan   Scroll: zoom   F: focus   W/E/R: tools   X: "
-               "local/global   Ctrl: snap";
+             : "Right-drag (+WASDQE)/Arrows: move/look   Alt+drag: orbit   "
+               "Middle-drag: pan   Scroll: zoom   F: focus   W/E/R: tools   "
+               "X: local/global   Ctrl: snap";
 }
 
 glm::vec3 EditorScene::CameraForward() const {
@@ -1319,6 +1319,23 @@ void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down
     camera_target_ += up * mouse_delta.y * world_per_pixel;
   }
   if (view_2d_) {
+    glm::vec2 key_pan(0.0f);
+    if (wasdqe_mask & kNavRight) key_pan.x += 1.0f;
+    if (wasdqe_mask & kNavLeft) key_pan.x -= 1.0f;
+    if (wasdqe_mask & kNavUp) key_pan.y += 1.0f;
+    if (wasdqe_mask & kNavDown) key_pan.y -= 1.0f;
+    if (right_down) {
+      if (wasdqe_mask & kFlyD) key_pan.x += 1.0f;
+      if (wasdqe_mask & kFlyA) key_pan.x -= 1.0f;
+      if (wasdqe_mask & kFlyW) key_pan.y += 1.0f;
+      if (wasdqe_mask & kFlyS) key_pan.y -= 1.0f;
+    }
+    if (key_pan != glm::vec2(0.0f)) {
+      const float pan_speed =
+          std::max(camera_distance_ * 0.85f, 12.0f) * (shift_down ? 2.5f : 1.0f);
+      const glm::vec2 dir = glm::normalize(key_pan);
+      camera_target_ += (right * dir.x + up * dir.y) * pan_speed * dt;
+    }
     UpdateEditorCamera();
     return;
   }
@@ -1329,19 +1346,25 @@ void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down
     camera_pitch_ =
         std::clamp(camera_pitch_ - mouse_delta.y * 0.25f, -89.0f, 89.0f);
     camera_target_ = eye + CameraForward() * camera_distance_;
+  }
 
-    glm::vec3 move(0.0f);
+  glm::vec3 move(0.0f);
+  if (wasdqe_mask & kNavUp) move += CameraForward();
+  if (wasdqe_mask & kNavDown) move -= CameraForward();
+  if (wasdqe_mask & kNavRight) move += right;
+  if (wasdqe_mask & kNavLeft) move -= right;
+  if (right_down) {
     if (wasdqe_mask & kFlyW) move += CameraForward();
     if (wasdqe_mask & kFlyS) move -= CameraForward();
     if (wasdqe_mask & kFlyD) move += right;
     if (wasdqe_mask & kFlyA) move -= right;
     if (wasdqe_mask & kFlyE) move += glm::vec3(0, 1, 0);
     if (wasdqe_mask & kFlyQ) move -= glm::vec3(0, 1, 0);
-    if (move != glm::vec3(0.0f)) {
-      const float speed =
-          std::max(camera_distance_, 2.0f) * (shift_down ? 3.0f : 1.0f);
-      camera_target_ += glm::normalize(move) * speed * dt;
-    }
+  }
+  if (move != glm::vec3(0.0f)) {
+    const float speed =
+        std::max(camera_distance_, 2.0f) * (shift_down ? 3.0f : 1.0f);
+    camera_target_ += glm::normalize(move) * speed * dt;
   }
 
   if (drag_ == Drag::kOrbit && left_down) {

@@ -123,6 +123,7 @@ class InputActionsFrame : public wxFrame {
 
   InputActionsPanel* Panel() { return panel_; }
   void SyncFromController(float dt);
+  void ClearOnClosed() { on_closed_ = nullptr; }
 
  private:
   InputActionsPanel* panel_ = nullptr;

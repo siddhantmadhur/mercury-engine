@@ -66,6 +66,13 @@ int MercuryEditorApp::OnExit() {
   return wxApp::OnExit();
 }
 
+int MercuryEditorApp::FilterEvent(wxEvent& evt) {
+  if (evt.GetEventType() == wxEVT_KEY_UP && editor_frame_ && !shutting_down_) {
+    editor_frame_->NotifyGlobalKeyUp(static_cast<wxKeyEvent&>(evt));
+  }
+  return Event_Skip;
+}
+
 void MercuryEditorApp::ShowLauncherFrame() {
   auto* old_editor = editor_frame_;
   editor_frame_ = nullptr;

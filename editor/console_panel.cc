@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 
+#include "editor_icons.h"
 #include "wx_theme.h"
 
 namespace Mercury::EditorUI {
@@ -35,8 +36,8 @@ ConsolePanel::ConsolePanel(wxWindow* parent, EditorScene& scene)
   auto* bar = new wxPanel(header_wrap, wxID_ANY);
   auto* bar_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-  auto* clear_btn = new wxButton(bar, wxID_ANY, "Clear", wxDefaultPosition,
-                                 wxDefaultSize, wxBU_EXACTFIT);
+  auto* clear_btn = new wxButton(bar, wxID_ANY, "Clear");
+  ApplyButtonIconAndPadding(clear_btn, EditorIcon::kClear);
   bar_sizer->Add(clear_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
   auto add_cb = [&](const char* label, bool initial) {

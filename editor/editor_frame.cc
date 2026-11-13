@@ -1,8 +1,16 @@
 #include "editor_frame.h"
 
+#include <wx/aui/floatpane.h>
+#include <wx/choice.h>
+#include <wx/combobox.h>
 #include <wx/filedlg.h>
+#include <wx/listctrl.h>
 #include <wx/menu.h>
+#include <wx/slider.h>
+#include <wx/spinctrl.h>
 #include <wx/statline.h>
+#include <wx/textentry.h>
+#include <wx/weakref.h>
 
 #include <filesystem>
 #include <format>
@@ -11,6 +19,7 @@
 
 #include "create_menu.h"
 #include "dialogs.h"
+#include "editor_icons.h"
 #include "wx_theme.h"
 
 namespace Mercury::EditorUI {
@@ -49,6 +58,7 @@ enum MenuId {
   kIdWinPopoutUIBuilder,
   kIdWinPopoutInputActions,
   kIdWinCameraPreview,
+  kIdWinDockAll,
   kIdWinResetLayout,
 
   kIdCreateBase = wxID_HIGHEST + 300,
@@ -84,10 +94,86 @@ fs::path LayoutFilePath() {
 bool IsTextInputFocused() {
   wxWindow* focus = wxWindow::FindFocus();
   if (!focus) return false;
-  return dynamic_cast<wxTextCtrl*>(focus) != nullptr;
+  return dynamic_cast<wxTextEntryBase*>(focus) != nullptr ||
+         dynamic_cast<wxSpinCtrl*>(focus) != nullptr;
+}
+
+bool IsListOrTreeFocused() {
+  wxWindow* focus = wxWindow::FindFocus();
+  if (!focus) return false;
+  return dynamic_cast<wxTreeCtrl*>(focus) != nullptr ||
+         dynamic_cast<wxListBox*>(focus) != nullptr ||
+         dynamic_cast<wxListCtrl*>(focus) != nullptr ||
+         dynamic_cast<wxChoice*>(focus) != nullptr ||
+         dynamic_cast<wxComboBox*>(focus) != nullptr ||
+         dynamic_cast<wxSlider*>(focus) != nullptr;
+}
+
+bool IsDescendantOf(const wxWindow* win, const wxWindow* ancestor) {
+  if (!win || !ancestor) return false;
+  for (const wxWindow* cur = win; cur != nullptr; cur = cur->GetParent()) {
+    if (cur == ancestor) return true;
+    if (cur->IsTopLevel()) break;
+  }
+  return false;
 }
 
 }  // namespace
+
+MercuryAuiManager::MercuryAuiManager(EditorFrame* owner, unsigned int flags)
+    : wxAuiManager(owner, flags), owner_(owner) {}
+
+wxAuiFloatingFrame* MercuryAuiManager::CreateFloatingFrame(
+    wxWindow* parent, const wxAuiPaneInfo& p) {
+  wxAuiFloatingFrame* ff = wxAuiManager::CreateFloatingFrame(parent, p);
+  if (!ff || !owner_) return ff;
+
+  wxWeakRef<wxAuiFloatingFrame> weak_ff(ff);
+  wxWeakRef<EditorFrame> weak_owner(owner_);
+  const wxString pane_name = p.name;
+  const wxString caption = p.caption.empty() ? p.name : p.caption;
+
+  ff->CallAfter([weak_owner, weak_ff, pane_name, caption]() {
+    if (!weak_ff || !weak_owner) return;
+    wxAuiManager& fm = weak_ff->GetAuiManager();
+    if (fm.GetPane("mercury_dock_bar").IsOk()) return;
+
+    auto* bar = new wxPanel(weak_ff.get());
+    auto* bs = new wxBoxSizer(wxHORIZONTAL);
+    auto* lbl = new wxStaticText(bar, wxID_ANY, caption);
+    lbl->SetFont(HeaderFont());
+    auto* dock_btn = new wxButton(bar, wxID_ANY, "Dock");
+    dock_btn->SetToolTip("Dock panel back into main window");
+    ApplyButtonIconAndPadding(dock_btn, EditorIcon::kDock, 10, 14);
+    dock_btn->Bind(wxEVT_BUTTON, [weak_owner, pane_name](wxCommandEvent&) {
+      if (weak_owner) {
+        weak_owner->CallAfter([weak_owner, pane_name]() {
+          if (weak_owner) weak_owner->DockPane(pane_name);
+        });
+      }
+    });
+
+    bs->Add(lbl, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
+    bs->Add(dock_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 3);
+    bar->SetSizer(bs);
+
+    fm.AddPane(bar, wxAuiPaneInfo()
+                        .Name("mercury_dock_bar")
+                        .ToolbarPane()
+                        .Top()
+                        .PaneBorder(false)
+                        .Gripper(false)
+                        .DockFixed(true)
+                        .LeftDockable(false)
+                        .RightDockable(false)
+                        .BottomDockable(false)
+                        .MinSize(wxSize(-1, 30))
+                        .BestSize(wxSize(-1, 30)));
+    fm.Update();
+  });
+
+  return ff;
+}
 
 EditorFrame::EditorFrame(EditorScene& scene,
                          std::function<void()> on_close_project,
@@ -113,7 +199,14 @@ EditorFrame::EditorFrame(EditorScene& scene,
 
   Bind(wxEVT_CHAR_HOOK, &EditorFrame::OnCharHook, this);
   Bind(wxEVT_CLOSE_WINDOW, &EditorFrame::OnClose, this);
+  Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& evt) {
+    if (!evt.GetActive() && scene_panel_) {
+      scene_panel_->ResetKeyState();
+    }
+    evt.Skip();
+  });
   aui_.Bind(wxEVT_AUI_PANE_CLOSE, &EditorFrame::OnAuiPaneClose, this);
+  aui_.Bind(wxEVT_AUI_PANE_BUTTON, &EditorFrame::OnAuiPaneButton, this);
 
   SyncWindowMenuChecks();
   RefreshToolbarAndStatus(0.0f);
@@ -127,14 +220,17 @@ EditorFrame::~EditorFrame() {
 
 void EditorFrame::DestroyChildFrames() {
   if (camera_preview_frame_) {
+    camera_preview_frame_->ClearOnClosed();
     camera_preview_frame_->Destroy();
     camera_preview_frame_ = nullptr;
   }
   if (ui_builder_frame_) {
+    ui_builder_frame_->ClearOnClosed();
     ui_builder_frame_->Destroy();
     ui_builder_frame_ = nullptr;
   }
   if (input_actions_frame_) {
+    input_actions_frame_->ClearOnClosed();
     input_actions_frame_->Destroy();
     input_actions_frame_ = nullptr;
   }
@@ -222,6 +318,7 @@ void EditorFrame::BuildMenuBar() {
   mi_cam_preview_ = window_menu_->AppendCheckItem(
       kIdWinCameraPreview, "Camera Preview Floating Window");
   window_menu_->AppendSeparator();
+  window_menu_->Append(kIdWinDockAll, "Dock All Floating Panels");
   window_menu_->Append(kIdWinResetLayout, "Reset Window Layout");
   mb->Append(window_menu_, "&Window");
 
@@ -232,37 +329,36 @@ void EditorFrame::BuildToolbar() {
   toolbar_ = new wxPanel(this);
   auto* s = new wxBoxSizer(wxHORIZONTAL);
 
-  play_btn_ = new wxButton(toolbar_, wxID_ANY, "Play (F5)", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
+  play_btn_ = new wxButton(toolbar_, wxID_ANY, "Play (F5)");
   play_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { HandleTogglePlay(); });
 
-  build_scripts_btn_ =
-      new wxButton(toolbar_, wxID_ANY, "Build Scripts", wxDefaultPosition,
-                   wxDefaultSize, wxBU_EXACTFIT);
+  build_scripts_btn_ = new wxButton(toolbar_, wxID_ANY, "Build Scripts");
   build_scripts_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     if (auto p = scene_.GetProject()) scene_.PlayRef().Build(*p);
   });
 
-  build_game_btn_ =
-      new wxButton(toolbar_, wxID_ANY, "Build Game...", wxDefaultPosition,
-                   wxDefaultSize, wxBU_EXACTFIT);
+  build_game_btn_ = new wxButton(toolbar_, wxID_ANY, "Build Game...");
   build_game_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     ShowReleaseBuildDialog(this, scene_);
   });
 
-  save_btn_ = new wxButton(toolbar_, wxID_ANY, "Save", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
+  save_btn_ = new wxButton(toolbar_, wxID_ANY, "Save");
   save_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.SaveAllDirty();
     RefreshToolbarAndStatus(0.0f);
   });
 
-  undo_btn_ = new wxButton(toolbar_, wxID_ANY, "Undo", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
-  redo_btn_ = new wxButton(toolbar_, wxID_ANY, "Redo", wxDefaultPosition,
-                           wxDefaultSize, wxBU_EXACTFIT);
+  undo_btn_ = new wxButton(toolbar_, wxID_ANY, "Undo");
+  redo_btn_ = new wxButton(toolbar_, wxID_ANY, "Redo");
   undo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { scene_.Undo(); });
   redo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { scene_.Redo(); });
+
+  ApplyButtonIconAndPadding(save_btn_, EditorIcon::kSave);
+  ApplyButtonIconAndPadding(undo_btn_, EditorIcon::kUndo);
+  ApplyButtonIconAndPadding(redo_btn_, EditorIcon::kRedo);
+  ApplyButtonIconAndPadding(play_btn_, EditorIcon::kPlay);
+  ApplyButtonIconAndPadding(build_scripts_btn_, EditorIcon::kBuildScripts);
+  ApplyButtonIconAndPadding(build_game_btn_, EditorIcon::kBuildGame);
 
   map_status_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "");
 
@@ -282,7 +378,7 @@ void EditorFrame::BuildToolbar() {
   s->Add(map_status_lbl_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
   s->Add(fps_lbl_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
   toolbar_->SetSizer(s);
-  toolbar_->SetMinSize(wxSize(-1, 36));
+  toolbar_->SetMinSize(wxSize(-1, 38));
 }
 
 void EditorFrame::BuildAuiPanes() {
@@ -311,8 +407,8 @@ void EditorFrame::BuildAuiPanes() {
                              .LeftDockable(false)
                              .RightDockable(false)
                              .BottomDockable(false)
-                             .MinSize(wxSize(-1, 36))
-                             .BestSize(wxSize(-1, 36)));
+                             .MinSize(wxSize(-1, 38))
+                             .BestSize(wxSize(-1, 38)));
 
   aui_.AddPane(scene_panel_, wxAuiPaneInfo()
                                  .Name("scene")
@@ -326,6 +422,7 @@ void EditorFrame::BuildAuiPanes() {
                                      .Layer(1)
                                      .BestSize(wxSize(270, 520))
                                      .MinSize(wxSize(190, 200))
+                                     .PinButton(true)
                                      .CloseButton(true));
 
   aui_.AddPane(inspector_panel_, wxAuiPaneInfo()
@@ -335,6 +432,7 @@ void EditorFrame::BuildAuiPanes() {
                                      .Layer(1)
                                      .BestSize(wxSize(360, 520))
                                      .MinSize(wxSize(260, 200))
+                                     .PinButton(true)
                                      .CloseButton(true));
 
   aui_.AddPane(project_panel_, wxAuiPaneInfo()
@@ -345,6 +443,7 @@ void EditorFrame::BuildAuiPanes() {
                                    .Position(0)
                                    .BestSize(wxSize(680, 250))
                                    .MinSize(wxSize(240, 150))
+                                   .PinButton(true)
                                    .CloseButton(true));
 
   aui_.AddPane(console_panel_, wxAuiPaneInfo()
@@ -355,6 +454,7 @@ void EditorFrame::BuildAuiPanes() {
                                    .Position(1)
                                    .BestSize(wxSize(460, 250))
                                    .MinSize(wxSize(220, 150))
+                                   .PinButton(true)
                                    .CloseButton(true));
 
   aui_.AddPane(lore_panel_, wxAuiPaneInfo()
@@ -366,6 +466,7 @@ void EditorFrame::BuildAuiPanes() {
                                 .BestSize(wxSize(420, 250))
                                 .MinSize(wxSize(220, 150))
                                 .Show(scene_.Settings().show_lore)
+                                .PinButton(true)
                                 .CloseButton(true));
 
   aui_.AddPane(ui_builder_panel_, wxAuiPaneInfo()
@@ -376,6 +477,7 @@ void EditorFrame::BuildAuiPanes() {
                                       .BestSize(wxSize(980, 380))
                                       .MinSize(wxSize(480, 280))
                                       .Show(scene_.Settings().show_ui_builder)
+                                      .PinButton(true)
                                       .CloseButton(true));
 
   aui_.AddPane(
@@ -388,6 +490,7 @@ void EditorFrame::BuildAuiPanes() {
           .BestSize(wxSize(880, 360))
           .MinSize(wxSize(440, 260))
           .Show(scene_.Settings().show_input_actions)
+          .PinButton(true)
           .CloseButton(true));
 
   aui_.Update();
@@ -401,7 +504,7 @@ void EditorFrame::BuildAuiPanes() {
     const std::string saved = ss.str();
     if (!saved.empty()) {
       aui_.LoadPerspective(wxString::FromUTF8(saved), false);
-      // Enforce persisted panel visibility flags
+      // Enforce persisted panel visibility flags and ensure pin buttons exist
       if (auto& p = aui_.GetPane("lore"); p.IsOk()) {
         p.Show(scene_.Settings().show_lore);
       }
@@ -410,6 +513,13 @@ void EditorFrame::BuildAuiPanes() {
       }
       if (auto& p = aui_.GetPane("input_actions"); p.IsOk()) {
         p.Show(scene_.Settings().show_input_actions);
+      }
+      wxAuiPaneInfoArray& panes = aui_.GetAllPanes();
+      for (size_t i = 0; i < panes.GetCount(); ++i) {
+        auto& p = panes.Item(i);
+        if (p.name != "toolbar" && p.name != "scene") {
+          p.PinButton(true);
+        }
       }
       aui_.Update();
     }
@@ -550,9 +660,23 @@ void EditorFrame::SetupMenuBindings() {
       },
       kIdWinCameraPreview);
   Bind(
+      wxEVT_MENU, [this](wxCommandEvent&) { DockAllFloatingPanels(); },
+      kIdWinDockAll);
+  Bind(
       wxEVT_MENU,
       [this](wxCommandEvent&) {
         if (!default_perspective_.empty()) {
+          ShowCameraPreviewPopout(false);
+          if (ui_builder_frame_) {
+            ui_builder_frame_->ClearOnClosed();
+            ui_builder_frame_->Destroy();
+            ui_builder_frame_ = nullptr;
+          }
+          if (input_actions_frame_) {
+            input_actions_frame_->ClearOnClosed();
+            input_actions_frame_->Destroy();
+            input_actions_frame_ = nullptr;
+          }
           aui_.LoadPerspective(default_perspective_, true);
           SyncWindowMenuChecks();
         }
@@ -568,21 +692,77 @@ void EditorFrame::TogglePane(const char* pane_name, bool show) {
   SyncWindowMenuChecks();
 }
 
+void EditorFrame::DockPane(const wxString& pane_name) {
+  if (closing_) return;
+  auto& pane = aui_.GetPane(pane_name);
+  if (!pane.IsOk()) return;
+  pane.Dock().Show(true);
+  if (pane_name == "lore") {
+    scene_.Settings().show_lore = true;
+    scene_.Settings().Save();
+  } else if (pane_name == "ui_builder") {
+    scene_.Settings().show_ui_builder = true;
+    scene_.Settings().Save();
+  } else if (pane_name == "input_actions") {
+    scene_.Settings().show_input_actions = true;
+    scene_.Settings().Save();
+  }
+  aui_.Update();
+  SyncWindowMenuChecks();
+}
+
+void EditorFrame::DockAllFloatingPanels() {
+  if (closing_) return;
+  wxAuiPaneInfoArray& panes = aui_.GetAllPanes();
+  for (size_t i = 0; i < panes.GetCount(); ++i) {
+    auto& p = panes.Item(i);
+    if (p.IsFloating()) {
+      p.Dock();
+    }
+  }
+  if (ui_builder_frame_) {
+    ui_builder_frame_->ClearOnClosed();
+    ui_builder_frame_->Destroy();
+    ui_builder_frame_ = nullptr;
+    scene_.Settings().show_ui_builder = true;
+    scene_.Settings().Save();
+    if (auto& p = aui_.GetPane("ui_builder"); p.IsOk()) {
+      p.Dock().Show(true);
+    }
+  }
+  if (input_actions_frame_) {
+    input_actions_frame_->ClearOnClosed();
+    input_actions_frame_->Destroy();
+    input_actions_frame_ = nullptr;
+    scene_.Settings().show_input_actions = true;
+    scene_.Settings().Save();
+    if (auto& p = aui_.GetPane("input_actions"); p.IsOk()) {
+      p.Dock().Show(true);
+    }
+  }
+  ShowCameraPreviewPopout(false);
+  aui_.Update();
+  SyncWindowMenuChecks();
+}
+
 void EditorFrame::ShowCameraPreviewPopout(bool show) {
   if (show) {
     if (!camera_preview_frame_) {
       camera_preview_frame_ = new CameraPreviewFrame(
           this, scene_, [this]() {
             camera_preview_frame_ = nullptr;
-            scene_panel_->SetPreviewPoppedOut(false);
-            SyncWindowMenuChecks();
+            if (!closing_ && scene_panel_) {
+              scene_panel_->SetPreviewPoppedOut(false);
+              SyncWindowMenuChecks();
+            }
           });
     }
     camera_preview_frame_->Show();
     camera_preview_frame_->Raise();
     scene_panel_->SetPreviewPoppedOut(true);
   } else if (camera_preview_frame_) {
-    camera_preview_frame_->Close(true);
+    camera_preview_frame_->ClearOnClosed();
+    camera_preview_frame_->Destroy();
     camera_preview_frame_ = nullptr;
     scene_panel_->SetPreviewPoppedOut(false);
   }
@@ -597,17 +777,24 @@ void EditorFrame::ShowUIBuilderPopout(bool show) {
     if (!ui_builder_frame_) {
       ui_builder_frame_ = new UIBuilderFrame(this, scene_, [this]() {
         ui_builder_frame_ = nullptr;
-        SyncWindowMenuChecks();
+        if (!closing_) {
+          DockPane("ui_builder");
+        }
       });
     }
     ui_builder_frame_->Show();
     ui_builder_frame_->Raise();
   } else {
     if (ui_builder_frame_) {
+      ui_builder_frame_->ClearOnClosed();
       ui_builder_frame_->Destroy();
       ui_builder_frame_ = nullptr;
     }
-    TogglePane("ui_builder", scene_.Settings().show_ui_builder);
+    if (scene_.Settings().show_ui_builder) {
+      DockPane("ui_builder");
+    } else {
+      TogglePane("ui_builder", false);
+    }
   }
   SyncWindowMenuChecks();
 }
@@ -620,17 +807,24 @@ void EditorFrame::ShowInputActionsPopout(bool show) {
     if (!input_actions_frame_) {
       input_actions_frame_ = new InputActionsFrame(this, scene_, [this]() {
         input_actions_frame_ = nullptr;
-        SyncWindowMenuChecks();
+        if (!closing_) {
+          DockPane("input_actions");
+        }
       });
     }
     input_actions_frame_->Show();
     input_actions_frame_->Raise();
   } else {
     if (input_actions_frame_) {
+      input_actions_frame_->ClearOnClosed();
       input_actions_frame_->Destroy();
       input_actions_frame_ = nullptr;
     }
-    TogglePane("input_actions", scene_.Settings().show_input_actions);
+    if (scene_.Settings().show_input_actions) {
+      DockPane("input_actions");
+    } else {
+      TogglePane("input_actions", false);
+    }
   }
   SyncWindowMenuChecks();
 }
@@ -749,6 +943,8 @@ void EditorFrame::SaveLayoutPerspective() {
 void EditorFrame::OnAuiPaneClose(wxAuiManagerEvent& evt) {
   wxAuiPaneInfo* pane = evt.GetPane();
   if (!pane) return;
+  // Reset floating state so reopening a closed pane returns it docked.
+  pane->Dock();
   const wxString& name = pane->name;
   if (name == "lore") {
     scene_.Settings().show_lore = false;
@@ -763,8 +959,48 @@ void EditorFrame::OnAuiPaneClose(wxAuiManagerEvent& evt) {
   CallAfter([this]() { SyncWindowMenuChecks(); });
 }
 
+void EditorFrame::OnAuiPaneButton(wxAuiManagerEvent& evt) {
+  wxAuiPaneInfo* pane = evt.GetPane();
+  if (!pane) {
+    evt.Skip();
+    return;
+  }
+  if (evt.GetButton() == wxAUI_BUTTON_PIN) {
+    if (pane->IsFloating()) {
+      pane->Dock().Show(true);
+    } else {
+      pane->Float();
+    }
+    aui_.Update();
+    SyncWindowMenuChecks();
+    return;
+  }
+  evt.Skip();
+}
+
+void EditorFrame::NotifyGlobalKeyUp(wxKeyEvent& evt) {
+  if (scene_panel_) {
+    scene_panel_->HandleKeyUp(evt);
+  }
+}
+
 void EditorFrame::OnCharHook(wxKeyEvent& evt) {
+  if ((ui_builder_frame_ && ui_builder_frame_->IsActive()) ||
+      (input_actions_frame_ && input_actions_frame_->IsActive()) ||
+      (camera_preview_frame_ && camera_preview_frame_->IsActive())) {
+    if (scene_panel_) scene_panel_->ResetKeyState();
+    evt.Skip();
+    return;
+  }
+  wxWindow* focus = wxWindow::FindFocus();
+  if (IsDescendantOf(focus, ui_builder_panel_) ||
+      IsDescendantOf(focus, input_actions_panel_)) {
+    if (scene_panel_) scene_panel_->ResetKeyState();
+    evt.Skip();
+    return;
+  }
   if (IsTextInputFocused()) {
+    if (scene_panel_) scene_panel_->ResetKeyState();
     evt.Skip();
     return;
   }
@@ -789,8 +1025,21 @@ void EditorFrame::OnCharHook(wxKeyEvent& evt) {
     scene_.DeleteSelected();
     return;
   }
+
+  if (scene_panel_ && scene_panel_->IsShownOnScreen()) {
+    const bool allow_viewport_keys =
+        scene_panel_->IsCanvasFocused() ||
+        scene_panel_->IsRightMouseDown() ||
+        (scene_panel_->IsHovered() && !IsListOrTreeFocused()) ||
+        !IsListOrTreeFocused();
+    if (allow_viewport_keys && scene_panel_->HandleKeyDown(evt)) {
+      return;
+    }
+  }
+
   if (!ctrl && (kc == 'F' || kc == 'f')) {
-    scene_.FrameSelected();
+    if (scene_.GetSelectedNode()) scene_.FrameSelected();
+    else scene_.FrameMap();
     return;
   }
   if (!ctrl && (kc == 'G' || kc == 'g')) {
@@ -820,14 +1069,26 @@ void EditorFrame::OnClose(wxCloseEvent& evt) {
 void EditorFrame::RefreshToolbarAndStatus(float dt) {
   auto& play = scene_.PlayRef();
   const auto pstate = play.GetState();
+  if (!toolbar_synced_once_ || pstate != last_play_state_) {
+    toolbar_synced_once_ = true;
+    last_play_state_ = pstate;
+    if (pstate == PlaySession::State::kIdle) {
+      play_btn_->SetLabel("Play (F5)");
+      ApplyButtonIconAndPadding(play_btn_, EditorIcon::kPlay);
+    } else if (pstate == PlaySession::State::kBuilding) {
+      play_btn_->SetLabel("Building...");
+      ApplyButtonIconAndPadding(play_btn_, EditorIcon::kBuilding);
+    } else {
+      play_btn_->SetLabel("Stop (F5)");
+      ApplyButtonIconAndPadding(play_btn_, EditorIcon::kStop);
+    }
+    toolbar_->Layout();
+  }
   if (pstate == PlaySession::State::kIdle) {
-    play_btn_->SetLabel("Play (F5)");
     play_btn_->Enable(scene_.GetProject() != nullptr);
   } else if (pstate == PlaySession::State::kBuilding) {
-    play_btn_->SetLabel("Building...");
     play_btn_->Enable(false);
   } else {
-    play_btn_->SetLabel("Stop (F5)");
     play_btn_->Enable(true);
   }
 

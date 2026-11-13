@@ -21,12 +21,15 @@
 
 namespace Mercury::EditorUI {
 
+class ViewportCanvas;
+
 class CameraPreviewFrame : public wxFrame {
  public:
   CameraPreviewFrame(wxWindow* parent, EditorScene& scene,
                      std::function<void()> on_closed);
 
   void SyncFromController();
+  void ClearOnClosed() { on_closed_ = nullptr; }
 
  private:
   void OnPaint(wxPaintEvent& evt);
@@ -52,6 +55,15 @@ class SceneViewportPanel : public wxPanel {
     on_popout_preview_ = std::move(cb);
   }
 
+  // Event-driven keyboard & modifier handling (Wayland/Sway safe)
+  bool HandleKeyDown(wxKeyEvent& evt);
+  void HandleKeyUp(wxKeyEvent& evt);
+  void ResetKeyState();
+  void FocusCanvas();
+  bool IsCanvasFocused() const;
+  bool IsHovered() const { return hovered_; }
+  bool IsRightMouseDown() const { return right_down_; }
+
  private:
   void SyncToolbarState();
   void OnPaintCanvas(wxPaintEvent& evt);
@@ -60,6 +72,7 @@ class SceneViewportPanel : public wxPanel {
   void OnCanvasMouseMove(wxMouseEvent& evt);
   void OnCanvasWheel(wxMouseEvent& evt);
   void OnCanvasKeyDown(wxKeyEvent& evt);
+  void OnCanvasKeyUp(wxKeyEvent& evt);
   void ReleaseMouseIfCaptured();
   bool HandleDroppedResPath(const std::string& res_path);
 
@@ -72,7 +85,7 @@ class SceneViewportPanel : public wxPanel {
   wxToggleButton* mode_2d_btn_ = nullptr;
   wxButton* frame_btn_ = nullptr;
   wxStaticText* status_lbl_ = nullptr;
-  wxPanel* canvas_ = nullptr;
+  ViewportCanvas* canvas_ = nullptr;
 
   wxFont overlay_font_;
   std::vector<uint8_t> scene_pixels_;
@@ -96,6 +109,12 @@ class SceneViewportPanel : public wxPanel {
   bool right_down_ = false;
   bool middle_down_ = false;
 
+  int nav_mask_ = 0;
+  bool shift_down_ = false;
+  bool alt_down_ = false;
+  bool ctrl_down_ = false;
+
+  bool toolbar_synced_once_ = false;
   EditorScene::Tool last_tool_ = EditorScene::Tool::kMove;
   EditorScene::HandleSpace last_space_ = EditorScene::HandleSpace::kLocal;
   bool last_2d_ = true;

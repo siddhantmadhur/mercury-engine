@@ -16,6 +16,7 @@
 #include "scene/scene.h"
 #include "dialogs.h"
 #include "dnd_payloads.h"
+#include "editor_icons.h"
 #include "project/asset_database.h"
 #include "ui/style.h"
 
@@ -151,9 +152,11 @@ UIBuilderFrame::UIBuilderFrame(wxWindow* parent, EditorScene& scene,
   SetSizer(sizer);
 
   Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& evt) {
-    Hide();
-    if (on_closed_) on_closed_();
-    evt.Veto();
+    if (auto cb = std::move(on_closed_)) {
+      on_closed_ = nullptr;
+      cb();
+    }
+    evt.Skip();
   });
 }
 
@@ -177,9 +180,13 @@ UIBuilderPanel::UIBuilderPanel(wxWindow* parent, EditorScene& scene)
 }
 
 void UIBuilderPanel::SetPoppedOut(bool popped_out) {
+  const bool changed = (popped_out_ != popped_out);
   popped_out_ = popped_out;
   if (popout_btn_) {
     popout_btn_->SetLabel(popped_out_ ? "Dock" : "Pop Out");
+    ApplyButtonIconAndPadding(
+        popout_btn_, popped_out_ ? EditorIcon::kDock : EditorIcon::kPopOut);
+    if (changed) Layout();
   }
 }
 
@@ -190,22 +197,23 @@ void UIBuilderPanel::BuildLayout() {
   auto* bar = new wxPanel(this, wxID_ANY);
   auto* bs = new wxBoxSizer(wxHORIZONTAL);
 
-  auto mkbtn = [&](const wxString& txt) {
-    return new wxButton(bar, wxID_ANY, txt, wxDefaultPosition, wxDefaultSize,
-                        wxBU_EXACTFIT);
+  auto mkbtn = [&](const wxString& txt, EditorIcon icon) {
+    auto* b = new wxButton(bar, wxID_ANY, txt);
+    ApplyButtonIconAndPadding(b, icon);
+    return b;
   };
 
   file_lbl_ = new wxStaticText(bar, wxID_ANY, "(no file)", wxDefaultPosition,
                                wxSize(130, -1), wxST_ELLIPSIZE_MIDDLE);
   file_lbl_->SetFont(HeaderFont(0));
 
-  save_btn_ = mkbtn("Save");
-  revert_btn_ = mkbtn("Revert");
-  close_btn_ = mkbtn("Close");
-  undo_btn_ = mkbtn("Undo");
-  redo_btn_ = mkbtn("Redo");
-  dup_btn_ = mkbtn("Duplicate");
-  del_btn_ = mkbtn("Delete");
+  save_btn_ = mkbtn("Save", EditorIcon::kSave);
+  revert_btn_ = mkbtn("Revert", EditorIcon::kRevert);
+  close_btn_ = mkbtn("Close", EditorIcon::kClose);
+  undo_btn_ = mkbtn("Undo", EditorIcon::kUndo);
+  redo_btn_ = mkbtn("Redo", EditorIcon::kRedo);
+  dup_btn_ = mkbtn("Duplicate", EditorIcon::kDuplicate);
+  del_btn_ = mkbtn("Delete", EditorIcon::kDelete);
 
   preview_cb_ = new wxCheckBox(bar, wxID_ANY, "Preview");
 
@@ -226,9 +234,9 @@ void UIBuilderPanel::BuildLayout() {
   theme_choice_ = new wxChoice(bar, wxID_ANY);
   theme_choice_->SetMinSize(wxSize(110, -1));
 
-  auto* fit_btn = mkbtn("Fit");
-  auto* one_btn = mkbtn("1:1");
-  popout_btn_ = mkbtn("Pop Out");
+  auto* fit_btn = mkbtn("Fit", EditorIcon::kFit);
+  auto* one_btn = mkbtn("1:1", EditorIcon::kOneToOne);
+  popout_btn_ = mkbtn("Pop Out", EditorIcon::kPopOut);
 
   bs->Add(file_lbl_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
   bs->Add(save_btn_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 3);
@@ -283,9 +291,8 @@ void UIBuilderPanel::BuildLayout() {
 
   auto* sh_hdr = new wxBoxSizer(wxHORIZONTAL);
   auto* sh_lbl = new wxStaticText(sheets_panel, wxID_ANY, "StyleSheets");
-  auto* add_sheet_btn =
-      new wxButton(sheets_panel, wxID_ANY, "+ Sheet", wxDefaultPosition,
-                   wxDefaultSize, wxBU_EXACTFIT);
+  auto* add_sheet_btn = new wxButton(sheets_panel, wxID_ANY, "Sheet");
+  ApplyButtonIconAndPadding(add_sheet_btn, EditorIcon::kCreate, 8, 13, 5);
   sh_hdr->Add(sh_lbl, 1, wxALIGN_CENTER_VERTICAL);
   sh_hdr->Add(add_sheet_btn, 0);
   shs->Add(sh_hdr, 0, wxEXPAND | wxALL, 4);
@@ -1359,8 +1366,8 @@ void UIBuilderPanel::RefreshInspector() {
                                       wxDefaultPosition, wxDefaultSize,
                                       wxTE_PROCESS_ENTER);
         cls_in->SetHint("class-name");
-        auto* add_btn = new wxButton(cb, wxID_ANY, "Add", wxDefaultPosition,
-                                     wxDefaultSize, wxBU_EXACTFIT);
+        auto* add_btn = new wxButton(cb, wxID_ANY, "Add");
+        ApplyButtonIconAndPadding(add_btn, EditorIcon::kCreate, 8, 13, 5);
         auto do_add_cls = [this, cls_in, elem_path, classes]() mutable {
           std::string name = cls_in->GetValue().ToStdString();
           if (name.starts_with('.')) name = name.substr(1);
@@ -1385,8 +1392,8 @@ void UIBuilderPanel::RefreshInspector() {
         auto* pills = new wxWrapSizer(wxHORIZONTAL);
         for (size_t i = 0; i < classes.size(); ++i) {
           auto* chip = new wxButton(
-              cb, wxID_ANY, wxString::FromUTF8("." + classes[i] + "  x"),
-              wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+              cb, wxID_ANY, wxString::FromUTF8("." + classes[i] + "  x"));
+          ApplyButtonPadding(chip, 8);
           chip->Bind(wxEVT_BUTTON, [this, elem_path, classes, i](wxCommandEvent&) mutable {
             classes.erase(classes.begin() + static_cast<ptrdiff_t>(i));
             if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
@@ -1401,9 +1408,8 @@ void UIBuilderPanel::RefreshInspector() {
           auto* ex_row = new wxBoxSizer(wxHORIZONTAL);
           auto* ex_in = new wxTextCtrl(cb, wxID_ANY);
           ex_in->SetHint("new-class");
-          auto* ex_btn = new wxButton(cb, wxID_ANY, "Extract Styles",
-                                      wxDefaultPosition, wxDefaultSize,
-                                      wxBU_EXACTFIT);
+          auto* ex_btn = new wxButton(cb, wxID_ANY, "Extract Styles");
+          ApplyButtonPadding(ex_btn, 10);
           ex_btn->Bind(wxEVT_BUTTON, [this, ex_in, elem_path](wxCommandEvent&) {
             std::string nm = ex_in->GetValue().ToStdString();
             if (nm.starts_with('.')) nm = nm.substr(1);
@@ -1626,9 +1632,8 @@ void UIBuilderPanel::RefreshInspector() {
           row->Add(rem, 0, wxALIGN_CENTER_VERTICAL);
           bs->Add(row, 0, wxEXPAND | wxBOTTOM, 4);
         }
-        auto* add_b = new wxButton(bb, wxID_ANY, "+ Add Binding",
-                                   wxDefaultPosition, wxDefaultSize,
-                                   wxBU_EXACTFIT);
+        auto* add_b = new wxButton(bb, wxID_ANY, "Add Binding");
+        ApplyButtonIconAndPadding(add_b, EditorIcon::kCreate, 8, 13, 5);
         add_b->Bind(wxEVT_BUTTON, [this, elem_path](wxCommandEvent&) {
           if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
             scene_.UIBuilderRef().AddBinding(*n);
@@ -1665,8 +1670,8 @@ void UIBuilderPanel::RefreshInspector() {
           for (const auto& m : matches) {
             auto* row = new wxBoxSizer(wxHORIZONTAL);
             auto* btn = new wxButton(
-                mb, wxID_ANY, wxString::FromUTF8(m.selector_text),
-                wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+                mb, wxID_ANY, wxString::FromUTF8(m.selector_text));
+            ApplyButtonPadding(btn, 8);
             btn->Enable(m.sheet_index >= 0);
             btn->SetToolTip(wxString::FromUTF8(m.tooltip));
             btn->Bind(wxEVT_BUTTON, [this, s = m.sheet_index,
@@ -2001,8 +2006,8 @@ void UIBuilderPanel::RefreshInspector() {
       auto* add_var_row = new wxBoxSizer(wxHORIZONTAL);
       auto* new_v = new wxTextCtrl(vb, wxID_ANY);
       new_v->SetHint("--my-color");
-      auto* add_vb = new wxButton(vb, wxID_ANY, "Add", wxDefaultPosition,
-                                  wxDefaultSize, wxBU_EXACTFIT);
+      auto* add_vb = new wxButton(vb, wxID_ANY, "Add");
+      ApplyButtonIconAndPadding(add_vb, EditorIcon::kCreate, 8, 13, 5);
       const int sh_idx = sel.sheet;
       const int rl_idx = sel.rule;
       add_vb->Bind(wxEVT_BUTTON, [this, new_v, sh_idx, rl_idx](wxCommandEvent&) {
