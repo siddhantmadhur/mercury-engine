@@ -25,9 +25,16 @@ cc_library(
         "angelscript/sdk/add_on/scriptmath/*.cpp",
         "angelscript/sdk/add_on/scriptdictionary/*.cpp",
     ]) + select({
-        "@platforms//cpu:aarch64": glob([
-            "angelscript/sdk/angelscript/source/*_arm64_gcc.S",
-        ]),
+        # Apple's assembler needs the Mach-O flavoured source; the GCC/GAS file
+        # uses ELF directives (e.g. .type) that the macOS toolchain rejects.
+        # Both files are wrapped in `#if defined(__aarch64__)`, so they assemble
+        # to nothing on other CPUs.
+        "@platforms//os:macos": [
+            "angelscript/sdk/angelscript/source/as_callfunc_arm64_xcode.S",
+        ],
+        "@platforms//os:linux": [
+            "angelscript/sdk/angelscript/source/as_callfunc_arm64_gcc.S",
+        ],
         "//conditions:default": [],
     }),
     hdrs = glob([
