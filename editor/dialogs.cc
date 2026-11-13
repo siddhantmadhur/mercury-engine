@@ -218,11 +218,17 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
 
 bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   wxDialog dlg(parent, wxID_ANY, "Editor Settings", wxDefaultPosition,
-               wxSize(560, -1));
+               wxSize(640, -1));
   auto* root = new wxBoxSizer(wxVERTICAL);
 
   auto* grid = new wxFlexGridSizer(2, 10, 12);
   grid->AddGrowableCol(1, 1);
+
+  auto* open_lbl = new wxStaticText(&dlg, wxID_ANY, "Open Scripts In:");
+  auto* open_choice = new wxChoice(&dlg, wxID_ANY);
+  open_choice->Append("Built-in code editor");
+  open_choice->Append("External editor");
+  open_choice->SetSelection(scene.Settings().open_scripts_in_editor ? 0 : 1);
 
   auto* ed_lbl = new wxStaticText(&dlg, wxID_ANY, "External Script Editor:");
   auto* ed_ctrl = new wxTextCtrl(
@@ -245,6 +251,11 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   add_preset("Neovim", "nvim {file}");
   add_preset("Sublime", "subl {project} {file}");
 
+  auto* vim_lbl = new wxStaticText(&dlg, wxID_ANY, "Keybindings:");
+  auto* vim_check =
+      new wxCheckBox(&dlg, wxID_ANY, "Enable Vim mode in the built-in editor");
+  vim_check->SetValue(scene.Settings().vim_mode);
+
   auto* lore_exe_lbl = new wxStaticText(&dlg, wxID_ANY, "Lore Executable:");
   auto* lore_exe_ctrl = new wxTextCtrl(
       &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_executable));
@@ -253,15 +264,28 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   auto* lore_srv_ctrl = new wxTextCtrl(
       &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_server));
 
+  grid->Add(open_lbl, 0, wxALIGN_CENTER_VERTICAL);
+  grid->Add(open_choice, 0, wxEXPAND);
   grid->Add(ed_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(ed_ctrl, 1, wxEXPAND);
   grid->Add(preset_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(preset_row, 1, wxEXPAND);
+  grid->Add(vim_lbl, 0, wxALIGN_CENTER_VERTICAL);
+  grid->Add(vim_check, 0);
   grid->Add(lore_exe_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(lore_exe_ctrl, 1, wxEXPAND);
   grid->Add(lore_srv_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(lore_srv_ctrl, 1, wxEXPAND);
   root->Add(grid, 0, wxEXPAND | wxALL, 14);
+
+  auto sync_external_enabled = [&]() {
+    const bool external = open_choice->GetSelection() == 1;
+    ed_ctrl->Enable(external);
+    preset_row->ShowItems(external);
+  };
+  open_choice->Bind(wxEVT_CHOICE,
+                    [&](wxCommandEvent&) { sync_external_enabled(); });
+  sync_external_enabled();
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* ok = new wxButton(&dlg, wxID_OK, "Save Settings");
@@ -273,10 +297,12 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   root->Add(btns, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 14);
 
   dlg.SetSizerAndFit(root);
-  dlg.SetSize(wxSize(560, dlg.GetSize().y));
+  dlg.SetSize(wxSize(640, dlg.GetSize().y));
   dlg.CenterOnParent();
   if (dlg.ShowModal() != wxID_OK) return false;
 
+  scene.Settings().open_scripts_in_editor = open_choice->GetSelection() == 0;
+  scene.Settings().vim_mode = vim_check->GetValue();
   scene.Settings().external_editor = ed_ctrl->GetValue().ToStdString();
   scene.Settings().lore_executable = lore_exe_ctrl->GetValue().ToStdString();
   scene.Settings().lore_server = lore_srv_ctrl->GetValue().ToStdString();

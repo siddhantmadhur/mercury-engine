@@ -164,10 +164,14 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
   content_sizer_->Add(header, 0, wxEXPAND | wxBOTTOM, 6);
 
   if (!res_path.ends_with(kAssetExtension)) {
-    auto* open_btn = new wxButton(scroll_, wxID_ANY, "Open in External Editor");
+    auto* open_btn = new wxButton(
+        scroll_, wxID_ANY,
+        scene_.Settings().open_scripts_in_editor && res_path.ends_with(".as")
+            ? "Open in Editor"
+            : "Open in External Editor");
     ApplyButtonIconAndPadding(open_btn, EditorIcon::kPopOut);
     open_btn->Bind(wxEVT_BUTTON, [this, project, res_path](wxCommandEvent&) {
-      scene_.OpenInExternalEditor(project->Resolve(res_path));
+      scene_.OpenScriptFile(project->Resolve(res_path));
     });
     content_sizer_->Add(open_btn, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
     return;

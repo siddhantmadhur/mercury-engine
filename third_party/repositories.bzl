@@ -175,11 +175,13 @@ def _wxwidgets_repo_impl(ctx):
     if cflags_res.return_code != 0:
         fail("wx-config --cxxflags failed: " + cflags_res.stderr)
 
-    libs_res = ctx.execute([wx_config, "--libs", "core,base,aui,propgrid,adv,richtext"])
+    # The editor's script view is a wxStyledTextCtrl, so the STC library is
+    # required in addition to the panels the editor already used.
+    libs_res = ctx.execute([wx_config, "--libs", "core,base,aui,propgrid,adv,richtext,stc"])
     if libs_res.return_code != 0:
-        libs_res = ctx.execute([wx_config, "--libs"])
-        if libs_res.return_code != 0:
-            fail("wx-config --libs failed: " + libs_res.stderr)
+        fail("wxWidgets with wxStyledTextCtrl (STC) is required: " +
+             "wx-config --libs core,base,aui,propgrid,adv,richtext,stc failed: " +
+             libs_res.stderr)
 
     includes = []
     hdr_globs = []

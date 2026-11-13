@@ -10,6 +10,7 @@
 #define MERCURY_EDITOR_EDITOR_FRAME_H
 
 #include <wx/aui/aui.h>
+#include <wx/notebook.h>
 #include <wx/wx.h>
 
 #include <chrono>
@@ -29,6 +30,7 @@
 namespace Mercury::EditorUI {
 
 class EditorFrame;
+class ScriptEditorPanel;
 
 class MercuryAuiManager : public wxAuiManager {
  public:
@@ -56,7 +58,8 @@ class EditorFrame : public wxFrame {
   // should render it at an unlocked frame rate.
   bool WantsUnlockedViewportFps() const;
   void SaveLayoutPerspective();
-  bool ConfirmDiscardOrSave(const wxString& action_prompt);
+  bool ConfirmDiscardOrSave(const wxString& action_prompt,
+                            bool include_scripts = false);
   void DestroyChildFrames();
   void DockPane(const wxString& pane_name);
   void DockAllFloatingPanels();
@@ -80,6 +83,9 @@ class EditorFrame : public wxFrame {
   void HandleNewMap();
   void HandleOpenMap();
   void HandleSaveMapAs();
+  void ShowScriptEditor();
+  void ShowSceneView();
+  void OpenPendingScript();
 
   void OnCharHook(wxKeyEvent& evt);
   void OnClose(wxCloseEvent& evt);
@@ -117,6 +123,8 @@ class EditorFrame : public wxFrame {
   std::string last_status_proj_;
 
   // Docked panels
+  wxNotebook* center_tabs_ = nullptr;
+  ScriptEditorPanel* script_editor_panel_ = nullptr;
   HierarchyPanel* hierarchy_panel_ = nullptr;
   SceneViewportPanel* scene_panel_ = nullptr;
   InspectorPanel* inspector_panel_ = nullptr;
@@ -135,6 +143,7 @@ class EditorFrame : public wxFrame {
   wxMenu* window_menu_ = nullptr;
   wxMenuItem* mi_hierarchy_ = nullptr;
   wxMenuItem* mi_scene_ = nullptr;
+  wxMenuItem* mi_script_ = nullptr;
   wxMenuItem* mi_inspector_ = nullptr;
   wxMenuItem* mi_project_ = nullptr;
   wxMenuItem* mi_console_ = nullptr;

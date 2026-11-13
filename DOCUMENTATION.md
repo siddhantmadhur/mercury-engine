@@ -47,7 +47,7 @@ bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
 # or no argument for the project launcher
 ```
 
-The editor has a Hierarchy, Inspector, Scene view, Project browser and Console. It has no code editor: write scripts in any IDE and set the command that opens them under Project > External editor command. Lines in the Console that name a script (`scripts/ball.as:42:5`, from a script error) open that file when clicked.
+The editor has a Hierarchy, Inspector, Scene view, Project browser, Console and a built-in code editor. Double-click a `.as` file (or use **Open** in the Project Browser) to edit it in the built-in editor, which has line numbers, folding, AngelScript completion across the whole project and the native API, compiler-backed diagnostics, an outline for jumping to methods, and optional Vim keybindings. **File > Preferences** switches between the built-in editor and an external editor command; the external command supports `{project}` and `{file}` placeholders. Lines in the Console that name a script (`scripts/ball.as:42:5`, from a script error) open that file when clicked.
 
 - **Creating nodes:** GameObject menu, **+ Create** in the Hierarchy, or right-click a node for a child. You can add empty nodes, 3D objects (cube, sphere, capsule, cylinder, plane, quad, each with a matching collider), 2D sprites, directional lights and cameras. New projects from the launcher start from a 2D or 3D template.
 - **Scene view:** opens in 2D or 3D to suit the map (the **2D** button switches). Click to select, drag to move (along the ground in 3D), **Move / Rotate / Scale** handles on W / E / R, Ctrl to snap. F frames the selection.

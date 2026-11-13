@@ -101,9 +101,10 @@ ConsolePanel::ConsolePanel(wxWindow* parent, EditorScene& scene)
   list_->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent& evt) {
     const long idx = evt.GetIndex();
     if (idx < 0 || static_cast<size_t>(idx) >= visible_lines_.size()) return;
-    if (auto script = Console::FindScriptFile(visible_lines_[idx].text);
+    if (auto script = Console::FindScriptLocation(visible_lines_[idx].text);
         script && scene_.GetProject()) {
-      scene_.OpenInExternalEditor(scene_.GetProject()->GetRoot() / *script);
+      scene_.OpenScriptFile(scene_.GetProject()->GetRoot() / script->path,
+                            script->line);
     }
   });
 

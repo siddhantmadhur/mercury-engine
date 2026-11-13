@@ -70,7 +70,7 @@ only through a small checked native API.
 | Assets | [Assimp](https://github.com/assimp/assimp), [stb](https://github.com/nothings/stb), [nanosvg](https://github.com/memononen/nanosvg), [meshoptimizer](https://github.com/zeux/meshoptimizer) | Models, images, SVG, mesh simplification |
 | UI | [Yoga](https://github.com/facebook/yoga), [tinyxml2](https://github.com/leethomason/tinyxml2) | Flexbox layout, UXML parsing |
 | Audio | [miniaudio](https://miniaud.io) | Playback with 3D attenuation |
-| Editor | [Dear ImGui](https://github.com/ocornut/imgui) | Editor panels (also debug overlays) |
+| Editor | [wxWidgets](https://www.wxwidgets.org) (wxAUI, wxStyledTextCtrl), [Dear ImGui](https://github.com/ocornut/imgui) | Editor panels and code editor; Dear ImGui for debug overlays |
 | Build | [Bazel](https://bazel.build) | Builds everything, runs the tests |
 
 ## Building
@@ -79,7 +79,8 @@ Game scripts are AngelScript (`.as`). AngelScript is a C++ library built directl
 the pinned `third_party/angelscript` submodule; there is no external code generation or bundler.
 
 The build requires [Bazelisk](https://github.com/bazelbuild/bazelisk); the repository pins Bazel
-in `.bazelversion`. Build the player with `bazelisk build //:mercury_player` (or
+in `.bazelversion`. The editor's built-in code editor uses `wxStyledTextCtrl`, so the system
+wxWidgets installation must provide the `stc` library (`wx-config --libs ...,stc`). Build the player with `bazelisk build //:mercury_player` (or
 `//mercury:mercury_player`); a bare `bazel build` has no implicit target in Bazel 8. `.bazelrc`
 points Bazel at `/usr/bin/cc` and `/usr/bin/c++` so its autoconf probes do not go through a ccache
 wrapper; override with `--repo_env=CC=... --repo_env=CXX=...` if your compilers live elsewhere. CMake and Ninja are still used, but only to build the third-party dependencies

@@ -6,6 +6,8 @@
  *
  *   [editor]
  *   external_editor = "code {project} {file}"
+ *   open_scripts_in_editor = true
+ *   vim_mode = false
  *   pack_size_mb = 256
  *
  *   [recent]
@@ -33,6 +35,10 @@ struct EditorSettings {
   // Command used to open scripts. {file} and {project} are replaced with
   // paths. Empty means the desktop's default application.
   std::string external_editor;
+  // Open .as files in the built-in script editor instead of an external tool.
+  bool open_scripts_in_editor = true;
+  // Enable modal Vim keybindings in the built-in script editor.
+  bool vim_mode = false;
   // Build Game: size at which game.mpack rolls over into the next archive,
   // in MiB. 0 keeps the whole pack in one archive.
   int pack_size_mb = 256;
