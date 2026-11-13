@@ -1031,6 +1031,7 @@ void UIBuilderPanel::SyncFromController(float dt) {
     UpdateCanvasInputPreview(dt);
     ub.UpdatePreview(scene_.GetRenderHost(), dt);
     canvas_->Refresh(false);
+    canvas_->Update();
   }
 }
 

@@ -247,7 +247,13 @@ float EditorScene::WorldPerPixel(glm::vec3 point) const {
 
 void EditorScene::DrawLine3D(OverlayCanvas& draw, glm::vec3 a, glm::vec3 b,
                              OverlayColor color, float thickness) const {
-  const glm::mat4 view_projection = GetViewProjection();
+  DrawLine3D(draw, GetViewProjection(), a, b, color, thickness);
+}
+
+void EditorScene::DrawLine3D(OverlayCanvas& draw,
+                             const glm::mat4& view_projection, glm::vec3 a,
+                             glm::vec3 b, OverlayColor color,
+                             float thickness) const {
   glm::vec4 ca = view_projection * glm::vec4(a, 1.0f);
   glm::vec4 cb = view_projection * glm::vec4(b, 1.0f);
   auto distance = [](const glm::vec4& c, int plane) {
@@ -280,6 +286,7 @@ void EditorScene::DrawLine3D(OverlayCanvas& draw, glm::vec3 a, glm::vec3 b,
 void EditorScene::DrawCircle3D(OverlayCanvas& draw, glm::vec3 center,
                                glm::vec3 axis, float radius, OverlayColor color,
                                float thickness) const {
+  const glm::mat4 vp = GetViewProjection();
   glm::vec3 u, v;
   Basis(axis, u, v);
   constexpr int kSegments = 48;
@@ -288,7 +295,7 @@ void EditorScene::DrawCircle3D(OverlayCanvas& draw, glm::vec3 center,
     const float angle = static_cast<float>(i) / kSegments * 2.0f * kPi;
     const glm::vec3 point =
         center + (u * std::cos(angle) + v * std::sin(angle)) * radius;
-    DrawLine3D(draw, previous, point, color, thickness);
+    DrawLine3D(draw, vp, previous, point, color, thickness);
     previous = point;
   }
 }
@@ -296,6 +303,7 @@ void EditorScene::DrawCircle3D(OverlayCanvas& draw, glm::vec3 center,
 void EditorScene::DrawBox3D(OverlayCanvas& draw, const glm::mat4& model,
                             glm::vec3 min, glm::vec3 max, OverlayColor color,
                             float thickness) const {
+  const glm::mat4 vp = GetViewProjection();
   glm::vec3 corners[8];
   for (int i = 0; i < 8; i++) {
     const glm::vec3 local(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y,
@@ -306,11 +314,12 @@ void EditorScene::DrawBox3D(OverlayCanvas& draw, const glm::mat4& model,
                                         {0, 2}, {1, 3}, {4, 6}, {5, 7},
                                         {0, 4}, {1, 5}, {2, 6}, {3, 7}};
   for (const auto& edge : kEdges) {
-    DrawLine3D(draw, corners[edge[0]], corners[edge[1]], color, thickness);
+    DrawLine3D(draw, vp, corners[edge[0]], corners[edge[1]], color, thickness);
   }
 }
 
 void EditorScene::DrawGrid(OverlayCanvas& draw) {
+  const glm::mat4 vp = GetViewProjection();
   if (view_2d_) {
     const glm::vec3 center(camera_target_.x, camera_target_.y, 0.0f);
     const float world_per_pixel = WorldPerPixel(center);
@@ -322,14 +331,16 @@ void EditorScene::DrawGrid(OverlayCanvas& draw) {
     const OverlayColor minor = Rgba(1, 1, 1, 0.05f);
     for (float x = std::floor(min.x / spacing) * spacing; x <= max.x;
          x += spacing) {
-      DrawLine3D(draw, {x, min.y, 0}, {x, max.y, 0}, minor);
+      DrawLine3D(draw, vp, {x, min.y, 0}, {x, max.y, 0}, minor);
     }
     for (float y = std::floor(min.y / spacing) * spacing; y <= max.y;
          y += spacing) {
-      DrawLine3D(draw, {min.x, y, 0}, {max.x, y, 0}, minor);
+      DrawLine3D(draw, vp, {min.x, y, 0}, {max.x, y, 0}, minor);
     }
-    DrawLine3D(draw, {min.x, 0, 0}, {max.x, 0, 0}, AxisColor(0, false, 0.35f));
-    DrawLine3D(draw, {0, min.y, 0}, {0, max.y, 0}, AxisColor(1, false, 0.35f));
+    DrawLine3D(draw, vp, {min.x, 0, 0}, {max.x, 0, 0},
+               AxisColor(0, false, 0.35f));
+    DrawLine3D(draw, vp, {0, min.y, 0}, {0, max.y, 0},
+               AxisColor(1, false, 0.35f));
     return;
   }
 
@@ -344,23 +355,29 @@ void EditorScene::DrawGrid(OverlayCanvas& draw) {
                          std::round(camera_target_.z / major_step) * major_step);
   const OverlayColor minor = Rgba(1, 1, 1, 0.06f);
   const OverlayColor major = Rgba(1, 1, 1, 0.14f);
-  for (int i = -kLines; i <= kLines; i++) {
-    const float x = center.x + i * spacing;
-    const float z = center.y + i * spacing;
-    const int index_x = static_cast<int>(std::lround(x / spacing));
-    const int index_z = static_cast<int>(std::lround(z / spacing));
-    if (index_x != 0) {
-      DrawLine3D(draw, {x, 0, center.y - extent}, {x, 0, center.y + extent},
-                 index_x % 10 == 0 ? major : minor);
-    }
-    if (index_z != 0) {
-      DrawLine3D(draw, {center.x - extent, 0, z}, {center.x + extent, 0, z},
-                 index_z % 10 == 0 ? major : minor);
+  // Group minor lines first and major lines second so backends (e.g.
+  // WxOverlayCanvas) batch all matching grid strokes into two path draws.
+  for (int pass = 0; pass < 2; ++pass) {
+    const bool want_major = (pass == 1);
+    const OverlayColor color = want_major ? major : minor;
+    for (int i = -kLines; i <= kLines; i++) {
+      const float x = center.x + i * spacing;
+      const float z = center.y + i * spacing;
+      const int index_x = static_cast<int>(std::lround(x / spacing));
+      const int index_z = static_cast<int>(std::lround(z / spacing));
+      if (index_x != 0 && (index_x % 10 == 0) == want_major) {
+        DrawLine3D(draw, vp, {x, 0, center.y - extent},
+                   {x, 0, center.y + extent}, color);
+      }
+      if (index_z != 0 && (index_z % 10 == 0) == want_major) {
+        DrawLine3D(draw, vp, {center.x - extent, 0, z},
+                   {center.x + extent, 0, z}, color);
+      }
     }
   }
-  DrawLine3D(draw, {center.x - extent, 0, 0}, {center.x + extent, 0, 0},
+  DrawLine3D(draw, vp, {center.x - extent, 0, 0}, {center.x + extent, 0, 0},
              AxisColor(0, false, 0.55f));
-  DrawLine3D(draw, {0, 0, center.y - extent}, {0, 0, center.y + extent},
+  DrawLine3D(draw, vp, {0, 0, center.y - extent}, {0, 0, center.y + extent},
              AxisColor(2, false, 0.55f));
 }
 

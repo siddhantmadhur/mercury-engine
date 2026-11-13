@@ -129,6 +129,7 @@ void CameraPreviewFrame::SyncFromController() {
                  : wxString::FromUTF8("Camera Preview — " + info.label));
   }
   canvas_->Refresh(false);
+  canvas_->Update();
 }
 
 void CameraPreviewFrame::OnPaint(wxPaintEvent&) {
@@ -147,7 +148,7 @@ void CameraPreviewFrame::OnPaint(wxPaintEvent&) {
     if (!bitmap_.IsOk() || fid != last_frame_id_ || bitmap_.GetWidth() != w ||
         bitmap_.GetHeight() != h) {
       last_frame_id_ = fid;
-      bitmap_ = RgbaToWxBitmap(pixels_.data(), w, h, false);
+      UpdateBitmapFromRgba(bitmap_, pixels_.data(), w, h, false);
     }
   }
   if (bitmap_.IsOk()) {
@@ -398,12 +399,15 @@ void SceneViewportPanel::SyncFromController(float dt) {
     SyncToolbarState();
   }
 
+  std::string status;
   if (scene_.IsModelPreloading()) {
-    status_lbl_->SetLabel(wxString::FromUTF8(
-        "Loading " + fs::path(scene_.PendingImportResPath()).filename().string() +
-        "..."));
-  } else {
-    status_lbl_->SetLabel(wxEmptyString);
+    status = "Loading " +
+             fs::path(scene_.PendingImportResPath()).filename().string() +
+             "...";
+  }
+  if (status != last_status_label_) {
+    status_lbl_->SetLabel(wxString::FromUTF8(status));
+    last_status_label_ = std::move(status);
   }
 
   glm::vec2 delta(0.0f, 0.0f);
@@ -423,33 +427,43 @@ void SceneViewportPanel::SyncFromController(float dt) {
   }
 
   canvas_->Refresh(false);
+  canvas_->Update();
 }
 
 void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
   wxAutoBufferedPaintDC dc(canvas_);
   const wxSize sz = canvas_->GetClientSize();
-  dc.SetBrush(wxBrush(wxColour(24, 26, 30)));
-  dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.DrawRectangle(0, 0, sz.x, sz.y);
 
   RenderHost* host = scene_.GetRenderHost();
   if (host) {
     int w = 0;
     int h = 0;
     uint64_t fid = 0;
-    if (host->CopyScenePixels(w, h, scene_pixels_, &fid) && w > 0 && h > 0) {
+    const bool copied = host->CopyScenePixels(w, h, scene_pixels_, &fid);
+    if (copied && w > 0 && h > 0) {
       if (!scene_bmp_.IsOk() || fid != scene_frame_id_ ||
           scene_bmp_.GetWidth() != w || scene_bmp_.GetHeight() != h) {
         scene_frame_id_ = fid;
-        scene_bmp_ = RgbaToWxBitmap(scene_pixels_.data(), w, h, false);
+        UpdateBitmapFromRgba(scene_bmp_, scene_pixels_.data(), w, h, false);
       }
     }
+  }
+
+  const bool exact_fit = scene_bmp_.IsOk() &&
+                         scene_bmp_.GetWidth() == sz.x &&
+                         scene_bmp_.GetHeight() == sz.y;
+  if (exact_fit) {
+    dc.DrawBitmap(scene_bmp_, 0, 0, false);
+  } else {
+    dc.SetBrush(wxBrush(wxColour(24, 26, 30)));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(0, 0, sz.x, sz.y);
   }
 
   std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(dc));
   if (!gc) return;
 
-  if (scene_bmp_.IsOk()) {
+  if (!exact_fit && scene_bmp_.IsOk()) {
     gc->DrawBitmap(scene_bmp_, 0, 0, sz.x, sz.y);
   }
 
@@ -466,6 +480,7 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
     overlay.AddRectFilled(min_p, max_p, OverlayColor{20, 22, 26, 200}, 4.0f);
     overlay.AddText(min_p + pad, OverlayColor{215, 220, 228, 255}, hint);
   }
+  overlay.Flush();
 
   // Embedded Camera Preview picture-in-picture when not popped out
   pip_popout_rect_ = wxRect();
@@ -479,7 +494,8 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
       if (!preview_bmp_.IsOk() || pfid != preview_frame_id_ ||
           preview_bmp_.GetWidth() != pw || preview_bmp_.GetHeight() != ph) {
         preview_frame_id_ = pfid;
-        preview_bmp_ = RgbaToWxBitmap(preview_pixels_.data(), pw, ph, false);
+        UpdateBitmapFromRgba(preview_bmp_, preview_pixels_.data(), pw, ph,
+                             false);
       }
     }
 
@@ -495,7 +511,13 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
       gc->SetPen(wxPen(wxColour(90, 96, 108), 1));
       gc->DrawRoundedRectangle(x, y, pip_w, pip_h + header_h, 4.0);
 
-      gc->SetFont(overlay_font_, wxColour(228, 231, 236));
+      const wxGraphicsFont pip_font =
+          CachedGraphicsFont(gc.get(), overlay_font_, wxColour(228, 231, 236));
+      if (!pip_font.IsNull()) {
+        gc->SetFont(pip_font);
+      } else {
+        gc->SetFont(overlay_font_, wxColour(228, 231, 236));
+      }
       gc->DrawText(wxString::FromUTF8(last_preview_info_.label), x + 8, y + 3);
 
       const wxString pop_lbl = "Pop Out";
@@ -510,7 +532,6 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
       gc->SetBrush(wxBrush(wxColour(55, 60, 68)));
       gc->SetPen(wxPen(wxColour(90, 96, 108), 1));
       gc->DrawRoundedRectangle(bx, by, bw, bh, 3.0);
-      gc->SetFont(overlay_font_, wxColour(228, 231, 236));
       gc->DrawText(pop_lbl, bx + 4, by + 1);
 
       if (preview_bmp_.IsOk()) {

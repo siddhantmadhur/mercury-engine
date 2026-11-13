@@ -50,15 +50,12 @@ bool MercuryEditorApp::OnInit() {
   }
 
   last_tick_ = std::chrono::steady_clock::now();
-  timer_.SetOwner(this);
-  Bind(wxEVT_TIMER, &MercuryEditorApp::OnTimer, this, timer_.GetId());
-  timer_.Start(16);
+  Bind(wxEVT_IDLE, &MercuryEditorApp::OnIdle, this);
   return true;
 }
 
 int MercuryEditorApp::OnExit() {
   shutting_down_ = true;
-  timer_.Stop();
   launcher_frame_ = nullptr;
   editor_frame_ = nullptr;
   scene_ = nullptr;
@@ -106,7 +103,6 @@ void MercuryEditorApp::ShowEditorFrame() {
       },
       [this]() {
         shutting_down_ = true;
-        timer_.Stop();
       });
   editor_frame_->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& evt) {
     if (evt.GetEventObject() == editor_frame_) editor_frame_ = nullptr;
@@ -120,8 +116,16 @@ void MercuryEditorApp::ShowEditorFrame() {
   }
 }
 
-void MercuryEditorApp::OnTimer(wxTimerEvent& /*evt*/) {
+void MercuryEditorApp::OnIdle(wxIdleEvent& evt) {
   if (shutting_down_ || in_tick_ || !application_ || !scene_) return;
+  wxWindow* active_win = editor_frame_
+                             ? static_cast<wxWindow*>(editor_frame_)
+                             : static_cast<wxWindow*>(launcher_frame_);
+  if (!active_win || !active_win->IsShown()) return;
+  if (auto* top = dynamic_cast<wxTopLevelWindow*>(active_win);
+      top && top->IsIconized()) {
+    return;
+  }
   in_tick_ = true;
 
   const auto now = std::chrono::steady_clock::now();
@@ -136,6 +140,7 @@ void MercuryEditorApp::OnTimer(wxTimerEvent& /*evt*/) {
   }
 
   in_tick_ = false;
+  if (!shutting_down_) evt.RequestMore(true);
 }
 
 }  // namespace Mercury::EditorUI

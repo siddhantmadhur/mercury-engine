@@ -20,6 +20,8 @@ struct OverlayColor {
   uint8_t b = 255;
   uint8_t a = 255;
 
+  bool operator==(const OverlayColor&) const = default;
+
   static OverlayColor FromFloat(float rf, float gf, float bf, float af = 1.0f) {
     auto clamp = [](float v) -> uint8_t {
       if (v <= 0.0f) return 0;

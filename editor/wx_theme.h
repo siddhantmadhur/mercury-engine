@@ -37,14 +37,22 @@ wxFont HeaderFont(int point_delta = 0);
 // Fast RGBA8 -> wxBitmap conversion.
 wxBitmap RgbaToWxBitmap(const uint8_t* rgba, int width, int height,
                         bool with_alpha = false);
+void UpdateBitmapFromRgba(wxBitmap& bitmap, const uint8_t* rgba, int width,
+                          int height, bool with_alpha = false);
 
 void DrawCheckerboard(wxGraphicsContext* gc, double x, double y, double w,
                       double h, int tile = 10);
+
+wxGraphicsFont CachedGraphicsFont(wxGraphicsContext* gc, const wxFont& font,
+                                    const wxColour& color);
 
 // wxGraphicsContext-backed OverlayCanvas for Scene Viewport & gizmo overlays.
 class WxOverlayCanvas : public OverlayCanvas {
  public:
   WxOverlayCanvas(wxGraphicsContext* gc, const wxFont& font);
+  ~WxOverlayCanvas() override;
+
+  void Flush();
 
   void AddLine(glm::vec2 a, glm::vec2 b, OverlayColor color,
                float thickness = 1.0f) override;
@@ -67,8 +75,16 @@ class WxOverlayCanvas : public OverlayCanvas {
   glm::vec2 MeasureText(const std::string& text) const override;
 
  private:
+  void FlushLines();
+
   wxGraphicsContext* gc_;
   wxFont font_;
+  bool has_pending_lines_ = false;
+  OverlayColor pending_line_color_{};
+  int pending_line_width_ = 1;
+  wxGraphicsPath pending_line_path_;
+  mutable bool has_active_font_ = false;
+  mutable OverlayColor active_font_color_{};
 };
 
 // --------------------------------------------------------- Custom Controls ---

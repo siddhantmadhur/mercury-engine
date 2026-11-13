@@ -6,7 +6,6 @@
 
 #include <wx/wx.h>
 
-#include <chrono>
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -61,18 +60,16 @@ class SmokeWxApp : public wxApp {
     if (!application_->StartHosted()) return false;
 
     frame_ = new Mercury::EditorUI::EditorFrame(
-        *scene_, []() {}, [this]() { timer_.Stop(); });
+        *scene_, []() {}, [this]() { done_ = true; });
     frame_->Show(true);
     SetTopWindow(frame_);
 
-    timer_.SetOwner(this);
-    Bind(wxEVT_TIMER, &SmokeWxApp::OnTimer, this, timer_.GetId());
-    timer_.Start(16);
+    Bind(wxEVT_IDLE, &SmokeWxApp::OnIdle, this);
     return true;
   }
 
   int OnExit() override {
-    timer_.Stop();
+    done_ = true;
     frame_ = nullptr;
     scene_ = nullptr;
     application_.reset();
@@ -80,26 +77,28 @@ class SmokeWxApp : public wxApp {
   }
 
  private:
-  void OnTimer(wxTimerEvent&) {
-    if (!application_ || !frame_) return;
+  void OnIdle(wxIdleEvent& evt) {
+    if (done_ || !application_ || !frame_) return;
     application_->StepFrame();
     frame_->SyncFromController(0.016f);
-    if (frames_++ >= max_frames_) {
-      timer_.Stop();
+    if (++frames_ >= max_frames_) {
+      done_ = true;
       frame_->DestroyChildFrames();
       frame_->Destroy();
       frame_ = nullptr;
       ExitMainLoop();
+      return;
     }
+    evt.RequestMore(true);
   }
 
   std::filesystem::path project_;
   int max_frames_ = 10;
   int frames_ = 0;
+  bool done_ = false;
   std::unique_ptr<Mercury::DefaultApplication> application_;
   Mercury::EditorScene* scene_ = nullptr;
   Mercury::EditorUI::EditorFrame* frame_ = nullptr;
-  wxTimer timer_;
 };
 
 }  // namespace

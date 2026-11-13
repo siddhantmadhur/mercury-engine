@@ -1442,6 +1442,9 @@ void VulkanApplication::Render() {
     MERCURY_PROFILE_SCOPE("wait_fence");
     vkWaitForFences(device, 1, &frame.in_flight, VK_TRUE, UINT64_MAX);
   }
+  scene_target_.slots[frame_index_].synced = true;
+  preview_target_.slots[frame_index_].synced = true;
+  ui_preview_target_.slots[frame_index_].synced = true;
   // The upload that used this staging buffer has finished.
   frame.atlas_staging.Reset();
 
@@ -1896,8 +1899,6 @@ void VulkanApplication::Render() {
     }
   }
 
-  last_submitted_fence_ = frame.in_flight;
-  readback_synced_ = false;
   frame_index_ = (frame_index_ + 1) % kFramesInFlight;
 
   if (capture_now) WriteCapture();
@@ -2146,13 +2147,17 @@ bool VulkanApplication::CopyPreviewPixels(int& width, int& height,
 }
 
 void VulkanApplication::DestroyOffscreenTarget(OffscreenTarget& target) {
-  target.readback.Reset();
+  for (auto& slot : target.slots) {
+    slot.buffer.Reset();
+    slot.extent = {0, 0};
+    slot.frame_id = 0;
+    slot.has_pixels = false;
+    slot.synced = true;
+  }
   target.color.Reset();
   target.depth.Reset();
   target.extent = {0, 0};
-  target.readback_extent = {0, 0};
-  target.has_pixels = false;
-  target.frame_id = 0;
+  target.last_recorded_slot = -1;
 }
 
 bool VulkanApplication::CreateOffscreenTarget(VkExtent2D extent,
@@ -2169,7 +2174,7 @@ bool VulkanApplication::CreateOffscreenTarget(VkExtent2D extent,
 
   const VkDeviceSize readback_bytes =
       VkDeviceSize{extent.width} * extent.height * 4;
-  const bool ok =
+  bool ok =
       target.color.Create(
           context_.allocator, context_.device, extent.width, extent.height,
           ColorFormat(),
@@ -2178,10 +2183,17 @@ bool VulkanApplication::CreateOffscreenTarget(VkExtent2D extent,
       target.depth.Create(context_.allocator, context_.device, extent.width,
                           extent.height, vk::Swapchain::kDepthFormat,
                           VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                          VK_IMAGE_ASPECT_DEPTH_BIT) &&
-      target.readback.Create(context_.allocator, readback_bytes,
-                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                             vk::Buffer::Memory::kReadback);
+                          VK_IMAGE_ASPECT_DEPTH_BIT);
+  if (ok) {
+    for (auto& slot : target.slots) {
+      if (!slot.buffer.Create(context_.allocator, readback_bytes,
+                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                              vk::Buffer::Memory::kReadback)) {
+        ok = false;
+        break;
+      }
+    }
+  }
   if (!ok) {
     PDebug::error("Vulkan: could not create {}x{} offscreen target",
                   extent.width, extent.height);
@@ -2190,9 +2202,7 @@ bool VulkanApplication::CreateOffscreenTarget(VkExtent2D extent,
   }
 
   target.extent = extent;
-  target.readback_extent = extent;
-  target.has_pixels = false;
-  target.frame_id = 0;
+  target.last_recorded_slot = -1;
   return true;
 }
 
@@ -2201,7 +2211,8 @@ void VulkanApplication::RecordTargetReadback(VkCommandBuffer cmd,
                                              VkImageLayout current_layout,
                                              VkPipelineStageFlags2 src_stage,
                                              VkAccessFlags2 src_access) {
-  if (!target.readback.Valid() || target.color.Get() == VK_NULL_HANDLE) return;
+  auto& slot = target.slots[frame_index_];
+  if (!slot.buffer.Valid() || target.color.Get() == VK_NULL_HANDLE) return;
   vk::TransitionImage(cmd, target.color.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
                       current_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                       src_stage, src_access, VK_PIPELINE_STAGE_2_COPY_BIT,
@@ -2211,10 +2222,12 @@ void VulkanApplication::RecordTargetReadback(VkCommandBuffer cmd,
   region.imageExtent = {target.extent.width, target.extent.height, 1};
   vkCmdCopyImageToBuffer(cmd, target.color.Get(),
                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                         target.readback.Get(), 1, &region);
-  target.readback_extent = target.extent;
-  target.has_pixels = true;
-  target.frame_id = frame_counter_ + 1;
+                         slot.buffer.Get(), 1, &region);
+  slot.extent = target.extent;
+  slot.has_pixels = true;
+  slot.synced = false;
+  slot.frame_id = frame_counter_ + 1;
+  target.last_recorded_slot = static_cast<int>(frame_index_);
 }
 
 bool VulkanApplication::CopyTargetPixels(OffscreenTarget& target, int& width,
@@ -2222,36 +2235,108 @@ bool VulkanApplication::CopyTargetPixels(OffscreenTarget& target, int& width,
                                          std::vector<uint8_t>& rgba_out,
                                          uint64_t* frame_id,
                                          bool force_opaque_alpha) {
-  if (!target.has_pixels || !target.readback.Valid() ||
-      target.readback_extent.width == 0 || target.readback_extent.height == 0) {
+  const int curr_idx = target.last_recorded_slot;
+  if (curr_idx < 0 || curr_idx >= static_cast<int>(kFramesInFlight)) {
     return false;
   }
-  if (!readback_synced_ && last_submitted_fence_ != VK_NULL_HANDLE) {
-    vkWaitForFences(context_.device, 1, &last_submitted_fence_, VK_TRUE,
-                    UINT64_MAX);
-    readback_synced_ = true;
+  auto slot_ready = [&](const OffscreenTarget::ReadbackSlot& s) {
+    return s.has_pixels && s.buffer.Valid() && s.extent.width > 0 &&
+           s.extent.height > 0 && s.extent.width == target.extent.width &&
+           s.extent.height == target.extent.height;
+  };
+
+  int chosen_idx = -1;
+  auto& curr = target.slots[curr_idx];
+  if (slot_ready(curr)) {
+    if (curr.synced ||
+        vkGetFenceStatus(context_.device, frames_[curr_idx].in_flight) ==
+            VK_SUCCESS) {
+      curr.synced = true;
+      chosen_idx = curr_idx;
+    } else {
+      for (int offset = 1; offset < static_cast<int>(kFramesInFlight);
+           ++offset) {
+        const int prev_idx = (curr_idx + static_cast<int>(kFramesInFlight) -
+                              offset) %
+                             static_cast<int>(kFramesInFlight);
+        if (slot_ready(target.slots[prev_idx])) {
+          chosen_idx = prev_idx;
+          break;
+        }
+      }
+      if (chosen_idx < 0) chosen_idx = curr_idx;
+    }
+  } else {
+    for (int offset = 1; offset < static_cast<int>(kFramesInFlight); ++offset) {
+      const int prev_idx = (curr_idx + static_cast<int>(kFramesInFlight) -
+                            offset) %
+                           static_cast<int>(kFramesInFlight);
+      if (slot_ready(target.slots[prev_idx])) {
+        chosen_idx = prev_idx;
+        break;
+      }
+    }
   }
-  target.readback.Invalidate();
-  const uint32_t w = target.readback_extent.width;
-  const uint32_t h = target.readback_extent.height;
-  const size_t bytes = size_t{w} * h * 4;
+  if (chosen_idx < 0) return false;
+
+  auto& slot = target.slots[chosen_idx];
+  if (!slot.synced) {
+    vkWaitForFences(context_.device, 1, &frames_[chosen_idx].in_flight, VK_TRUE,
+                    UINT64_MAX);
+    slot.synced = true;
+  }
+  slot.buffer.Invalidate();
+
+  const uint32_t w = slot.extent.width;
+  const uint32_t h = slot.extent.height;
+  const size_t pixel_count = size_t{w} * h;
+  const size_t bytes = pixel_count * 4;
   rgba_out.resize(bytes);
-  std::memcpy(rgba_out.data(), target.readback.Mapped(), bytes);
+
   const VkFormat format = ColorFormat();
-  if (format == VK_FORMAT_B8G8R8A8_SRGB ||
-      format == VK_FORMAT_B8G8R8A8_UNORM) {
+  const bool swap_rb = (format == VK_FORMAT_B8G8R8A8_SRGB ||
+                        format == VK_FORMAT_B8G8R8A8_UNORM);
+  const auto* src = static_cast<const uint8_t*>(slot.buffer.Mapped());
+  uint8_t* dst = rgba_out.data();
+
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  if (!swap_rb && !force_opaque_alpha) {
+    std::memcpy(dst, src, bytes);
+  } else if (swap_rb) {
+    const uint32_t alpha_mask = force_opaque_alpha ? 0xFF000000u : 0x00000000u;
+    const uint32_t keep_mask = force_opaque_alpha ? 0x0000FF00u : 0xFF00FF00u;
+    for (size_t i = 0; i < pixel_count; ++i) {
+      uint32_t p;
+      std::memcpy(&p, src + i * 4, sizeof(p));
+      const uint32_t out = (p & keep_mask) | ((p & 0x00FF0000u) >> 16) |
+                           ((p & 0x000000FFu) << 16) | alpha_mask;
+      std::memcpy(dst + i * 4, &out, sizeof(out));
+    }
+  } else {
+    for (size_t i = 0; i < pixel_count; ++i) {
+      uint32_t p;
+      std::memcpy(&p, src + i * 4, sizeof(p));
+      const uint32_t out = p | 0xFF000000u;
+      std::memcpy(dst + i * 4, &out, sizeof(out));
+    }
+  }
+#else
+  std::memcpy(dst, src, bytes);
+  if (swap_rb) {
     for (size_t i = 0; i < bytes; i += 4) {
-      std::swap(rgba_out[i], rgba_out[i + 2]);
+      std::swap(dst[i], dst[i + 2]);
     }
   }
   if (force_opaque_alpha) {
     for (size_t i = 3; i < bytes; i += 4) {
-      rgba_out[i] = 255;
+      dst[i] = 255;
     }
   }
+#endif
+
   width = static_cast<int>(w);
   height = static_cast<int>(h);
-  if (frame_id) *frame_id = target.frame_id;
+  if (frame_id) *frame_id = slot.frame_id;
   return true;
 }
 

@@ -2,13 +2,12 @@
  * editor_app.h
  *
  * wxApp entrypoint hosting headless DefaultApplication + EditorScene, driving
- * StepFrame() via a ~16ms wxTimer, and managing LauncherFrame <-> EditorFrame
+ * StepFrame() via wxEVT_IDLE, and managing LauncherFrame <-> EditorFrame
  * transitions.
  */
 #ifndef MERCURY_EDITOR_EDITOR_APP_H
 #define MERCURY_EDITOR_EDITOR_APP_H
 
-#include <wx/timer.h>
 #include <wx/wx.h>
 
 #include <chrono>
@@ -28,7 +27,7 @@ class MercuryEditorApp : public wxApp {
   int FilterEvent(wxEvent& evt) override;
 
  private:
-  void OnTimer(wxTimerEvent& evt);
+  void OnIdle(wxIdleEvent& evt);
   void ShowLauncherFrame();
   void ShowEditorFrame();
 
@@ -38,7 +37,6 @@ class MercuryEditorApp : public wxApp {
   LauncherFrame* launcher_frame_ = nullptr;
   EditorFrame* editor_frame_ = nullptr;
 
-  wxTimer timer_;
   std::chrono::steady_clock::time_point last_tick_;
   bool in_tick_ = false;
   bool shutting_down_ = false;

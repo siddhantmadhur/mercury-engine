@@ -98,6 +98,15 @@ class EditorFrame : public wxFrame {
   wxStaticText* fps_lbl_ = nullptr;
   bool toolbar_synced_once_ = false;
   PlaySession::State last_play_state_ = PlaySession::State::kIdle;
+  bool status_synced_once_ = false;
+  bool last_play_enabled_ = false;
+  bool last_build_enabled_ = false;
+  bool last_save_enabled_ = false;
+  bool last_undo_enabled_ = false;
+  bool last_redo_enabled_ = false;
+  std::string last_map_label_;
+  std::string last_status_hint_;
+  std::string last_status_proj_;
 
   // Docked panels
   HierarchyPanel* hierarchy_panel_ = nullptr;
