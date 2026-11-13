@@ -10,7 +10,8 @@ void ModelPreloader::Start(std::vector<Job> jobs) {
   Cancel();
   jobs_ = std::move(jobs);
   results_.assign(jobs_.size(), Result{});
-  for (size_t i = 0; i < jobs_.size(); i++) results_[i].res_path = jobs_[i].res_path;
+  for (size_t i = 0; i < jobs_.size(); i++)
+    results_[i].res_path = jobs_[i].res_path;
   progress_.reset(new std::atomic<float>[jobs_.size()]());
   next_ = 0;
   done_ = 0;
@@ -41,7 +42,8 @@ void ModelPreloader::Work() {
     } catch (const std::exception& e) {
       error = e.what();
     }
-    if (!model) PDebug::warn("Could not load model {}: {}", job.res_path, error);
+    if (!model)
+      PDebug::warn("Could not load model {}: {}", job.res_path, error);
     {
       std::lock_guard lock(mutex_);
       results_[index].model = std::move(model);

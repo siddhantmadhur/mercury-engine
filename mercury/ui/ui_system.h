@@ -30,13 +30,15 @@ class UISystem {
 
   // The panel for a PanelSettings asset ("" for the defaults), made on
   // first use.
-  Panel* GetPanel(const std::string& settings_path, const PanelSettings& settings);
+  Panel* GetPanel(const std::string& settings_path,
+                  const PanelSettings& settings);
 
   /**
    * @brief Shows a document in a panel
    * @return its root, a TemplateContainer that fills the panel
    */
-  VisualElement* AddDocument(Panel* panel, const std::shared_ptr<VisualTreeAsset>& tree,
+  VisualElement* AddDocument(Panel* panel,
+                             const std::shared_ptr<VisualTreeAsset>& tree,
                              float sort_order);
   void RemoveDocument(VisualElement* root);
   // Removes every panel and document.
@@ -56,7 +58,9 @@ class UISystem {
   // True while a text field has focus.
   bool WantsKeyboard() const;
 
-  const std::vector<std::unique_ptr<Panel>>& panels() const { return panel_list_; }
+  const std::vector<std::unique_ptr<Panel>>& panels() const {
+    return panel_list_;
+  }
 
  private:
   struct PanelEntry {

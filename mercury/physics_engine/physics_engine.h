@@ -133,9 +133,9 @@ constexpr uint32_t kDefaultRaycastLayers = ~(1u << 2);
 struct ColliderShape {
   enum class Kind { kBox, kSphere, kCapsule, kCylinder, kMesh, kConvexHull };
   Kind kind = Kind::kBox;
-  glm::vec3 size = glm::vec3(1.0f);  // kBox: full extents
-  float radius = 0.5f;               // kSphere, kCapsule, kCylinder
-  float height = 2.0f;               // kCapsule (total), kCylinder
+  glm::vec3 size = glm::vec3(1.0f);    // kBox: full extents
+  float radius = 0.5f;                 // kSphere, kCapsule, kCylinder
+  float height = 2.0f;                 // kCapsule (total), kCylinder
   glm::vec3 center = glm::vec3(0.0f);  // offset from the body origin
   glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
   // kMesh: triangles; kConvexHull: points (indices unused)
@@ -191,10 +191,10 @@ enum class ContactEvent { kEnter, kStay, kExit };
 enum CollisionType { kCollisionEnter, kCollisionPersisted, kCollisionLeave };
 
 enum class ForceMode {
-  kForce,          // Continuous force, using mass (F = m * a)
-  kImpulse,        // Instantaneous impulse, using mass
-  kVelocityChange, // Instantaneous velocity change, ignoring mass
-  kAcceleration,   // Continuous acceleration, ignoring mass
+  kForce,           // Continuous force, using mass (F = m * a)
+  kImpulse,         // Instantaneous impulse, using mass
+  kVelocityChange,  // Instantaneous velocity change, ignoring mass
+  kAcceleration,    // Continuous acceleration, ignoring mass
 };
 
 enum PhysicsProperty {
@@ -328,21 +328,21 @@ class PhysicsEngine {
                                     uint32_t layer_mask = kDefaultRaycastLayers,
                                     bool query_triggers = true);
   // Every hit along a ray, nearest first.
-  std::vector<RaycastHit> RaycastAll(glm::vec3 origin, glm::vec3 direction,
-                                     float max_distance = 1e30f,
-                                     uint32_t layer_mask = kDefaultRaycastLayers,
-                                     bool query_triggers = true);
+  std::vector<RaycastHit> RaycastAll(
+      glm::vec3 origin, glm::vec3 direction, float max_distance = 1e30f,
+      uint32_t layer_mask = kDefaultRaycastLayers, bool query_triggers = true);
   // Entities whose colliders overlap a sphere (Physics.OverlapSphere).
-  std::vector<kEntityId> OverlapSphere(glm::vec3 center, float radius,
-                                       uint32_t layer_mask = kDefaultRaycastLayers,
-                                       bool query_triggers = true);
+  std::vector<kEntityId> OverlapSphere(
+      glm::vec3 center, float radius,
+      uint32_t layer_mask = kDefaultRaycastLayers, bool query_triggers = true);
 
   // Whether raycasts hit triggers when not told (Physics.queriesHitTriggers).
   void SetQueriesHitTriggers(bool hit) { queries_hit_triggers_ = hit; }
   bool GetQueriesHitTriggers() const { return queries_hit_triggers_; }
 
   // ---- Characters (Unity's CharacterController) ----
-  bool CreateCharacter(kEntityId self, const CharacterDesc& desc, int layer = 0);
+  bool CreateCharacter(kEntityId self, const CharacterDesc& desc,
+                       int layer = 0);
   bool HasCharacter(kEntityId self) const { return characters_.contains(self); }
   /**
    * @brief Move the character right away, sliding along what it hits
@@ -361,8 +361,8 @@ class PhysicsEngine {
    * @brief Receives trigger enter/stay/exit pairs after each step (main
    * thread). `trigger` is the entity with the trigger collider.
    */
-  using TriggerCallback = std::function<void(TriggerEvent event, kEntityId trigger,
-                                             kEntityId other)>;
+  using TriggerCallback = std::function<void(
+      TriggerEvent event, kEntityId trigger, kEntityId other)>;
   void SetTriggerCallback(TriggerCallback callback) {
     trigger_callback_ = std::move(callback);
   }
@@ -370,8 +370,8 @@ class PhysicsEngine {
    * @brief Receives collision enter/stay/exit for every pair of entities
    * touching, after each step (main thread)
    */
-  using ContactCallback = std::function<void(ContactEvent event, kEntityId a,
-                                             kEntityId b)>;
+  using ContactCallback =
+      std::function<void(ContactEvent event, kEntityId a, kEntityId b)>;
   void SetContactCallback(ContactCallback callback) {
     contact_callback_ = std::move(callback);
   }
@@ -379,9 +379,11 @@ class PhysicsEngine {
   void RecordContact(kEntityId a, kEntityId b, bool added);
 
   // Forces and impulses act on dynamic bodies at the next physics step.
-  void AddForce(kEntityId self, glm::vec3 force, ForceMode mode = ForceMode::kForce);
+  void AddForce(kEntityId self, glm::vec3 force,
+                ForceMode mode = ForceMode::kForce);
   void AddImpulse(kEntityId self, glm::vec3 impulse);
-  void AddTorque(kEntityId self, glm::vec3 torque, ForceMode mode = ForceMode::kForce);
+  void AddTorque(kEntityId self, glm::vec3 torque,
+                 ForceMode mode = ForceMode::kForce);
   void SetAngularVelocity(kEntityId self, glm::vec3 radians_per_second);
   glm::vec3 GetAngularVelocity(kEntityId self);
 
@@ -518,7 +520,8 @@ class PhysicsEngine {
   int tick_rate_ = 60;
   bool queries_hit_triggers_ = true;
 
-  JPH::Ref<JPH::Shape> BuildShape(const std::vector<const ColliderShape*>& shapes);
+  JPH::Ref<JPH::Shape> BuildShape(
+      const std::vector<const ColliderShape*>& shapes);
   bool BodyMatches(JPH::BodyID body, uint32_t layer_mask, bool query_triggers);
 
   // Shared by the Create* functions: places the shape at the entity's

@@ -13,8 +13,8 @@ namespace Mercury::UI {
 namespace {
 
 bool IsWordChar(char32_t c) {
-  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-         c == '_' || c > 127;
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+         (c >= 'A' && c <= 'Z') || c == '_' || c > 127;
 }
 
 template <typename E>
@@ -51,7 +51,10 @@ void TextElement::SetEnableRichText(bool enable) {
 
 Font* TextElement::ResolveFont() const {
   if (!panel()) return nullptr;
-  return panel()->resources().LoadFont(resolvedStyle().unityFontDefinition.path).get();
+  return panel()
+      ->resources()
+      .LoadFont(resolvedStyle().unityFontDefinition.path)
+      .get();
 }
 
 TextSettings TextElement::MakeTextSettings() const {
@@ -71,8 +74,8 @@ TextSettings TextElement::MakeTextSettings() const {
   return settings;
 }
 
-glm::vec2 TextElement::Measure(float width, MeasureMode width_mode, float height,
-                               MeasureMode height_mode) {
+glm::vec2 TextElement::Measure(float width, MeasureMode width_mode,
+                               float height, MeasureMode height_mode) {
   TextSettings settings = MakeTextSettings();
   if (!settings.font) return glm::vec2(0.0f);
   const bool wraps = settings.white_space == WhiteSpace::kNormal ||
@@ -106,7 +109,8 @@ void TextElement::GenerateVisualContent(MeshGenerationContext& context) {
   context.DrawText(layout, *settings.font, TextOrigin(layout), resolvedStyle());
 }
 
-bool TextElement::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool TextElement::SetProperty(std::string_view name,
+                              const mtext::Variant& value) {
   if (name == "text") {
     SetText(VariantToString(value));
     return true;
@@ -118,7 +122,8 @@ bool TextElement::SetProperty(std::string_view name, const mtext::Variant& value
   return VisualElement::SetProperty(name, value);
 }
 
-std::optional<mtext::Variant> TextElement::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> TextElement::GetProperty(
+    std::string_view name) const {
   if (name == "text") return text_;
   if (name == "enable-rich-text") return rich_text_;
   return VisualElement::GetProperty(name);
@@ -147,8 +152,9 @@ RepeatButton::RepeatButton(std::function<void()> action, double delay_ms,
 void RepeatButton::SetAction(std::function<void()> action, double delay_ms,
                              double interval_ms) {
   if (clickable_) RemoveManipulator(clickable_);
-  clickable_ = static_cast<Clickable*>(AddManipulator(
-      std::make_unique<Clickable>(std::move(action), delay_ms, std::max(1.0, interval_ms))));
+  clickable_ =
+      static_cast<Clickable*>(AddManipulator(std::make_unique<Clickable>(
+          std::move(action), delay_ms, std::max(1.0, interval_ms))));
 }
 
 // ------------------------------------------------------------------ Image --
@@ -195,9 +201,11 @@ glm::vec2 Image::Measure(float width, MeasureMode width_mode, float height,
   if (!texture) return glm::vec2(0.0f);
   glm::vec2 size(texture->width * uv_.z, texture->height * uv_.w);
   const float aspect = size.y > 0 ? size.x / size.y : 1.0f;
-  if (width_mode == MeasureMode::kExactly && height_mode != MeasureMode::kExactly) {
+  if (width_mode == MeasureMode::kExactly &&
+      height_mode != MeasureMode::kExactly) {
     size = {width, width / aspect};
-  } else if (height_mode == MeasureMode::kExactly && width_mode != MeasureMode::kExactly) {
+  } else if (height_mode == MeasureMode::kExactly &&
+             width_mode != MeasureMode::kExactly) {
     size = {height * aspect, height};
   }
   if (width_mode == MeasureMode::kExactly) size.x = width;
@@ -264,9 +272,10 @@ bool Image::SetProperty(std::string_view name, const mtext::Variant& value) {
 std::optional<mtext::Variant> Image::GetProperty(std::string_view name) const {
   if (name == "image" || name == "source") return path_;
   if (name == "scale-mode") {
-    return std::string(scale_mode_ == ScaleMode::kStretchToFill  ? "StretchToFill"
-                       : scale_mode_ == ScaleMode::kScaleAndCrop ? "ScaleAndCrop"
-                                                                 : "ScaleToFit");
+    return std::string(
+        scale_mode_ == ScaleMode::kStretchToFill  ? "StretchToFill"
+        : scale_mode_ == ScaleMode::kScaleAndCrop ? "ScaleAndCrop"
+                                                  : "ScaleToFit");
   }
   if (name == "tint-color") return mtext::Color{tint_.rgba};
   return VisualElement::GetProperty(name);
@@ -298,7 +307,8 @@ bool GroupBox::SetProperty(std::string_view name, const mtext::Variant& value) {
   return VisualElement::SetProperty(name, value);
 }
 
-std::optional<mtext::Variant> GroupBox::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> GroupBox::GetProperty(
+    std::string_view name) const {
   if (name == "text") return text();
   return VisualElement::GetProperty(name);
 }
@@ -423,7 +433,8 @@ void RadioButton::OnValueChanged() {
   // Radio buttons that share a parent form a group.
   for (VisualElement* sibling : parent()->Children()) {
     if (sibling == this) continue;
-    if (auto* radio = dynamic_cast<RadioButton*>(sibling)) radio->SetValue(false);
+    if (auto* radio = dynamic_cast<RadioButton*>(sibling))
+      radio->SetValue(false);
   }
 }
 
@@ -479,7 +490,8 @@ template <typename T>
 float BaseSlider<T>::normalizedValue() const {
   const float range = static_cast<float>(high_ - low_);
   if (range == 0.0f) return 0.0f;
-  return std::clamp(static_cast<float>(this->value_ - low_) / range, 0.0f, 1.0f);
+  return std::clamp(static_cast<float>(this->value_ - low_) / range, 0.0f,
+                    1.0f);
 }
 
 template <typename T>
@@ -544,15 +556,18 @@ void BaseSlider<T>::HandleEventBubbleUp(EventBase& event) {
     if (!h && e.direction == NavigationDirection::kDown) dir = 1;
     if (dir == 0.0f) return;
     if (inverted_) dir = -dir;
-    float step = page_size_ > 0 ? page_size_ : static_cast<float>(high_ - low_) / 100.0f;
-    if constexpr (std::is_integral_v<T>) step = std::max(1.0f, std::round(step));
+    float step =
+        page_size_ > 0 ? page_size_ : static_cast<float>(high_ - low_) / 100.0f;
+    if constexpr (std::is_integral_v<T>)
+      step = std::max(1.0f, std::round(step));
     this->SetValue(static_cast<T>(this->value_ + dir * step));
     event.StopPropagation();
   }
 }
 
 template <typename T>
-bool BaseSlider<T>::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool BaseSlider<T>::SetProperty(std::string_view name,
+                                const mtext::Variant& value) {
   if (name == "value") {
     if (auto f = VariantToFloat(value)) this->SetValue(static_cast<T>(*f));
     return true;
@@ -570,8 +585,9 @@ bool BaseSlider<T>::SetProperty(std::string_view name, const mtext::Variant& val
     return true;
   }
   if (name == "direction") {
-    SetDirection(VariantToString(value) == "Vertical" ? SliderDirection::kVertical
-                                                      : SliderDirection::kHorizontal);
+    SetDirection(VariantToString(value) == "Vertical"
+                     ? SliderDirection::kVertical
+                     : SliderDirection::kHorizontal);
     return true;
   }
   if (name == "inverted") {
@@ -586,13 +602,15 @@ bool BaseSlider<T>::SetProperty(std::string_view name, const mtext::Variant& val
 }
 
 template <typename T>
-std::optional<mtext::Variant> BaseSlider<T>::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> BaseSlider<T>::GetProperty(
+    std::string_view name) const {
   if (name == "value") return mtext::Variant(this->value_);
   if (name == "low-value") return mtext::Variant(low_);
   if (name == "high-value") return mtext::Variant(high_);
   if (name == "page-size") return mtext::Variant(page_size_);
   if (name == "direction") {
-    return std::string(direction_ == SliderDirection::kVertical ? "Vertical" : "Horizontal");
+    return std::string(direction_ == SliderDirection::kVertical ? "Vertical"
+                                                                : "Horizontal");
   }
   if (name == "inverted") return inverted_;
   if (name == "label") return this->label();
@@ -606,7 +624,9 @@ Slider::Slider(float low, float high) : BaseSlider(low, high) {
   AddToClassList(ussClassName);
 }
 
-float Slider::FromNormalized(float t) const { return low_ + t * (high_ - low_); }
+float Slider::FromNormalized(float t) const {
+  return low_ + t * (high_ - low_);
+}
 
 SliderInt::SliderInt(int low, int high) : BaseSlider(low, high) {
   AddToClassList(ussClassName);
@@ -654,15 +674,19 @@ void ProgressBar::SetValue(float v) {
   NotifyPropertyChanged();
 }
 const std::string& ProgressBar::title() const { return title_->text(); }
-void ProgressBar::SetTitle(std::string title) { title_->SetText(std::move(title)); }
+void ProgressBar::SetTitle(std::string title) {
+  title_->SetText(std::move(title));
+}
 
 void ProgressBar::UpdateProgress() {
   const float range = high_ - low_;
-  const float t = range != 0 ? std::clamp((value_ - low_) / range, 0.0f, 1.0f) : 0.0f;
+  const float t =
+      range != 0 ? std::clamp((value_ - low_) / range, 0.0f, 1.0f) : 0.0f;
   progress_->style().width = Length::Percent(t * 100.0f);
 }
 
-bool ProgressBar::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool ProgressBar::SetProperty(std::string_view name,
+                              const mtext::Variant& value) {
   if (name == "value") {
     if (auto f = VariantToFloat(value)) SetValue(static_cast<float>(*f));
   } else if (name == "low-value") {
@@ -677,7 +701,8 @@ bool ProgressBar::SetProperty(std::string_view name, const mtext::Variant& value
   return true;
 }
 
-std::optional<mtext::Variant> ProgressBar::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> ProgressBar::GetProperty(
+    std::string_view name) const {
   if (name == "value") return mtext::Variant(value_);
   if (name == "low-value") return mtext::Variant(low_);
   if (name == "high-value") return mtext::Variant(high_);
@@ -705,7 +730,8 @@ class TextInputBase : public TextElement {
   }
   glm::vec2 Measure(float width, MeasureMode width_mode, float height,
                     MeasureMode height_mode) override {
-    glm::vec2 size = TextElement::Measure(width, width_mode, height, height_mode);
+    glm::vec2 size =
+        TextElement::Measure(width, width_mode, height, height_mode);
     TextSettings settings = MakeTextSettings();
     if (settings.font && height_mode != MeasureMode::kExactly) {
       // Never collapse below one line, even when empty.
@@ -770,7 +796,8 @@ void TextField::SetValueWithoutNotify(std::string value) {
 }
 
 std::string TextField::DisplayText() const {
-  if (editing_.empty() && !IsFocused() && !placeholder_.empty()) return placeholder_;
+  if (editing_.empty() && !IsFocused() && !placeholder_.empty())
+    return placeholder_;
   if (password_) return EncodeUtf8(std::u32string(editing_.size(), mask_char_));
   return EncodeUtf8(editing_);
 }
@@ -840,14 +867,18 @@ int TextField::IndexAt(glm::vec2 world) const {
   settings.rich_text = false;
   const Rect content = text_input_->contentRect();
   const std::string display =
-      password_ ? EncodeUtf8(std::u32string(editing_.size(), mask_char_)) : EncodeUtf8(editing_);
-  TextLayout layout = LayoutText(display, settings, multiline_ ? content.width
-                                                               : std::numeric_limits<float>::infinity());
-  glm::vec2 local = text_input_->WorldToLocal(world) - text_input_->TextOrigin(layout);
+      password_ ? EncodeUtf8(std::u32string(editing_.size(), mask_char_))
+                : EncodeUtf8(editing_);
+  TextLayout layout = LayoutText(
+      display, settings,
+      multiline_ ? content.width : std::numeric_limits<float>::infinity());
+  glm::vec2 local =
+      text_input_->WorldToLocal(world) - text_input_->TextOrigin(layout);
   local.x += text_input_->scroll_x;
   if (layout.carets.empty()) return 0;
   // Line under the point, then the nearest caret on it.
-  int line = static_cast<int>(std::floor(local.y / std::max(1.0f, layout.line_height)));
+  int line = static_cast<int>(
+      std::floor(local.y / std::max(1.0f, layout.line_height)));
   line = std::clamp(line, 0, layout.caret_lines.back());
   int best = 0;
   float best_distance = std::numeric_limits<float>::max();
@@ -868,7 +899,8 @@ void TextField::EnsureCursorVisible() {
   if (!settings.font) return;
   settings.rich_text = false;
   const std::string display =
-      password_ ? EncodeUtf8(std::u32string(editing_.size(), mask_char_)) : EncodeUtf8(editing_);
+      password_ ? EncodeUtf8(std::u32string(editing_.size(), mask_char_))
+                : EncodeUtf8(editing_);
   TextLayout layout = LayoutText(display, settings);
   if (cursor_ >= static_cast<int>(layout.carets.size())) return;
   const float x = layout.carets[cursor_].x;
@@ -882,12 +914,14 @@ void TextField::EnsureCursorVisible() {
 void TextField::DrawCaretAndSelection(MeshGenerationContext& ctx) {
   TextSettings settings = text_input_->MakeTextSettings();
   if (!settings.font) return;
-  const bool placeholder = editing_.empty() && !IsFocused() && !placeholder_.empty();
+  const bool placeholder =
+      editing_.empty() && !IsFocused() && !placeholder_.empty();
   const std::string display = DisplayText();
   const Rect content = text_input_->contentRect();
   settings.rich_text = false;
   if (placeholder) settings.color.rgba.a *= 0.5f;
-  const float box = multiline_ ? content.width : std::numeric_limits<float>::infinity();
+  const float box =
+      multiline_ ? content.width : std::numeric_limits<float>::infinity();
   TextLayout layout = LayoutText(display, settings, box);
   glm::vec2 origin = text_input_->TextOrigin(layout);
   origin.x -= text_input_->scroll_x;
@@ -897,12 +931,14 @@ void TextField::DrawCaretAndSelection(MeshGenerationContext& ctx) {
     Color selection(0.24f, 0.5f, 0.87f, 0.65f);
     text_input_->TryGetCustomStyle("--unity-selection-color", selection);
     const int a = std::min(anchor_, cursor_), b = std::max(anchor_, cursor_);
-    for (int i = a; i < b && i + 1 < static_cast<int>(layout.carets.size()); i++) {
+    for (int i = a; i < b && i + 1 < static_cast<int>(layout.carets.size());
+         i++) {
       const glm::vec2 p0 = layout.carets[i];
       glm::vec2 p1 = layout.carets[i + 1];
       if (layout.caret_lines[i] != layout.caret_lines[i + 1]) p1.x = p0.x + 4;
-      ctx.DrawRect({origin.x + p0.x, origin.y + p0.y, p1.x - p0.x, layout.line_height},
-                   selection);
+      ctx.DrawRect(
+          {origin.x + p0.x, origin.y + p0.y, p1.x - p0.x, layout.line_height},
+          selection);
     }
   }
   if (!display.empty()) {
@@ -915,11 +951,13 @@ void TextField::DrawCaretAndSelection(MeshGenerationContext& ctx) {
   }
   if (focused && !read_only_ && panel()) {
     const double t = panel()->time() - blink_start_;
-    if (std::fmod(t, 1.0) < 0.5 && cursor_ < static_cast<int>(layout.carets.size())) {
+    if (std::fmod(t, 1.0) < 0.5 &&
+        cursor_ < static_cast<int>(layout.carets.size())) {
       Color caret = text_input_->resolvedStyle().color;
       text_input_->TryGetCustomStyle("--unity-cursor-color", caret);
       const glm::vec2 p = layout.carets[cursor_];
-      ctx.DrawRect({origin.x + p.x, origin.y + p.y, 1.0f, layout.line_height}, caret);
+      ctx.DrawRect({origin.x + p.x, origin.y + p.y, 1.0f, layout.line_height},
+                   caret);
     }
   }
 }
@@ -930,7 +968,9 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
     if (!dragging_) SelectAll();
     if (panel()) panel()->OnTextInputFocus(true);
     // Blink the caret.
-    Schedule([this] { MarkDirtyRepaint(); }).Every(250).Until([this] { return !IsFocused(); });
+    Schedule([this] { MarkDirtyRepaint(); }).Every(250).Until([this] {
+      return !IsFocused();
+    });
     text_input_->Refresh();
     return;
   }
@@ -954,7 +994,8 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
     if (e.clickCount == 2) {
       int a = index, b = index;
       while (a > 0 && IsWordChar(editing_[a - 1])) a--;
-      while (b < static_cast<int>(editing_.size()) && IsWordChar(editing_[b])) b++;
+      while (b < static_cast<int>(editing_.size()) && IsWordChar(editing_[b]))
+        b++;
       SelectRange(a, b);
     } else if (e.clickCount >= 3) {
       SelectAll();
@@ -1008,7 +1049,8 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
     Insert(std::u32string(1, e.character));
   } else if (e.actionKey() && e.keyCode == KeyCode::kA) {
     SelectAll();
-  } else if (e.actionKey() && (e.keyCode == KeyCode::kC || e.keyCode == KeyCode::kX)) {
+  } else if (e.actionKey() &&
+             (e.keyCode == KeyCode::kC || e.keyCode == KeyCode::kX)) {
     if (anchor_ != cursor_ && !password_ && panel() && panel()->clipboard.set) {
       const int a = std::min(anchor_, cursor_), b = std::max(anchor_, cursor_);
       panel()->clipboard.set(EncodeUtf8(editing_.substr(a, b - a)));
@@ -1112,7 +1154,9 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
       case KeyCode::kEscape:
         Blur();
         break;
-      default: handled = false; break;
+      default:
+        handled = false;
+        break;
     }
   }
   if (handled) {
@@ -1123,7 +1167,8 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
   }
 }
 
-bool TextField::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool TextField::SetProperty(std::string_view name,
+                            const mtext::Variant& value) {
   if (name == "value" || name == "text") {
     SetValue(VariantToString(value));
   } else if (name == "label") {
@@ -1149,7 +1194,8 @@ bool TextField::SetProperty(std::string_view name, const mtext::Variant& value) 
   return true;
 }
 
-std::optional<mtext::Variant> TextField::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> TextField::GetProperty(
+    std::string_view name) const {
   if (name == "value" || name == "text") return value_;
   if (name == "label") return label();
   if (name == "max-length") return max_length_;
@@ -1191,7 +1237,8 @@ bool IntegerField::AcceptsCharacter(char32_t c) const {
   return (c >= '0' && c <= '9') || c == '-' || c == '+';
 }
 
-bool IntegerField::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool IntegerField::SetProperty(std::string_view name,
+                               const mtext::Variant& value) {
   if (name == "value") {
     if (auto i = VariantToInt(value)) SetIntValue(static_cast<int>(*i));
     return true;
@@ -1199,7 +1246,8 @@ bool IntegerField::SetProperty(std::string_view name, const mtext::Variant& valu
   return TextField::SetProperty(name, value);
 }
 
-std::optional<mtext::Variant> IntegerField::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> IntegerField::GetProperty(
+    std::string_view name) const {
   if (name == "value") return int_value_;
   return TextField::GetProperty(name);
 }
@@ -1231,11 +1279,12 @@ void FloatField::CommitText(const std::string& text) {
 }
 
 bool FloatField::AcceptsCharacter(char32_t c) const {
-  return (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' || c == 'e' ||
-         c == 'E';
+  return (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' ||
+         c == 'e' || c == 'E';
 }
 
-bool FloatField::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool FloatField::SetProperty(std::string_view name,
+                             const mtext::Variant& value) {
   if (name == "value") {
     if (auto f = VariantToFloat(value)) SetFloatValue(static_cast<float>(*f));
     return true;
@@ -1243,7 +1292,8 @@ bool FloatField::SetProperty(std::string_view name, const mtext::Variant& value)
   return TextField::SetProperty(name, value);
 }
 
-std::optional<mtext::Variant> FloatField::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> FloatField::GetProperty(
+    std::string_view name) const {
   if (name == "value") return mtext::Variant(float_value_);
   return TextField::GetProperty(name);
 }
@@ -1252,8 +1302,9 @@ std::optional<mtext::Variant> FloatField::GetProperty(std::string_view name) con
 
 Scroller::Scroller(SliderDirection direction) : direction_(direction) {
   AddToClassList(ussClassName);
-  AddToClassList(direction == SliderDirection::kVertical ? "unity-scroller--vertical"
-                                                         : "unity-scroller--horizontal");
+  AddToClassList(direction == SliderDirection::kVertical
+                     ? "unity-scroller--vertical"
+                     : "unity-scroller--horizontal");
   auto tracker = std::make_unique<VisualElement>();
   tracker->AddToClassList("unity-scroller__slider");
   tracker_ = hierarchy().Add(std::move(tracker));
@@ -1351,7 +1402,8 @@ ScrollView::ScrollView(ScrollViewMode mode) : mode_(mode) {
   // The structure is set here so a ScrollView works with any theme; the
   // theme only styles it.
   auto row = std::make_unique<VisualElement>();
-  row->AddToClassList("unity-scroll-view__content-and-vertical-scroll-container");
+  row->AddToClassList(
+      "unity-scroll-view__content-and-vertical-scroll-container");
   row->style().flexDirection = FlexDirection::kRow;
   row->style().flexGrow = 1.0f;
   row->style().flexShrink = 1.0f;
@@ -1368,10 +1420,12 @@ ScrollView::ScrollView(ScrollViewMode mode) : mode_(mode) {
   content_ = viewport_->Add(std::move(content));
   vertical_ = static_cast<Scroller*>(
       r->Add(std::make_unique<Scroller>(SliderDirection::kVertical)));
-  horizontal_ = static_cast<Scroller*>(
-      hierarchy().Add(std::make_unique<Scroller>(SliderDirection::kHorizontal)));
-  vertical_->valueChanged += [this](float v) { SetScrollOffset({offset_.x, v}); };
-  horizontal_->valueChanged += [this](float v) { SetScrollOffset({v, offset_.y}); };
+  horizontal_ = static_cast<Scroller*>(hierarchy().Add(
+      std::make_unique<Scroller>(SliderDirection::kHorizontal)));
+  vertical_->valueChanged +=
+      [this](float v) { SetScrollOffset({offset_.x, v}); };
+  horizontal_->valueChanged +=
+      [this](float v) { SetScrollOffset({v, offset_.y}); };
   auto refresh = [this](GeometryChangedEvent&) { UpdateScrollers(); };
   viewport_->RegisterCallback<GeometryChangedEvent>(refresh);
   content_->RegisterCallback<GeometryChangedEvent>(refresh);
@@ -1380,8 +1434,10 @@ ScrollView::ScrollView(ScrollViewMode mode) : mode_(mode) {
 
 void ScrollView::SetMode(ScrollViewMode mode) {
   mode_ = mode;
-  EnableInClassList("unity-scroll-view--vertical", mode == ScrollViewMode::kVertical);
-  EnableInClassList("unity-scroll-view--horizontal", mode == ScrollViewMode::kHorizontal);
+  EnableInClassList("unity-scroll-view--vertical",
+                    mode == ScrollViewMode::kVertical);
+  EnableInClassList("unity-scroll-view--horizontal",
+                    mode == ScrollViewMode::kHorizontal);
   EnableInClassList("unity-scroll-view--vertical-horizontal",
                     mode == ScrollViewMode::kVerticalAndHorizontal);
   // Vertical content is as wide as the view; horizontal content as tall.
@@ -1391,9 +1447,12 @@ void ScrollView::SetMode(ScrollViewMode mode) {
   const bool vertical = mode == ScrollViewMode::kVertical;
   content.position = vertical ? Position::kRelative : Position::kAbsolute;
   content.flexShrink = vertical ? std::optional(0.0f) : std::nullopt;
-  content.right = mode == ScrollViewMode::kVertical ? std::optional(Length::Px(0)) : std::nullopt;
-  content.bottom =
-      mode == ScrollViewMode::kHorizontal ? std::optional(Length::Px(0)) : std::nullopt;
+  content.right = mode == ScrollViewMode::kVertical
+                      ? std::optional(Length::Px(0))
+                      : std::nullopt;
+  content.bottom = mode == ScrollViewMode::kHorizontal
+                       ? std::optional(Length::Px(0))
+                       : std::nullopt;
   content.flexDirection = mode == ScrollViewMode::kHorizontal
                               ? std::optional(FlexDirection::kRow)
                               : std::nullopt;
@@ -1423,11 +1482,14 @@ void ScrollView::UpdateScrollers() {
   const bool can_h = mode_ != ScrollViewMode::kVertical;
   const bool show_v = can_v && show(vertical_visibility_, overflow.y > 0.5f);
   const bool show_h = can_h && show(horizontal_visibility_, overflow.x > 0.5f);
-  vertical_->style().display = show_v ? DisplayStyle::kFlex : DisplayStyle::kNone;
-  horizontal_->style().display = show_h ? DisplayStyle::kFlex : DisplayStyle::kNone;
+  vertical_->style().display =
+      show_v ? DisplayStyle::kFlex : DisplayStyle::kNone;
+  horizontal_->style().display =
+      show_h ? DisplayStyle::kFlex : DisplayStyle::kNone;
   vertical_->SetHighValue(overflow.y);
   horizontal_->SetHighValue(overflow.x);
-  vertical_->SetFactor(content.height > 0 ? view.height / content.height : 1.0f);
+  vertical_->SetFactor(content.height > 0 ? view.height / content.height
+                                          : 1.0f);
   horizontal_->SetFactor(content.width > 0 ? view.width / content.width : 1.0f);
   SetScrollOffset(offset_);
 }
@@ -1448,14 +1510,17 @@ void ScrollView::SetScrollOffset(glm::vec2 offset) {
 
 void ScrollView::ScrollTo(VisualElement* child) {
   if (!child || !content_->Contains(child)) return;
-  const glm::vec2 top_left = content_->WorldToLocal(child->LocalToWorld({0, 0}));
+  const glm::vec2 top_left =
+      content_->WorldToLocal(child->LocalToWorld({0, 0}));
   const Rect& view = viewport_->layout();
   glm::vec2 offset = offset_;
   const Rect& r = child->layout();
   if (top_left.y < offset.y) offset.y = top_left.y;
-  if (top_left.y + r.height > offset.y + view.height) offset.y = top_left.y + r.height - view.height;
+  if (top_left.y + r.height > offset.y + view.height)
+    offset.y = top_left.y + r.height - view.height;
   if (top_left.x < offset.x) offset.x = top_left.x;
-  if (top_left.x + r.width > offset.x + view.width) offset.x = top_left.x + r.width - view.width;
+  if (top_left.x + r.width > offset.x + view.width)
+    offset.x = top_left.x + r.width - view.width;
   SetScrollOffset(offset);
 }
 
@@ -1464,12 +1529,14 @@ void ScrollView::HandleEventBubbleUp(EventBase& event) {
   auto& e = static_cast<WheelEvent&>(event);
   const glm::vec2 before = offset_;
   glm::vec2 delta = e.delta * wheel_size_;
-  if (mode_ == ScrollViewMode::kHorizontal && delta.x == 0.0f) delta.x = delta.y;
+  if (mode_ == ScrollViewMode::kHorizontal && delta.x == 0.0f)
+    delta.x = delta.y;
   SetScrollOffset(offset_ + delta);
   if (offset_ != before) event.StopPropagation();
 }
 
-bool ScrollView::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool ScrollView::SetProperty(std::string_view name,
+                             const mtext::Variant& value) {
   auto visibility = [](const std::string& v) {
     return v == "AlwaysVisible" ? ScrollerVisibility::kAlwaysVisible
            : v == "Hidden"      ? ScrollerVisibility::kHidden
@@ -1477,22 +1544,25 @@ bool ScrollView::SetProperty(std::string_view name, const mtext::Variant& value)
   };
   if (name == "mode") {
     const std::string mode = VariantToString(value);
-    SetMode(mode == "Horizontal"              ? ScrollViewMode::kHorizontal
-            : mode == "VerticalAndHorizontal" ? ScrollViewMode::kVerticalAndHorizontal
-                                              : ScrollViewMode::kVertical);
+    SetMode(mode == "Horizontal" ? ScrollViewMode::kHorizontal
+            : mode == "VerticalAndHorizontal"
+                ? ScrollViewMode::kVerticalAndHorizontal
+                : ScrollViewMode::kVertical);
   } else if (name == "vertical-scroller-visibility") {
     SetVerticalScrollerVisibility(visibility(VariantToString(value)));
   } else if (name == "horizontal-scroller-visibility") {
     SetHorizontalScrollerVisibility(visibility(VariantToString(value)));
   } else if (name == "mouse-wheel-scroll-size") {
-    if (auto f = VariantToFloat(value)) SetMouseWheelScrollSize(static_cast<float>(*f));
+    if (auto f = VariantToFloat(value))
+      SetMouseWheelScrollSize(static_cast<float>(*f));
   } else {
     return VisualElement::SetProperty(name, value);
   }
   return true;
 }
 
-std::optional<mtext::Variant> ScrollView::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> ScrollView::GetProperty(
+    std::string_view name) const {
   if (name == "mode") {
     return std::string(mode_ == ScrollViewMode::kHorizontal ? "Horizontal"
                        : mode_ == ScrollViewMode::kVerticalAndHorizontal
@@ -1515,7 +1585,8 @@ Foldout::Foldout() {
   content_ = hierarchy().Add(std::move(content));
   toggle_->RegisterValueChangedCallback<bool>([this](ChangeEvent<bool>& e) {
     if (e.target() != toggle_) return;
-    content_->style().display = e.newValue ? DisplayStyle::kFlex : DisplayStyle::kNone;
+    content_->style().display =
+        e.newValue ? DisplayStyle::kFlex : DisplayStyle::kNone;
     SetPseudoState(kPseudoChecked, e.newValue);
   });
   toggle_->SetValueWithoutNotify(true);
@@ -1542,7 +1613,8 @@ bool Foldout::SetProperty(std::string_view name, const mtext::Variant& value) {
   return true;
 }
 
-std::optional<mtext::Variant> Foldout::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> Foldout::GetProperty(
+    std::string_view name) const {
   if (name == "text") return text();
   if (name == "value") return value();
   return VisualElement::GetProperty(name);
@@ -1569,7 +1641,8 @@ void ListView::SetItemCount(int count) {
 
 void ListView::SetFixedItemHeight(float height) {
   item_height_ = height;
-  for (VisualElement* item : items_) item->style().height = Length::Px(item_height_);
+  for (VisualElement* item : items_)
+    item->style().height = Length::Px(item_height_);
 }
 
 void ListView::RefreshItems() {
@@ -1594,7 +1667,8 @@ void ListView::RefreshItems() {
     if (!item) item = std::make_unique<Label>();
     item->AddToClassList("unity-list-view__item");
     item->AddToClassList("unity-collection-view__item");
-    item->EnableInClassList("unity-collection-view__item--alternative-background", i % 2);
+    item->EnableInClassList(
+        "unity-collection-view__item--alternative-background", i % 2);
     item->style().height = Length::Px(item_height_);
     item->style().flexShrink = 0.0f;
     VisualElement* raw = scroll_->Add(std::move(item));
@@ -1610,9 +1684,10 @@ void ListView::RefreshItems() {
 
 void ListView::UpdateSelectionClasses() {
   for (size_t i = 0; i < items_.size(); i++) {
-    const bool selected =
-        std::find(selected_.begin(), selected_.end(), static_cast<int>(i)) != selected_.end();
-    items_[i]->EnableInClassList("unity-collection-view__item--selected", selected);
+    const bool selected = std::find(selected_.begin(), selected_.end(),
+                                    static_cast<int>(i)) != selected_.end();
+    items_[i]->EnableInClassList("unity-collection-view__item--selected",
+                                 selected);
     items_[i]->SetPseudoState(kPseudoChecked, selected);
   }
 }
@@ -1624,7 +1699,8 @@ void ListView::SetSelection(int index) {
   if (next == selected_) return;
   selected_ = next;
   UpdateSelectionClasses();
-  if (index >= 0 && index < static_cast<int>(items_.size())) scroll_->ScrollTo(items_[index]);
+  if (index >= 0 && index < static_cast<int>(items_.size()))
+    scroll_->ScrollTo(items_[index]);
   selectionChanged(selected_);
 }
 
@@ -1691,7 +1767,8 @@ bool ListView::SetProperty(std::string_view name, const mtext::Variant& value) {
     return true;
   }
   if (name == "fixed-item-height") {
-    if (auto f = VariantToFloat(value)) SetFixedItemHeight(static_cast<float>(*f));
+    if (auto f = VariantToFloat(value))
+      SetFixedItemHeight(static_cast<float>(*f));
   } else if (name == "selection-type") {
     const std::string t = VariantToString(value);
     SetSelectionType(t == "None"       ? SelectionType::kNone
@@ -1707,14 +1784,16 @@ bool ListView::SetProperty(std::string_view name, const mtext::Variant& value) {
   return true;
 }
 
-std::optional<mtext::Variant> ListView::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> ListView::GetProperty(
+    std::string_view name) const {
   if (name == "fixed-item-height") return mtext::Variant(item_height_);
   if (name == "item-count") return count_;
   if (name == "selected-index") return selectedIndex();
   if (name == "selection-type") {
-    return std::string(selection_type_ == SelectionType::kNone       ? "None"
-                       : selection_type_ == SelectionType::kMultiple ? "Multiple"
-                                                                     : "Single");
+    return std::string(selection_type_ == SelectionType::kNone ? "None"
+                       : selection_type_ == SelectionType::kMultiple
+                           ? "Multiple"
+                           : "Single");
   }
   return VisualElement::GetProperty(name);
 }
@@ -1731,43 +1810,83 @@ void RegisterBuiltinControls(UxmlFactoryRegistry& registry) {
   };
   auto add = [&registry](const char* name, const char* category, auto create,
                          std::vector<UxmlAttributeDescription> attributes) {
-    registry.Register(UxmlTypeInfo{name, category, create, std::move(attributes)});
+    registry.Register(
+        UxmlTypeInfo{name, category, create, std::move(attributes)});
   };
-  const UxmlAttributeDescription text{"text", F::kString, "", {}, "", "Text to show"};
-  const UxmlAttributeDescription label{"label", F::kString, "", {}, "", "Text before the field"};
-  const UxmlAttributeDescription rich{"enable-rich-text", F::kBool, "true", {}, "",
-                                      "Allow <b>, <i>, <color> and <size> tags"};
+  const UxmlAttributeDescription text{"text", F::kString, "",
+                                      {},     "",         "Text to show"};
+  const UxmlAttributeDescription label{
+      "label", F::kString, "", {}, "", "Text before the field"};
+  const UxmlAttributeDescription rich{
+      "enable-rich-text",
+      F::kBool,
+      "true",
+      {},
+      "",
+      "Allow <b>, <i>, <color> and <size> tags"};
 
-  add("VisualElement", "Containers", [] { return std::make_unique<VisualElement>(); }, base);
-  add("ScrollView", "Containers", [] { return std::make_unique<ScrollView>(); },
-      with({{"mode", F::kEnum, "Vertical", {"Vertical", "Horizontal", "VerticalAndHorizontal"}},
-            {"vertical-scroller-visibility", F::kEnum, "Auto", {"Auto", "AlwaysVisible", "Hidden"}},
-            {"horizontal-scroller-visibility", F::kEnum, "Auto", {"Auto", "AlwaysVisible", "Hidden"}},
+  add(
+      "VisualElement", "Containers",
+      [] { return std::make_unique<VisualElement>(); }, base);
+  add(
+      "ScrollView", "Containers", [] { return std::make_unique<ScrollView>(); },
+      with({{"mode",
+             F::kEnum,
+             "Vertical",
+             {"Vertical", "Horizontal", "VerticalAndHorizontal"}},
+            {"vertical-scroller-visibility",
+             F::kEnum,
+             "Auto",
+             {"Auto", "AlwaysVisible", "Hidden"}},
+            {"horizontal-scroller-visibility",
+             F::kEnum,
+             "Auto",
+             {"Auto", "AlwaysVisible", "Hidden"}},
             {"mouse-wheel-scroll-size", F::kFloat, "18"}}));
-  add("ListView", "Containers", [] { return std::make_unique<ListView>(); },
+  add(
+      "ListView", "Containers", [] { return std::make_unique<ListView>(); },
       with({{"fixed-item-height", F::kFloat, "22"},
-            {"selection-type", F::kEnum, "Single", {"None", "Single", "Multiple"}},
+            {"selection-type",
+             F::kEnum,
+             "Single",
+             {"None", "Single", "Multiple"}},
             {"item-count", F::kInt, "0"}}));
-  add("GroupBox", "Containers", [] { return std::make_unique<GroupBox>(); }, with({text}));
-  add("Foldout", "Containers", [] { return std::make_unique<Foldout>(); },
+  add(
+      "GroupBox", "Containers", [] { return std::make_unique<GroupBox>(); },
+      with({text}));
+  add(
+      "Foldout", "Containers", [] { return std::make_unique<Foldout>(); },
       with({text, {"value", F::kBool, "true", {}, "", "Open"}}));
   add("Box", "Containers", [] { return std::make_unique<Box>(); }, base);
-  add("TemplateContainer", "Containers", [] { return std::make_unique<TemplateContainer>(); },
-      base);
+  add(
+      "TemplateContainer", "Containers",
+      [] { return std::make_unique<TemplateContainer>(); }, base);
 
-  add("Label", "Controls", [] { return std::make_unique<Label>(); }, with({text, rich}));
-  add("TextElement", "Controls", [] { return std::make_unique<TextElement>(); },
+  add(
+      "Label", "Controls", [] { return std::make_unique<Label>(); },
       with({text, rich}));
-  add("Button", "Controls", [] { return std::make_unique<Button>(); }, with({text, rich}));
-  add("RepeatButton", "Controls", [] { return std::make_unique<RepeatButton>(); },
-      with({text}));
-  add("Image", "Controls", [] { return std::make_unique<Image>(); },
+  add(
+      "TextElement", "Controls", [] { return std::make_unique<TextElement>(); },
+      with({text, rich}));
+  add(
+      "Button", "Controls", [] { return std::make_unique<Button>(); },
+      with({text, rich}));
+  add(
+      "RepeatButton", "Controls",
+      [] { return std::make_unique<RepeatButton>(); }, with({text}));
+  add(
+      "Image", "Controls", [] { return std::make_unique<Image>(); },
       with({{"image", F::kAsset, "", {}, "", "Texture to show"},
-            {"scale-mode", F::kEnum, "ScaleToFit", {"StretchToFill", "ScaleAndCrop", "ScaleToFit"}},
+            {"scale-mode",
+             F::kEnum,
+             "ScaleToFit",
+             {"StretchToFill", "ScaleAndCrop", "ScaleToFit"}},
             {"tint-color", F::kColor, "#FFFFFF"}}));
-  add("Toggle", "Controls", [] { return std::make_unique<Toggle>(); },
+  add(
+      "Toggle", "Controls", [] { return std::make_unique<Toggle>(); },
       with({label, text, {"value", F::kBool, "false"}}));
-  add("RadioButton", "Controls", [] { return std::make_unique<RadioButton>(); },
+  add(
+      "RadioButton", "Controls", [] { return std::make_unique<RadioButton>(); },
       with({label, text, {"value", F::kBool, "false"}}));
   const std::vector<UxmlAttributeDescription> slider_attrs = {
       label,
@@ -1781,8 +1900,11 @@ void RegisterBuiltinControls(UxmlFactoryRegistry& registry) {
   add("Slider", "Controls", [] { return std::make_unique<Slider>(); }, slider);
   auto slider_int = with(slider_attrs);
   slider_int.push_back({"value", F::kInt, "0"});
-  add("SliderInt", "Controls", [] { return std::make_unique<SliderInt>(); }, slider_int);
-  add("ProgressBar", "Controls", [] { return std::make_unique<ProgressBar>(); },
+  add(
+      "SliderInt", "Controls", [] { return std::make_unique<SliderInt>(); },
+      slider_int);
+  add(
+      "ProgressBar", "Controls", [] { return std::make_unique<ProgressBar>(); },
       with({{"low-value", F::kFloat, "0"},
             {"high-value", F::kFloat, "100"},
             {"value", F::kFloat, "0"},
@@ -1798,14 +1920,22 @@ void RegisterBuiltinControls(UxmlFactoryRegistry& registry) {
       {"placeholder-text", F::kString, ""}};
   auto text_field = with(text_attrs);
   text_field.push_back({"value", F::kString, ""});
-  add("TextField", "Controls", [] { return std::make_unique<TextField>(); }, text_field);
+  add(
+      "TextField", "Controls", [] { return std::make_unique<TextField>(); },
+      text_field);
   auto int_field = with({label});
   int_field.push_back({"value", F::kInt, "0"});
-  add("IntegerField", "Controls", [] { return std::make_unique<IntegerField>(); }, int_field);
+  add(
+      "IntegerField", "Controls",
+      [] { return std::make_unique<IntegerField>(); }, int_field);
   auto float_field = with({label});
   float_field.push_back({"value", F::kFloat, "0"});
-  add("FloatField", "Controls", [] { return std::make_unique<FloatField>(); }, float_field);
-  add("Scroller", "Controls", [] { return std::make_unique<Scroller>(); }, base);
+  add(
+      "FloatField", "Controls", [] { return std::make_unique<FloatField>(); },
+      float_field);
+  add(
+      "Scroller", "Controls", [] { return std::make_unique<Scroller>(); },
+      base);
 }
 
 }  // namespace Mercury::UI

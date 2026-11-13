@@ -55,8 +55,8 @@ template <typename T>
 AttachFn StoreAsProperty(const char* name) {
   return [name](MapScene& scene, kEntityId entity,
                 const mtext::PropertyList& properties) {
-    auto value = ReadFields<T>(properties,
-                               scene.GetGameObject(entity).GetPath() + "." + name);
+    auto value = ReadFields<T>(
+        properties, scene.GetGameObject(entity).GetPath() + "." + name);
     scene.Objects().AddProperty(entity, value);
   };
 }
@@ -91,17 +91,20 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
   mesh.cast_shadows = renderer.cast_shadows;
   mesh.rendering_layers = static_cast<uint32_t>(renderer.rendering_layers);
   const bool has_material = renderer.material.IsSet();
-  const auto material = scene.Assets().LoadAs<MaterialAsset>(renderer.material.path);
+  const auto material =
+      scene.Assets().LoadAs<MaterialAsset>(renderer.material.path);
 
   // Unity's rule: the renderer's material list (one per submesh) wins, then
   // a single material, then the model's own materials.
   auto material_for = [&](size_t index, const ModelMaterial* own) {
-    if (index < renderer.materials.size() && renderer.materials[index].IsSet()) {
+    if (index < renderer.materials.size() &&
+        renderer.materials[index].IsSet()) {
       return scene.MakeRenderMaterial(
           scene.Assets().LoadAs<MaterialAsset>(renderer.materials[index].path),
           renderer.color);
     }
-    if (has_material || !own) return scene.MakeRenderMaterial(material, renderer.color);
+    if (has_material || !own)
+      return scene.MakeRenderMaterial(material, renderer.color);
     RenderMaterial result;
     result.color = own->color * renderer.color;
     result.texture = own->texture;
@@ -138,17 +141,20 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
     } else {
       mesh.base_node = model->FindNode(renderer.node);
       if (mesh.base_node < 0) {
-        PDebug::warn("{}: {} has no node \"{}\"", path, renderer.model.path, renderer.node);
+        PDebug::warn("{}: {} has no node \"{}\"", path, renderer.model.path,
+                     renderer.node);
         return;
       }
       mesh_indices = model->Nodes()[mesh.base_node].meshes;
     }
     // Unity numbers a node's submeshes in material-slot order.
-    std::stable_sort(mesh_indices.begin(), mesh_indices.end(), [&](int a, int b) {
-      const auto& ma = model->Meshes()[a];
-      const auto& mb = model->Meshes()[b];
-      return std::pair(ma.node, ma.material) < std::pair(mb.node, mb.material);
-    });
+    std::stable_sort(mesh_indices.begin(), mesh_indices.end(),
+                     [&](int a, int b) {
+                       const auto& ma = model->Meshes()[a];
+                       const auto& mb = model->Meshes()[b];
+                       return std::pair(ma.node, ma.material) <
+                              std::pair(mb.node, mb.material);
+                     });
     for (int index : mesh_indices) {
       const ModelMesh& source = model->Meshes()[index];
       RenderDraw draw;
@@ -159,8 +165,8 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
         draw.skin = static_cast<int>(mesh.skins.size());
         mesh.skins.push_back(RenderSkin{source.bones});
       }
-      mesh.materials.push_back(
-          material_for(mesh.materials.size(), &model->Materials()[source.material]));
+      mesh.materials.push_back(material_for(
+          mesh.materials.size(), &model->Materials()[source.material]));
       mesh.draws.push_back(std::move(draw));
     }
   }
@@ -179,12 +185,14 @@ ColliderSet& GetColliderSet(MapScene& scene, kEntityId entity) {
 
 template <typename T>
 void StoreFirst(MapScene& scene, kEntityId entity, const T& value) {
-  if (!scene.Objects().GetProperty<T>(entity)) scene.Objects().AddProperty(entity, value);
+  if (!scene.Objects().GetProperty<T>(entity))
+    scene.Objects().AddProperty(entity, value);
 }
 
 void ApplyMaterial(MapScene& scene, const AssetRef& material, bool is_trigger,
                    ColliderShape& shape) {
-  const auto physics = scene.Assets().LoadAs<PhysicsMaterialAsset>(material.path);
+  const auto physics =
+      scene.Assets().LoadAs<PhysicsMaterialAsset>(material.path);
   shape.friction = physics.friction;
   shape.restitution = physics.restitution;
   shape.is_trigger = is_trigger;
@@ -246,13 +254,20 @@ void AttachCylinderCollider(MapScene& scene, kEntityId entity,
 
 std::optional<Mesh> PrimitiveMesh(MeshShape shape) {
   switch (shape) {
-    case MeshShape::kCube: return Primitives::Cube(glm::vec4(1.0f));
-    case MeshShape::kSphere: return Primitives::Sphere(glm::vec4(1.0f));
-    case MeshShape::kCapsule: return Primitives::Capsule(glm::vec4(1.0f));
-    case MeshShape::kCylinder: return Primitives::Cylinder(glm::vec4(1.0f));
-    case MeshShape::kPlane: return Primitives::Plane(glm::vec4(1.0f));
-    case MeshShape::kQuad: return Primitives::Quad(glm::vec4(1.0f));
-    case MeshShape::kModel: return std::nullopt;
+    case MeshShape::kCube:
+      return Primitives::Cube(glm::vec4(1.0f));
+    case MeshShape::kSphere:
+      return Primitives::Sphere(glm::vec4(1.0f));
+    case MeshShape::kCapsule:
+      return Primitives::Capsule(glm::vec4(1.0f));
+    case MeshShape::kCylinder:
+      return Primitives::Cylinder(glm::vec4(1.0f));
+    case MeshShape::kPlane:
+      return Primitives::Plane(glm::vec4(1.0f));
+    case MeshShape::kQuad:
+      return Primitives::Quad(glm::vec4(1.0f));
+    case MeshShape::kModel:
+      return std::nullopt;
   }
   return std::nullopt;
 }
@@ -267,12 +282,13 @@ void AttachMeshCollider(MapScene& scene, kEntityId entity,
                                : ColliderShape::Kind::kMesh;
   if (collider.mesh == MeshShape::kModel) {
     if (!collider.model.IsSet()) return;
-    if (!scene.GetModelTriangles(collider.model.path, collider.submesh, shape.vertices,
-                                 shape.indices)) {
+    if (!scene.GetModelTriangles(collider.model.path, collider.submesh,
+                                 shape.vertices, shape.indices)) {
       return;
     }
   } else if (auto mesh = PrimitiveMesh(collider.mesh)) {
-    for (const auto& vertex : mesh->vertices_) shape.vertices.push_back(vertex.position);
+    for (const auto& vertex : mesh->vertices_)
+      shape.vertices.push_back(vertex.position);
     shape.indices = mesh->indices_;
   }
   if (shape.vertices.empty()) return;
@@ -300,7 +316,8 @@ void AttachCamera(MapScene& scene, kEntityId entity,
     const float half_fov = glm::radians(settings.fov) / 2.0f;
     const float distance = (settings.fit_height / 2.0f) / std::tan(half_fov);
     auto position = transform->GetPosition();
-    transform->SetPosition(glm::vec3(position.x, position.y, position.z + distance));
+    transform->SetPosition(
+        glm::vec3(position.x, position.y, position.z + distance));
     transform->SetRotate(glm::vec3(0.0f));
     transform->SnapInterpolation();
     transform->ClearTransformations();
@@ -352,8 +369,8 @@ void AttachAudioSource(MapScene& scene, kEntityId entity,
 
 void AttachTextMesh(MapScene& scene, kEntityId entity,
                     const mtext::PropertyList& properties) {
-  auto text = ReadFields<TextMesh>(properties,
-                                   scene.GetGameObject(entity).GetPath() + ".TextMesh");
+  auto text = ReadFields<TextMesh>(
+      properties, scene.GetGameObject(entity).GetPath() + ".TextMesh");
   text.scene_ = &scene;
   text.entity_ = entity;
   scene.Objects().AddProperty(entity, text);
@@ -422,12 +439,15 @@ void AudioSource::Pause() {
 void AudioSource::UnPause() {
   if (audio_) audio_->UnPause(source_);
 }
-void AudioSource::PlayOneShot(const AssetRef& one_shot_clip, float volume_scale) {
+void AudioSource::PlayOneShot(const AssetRef& one_shot_clip,
+                              float volume_scale) {
   if (audio_ && enabled && one_shot_clip.IsSet()) {
     audio_->PlayOneShot(source_, one_shot_clip.path, volume_scale);
   }
 }
-bool AudioSource::IsPlaying() const { return audio_ && audio_->IsPlaying(source_); }
+bool AudioSource::IsPlaying() const {
+  return audio_ && audio_->IsPlaying(source_);
+}
 void AudioSource::SetClip(const AssetRef& new_clip) {
   clip = new_clip;
   if (audio_) audio_->SetClip(source_, clip.path);
@@ -508,8 +528,8 @@ void RegisterBuiltinTypes() {
     registry.RegisterComponent(std::move(info));
   }
   {
-    auto info = MakeInfo<CameraComponent>("Camera", "Rendering",
-                                          "Renders the game");
+    auto info =
+        MakeInfo<CameraComponent>("Camera", "Rendering", "Renders the game");
     info.attach = AttachCamera;
     registry.RegisterComponent(std::move(info));
   }
@@ -528,16 +548,18 @@ void RegisterBuiltinTypes() {
     registry.RegisterComponent(std::move(info));
   }
   {
-    auto info = MakeInfo<AreaLight>(
-        "AreaLight", "Rendering",
-        "A glowing rectangle in the node's XY plane, shining along -Z, with soft shadows");
+    auto info =
+        MakeInfo<AreaLight>("AreaLight", "Rendering",
+                            "A glowing rectangle in the node's XY plane, "
+                            "shining along -Z, with soft shadows");
     info.attach = StoreAsProperty<AreaLight>("AreaLight");
     registry.RegisterComponent(std::move(info));
   }
   {
-    auto info = MakeInfo<LightProbeVolume>(
-        "LightProbeVolume", "Rendering",
-        "A grid of light probes that lets light bounce between surfaces inside it");
+    auto info =
+        MakeInfo<LightProbeVolume>("LightProbeVolume", "Rendering",
+                                   "A grid of light probes that lets light "
+                                   "bounce between surfaces inside it");
     info.attach = StoreAsProperty<LightProbeVolume>("LightProbeVolume");
     registry.RegisterComponent(std::move(info));
   }
@@ -604,14 +626,14 @@ void RegisterBuiltinTypes() {
   }
 
   {
-    auto info = MakeInfo<AudioSource>("AudioSource", "Audio",
-                                      "Plays sound clips from the node's position");
+    auto info = MakeInfo<AudioSource>(
+        "AudioSource", "Audio", "Plays sound clips from the node's position");
     info.attach = AttachAudioSource;
     registry.RegisterComponent(std::move(info));
   }
   {
-    auto info = MakeInfo<TextMesh>("TextMesh", "Rendering",
-                                   "Text in the world (TextMesh Pro's 3D text)");
+    auto info = MakeInfo<TextMesh>(
+        "TextMesh", "Rendering", "Text in the world (TextMesh Pro's 3D text)");
     info.attach = AttachTextMesh;
     registry.RegisterComponent(std::move(info));
   }
@@ -623,15 +645,17 @@ void RegisterBuiltinTypes() {
     registry.RegisterComponent(std::move(info));
   }
   {
-    auto info = MakeInfo<AudioListener>("AudioListener", "Audio",
-                                        "Where sounds are heard from (one per scene)");
+    auto info =
+        MakeInfo<AudioListener>("AudioListener", "Audio",
+                                "Where sounds are heard from (one per scene)");
     info.attach = StoreAsProperty<AudioListener>("AudioListener");
     registry.RegisterComponent(std::move(info));
   }
   {
-    auto info = MakeInfo<PostProcessVolume>(
-        "PostProcessVolume", "Rendering",
-        "Tonemapping, bloom and vignette for every camera (a global URP Volume)");
+    auto info =
+        MakeInfo<PostProcessVolume>("PostProcessVolume", "Rendering",
+                                    "Tonemapping, bloom and vignette for every "
+                                    "camera (a global URP Volume)");
     info.attach = StoreAsProperty<PostProcessVolume>("PostProcessVolume");
     registry.RegisterComponent(std::move(info));
   }
@@ -648,9 +672,9 @@ void RegisterBuiltinTypes() {
   registry.RegisterAssetType(AssetTypeInfo{
       "Material", "Color and texture for a SpriteRenderer or MeshRenderer",
       DescribeFields<MaterialAsset>()});
-  registry.RegisterAssetType(AssetTypeInfo{
-      "PhysicsMaterial", "Friction and bounciness for a collider",
-      DescribeFields<PhysicsMaterialAsset>()});
+  registry.RegisterAssetType(
+      AssetTypeInfo{"PhysicsMaterial", "Friction and bounciness for a collider",
+                    DescribeFields<PhysicsMaterialAsset>()});
 }
 
 }  // namespace Mercury

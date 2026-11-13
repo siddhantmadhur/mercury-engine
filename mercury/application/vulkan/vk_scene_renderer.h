@@ -54,20 +54,23 @@ struct FrameUniforms {
   glm::vec4 camera_pos;
   glm::vec4 resolution;
   glm::vec4 shadow_params;
-  glm::vec4 flags;  // w: point light count
+  glm::vec4 flags;                 // w: point light count
   glm::vec4 point_lights[2 * 16];  // position + range, color + shadow slot
   glm::vec4 point_shadows[16];     // radius, bias, soft
-  glm::vec4 area_lights[4 * 4];    // center + range, right + two-sided, up + slot, color + soft
+  glm::vec4 area_lights[4 * 4];    // center + range, right + two-sided, up +
+                                   // slot, color + soft
   glm::vec4 area_shadow_bias[4];
   glm::vec4 shadow_cubes_info[8];  // center + far
-  glm::vec4 light_info;            // area count, capture pass, cube size, capture emission
-  glm::vec4 gi_min;                // + enabled
-  glm::vec4 gi_max;                // + intensity
-  glm::vec4 gi_counts;             // + probes per atlas row
+  glm::vec4
+      light_info;       // area count, capture pass, cube size, capture emission
+  glm::vec4 gi_min;     // + enabled
+  glm::vec4 gi_max;     // + intensity
+  glm::vec4 gi_counts;  // + probes per atlas row
   // The sun's shadow over the whole scene, past the camera's map.
   glm::mat4 far_light_view_proj;
-  glm::vec4 far_shadow_params;     // resolution (0: none), normal bias, -, use it alone
-  glm::vec4 gi_params;             // visibility maps filter linearly
+  glm::vec4
+      far_shadow_params;  // resolution (0: none), normal bias, -, use it alone
+  glm::vec4 gi_params;    // visibility maps filter linearly
   // Scene color slot (0: none), its mips, sun and cube transmittance in use.
   glm::vec4 transmission_params;
 };
@@ -84,7 +87,7 @@ struct DrawData {
   glm::vec4 uv;
   glm::uvec4 info;
   glm::vec4 material;
-  glm::uvec4 maps;  // x: normal map slot, y: emission map slot (0: none)
+  glm::uvec4 maps;         // x: normal map slot, y: emission map slot (0: none)
   glm::vec4 transmission;  // tint, share passing through
   glm::vec4 volume;        // index of refraction, thickness, size, roundness
 };
@@ -146,18 +149,21 @@ class SceneRenderer {
   // Mips of the scene color transmissive surfaces refract, for roughness.
   static constexpr uint32_t kSceneColorMips = 7;
   static constexpr uint32_t kFarShadowResolution = 4096;
-  static constexpr uint32_t kProbeFaceSize = 16;   // each face a probe captures
-  static constexpr uint32_t kMaxProbeBatch = 32;   // probes updated per frame at most
+  static constexpr uint32_t kProbeFaceSize = 16;  // each face a probe captures
+  static constexpr uint32_t kMaxProbeBatch =
+      32;  // probes updated per frame at most
   static constexpr uint32_t kProbesPerAtlasRow = 64;
   // Must match kProbeVisibilitySize in lighting_math.hlsli.
   static constexpr uint32_t kProbeVisibilitySize = 8;
-  static constexpr uint32_t kProbeVisibilityTexels = kProbeVisibilitySize + 2;  // with border
+  static constexpr uint32_t kProbeVisibilityTexels =
+      kProbeVisibilitySize + 2;  // with border
   // Must match kProbeOctaSize in lighting_math.hlsli: each probe's light
   // maps, inside a one-texel border.
   static constexpr uint32_t kProbeOctaSize = 6;
   static constexpr uint32_t kProbeOctaTexels = kProbeOctaSize + 2;
   static constexpr uint32_t kMaxProbes = 4096;
-  static constexpr uint32_t kAutoProbes = 512;      // probes of a volume fitted to the scene
+  static constexpr uint32_t kAutoProbes =
+      512;  // probes of a volume fitted to the scene
   // Indices drawn per frame for probe captures when their GPU time is not
   // measured; a scene's probes take more frames to settle the more geometry
   // it has.
@@ -168,14 +174,16 @@ class SceneRenderer {
   using ShaderLoader = std::function<VkShaderModule(const std::string&)>;
   // Records the older draws (skybox panorama, Mesh, static batches) into the
   // current pass of the main camera. The camera set is the legacy one.
-  using LegacyDraws = std::function<void(VkCommandBuffer cmd, VkExtent2D extent)>;
+  using LegacyDraws =
+      std::function<void(VkCommandBuffer cmd, VkExtent2D extent)>;
 
   SceneRenderer() = default;
   ~SceneRenderer() { Shutdown(); }
   SceneRenderer(const SceneRenderer&) = delete;
   SceneRenderer& operator=(const SceneRenderer&) = delete;
 
-  bool Init(Context& context, uint32_t frames_in_flight, const ShaderLoader& shaders);
+  bool Init(Context& context, uint32_t frames_in_flight,
+            const ShaderLoader& shaders);
   void Shutdown();
 
   // After waiting for the frame's fence.
@@ -199,9 +207,10 @@ class SceneRenderer {
    */
   void RenderView(VkCommandBuffer cmd, GameScene& scene,
                   const std::vector<RenderCamera>& cameras, VkImage output,
-                  VkImageView output_view, VkExtent2D extent, VkFormat output_format,
-                  VkImageLayout output_layout, const LegacyDraws& legacy,
-                  VkImageView sky_texture, VkSampler sky_sampler);
+                  VkImageView output_view, VkExtent2D extent,
+                  VkFormat output_format, VkImageLayout output_layout,
+                  const LegacyDraws& legacy, VkImageView sky_texture,
+                  VkSampler sky_sampler);
 
   // Formats the legacy pipelines must be built for to draw into the main
   // pass: two color attachments (HDR, normal) and depth.
@@ -243,7 +252,7 @@ class SceneRenderer {
     vk::Image bloom;  // half size, with mips
     uint32_t bloom_mips = 0;
     vk::Image outline;
-    vk::Image ldr;    // composite result before FXAA
+    vk::Image ldr;  // composite result before FXAA
     // The opaque scene, view distance in alpha, for transmissive surfaces
     // to refract: made on first need, a bindless texture slot.
     vk::Image scene_color;
@@ -277,8 +286,9 @@ class SceneRenderer {
     uint32_t record = 0;  // its slot: index into records_ and the draw buffer
     uint32_t layer = 0;   // node layer
     uint32_t entity = 0;
-    bool alive = false;   // the slot is in use
-    bool transparent = false;  // blended after the opaque pass (transmissive too)
+    bool alive = false;  // the slot is in use
+    bool transparent =
+        false;  // blended after the opaque pass (transmissive too)
     bool transmissive = false;  // refracts the scene behind it
     bool double_sided = false;
     bool cast_shadows = true;
@@ -288,7 +298,7 @@ class SceneRenderer {
     bool skinned = false;
     // Moved recently or animated: lit by the probes but not seen by them.
     bool dynamic = false;
-    uint64_t moved = 0;  // frame its entity last moved; 0 never
+    uint64_t moved = 0;                  // frame its entity last moved; 0 never
     glm::vec3 center = glm::vec3(0.0f);  // world, for sorting
     glm::vec3 bounds_min = glm::vec3(0.0f);  // world box
     glm::vec3 bounds_max = glm::vec3(0.0f);
@@ -319,7 +329,7 @@ class SceneRenderer {
     uint32_t command_base = 0;  // first command (of bucket 0)
     uint32_t count_base = 0;    // first count
     uint32_t buckets = 0;
-    uint32_t stride = 0;        // commands per bucket
+    uint32_t stride = 0;  // commands per bucket
   };
   // How a view is culled beyond its frustum.
   struct CullOptions {
@@ -341,8 +351,8 @@ class SceneRenderer {
   void SyncScene(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene);
   // (Re)builds one entity's slots.
   void BuildProxy(VkCommandBuffer cmd, FrameResources& frame, GameScene& scene,
-                  entt::entity entity, const RenderMesh& mesh, const Transform& transform,
-                  RenderProxy& proxy);
+                  entt::entity entity, const RenderMesh& mesh,
+                  const Transform& transform, RenderProxy& proxy);
   void FreeProxySlots(RenderProxy& proxy);
   uint32_t AllocateSlot();
   // Copies the changed records into the draw buffer (growing it if needed).
@@ -357,13 +367,14 @@ class SceneRenderer {
   // those whose flags masked by `mask` equal `value` and whose layer is in
   // `layers`. Outside any rendering pass. Invalid when culling on the GPU is
   // unavailable (draw from the CPU lists then).
-  CulledView CullView(VkCommandBuffer cmd, FrameResources& frame, const glm::mat4& view_proj,
-                      uint32_t mask, uint32_t value, uint32_t layers,
-                      const CullOptions& options);
+  CulledView CullView(VkCommandBuffer cmd, FrameResources& frame,
+                      const glm::mat4& view_proj, uint32_t mask, uint32_t value,
+                      uint32_t layers, const CullOptions& options);
   // Draws a culled view's buckets: `single` and `double_sided` pipelines,
   // front faces flipped for the mirrored buckets.
-  void DrawCulled(VkCommandBuffer cmd, FrameResources& frame, const CulledView& view,
-                  uint32_t uniform_offset, VkPipeline single, VkPipeline double_sided);
+  void DrawCulled(VkCommandBuffer cmd, FrameResources& frame,
+                  const CulledView& view, uint32_t uniform_offset,
+                  VkPipeline single, VkPipeline double_sided);
   // Marks still draws that moved lately as dynamic; changes to what is
   // still bump static_version_.
   void UpdateDynamic();
@@ -378,7 +389,8 @@ class SceneRenderer {
   // what they saw: the still geometry, the lights and the volume.
   uint64_t ProbeCacheKey(const ProbeVolumeData& volume) const;
   // Fills the probes from the cache; false if it has none for `key`.
-  bool LoadProbeCache(VkCommandBuffer cmd, FrameResources& frame, uint64_t key, uint32_t total);
+  bool LoadProbeCache(VkCommandBuffer cmd, FrameResources& frame, uint64_t key,
+                      uint32_t total);
   // Copies the settled probes out, to be written once the frame is done.
   void SaveProbeCache(VkCommandBuffer cmd, uint64_t key, uint32_t total);
   // Writes a finished copy to disk (BeginFrame).
@@ -390,50 +402,57 @@ class SceneRenderer {
   // sees them.
   // `image` comes in `from` (SHADER_READ_ONLY or TRANSFER_DST: drawn over,
   // not cleared) and is left in `to`.
-  void DrawSunShadow(VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
-                     uint32_t size, const glm::mat4& view_proj,
-                     const std::vector<const FrameDraw*>& casters,
-                     const CulledView& culled,
-                     VkImageLayout from = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                     VkImageLayout to = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  void DrawSunShadow(
+      VkCommandBuffer cmd, FrameResources& frame, vk::Image& image,
+      uint32_t size, const glm::mat4& view_proj,
+      const std::vector<const FrameDraw*>& casters, const CulledView& culled,
+      VkImageLayout from = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      VkImageLayout to = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   // The camera's sun shadow map: still casters from the cache (redrawn when
   // the map steps), moving ones drawn over a copy of it.
-  void UpdateSunShadow(VkCommandBuffer cmd, FrameResources& frame, const RenderCamera& camera);
+  void UpdateSunShadow(VkCommandBuffer cmd, FrameResources& frame,
+                       const RenderCamera& camera);
   // Redraws the scene-wide sun shadow map when the sun or still geometry
   // changed.
   void UpdateFarShadow(VkCommandBuffer cmd, FrameResources& frame);
   // Uniforms of a 90 degree view along cube face `face` from `center`.
   // `cube_map`: mirrored left to right, as the face of a cube map is sampled
   // (the views are otherwise as lighting_math.hlsli's CubeFaceUV reads them).
-  FrameUniforms CubeFaceUniforms(glm::vec3 center, uint32_t face, float near_clip,
-                                 float far_clip, VkExtent2D extent,
+  FrameUniforms CubeFaceUniforms(glm::vec3 center, uint32_t face,
+                                 float near_clip, float far_clip,
+                                 VkExtent2D extent,
                                  bool cube_map = false) const;
   // Lights, shadow cubes and probes, as every pass sees them.
   void FillLighting(FrameUniforms& u) const;
   void UpdateFrameSet(FrameResources& frame);
   // The light the transmissive casters let through, into the sun's
   // transmittance map (as the camera's sun map sees them).
-  void UpdateSunTransmittance(VkCommandBuffer cmd, FrameResources& frame, bool redraw,
-                              uint32_t layers);
+  void UpdateSunTransmittance(VkCommandBuffer cmd, FrameResources& frame,
+                              bool redraw, uint32_t layers);
   // Draws `casters` with the transmittance pipeline into `view` (cleared to
   // white), inside no pass.
-  void DrawTransmittance(VkCommandBuffer cmd, FrameResources& frame, VkImageView view,
-                         VkExtent2D extent, uint32_t uniform_offset,
+  void DrawTransmittance(VkCommandBuffer cmd, FrameResources& frame,
+                         VkImageView view, VkExtent2D extent,
+                         uint32_t uniform_offset,
                          const std::vector<const FrameDraw*>& casters);
   // Targets' scene color image and slot, made the first time it is needed.
   bool EnsureSceneColor(VkCommandBuffer cmd, Targets& targets);
   // The opaque scene into targets.scene_color and its mips (outside a pass;
   // hdr and depth are in SHADER_READ_ONLY).
-  void CopySceneColor(VkCommandBuffer cmd, Targets& targets, const RenderCamera& camera);
+  void CopySceneColor(VkCommandBuffer cmd, Targets& targets,
+                      const RenderCamera& camera);
 
-  VkPipeline BuildPipeline(VkShaderModule vs, VkShaderModule ps, bool model_input,
+  VkPipeline BuildPipeline(VkShaderModule vs, VkShaderModule ps,
+                           bool model_input,
                            const std::vector<VkFormat>& colors, VkFormat depth,
                            int blend, bool depth_test, bool depth_write,
-                           VkCompareOp compare, VkCullModeFlags cull, bool depth_bias,
-                           VkPipelineLayout layout, uint32_t color_write_count = 0);
+                           VkCompareOp compare, VkCullModeFlags cull,
+                           bool depth_bias, VkPipelineLayout layout,
+                           uint32_t color_write_count = 0);
 
-  const GpuGeometry* UploadGeometry(VkCommandBuffer cmd, FrameResources& frame,
-                                    const std::shared_ptr<const MeshGeometry>& geometry);
+  const GpuGeometry* UploadGeometry(
+      VkCommandBuffer cmd, FrameResources& frame,
+      const std::shared_ptr<const MeshGeometry>& geometry);
   uint32_t TextureSlot(VkCommandBuffer cmd, FrameResources& frame,
                        const std::shared_ptr<ImageData>& image);
   uint32_t RenderTextureSlot(const std::string& path, int width, int height);
@@ -448,29 +467,37 @@ class SceneRenderer {
   bool CreateTargets(Targets& targets, VkExtent2D extent);
   void DestroyTargets(Targets& targets);
   VkDescriptorSet AllocatePostSet(const std::array<VkImageView, 6>& inputs);
-  void WritePostSet(VkDescriptorSet set, const std::array<VkImageView, 6>& inputs);
+  void WritePostSet(VkDescriptorSet set,
+                    const std::array<VkImageView, 6>& inputs);
 
   uint32_t PushUniforms(FrameResources& frame, const FrameUniforms& uniforms);
   // One camera's geometry into `targets` (hdr, normal, depth).
   // `linear`: write linear color (post-processing or a RenderTexture);
   // otherwise the shaders tonemap and encode themselves.
-  void DrawCamera(VkCommandBuffer cmd, FrameResources& frame, const RenderCamera& camera,
-                  Targets& targets, bool clear_color, bool clear_depth, bool overlay,
-                  bool linear, const LegacyDraws* legacy, VkImageView sky_view, bool has_sky);
+  void DrawCamera(VkCommandBuffer cmd, FrameResources& frame,
+                  const RenderCamera& camera, Targets& targets,
+                  bool clear_color, bool clear_depth, bool overlay, bool linear,
+                  const LegacyDraws* legacy, VkImageView sky_view,
+                  bool has_sky);
   void InitTargets(VkCommandBuffer cmd, Targets& targets);
   // `pipelines`: [cull back, cull none].
-  void DrawList(VkCommandBuffer cmd, FrameResources& frame, uint32_t uniform_offset,
-                const std::vector<const FrameDraw*>& list, const VkPipeline (&pipelines)[2]);
-  void DrawOutlineMask(VkCommandBuffer cmd, FrameResources& frame, const RenderCamera& camera,
-                       Targets& targets, const RenderSettings& settings);
-  void PostProcess(VkCommandBuffer cmd, Targets& targets, const RenderCamera& camera,
-                   const RenderSettings& settings, VkImage output, VkImageView output_view,
-                   VkFormat output_format, VkImageLayout output_layout, bool srgb_output);
+  void DrawList(VkCommandBuffer cmd, FrameResources& frame,
+                uint32_t uniform_offset,
+                const std::vector<const FrameDraw*>& list,
+                const VkPipeline (&pipelines)[2]);
+  void DrawOutlineMask(VkCommandBuffer cmd, FrameResources& frame,
+                       const RenderCamera& camera, Targets& targets,
+                       const RenderSettings& settings);
+  void PostProcess(VkCommandBuffer cmd, Targets& targets,
+                   const RenderCamera& camera, const RenderSettings& settings,
+                   VkImage output, VkImageView output_view,
+                   VkFormat output_format, VkImageLayout output_layout,
+                   bool srgb_output);
   void Fullscreen(VkCommandBuffer cmd, VkPipeline pipeline, VkDescriptorSet set,
                   VkImageView target, VkExtent2D extent, const void* params,
                   bool clear, bool load = false);
-  FrameUniforms CameraUniforms(const RenderCamera& camera, VkExtent2D extent, bool overlay,
-                               bool linear) const;
+  FrameUniforms CameraUniforms(const RenderCamera& camera, VkExtent2D extent,
+                               bool overlay, bool linear) const;
   VkPipeline PipelineForFormat(VkFormat format, bool fxaa);
 
   Context* context_ = nullptr;
@@ -496,7 +523,8 @@ class SceneRenderer {
   int depth_prepass_ = -1;
   uint64_t live_triangles_ = 0;  // in every draw slot, this frame
   VkPipeline transparent_[2] = {};
-  VkPipeline transmissive_[2] = {};  // premultiplied over the scene they refract
+  VkPipeline transmissive_[2] =
+      {};  // premultiplied over the scene they refract
   VkPipeline scene_copy_ = VK_NULL_HANDLE;
   VkPipeline shadow_transmit_ = VK_NULL_HANDLE;  // into transmittance maps
   VkFormat transmit_format_ = VK_FORMAT_R16G16B16A16_UNORM;
@@ -507,11 +535,12 @@ class SceneRenderer {
   VkPipeline blur_ = VK_NULL_HANDLE;
   VkPipeline bloom_down_ = VK_NULL_HANDLE;
   VkPipeline bloom_up_ = VK_NULL_HANDLE;
-  VkPipeline shadow_cube_ = VK_NULL_HANDLE;   // distance to the light
-  VkPipeline probe_capture_ = VK_NULL_HANDLE; // the scene as a probe sees it
-  VkPipeline probe_sh_ = VK_NULL_HANDLE;      // capture -> spherical harmonics
-  VkPipeline probe_visibility_pass_ = VK_NULL_HANDLE;  // capture -> distance map
-  VkPipeline probe_octa_ = VK_NULL_HANDLE;    // spherical harmonics -> light maps
+  VkPipeline shadow_cube_ = VK_NULL_HANDLE;    // distance to the light
+  VkPipeline probe_capture_ = VK_NULL_HANDLE;  // the scene as a probe sees it
+  VkPipeline probe_sh_ = VK_NULL_HANDLE;       // capture -> spherical harmonics
+  VkPipeline probe_visibility_pass_ =
+      VK_NULL_HANDLE;                       // capture -> distance map
+  VkPipeline probe_octa_ = VK_NULL_HANDLE;  // spherical harmonics -> light maps
   // Composite/FXAA pipelines per output format.
   std::map<std::pair<VkFormat, bool>, VkPipeline> output_pipelines_;
   VkShaderModule fullscreen_vs_ = VK_NULL_HANDLE;
@@ -573,10 +602,10 @@ class SceneRenderer {
     bool one_sided = false;
     glm::vec3 normal = glm::vec3(0.0f);
   };
-  vk::Image shadow_cubes_;  // a depth cube per slot
-  std::vector<ShadowCube> cubes_;   // this frame's slots
-  std::vector<int> point_slots_;    // per point light: slot or -1
-  std::vector<int> area_slots_;     // per area light
+  vk::Image shadow_cubes_;         // a depth cube per slot
+  std::vector<ShadowCube> cubes_;  // this frame's slots
+  std::vector<int> point_slots_;   // per point light: slot or -1
+  std::vector<int> area_slots_;    // per area light
   // What each slot last drew; a slot whose light and casters are unchanged
   // keeps its faces.
   std::array<uint64_t, kMaxShadowCubes> cube_hashes_ = {};
@@ -605,20 +634,21 @@ class SceneRenderer {
   vk::Image probe_depth_;
   VkDescriptorSet probe_sh_set_ = VK_NULL_HANDLE;
   bool lighting_initialized_ = false;
-  bool visibility_filterable_ = false;  // kProbeVisibilityFormat filters linearly
+  bool visibility_filterable_ =
+      false;  // kProbeVisibilityFormat filters linearly
   struct ProbeState {
-    bool active = false;        // the volume's probes light this frame
+    bool active = false;  // the volume's probes light this frame
     glm::vec3 min = glm::vec3(0.0f), max = glm::vec3(0.0f);
     glm::ivec3 counts = glm::ivec3(0);
-    uint32_t next = 0;          // next probe to update
-    uint64_t started = 0;       // frame the current passes began
-    uint64_t cache_key = 0;     // what the current passes are for (0: unknown)
-    bool check_cache = true;    // look for it in the cache before updating
+    uint32_t next = 0;        // next probe to update
+    uint64_t started = 0;     // frame the current passes began
+    uint64_t cache_key = 0;   // what the current passes are for (0: unknown)
+    bool check_cache = true;  // look for it in the cache before updating
     // Probes updated by each frame slot's last frame (0: none), to go with
     // the GPU time it reports.
     std::array<uint32_t, 4> batches = {};
-    int passes = 0;             // full passes since the scene last changed
-    uint64_t light_hash = 0;    // the lights they saw
+    int passes = 0;               // full passes since the scene last changed
+    uint64_t light_hash = 0;      // the lights they saw
     uint64_t static_version = 0;  // and the still geometry
     bool clear_atlas = true;
     float intensity = 1.0f;
@@ -635,7 +665,7 @@ class SceneRenderer {
     uint64_t frame = 0;  // recorded in this frame
     uint64_t key = 0;
     uint32_t total = 0;
-    vk::Buffer buffer;   // coefficient rows, then visibility rows
+    vk::Buffer buffer;  // coefficient rows, then visibility rows
     VkDeviceSize coefficient_bytes = 0;
   };
   std::optional<ProbeSave> probe_save_;
@@ -658,7 +688,7 @@ class SceneRenderer {
   // shaders read them from. Changed slots are copied each frame.
   vk::Buffer draw_buffer_;
   vk::Buffer instance_buffer_;  // 0, 1, 2, ... (the draw index per instance)
-  vk::Buffer cull_buffer_;  // CullData by slot
+  vk::Buffer cull_buffer_;      // CullData by slot
   std::vector<CullData> cull_records_;
   std::vector<uint32_t> free_draw_slots_;
   VkDescriptorSetLayout cull_layout_ = VK_NULL_HANDLE;

@@ -24,15 +24,17 @@ std::string Lower(std::string_view text) {
 }
 
 bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
-  return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](unsigned char x, unsigned char y) {
-    return std::tolower(x) == std::tolower(y);
-  });
+  return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+                    [](unsigned char x, unsigned char y) {
+                      return std::tolower(x) == std::tolower(y);
+                    });
 }
 
 float Deadzone(float value) {
   const float magnitude = std::abs(value);
   if (magnitude < kStickDeadzone) return 0.0f;
-  return std::copysign((magnitude - kStickDeadzone) / (1.0f - kStickDeadzone), value);
+  return std::copysign((magnitude - kStickDeadzone) / (1.0f - kStickDeadzone),
+                       value);
 }
 
 glm::vec2 Stick(const GamepadState& pad, int x_axis, int y_axis) {
@@ -40,7 +42,8 @@ glm::vec2 Stick(const GamepadState& pad, int x_axis, int y_axis) {
   glm::vec2 v(pad.axes[x_axis], -pad.axes[y_axis]);
   const float length = glm::length(v);
   if (length < kStickDeadzone) return glm::vec2(0.0f);
-  const float scaled = std::min((length - kStickDeadzone) / (1.0f - kStickDeadzone), 1.0f);
+  const float scaled =
+      std::min((length - kStickDeadzone) / (1.0f - kStickDeadzone), 1.0f);
   return v / length * scaled;
 }
 
@@ -104,31 +107,40 @@ constexpr std::pair<std::string_view, int> kNamedKeys[] = {
 };
 
 constexpr std::string_view kMouseControls[] = {
-    "leftButton", "rightButton", "middleButton", "delta", "delta/x",
+    "leftButton", "rightButton", "middleButton", "delta",    "delta/x",
     "delta/y",    "scroll",      "scroll/y",     "position",
 };
 
 constexpr std::string_view kGamepadControls[] = {
-    "leftStick",   "rightStick",   "leftStick/x",  "leftStick/y", "rightStick/x",
-    "rightStick/y", "leftTrigger", "rightTrigger", "dpad",
+    "leftStick",   "rightStick",   "leftStick/x",
+    "leftStick/y", "rightStick/x", "rightStick/y",
+    "leftTrigger", "rightTrigger", "dpad",
 };
 
 glm::vec2 ReadGamepad(const GamepadState& pad, std::string_view control) {
   if (!pad.connected) return glm::vec2(0.0f);
   const std::string name = Lower(control);
   for (const auto& [button, index] : kGamepadButtons) {
-    if (EqualsIgnoreCase(button, name)) return glm::vec2(pad.buttons[index] ? 1.0f : 0.0f, 0.0f);
+    if (EqualsIgnoreCase(button, name))
+      return glm::vec2(pad.buttons[index] ? 1.0f : 0.0f, 0.0f);
   }
-  if (name == "lefttrigger") return {pad.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER], 0.0f};
-  if (name == "righttrigger") return {pad.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER], 0.0f};
-  if (name == "leftstick") return Stick(pad, GLFW_GAMEPAD_AXIS_LEFT_X, GLFW_GAMEPAD_AXIS_LEFT_Y);
+  if (name == "lefttrigger")
+    return {pad.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER], 0.0f};
+  if (name == "righttrigger")
+    return {pad.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER], 0.0f};
+  if (name == "leftstick")
+    return Stick(pad, GLFW_GAMEPAD_AXIS_LEFT_X, GLFW_GAMEPAD_AXIS_LEFT_Y);
   if (name == "rightstick") {
     return Stick(pad, GLFW_GAMEPAD_AXIS_RIGHT_X, GLFW_GAMEPAD_AXIS_RIGHT_Y);
   }
-  if (name == "leftstick/x") return {Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_LEFT_X]), 0.0f};
-  if (name == "leftstick/y") return {-Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]), 0.0f};
-  if (name == "rightstick/x") return {Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_RIGHT_X]), 0.0f};
-  if (name == "rightstick/y") return {-Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]), 0.0f};
+  if (name == "leftstick/x")
+    return {Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_LEFT_X]), 0.0f};
+  if (name == "leftstick/y")
+    return {-Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]), 0.0f};
+  if (name == "rightstick/x")
+    return {Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_RIGHT_X]), 0.0f};
+  if (name == "rightstick/y")
+    return {-Deadzone(pad.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]), 0.0f};
   if (name == "dpad") {
     return {static_cast<float>(pad.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT]) -
                 static_cast<float>(pad.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT]),
@@ -153,7 +165,8 @@ int KeyFromControl(std::string_view control) {
     if (c >= 'a' && c <= 'z') return GLFW_KEY_A + (c - 'a');
     if (c >= '0' && c <= '9') return GLFW_KEY_0 + (c - '0');
   }
-  if (name.size() >= 2 && name[0] == 'f' && std::isdigit(static_cast<unsigned char>(name[1]))) {
+  if (name.size() >= 2 && name[0] == 'f' &&
+      std::isdigit(static_cast<unsigned char>(name[1]))) {
     const int n = std::atoi(name.c_str() + 1);
     if (n >= 1 && n <= 25) return GLFW_KEY_F1 + n - 1;
   }
@@ -168,9 +181,12 @@ int KeyFromControl(std::string_view control) {
 }
 
 std::string ControlFromKey(int key) {
-  if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) return std::string(1, 'a' + (key - GLFW_KEY_A));
-  if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) return std::string(1, '0' + (key - GLFW_KEY_0));
-  if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F25) return "f" + std::to_string(key - GLFW_KEY_F1 + 1);
+  if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z)
+    return std::string(1, 'a' + (key - GLFW_KEY_A));
+  if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
+    return std::string(1, '0' + (key - GLFW_KEY_0));
+  if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F25)
+    return "f" + std::to_string(key - GLFW_KEY_F1 + 1);
   if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) {
     return "numpad" + std::to_string(key - GLFW_KEY_KP_0);
   }
@@ -201,14 +217,17 @@ std::span<const std::string_view> KnownControlPaths() {
     keyboard("anyKey");
     for (int n = 1; n <= 12; n++) keyboard("f" + std::to_string(n));
     for (int n = 0; n <= 9; n++) keyboard("numpad" + std::to_string(n));
-    for (auto name : kMouseControls) paths.push_back("<Mouse>/" + std::string(name));
+    for (auto name : kMouseControls)
+      paths.push_back("<Mouse>/" + std::string(name));
     for (const auto& [name, button] : kGamepadButtons) {
       paths.push_back("<Gamepad>/" + std::string(name));
     }
-    for (auto name : kGamepadControls) paths.push_back("<Gamepad>/" + std::string(name));
+    for (auto name : kGamepadControls)
+      paths.push_back("<Gamepad>/" + std::string(name));
     return paths;
   }();
-  static const std::vector<std::string_view> views(storage.begin(), storage.end());
+  static const std::vector<std::string_view> views(storage.begin(),
+                                                   storage.end());
   return views;
 }
 
@@ -233,12 +252,17 @@ glm::vec2 ReadControl(const InputManager& const_input, std::string_view path) {
       return glm::vec2(0.0f);
     }
     if (name == "shift") {
-      return {input.IsPressed(GLFW_KEY_LEFT_SHIFT) || input.IsPressed(GLFW_KEY_RIGHT_SHIFT)
-                  ? 1.0f : 0.0f, 0.0f};
+      return {input.IsPressed(GLFW_KEY_LEFT_SHIFT) ||
+                      input.IsPressed(GLFW_KEY_RIGHT_SHIFT)
+                  ? 1.0f
+                  : 0.0f,
+              0.0f};
     }
     if (name == "ctrl") {
       return {input.IsPressed(GLFW_KEY_LEFT_CONTROL) ||
-                      input.IsPressed(GLFW_KEY_RIGHT_CONTROL) ? 1.0f : 0.0f,
+                      input.IsPressed(GLFW_KEY_RIGHT_CONTROL)
+                  ? 1.0f
+                  : 0.0f,
               0.0f};
     }
     const int key = KeyFromControl(control);
@@ -261,13 +285,15 @@ glm::vec2 ReadControl(const InputManager& const_input, std::string_view path) {
     if (name == "leftbutton" || name == "press") {
       return {input.IsPressed(MouseButton::kLeft) ? 1.0f : 0.0f, 0.0f};
     }
-    if (name == "rightbutton") return {input.IsPressed(MouseButton::kRight) ? 1.0f : 0.0f, 0.0f};
+    if (name == "rightbutton")
+      return {input.IsPressed(MouseButton::kRight) ? 1.0f : 0.0f, 0.0f};
     if (name == "middlebutton") {
       return {input.IsPressed(MouseButton::kMiddle) ? 1.0f : 0.0f, 0.0f};
     }
     return glm::vec2(0.0f);
   }
-  if (device == "gamepad" || device == "xinputcontroller" || device == "dualshockgamepad") {
+  if (device == "gamepad" || device == "xinputcontroller" ||
+      device == "dualshockgamepad") {
     return ReadGamepad(input.GetGamepad(), control);
   }
   // Touchscreen, XR and joystick bindings are accepted but never actuate.
@@ -276,16 +302,23 @@ glm::vec2 ReadControl(const InputManager& const_input, std::string_view path) {
 
 // ------------------------------------------------------------- InputAction --
 
-InputAction::InputAction(std::string map, std::string name, Type type, bool vector2)
-    : map_(std::move(map)), name_(std::move(name)), type_(type), vector2_(vector2) {}
+InputAction::InputAction(std::string map, std::string name, Type type,
+                         bool vector2)
+    : map_(std::move(map)),
+      name_(std::move(name)),
+      type_(type),
+      vector2_(vector2) {}
 
-void InputAction::AddComposite2D(std::vector<std::string> up, std::vector<std::string> down,
+void InputAction::AddComposite2D(std::vector<std::string> up,
+                                 std::vector<std::string> down,
                                  std::vector<std::string> left,
                                  std::vector<std::string> right) {
-  composites_.push_back({std::move(up), std::move(down), std::move(left), std::move(right)});
+  composites_.push_back(
+      {std::move(up), std::move(down), std::move(left), std::move(right)});
 }
 
-glm::vec2 InputAction::Evaluate(const InputManager& input, std::string* control) const {
+glm::vec2 InputAction::Evaluate(const InputManager& input,
+                                std::string* control) const {
   glm::vec2 best(0.0f);
   float best_magnitude = 0.0f;
   auto consider = [&](glm::vec2 value, std::string_view path) {
@@ -314,7 +347,10 @@ glm::vec2 InputAction::Evaluate(const InputManager& input, std::string* control)
                 part(composite.up, &up) - part(composite.down, &down));
     // Unity's default 2D vector mode, DigitalNormalized.
     if (glm::length(v) > 1.0f) v = glm::normalize(v);
-    const std::string& which = !up.empty() ? up : !down.empty() ? down : !left.empty() ? left : right;
+    const std::string& which = !up.empty()     ? up
+                               : !down.empty() ? down
+                               : !left.empty() ? left
+                                               : right;
     consider(v, which);
   }
   return best;
@@ -337,7 +373,8 @@ void InputAction::Update(const InputManager& input) {
   std::string control;
   const glm::vec2 value = Evaluate(input, &control);
   const glm::vec2 previous = value_;
-  value_ = vector2_ ? value : glm::vec2(glm::length(value) > 0 ? value.x : 0.0f, 0.0f);
+  value_ = vector2_ ? value
+                    : glm::vec2(glm::length(value) > 0 ? value.x : 0.0f, 0.0f);
   if (!control.empty()) control_ = control;
 
   const bool was_pressed = pressed_;
@@ -416,7 +453,8 @@ bool InputAction::ReadValue<bool>() const {
 
 // -------------------------------------------------------- InputActionAsset --
 
-bool InputActionAsset::Load(const std::filesystem::path& file, std::string* error) {
+bool InputActionAsset::Load(const std::filesystem::path& file,
+                            std::string* error) {
   auto text = os::ReadText(file);
   if (!text) {
     if (error) *error = "could not open " + file.string();
@@ -429,13 +467,15 @@ bool InputActionAsset::Load(const std::filesystem::path& file, std::string* erro
   return true;
 }
 
-bool InputActionAsset::LoadFromString(std::string_view source, std::string* error) {
+bool InputActionAsset::LoadFromString(std::string_view source,
+                                      std::string* error) {
   InputActionsDesc desc;
   if (!ParseInputActions(source, &desc, error)) return false;
   actions_.clear();
   for (const auto& action_desc : desc.actions) {
-    auto action = std::make_unique<InputAction>(action_desc.map, action_desc.name,
-                                                action_desc.type, action_desc.vector2);
+    auto action =
+        std::make_unique<InputAction>(action_desc.map, action_desc.name,
+                                      action_desc.type, action_desc.vector2);
     for (const auto& path : action_desc.bindings) action->AddBinding(path);
     for (const auto& c : action_desc.composites) {
       action->AddComposite2D(c.up, c.down, c.left, c.right);
@@ -461,7 +501,8 @@ InputAction* InputActionAsset::Find(std::string_view name) {
 std::vector<InputAction*> InputActionAsset::GetMap(std::string_view map) {
   std::vector<InputAction*> result;
   for (auto& action : actions_) {
-    if (map.empty() || action->GetMapName() == map) result.push_back(action.get());
+    if (map.empty() || action->GetMapName() == map)
+      result.push_back(action.get());
   }
   return result;
 }
@@ -506,18 +547,21 @@ mtext::Document ToDocument(const InputActionsDesc& desc) {
   header.Set("format", 1);
   if (!desc.class_name.empty()) header.Set("class", desc.class_name);
   if (!desc.header.empty()) header.Set("header", desc.header);
-  for (const auto& map : desc.maps) document.Add("map").attributes.Set("name", map);
+  for (const auto& map : desc.maps)
+    document.Add("map").attributes.Set("name", map);
   for (const auto& action : desc.actions) {
     auto& section = document.Add("action");
     section.attributes.Set("name", action.FullName());
     section.attributes.Set("type", TypeToString(action.type));
     if (action.vector2) section.attributes.Set("control", "vector2");
-    if (!action.bindings.empty()) section.properties.Set("bindings", StringArray(action.bindings));
+    if (!action.bindings.empty())
+      section.properties.Set("bindings", StringArray(action.bindings));
     if (!action.composites.empty()) {
       mtext::Array composites;
       for (const auto& c : action.composites) {
-        composites.emplace_back(mtext::Array{"2DVector", StringArray(c.up), StringArray(c.down),
-                                             StringArray(c.left), StringArray(c.right)});
+        composites.emplace_back(
+            mtext::Array{"2DVector", StringArray(c.up), StringArray(c.down),
+                         StringArray(c.left), StringArray(c.right)});
       }
       section.properties.Set("composites", std::move(composites));
     }
@@ -527,7 +571,8 @@ mtext::Document ToDocument(const InputActionsDesc& desc) {
 
 }  // namespace
 
-bool ParseInputActions(std::string_view source, InputActionsDesc* out, std::string* error) {
+bool ParseInputActions(std::string_view source, InputActionsDesc* out,
+                       std::string* error) {
   mtext::Document document;
   mtext::ParseError parse_error;
   if (!mtext::Parse(source, document, &parse_error)) {
@@ -568,18 +613,22 @@ bool ParseInputActions(std::string_view source, InputActionsDesc* out, std::stri
     const auto slash = full.find('/');
     action.map = slash == std::string::npos ? "" : full.substr(0, slash);
     action.name = slash == std::string::npos ? full : full.substr(slash + 1);
-    const std::string type_name = Lower(section.attributes.GetString("type", "button"));
+    const std::string type_name =
+        Lower(section.attributes.GetString("type", "button"));
     if (type_name == "value") action.type = InputAction::Type::kValue;
-    if (type_name == "passthrough") action.type = InputAction::Type::kPassThrough;
-    action.vector2 = Lower(section.attributes.GetString("control")) == "vector2";
+    if (type_name == "passthrough")
+      action.type = InputAction::Type::kPassThrough;
+    action.vector2 =
+        Lower(section.attributes.GetString("control")) == "vector2";
     action.bindings = strings(section.properties.Get("bindings"));
     if (auto composites = section.properties.Get("composites")) {
       if (auto list = composites->Get<mtext::Array>()) {
         for (const auto& item : *list) {
           auto parts = item.Get<mtext::Array>();
           if (!parts || parts->size() < 5) continue;
-          action.composites.push_back({strings(&(*parts)[1]), strings(&(*parts)[2]),
-                                       strings(&(*parts)[3]), strings(&(*parts)[4])});
+          action.composites.push_back(
+              {strings(&(*parts)[1]), strings(&(*parts)[2]),
+               strings(&(*parts)[3]), strings(&(*parts)[4])});
         }
       }
     }
@@ -593,7 +642,8 @@ std::string SerializeInputActions(const InputActionsDesc& desc) {
   return mtext::Write(ToDocument(desc));
 }
 
-bool SaveInputActions(const std::filesystem::path& file, const InputActionsDesc& desc) {
+bool SaveInputActions(const std::filesystem::path& file,
+                      const InputActionsDesc& desc) {
   return mtext::SaveFile(file, ToDocument(desc));
 }
 

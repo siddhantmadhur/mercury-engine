@@ -215,7 +215,8 @@ is_trigger = true
   ASSERT_TRUE(hit);
   EXPECT_EQ(scene.GetGameObject(hit->entity).GetName(), "Ghost");
 
-  hit = scene.Physics().Raycast(origin, forward, 20.0f, kDefaultRaycastLayers, false);
+  hit = scene.Physics().Raycast(origin, forward, 20.0f, kDefaultRaycastLayers,
+                                false);
   ASSERT_TRUE(hit);
   EXPECT_EQ(scene.GetGameObject(hit->entity).GetName(), "Near");
   EXPECT_NEAR(hit->distance, 2.5f, 1e-3f);
@@ -224,7 +225,8 @@ is_trigger = true
   ASSERT_TRUE(hit);
   EXPECT_EQ(scene.GetGameObject(hit->entity).GetName(), "Far");
 
-  EXPECT_FALSE(scene.Physics().Raycast(origin, forward, 2.0f, kDefaultRaycastLayers, false));
+  EXPECT_FALSE(scene.Physics().Raycast(origin, forward, 2.0f,
+                                       kDefaultRaycastLayers, false));
 }
 
 TEST(Gameplay, PrefabInstanceKeepsChildrenAndOverrides) {
@@ -274,7 +276,8 @@ position = Vector3(5, 0, 0)
 }
 
 TEST(Gameplay, ModelLoadsNodesAndMeshes) {
-  const auto dir = std::filesystem::temp_directory_path() / "mercury_model_test";
+  const auto dir =
+      std::filesystem::temp_directory_path() / "mercury_model_test";
   std::filesystem::create_directories(dir);
   const auto path = dir / "two_parts.obj";
   {
@@ -292,7 +295,8 @@ TEST(Gameplay, ModelLoadsNodesAndMeshes) {
 }
 
 TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
-  const auto dir = std::filesystem::temp_directory_path() / "mercury_obj_material_test";
+  const auto dir =
+      std::filesystem::temp_directory_path() / "mercury_obj_material_test";
   std::filesystem::remove_all(dir);
   std::filesystem::create_directories(dir);
   // Textures named in a different case than the .mtl spells them, as in
@@ -306,11 +310,13 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
         p[3] = 255;
       }
     }
-    stbi_write_png((dir / name).string().c_str(), size, size, 4, pixels.data(), size * 4);
+    stbi_write_png((dir / name).string().c_str(), size, size, 4, pixels.data(),
+                   size * 4);
   };
   write_png("color.png", 64, [](int, int) -> uint8_t { return 200; });
   // Bright stripes every 4 texels: a bump map with slopes along x only.
-  write_png("bumps.png", 16, [](int x, int) -> uint8_t { return x % 4 == 0 ? 255 : 0; });
+  write_png("bumps.png", 16,
+            [](int x, int) -> uint8_t { return x % 4 == 0 ? 255 : 0; });
   {
     std::ofstream mtl(dir / "scene.mtl");
     mtl << "newmtl Lamp\nKd 0.5 0.5 0.5\nKe 4 3 2\nKs 0 0 0\nNs 10\n"
@@ -319,7 +325,8 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
   }
   {
     std::ofstream obj(dir / "scene.obj");
-    obj << "mtllib scene.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\n"
+    obj << "mtllib scene.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 "
+           "1\n"
            "usemtl Lamp\nf 1/1 2/2 3/3\nusemtl Stone\nf 1/1 2/2 3/3\n";
   }
   {
@@ -327,8 +334,8 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
     sidecar << "[mimport]\nmax_texture_size = 32\n\n"
                "[material name=\"Lamp\"]\nsmoothness = 0.25\n";
   }
-  ModelImportSettings settings =
-      ModelImportSettings::ForFile((dir / "scene.obj").string(), ModelImportSettings{});
+  ModelImportSettings settings = ModelImportSettings::ForFile(
+      (dir / "scene.obj").string(), ModelImportSettings{});
   ASSERT_EQ(settings.materials.size(), 1u);
   std::string error;
   auto model = Model::Load((dir / "scene.obj").string(), settings, &error);
@@ -378,20 +385,25 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
 }
 
 TEST(Gameplay, LoadMapFromScriptReplacesTheScene) {
-  const auto dir = std::filesystem::temp_directory_path() / "mercury_load_map_test";
+  const auto dir =
+      std::filesystem::temp_directory_path() / "mercury_load_map_test";
   std::filesystem::remove_all(dir);
   std::filesystem::create_directories(dir / "maps");
   {
     std::ofstream(dir / "test.mproj") << "[project]\nname = \"Test\"\n"
                                          "main_map = \"res://maps/a.mmap\"\n";
     std::ofstream(dir / "maps/a.mmap")
-        << "[mmap format=1]\n[node name=\"A\"]\n[node name=\"Switch\" parent=\".\"]\n"
+        << "[mmap format=1]\n[node name=\"A\"]\n[node name=\"Switch\" "
+           "parent=\".\"]\n"
            "[component type=\"TestMapSwitcher\" node=\"Switch\"]\n"
            "next = \"res://maps/b.mmap\"\n";
     std::ofstream(dir / "maps/b.mmap")
-        << "[mmap format=1]\n[node name=\"B\"]\n[node name=\"Lamp\" parent=\".\"]\n"
-           "[component type=\"Transform\" node=\"Lamp\"]\nposition = Vector3(1, 2, 3)\n"
-           "[component type=\"PointLight\" node=\"Lamp\"]\nintensity = 2\nrange = 5\n";
+        << "[mmap format=1]\n[node name=\"B\"]\n[node name=\"Lamp\" "
+           "parent=\".\"]\n"
+           "[component type=\"Transform\" node=\"Lamp\"]\nposition = "
+           "Vector3(1, 2, 3)\n"
+           "[component type=\"PointLight\" node=\"Lamp\"]\nintensity = "
+           "2\nrange = 5\n";
   }
   std::string error;
   auto project = Project::Load(dir / "test.mproj", &error);
@@ -548,7 +560,8 @@ exit_time = 0.9
   ASSERT_TRUE(controller) << error;
   EXPECT_EQ(controller->GetModel(), "res://hero.fbx");
   ASSERT_EQ(controller->Parameters().size(), 2u);
-  EXPECT_EQ(controller->Parameters()[1].type, AnimatorParameter::Type::kTrigger);
+  EXPECT_EQ(controller->Parameters()[1].type,
+            AnimatorParameter::Type::kTrigger);
   ASSERT_EQ(controller->Layers().size(), 1u);
   const auto& layer = controller->Layers()[0];
   ASSERT_EQ(layer.states.size(), 2u);
@@ -560,8 +573,10 @@ exit_time = 0.9
   EXPECT_TRUE(controller->IsLooping("Run"));
   EXPECT_FALSE(controller->IsLooping("Jump"));
 
-  EXPECT_FALSE(AnimatorController::FromString(
-      "[layer name=\"Base\"]\n[transition from=\"A\" to=\"B\" layer=\"Base\"]\n", &error));
+  EXPECT_FALSE(
+      AnimatorController::FromString("[layer name=\"Base\"]\n[transition "
+                                     "from=\"A\" to=\"B\" layer=\"Base\"]\n",
+                                     &error));
 }
 
 TEST(Gameplay, InputScriptPressesAndReleasesKeys) {
@@ -569,8 +584,8 @@ TEST(Gameplay, InputScriptPressesAndReleasesKeys) {
   std::string error;
   EXPECT_FALSE(script.LoadFromString("10 press nokey\n", &error));
   EXPECT_FALSE(script.LoadFromString("10 dance\n", &error));
-  ASSERT_TRUE(script.LoadFromString("# walk\n2 press w\n3 tap space\n5 release w\n6 quit\n",
-                                    &error))
+  ASSERT_TRUE(script.LoadFromString(
+      "# walk\n2 press w\n3 tap space\n5 release w\n6 quit\n", &error))
       << error;
 
   InputManager input;
@@ -613,7 +628,8 @@ TEST(Gameplay, ListViewFollowsItemsSource) {
 TEST(Gameplay, MathfMatchesUnity) {
   float velocity = 0.0f;
   float value = 0.0f;
-  for (int i = 0; i < 200; i++) value = Mathf::SmoothDamp(value, 10.0f, velocity, 0.2f, 0.02f);
+  for (int i = 0; i < 200; i++)
+    value = Mathf::SmoothDamp(value, 10.0f, velocity, 0.2f, 0.02f);
   EXPECT_NEAR(value, 10.0f, 1e-2f);
 
   Random::InitState(7);

@@ -12,7 +12,8 @@ namespace {
 
 float ToFloat(const mtext::Variant* value, float fallback = 0.0f) {
   if (!value) return fallback;
-  if (auto b = value->ToBool(); b && value->GetType() == mtext::Variant::Type::kBool) {
+  if (auto b = value->ToBool();
+      b && value->GetType() == mtext::Variant::Type::kBool) {
     return *b ? 1.0f : 0.0f;
   }
   if (auto f = value->ToFloat()) return static_cast<float>(*f);
@@ -21,8 +22,8 @@ float ToFloat(const mtext::Variant* value, float fallback = 0.0f) {
 
 }  // namespace
 
-std::shared_ptr<AnimatorController> AnimatorController::Load(const std::string& file,
-                                                             std::string* error) {
+std::shared_ptr<AnimatorController> AnimatorController::Load(
+    const std::string& file, std::string* error) {
   auto text = os::ReadText(file);
   if (!text) {
     if (error) *error = "could not open " + file;
@@ -33,8 +34,8 @@ std::shared_ptr<AnimatorController> AnimatorController::Load(const std::string& 
   return controller;
 }
 
-std::shared_ptr<AnimatorController> AnimatorController::FromString(std::string_view text,
-                                                                   std::string* error) {
+std::shared_ptr<AnimatorController> AnimatorController::FromString(
+    std::string_view text, std::string* error) {
   mtext::Document document;
   mtext::ParseError parse_error;
   if (!mtext::Parse(text, document, &parse_error)) {
@@ -60,7 +61,8 @@ std::shared_ptr<AnimatorController> AnimatorController::FromString(std::string_v
     const auto& p = section.properties;
     if (section.tag == "model") {
       if (auto model = p.Get("model")) {
-        if (auto res = model->Get<mtext::Resource>()) controller->model_ = res->path;
+        if (auto res = model->Get<mtext::Resource>())
+          controller->model_ = res->path;
         if (auto s = model->ToString()) controller->model_ = *s;
       }
       if (auto loops = p.Get("loop_clips")) {
@@ -100,8 +102,10 @@ std::shared_ptr<AnimatorController> AnimatorController::FromString(std::string_v
       const std::string blend = p.GetString("blend");
       if (blend == "1d") state.blend = AnimatorState::Blend::k1D;
       if (blend == "2d_simple") state.blend = AnimatorState::Blend::k2DSimple;
-      if (blend == "2d_freeform") state.blend = AnimatorState::Blend::k2DFreeform;
-      if (blend == "2d_cartesian") state.blend = AnimatorState::Blend::k2DCartesian;
+      if (blend == "2d_freeform")
+        state.blend = AnimatorState::Blend::k2DFreeform;
+      if (blend == "2d_cartesian")
+        state.blend = AnimatorState::Blend::k2DCartesian;
       state.parameter = p.GetString("parameter");
       state.parameter_y = p.GetString("parameter_y");
       if (auto motions = p.Get("motions")) {
@@ -113,14 +117,17 @@ std::shared_ptr<AnimatorController> AnimatorController::FromString(std::string_v
             motion.clip = (*parts)[0].ToString().value_or("");
             if (parts->size() > 1) motion.threshold = ToFloat(&(*parts)[1]);
             if (parts->size() > 3) {
-              motion.position = glm::vec2(ToFloat(&(*parts)[2]), ToFloat(&(*parts)[3]));
+              motion.position =
+                  glm::vec2(ToFloat(&(*parts)[2]), ToFloat(&(*parts)[3]));
             }
-            if (parts->size() > 4) motion.time_scale = ToFloat(&(*parts)[4], 1.0f);
+            if (parts->size() > 4)
+              motion.time_scale = ToFloat(&(*parts)[4], 1.0f);
             state.motions.push_back(motion);
           }
         }
       }
-      if (a.GetBool("default", false)) layer->default_state = static_cast<int>(layer->states.size());
+      if (a.GetBool("default", false))
+        layer->default_state = static_cast<int>(layer->states.size());
       layer->states.push_back(std::move(state));
     }
   }
@@ -142,8 +149,9 @@ std::shared_ptr<AnimatorController> AnimatorController::FromString(std::string_v
     transition.from = from == "Any State" ? -1 : find(from);
     transition.to = find(a.GetString("to"));
     if (transition.from == -2 || transition.to < 0) {
-      if (error) *error = std::format("{}: transition {} -> {} names a missing state",
-                                      section.line, from, a.GetString("to"));
+      if (error)
+        *error = std::format("{}: transition {} -> {} names a missing state",
+                             section.line, from, a.GetString("to"));
       return nullptr;
     }
     transition.duration = static_cast<float>(p.GetFloat("duration", 0.25));
@@ -164,7 +172,8 @@ std::shared_ptr<AnimatorController> AnimatorController::FromString(std::string_v
               {"if", Mode::kIf},           {"ifnot", Mode::kIfNot},
               {"greater", Mode::kGreater}, {"less", Mode::kLess},
               {"equals", Mode::kEquals},   {"notequal", Mode::kNotEqual}};
-          if (auto it = kModes.find(mode); it != kModes.end()) condition.mode = it->second;
+          if (auto it = kModes.find(mode); it != kModes.end())
+            condition.mode = it->second;
           if (parts->size() > 2) condition.threshold = ToFloat(&(*parts)[2]);
           transition.conditions.push_back(condition);
         }

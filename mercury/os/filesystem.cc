@@ -59,8 +59,8 @@ void Mount(const fs::path& prefix, std::shared_ptr<const mpack::Reader> pack,
   std::string normalized = Normalize(prefix);
   if (!normalized.ends_with('/')) normalized += '/';
   std::unique_lock lock(g_mounts_mutex);
-  g_mounts.push_back({std::move(normalized), std::move(pack),
-                      std::move(entry_prefix)});
+  g_mounts.push_back(
+      {std::move(normalized), std::move(pack), std::move(entry_prefix)});
 }
 
 void UnmountAll() {
@@ -114,16 +114,19 @@ std::vector<std::string> ListDirectory(const fs::path& dir) {
     std::shared_lock lock(g_mounts_mutex);
     for (auto it = g_mounts.rbegin(); it != g_mounts.rend(); ++it) {
       if (!key.starts_with(it->prefix)) continue;
-      const std::string folder = it->entry_prefix + key.substr(it->prefix.size());
+      const std::string folder =
+          it->entry_prefix + key.substr(it->prefix.size());
       for (const mpack::Entry& entry : it->pack->GetEntries()) {
         if (!entry.path.starts_with(folder)) continue;
         std::string rest = entry.path.substr(folder.size());
-        if (!rest.empty() && rest.find('/') == std::string::npos) add(std::move(rest));
+        if (!rest.empty() && rest.find('/') == std::string::npos)
+          add(std::move(rest));
       }
     }
   }
   std::error_code ec;
-  for (const auto& entry : fs::directory_iterator(dir.empty() ? fs::path(".") : dir, ec)) {
+  for (const auto& entry :
+       fs::directory_iterator(dir.empty() ? fs::path(".") : dir, ec)) {
     if (entry.is_regular_file(ec)) add(entry.path().filename().string());
   }
   return names;
@@ -132,13 +135,16 @@ std::vector<std::string> ListDirectory(const fs::path& dir) {
 fs::path CacheDir() {
   const fs::path dir = [] {
     fs::path base;
-    if (const char* custom = std::getenv("MERCURY_CACHE_DIR"); custom && *custom) {
+    if (const char* custom = std::getenv("MERCURY_CACHE_DIR");
+        custom && *custom) {
       return fs::path(custom);
     }
 #if defined(_WIN32)
-    if (const char* local = std::getenv("LOCALAPPDATA")) base = fs::path(local) / "Mercury";
+    if (const char* local = std::getenv("LOCALAPPDATA"))
+      base = fs::path(local) / "Mercury";
 #elif defined(__APPLE__)
-    if (const char* home = std::getenv("HOME")) base = fs::path(home) / "Library" / "Caches";
+    if (const char* home = std::getenv("HOME"))
+      base = fs::path(home) / "Library" / "Caches";
 #else
     if (const char* xdg = std::getenv("XDG_CACHE_HOME"); xdg && *xdg) {
       base = xdg;

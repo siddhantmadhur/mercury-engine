@@ -121,8 +121,8 @@ class MeshGenerationContext {
   void DrawRect(const Rect& rect, Color color);
   void DrawRoundedRect(const Rect& rect, const std::array<float, 4>& radii,
                        Color color);
-  void DrawImage(const Rect& rect, uint32_t texture_id, glm::vec4 uv = {0, 0, 1, 1},
-                 Color tint = Color::White());
+  void DrawImage(const Rect& rect, uint32_t texture_id,
+                 glm::vec4 uv = {0, 0, 1, 1}, Color tint = Color::White());
   // Draws laid-out text with its top-left at `origin`.
   void DrawText(const TextLayout& layout, const Font& font, glm::vec2 origin,
                 const ComputedStyle& style);
@@ -150,12 +150,15 @@ class MeshGenerationContext {
  * @param sides receives the side (0 left, 1 top, 2 right, 3 bottom) of each
  * point
  */
-void BuildRoundedContour(const Rect& rect, const std::array<glm::vec2, 4>& radii,
+void BuildRoundedContour(const Rect& rect,
+                         const std::array<glm::vec2, 4>& radii,
                          const std::array<int, 4>& segments,
-                         std::vector<glm::vec2>& points, std::vector<int>* sides);
+                         std::vector<glm::vec2>& points,
+                         std::vector<int>* sides);
 
 // Draws an element's background, image and border.
-void DrawElementBox(MeshGenerationContext& context, const VisualElement& element);
+void DrawElementBox(MeshGenerationContext& context,
+                    const VisualElement& element);
 
 }  // namespace Mercury::UI
 

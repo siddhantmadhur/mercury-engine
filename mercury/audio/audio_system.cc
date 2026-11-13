@@ -22,7 +22,8 @@ struct Vfs {
   ma_vfs_callbacks callbacks;  // must come first
 };
 
-ma_result VfsOpen(ma_vfs*, const char* path, ma_uint32 mode, ma_vfs_file* file) {
+ma_result VfsOpen(ma_vfs*, const char* path, ma_uint32 mode,
+                  ma_vfs_file* file) {
   if (mode & MA_OPEN_MODE_WRITE) return MA_ACCESS_DENIED;
   auto bytes = os::ReadBytes(path);
   if (!bytes) return MA_DOES_NOT_EXIST;
@@ -40,7 +41,8 @@ ma_result VfsClose(ma_vfs*, ma_vfs_file file) {
   return MA_SUCCESS;
 }
 
-ma_result VfsRead(ma_vfs*, ma_vfs_file file, void* dst, size_t bytes, size_t* read) {
+ma_result VfsRead(ma_vfs*, ma_vfs_file file, void* dst, size_t bytes,
+                  size_t* read) {
   auto* memory = static_cast<MemoryFile*>(file);
   const size_t available = memory->data.size() - memory->cursor;
   const size_t count = std::min(bytes, available);
@@ -54,12 +56,16 @@ ma_result VfsWrite(ma_vfs*, ma_vfs_file, const void*, size_t, size_t*) {
   return MA_ACCESS_DENIED;
 }
 
-ma_result VfsSeek(ma_vfs*, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin) {
+ma_result VfsSeek(ma_vfs*, ma_vfs_file file, ma_int64 offset,
+                  ma_seek_origin origin) {
   auto* memory = static_cast<MemoryFile*>(file);
   ma_int64 target = offset;
-  if (origin == ma_seek_origin_current) target = static_cast<ma_int64>(memory->cursor) + offset;
-  if (origin == ma_seek_origin_end) target = static_cast<ma_int64>(memory->data.size()) + offset;
-  if (target < 0 || target > static_cast<ma_int64>(memory->data.size())) return MA_BAD_SEEK;
+  if (origin == ma_seek_origin_current)
+    target = static_cast<ma_int64>(memory->cursor) + offset;
+  if (origin == ma_seek_origin_end)
+    target = static_cast<ma_int64>(memory->data.size()) + offset;
+  if (target < 0 || target > static_cast<ma_int64>(memory->data.size()))
+    return MA_BAD_SEEK;
   memory->cursor = static_cast<size_t>(target);
   return MA_SUCCESS;
 }
@@ -112,15 +118,16 @@ AudioSystem::~AudioSystem() {
   sources_.clear();
   if (engine_) {
     ma_engine_uninit(&engine_->engine);
-    if (engine_->resource_manager_ready) ma_resource_manager_uninit(&engine_->resource_manager);
+    if (engine_->resource_manager_ready)
+      ma_resource_manager_uninit(&engine_->resource_manager);
   }
 }
 
 bool AudioSystem::Initialize(Resolver resolver, bool no_device) {
   resolver_ = std::move(resolver);
   auto engine = std::make_unique<Engine>();
-  engine->vfs.callbacks = {VfsOpen, VfsOpenW, VfsClose, VfsRead,
-                           VfsWrite, VfsSeek, VfsTell, VfsInfo};
+  engine->vfs.callbacks = {VfsOpen,  VfsOpenW, VfsClose, VfsRead,
+                           VfsWrite, VfsSeek,  VfsTell,  VfsInfo};
 
   ma_resource_manager_config rm_config = ma_resource_manager_config_init();
   rm_config.pVFS = &engine->vfs;
@@ -128,7 +135,8 @@ bool AudioSystem::Initialize(Resolver resolver, bool no_device) {
   // Decoding happens on the calling thread; clips here are short.
   rm_config.jobThreadCount = 0;
   rm_config.flags = MA_RESOURCE_MANAGER_FLAG_NO_THREADING;
-  if (ma_resource_manager_init(&rm_config, &engine->resource_manager) != MA_SUCCESS) {
+  if (ma_resource_manager_init(&rm_config, &engine->resource_manager) !=
+      MA_SUCCESS) {
     PDebug::warn("Audio: could not create the resource manager; sound is off");
     return false;
   }
@@ -167,11 +175,12 @@ void AudioSystem::DestroySource(SourceId id) {
 
 AudioSystem::Sound* AudioSystem::NewSound(std::string_view res_path) {
   if (!engine_ || res_path.empty()) return nullptr;
-  const std::string file = resolver_ ? resolver_(res_path) : std::string(res_path);
+  const std::string file =
+      resolver_ ? resolver_(res_path) : std::string(res_path);
   auto sound = std::make_unique<Sound>();
   const ma_uint32 flags = MA_SOUND_FLAG_DECODE;
-  if (ma_sound_init_from_file(&engine_->engine, file.c_str(), flags, nullptr, nullptr,
-                              &sound->sound) != MA_SUCCESS) {
+  if (ma_sound_init_from_file(&engine_->engine, file.c_str(), flags, nullptr,
+                              nullptr, &sound->sound) != MA_SUCCESS) {
     PDebug::warn("Audio: could not load {}", res_path);
     return nullptr;
   }
@@ -182,7 +191,8 @@ void AudioSystem::Apply(Source& source, Sound& sound) const {
   ma_sound_set_volume(&sound.sound, source.mute ? 0.0f : source.volume);
   ma_sound_set_pitch(&sound.sound, std::max(source.pitch, 0.01f));
   const bool spatial = source.spatial_blend > 0.5f;
-  ma_sound_set_spatialization_enabled(&sound.sound, spatial ? MA_TRUE : MA_FALSE);
+  ma_sound_set_spatialization_enabled(&sound.sound,
+                                      spatial ? MA_TRUE : MA_FALSE);
   if (spatial) {
     // Unity's default rolloff is logarithmic between min and max distance.
     ma_sound_set_attenuation_model(&sound.sound, ma_attenuation_model_inverse);
@@ -229,22 +239,26 @@ void AudioSystem::Stop(SourceId id) {
 
 void AudioSystem::Pause(SourceId id) {
   auto it = sources_.find(id);
-  if (it != sources_.end() && it->second->main) ma_sound_stop(&it->second->main->sound);
+  if (it != sources_.end() && it->second->main)
+    ma_sound_stop(&it->second->main->sound);
 }
 
 void AudioSystem::UnPause(SourceId id) {
   auto it = sources_.find(id);
-  if (it != sources_.end() && it->second->main) ma_sound_start(&it->second->main->sound);
+  if (it != sources_.end() && it->second->main)
+    ma_sound_start(&it->second->main->sound);
 }
 
-void AudioSystem::PlayOneShot(SourceId id, std::string_view res_path, float volume_scale) {
+void AudioSystem::PlayOneShot(SourceId id, std::string_view res_path,
+                              float volume_scale) {
   auto it = sources_.find(id);
   if (it == sources_.end()) return;
   Source& source = *it->second;
   Sound* sound = NewSound(res_path);
   if (!sound) return;
   Apply(source, *sound);
-  ma_sound_set_volume(&sound->sound, source.mute ? 0.0f : source.volume * volume_scale);
+  ma_sound_set_volume(&sound->sound,
+                      source.mute ? 0.0f : source.volume * volume_scale);
   ma_sound_start(&sound->sound);
   source.one_shots.emplace_back(sound);
   source.one_shot_scales.push_back(volume_scale);
@@ -256,7 +270,8 @@ bool AudioSystem::IsPlaying(SourceId id) const {
   const Source& source = *it->second;
   if (source.main && ma_sound_is_playing(&source.main->sound)) return true;
   for (const auto& shot : source.one_shots) {
-    if (ma_sound_is_playing(&shot->sound) && !ma_sound_at_end(&shot->sound)) return true;
+    if (ma_sound_is_playing(&shot->sound) && !ma_sound_at_end(&shot->sound))
+      return true;
   }
   return false;
 }
@@ -302,8 +317,8 @@ void AudioSystem::SetMute(SourceId id, bool mute) {
   if (it->second->main) Apply(*it->second, *it->second->main);
 }
 
-void AudioSystem::SetSpatial(SourceId id, float spatial_blend, float min_distance,
-                             float max_distance) {
+void AudioSystem::SetSpatial(SourceId id, float spatial_blend,
+                             float min_distance, float max_distance) {
   auto it = sources_.find(id);
   if (it == sources_.end()) return;
   Source& source = *it->second;
@@ -319,16 +334,21 @@ void AudioSystem::SetPosition(SourceId id, glm::vec3 position) {
   Source& source = *it->second;
   source.position = position;
   if (source.spatial_blend <= 0.5f) return;
-  if (source.main) ma_sound_set_position(&source.main->sound, position.x, position.y, position.z);
+  if (source.main)
+    ma_sound_set_position(&source.main->sound, position.x, position.y,
+                          position.z);
   for (auto& shot : source.one_shots) {
     ma_sound_set_position(&shot->sound, position.x, position.y, position.z);
   }
 }
 
-void AudioSystem::SetListener(glm::vec3 position, glm::vec3 forward, glm::vec3 up) {
+void AudioSystem::SetListener(glm::vec3 position, glm::vec3 forward,
+                              glm::vec3 up) {
   if (!engine_) return;
-  ma_engine_listener_set_position(&engine_->engine, 0, position.x, position.y, position.z);
-  ma_engine_listener_set_direction(&engine_->engine, 0, forward.x, forward.y, forward.z);
+  ma_engine_listener_set_position(&engine_->engine, 0, position.x, position.y,
+                                  position.z);
+  ma_engine_listener_set_direction(&engine_->engine, 0, forward.x, forward.y,
+                                   forward.z);
   ma_engine_listener_set_world_up(&engine_->engine, 0, up.x, up.y, up.z);
 }
 
@@ -350,7 +370,8 @@ void AudioSystem::Update() {
   for (auto& [id, source] : sources_) {
     auto scale = source->one_shot_scales.begin();
     for (auto it = source->one_shots.begin(); it != source->one_shots.end();) {
-      if (ma_sound_at_end(&(*it)->sound) || !ma_sound_is_playing(&(*it)->sound)) {
+      if (ma_sound_at_end(&(*it)->sound) ||
+          !ma_sound_is_playing(&(*it)->sound)) {
         ma_sound_uninit(&(*it)->sound);
         it = source->one_shots.erase(it);
         scale = source->one_shot_scales.erase(scale);

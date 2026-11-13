@@ -67,7 +67,9 @@ class GpuTimer {
 class GpuScope {
  public:
   GpuScope(GpuTimer* timer, VkCommandBuffer cmd, std::string_view name)
-      : timer_(timer), cmd_(cmd), scope_(timer ? timer->Begin(cmd, name) : -1) {}
+      : timer_(timer),
+        cmd_(cmd),
+        scope_(timer ? timer->Begin(cmd, name) : -1) {}
   ~GpuScope() {
     if (timer_) timer_->End(cmd_, scope_);
   }

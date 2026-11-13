@@ -38,7 +38,9 @@ std::optional<std::string> Console::FindScriptFile(const std::string& text) {
     const size_t end = as + 3;
     if (end >= text.size() || (text[end] != ':' && text[end] != '(')) continue;
     // Something must follow that looks like a line number.
-    if (end + 1 >= text.size() || !std::isdigit(static_cast<unsigned char>(text[end + 1]))) continue;
+    if (end + 1 >= text.size() ||
+        !std::isdigit(static_cast<unsigned char>(text[end + 1])))
+      continue;
     return text.substr(at, end - at);
   }
 }

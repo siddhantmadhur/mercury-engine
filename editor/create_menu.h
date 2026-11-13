@@ -51,10 +51,12 @@ inline void PopulateCreateNodeMenu(
   menu->AppendSubMenu(objects3d, "3D Object");
 
   auto* lights = new wxMenu();
-  add_preset(lights, "Directional Light", EditorScene::Preset::kDirectionalLight);
+  add_preset(lights, "Directional Light",
+             EditorScene::Preset::kDirectionalLight);
   add_preset(lights, "Point Light", EditorScene::Preset::kPointLight);
   add_preset(lights, "Area Light", EditorScene::Preset::kAreaLight);
-  add_preset(lights, "Light Probe Volume", EditorScene::Preset::kLightProbeVolume);
+  add_preset(lights, "Light Probe Volume",
+             EditorScene::Preset::kLightProbeVolume);
   menu->AppendSubMenu(lights, "Light");
 
   add_preset(menu, "2D Sprite", EditorScene::Preset::kSprite);

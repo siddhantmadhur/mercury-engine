@@ -32,12 +32,18 @@ class Console {
   // Guesses the level of a line of process output from its wording.
   void AddProcessOutput(Source source, std::string text);
 
-  void Info(std::string text) { Add(Level::kInfo, Source::kEditor, std::move(text)); }
-  void Warn(std::string text) { Add(Level::kWarning, Source::kEditor, std::move(text)); }
-  void Error(std::string text) { Add(Level::kError, Source::kEditor, std::move(text)); }
+  void Info(std::string text) {
+    Add(Level::kInfo, Source::kEditor, std::move(text));
+  }
+  void Warn(std::string text) {
+    Add(Level::kWarning, Source::kEditor, std::move(text));
+  }
+  void Error(std::string text) {
+    Add(Level::kError, Source::kEditor, std::move(text));
+  }
 
-  // The script file a line points at: "scripts/ball.as:42:5" (an AngelScript exception).
-  // Returns the project-relative path, e.g. "scripts/ball.as".
+  // The script file a line points at: "scripts/ball.as:42:5" (an AngelScript
+  // exception). Returns the project-relative path, e.g. "scripts/ball.as".
   static std::optional<std::string> FindScriptFile(const std::string& text);
 
   void Clear();

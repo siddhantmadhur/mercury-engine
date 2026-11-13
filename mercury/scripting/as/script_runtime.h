@@ -97,7 +97,15 @@ struct ScriptClass {
 
 // A typed argument or return value for ScriptRuntime::Call.
 struct ScriptArg {
-  enum class Kind { kNone, kBool, kInt, kFloat, kDouble, kString, kObject } kind = Kind::kNone;
+  enum class Kind {
+    kNone,
+    kBool,
+    kInt,
+    kFloat,
+    kDouble,
+    kString,
+    kObject
+  } kind = Kind::kNone;
   bool b = false;
   int i = 0;
   float f = 0.0f;
@@ -145,7 +153,8 @@ struct ScriptArg {
   }
 };
 
-// Empties the table of UI element handles (bindings_ui.cc); old handles then throw.
+// Empties the table of UI element handles (bindings_ui.cc); old handles then
+// throw.
 void InvalidateUiHandles();
 
 class ScriptRuntime {
@@ -153,7 +162,8 @@ class ScriptRuntime {
   static ScriptRuntime& Instance();
 
   /**
-   * @brief Starts AngelScript and installs the native API. Call once per process.
+   * @brief Starts AngelScript and installs the native API. Call once per
+   * process.
    */
   bool Initialize();
   // Drops every script object and the engine. Destroy scenes first.
@@ -217,9 +227,12 @@ class ScriptRuntime {
   void OwnDataAsset(std::unique_ptr<ScriptBehaviour> asset);
 
   // --- script classes -----------------------------------------------------
-  bool AddScriptClass(std::unique_ptr<ScriptClass> script_class, std::string* error);
+  bool AddScriptClass(std::unique_ptr<ScriptClass> script_class,
+                      std::string* error);
   const ScriptClass* FindScriptClass(std::string_view name) const;
-  const std::vector<std::unique_ptr<ScriptClass>>& ScriptClasses() const { return classes_; }
+  const std::vector<std::unique_ptr<ScriptClass>>& ScriptClasses() const {
+    return classes_;
+  }
 
   // --- timers -------------------------------------------------------------
   struct Timer {
@@ -249,8 +262,9 @@ class ScriptRuntime {
   ScriptRuntime() = default;
   ~ScriptRuntime();
 
-  bool BuildFromSections(const std::vector<std::pair<std::string, std::string>>& sections,
-                         const std::string& module_name, bool register_types);
+  bool BuildFromSections(
+      const std::vector<std::pair<std::string, std::string>>& sections,
+      const std::string& module_name, bool register_types);
   void RegisterClasses(asIScriptModule* module, CScriptBuilder& builder,
                        bool register_types);
   void DiscardModule();

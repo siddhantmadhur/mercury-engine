@@ -31,8 +31,8 @@ int RunHeadlessControllerSmoke(const std::filesystem::path& project,
   for (int i = 0; i < max_frames; ++i) {
     application->StepFrame();
     if (i == 2 && scene_ptr->GetMap().GetRoot()) {
-      auto* created = scene_ptr->CreatePreset(scene_ptr->GetMap().GetRoot(),
-                                              Mercury::EditorScene::Preset::kCube);
+      auto* created = scene_ptr->CreatePreset(
+          scene_ptr->GetMap().GetRoot(), Mercury::EditorScene::Preset::kCube);
       if (created) {
         scene_ptr->Undo();
         scene_ptr->Redo();

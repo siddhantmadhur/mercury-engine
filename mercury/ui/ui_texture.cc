@@ -27,8 +27,8 @@ UITextureRegistry& UITextureRegistry::Instance() {
   return registry;
 }
 
-std::shared_ptr<UITexture> UITextureRegistry::Create(int width, int height,
-                                                     std::vector<uint8_t> rgba) {
+std::shared_ptr<UITexture> UITextureRegistry::Create(
+    int width, int height, std::vector<uint8_t> rgba) {
   auto texture = std::make_shared<UITexture>();
   texture->width = width;
   texture->height = height;
@@ -59,7 +59,8 @@ std::shared_ptr<UITexture> UITextureRegistry::LoadFile(
     by_path_[absolute_path] = 0;
     return nullptr;
   }
-  std::vector<uint8_t> rgba(pixels, pixels + static_cast<size_t>(width) * height * 4);
+  std::vector<uint8_t> rgba(pixels,
+                            pixels + static_cast<size_t>(width) * height * 4);
   stbi_image_free(pixels);
   auto texture = Create(width, height, std::move(rgba));
   std::lock_guard lock(mutex_);
@@ -70,7 +71,8 @@ std::shared_ptr<UITexture> UITextureRegistry::LoadFile(
 void UITextureRegistry::Release(uint32_t id) {
   std::lock_guard lock(mutex_);
   if (textures_.erase(id)) generation_++;
-  std::erase_if(by_path_, [id](const auto& entry) { return entry.second == id; });
+  std::erase_if(by_path_,
+                [id](const auto& entry) { return entry.second == id; });
 }
 
 std::shared_ptr<UITexture> UITextureRegistry::Find(uint32_t id) const {

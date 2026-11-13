@@ -15,11 +15,11 @@ Mesh::Mesh() {
   this->indices_ = {};
 }
 
-Mesh::Mesh(const std::string &file_path) {
+Mesh::Mesh(const std::string& file_path) {
   Assimp::Importer importer;
   UseVfs(importer);
 
-  const aiScene *scene = importer.ReadFile(
+  const aiScene* scene = importer.ReadFile(
       file_path, aiProcess_Triangulate | aiProcess_FlipUVs |
                      aiProcess_ConvertToLeftHanded | aiProcess_GenNormals |
                      aiProcess_PreTransformVertices |
@@ -33,7 +33,7 @@ Mesh::Mesh(const std::string &file_path) {
   std::vector<Vertex> vertices = {};
   std::vector<UINT> indices = {};
 
-  std::vector<aiNode *> nodes = {};
+  std::vector<aiNode*> nodes = {};
   nodes.push_back(scene->mRootNode);
 
   int vertex_offset = 0;
@@ -42,7 +42,7 @@ Mesh::Mesh(const std::string &file_path) {
   glm::vec3 mesh_max(0.0);
 
   while (nodes.size()) {
-    aiNode *cur = nodes.back();
+    aiNode* cur = nodes.back();
     nodes.pop_back();
 
     for (int i = 0; i < cur->mNumChildren; i++) {
@@ -51,8 +51,8 @@ Mesh::Mesh(const std::string &file_path) {
 
     for (int x = 0; x < cur->mNumMeshes; x++) {
       auto idx = cur->mMeshes[x];
-      auto *aiMesh = scene->mMeshes[idx];
-      aiAABB &aabb = aiMesh->mAABB;
+      auto* aiMesh = scene->mMeshes[idx];
+      aiAABB& aabb = aiMesh->mAABB;
       aiVector3D center = (aabb.mMin + aabb.mMax) / 2.0f;
 
       if (mesh_min.x > aabb.mMin.x) mesh_min.x = aabb.mMin.x;
@@ -94,7 +94,7 @@ Mesh::Mesh(const std::string &file_path) {
   SetVertices(vertices);
   SetIndices(indices);
 }
-bool Mesh::AddMesh(const Mesh &mesh) {
+bool Mesh::AddMesh(const Mesh& mesh) {
   auto index_offset = vertices_.size();
 
   for (auto vertex : mesh.vertices_) {
@@ -117,7 +117,7 @@ void Mesh::SetVertices(std::vector<Vertex> vertices) {
 
 std::vector<Vertex> Mesh::GetVertices() const { return this->vertices_; }
 
-void Mesh::SetIndices(const std::vector<UINT> &indices) {
+void Mesh::SetIndices(const std::vector<UINT>& indices) {
   this->indices_ = indices;
 }
 

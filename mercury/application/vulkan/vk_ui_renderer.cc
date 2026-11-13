@@ -26,33 +26,37 @@ bool UIRenderer::Init(Context& context, VkFormat color_format,
   frames_.resize(frames_in_flight);
   VkDevice device = context.device;
 
-  VkSamplerCreateInfo sampler_info = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+  VkSamplerCreateInfo sampler_info = {
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
   sampler_info.magFilter = VK_FILTER_LINEAR;
   sampler_info.minFilter = VK_FILTER_LINEAR;
   sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
   sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  if (!VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &linear_sampler_))) {
+  if (!VK_CHECK(
+          vkCreateSampler(device, &sampler_info, nullptr, &linear_sampler_))) {
     return false;
   }
   sampler_info.magFilter = VK_FILTER_NEAREST;
   sampler_info.minFilter = VK_FILTER_NEAREST;
-  if (!VK_CHECK(vkCreateSampler(device, &sampler_info, nullptr, &nearest_sampler_))) {
+  if (!VK_CHECK(
+          vkCreateSampler(device, &sampler_info, nullptr, &nearest_sampler_))) {
     return false;
   }
 
   const VkDescriptorSetLayoutBinding bindings[] = {
       {kTextureBinding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
        VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-      {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-       nullptr},
+      {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
+       VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
   };
   VkDescriptorSetLayoutCreateInfo layout_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
   layout_info.bindingCount = 2;
   layout_info.pBindings = bindings;
-  if (!VK_CHECK(vkCreateDescriptorSetLayout(device, &layout_info, nullptr, &set_layout_))) {
+  if (!VK_CHECK(vkCreateDescriptorSetLayout(device, &layout_info, nullptr,
+                                            &set_layout_))) {
     return false;
   }
 
@@ -60,7 +64,8 @@ bool UIRenderer::Init(Context& context, VkFormat color_format,
       {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kMaxTextures},
       {VK_DESCRIPTOR_TYPE_SAMPLER, kMaxTextures},
   };
-  VkDescriptorPoolCreateInfo pool_info = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  VkDescriptorPoolCreateInfo pool_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
   pool_info.maxSets = kMaxTextures;
   pool_info.poolSizeCount = 2;
@@ -81,7 +86,8 @@ bool UIRenderer::Init(Context& context, VkFormat color_format,
                                        &pipeline_layout_))) {
     return false;
   }
-  return CreatePipeline(color_format, depth_format, vertex_shader, pixel_shader);
+  return CreatePipeline(color_format, depth_format, vertex_shader,
+                        pixel_shader);
 }
 
 bool UIRenderer::CreatePipeline(VkFormat color_format, VkFormat depth_format,
@@ -99,7 +105,8 @@ bool UIRenderer::CreatePipeline(VkFormat color_format, VkFormat depth_format,
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
   vertex_input.vertexBindingDescriptionCount = 1;
   vertex_input.pVertexBindingDescriptions = &binding;
-  vertex_input.vertexAttributeDescriptionCount = static_cast<uint32_t>(std::size(attributes));
+  vertex_input.vertexAttributeDescriptionCount =
+      static_cast<uint32_t>(std::size(attributes));
   vertex_input.pVertexAttributeDescriptions = attributes;
 
   VkPipelineInputAssemblyStateCreateInfo input_assembly = {
@@ -225,8 +232,10 @@ void UIRenderer::Retire(std::unique_ptr<GpuTexture> texture) {
 
 void UIRenderer::CollectGarbage(bool everything) {
   std::erase_if(garbage_, [&](Garbage& g) {
-    if (!everything && frame_counter_ < g.frame + frames_in_flight_ + 1) return false;
-    if (g.texture->set) vkFreeDescriptorSets(context_->device, pool_, 1, &g.texture->set);
+    if (!everything && frame_counter_ < g.frame + frames_in_flight_ + 1)
+      return false;
+    if (g.texture->set)
+      vkFreeDescriptorSets(context_->device, pool_, 1, &g.texture->set);
     return true;
   });
 }
@@ -234,10 +243,12 @@ void UIRenderer::CollectGarbage(bool everything) {
 bool UIRenderer::EnsureCapacity(vk::Buffer& buffer, VkDeviceSize needed,
                                 VkBufferUsageFlags usage) {
   if (buffer.Valid() && buffer.Size() >= needed) return true;
-  VkDeviceSize size = std::max<VkDeviceSize>(buffer.Valid() ? buffer.Size() : 0, 64 * 1024);
+  VkDeviceSize size =
+      std::max<VkDeviceSize>(buffer.Valid() ? buffer.Size() : 0, 64 * 1024);
   while (size < needed) size *= 2;
   vk::Buffer bigger;
-  if (!bigger.Create(context_->allocator, size, usage, vk::Buffer::Memory::kHostVisible)) {
+  if (!bigger.Create(context_->allocator, size, usage,
+                     vk::Buffer::Memory::kHostVisible)) {
     PDebug::error("Vulkan: could not grow the UI buffer to {} bytes", size);
     return false;
   }
@@ -251,11 +262,12 @@ bool UIRenderer::EnsureCapacity(vk::Buffer& buffer, VkDeviceSize needed,
   return true;
 }
 
-bool UIRenderer::Upload(VkCommandBuffer cmd, GpuTexture& texture, const uint8_t* rgba,
-                        int width, int height) {
+bool UIRenderer::Upload(VkCommandBuffer cmd, GpuTexture& texture,
+                        const uint8_t* rgba, int width, int height) {
   const VkDeviceSize bytes = VkDeviceSize(width) * height * 4;
   vk::Buffer staging;
-  if (!staging.Create(context_->allocator, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+  if (!staging.Create(context_->allocator, bytes,
+                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                       vk::Buffer::Memory::kHostVisible) ||
       !staging.Write(rgba, bytes)) {
     return false;
@@ -267,23 +279,26 @@ bool UIRenderer::Upload(VkCommandBuffer cmd, GpuTexture& texture, const uint8_t*
                             : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
-                      VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+                      VK_PIPELINE_STAGE_2_COPY_BIT,
+                      VK_ACCESS_2_TRANSFER_WRITE_BIT);
   VkBufferImageCopy region = {};
   region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-  region.imageExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+  region.imageExtent = {static_cast<uint32_t>(width),
+                        static_cast<uint32_t>(height), 1};
   vkCmdCopyBufferToImage(cmd, staging.Get(), texture.image.Get(),
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-  vk::TransitionImage(cmd, texture.image.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+  vk::TransitionImage(
+      cmd, texture.image.Get(), VK_IMAGE_ASPECT_COLOR_BIT,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT,
+      VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
   frames_[frame_index_].staging.push_back(std::move(staging));
   return true;
 }
 
-UIRenderer::GpuTexture* UIRenderer::SyncTexture(VkCommandBuffer cmd, uint32_t id) {
+UIRenderer::GpuTexture* UIRenderer::SyncTexture(VkCommandBuffer cmd,
+                                                uint32_t id) {
   std::shared_ptr<UI::UITexture> cpu;
   static const uint8_t kWhite[4] = {255, 255, 255, 255};
   const uint8_t* pixels = kWhite;
@@ -314,11 +329,11 @@ UIRenderer::GpuTexture* UIRenderer::SyncTexture(VkCommandBuffer cmd, uint32_t id
   }
   if (!texture) {
     auto created = std::make_unique<GpuTexture>();
-    if (!created->image.Create(context_->allocator, context_->device,
-                               static_cast<uint32_t>(width), static_cast<uint32_t>(height),
-                               VK_FORMAT_R8G8B8A8_UNORM,
-                               VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                               VK_IMAGE_ASPECT_COLOR_BIT)) {
+    if (!created->image.Create(
+            context_->allocator, context_->device, static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height), VK_FORMAT_R8G8B8A8_UNORM,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT)) {
       PDebug::error("Vulkan: could not create {}x{} UI texture", width, height);
       return nullptr;
     }
@@ -327,13 +342,16 @@ UIRenderer::GpuTexture* UIRenderer::SyncTexture(VkCommandBuffer cmd, uint32_t id
     alloc_info.descriptorPool = pool_;
     alloc_info.descriptorSetCount = 1;
     alloc_info.pSetLayouts = &set_layout_;
-    if (!VK_CHECK(vkAllocateDescriptorSets(context_->device, &alloc_info, &created->set))) {
+    if (!VK_CHECK(vkAllocateDescriptorSets(context_->device, &alloc_info,
+                                           &created->set))) {
       return nullptr;
     }
-    VkDescriptorImageInfo image_info = {VK_NULL_HANDLE, created->image.View(),
-                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkDescriptorImageInfo sampler_info = {linear ? linear_sampler_ : nearest_sampler_,
-                                          VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
+    VkDescriptorImageInfo image_info = {
+        VK_NULL_HANDLE, created->image.View(),
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkDescriptorImageInfo sampler_info = {
+        linear ? linear_sampler_ : nearest_sampler_, VK_NULL_HANDLE,
+        VK_IMAGE_LAYOUT_UNDEFINED};
     VkWriteDescriptorSet writes[2] = {};
     for (auto& write : writes) {
       write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -358,10 +376,12 @@ UIRenderer::GpuTexture* UIRenderer::SyncTexture(VkCommandBuffer cmd, uint32_t id
   return texture;
 }
 
-UIRenderer::Batch UIRenderer::Prepare(VkCommandBuffer cmd, const UI::UIDrawData& data) {
+UIRenderer::Batch UIRenderer::Prepare(VkCommandBuffer cmd,
+                                      const UI::UIDrawData& data) {
   Batch batch;
   if (!context_ || data.empty()) return batch;
-  for (const auto& command : data.commands) SyncTexture(cmd, command.texture_id);
+  for (const auto& command : data.commands)
+    SyncTexture(cmd, command.texture_id);
   SyncTexture(cmd, 0);
 
   FrameBuffers& frame = frames_[frame_index_];
@@ -385,19 +405,25 @@ UIRenderer::Batch UIRenderer::Prepare(VkCommandBuffer cmd, const UI::UIDrawData&
   return batch;
 }
 
-void UIRenderer::Record(VkCommandBuffer cmd, const Batch& batch, VkExtent2D extent) {
+void UIRenderer::Record(VkCommandBuffer cmd, const Batch& batch,
+                        VkExtent2D extent) {
   if (!batch.valid() || extent.width == 0 || extent.height == 0) return;
   const UI::UIDrawData& data = *batch.data;
 
-  VkViewport viewport = {0.0f, 0.0f, static_cast<float>(extent.width),
-                         static_cast<float>(extent.height), 0.0f, 1.0f};
+  VkViewport viewport = {0.0f,
+                         0.0f,
+                         static_cast<float>(extent.width),
+                         static_cast<float>(extent.height),
+                         0.0f,
+                         1.0f};
   vkCmdSetViewport(cmd, 0, 1, &viewport);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
   const float inv_size[2] = {1.0f / extent.width, 1.0f / extent.height};
   vkCmdPushConstants(cmd, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0,
                      sizeof(inv_size), inv_size);
   vkCmdBindVertexBuffers(cmd, 0, 1, &batch.vertex_buffer, &batch.vertex_offset);
-  vkCmdBindIndexBuffer(cmd, batch.index_buffer, batch.index_offset, VK_INDEX_TYPE_UINT32);
+  vkCmdBindIndexBuffer(cmd, batch.index_buffer, batch.index_offset,
+                       VK_INDEX_TYPE_UINT32);
 
   VkDescriptorSet bound = VK_NULL_HANDLE;
   for (const auto& command : data.commands) {
@@ -407,8 +433,8 @@ void UIRenderer::Record(VkCommandBuffer cmd, const Batch& batch, VkExtent2D exte
     if (it == textures_.end()) continue;
     if (it->second->set != bound) {
       bound = it->second->set;
-      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0,
-                              1, &bound, 0, nullptr);
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              pipeline_layout_, 0, 1, &bound, 0, nullptr);
     }
     int x = 0, y = 0;
     int w = static_cast<int>(extent.width), h = static_cast<int>(extent.height);
@@ -419,7 +445,8 @@ void UIRenderer::Record(VkCommandBuffer cmd, const Batch& batch, VkExtent2D exte
       h = std::clamp(command.clip.y + command.clip.w, 0, h) - y;
     }
     if (w <= 0 || h <= 0) continue;
-    const VkRect2D scissor = {{x, y}, {static_cast<uint32_t>(w), static_cast<uint32_t>(h)}};
+    const VkRect2D scissor = {
+        {x, y}, {static_cast<uint32_t>(w), static_cast<uint32_t>(h)}};
     vkCmdSetScissor(cmd, 0, 1, &scissor);
     vkCmdDrawIndexed(cmd, command.index_count, 1, command.index_offset, 0, 0);
   }

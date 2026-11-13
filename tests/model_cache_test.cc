@@ -22,12 +22,14 @@ void SetCacheDir(const fs::path& dir);
 // Every test in this binary caches the models it imports in the build
 // folder (MERCURY_TEST_CACHE_DIR), not in the user's cache.
 const bool kTestCacheDir = [] {
-  if (!std::getenv("MERCURY_CACHE_DIR")) SetCacheDir(Mercury::test::CacheDir().string());
+  if (!std::getenv("MERCURY_CACHE_DIR"))
+    SetCacheDir(Mercury::test::CacheDir().string());
   return true;
 }();
 
 const fs::path kModel =
-    fs::path(MERCURY_SOURCE_DIR) / "examples/model_viewer/models/breakfast_room/breakfast_room.obj";
+    fs::path(MERCURY_SOURCE_DIR) /
+    "examples/model_viewer/models/breakfast_room/breakfast_room.obj";
 
 void SetCacheDir(const fs::path& dir) {
 #if defined(_WIN32)
@@ -45,9 +47,11 @@ void SetCacheDir(const fs::path& dir) {
 class ModelCacheTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    previous_ = std::getenv("MERCURY_CACHE_DIR") ? std::getenv("MERCURY_CACHE_DIR") : "";
-    dir_ = fs::temp_directory_path() /
-           ("mercury_model_cache_test_" + std::to_string(std::random_device()()));
+    previous_ = std::getenv("MERCURY_CACHE_DIR")
+                    ? std::getenv("MERCURY_CACHE_DIR")
+                    : "";
+    dir_ = fs::temp_directory_path() / ("mercury_model_cache_test_" +
+                                        std::to_string(std::random_device()()));
     fs::remove_all(dir_);
     SetCacheDir(dir_);
   }
@@ -139,8 +143,9 @@ TEST_F(ModelCacheTest, OtherSettingsImportAgain) {
 // OBJ glass (illum 7 with a transmission filter) imports as transmissive,
 // with its index of refraction and tint, and the cache keeps them.
 TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
-  const fs::path model = fs::path(MERCURY_SOURCE_DIR) /
-                         "examples/model_viewer/models/cornell_box/CornellBox-Sphere.obj";
+  const fs::path model =
+      fs::path(MERCURY_SOURCE_DIR) /
+      "examples/model_viewer/models/cornell_box/CornellBox-Sphere.obj";
   for (int pass = 0; pass < 2; pass++) {  // imported, then from the cache
     std::string error;
     auto loaded = Model::Load(model.string(), Settings(), &error);

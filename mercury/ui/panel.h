@@ -46,7 +46,8 @@ struct PanelSettings {
   PanelScaleMode scale_mode = PanelScaleMode::kConstantPixelSize;
   float scale = 1.0f;
   glm::vec2 reference_resolution{1200.0f, 800.0f};
-  PanelScreenMatchMode screen_match_mode = PanelScreenMatchMode::kMatchWidthOrHeight;
+  PanelScreenMatchMode screen_match_mode =
+      PanelScreenMatchMode::kMatchWidthOrHeight;
   float match = 0.0f;  // 0 = width, 1 = height
   float reference_dpi = 96.0f;
   float fallback_dpi = 96.0f;

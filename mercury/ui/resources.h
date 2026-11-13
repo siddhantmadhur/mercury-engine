@@ -4,8 +4,8 @@
  * Loads and caches what UI documents refer to: UXML files, USS sheets,
  * fonts and images. Paths may be:
  *   res://ui/hud.uxml      a file in the game project (needs a resolver)
- *   mercury://fonts/x.ttf  a file shipped with the engine (mercury/ui/resources)
- *   /abs/path.png          a plain file
+ *   mercury://fonts/x.ttf  a file shipped with the engine
+ * (mercury/ui/resources) /abs/path.png          a plain file
  */
 #ifndef MERCURY_UI_RESOURCES_H
 #define MERCURY_UI_RESOURCES_H
@@ -76,7 +76,8 @@ class UIResources {
   std::map<std::string, std::shared_ptr<VisualTreeAsset>, std::less<>> trees_;
   std::map<std::string, std::shared_ptr<Font>, std::less<>> fonts_;
   std::map<std::string, std::shared_ptr<UITexture>, std::less<>> textures_;
-  std::map<std::string, std::shared_ptr<StyleSheet>, std::less<>> sheet_overrides_;
+  std::map<std::string, std::shared_ptr<StyleSheet>, std::less<>>
+      sheet_overrides_;
   std::map<std::string, std::shared_ptr<VisualTreeAsset>, std::less<>>
       tree_overrides_;
   std::shared_ptr<StyleSheet> default_theme_;

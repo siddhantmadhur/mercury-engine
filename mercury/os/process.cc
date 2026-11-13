@@ -184,8 +184,8 @@ bool LaunchDetached(const std::vector<std::string>& args, std::string* error) {
 }
 
 bool OpenWithDefaultApp(const std::filesystem::path& path) {
-  auto result = ShellExecuteW(nullptr, L"open", path.wstring().c_str(),
-                              nullptr, nullptr, SW_SHOWNORMAL);
+  auto result = ShellExecuteW(nullptr, L"open", path.wstring().c_str(), nullptr,
+                              nullptr, SW_SHOWNORMAL);
   return reinterpret_cast<intptr_t>(result) > 32;
 }
 
@@ -208,7 +208,8 @@ bool Process::Start(const std::vector<std::string>& args,
   posix_spawn_file_actions_adddup2(&actions, fds[1], STDERR_FILENO);
   posix_spawn_file_actions_addclose(&actions, fds[0]);
   posix_spawn_file_actions_addclose(&actions, fds[1]);
-#if (defined(__GLIBC__) && (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 29)) || defined(__APPLE__)
+#if (defined(__GLIBC__) && (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 29)) || \
+    defined(__APPLE__)
   if (!working_dir.empty()) {
     posix_spawn_file_actions_addchdir_np(&actions, working_dir.c_str());
   }
@@ -226,14 +227,15 @@ bool Process::Start(const std::vector<std::string>& args,
   argv.push_back(nullptr);
 
   pid_t pid = -1;
-  const int result = posix_spawnp(&pid, argv[0], &actions, &attributes,
-                                  argv.data(), environ);
+  const int result =
+      posix_spawnp(&pid, argv[0], &actions, &attributes, argv.data(), environ);
   posix_spawn_file_actions_destroy(&actions);
   posix_spawnattr_destroy(&attributes);
   close(fds[1]);
   if (result != 0) {
     close(fds[0]);
-    if (error) *error = "could not start " + args[0] + ": " + std::strerror(result);
+    if (error)
+      *error = "could not start " + args[0] + ": " + std::strerror(result);
     return false;
   }
 
@@ -319,7 +321,8 @@ bool LaunchDetached(const std::vector<std::string>& args, std::string* error) {
       posix_spawnp(&pid, argv[0], nullptr, &attributes, argv.data(), environ);
   posix_spawnattr_destroy(&attributes);
   if (result != 0) {
-    if (error) *error = "could not start " + args[0] + ": " + std::strerror(result);
+    if (error)
+      *error = "could not start " + args[0] + ": " + std::strerror(result);
     return false;
   }
   // Reap it whenever it exits so it does not linger as a zombie.

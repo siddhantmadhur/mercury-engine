@@ -5,9 +5,9 @@
  * the map (set up in the editor) plus listeners added from code.
  *
  *   class Zone : public Mercury::Behaviour {
- *     void Reflect(Mercury::Reflector& r) override { r.Field("entered", entered); }
- *     void OnTriggerEnter(Mercury::GameObject) override { entered.Invoke(); }
- *     Mercury::Event entered;
+ *     void Reflect(Mercury::Reflector& r) override { r.Field("entered",
+ * entered); } void OnTriggerEnter(Mercury::GameObject) override {
+ * entered.Invoke(); } Mercury::Event entered;
  *   };
  *
  * A saved call names a node, a script on it and one of the methods that
@@ -112,27 +112,31 @@ class MethodReflector {
   void AddMethod(const char* name, Fn fn) {
     using Args = typename Arguments<Signature>::type;
     if constexpr (std::tuple_size_v<Args> == 0) {
-      methods_.push_back({name, ArgType::kNone, [fn](const mtext::Variant&) { fn(); }});
+      methods_.push_back(
+          {name, ArgType::kNone, [fn](const mtext::Variant&) { fn(); }});
     } else {
       using A = std::decay_t<std::tuple_element_t<0, Args>>;
       if constexpr (std::is_same_v<A, bool>) {
-        methods_.push_back({name, ArgType::kBool, [fn](const mtext::Variant& v) {
-                              fn(v.ToBool().value_or(false));
-                            }});
+        methods_.push_back(
+            {name, ArgType::kBool, [fn](const mtext::Variant& v) {
+               fn(v.ToBool().value_or(false));
+             }});
       } else if constexpr (std::is_integral_v<A>) {
         methods_.push_back({name, ArgType::kInt, [fn](const mtext::Variant& v) {
                               fn(static_cast<A>(v.ToInt().value_or(0)));
                             }});
       } else if constexpr (std::is_floating_point_v<A>) {
-        methods_.push_back({name, ArgType::kFloat, [fn](const mtext::Variant& v) {
-                              fn(static_cast<A>(v.ToFloat().value_or(0.0)));
-                            }});
+        methods_.push_back(
+            {name, ArgType::kFloat, [fn](const mtext::Variant& v) {
+               fn(static_cast<A>(v.ToFloat().value_or(0.0)));
+             }});
       } else {
-        static_assert(std::is_convertible_v<std::string, A>,
-                      "Event methods take nothing, a bool, int, float or string");
-        methods_.push_back({name, ArgType::kString, [fn](const mtext::Variant& v) {
-                              fn(v.ToString().value_or(""));
-                            }});
+        static_assert(
+            std::is_convertible_v<std::string, A>,
+            "Event methods take nothing, a bool, int, float or string");
+        methods_.push_back(
+            {name, ArgType::kString,
+             [fn](const mtext::Variant& v) { fn(v.ToString().value_or("")); }});
       }
     }
   }

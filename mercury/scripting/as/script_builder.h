@@ -31,16 +31,19 @@ class ScriptBuilder {
    * @brief Compiles the project's .as files and registers their classes
    * @return false if the project does not compile
    */
-  static bool Build(const std::filesystem::path& project_dir, const BuildOptions& options = {},
+  static bool Build(const std::filesystem::path& project_dir,
+                    const BuildOptions& options = {},
                     std::string* log = nullptr);
 
   // True when every .as is older than the stamp Build writes.
   static bool IsUpToDate(const std::filesystem::path& project_dir);
 
   // Every .as under the project's scripts folder, sorted.
-  static std::vector<std::filesystem::path> ScriptFiles(const std::filesystem::path& project_dir);
+  static std::vector<std::filesystem::path> ScriptFiles(
+      const std::filesystem::path& project_dir);
 
-  static std::filesystem::path StampPath(const std::filesystem::path& project_dir);
+  static std::filesystem::path StampPath(
+      const std::filesystem::path& project_dir);
 };
 
 }  // namespace Mercury

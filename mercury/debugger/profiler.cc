@@ -16,9 +16,9 @@ namespace Mercury::Profiler {
 namespace {
 
 struct Stat {
-  double frame = 0.0;     // this frame so far
-  double last = 0.0;      // the last finished frame
-  double smooth = 0.0;    // averaged over recent frames, for the overlay
+  double frame = 0.0;   // this frame so far
+  double last = 0.0;    // the last finished frame
+  double smooth = 0.0;  // averaged over recent frames, for the overlay
   double bench_sum = 0.0;
   double bench_max = 0.0;
   bool gpu = false;
@@ -64,13 +64,15 @@ struct State {
   // Frames since the last map load finished, and when it started.
   bool loading = true;
   uint64_t ready_frames = 0;
-  std::chrono::steady_clock::time_point load_start = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point load_start =
+      std::chrono::steady_clock::now();
   double last_load_ms = 0.0;
 };
 
 bool Measured(const State& s) {
   const Config& config = GetConfig();
-  return config.bench_frames > 0 && !s.bench_done && s.ready_frames > config.bench_warmup;
+  return config.bench_frames > 0 && !s.bench_done &&
+         s.ready_frames > config.bench_warmup;
 }
 
 State& GetState() {
@@ -82,7 +84,8 @@ void Add(std::string_view name, double ms, bool gpu) {
   State& s = GetState();
   std::lock_guard lock(s.mutex);
   auto it = s.stats.find(name);
-  if (it == s.stats.end()) it = s.stats.emplace(std::string(name), Stat{}).first;
+  if (it == s.stats.end())
+    it = s.stats.emplace(std::string(name), Stat{}).first;
   it->second.frame += ms;
   it->second.gpu = gpu;
 }
@@ -90,7 +93,8 @@ void Add(std::string_view name, double ms, bool gpu) {
 double Percentile(std::vector<double> values, double p) {
   if (values.empty()) return 0.0;
   std::sort(values.begin(), values.end());
-  const size_t i = std::min(values.size() - 1, static_cast<size_t>(p * (values.size() - 1) + 0.5));
+  const size_t i = std::min(values.size() - 1,
+                            static_cast<size_t>(p * (values.size() - 1) + 0.5));
   return values[i];
 }
 
@@ -103,15 +107,18 @@ void ReportBench(State& s) {
   const double average = total / std::max(n, 1.0);
   std::ostringstream out;
   out << std::format("load {:.0f} ms\n", s.last_load_ms);
-  out << std::format("frames {}  avg {:.3f} ms ({:.1f} fps)  p50 {:.3f}  p95 {:.3f}  p99 {:.3f}  max {:.3f}\n",
-                     frames.size(), average, 1000.0 / std::max(average, 1e-6),
-                     Percentile(frames, 0.5), Percentile(frames, 0.95),
-                     Percentile(frames, 0.99), Percentile(frames, 1.0));
+  out << std::format(
+      "frames {}  avg {:.3f} ms ({:.1f} fps)  p50 {:.3f}  p95 {:.3f}  p99 "
+      "{:.3f}  max {:.3f}\n",
+      frames.size(), average, 1000.0 / std::max(average, 1e-6),
+      Percentile(frames, 0.5), Percentile(frames, 0.95),
+      Percentile(frames, 0.99), Percentile(frames, 1.0));
   for (int pass = 0; pass < 2; pass++) {
     for (const auto& [name, stat] : s.stats) {
       if (stat.gpu != (pass == 1)) continue;
-      out << std::format("{} {:<28} avg {:8.3f} ms  max {:8.3f} ms\n", stat.gpu ? "gpu" : "cpu",
-                         name, stat.bench_sum / std::max(n, 1.0), stat.bench_max);
+      out << std::format("{} {:<28} avg {:8.3f} ms  max {:8.3f} ms\n",
+                         stat.gpu ? "gpu" : "cpu", name,
+                         stat.bench_sum / std::max(n, 1.0), stat.bench_max);
     }
   }
   for (const auto& [name, value] : s.counters) {
@@ -131,7 +138,8 @@ void BeginFrame() {
   const auto now = std::chrono::steady_clock::now();
   std::lock_guard lock(s.mutex);
   if (s.started) {
-    s.last_frame_ms = std::chrono::duration<double, std::milli>(now - s.frame_start).count();
+    s.last_frame_ms =
+        std::chrono::duration<double, std::milli>(now - s.frame_start).count();
     s.smooth_frame_ms = s.smooth_frame_ms * 0.95 + s.last_frame_ms * 0.05;
     const Config& config = GetConfig();
     // The frame that just ended counts if it was measured.
@@ -179,7 +187,8 @@ void SetLoading(bool loading) {
   if (loading) {
     s.load_start = now;
   } else {
-    s.last_load_ms = std::chrono::duration<double, std::milli>(now - s.load_start).count();
+    s.last_load_ms =
+        std::chrono::duration<double, std::milli>(now - s.load_start).count();
     s.ready_frames = 0;
     PDebug::info("Profiler: map loaded in {:.0f} ms", s.last_load_ms);
   }
@@ -192,7 +201,8 @@ void SetCounter(std::string_view name, double value) {
   State& s = GetState();
   std::lock_guard lock(s.mutex);
   auto it = s.counters.find(name);
-  if (it == s.counters.end()) it = s.counters.emplace(std::string(name), 0.0).first;
+  if (it == s.counters.end())
+    it = s.counters.emplace(std::string(name), 0.0).first;
   it->second = value;
 }
 

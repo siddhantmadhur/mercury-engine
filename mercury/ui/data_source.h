@@ -33,7 +33,8 @@ class IDataSource {
  public:
   virtual ~IDataSource() = default;
   // `path` is the binding's full path, e.g. "score" or "player.health".
-  virtual std::optional<mtext::Variant> GetValue(std::string_view path) const = 0;
+  virtual std::optional<mtext::Variant> GetValue(
+      std::string_view path) const = 0;
   virtual bool SetValue(std::string_view path, const mtext::Variant& value) = 0;
 };
 

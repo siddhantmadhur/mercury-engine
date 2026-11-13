@@ -223,7 +223,8 @@ lock_rotation_z = true
   const glm::quat q = capsule.GetTransform()->GetRotationQuat();
   const glm::vec3 up = q * glm::vec3(0.0f, 1.0f, 0.0f);
 
-  // Since X and Z rotation are locked, capsule must stay strictly upright along Y:
+  // Since X and Z rotation are locked, capsule must stay strictly upright along
+  // Y:
   EXPECT_NEAR(up.x, 0.0f, 1e-4f);
   EXPECT_NEAR(up.y, 1.0f, 1e-4f);
   EXPECT_NEAR(up.z, 0.0f, 1e-4f);
@@ -231,7 +232,8 @@ lock_rotation_z = true
   // Since Y rotation was NOT locked, it should have rotated around Y:
   const glm::vec3 forward = q * glm::vec3(0.0f, 0.0f, -1.0f);
   // Forward vector is no longer pointing purely along -Z
-  EXPECT_TRUE(std::abs(forward.x) > 1e-4f || std::abs(forward.z - (-1.0f)) > 1e-4f);
+  EXPECT_TRUE(std::abs(forward.x) > 1e-4f ||
+              std::abs(forward.z - (-1.0f)) > 1e-4f);
 }
 
 TEST(PhysicsConstraints, AllLockedAxesDoNotCrash) {
@@ -265,7 +267,8 @@ lock_rotation_z = true
       << error;
 
   MapScene scene(project, MapScene::Mode::kPlay);
-  // Should successfully instantiate and configure as static body without crashing
+  // Should successfully instantiate and configure as static body without
+  // crashing
   scene.Instantiate(map);
 
   auto body = scene.Find("LockedBody");

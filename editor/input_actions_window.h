@@ -72,7 +72,9 @@ class InputActionsWindow {
   void Select(Selection selection);
 
   std::vector<int> ActionsOf(const std::string& map) const;
-  const std::vector<std::string>& HeaderErrors() const { return header_errors_; }
+  const std::vector<std::string>& HeaderErrors() const {
+    return header_errors_;
+  }
   bool IsActionNameTaken(int action_idx, const std::string& name) const;
   std::string ActionUsageSnippet(int action_idx) const;
 
@@ -86,22 +88,26 @@ class InputActionsWindow {
   void DeleteSelected();
   void DuplicateSelected();
 
-  std::string SetActionName(int action_idx, std::string new_name, bool finalize = true);
+  std::string SetActionName(int action_idx, std::string new_name,
+                            bool finalize = true);
   void SetActionType(int action_idx, InputAction::Type type);
   void SetActionVector2(int action_idx, bool vector2);
 
   void SetBindingPath(int action_idx, int binding_idx, const std::string& path,
                       bool coalesced = false);
-  void SetCompositePartPath(int action_idx, int composite_idx, int part, int idx,
-                            const std::string& path, bool coalesced = false);
+  void SetCompositePartPath(int action_idx, int composite_idx, int part,
+                            int idx, const std::string& path,
+                            bool coalesced = false);
   void AddCompositePartPath(int action_idx, int composite_idx, int part);
-  void RemoveCompositePartPath(int action_idx, int composite_idx, int part, int idx);
+  void RemoveCompositePartPath(int action_idx, int composite_idx, int part,
+                               int idx);
 
   void SetGenerateHeader(bool enabled);
   void SetClassName(const std::string& class_name, bool coalesced = false);
   void SetHeaderPath(const std::string& header, bool coalesced = false);
 
-  // Polls gamepad buttons / triggers while listening; returns control path on new press.
+  // Polls gamepad buttons / triggers while listening; returns control path on
+  // new press.
   static std::optional<std::string> PollGamepadListen(const InputManager* input,
                                                       bool prev_buttons[15]);
 

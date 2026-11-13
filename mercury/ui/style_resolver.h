@@ -33,8 +33,8 @@ std::vector<const StyleSheet*> ApplicableSheets(
     const std::vector<const StyleSheet*>& panel_sheets);
 
 // Matching rules, lowest priority first.
-std::vector<MatchedRule> MatchRules(const VisualElement* element,
-                                    const std::vector<const StyleSheet*>& sheets);
+std::vector<MatchedRule> MatchRules(
+    const VisualElement* element, const std::vector<const StyleSheet*>& sheets);
 
 /**
  * @brief Restyles every element marked dirty under `root`

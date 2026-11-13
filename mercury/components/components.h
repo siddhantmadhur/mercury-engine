@@ -77,7 +77,15 @@ struct SpriteRenderer {
   }
 };
 
-enum class MeshShape { kCube, kSphere, kCapsule, kCylinder, kPlane, kQuad, kModel };
+enum class MeshShape {
+  kCube,
+  kSphere,
+  kCapsule,
+  kCylinder,
+  kPlane,
+  kQuad,
+  kModel
+};
 
 /**
  * @brief Draws a lit 3D shape, or a model file, sized by the Transform's scale
@@ -211,7 +219,8 @@ struct DirectionalLight {
     r.Field("ground_ambient", ground_ambient)
         .Tooltip("Ambient light from below; alpha 0 uses 35% of ambient");
     r.Field("cast_shadows", cast_shadows).Tooltip("Enable shadow casting");
-    r.Field("shadow_bias", shadow_bias).Tooltip("Depth bias against shadow acne");
+    r.Field("shadow_bias", shadow_bias)
+        .Tooltip("Depth bias against shadow acne");
     r.Field("shadow_normal_bias", shadow_normal_bias)
         .Tooltip("Normal offset bias for sloped geometry");
     r.Field("shadow_distance", shadow_distance)
@@ -243,8 +252,10 @@ struct PointLight {
     r.Field("intensity", intensity);
     r.Field("range", range).Tooltip("Distance at which the light fades out");
     r.Enum("shadows", shadows, {"none", "hard", "soft"});
-    r.Field("radius", radius).Tooltip("Size of the light; soft shadows blur more for larger lights");
-    r.Field("shadow_bias", shadow_bias).Tooltip("Distance bias against shadow acne");
+    r.Field("radius", radius)
+        .Tooltip("Size of the light; soft shadows blur more for larger lights");
+    r.Field("shadow_bias", shadow_bias)
+        .Tooltip("Distance bias against shadow acne");
   }
 };
 
@@ -268,12 +279,14 @@ struct AreaLight {
 
   void Reflect(Reflector& r) {
     r.Field("color", color);
-    r.Field("intensity", intensity).Tooltip("Radiance: an emission of 17 matches intensity 17");
+    r.Field("intensity", intensity)
+        .Tooltip("Radiance: an emission of 17 matches intensity 17");
     r.Field("size", size).Tooltip("Width (x) and height (y) of the rectangle");
     r.Field("range", range).Tooltip("Distance at which the light fades out");
     r.Field("two_sided", two_sided).Tooltip("Shine from both faces");
     r.Enum("shadows", shadows, {"none", "hard", "soft"});
-    r.Field("shadow_bias", shadow_bias).Tooltip("Distance bias against shadow acne");
+    r.Field("shadow_bias", shadow_bias)
+        .Tooltip("Distance bias against shadow acne");
   }
 };
 
@@ -308,13 +321,20 @@ struct LightProbeVolume {
 
   void Reflect(Reflector& r) {
     r.Field("fit_to_scene", fit_to_scene)
-        .Tooltip("Fit the grid around the scene's still geometry; size and resolution are ignored");
-    r.Field("size", size).Tooltip("Extent of the probe grid, centered on the node");
-    r.Field("resolution", resolution).Tooltip("Probes along x, y and z (2 to 16 each)");
+        .Tooltip(
+            "Fit the grid around the scene's still geometry; size and "
+            "resolution are ignored");
+    r.Field("size", size)
+        .Tooltip("Extent of the probe grid, centered on the node");
+    r.Field("resolution", resolution)
+        .Tooltip("Probes along x, y and z (2 to 16 each)");
     r.Field("intensity", intensity).Tooltip("Multiplies the indirect light");
-    r.Field("bounces", bounces).Tooltip("Passes over the probes; each adds a bounce of light");
+    r.Field("bounces", bounces)
+        .Tooltip("Passes over the probes; each adds a bounce of light");
     r.Field("include_emission", include_emission)
-        .Tooltip("Emissive surfaces add light; off when an AreaLight stands for them");
+        .Tooltip(
+            "Emissive surfaces add light; off when an AreaLight stands for "
+            "them");
     r.Field("probes_per_frame", probes_per_frame)
         .Tooltip("Update budget; 0 picks one from the scene's size");
   }
@@ -408,9 +428,9 @@ struct Rigidbody {
       r.Enum("allowed_dofs", legacy_dofs,
              {"all", "translation_xyz", "translation_xy", "plane_2d",
               "translation_x", "translation_y"});
-      if (legacy_dofs != AllowedDofs::kAll &&
-          !lock_translation_x && !lock_translation_y && !lock_translation_z &&
-          !lock_rotation_x && !lock_rotation_y && !lock_rotation_z) {
+      if (legacy_dofs != AllowedDofs::kAll && !lock_translation_x &&
+          !lock_translation_y && !lock_translation_z && !lock_rotation_x &&
+          !lock_rotation_y && !lock_rotation_z) {
         switch (legacy_dofs) {
           case AllowedDofs::kTranslationXYZ:
             lock_rotation_x = lock_rotation_y = lock_rotation_z = true;
@@ -581,15 +601,20 @@ struct AudioSource {
 
   void Reflect(Reflector& r) {
     r.Field("enabled", enabled);
-    r.Field("clip", clip, "AudioClip").Tooltip("A .wav, .ogg, .mp3 or .flac file");
+    r.Field("clip", clip, "AudioClip")
+        .Tooltip("A .wav, .ogg, .mp3 or .flac file");
     r.Field("volume", volume);
     r.Field("pitch", pitch).Tooltip("Playback speed; 1 is normal");
     r.Field("loop", loop);
-    r.Field("play_on_awake", play_on_awake).Tooltip("Play the clip when the scene starts");
+    r.Field("play_on_awake", play_on_awake)
+        .Tooltip("Play the clip when the scene starts");
     r.Field("mute", mute);
-    r.Field("spatial_blend", spatial_blend).Tooltip("0 = 2D, 1 = 3D (fades with distance)");
-    r.Field("min_distance", min_distance).Tooltip("3D: full volume within this distance");
-    r.Field("max_distance", max_distance).Tooltip("3D: no more fading beyond this distance");
+    r.Field("spatial_blend", spatial_blend)
+        .Tooltip("0 = 2D, 1 = 3D (fades with distance)");
+    r.Field("min_distance", min_distance)
+        .Tooltip("3D: full volume within this distance");
+    r.Field("max_distance", max_distance)
+        .Tooltip("3D: no more fading beyond this distance");
   }
 
   // Runtime (play mode).
@@ -612,9 +637,15 @@ struct AudioSource {
 class MapScene;
 
 enum class TextAlignment {
-  kTopLeft, kTopCenter, kTopRight,
-  kMiddleLeft, kMiddleCenter, kMiddleRight,
-  kBottomLeft, kBottomCenter, kBottomRight,
+  kTopLeft,
+  kTopCenter,
+  kTopRight,
+  kMiddleLeft,
+  kMiddleCenter,
+  kMiddleRight,
+  kBottomLeft,
+  kBottomCenter,
+  kBottomRight,
 };
 
 /**
@@ -636,15 +667,18 @@ struct TextMesh {
 
   void Reflect(Reflector& r) {
     r.Field("text", text);
-    r.Field("font", font, "Font").Tooltip("A .ttf or .otf file; empty: Liberation Sans");
+    r.Field("font", font, "Font")
+        .Tooltip("A .ttf or .otf file; empty: Liberation Sans");
     r.Field("font_size", font_size).Tooltip("An em is font_size / 10 units");
     r.Field("color", color);
-    r.Enum("alignment", alignment,
-           {"top_left", "top_center", "top_right", "middle_left", "middle_center",
-            "middle_right", "bottom_left", "bottom_center", "bottom_right"});
+    r.Enum(
+        "alignment", alignment,
+        {"top_left", "top_center", "top_right", "middle_left", "middle_center",
+         "middle_right", "bottom_left", "bottom_center", "bottom_right"});
     r.Field("size", size).Tooltip("The box the text is laid out in");
     r.Field("word_wrap", word_wrap);
-    r.Field("rich_text", rich_text).Tooltip("Understand <b>, <i>, <color=...> tags");
+    r.Field("rich_text", rich_text)
+        .Tooltip("Understand <b>, <i>, <color=...> tags");
     r.Field("visible", visible);
   }
 
@@ -674,16 +708,20 @@ struct Animator {
 
   void Reflect(Reflector& r) {
     r.Field("enabled", enabled);
-    r.Field("controller", controller, "AnimatorController").Tooltip("A .manim file");
+    r.Field("controller", controller, "AnimatorController")
+        .Tooltip("A .manim file");
     r.Field("apply_root_motion", apply_root_motion)
-        .Tooltip("Off: the root bone stays in place (the object moves by script)");
+        .Tooltip(
+            "Off: the root bone stays in place (the object moves by script)");
     r.Field("speed", speed);
-    r.Field("target", target).Tooltip("The node whose model is animated (optional)");
+    r.Field("target", target)
+        .Tooltip("The node whose model is animated (optional)");
   }
 
   // Runtime (play mode).
   void SetFloat(std::string_view name, float value);
-  void SetFloat(std::string_view name, float value, float damp_time, float delta_time);
+  void SetFloat(std::string_view name, float value, float damp_time,
+                float delta_time);
   void SetInteger(std::string_view name, int value);
   void SetBool(std::string_view name, bool value);
   void SetTrigger(std::string_view name);
@@ -691,7 +729,8 @@ struct Animator {
   float GetFloat(std::string_view name) const;
   bool GetBool(std::string_view name) const;
   int GetInteger(std::string_view name) const;
-  void Play(std::string_view state, int layer = -1, float normalized_time = 0.0f);
+  void Play(std::string_view state, int layer = -1,
+            float normalized_time = 0.0f);
   std::string GetCurrentState(int layer = 0) const;
 
   std::shared_ptr<AnimatorRuntime> runtime_;
@@ -723,7 +762,8 @@ struct CharacterController {
     r.Field("height", height);
     r.Field("radius", radius);
     r.Field("center", center).Tooltip("Capsule center, relative to the node");
-    r.Field("slope_limit", slope_limit).Tooltip("Steepest walkable slope, degrees");
+    r.Field("slope_limit", slope_limit)
+        .Tooltip("Steepest walkable slope, degrees");
     r.Field("step_offset", step_offset).Tooltip("Tallest step climbed");
     r.Field("skin_width", skin_width);
     r.Field("min_move_distance", min_move_distance);
@@ -791,13 +831,17 @@ struct MaterialAsset {
             "transparent blends with what is behind by the color's alpha; "
             "transmissive refracts it, like glass");
     r.Field("transmission", transmission)
-        .Tooltip("Transmissive: share of light passing through [0 = opaque, 1 = clear]");
-    r.Field("ior", ior).Tooltip("Transmissive: index of refraction (water 1.33, glass 1.5)");
+        .Tooltip(
+            "Transmissive: share of light passing through [0 = opaque, 1 = "
+            "clear]");
+    r.Field("ior", ior)
+        .Tooltip("Transmissive: index of refraction (water 1.33, glass 1.5)");
     r.Field("transmission_color", transmission_color)
         .Tooltip("Transmissive: tint of the light passing through (linear)");
     r.Field("thickness", thickness)
         .Tooltip(
-            "Transmissive: distance at which the tint is reached, in world units "
+            "Transmissive: distance at which the tint is reached, in world "
+            "units "
             "(0 = thin walled)");
     r.Enum("cull", cull, {"back", "front", "off"})
         .Tooltip("Which faces are hidden; off draws both sides");
@@ -837,18 +881,25 @@ struct PostProcessProfile {
 
   void Reflect(Reflector& r) {
     r.Enum("tonemap", tonemap, {"none", "neutral", "aces"});
-    r.Field("exposure", exposure).Tooltip("Multiplies the scene before tonemapping");
+    r.Field("exposure", exposure)
+        .Tooltip("Multiplies the scene before tonemapping");
     r.Field("bloom_intensity", bloom_intensity).Tooltip("0 turns bloom off");
     r.Field("bloom_threshold", bloom_threshold)
         .Tooltip("Brightness (linear) above which pixels glow");
-    r.Field("bloom_scatter", bloom_scatter).Tooltip("How far the glow spreads, 0 to 1");
-    r.Field("vignette_intensity", vignette_intensity).Tooltip("0 turns the vignette off");
+    r.Field("bloom_scatter", bloom_scatter)
+        .Tooltip("How far the glow spreads, 0 to 1");
+    r.Field("vignette_intensity", vignette_intensity)
+        .Tooltip("0 turns the vignette off");
     r.Field("vignette_smoothness", vignette_smoothness);
     r.Field("vignette_center", vignette_center);
     r.Field("ambient_occlusion", ambient_occlusion)
-        .Tooltip("Darkens indirect light in creases and contact areas; 0 turns it off");
-    r.Field("ao_radius", ao_radius).Tooltip("World-space reach of the occlusion");
-    r.Field("antialiasing", antialiasing).Tooltip("Smooths jagged edges (FXAA)");
+        .Tooltip(
+            "Darkens indirect light in creases and contact areas; 0 turns it "
+            "off");
+    r.Field("ao_radius", ao_radius)
+        .Tooltip("World-space reach of the occlusion");
+    r.Field("antialiasing", antialiasing)
+        .Tooltip("Smooths jagged edges (FXAA)");
   }
 };
 
@@ -861,7 +912,8 @@ struct PostProcessVolume {
 
   void Reflect(Reflector& r) {
     r.Field("profile", profile, "PostProcessProfile");
-    r.Field("weight", weight).Tooltip("0 to 1; below 0.5 the volume is ignored");
+    r.Field("weight", weight)
+        .Tooltip("0 to 1; below 0.5 the volume is ignored");
   }
 };
 

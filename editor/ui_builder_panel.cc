@@ -39,7 +39,7 @@ struct CanvasPreset {
 constexpr CanvasPreset kPresets[] = {
     {"1920 x 1080", 1920, 1080}, {"1280 x 720", 1280, 720},
     {"2560 x 1440", 2560, 1440}, {"1024 x 768", 1024, 768},
-    {"800 x 600", 800, 600},    {"720 x 1280", 720, 1280},
+    {"800 x 600", 800, 600},     {"720 x 1280", 720, 1280},
 };
 
 std::string EncodePath(const std::vector<int>& path) {
@@ -81,7 +81,8 @@ class SheetTreeData : public wxTreeItemData {
 
 class ElemTreeData : public wxTreeItemData {
  public:
-  ElemTreeData(bool doc, std::vector<int> p) : is_doc(doc), path(std::move(p)) {}
+  ElemTreeData(bool doc, std::vector<int> p)
+      : is_doc(doc), path(std::move(p)) {}
   bool is_doc;
   std::vector<int> path;
 };
@@ -98,29 +99,52 @@ UI::KeyCode WxKeyToUiKey(int key) {
   using K = UI::KeyCode;
   if (key >= 'a' && key <= 'z') key = key - 'a' + 'A';
   switch (key) {
-    case WXK_SPACE: return K::kSpace;
-    case 'A': return K::kA;
-    case 'C': return K::kC;
-    case 'V': return K::kV;
-    case 'X': return K::kX;
-    case 'Y': return K::kY;
-    case 'Z': return K::kZ;
-    case WXK_ESCAPE: return K::kEscape;
-    case WXK_RETURN: return K::kEnter;
-    case WXK_NUMPAD_ENTER: return K::kKeypadEnter;
-    case WXK_TAB: return K::kTab;
-    case WXK_BACK: return K::kBackspace;
-    case WXK_INSERT: return K::kInsert;
-    case WXK_DELETE: return K::kDelete;
-    case WXK_RIGHT: return K::kRight;
-    case WXK_LEFT: return K::kLeft;
-    case WXK_DOWN: return K::kDown;
-    case WXK_UP: return K::kUp;
-    case WXK_PAGEUP: return K::kPageUp;
-    case WXK_PAGEDOWN: return K::kPageDown;
-    case WXK_HOME: return K::kHome;
-    case WXK_END: return K::kEnd;
-    default: return K::kNone;
+    case WXK_SPACE:
+      return K::kSpace;
+    case 'A':
+      return K::kA;
+    case 'C':
+      return K::kC;
+    case 'V':
+      return K::kV;
+    case 'X':
+      return K::kX;
+    case 'Y':
+      return K::kY;
+    case 'Z':
+      return K::kZ;
+    case WXK_ESCAPE:
+      return K::kEscape;
+    case WXK_RETURN:
+      return K::kEnter;
+    case WXK_NUMPAD_ENTER:
+      return K::kKeypadEnter;
+    case WXK_TAB:
+      return K::kTab;
+    case WXK_BACK:
+      return K::kBackspace;
+    case WXK_INSERT:
+      return K::kInsert;
+    case WXK_DELETE:
+      return K::kDelete;
+    case WXK_RIGHT:
+      return K::kRight;
+    case WXK_LEFT:
+      return K::kLeft;
+    case WXK_DOWN:
+      return K::kDown;
+    case WXK_UP:
+      return K::kUp;
+    case WXK_PAGEUP:
+      return K::kPageUp;
+    case WXK_PAGEDOWN:
+      return K::kPageDown;
+    case WXK_HOME:
+      return K::kHome;
+    case WXK_END:
+      return K::kEnd;
+    default:
+      return K::kNone;
   }
 }
 
@@ -280,9 +304,8 @@ void UIBuilderPanel::BuildLayout() {
 
   // Left pane: StyleSheets | Hierarchy | Library
   auto* left_pane = new wxPanel(main_split_, wxID_ANY);
-  auto* left_split1 = new wxSplitterWindow(left_pane, wxID_ANY,
-                                           wxDefaultPosition, wxDefaultSize,
-                                           wxSP_LIVE_UPDATE);
+  auto* left_split1 = new wxSplitterWindow(
+      left_pane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE);
   left_split1->SetMinimumPaneSize(100);
 
   // Top-left: StyleSheets
@@ -298,9 +321,9 @@ void UIBuilderPanel::BuildLayout() {
   shs->Add(sh_hdr, 0, wxEXPAND | wxALL, 4);
 
   auto* sel_row = new wxBoxSizer(wxHORIZONTAL);
-  new_selector_ = new wxTextCtrl(sheets_panel, wxID_ANY, wxEmptyString,
-                                 wxDefaultPosition, wxDefaultSize,
-                                 wxTE_PROCESS_ENTER);
+  new_selector_ =
+      new wxTextCtrl(sheets_panel, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                     wxDefaultSize, wxTE_PROCESS_ENTER);
   new_selector_->SetHint(".button or #title");
   auto* add_rule_btn =
       new wxButton(sheets_panel, wxID_ANY, "+", wxDefaultPosition,
@@ -309,25 +332,25 @@ void UIBuilderPanel::BuildLayout() {
   sel_row->Add(add_rule_btn, 0, wxALIGN_CENTER_VERTICAL);
   shs->Add(sel_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
 
-  sheets_tree_ = new wxTreeCtrl(
-      sheets_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
+  sheets_tree_ =
+      new wxTreeCtrl(sheets_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
   shs->Add(sheets_tree_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   sheets_panel->SetSizer(shs);
 
   // Lower-left splitter: Hierarchy + Library
-  auto* left_split2 = new wxSplitterWindow(left_split1, wxID_ANY,
-                                           wxDefaultPosition, wxDefaultSize,
-                                           wxSP_LIVE_UPDATE);
+  auto* left_split2 =
+      new wxSplitterWindow(left_split1, wxID_ANY, wxDefaultPosition,
+                           wxDefaultSize, wxSP_LIVE_UPDATE);
   left_split2->SetMinimumPaneSize(100);
 
   auto* hier_panel = new wxPanel(left_split2, wxID_ANY);
   auto* hs = new wxBoxSizer(wxVERTICAL);
   auto* hl = new wxStaticText(hier_panel, wxID_ANY, "Hierarchy");
   hs->Add(hl, 0, wxALL, 4);
-  hier_tree_ = new wxTreeCtrl(
-      hier_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
+  hier_tree_ =
+      new wxTreeCtrl(hier_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
   hs->Add(hier_tree_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   hier_panel->SetSizer(hs);
 
@@ -338,9 +361,9 @@ void UIBuilderPanel::BuildLayout() {
   lib_search_ = new wxTextCtrl(lib_panel, wxID_ANY);
   lib_search_->SetHint("Search controls...");
   lbs->Add(lib_search_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
-  lib_tree_ = new wxTreeCtrl(
-      lib_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
+  lib_tree_ =
+      new wxTreeCtrl(lib_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                     wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE);
   lbs->Add(lib_tree_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
   lib_panel->SetSizer(lbs);
 
@@ -351,19 +374,19 @@ void UIBuilderPanel::BuildLayout() {
   left_pane->SetSizer(lwrap);
 
   // Right splitter: [Center Canvas/Code] | [Inspector]
-  auto* right_split = new wxSplitterWindow(main_split_, wxID_ANY,
-                                           wxDefaultPosition, wxDefaultSize,
-                                           wxSP_LIVE_UPDATE);
+  auto* right_split =
+      new wxSplitterWindow(main_split_, wxID_ANY, wxDefaultPosition,
+                           wxDefaultSize, wxSP_LIVE_UPDATE);
   right_split->SetMinimumPaneSize(220);
 
-  auto* center_split = new wxSplitterWindow(right_split, wxID_ANY,
-                                            wxDefaultPosition, wxDefaultSize,
-                                            wxSP_LIVE_UPDATE);
+  auto* center_split =
+      new wxSplitterWindow(right_split, wxID_ANY, wxDefaultPosition,
+                           wxDefaultSize, wxSP_LIVE_UPDATE);
   center_split->SetMinimumPaneSize(120);
 
-  canvas_ = new wxPanel(center_split, wxID_ANY, wxDefaultPosition,
-                        wxDefaultSize,
-                        wxBORDER_NONE | wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE);
+  canvas_ =
+      new wxPanel(center_split, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                  wxBORDER_NONE | wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE);
   canvas_->SetBackgroundStyle(wxBG_STYLE_PAINT);
   canvas_->SetBackgroundColour(wxColour(24, 26, 30));
 
@@ -371,9 +394,9 @@ void UIBuilderPanel::BuildLayout() {
 
   center_split->SplitHorizontally(canvas_, code_tabs_, 460);
 
-  inspector_scroll_ = new wxScrolledWindow(
-      right_split, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxVSCROLL | wxBORDER_NONE);
+  inspector_scroll_ =
+      new wxScrolledWindow(right_split, wxID_ANY, wxDefaultPosition,
+                           wxDefaultSize, wxVSCROLL | wxBORDER_NONE);
   inspector_scroll_->SetScrollRate(0, 14);
   inspector_sizer_ = new wxBoxSizer(wxVERTICAL);
   inspector_scroll_->SetSizer(inspector_sizer_);
@@ -386,9 +409,8 @@ void UIBuilderPanel::BuildLayout() {
   SetSizer(root);
 
   // --- Top bar event wiring ---
-  save_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    scene_.UIBuilderRef().Save();
-  });
+  save_btn_->Bind(wxEVT_BUTTON,
+                  [this](wxCommandEvent&) { scene_.UIBuilderRef().Save(); });
   revert_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     auto& b = scene_.UIBuilderRef();
     if (!b.path().empty()) b.Open(b.path());
@@ -403,12 +425,10 @@ void UIBuilderPanel::BuildLayout() {
     }
     b.Close();
   });
-  undo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    scene_.UIBuilderRef().Undo();
-  });
-  redo_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    scene_.UIBuilderRef().Redo();
-  });
+  undo_btn_->Bind(wxEVT_BUTTON,
+                  [this](wxCommandEvent&) { scene_.UIBuilderRef().Undo(); });
+  redo_btn_->Bind(wxEVT_BUTTON,
+                  [this](wxCommandEvent&) { scene_.UIBuilderRef().Redo(); });
   dup_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.UIBuilderRef().DuplicateSelected();
   });
@@ -441,9 +461,8 @@ void UIBuilderPanel::BuildLayout() {
         scene_.UIBuilderRef().SetCanvasSize(sz);
       },
       nullptr);
-  bg_swatch_->SetOnChange([this](glm::vec4 c) {
-    scene_.UIBuilderRef().SetBackground(c);
-  });
+  bg_swatch_->SetOnChange(
+      [this](glm::vec4 c) { scene_.UIBuilderRef().SetBackground(c); });
   theme_choice_->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) {
     const int idx = theme_choice_->GetSelection();
     if (idx >= 0 && idx < static_cast<int>(theme_paths_.size())) {
@@ -473,12 +492,10 @@ void UIBuilderPanel::BuildLayout() {
       scene_.ConsoleRef().Error("Selector: " + err);
     }
   };
-  new_selector_->Bind(wxEVT_TEXT_ENTER, [add_rule_fn](wxCommandEvent&) {
-    add_rule_fn();
-  });
-  add_rule_btn->Bind(wxEVT_BUTTON, [add_rule_fn](wxCommandEvent&) {
-    add_rule_fn();
-  });
+  new_selector_->Bind(wxEVT_TEXT_ENTER,
+                      [add_rule_fn](wxCommandEvent&) { add_rule_fn(); });
+  add_rule_btn->Bind(wxEVT_BUTTON,
+                     [add_rule_fn](wxCommandEvent&) { add_rule_fn(); });
 
   add_sheet_btn->Bind(wxEVT_BUTTON, [this, add_sheet_btn](wxCommandEvent&) {
     wxMenu menu;
@@ -506,14 +523,14 @@ void UIBuilderPanel::BuildLayout() {
 
   sheets_tree_->Bind(wxEVT_TREE_SEL_CHANGED, [this](wxTreeEvent& evt) {
     if (syncing_trees_) return;
-    auto* data = static_cast<SheetTreeData*>(
-        sheets_tree_->GetItemData(evt.GetItem()));
+    auto* data =
+        static_cast<SheetTreeData*>(sheets_tree_->GetItemData(evt.GetItem()));
     if (!data) return;
     auto& b = scene_.UIBuilderRef();
     b.SetActiveSheet(data->sheet);
     if (data->rule >= 0) {
-      b.Select({UIBuilder::Selection::Kind::kSelector, {}, data->sheet,
-                data->rule});
+      b.Select(
+          {UIBuilder::Selection::Kind::kSelector, {}, data->sheet, data->rule});
     }
   });
 
@@ -547,9 +564,8 @@ void UIBuilderPanel::BuildLayout() {
         }
         auto* rule = &sheet_entry.sheet->rules[rl];
         if (cmd.GetId() == 1) {
-          if (auto vname =
-                  PromptTextDialog(this, "Add Variable", "Name (--my-var)",
-                                   "--", "Add")) {
+          if (auto vname = PromptTextDialog(this, "Add Variable",
+                                            "Name (--my-var)", "--", "Add")) {
             ub.AddVariable(rule, sh, *vname);
           }
         } else if (cmd.GetId() == 2) {
@@ -595,13 +611,13 @@ void UIBuilderPanel::BuildLayout() {
   });
 
   hier_tree_->SetDropTarget(new CompositeDropTarget(
-      nullptr,
-      [this](wxCoord x, wxCoord y, const wxString& text) -> bool {
+      nullptr, [this](wxCoord x, wxCoord y, const wxString& text) -> bool {
         int flags = 0;
         const wxTreeItemId hit = hier_tree_->HitTest(wxPoint(x, y), flags);
         std::vector<int> target_parent;
         if (hit.IsOk()) {
-          if (auto* d = static_cast<ElemTreeData*>(hier_tree_->GetItemData(hit))) {
+          if (auto* d =
+                  static_cast<ElemTreeData*>(hier_tree_->GetItemData(hit))) {
             target_parent = d->path;
           }
         }
@@ -622,7 +638,8 @@ void UIBuilderPanel::BuildLayout() {
         if (s.rfind(kLibPayloadPrefix, 0) == 0) {
           const std::string t =
               s.substr(std::char_traits<char>::length(kLibPayloadPrefix));
-          int idx = ub.Doc() ? static_cast<int>(ub.Doc()->root.children.size()) : 0;
+          int idx =
+              ub.Doc() ? static_cast<int>(ub.Doc()->root.children.size()) : 0;
           if (auto* parent = ub.NodeAt(target_parent)) {
             idx = static_cast<int>(parent->children.size());
           }
@@ -672,7 +689,8 @@ void UIBuilderPanel::BuildLayout() {
         ub.InsertNode(path, idx, ub.NewNode(type_name));
         return;
       }
-      if (id == 1) ub.DuplicateSelected();
+      if (id == 1)
+        ub.DuplicateSelected();
       else if (id == 2 && !path.empty()) {
         std::vector<int> parent(path.begin(), path.end() - 1);
         ub.MoveNode(path, parent, std::max(0, path.back() - 1));
@@ -723,7 +741,8 @@ void UIBuilderPanel::BuildLayout() {
     } else {
       UI::UxmlNode inst;
       inst.type = "Instance";
-      inst.attributes.push_back({"template", ub.RelativeToDocument(data->payload)});
+      inst.attributes.push_back(
+          {"template", ub.RelativeToDocument(data->payload)});
       ub.InsertNode(parent, idx, std::move(inst));
     }
   });
@@ -782,12 +801,10 @@ void UIBuilderPanel::BuildLayout() {
     ub.RenderCanvasOverlay(overlay, origin);
   });
 
-  canvas_->Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) {
-    canvas_hovered_ = true;
-  });
-  canvas_->Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) {
-    canvas_hovered_ = false;
-  });
+  canvas_->Bind(wxEVT_ENTER_WINDOW,
+                [this](wxMouseEvent&) { canvas_hovered_ = true; });
+  canvas_->Bind(wxEVT_LEAVE_WINDOW,
+                [this](wxMouseEvent&) { canvas_hovered_ = false; });
 
   canvas_->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent& evt) {
     canvas_->SetFocus();
@@ -916,10 +933,22 @@ void UIBuilderPanel::BuildLayout() {
       return;
     }
     if (evt.ControlDown()) {
-      if (evt.GetKeyCode() == 'Z') { ub.Undo(); return; }
-      if (evt.GetKeyCode() == 'Y') { ub.Redo(); return; }
-      if (evt.GetKeyCode() == 'D') { ub.DuplicateSelected(); return; }
-      if (evt.GetKeyCode() == 'S') { ub.Save(); return; }
+      if (evt.GetKeyCode() == 'Z') {
+        ub.Undo();
+        return;
+      }
+      if (evt.GetKeyCode() == 'Y') {
+        ub.Redo();
+        return;
+      }
+      if (evt.GetKeyCode() == 'D') {
+        ub.DuplicateSelected();
+        return;
+      }
+      if (evt.GetKeyCode() == 'S') {
+        ub.Save();
+        return;
+      }
     } else if (evt.GetKeyCode() == WXK_DELETE || evt.GetKeyCode() == WXK_BACK) {
       ub.DeleteSelected();
       return;
@@ -951,8 +980,7 @@ void UIBuilderPanel::BuildLayout() {
   });
 
   canvas_->SetDropTarget(new CompositeDropTarget(
-      nullptr,
-      [this](wxCoord x, wxCoord y, const wxString& text) -> bool {
+      nullptr, [this](wxCoord x, wxCoord y, const wxString& text) -> bool {
         auto& ub = scene_.UIBuilderRef();
         if (!ub.IsOpen()) return false;
         const wxSize sz = canvas_->GetClientSize();
@@ -990,8 +1018,8 @@ void UIBuilderPanel::QueuePreviewKey(wxKeyEvent& evt, bool down) {
   const UI::KeyCode kc = WxKeyToUiKey(evt.GetKeyCode());
   if (kc == UI::KeyCode::kNone) return;
   UI::UIInputEvent ev;
-  ev.type = down ? UI::UIInputEvent::Type::kKeyDown
-                 : UI::UIInputEvent::Type::kKeyUp;
+  ev.type =
+      down ? UI::UIInputEvent::Type::kKeyDown : UI::UIInputEvent::Type::kKeyUp;
   ev.key = kc;
   ev.modifiers = WxMods(evt);
   pending_preview_events_.push_back(ev);
@@ -1093,8 +1121,8 @@ void UIBuilderPanel::RefreshTopBar() {
   close_btn_->Enable(open);
   undo_btn_->Enable(open && ub.CanUndo());
   redo_btn_->Enable(open && ub.CanRedo());
-  const bool has_elem =
-      open && ub.CurrentSelection().kind == UIBuilder::Selection::Kind::kElement;
+  const bool has_elem = open && ub.CurrentSelection().kind ==
+                                    UIBuilder::Selection::Kind::kElement;
   dup_btn_->Enable(has_elem);
   del_btn_->Enable(has_elem);
   preview_cb_->Enable(open);
@@ -1120,7 +1148,8 @@ void UIBuilderPanel::RefreshTopBar() {
   theme_paths_.push_back("");
   tlabels.Add("Default Theme");
   int tsel = ub.Theme().empty() ? 0 : wxNOT_FOUND;
-  for (const auto& uss : scene_.ListProjectFiles({std::string(kUssExtension)})) {
+  for (const auto& uss :
+       scene_.ListProjectFiles({std::string(kUssExtension)})) {
     if (uss == ub.Theme()) tsel = static_cast<int>(theme_paths_.size());
     theme_paths_.push_back(uss);
     tlabels.Add(wxString::FromUTF8(fs::path(uss).filename().string()));
@@ -1176,8 +1205,7 @@ void UIBuilderPanel::RefreshHierarchyTree() {
     std::string doc_lbl =
         "Document (" + fs::path(ub.path()).filename().string() + ")";
     wxTreeItemId doc_item = hier_tree_->AppendItem(
-        root, wxString::FromUTF8(doc_lbl), -1, -1,
-        new ElemTreeData(true, {}));
+        root, wxString::FromUTF8(doc_lbl), -1, -1, new ElemTreeData(true, {}));
     wxTreeItemId to_select;
     if (sel.kind == UIBuilder::Selection::Kind::kDocument) to_select = doc_item;
 
@@ -1216,9 +1244,11 @@ void UIBuilderPanel::RefreshLibrary() {
 
   std::string cur_cat;
   wxTreeItemId cat_item;
-  for (const UI::UxmlTypeInfo* type : UI::UxmlFactoryRegistry::Instance().Types()) {
+  for (const UI::UxmlTypeInfo* type :
+       UI::UxmlFactoryRegistry::Instance().Types()) {
     if (!type) continue;
-    if (!filter.empty() && LowerStr(type->name).find(filter) == std::string::npos) {
+    if (!filter.empty() &&
+        LowerStr(type->name).find(filter) == std::string::npos) {
       continue;
     }
     if (!cat_item.IsOk() || type->category != cur_cat) {
@@ -1269,7 +1299,8 @@ void UIBuilderPanel::RefreshCodeTabs() {
     const std::string fname = fs::path(ub.Sheets()[i].src).filename().string();
     add_code_page(wxString::FromUTF8(fname), ub.WriteSheet(i));
   }
-  if (prev_sel >= 0 && prev_sel < static_cast<int>(code_tabs_->GetPageCount())) {
+  if (prev_sel >= 0 &&
+      prev_sel < static_cast<int>(code_tabs_->GetPageCount())) {
     code_tabs_->SetSelection(prev_sel);
   }
   code_tabs_->Thaw();
@@ -1307,13 +1338,15 @@ void UIBuilderPanel::RefreshInspector() {
     auto* info = new wxStaticText(
         inspector_scroll_, wxID_ANY,
         "Configure canvas dimensions, background, and theme from the toolbar.");
-    info->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+    info->SetForegroundColour(
+        wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     info->Wrap(250);
     inspector_sizer_->Add(info, 0, wxLEFT | wxRIGHT, 10);
   } else if (!node && !rule) {
     auto* msg = new wxStaticText(inspector_scroll_, wxID_ANY,
                                  "Select an element or selector.");
-    msg->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+    msg->SetForegroundColour(
+        wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     inspector_sizer_->Add(msg, 0, wxALL, 10);
   } else {
     // Selector or Element Header
@@ -1333,9 +1366,9 @@ void UIBuilderPanel::RefreshInspector() {
       });
       inspector_sizer_->Add(s_edit, 0, wxEXPAND | wxALL, 8);
     } else if (node) {
-      auto* hdr = new wxStaticText(
-          inspector_scroll_, wxID_ANY,
-          wxString::FromUTF8(UIBuilder::NodeLabel(*node)));
+      auto* hdr =
+          new wxStaticText(inspector_scroll_, wxID_ANY,
+                           wxString::FromUTF8(UIBuilder::NodeLabel(*node)));
       hdr->SetFont(HeaderFont(1));
       inspector_sizer_->Add(hdr, 0, wxALL, 8);
 
@@ -1344,14 +1377,16 @@ void UIBuilderPanel::RefreshInspector() {
       const auto elem_path = sel.element;
 
       // Classes Section
-      auto* cls_sec = new CollapsibleSection(
-          inspector_scroll_, "Classes",
-          collapsed_groups_.count("__classes__") == 0, wxEmptyString, nullptr,
-          [this](bool open) {
-            if (open) collapsed_groups_.erase("__classes__");
-            else collapsed_groups_.insert("__classes__");
-            inspector_scroll_->FitInside();
-          });
+      auto* cls_sec =
+          new CollapsibleSection(inspector_scroll_, "Classes",
+                                 collapsed_groups_.count("__classes__") == 0,
+                                 wxEmptyString, nullptr, [this](bool open) {
+                                   if (open)
+                                     collapsed_groups_.erase("__classes__");
+                                   else
+                                     collapsed_groups_.insert("__classes__");
+                                   inspector_scroll_->FitInside();
+                                 });
       {
         wxPanel* cb = cls_sec->Body();
         wxBoxSizer* cs = cls_sec->BodySizer();
@@ -1363,9 +1398,9 @@ void UIBuilderPanel::RefreshInspector() {
         }
 
         auto* add_row = new wxBoxSizer(wxHORIZONTAL);
-        auto* cls_in = new wxTextCtrl(cb, wxID_ANY, wxEmptyString,
-                                      wxDefaultPosition, wxDefaultSize,
-                                      wxTE_PROCESS_ENTER);
+        auto* cls_in =
+            new wxTextCtrl(cb, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                           wxDefaultSize, wxTE_PROCESS_ENTER);
         cls_in->SetHint("class-name");
         auto* add_btn = new wxButton(cb, wxID_ANY, "Add");
         ApplyButtonIconAndPadding(add_btn, EditorIcon::kCreate, 8, 13, 5);
@@ -1373,19 +1408,18 @@ void UIBuilderPanel::RefreshInspector() {
           std::string name = cls_in->GetValue().ToStdString();
           if (name.starts_with('.')) name = name.substr(1);
           if (name.empty()) return;
-          if (std::find(classes.begin(), classes.end(), name) == classes.end()) {
+          if (std::find(classes.begin(), classes.end(), name) ==
+              classes.end()) {
             classes.push_back(name);
             if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
               scene_.UIBuilderRef().SetClassList(*n, classes);
             }
           }
         };
-        cls_in->Bind(wxEVT_TEXT_ENTER, [do_add_cls](wxCommandEvent&) mutable {
-          do_add_cls();
-        });
-        add_btn->Bind(wxEVT_BUTTON, [do_add_cls](wxCommandEvent&) mutable {
-          do_add_cls();
-        });
+        cls_in->Bind(wxEVT_TEXT_ENTER,
+                     [do_add_cls](wxCommandEvent&) mutable { do_add_cls(); });
+        add_btn->Bind(wxEVT_BUTTON,
+                      [do_add_cls](wxCommandEvent&) mutable { do_add_cls(); });
         add_row->Add(cls_in, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         add_row->Add(add_btn, 0);
         cs->Add(add_row, 0, wxEXPAND | wxBOTTOM, 4);
@@ -1395,7 +1429,8 @@ void UIBuilderPanel::RefreshInspector() {
           auto* chip = new wxButton(
               cb, wxID_ANY, wxString::FromUTF8("." + classes[i] + "  x"));
           ApplyButtonPadding(chip, 8);
-          chip->Bind(wxEVT_BUTTON, [this, elem_path, classes, i](wxCommandEvent&) mutable {
+          chip->Bind(wxEVT_BUTTON, [this, elem_path, classes,
+                                    i](wxCommandEvent&) mutable {
             classes.erase(classes.begin() + static_cast<ptrdiff_t>(i));
             if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
               scene_.UIBuilderRef().SetClassList(*n, classes);
@@ -1430,14 +1465,16 @@ void UIBuilderPanel::RefreshInspector() {
 
       // Attributes Section
       if (type) {
-        auto* attr_sec = new CollapsibleSection(
-            inspector_scroll_, "Attributes",
-            collapsed_groups_.count("__attrs__") == 0, wxEmptyString, nullptr,
-            [this](bool open) {
-              if (open) collapsed_groups_.erase("__attrs__");
-              else collapsed_groups_.insert("__attrs__");
-              inspector_scroll_->FitInside();
-            });
+        auto* attr_sec =
+            new CollapsibleSection(inspector_scroll_, "Attributes",
+                                   collapsed_groups_.count("__attrs__") == 0,
+                                   wxEmptyString, nullptr, [this](bool open) {
+                                     if (open)
+                                       collapsed_groups_.erase("__attrs__");
+                                     else
+                                       collapsed_groups_.insert("__attrs__");
+                                     inspector_scroll_->FitInside();
+                                   });
         wxPanel* ab = attr_sec->Body();
         wxBoxSizer* as = attr_sec->BodySizer();
         for (const auto& desc : type->attributes) {
@@ -1446,13 +1483,12 @@ void UIBuilderPanel::RefreshInspector() {
           const std::string val = stored ? *stored : desc.default_value;
 
           auto* row = new wxBoxSizer(wxHORIZONTAL);
-          auto* lbl = new wxStaticText(ab, wxID_ANY,
-                                       wxString::FromUTF8(desc.name),
-                                       wxDefaultPosition, wxSize(108, -1),
-                                       wxST_ELLIPSIZE_END);
+          auto* lbl = new wxStaticText(
+              ab, wxID_ANY, wxString::FromUTF8(desc.name), wxDefaultPosition,
+              wxSize(108, -1), wxST_ELLIPSIZE_END);
           if (stored) lbl->SetFont(ab->GetFont().Bold());
-          lbl->Bind(wxEVT_RIGHT_DOWN, [this, lbl, elem_path,
-                                       name = desc.name, has = stored != nullptr](wxMouseEvent&) {
+          lbl->Bind(wxEVT_RIGHT_DOWN, [this, lbl, elem_path, name = desc.name,
+                                       has = stored != nullptr](wxMouseEvent&) {
             wxMenu m;
             m.Append(1, "Unset")->Enable(has);
             m.Bind(wxEVT_MENU, [this, elem_path, name](wxCommandEvent&) {
@@ -1465,7 +1501,7 @@ void UIBuilderPanel::RefreshInspector() {
           row->Add(lbl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
 
           auto apply_attr = [this, elem_path, desc](const std::string& v,
-                                                   bool coalesced) {
+                                                    bool coalesced) {
             if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
               scene_.UIBuilderRef().SetAttribute(*n, desc.name, v,
                                                  desc.default_value, coalesced);
@@ -1493,8 +1529,9 @@ void UIBuilderPanel::RefreshInspector() {
                     scene_.UIBuilderRef().BeginEdit();
                   },
                   [apply_attr](double v) {
-                    apply_attr(std::to_string(static_cast<int>(std::llround(v))),
-                               true);
+                    apply_attr(
+                        std::to_string(static_cast<int>(std::llround(v))),
+                        true);
                   },
                   [this]() {
                     dragging_ = false;
@@ -1505,9 +1542,9 @@ void UIBuilderPanel::RefreshInspector() {
               break;
             }
             case FieldType::kFloat: {
-              auto* dn = new DragNumberCtrl(
-                  ab, wxEmptyString, wxNullColour,
-                  std::strtof(val.c_str(), nullptr), 0.1, false, 4);
+              auto* dn = new DragNumberCtrl(ab, wxEmptyString, wxNullColour,
+                                            std::strtof(val.c_str(), nullptr),
+                                            0.1, false, 4);
               dn->SetCallbacks(
                   [this]() {
                     dragging_ = true;
@@ -1536,7 +1573,8 @@ void UIBuilderPanel::RefreshInspector() {
               if (sel_idx != wxNOT_FOUND) ch->SetSelection(sel_idx);
               ch->Bind(wxEVT_CHOICE, [ch, desc, apply_attr](wxCommandEvent&) {
                 const int idx = ch->GetSelection();
-                if (idx >= 0 && idx < static_cast<int>(desc.enum_values.size())) {
+                if (idx >= 0 &&
+                    idx < static_cast<int>(desc.enum_values.size())) {
                   apply_attr(desc.enum_values[idx], false);
                 }
               });
@@ -1544,8 +1582,7 @@ void UIBuilderPanel::RefreshInspector() {
               break;
             }
             case FieldType::kColor: {
-              UI::Color c =
-                  UI::ParseColor(val).value_or(UI::Color::White());
+              UI::Color c = UI::ParseColor(val).value_or(UI::Color::White());
               auto* sw = new ColorSwatchCtrl(ab, c.rgba);
               sw->SetOnChange([apply_attr](glm::vec4 rgba) {
                 apply_attr(UI::FormatStyleValue(UI::StylePropertyId::kColor,
@@ -1585,10 +1622,11 @@ void UIBuilderPanel::RefreshInspector() {
           node->bindings.empty()
               ? wxString()
               : wxString::Format("%zu", node->bindings.size()),
-          nullptr,
-          [this](bool open) {
-            if (open) collapsed_groups_.erase("__bindings__");
-            else collapsed_groups_.insert("__bindings__");
+          nullptr, [this](bool open) {
+            if (open)
+              collapsed_groups_.erase("__bindings__");
+            else
+              collapsed_groups_.insert("__bindings__");
             inspector_scroll_->FitInside();
           });
       {
@@ -1597,15 +1635,13 @@ void UIBuilderPanel::RefreshInspector() {
         for (size_t i = 0; i < node->bindings.size(); ++i) {
           const auto& b = node->bindings[i];
           auto* row = new wxBoxSizer(wxHORIZONTAL);
-          auto* prop_in = new wxTextCtrl(bb, wxID_ANY,
-                                         wxString::FromUTF8(b.property),
-                                         wxDefaultPosition, wxSize(78, -1),
-                                         wxTE_PROCESS_ENTER);
+          auto* prop_in = new wxTextCtrl(
+              bb, wxID_ANY, wxString::FromUTF8(b.property), wxDefaultPosition,
+              wxSize(78, -1), wxTE_PROCESS_ENTER);
           prop_in->SetHint("prop");
-          auto* path_in = new wxTextCtrl(bb, wxID_ANY,
-                                         wxString::FromUTF8(b.data_source_path),
-                                         wxDefaultPosition, wxDefaultSize,
-                                         wxTE_PROCESS_ENTER);
+          auto* path_in = new wxTextCtrl(
+              bb, wxID_ANY, wxString::FromUTF8(b.data_source_path),
+              wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
           path_in->SetHint("data.path");
           auto* rem = new wxButton(bb, wxID_ANY, "x", wxDefaultPosition,
                                    wxSize(22, 22), wxBU_EXACTFIT);
@@ -1621,8 +1657,10 @@ void UIBuilderPanel::RefreshInspector() {
               }
             }
           };
-          prop_in->Bind(wxEVT_TEXT_ENTER, [commit_b](wxCommandEvent&) { commit_b(); });
-          path_in->Bind(wxEVT_TEXT_ENTER, [commit_b](wxCommandEvent&) { commit_b(); });
+          prop_in->Bind(wxEVT_TEXT_ENTER,
+                        [commit_b](wxCommandEvent&) { commit_b(); });
+          path_in->Bind(wxEVT_TEXT_ENTER,
+                        [commit_b](wxCommandEvent&) { commit_b(); });
           rem->Bind(wxEVT_BUTTON, [this, elem_path, i](wxCommandEvent&) {
             if (UI::UxmlNode* n = scene_.UIBuilderRef().NodeAt(elem_path)) {
               scene_.UIBuilderRef().RemoveBinding(*n, i);
@@ -1643,8 +1681,8 @@ void UIBuilderPanel::RefreshInspector() {
         bs->Add(add_b, 0);
       }
       bind_sec->FinishBuild();
-      inspector_sizer_->Add(bind_sec, 0,
-                            wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+      inspector_sizer_->Add(bind_sec, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
+                            6);
 
       // Matching Selectors Section
       const auto matches = ub.MatchingSelectors(ub.ElementFor(node));
@@ -1653,10 +1691,11 @@ void UIBuilderPanel::RefreshInspector() {
           collapsed_groups_.count("__matching__") == 0,
           matches.empty() ? wxString()
                           : wxString::Format("%zu", matches.size()),
-          nullptr,
-          [this](bool open) {
-            if (open) collapsed_groups_.erase("__matching__");
-            else collapsed_groups_.insert("__matching__");
+          nullptr, [this](bool open) {
+            if (open)
+              collapsed_groups_.erase("__matching__");
+            else
+              collapsed_groups_.insert("__matching__");
             inspector_scroll_->FitInside();
           });
       {
@@ -1670,8 +1709,8 @@ void UIBuilderPanel::RefreshInspector() {
         } else {
           for (const auto& m : matches) {
             auto* row = new wxBoxSizer(wxHORIZONTAL);
-            auto* btn = new wxButton(
-                mb, wxID_ANY, wxString::FromUTF8(m.selector_text));
+            auto* btn =
+                new wxButton(mb, wxID_ANY, wxString::FromUTF8(m.selector_text));
             ApplyButtonPadding(btn, 8);
             btn->Enable(m.sheet_index >= 0);
             btn->SetToolTip(wxString::FromUTF8(m.tooltip));
@@ -1704,14 +1743,15 @@ void UIBuilderPanel::RefreshInspector() {
     const int sh_idx = sel.sheet;
     const int rl_idx = sel.rule;
 
-    auto resolve_target = [this, is_rule = (rule != nullptr), elem_path,
-                           sh_idx, rl_idx]()
-        -> std::pair<UI::UxmlNode*, UI::StyleRule*> {
+    auto resolve_target =
+        [this, is_rule = (rule != nullptr), elem_path, sh_idx,
+         rl_idx]() -> std::pair<UI::UxmlNode*, UI::StyleRule*> {
       auto& u = scene_.UIBuilderRef();
       if (is_rule) {
         if (sh_idx >= 0 && sh_idx < static_cast<int>(u.Sheets().size())) {
           auto& sh = u.Sheets()[sh_idx].sheet;
-          if (sh && rl_idx >= 0 && rl_idx < static_cast<int>(sh->rules.size())) {
+          if (sh && rl_idx >= 0 &&
+              rl_idx < static_cast<int>(sh->rules.size())) {
             return {nullptr, &sh->rules[rl_idx]};
           }
         }
@@ -1742,11 +1782,15 @@ void UIBuilderPanel::RefreshInspector() {
           set_count ? wxString::Format("%d", set_count) : wxString(), nullptr,
           [this, gkey, default_open](bool open) {
             if (default_open) {
-              if (open) collapsed_groups_.erase(gkey);
-              else collapsed_groups_.insert(gkey);
+              if (open)
+                collapsed_groups_.erase(gkey);
+              else
+                collapsed_groups_.insert(gkey);
             } else {
-              if (open) collapsed_groups_.insert("open:" + gkey);
-              else collapsed_groups_.erase("open:" + gkey);
+              if (open)
+                collapsed_groups_.insert("open:" + gkey);
+              else
+                collapsed_groups_.erase("open:" + gkey);
             }
             inspector_scroll_->FitInside();
           });
@@ -1758,10 +1802,9 @@ void UIBuilderPanel::RefreshInspector() {
         const char* pname = UI::GetStylePropertyInfo(id).name;
         const bool is_set =
             declared[i].has_value() || !declared_text[i].empty();
-        UI::StyleValue val =
-            declared[i]   ? *declared[i]
-            : element     ? element->resolvedStyle().Get(id)
-                          : UI::DefaultStyleValue(id);
+        UI::StyleValue val = declared[i] ? *declared[i]
+                             : element   ? element->resolvedStyle().Get(id)
+                                         : UI::DefaultStyleValue(id);
 
         auto* row = new wxBoxSizer(wxHORIZONTAL);
         auto* lbl = new wxStaticText(gb, wxID_ANY, pname, wxDefaultPosition,
@@ -1814,8 +1857,8 @@ void UIBuilderPanel::RefreshInspector() {
           const auto& kws = UI::StyleKeywords(id);
           wxArrayString opts;
           for (const auto& k : kws) opts.Add(wxString::FromUTF8(k));
-          auto* ch =
-              new wxChoice(gb, wxID_ANY, wxDefaultPosition, wxDefaultSize, opts);
+          auto* ch = new wxChoice(gb, wxID_ANY, wxDefaultPosition,
+                                  wxDefaultSize, opts);
           const int cur = std::get<int>(val);
           if (cur >= 0 && cur < static_cast<int>(kws.size())) {
             ch->SetSelection(cur);
@@ -1843,20 +1886,28 @@ void UIBuilderPanel::RefreshInspector() {
           auto* u_ch = new wxChoice(lp, wxID_ANY, wxDefaultPosition,
                                     wxSize(56, -1), units);
           int u_sel = 0;
-          if (len.unit == UI::Length::Unit::kPercent) u_sel = 1;
-          else if (len.unit == UI::Length::Unit::kAuto) u_sel = 2;
-          else if (len.unit == UI::Length::Unit::kNone && allow_none) u_sel = 3;
+          if (len.unit == UI::Length::Unit::kPercent)
+            u_sel = 1;
+          else if (len.unit == UI::Length::Unit::kAuto)
+            u_sel = 2;
+          else if (len.unit == UI::Length::Unit::kNone && allow_none)
+            u_sel = 3;
           u_ch->SetSelection(u_sel);
 
           auto emit_len = [id, num, u_ch, apply_style](bool coalesced) {
             UI::Length out;
             out.value = static_cast<float>(num->GetValue());
             const int us = u_ch->GetSelection();
-            if (us == 1) out.unit = UI::Length::Unit::kPercent;
-            else if (us == 2) out.unit = UI::Length::Unit::kAuto;
-            else if (us == 3) out.unit = UI::Length::Unit::kNone;
-            else out.unit = UI::Length::Unit::kPixel;
-            apply_style(UI::FormatStyleValue(id, UI::StyleValue(out)), coalesced);
+            if (us == 1)
+              out.unit = UI::Length::Unit::kPercent;
+            else if (us == 2)
+              out.unit = UI::Length::Unit::kAuto;
+            else if (us == 3)
+              out.unit = UI::Length::Unit::kNone;
+            else
+              out.unit = UI::Length::Unit::kPixel;
+            apply_style(UI::FormatStyleValue(id, UI::StyleValue(out)),
+                        coalesced);
           };
           num->SetCallbacks(
               [this]() {
@@ -1869,28 +1920,26 @@ void UIBuilderPanel::RefreshInspector() {
                 scene_.UIBuilderRef().CommitEdit();
                 last_doc_rev_ = scene_.UIBuilderRef().DocRevision();
               });
-          u_ch->Bind(wxEVT_CHOICE, [emit_len](wxCommandEvent&) {
-            emit_len(false);
-          });
+          u_ch->Bind(wxEVT_CHOICE,
+                     [emit_len](wxCommandEvent&) { emit_len(false); });
           ls->Add(num, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 3);
           ls->Add(u_ch, 0, wxALIGN_CENTER_VERTICAL);
           lp->SetSizer(ls);
           ed = lp;
         } else if (std::holds_alternative<float>(val)) {
           const float f = std::get<float>(val);
-          const double step =
-              id == UI::StylePropertyId::kOpacity ? 0.01 : 0.1;
-          auto* dn = new DragNumberCtrl(gb, wxEmptyString, wxNullColour,
-                                        f, step, false, 3);
+          const double step = id == UI::StylePropertyId::kOpacity ? 0.01 : 0.1;
+          auto* dn = new DragNumberCtrl(gb, wxEmptyString, wxNullColour, f,
+                                        step, false, 3);
           dn->SetCallbacks(
               [this]() {
                 dragging_ = true;
                 scene_.UIBuilderRef().BeginEdit();
               },
               [id, apply_style](double v) {
-                apply_style(
-                    UI::FormatStyleValue(id, UI::StyleValue(static_cast<float>(v))),
-                    true);
+                apply_style(UI::FormatStyleValue(
+                                id, UI::StyleValue(static_cast<float>(v))),
+                            true);
               },
               [this]() {
                 dragging_ = false;
@@ -1907,8 +1956,9 @@ void UIBuilderPanel::RefreshInspector() {
                 scene_.UIBuilderRef().BeginEdit();
               },
               [id, apply_style](glm::vec2 v) {
-                apply_style(UI::FormatStyleValue(id, UI::StyleValue(UI::Scale{v})),
-                            true);
+                apply_style(
+                    UI::FormatStyleValue(id, UI::StyleValue(UI::Scale{v})),
+                    true);
               },
               [this]() {
                 dragging_ = false;
@@ -1926,9 +1976,10 @@ void UIBuilderPanel::RefreshInspector() {
                 scene_.UIBuilderRef().BeginEdit();
               },
               [id, apply_style](double v) {
-                apply_style(UI::FormatStyleValue(
-                                id, UI::StyleValue(UI::Rotate{static_cast<float>(v)})),
-                            true);
+                apply_style(
+                    UI::FormatStyleValue(
+                        id, UI::StyleValue(UI::Rotate{static_cast<float>(v)})),
+                    true);
               },
               [this]() {
                 dragging_ = false;
@@ -1955,17 +2006,17 @@ void UIBuilderPanel::RefreshInspector() {
 
     // Rule custom variables (--name)
     if (rule) {
-      auto* var_sec = new CollapsibleSection(
-          inspector_scroll_, "Variables", true, wxEmptyString);
+      auto* var_sec = new CollapsibleSection(inspector_scroll_, "Variables",
+                                             true, wxEmptyString);
       wxPanel* vb = var_sec->Body();
       wxBoxSizer* vs = var_sec->BodySizer();
       for (size_t d_i = 0; d_i < rule->declarations.size(); ++d_i) {
         const auto& d = rule->declarations[d_i];
         if (!d.property.starts_with("--")) continue;
         auto* row = new wxBoxSizer(wxHORIZONTAL);
-        auto* vl = new wxStaticText(vb, wxID_ANY, wxString::FromUTF8(d.property),
-                                    wxDefaultPosition, wxSize(108, -1),
-                                    wxST_ELLIPSIZE_END);
+        auto* vl = new wxStaticText(
+            vb, wxID_ANY, wxString::FromUTF8(d.property), wxDefaultPosition,
+            wxSize(108, -1), wxST_ELLIPSIZE_END);
         auto* vc = new wxTextCtrl(vb, wxID_ANY, wxString::FromUTF8(d.value),
                                   wxDefaultPosition, wxDefaultSize,
                                   wxTE_PROCESS_ENTER);
@@ -1975,19 +2026,18 @@ void UIBuilderPanel::RefreshInspector() {
         const int sh_idx = sel.sheet;
         const int rl_idx = sel.rule;
         const std::string prop_name = d.property;
-        vc->Bind(wxEVT_TEXT_ENTER,
-                 [this, vc, sh_idx, rl_idx, prop_name](wxCommandEvent&) {
-                   auto& u = scene_.UIBuilderRef();
-                   if (sh_idx >= 0 &&
-                       sh_idx < static_cast<int>(u.Sheets().size())) {
-                     auto& sh = u.Sheets()[sh_idx].sheet;
-                     if (sh && rl_idx >= 0 &&
-                         rl_idx < static_cast<int>(sh->rules.size())) {
-                       u.SetVariable(&sh->rules[rl_idx], sh_idx, prop_name,
-                                     vc->GetValue().ToStdString());
-                     }
-                   }
-                 });
+        vc->Bind(wxEVT_TEXT_ENTER, [this, vc, sh_idx, rl_idx,
+                                    prop_name](wxCommandEvent&) {
+          auto& u = scene_.UIBuilderRef();
+          if (sh_idx >= 0 && sh_idx < static_cast<int>(u.Sheets().size())) {
+            auto& sh = u.Sheets()[sh_idx].sheet;
+            if (sh && rl_idx >= 0 &&
+                rl_idx < static_cast<int>(sh->rules.size())) {
+              u.SetVariable(&sh->rules[rl_idx], sh_idx, prop_name,
+                            vc->GetValue().ToStdString());
+            }
+          }
+        });
         vrem->Bind(wxEVT_BUTTON, [this, sh_idx, rl_idx, d_i](wxCommandEvent&) {
           auto& u = scene_.UIBuilderRef();
           if (sh_idx >= 0 && sh_idx < static_cast<int>(u.Sheets().size())) {
@@ -2011,24 +2061,25 @@ void UIBuilderPanel::RefreshInspector() {
       ApplyButtonIconAndPadding(add_vb, EditorIcon::kCreate, 8, 13, 5);
       const int sh_idx = sel.sheet;
       const int rl_idx = sel.rule;
-      add_vb->Bind(wxEVT_BUTTON, [this, new_v, sh_idx, rl_idx](wxCommandEvent&) {
-        auto& u = scene_.UIBuilderRef();
-        if (sh_idx >= 0 && sh_idx < static_cast<int>(u.Sheets().size())) {
-          auto& sh = u.Sheets()[sh_idx].sheet;
-          if (sh && rl_idx >= 0 &&
-              rl_idx < static_cast<int>(sh->rules.size())) {
-            u.AddVariable(&sh->rules[rl_idx], sh_idx,
-                          new_v->GetValue().ToStdString());
-          }
-        }
-      });
+      add_vb->Bind(
+          wxEVT_BUTTON, [this, new_v, sh_idx, rl_idx](wxCommandEvent&) {
+            auto& u = scene_.UIBuilderRef();
+            if (sh_idx >= 0 && sh_idx < static_cast<int>(u.Sheets().size())) {
+              auto& sh = u.Sheets()[sh_idx].sheet;
+              if (sh && rl_idx >= 0 &&
+                  rl_idx < static_cast<int>(sh->rules.size())) {
+                u.AddVariable(&sh->rules[rl_idx], sh_idx,
+                              new_v->GetValue().ToStdString());
+              }
+            }
+          });
       add_var_row->Add(new_v, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
       add_var_row->Add(add_vb, 0);
       vs->Add(add_var_row, 0, wxEXPAND | wxTOP, 4);
 
       var_sec->FinishBuild();
-      inspector_sizer_->Add(var_sec, 0,
-                            wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+      inspector_sizer_->Add(var_sec, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
+                            6);
     }
   }
 

@@ -55,7 +55,9 @@ class TextElement : public VisualElement {
  public:
   static constexpr const char* ussClassName = "unity-text-element";
   TextElement();
-  explicit TextElement(std::string text) : TextElement() { SetText(std::move(text)); }
+  explicit TextElement(std::string text) : TextElement() {
+    SetText(std::move(text));
+  }
   const char* typeName() const override { return "TextElement"; }
 
   const std::string& text() const { return text_; }
@@ -74,7 +76,8 @@ class TextElement : public VisualElement {
   void GenerateVisualContent(MeshGenerationContext& context) override;
 
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
 
   // Where text is drawn within the content rect, after alignment.
   glm::vec2 TextOrigin(const TextLayout& layout) const;
@@ -116,9 +119,11 @@ class RepeatButton : public TextElement {
  public:
   static constexpr const char* ussClassName = "unity-repeat-button";
   RepeatButton();
-  RepeatButton(std::function<void()> action, double delay_ms, double interval_ms);
+  RepeatButton(std::function<void()> action, double delay_ms,
+               double interval_ms);
   const char* typeName() const override { return "RepeatButton"; }
-  void SetAction(std::function<void()> action, double delay_ms, double interval_ms);
+  void SetAction(std::function<void()> action, double delay_ms,
+                 double interval_ms);
 
  private:
   Clickable* clickable_ = nullptr;
@@ -149,7 +154,8 @@ class Image : public VisualElement {
                     MeasureMode height_mode) override;
   void GenerateVisualContent(MeshGenerationContext& context) override;
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
 
  private:
   std::shared_ptr<UITexture> Texture() const;
@@ -178,7 +184,8 @@ class GroupBox : public VisualElement {
   const std::string& text() const;
   void SetText(std::string text);
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
 
  private:
   Label* label_ = nullptr;
@@ -241,7 +248,8 @@ class Toggle : public BaseField<bool> {
   const std::string& text() const { return text_; }
   void SetText(std::string text);
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
   void HandleEventBubbleUp(EventBase& event) override;
 
  protected:
@@ -255,7 +263,9 @@ class RadioButton : public Toggle {
  public:
   static constexpr const char* ussClassName = "unity-radio-button";
   RadioButton();
-  explicit RadioButton(std::string label) : RadioButton() { SetLabel(std::move(label)); }
+  explicit RadioButton(std::string label) : RadioButton() {
+    SetLabel(std::move(label));
+  }
   const char* typeName() const override { return "RadioButton"; }
   void HandleEventBubbleUp(EventBase& event) override;
 
@@ -285,7 +295,8 @@ class BaseSlider : public BaseField<T> {
   VisualElement* dragger() const { return dragger_; }
 
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
   void HandleEventBubbleUp(EventBase& event) override;
 
  protected:
@@ -345,7 +356,8 @@ class ProgressBar : public VisualElement {
   void SetTitle(std::string title);
 
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
 
  private:
   void UpdateProgress();
@@ -366,7 +378,9 @@ class TextField : public BaseField<std::string> {
  public:
   static constexpr const char* ussClassName = "unity-text-field";
   TextField();
-  explicit TextField(std::string label) : TextField() { SetLabel(std::move(label)); }
+  explicit TextField(std::string label) : TextField() {
+    SetLabel(std::move(label));
+  }
   const char* typeName() const override { return "TextField"; }
 
   const std::string& text() const { return value_; }
@@ -395,7 +409,8 @@ class TextField : public BaseField<std::string> {
   void SelectRange(int anchor, int cursor);
 
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
   void HandleEventBubbleUp(EventBase& event) override;
 
   // Used by the inner text element.
@@ -442,7 +457,8 @@ class IntegerField : public TextField {
   int intValue() const { return int_value_; }
   void SetIntValue(int value);
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
 
  protected:
   void CommitText(const std::string& text) override;
@@ -460,7 +476,8 @@ class FloatField : public TextField {
   float floatValue() const { return float_value_; }
   void SetFloatValue(float value);
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
 
  protected:
   void CommitText(const std::string& text) override;
@@ -497,7 +514,11 @@ class Scroller : public VisualElement {
   VisualElement* dragger_ = nullptr;
 };
 
-enum class ScrollViewMode : uint8_t { kVertical, kHorizontal, kVerticalAndHorizontal };
+enum class ScrollViewMode : uint8_t {
+  kVertical,
+  kHorizontal,
+  kVerticalAndHorizontal
+};
 enum class ScrollerVisibility : uint8_t { kAuto, kAlwaysVisible, kHidden };
 
 class ScrollView : public VisualElement {
@@ -521,7 +542,8 @@ class ScrollView : public VisualElement {
   Scroller* horizontalScroller() const { return horizontal_; }
 
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
   void HandleEventBubbleUp(EventBase& event) override;
 
  private:
@@ -549,7 +571,8 @@ class Foldout : public VisualElement {
   bool value() const;
   void SetValue(bool open);
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
 
  private:
   Toggle* toggle_ = nullptr;
@@ -587,7 +610,8 @@ class ListView : public VisualElement {
     items_source_ = items;
     items_source_size_ = items ? std::function<int()>([items] {
       return static_cast<int>(items->size());
-    }) : std::function<int()>();
+    })
+                               : std::function<int()>();
     RefreshItems();
   }
   const void* itemsSource() const { return items_source_; }
@@ -599,7 +623,9 @@ class ListView : public VisualElement {
   void SetFixedItemHeight(float height);
   SelectionType selectionType() const { return selection_type_; }
   void SetSelectionType(SelectionType type) { selection_type_ = type; }
-  int selectedIndex() const { return selected_.empty() ? -1 : selected_.front(); }
+  int selectedIndex() const {
+    return selected_.empty() ? -1 : selected_.front();
+  }
   const std::vector<int>& selectedIndices() const { return selected_; }
   void SetSelection(int index);
   void AddToSelection(int index);
@@ -611,7 +637,8 @@ class ListView : public VisualElement {
   ScrollView* scrollView() const { return scroll_; }
 
   bool SetProperty(std::string_view name, const mtext::Variant& value) override;
-  std::optional<mtext::Variant> GetProperty(std::string_view name) const override;
+  std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const override;
   void HandleEventBubbleUp(EventBase& event) override;
 
  private:

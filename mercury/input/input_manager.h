@@ -36,12 +36,12 @@ enum KeyStatus { kJustPressed = 0, kContinuous = 1, kReleased = 2 };
 struct InputEvent {
   enum class Type { kKey, kChar, kMouseButton, kScroll };
   Type type = Type::kKey;
-  int key = 0;       // kKey: GLFW key code
-  int action = 0;    // kKey / kMouseButton: GLFW_PRESS, GLFW_RELEASE, GLFW_REPEAT
-  int button = 0;    // kMouseButton: 0 left, 1 right, 2 middle
-  int mods = 0;      // GLFW_MOD_* bits
-  char32_t codepoint = 0;    // kChar
-  glm::vec2 scroll{0.0f};    // kScroll
+  int key = 0;     // kKey: GLFW key code
+  int action = 0;  // kKey / kMouseButton: GLFW_PRESS, GLFW_RELEASE, GLFW_REPEAT
+  int button = 0;  // kMouseButton: 0 left, 1 right, 2 middle
+  int mods = 0;    // GLFW_MOD_* bits
+  char32_t codepoint = 0;  // kChar
+  glm::vec2 scroll{0.0f};  // kScroll
 };
 
 /**
@@ -88,7 +88,9 @@ class InputManager {
 
   // Events since the last BeginFrame(); the application clears them before
   // polling each frame.
-  const std::vector<InputEvent>& GetFrameEvents() const { return frame_events_; }
+  const std::vector<InputEvent>& GetFrameEvents() const {
+    return frame_events_;
+  }
   void BeginFrame() {
     frame_events_.clear();
     frame_mouse_delta_ = glm::vec2(0.0f);

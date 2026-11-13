@@ -90,9 +90,9 @@ class VisualTreeAsset {
   // style_sheets apply to the whole document.
   UxmlNode root{"UXML"};
 
-  static std::shared_ptr<VisualTreeAsset> Parse(std::string_view xml,
-                                                std::string path = "",
-                                                std::vector<UxmlError>* errors = nullptr);
+  static std::shared_ptr<VisualTreeAsset> Parse(
+      std::string_view xml, std::string path = "",
+      std::vector<UxmlError>* errors = nullptr);
   std::string Write() const;
 
   /**

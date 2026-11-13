@@ -202,7 +202,8 @@ void Application::StepFrame() {
     time_since_last_tick_ -= kTickMs;
     ticks_run++;
   }
-  if (time_since_last_tick_ > kTickMs) time_since_last_tick_ = std::fmod(time_since_last_tick_, kTickMs);
+  if (time_since_last_tick_ > kTickMs)
+    time_since_last_tick_ = std::fmod(time_since_last_tick_, kTickMs);
 
   float alpha = static_cast<float>(time_since_last_tick_ / kTickMs);
   alpha = std::clamp(alpha, 0.0f, 1.0f);
@@ -231,7 +232,8 @@ void Application::StepFrame() {
 
   // The benchmark is done: a screenshot of this frame if asked for, then quit.
   if (Profiler::BenchFinished() && !quit_after_frame_) {
-    if (const char* capture = std::getenv("MERCURY_BENCH_CAPTURE")) RequestCapture(capture);
+    if (const char* capture = std::getenv("MERCURY_BENCH_CAPTURE"))
+      RequestCapture(capture);
     quit_after_frame_ = true;
   }
   {
@@ -336,8 +338,10 @@ void Application::SetPointer(std::string file_path) {
   }
 }
 void Application::Quit() const {
-  if (window_) glfwSetWindowShouldClose(window_, true);
-  else if (game_scene_) game_scene_->QuitScene();
+  if (window_)
+    glfwSetWindowShouldClose(window_, true);
+  else if (game_scene_)
+    game_scene_->QuitScene();
 }
 void Application::SetWindowTitle(const std::string& title) {
   title_ = title;

@@ -91,7 +91,8 @@ class UIBuilder {
   uint64_t SelectionRevision() const { return selection_revision_; }
 
   // Callbacks provided by the UI host.
-  std::function<std::vector<std::string>(const std::vector<std::string>&)> list_files;
+  std::function<std::vector<std::string>(const std::vector<std::string>&)>
+      list_files;
   std::function<std::string()> clipboard_get;
   std::function<void(const std::string&)> clipboard_set;
 
@@ -106,12 +107,15 @@ class UIBuilder {
   int CreateNewSheetNextToDoc();
   void RemoveSheet(int sheet_idx);
 
-  bool AddRuleToActiveSheet(const std::string& selector_text, std::string* error_out = nullptr);
+  bool AddRuleToActiveSheet(const std::string& selector_text,
+                            std::string* error_out = nullptr);
   void DuplicateRule(int sheet_idx, int rule_idx);
   void DeleteRule(int sheet_idx, int rule_idx);
-  bool RenameRule(UI::StyleRule* rule, int sheet_idx, const std::string& selector_text);
+  bool RenameRule(UI::StyleRule* rule, int sheet_idx,
+                  const std::string& selector_text);
 
-  static bool ValidateSelectorList(const std::string& text, std::string* error_out = nullptr);
+  static bool ValidateSelectorList(const std::string& text,
+                                   std::string* error_out = nullptr);
   std::string RelativeToDocument(const std::string& res_path) const;
 
   std::string WriteUxml() const;
@@ -131,43 +135,57 @@ class UIBuilder {
   UI::UxmlNode NewNode(const std::string& type) const;
   void InsertNode(const std::vector<int>& parent, int index, UI::UxmlNode node);
   std::optional<UI::UxmlNode> RemoveNode(const std::vector<int>& path);
-  void MoveNode(const std::vector<int>& from, const std::vector<int>& parent, int index);
+  void MoveNode(const std::vector<int>& from, const std::vector<int>& parent,
+                int index);
   void WrapInVisualElement(const std::vector<int>& path);
   void UnwrapElement(const std::vector<int>& path);
   void DeleteSelected();
   void DuplicateSelected();
   void RemoveTemplate(size_t index);
 
-  // --------------------------------------------------------- Attributes & Style
+  // --------------------------------------------------------- Attributes &
+  // Style
   static const std::vector<StyleGroup>& StyleGroups();
   static bool IsListValue(const UI::StyleValue& v);
 
-  std::vector<UI::StyleDeclaration> InlineDeclarations(const UI::UxmlNode& node) const;
-  void ResolveDeclaredStyles(const UI::UxmlNode* node, const UI::StyleRule* rule,
-                             std::vector<std::optional<UI::StyleValue>>& declared,
-                             std::vector<std::string>& declared_text) const;
+  std::vector<UI::StyleDeclaration> InlineDeclarations(
+      const UI::UxmlNode& node) const;
+  void ResolveDeclaredStyles(
+      const UI::UxmlNode* node, const UI::StyleRule* rule,
+      std::vector<std::optional<UI::StyleValue>>& declared,
+      std::vector<std::string>& declared_text) const;
 
-  void SetStyle(UI::UxmlNode* node, UI::StyleRule* rule, std::string_view property,
-                std::string_view value, bool coalesced = false);
-  void UnsetStyle(UI::UxmlNode* node, UI::StyleRule* rule, std::string_view property);
-  void SetVariable(UI::StyleRule* rule, int sheet_idx, const std::string& property,
-                   const std::string& value, bool coalesced = false);
+  void SetStyle(UI::UxmlNode* node, UI::StyleRule* rule,
+                std::string_view property, std::string_view value,
+                bool coalesced = false);
+  void UnsetStyle(UI::UxmlNode* node, UI::StyleRule* rule,
+                  std::string_view property);
+  void SetVariable(UI::StyleRule* rule, int sheet_idx,
+                   const std::string& property, const std::string& value,
+                   bool coalesced = false);
   void RemoveVariable(UI::StyleRule* rule, int sheet_idx, size_t decl_index);
-  bool AddVariable(UI::StyleRule* rule, int sheet_idx, const std::string& property);
-  void ExtractInlineStylesToClass(UI::UxmlNode& node, const std::string& class_name);
+  bool AddVariable(UI::StyleRule* rule, int sheet_idx,
+                   const std::string& property);
+  void ExtractInlineStylesToClass(UI::UxmlNode& node,
+                                  const std::string& class_name);
 
-  std::vector<MatchingRuleInfo> MatchingSelectors(UI::VisualElement* element) const;
+  std::vector<MatchingRuleInfo> MatchingSelectors(
+      UI::VisualElement* element) const;
 
-  void SetAttribute(UI::UxmlNode& node, const std::string& name, const std::string& value,
-                    const std::string& default_value, bool coalesced = false);
+  void SetAttribute(UI::UxmlNode& node, const std::string& name,
+                    const std::string& value, const std::string& default_value,
+                    bool coalesced = false);
   void UnsetAttribute(UI::UxmlNode& node, const std::string& name);
-  void SetClassList(UI::UxmlNode& node, const std::vector<std::string>& classes);
+  void SetClassList(UI::UxmlNode& node,
+                    const std::vector<std::string>& classes);
   void AddBinding(UI::UxmlNode& node);
   void RemoveBinding(UI::UxmlNode& node, size_t idx);
-  void UpdateBinding(UI::UxmlNode& node, size_t idx, const UI::UxmlBindingDesc& binding,
+  void UpdateBinding(UI::UxmlNode& node, size_t idx,
+                     const UI::UxmlBindingDesc& binding,
                      bool coalesced = false);
 
-  // ------------------------------------------------------------- Preview & Canvas
+  // ------------------------------------------------------------- Preview &
+  // Canvas
   void UpdatePreview(RenderHost* host, float dt);
   void DispatchPreviewInput(const UI::UIInputFrame& frame);
   UI::Panel* PreviewPanel() const { return panel_.get(); }
@@ -195,7 +213,8 @@ class UIBuilder {
 
   Handle HitTestHandle(glm::vec2 local_mouse, glm::vec2 origin) const;
   void OnCanvasWheel(float wheel_delta, float wheel_h, bool ctrl_down);
-  void OnCanvasMouseDown(glm::vec2 local_mouse, glm::vec2 origin, int button, bool alt_down);
+  void OnCanvasMouseDown(glm::vec2 local_mouse, glm::vec2 origin, int button,
+                         bool alt_down);
   void OnCanvasMouseDrag(glm::vec2 local_mouse, glm::vec2 mouse_delta);
   void OnCanvasMouseUp();
   bool IsDraggingCanvas() const { return drag_ != Handle::kNone; }
@@ -206,9 +225,10 @@ class UIBuilder {
 
   void RenderCanvasOverlay(OverlayCanvas& canvas, glm::vec2 origin) const;
 
-  void DropNewTypeAtPoint(const std::string& type_name, glm::vec2 local_mouse, glm::vec2 origin);
-  void DropTemplateAtPoint(const std::string& template_res_path, glm::vec2 local_mouse,
-                           glm::vec2 origin);
+  void DropNewTypeAtPoint(const std::string& type_name, glm::vec2 local_mouse,
+                          glm::vec2 origin);
+  void DropTemplateAtPoint(const std::string& template_res_path,
+                           glm::vec2 local_mouse, glm::vec2 origin);
 
  private:
   struct Snapshot {
@@ -222,8 +242,9 @@ class UIBuilder {
   void MarkChanged(bool coalesced = false);
   void LoadSheets();
   void RebuildPreview();
-  void SetInlineDeclarations(UI::UxmlNode& node,
-                             const std::vector<UI::StyleDeclaration>& declarations);
+  void SetInlineDeclarations(
+      UI::UxmlNode& node,
+      const std::vector<UI::StyleDeclaration>& declarations);
 
   Console& console_;
   std::shared_ptr<Project> project_;

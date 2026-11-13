@@ -57,7 +57,8 @@ struct Length {
 struct Color {
   glm::vec4 rgba = glm::vec4(0.0f);
   constexpr Color() = default;
-  constexpr Color(float r, float g, float b, float a = 1.0f) : rgba(r, g, b, a) {}
+  constexpr Color(float r, float g, float b, float a = 1.0f)
+      : rgba(r, g, b, a) {}
   explicit constexpr Color(glm::vec4 v) : rgba(v) {}
   static constexpr Color Clear() { return {0, 0, 0, 0}; }
   static constexpr Color White() { return {1, 1, 1, 1}; }
@@ -140,7 +141,12 @@ struct EasingList {
   bool operator==(const EasingList&) const = default;
 };
 
-enum class FlexDirection : uint8_t { kColumn, kColumnReverse, kRow, kRowReverse };
+enum class FlexDirection : uint8_t {
+  kColumn,
+  kColumnReverse,
+  kRow,
+  kRowReverse
+};
 enum class Wrap : uint8_t { kNoWrap, kWrap, kWrapReverse };
 enum class Align : uint8_t {
   kAuto,
@@ -181,112 +187,111 @@ enum class TextOverflow : uint8_t { kClip, kEllipsis };
 enum class ScaleMode : uint8_t { kStretchToFill, kScaleAndCrop, kScaleToFit };
 
 // X(Id, "uss-name", Type, member, default, inherited)
-#define MERCURY_UI_STYLE_PROPERTIES(X)                                        \
-  X(Width, "width", Length, width, Length::Auto(), false)                     \
-  X(Height, "height", Length, height, Length::Auto(), false)                  \
-  X(MinWidth, "min-width", Length, minWidth, Length::Auto(), false)           \
-  X(MinHeight, "min-height", Length, minHeight, Length::Auto(), false)        \
-  X(MaxWidth, "max-width", Length, maxWidth, Length::None(), false)           \
-  X(MaxHeight, "max-height", Length, maxHeight, Length::None(), false)        \
-  X(FlexDirection, "flex-direction", FlexDirection, flexDirection,            \
-    FlexDirection::kColumn, false)                                            \
-  X(FlexWrap, "flex-wrap", Wrap, flexWrap, Wrap::kNoWrap, false)              \
-  X(FlexGrow, "flex-grow", float, flexGrow, 0.0f, false)                      \
-  X(FlexShrink, "flex-shrink", float, flexShrink, 1.0f, false)                \
-  X(FlexBasis, "flex-basis", Length, flexBasis, Length::Auto(), false)        \
-  X(AlignItems, "align-items", Align, alignItems, Align::kStretch, false)     \
-  X(AlignContent, "align-content", Align, alignContent, Align::kFlexStart,    \
-    false)                                                                    \
-  X(AlignSelf, "align-self", Align, alignSelf, Align::kAuto, false)           \
-  X(JustifyContent, "justify-content", Justify, justifyContent,               \
-    Justify::kFlexStart, false)                                               \
-  X(Position, "position", Position, position, Position::kRelative, false)     \
-  X(Left, "left", Length, left, Length::Auto(), false)                        \
-  X(Top, "top", Length, top, Length::Auto(), false)                           \
-  X(Right, "right", Length, right, Length::Auto(), false)                     \
-  X(Bottom, "bottom", Length, bottom, Length::Auto(), false)                  \
-  X(MarginLeft, "margin-left", Length, marginLeft, Length(), false)           \
-  X(MarginTop, "margin-top", Length, marginTop, Length(), false)              \
-  X(MarginRight, "margin-right", Length, marginRight, Length(), false)        \
-  X(MarginBottom, "margin-bottom", Length, marginBottom, Length(), false)     \
-  X(PaddingLeft, "padding-left", Length, paddingLeft, Length(), false)        \
-  X(PaddingTop, "padding-top", Length, paddingTop, Length(), false)           \
-  X(PaddingRight, "padding-right", Length, paddingRight, Length(), false)     \
-  X(PaddingBottom, "padding-bottom", Length, paddingBottom, Length(), false)  \
-  X(BorderLeftWidth, "border-left-width", float, borderLeftWidth, 0.0f,       \
-    false)                                                                    \
-  X(BorderTopWidth, "border-top-width", float, borderTopWidth, 0.0f, false)   \
-  X(BorderRightWidth, "border-right-width", float, borderRightWidth, 0.0f,    \
-    false)                                                                    \
-  X(BorderBottomWidth, "border-bottom-width", float, borderBottomWidth, 0.0f, \
-    false)                                                                    \
-  X(BorderLeftColor, "border-left-color", Color, borderLeftColor,             \
-    Color::Clear(), false)                                                    \
-  X(BorderTopColor, "border-top-color", Color, borderTopColor,                \
-    Color::Clear(), false)                                                    \
-  X(BorderRightColor, "border-right-color", Color, borderRightColor,          \
-    Color::Clear(), false)                                                    \
-  X(BorderBottomColor, "border-bottom-color", Color, borderBottomColor,       \
-    Color::Clear(), false)                                                    \
-  X(BorderTopLeftRadius, "border-top-left-radius", Length,                    \
-    borderTopLeftRadius, Length(), false)                                     \
-  X(BorderTopRightRadius, "border-top-right-radius", Length,                  \
-    borderTopRightRadius, Length(), false)                                    \
-  X(BorderBottomRightRadius, "border-bottom-right-radius", Length,            \
-    borderBottomRightRadius, Length(), false)                                 \
-  X(BorderBottomLeftRadius, "border-bottom-left-radius", Length,              \
-    borderBottomLeftRadius, Length(), false)                                  \
-  X(BackgroundColor, "background-color", Color, backgroundColor,              \
-    Color::Clear(), false)                                                    \
-  X(BackgroundImage, "background-image", Background, backgroundImage,         \
-    Background(), false)                                                      \
-  X(BackgroundImageTintColor, "-unity-background-image-tint-color", Color,    \
-    unityBackgroundImageTintColor, Color::White(), false)                     \
-  X(BackgroundScaleMode, "-unity-background-scale-mode", ScaleMode,           \
-    unityBackgroundScaleMode, ScaleMode::kStretchToFill, false)               \
-  X(SliceLeft, "-unity-slice-left", float, unitySliceLeft, 0.0f, false)       \
-  X(SliceTop, "-unity-slice-top", float, unitySliceTop, 0.0f, false)          \
-  X(SliceRight, "-unity-slice-right", float, unitySliceRight, 0.0f, false)    \
-  X(SliceBottom, "-unity-slice-bottom", float, unitySliceBottom, 0.0f, false) \
-  X(SliceScale, "-unity-slice-scale", float, unitySliceScale, 1.0f, false)    \
-  X(Color, "color", Color, color, Color::Black(), true)                       \
-  X(FontSize, "font-size", float, fontSize, 12.0f, true)                      \
-  X(Font, "-unity-font-definition", FontDefinition, unityFontDefinition,      \
-    FontDefinition(), true)                                                   \
-  X(FontStyle, "-unity-font-style", FontStyle, unityFontStyleAndWeight,       \
-    FontStyle::kNormal, true)                                                 \
-  X(TextAlign, "-unity-text-align", TextAnchor, unityTextAlign,               \
-    TextAnchor::kUpperLeft, true)                                             \
-  X(WhiteSpace, "white-space", WhiteSpace, whiteSpace, WhiteSpace::kNormal,   \
-    true)                                                                     \
-  X(TextOverflow, "text-overflow", TextOverflow, textOverflow,                \
-    TextOverflow::kClip, false)                                               \
-  X(LetterSpacing, "letter-spacing", float, letterSpacing, 0.0f, true)        \
-  X(WordSpacing, "word-spacing", float, wordSpacing, 0.0f, true)              \
-  X(ParagraphSpacing, "-unity-paragraph-spacing", float,                      \
-    unityParagraphSpacing, 0.0f, true)                                        \
-  X(TextOutlineWidth, "-unity-text-outline-width", float,                     \
-    unityTextOutlineWidth, 0.0f, true)                                        \
-  X(TextOutlineColor, "-unity-text-outline-color", Color,                     \
-    unityTextOutlineColor, Color::Clear(), true)                              \
-  X(TextShadow, "text-shadow", TextShadow, textShadow, TextShadow(), true)    \
-  X(Opacity, "opacity", float, opacity, 1.0f, false)                          \
-  X(Display, "display", DisplayStyle, display, DisplayStyle::kFlex, false)    \
-  X(Visibility, "visibility", Visibility, visibility, Visibility::kVisible,   \
-    true)                                                                     \
-  X(Overflow, "overflow", Overflow, overflow, Overflow::kVisible, false)      \
-  X(Translate, "translate", Translate, translate, Translate(), false)         \
-  X(Scale, "scale", Scale, scale, Scale(), false)                             \
-  X(Rotate, "rotate", Rotate, rotate, Rotate(), false)                        \
-  X(TransformOrigin, "transform-origin", TransformOrigin, transformOrigin,    \
-    TransformOrigin(), false)                                                 \
-  X(TransitionProperty, "transition-property", PropertyNameList,              \
-    transitionProperty, PropertyNameList(), false)                            \
-  X(TransitionDuration, "transition-duration", TimeList, transitionDuration,  \
-    TimeList(), false)                                                        \
-  X(TransitionTimingFunction, "transition-timing-function", EasingList,       \
-    transitionTimingFunction, EasingList(), false)                            \
-  X(TransitionDelay, "transition-delay", TimeList, transitionDelay,           \
+#define MERCURY_UI_STYLE_PROPERTIES(X)                                         \
+  X(Width, "width", Length, width, Length::Auto(), false)                      \
+  X(Height, "height", Length, height, Length::Auto(), false)                   \
+  X(MinWidth, "min-width", Length, minWidth, Length::Auto(), false)            \
+  X(MinHeight, "min-height", Length, minHeight, Length::Auto(), false)         \
+  X(MaxWidth, "max-width", Length, maxWidth, Length::None(), false)            \
+  X(MaxHeight, "max-height", Length, maxHeight, Length::None(), false)         \
+  X(FlexDirection, "flex-direction", FlexDirection, flexDirection,             \
+    FlexDirection::kColumn, false)                                             \
+  X(FlexWrap, "flex-wrap", Wrap, flexWrap, Wrap::kNoWrap, false)               \
+  X(FlexGrow, "flex-grow", float, flexGrow, 0.0f, false)                       \
+  X(FlexShrink, "flex-shrink", float, flexShrink, 1.0f, false)                 \
+  X(FlexBasis, "flex-basis", Length, flexBasis, Length::Auto(), false)         \
+  X(AlignItems, "align-items", Align, alignItems, Align::kStretch, false)      \
+  X(AlignContent, "align-content", Align, alignContent, Align::kFlexStart,     \
+    false)                                                                     \
+  X(AlignSelf, "align-self", Align, alignSelf, Align::kAuto, false)            \
+  X(JustifyContent, "justify-content", Justify, justifyContent,                \
+    Justify::kFlexStart, false)                                                \
+  X(Position, "position", Position, position, Position::kRelative, false)      \
+  X(Left, "left", Length, left, Length::Auto(), false)                         \
+  X(Top, "top", Length, top, Length::Auto(), false)                            \
+  X(Right, "right", Length, right, Length::Auto(), false)                      \
+  X(Bottom, "bottom", Length, bottom, Length::Auto(), false)                   \
+  X(MarginLeft, "margin-left", Length, marginLeft, Length(), false)            \
+  X(MarginTop, "margin-top", Length, marginTop, Length(), false)               \
+  X(MarginRight, "margin-right", Length, marginRight, Length(), false)         \
+  X(MarginBottom, "margin-bottom", Length, marginBottom, Length(), false)      \
+  X(PaddingLeft, "padding-left", Length, paddingLeft, Length(), false)         \
+  X(PaddingTop, "padding-top", Length, paddingTop, Length(), false)            \
+  X(PaddingRight, "padding-right", Length, paddingRight, Length(), false)      \
+  X(PaddingBottom, "padding-bottom", Length, paddingBottom, Length(), false)   \
+  X(BorderLeftWidth, "border-left-width", float, borderLeftWidth, 0.0f, false) \
+  X(BorderTopWidth, "border-top-width", float, borderTopWidth, 0.0f, false)    \
+  X(BorderRightWidth, "border-right-width", float, borderRightWidth, 0.0f,     \
+    false)                                                                     \
+  X(BorderBottomWidth, "border-bottom-width", float, borderBottomWidth, 0.0f,  \
+    false)                                                                     \
+  X(BorderLeftColor, "border-left-color", Color, borderLeftColor,              \
+    Color::Clear(), false)                                                     \
+  X(BorderTopColor, "border-top-color", Color, borderTopColor, Color::Clear(), \
+    false)                                                                     \
+  X(BorderRightColor, "border-right-color", Color, borderRightColor,           \
+    Color::Clear(), false)                                                     \
+  X(BorderBottomColor, "border-bottom-color", Color, borderBottomColor,        \
+    Color::Clear(), false)                                                     \
+  X(BorderTopLeftRadius, "border-top-left-radius", Length,                     \
+    borderTopLeftRadius, Length(), false)                                      \
+  X(BorderTopRightRadius, "border-top-right-radius", Length,                   \
+    borderTopRightRadius, Length(), false)                                     \
+  X(BorderBottomRightRadius, "border-bottom-right-radius", Length,             \
+    borderBottomRightRadius, Length(), false)                                  \
+  X(BorderBottomLeftRadius, "border-bottom-left-radius", Length,               \
+    borderBottomLeftRadius, Length(), false)                                   \
+  X(BackgroundColor, "background-color", Color, backgroundColor,               \
+    Color::Clear(), false)                                                     \
+  X(BackgroundImage, "background-image", Background, backgroundImage,          \
+    Background(), false)                                                       \
+  X(BackgroundImageTintColor, "-unity-background-image-tint-color", Color,     \
+    unityBackgroundImageTintColor, Color::White(), false)                      \
+  X(BackgroundScaleMode, "-unity-background-scale-mode", ScaleMode,            \
+    unityBackgroundScaleMode, ScaleMode::kStretchToFill, false)                \
+  X(SliceLeft, "-unity-slice-left", float, unitySliceLeft, 0.0f, false)        \
+  X(SliceTop, "-unity-slice-top", float, unitySliceTop, 0.0f, false)           \
+  X(SliceRight, "-unity-slice-right", float, unitySliceRight, 0.0f, false)     \
+  X(SliceBottom, "-unity-slice-bottom", float, unitySliceBottom, 0.0f, false)  \
+  X(SliceScale, "-unity-slice-scale", float, unitySliceScale, 1.0f, false)     \
+  X(Color, "color", Color, color, Color::Black(), true)                        \
+  X(FontSize, "font-size", float, fontSize, 12.0f, true)                       \
+  X(Font, "-unity-font-definition", FontDefinition, unityFontDefinition,       \
+    FontDefinition(), true)                                                    \
+  X(FontStyle, "-unity-font-style", FontStyle, unityFontStyleAndWeight,        \
+    FontStyle::kNormal, true)                                                  \
+  X(TextAlign, "-unity-text-align", TextAnchor, unityTextAlign,                \
+    TextAnchor::kUpperLeft, true)                                              \
+  X(WhiteSpace, "white-space", WhiteSpace, whiteSpace, WhiteSpace::kNormal,    \
+    true)                                                                      \
+  X(TextOverflow, "text-overflow", TextOverflow, textOverflow,                 \
+    TextOverflow::kClip, false)                                                \
+  X(LetterSpacing, "letter-spacing", float, letterSpacing, 0.0f, true)         \
+  X(WordSpacing, "word-spacing", float, wordSpacing, 0.0f, true)               \
+  X(ParagraphSpacing, "-unity-paragraph-spacing", float,                       \
+    unityParagraphSpacing, 0.0f, true)                                         \
+  X(TextOutlineWidth, "-unity-text-outline-width", float,                      \
+    unityTextOutlineWidth, 0.0f, true)                                         \
+  X(TextOutlineColor, "-unity-text-outline-color", Color,                      \
+    unityTextOutlineColor, Color::Clear(), true)                               \
+  X(TextShadow, "text-shadow", TextShadow, textShadow, TextShadow(), true)     \
+  X(Opacity, "opacity", float, opacity, 1.0f, false)                           \
+  X(Display, "display", DisplayStyle, display, DisplayStyle::kFlex, false)     \
+  X(Visibility, "visibility", Visibility, visibility, Visibility::kVisible,    \
+    true)                                                                      \
+  X(Overflow, "overflow", Overflow, overflow, Overflow::kVisible, false)       \
+  X(Translate, "translate", Translate, translate, Translate(), false)          \
+  X(Scale, "scale", Scale, scale, Scale(), false)                              \
+  X(Rotate, "rotate", Rotate, rotate, Rotate(), false)                         \
+  X(TransformOrigin, "transform-origin", TransformOrigin, transformOrigin,     \
+    TransformOrigin(), false)                                                  \
+  X(TransitionProperty, "transition-property", PropertyNameList,               \
+    transitionProperty, PropertyNameList(), false)                             \
+  X(TransitionDuration, "transition-duration", TimeList, transitionDuration,   \
+    TimeList(), false)                                                         \
+  X(TransitionTimingFunction, "transition-timing-function", EasingList,        \
+    transitionTimingFunction, EasingList(), false)                             \
+  X(TransitionDelay, "transition-delay", TimeList, transitionDelay,            \
     TimeList(), false)
 
 enum class StylePropertyId : uint8_t {

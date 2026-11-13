@@ -39,7 +39,8 @@ std::mt19937& Engine() {
 
 float Random::Range(float min, float max) {
   if (min > max) std::swap(min, max);
-  std::uniform_real_distribution<float> distribution(min, std::nextafter(max, max + 1.0f));
+  std::uniform_real_distribution<float> distribution(
+      min, std::nextafter(max, max + 1.0f));
   return distribution(Engine());
 }
 

@@ -120,12 +120,14 @@ int Project::GetTickRate() const {
 
 bool Project::GetQueriesHitTriggers() const {
   auto section = document_.Find("physics");
-  return section ? section->properties.GetBool("queries_hit_triggers", true) : true;
+  return section ? section->properties.GetBool("queries_hit_triggers", true)
+                 : true;
 }
 
 std::string Project::GetModelConvention() const {
   auto section = document_.Find("import");
-  return section ? section->properties.GetString("model_convention", "native") : "native";
+  return section ? section->properties.GetString("model_convention", "native")
+                 : "native";
 }
 
 std::string Project::GetInputActionsPath() const {
@@ -144,7 +146,8 @@ std::vector<std::string> ReadNames(const mtext::Section* section) {
   auto value = section->properties.Get("names");
   if (!value) return names;
   if (auto array = value->Get<mtext::Array>()) {
-    for (const auto& item : *array) names.push_back(item.ToString().value_or(""));
+    for (const auto& item : *array)
+      names.push_back(item.ToString().value_or(""));
   }
   return names;
 }
@@ -173,11 +176,12 @@ int Project::LayerFromName(std::string_view name) const {
 }
 
 std::vector<std::string> Project::GetTags() const {
-  std::vector<std::string> tags = {"Untagged", "Respawn",    "Finish",
-                                   "EditorOnly", "MainCamera", "Player",
+  std::vector<std::string> tags = {"Untagged",      "Respawn",    "Finish",
+                                   "EditorOnly",    "MainCamera", "Player",
                                    "GameController"};
   for (auto& tag : ReadNames(document_.Find("tags"))) {
-    if (std::find(tags.begin(), tags.end(), tag) == tags.end()) tags.push_back(tag);
+    if (std::find(tags.begin(), tags.end(), tag) == tags.end())
+      tags.push_back(tag);
   }
   return tags;
 }

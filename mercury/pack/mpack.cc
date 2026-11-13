@@ -233,7 +233,8 @@ bool Writer::Write(const std::filesystem::path& dir, std::string_view base_name,
   if (!open_next()) return false;
 
   for (const auto& [path, source] : sources_) {
-    if (!IsValidEntryPath(path)) return fail("invalid pack path \"" + path + "\"");
+    if (!IsValidEntryPath(path))
+      return fail("invalid pack path \"" + path + "\"");
     std::optional<std::vector<uint8_t>> loaded;
     if (!source.bytes) {
       loaded = ReadWholeFile(source.file);
@@ -281,7 +282,8 @@ bool Writer::Write(const std::filesystem::path& dir, std::string_view base_name,
   for (size_t i = 0; i < entries.size(); i++) {
     const Entry& entry = entries[i];
     const uint64_t hash = HashPath(entry.path);
-    for (uint32_t b = hash & (bucket_count - 1); ; b = (b + 1) & (bucket_count - 1)) {
+    for (uint32_t b = hash & (bucket_count - 1);;
+         b = (b + 1) & (bucket_count - 1)) {
       if (buckets[b] == 0) {
         buckets[b] = static_cast<uint32_t>(i + 1);
         break;
@@ -379,7 +381,8 @@ std::shared_ptr<Reader> Reader::Open(const std::filesystem::path& archive0,
   }
   const uint64_t table_size = uint64_t{bucket_count} * 4;
   const uint64_t records_size = uint64_t{entry_count} * kIndexEntrySize;
-  if (index->size() != kIndexHeaderSize + table_size + records_size + strings_size) {
+  if (index->size() !=
+      kIndexHeaderSize + table_size + records_size + strings_size) {
     return fail("index is truncated");
   }
 
@@ -388,7 +391,8 @@ std::shared_ptr<Reader> Reader::Open(const std::filesystem::path& archive0,
   reader->base_name_ = base_name;
   reader->buckets_.resize(bucket_count);
   for (auto& bucket : reader->buckets_) bucket = in.U32();
-  const uint8_t* strings = index->data() + kIndexHeaderSize + table_size + records_size;
+  const uint8_t* strings =
+      index->data() + kIndexHeaderSize + table_size + records_size;
   for (uint32_t i = 0; i < entry_count; i++) {
     Entry entry;
     const uint64_t hash = in.U64();
@@ -459,10 +463,9 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
     if (!stored.empty() &&
         !archive->read(reinterpret_cast<char*>(stored.data()), stored.size())) {
       archive->clear();
-      return fail(std::format("could not read {}",
-                              ArchivePath(dir_, base_name_, entry->archive)
-                                  .filename()
-                                  .string()));
+      return fail(std::format(
+          "could not read {}",
+          ArchivePath(dir_, base_name_, entry->archive).filename().string()));
     }
   }
 

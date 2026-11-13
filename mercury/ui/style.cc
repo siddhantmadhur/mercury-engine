@@ -28,17 +28,16 @@ const std::vector<std::string>& KeywordsOf<Wrap>() {
 }
 template <>
 const std::vector<std::string>& KeywordsOf<Align>() {
-  static const std::vector<std::string> k{"auto",    "flex-start",
-                                          "center",  "flex-end",
-                                          "stretch", "space-between",
-                                          "space-around"};
+  static const std::vector<std::string> k{
+      "auto",    "flex-start",    "center",      "flex-end",
+      "stretch", "space-between", "space-around"};
   return k;
 }
 template <>
 const std::vector<std::string>& KeywordsOf<Justify>() {
-  static const std::vector<std::string> k{"flex-start",    "center",
-                                          "flex-end",      "space-between",
-                                          "space-around",  "space-evenly"};
+  static const std::vector<std::string> k{"flex-start",   "center",
+                                          "flex-end",     "space-between",
+                                          "space-around", "space-evenly"};
   return k;
 }
 template <>
@@ -176,10 +175,14 @@ std::string FormatFloat(float v) {
 
 std::string FormatLength(const Length& l) {
   switch (l.unit) {
-    case Length::Unit::kAuto: return "auto";
-    case Length::Unit::kNone: return "none";
-    case Length::Unit::kPercent: return FormatFloat(l.value) + "%";
-    case Length::Unit::kPixel: return FormatFloat(l.value) + "px";
+    case Length::Unit::kAuto:
+      return "auto";
+    case Length::Unit::kNone:
+      return "none";
+    case Length::Unit::kPercent:
+      return FormatFloat(l.value) + "%";
+    case Length::Unit::kPixel:
+      return FormatFloat(l.value) + "px";
   }
   return "0";
 }
@@ -197,13 +200,23 @@ std::string FormatColor(const Color& c) {
 }
 
 const char* EasingName(EasingMode mode) {
-  static const char* kNames[] = {
-      "ease",          "ease-in",          "ease-out",
-      "ease-in-out",   "linear",           "ease-in-sine",
-      "ease-out-sine", "ease-in-out-sine", "ease-in-cubic",
-      "ease-out-cubic", "ease-in-out-cubic", "ease-in-back",
-      "ease-out-back", "ease-in-out-back", "ease-in-bounce",
-      "ease-out-bounce", "ease-in-out-bounce"};
+  static const char* kNames[] = {"ease",
+                                 "ease-in",
+                                 "ease-out",
+                                 "ease-in-out",
+                                 "linear",
+                                 "ease-in-sine",
+                                 "ease-out-sine",
+                                 "ease-in-out-sine",
+                                 "ease-in-cubic",
+                                 "ease-out-cubic",
+                                 "ease-in-out-cubic",
+                                 "ease-in-back",
+                                 "ease-out-back",
+                                 "ease-in-out-back",
+                                 "ease-in-bounce",
+                                 "ease-out-bounce",
+                                 "ease-in-out-bounce"};
   return kNames[static_cast<int>(mode)];
 }
 
@@ -244,23 +257,25 @@ float CubicBezier(float x1, float y1, float x2, float y2, float t) {
 StyleValue ComputedStyle::Get(StylePropertyId id) const {
   switch (id) {
 #define MERCURY_UI_X(id, name, type, member, def, inherited) \
-  case StylePropertyId::k##id:                                \
+  case StylePropertyId::k##id:                               \
     return ToValue(member);
     MERCURY_UI_STYLE_PROPERTIES(MERCURY_UI_X)
 #undef MERCURY_UI_X
-    default: return {};
+    default:
+      return {};
   }
 }
 
 void ComputedStyle::Set(StylePropertyId id, const StyleValue& value) {
   switch (id) {
 #define MERCURY_UI_X(id, name, type, member, def, inherited) \
-  case StylePropertyId::k##id:                                \
-    FromValue(value, member);                                 \
+  case StylePropertyId::k##id:                               \
+    FromValue(value, member);                                \
     break;
     MERCURY_UI_STYLE_PROPERTIES(MERCURY_UI_X)
 #undef MERCURY_UI_X
-    default: break;
+    default:
+      break;
   }
 }
 
@@ -291,48 +306,52 @@ void InlineStyle::SetBorderRadius(Length all) {
 bool InlineStyle::Has(StylePropertyId id) const {
   switch (id) {
 #define MERCURY_UI_X(id, name, type, member, def, inherited) \
-  case StylePropertyId::k##id:                                \
+  case StylePropertyId::k##id:                               \
     return member.has_value();
     MERCURY_UI_STYLE_PROPERTIES(MERCURY_UI_X)
 #undef MERCURY_UI_X
-    default: return false;
+    default:
+      return false;
   }
 }
 
 void InlineStyle::Clear(StylePropertyId id) {
   switch (id) {
 #define MERCURY_UI_X(id, name, type, member, def, inherited) \
-  case StylePropertyId::k##id:                                \
-    member.reset();                                           \
+  case StylePropertyId::k##id:                               \
+    member.reset();                                          \
     break;
     MERCURY_UI_STYLE_PROPERTIES(MERCURY_UI_X)
 #undef MERCURY_UI_X
-    default: break;
+    default:
+      break;
   }
 }
 
 void InlineStyle::Set(StylePropertyId id, const StyleValue& value) {
   switch (id) {
 #define MERCURY_UI_X(id, name, type, member, def, inherited) \
-  case StylePropertyId::k##id: {                              \
-    type v = def;                                             \
-    if (FromValue(value, v)) member = v;                      \
-    break;                                                    \
+  case StylePropertyId::k##id: {                             \
+    type v = def;                                            \
+    if (FromValue(value, v)) member = v;                     \
+    break;                                                   \
   }
     MERCURY_UI_STYLE_PROPERTIES(MERCURY_UI_X)
 #undef MERCURY_UI_X
-    default: break;
+    default:
+      break;
   }
 }
 
 StyleValue InlineStyle::Get(StylePropertyId id) const {
   switch (id) {
 #define MERCURY_UI_X(id, name, type, member, def, inherited) \
-  case StylePropertyId::k##id:                                \
+  case StylePropertyId::k##id:                               \
     return member ? ToValue(*member) : StyleValue{};
     MERCURY_UI_STYLE_PROPERTIES(MERCURY_UI_X)
 #undef MERCURY_UI_X
-    default: return {};
+    default:
+      return {};
   }
 }
 
@@ -370,29 +389,42 @@ float Ease(EasingMode mode, float t) {
   constexpr float kPi = std::numbers::pi_v<float>;
   constexpr float c1 = 1.70158f, c2 = c1 * 1.525f, c3 = c1 + 1.0f;
   switch (mode) {
-    case EasingMode::kEase: return CubicBezier(0.25f, 0.1f, 0.25f, 1.0f, t);
-    case EasingMode::kEaseIn: return CubicBezier(0.42f, 0.0f, 1.0f, 1.0f, t);
-    case EasingMode::kEaseOut: return CubicBezier(0.0f, 0.0f, 0.58f, 1.0f, t);
+    case EasingMode::kEase:
+      return CubicBezier(0.25f, 0.1f, 0.25f, 1.0f, t);
+    case EasingMode::kEaseIn:
+      return CubicBezier(0.42f, 0.0f, 1.0f, 1.0f, t);
+    case EasingMode::kEaseOut:
+      return CubicBezier(0.0f, 0.0f, 0.58f, 1.0f, t);
     case EasingMode::kEaseInOut:
       return CubicBezier(0.42f, 0.0f, 0.58f, 1.0f, t);
-    case EasingMode::kLinear: return t;
-    case EasingMode::kEaseInSine: return 1 - std::cos(t * kPi / 2);
-    case EasingMode::kEaseOutSine: return std::sin(t * kPi / 2);
-    case EasingMode::kEaseInOutSine: return -(std::cos(kPi * t) - 1) / 2;
-    case EasingMode::kEaseInCubic: return t * t * t;
-    case EasingMode::kEaseOutCubic: return 1 - std::pow(1 - t, 3.0f);
+    case EasingMode::kLinear:
+      return t;
+    case EasingMode::kEaseInSine:
+      return 1 - std::cos(t * kPi / 2);
+    case EasingMode::kEaseOutSine:
+      return std::sin(t * kPi / 2);
+    case EasingMode::kEaseInOutSine:
+      return -(std::cos(kPi * t) - 1) / 2;
+    case EasingMode::kEaseInCubic:
+      return t * t * t;
+    case EasingMode::kEaseOutCubic:
+      return 1 - std::pow(1 - t, 3.0f);
     case EasingMode::kEaseInOutCubic:
       return t < 0.5f ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3.0f) / 2;
-    case EasingMode::kEaseInBack: return c3 * t * t * t - c1 * t * t;
+    case EasingMode::kEaseInBack:
+      return c3 * t * t * t - c1 * t * t;
     case EasingMode::kEaseOutBack:
       return 1 + c3 * std::pow(t - 1, 3.0f) + c1 * std::pow(t - 1, 2.0f);
     case EasingMode::kEaseInOutBack:
       return t < 0.5f
                  ? (std::pow(2 * t, 2.0f) * ((c2 + 1) * 2 * t - c2)) / 2
                  : (std::pow(2 * t - 2, 2.0f) * ((c2 + 1) * (t * 2 - 2) + c2) +
-                    2) / 2;
-    case EasingMode::kEaseInBounce: return 1 - BounceOut(1 - t);
-    case EasingMode::kEaseOutBounce: return BounceOut(t);
+                    2) /
+                       2;
+    case EasingMode::kEaseInBounce:
+      return 1 - BounceOut(1 - t);
+    case EasingMode::kEaseOutBounce:
+      return BounceOut(t);
     case EasingMode::kEaseInOutBounce:
       return t < 0.5f ? (1 - BounceOut(1 - 2 * t)) / 2
                       : (1 + BounceOut(2 * t - 1)) / 2;
@@ -436,11 +468,12 @@ StyleValue Interpolate(StylePropertyId id, const StyleValue& from,
 const std::vector<std::string>& StyleKeywords(StylePropertyId id) {
   switch (id) {
 #define MERCURY_UI_X(id, name, type, member, def, inherited) \
-  case StylePropertyId::k##id:                                \
+  case StylePropertyId::k##id:                               \
     return KeywordsOf<type>();
     MERCURY_UI_STYLE_PROPERTIES(MERCURY_UI_X)
 #undef MERCURY_UI_X
-    default: return KeywordsOf<float>();
+    default:
+      return KeywordsOf<float>();
   }
 }
 

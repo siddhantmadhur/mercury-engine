@@ -27,7 +27,8 @@ void CollectModelPaths(const MapNode& node, std::vector<std::string>& paths) {
     const bool renderer = component.type == "MeshRenderer";
     if (!renderer && component.type != "MeshCollider") continue;
     // A renderer draws a cube unless told otherwise; a collider uses its model.
-    if (component.properties.GetString("mesh", renderer ? "cube" : "model") != "model") {
+    if (component.properties.GetString("mesh", renderer ? "cube" : "model") !=
+        "model") {
       continue;
     }
     const mtext::Variant* model = component.properties.Get("model");
@@ -94,7 +95,8 @@ GameObject GameObject::FindChild(std::string_view path) const {
   while (!path.empty()) {
     auto slash = path.find('/');
     std::string_view part = path.substr(0, slash);
-    path = slash == std::string_view::npos ? std::string_view() : path.substr(slash + 1);
+    path = slash == std::string_view::npos ? std::string_view()
+                                           : path.substr(slash + 1);
     GameObject next;
     for (const GameObject& child : current.GetChildren()) {
       if (child.GetName() == part) {
@@ -110,7 +112,8 @@ GameObject GameObject::FindChild(std::string_view path) const {
 
 void GameObject::SetParent(GameObject new_parent, bool keep_world_transform) {
   if (!IsValid()) return;
-  scene_->SetEntityParent(entity_, new_parent.GetEntity(), keep_world_transform);
+  scene_->SetEntityParent(entity_, new_parent.GetEntity(),
+                          keep_world_transform);
 }
 
 std::string GameObject::GetTag() const {
@@ -219,8 +222,12 @@ MapScene::MapScene(std::shared_ptr<Project> project, Mode mode)
   ui_.resources().SetResolver([this](std::string_view path) {
     return project_ ? project_->Resolve(path) : fs::path(std::string(path));
   });
-  GetRegistry().on_destroy<UIDocument>().connect<&MapScene::OnUIDocumentDestroyed>(this);
-  GetRegistry().on_destroy<AudioSource>().connect<&MapScene::OnAudioSourceDestroyed>(this);
+  GetRegistry()
+      .on_destroy<UIDocument>()
+      .connect<&MapScene::OnUIDocumentDestroyed>(this);
+  GetRegistry()
+      .on_destroy<AudioSource>()
+      .connect<&MapScene::OnAudioSourceDestroyed>(this);
   ApplyProjectSettings();
   if (mode == Mode::kPlay) {
     audio_ = std::make_unique<AudioSystem>();
@@ -229,7 +236,8 @@ MapScene::MapScene(std::shared_ptr<Project> project, Mode mode)
     const bool no_device = audio_mode && std::string_view(audio_mode) == "none";
     audio_->Initialize(
         [this](std::string_view path) {
-          return project_ ? project_->Resolve(path).string() : std::string(path);
+          return project_ ? project_->Resolve(path).string()
+                          : std::string(path);
         },
         no_device);
   }
@@ -245,14 +253,14 @@ MapScene::MapScene(std::shared_ptr<Project> project, Mode mode)
         collisions_.push_back({kMap[static_cast<int>(event)], trigger, other});
         collisions_.push_back({kMap[static_cast<int>(event)], other, trigger});
       });
-  physics_engine_->SetContactCallback(
-      [this](ContactEvent event, kEntityId a, kEntityId b) {
-        static constexpr CollisionEvent kMap[] = {
-            CollisionEvent::kEnter, CollisionEvent::kStay, CollisionEvent::kLeave};
-        std::lock_guard lock(collision_mutex_);
-        collisions_.push_back({kMap[static_cast<int>(event)], a, b});
-        collisions_.push_back({kMap[static_cast<int>(event)], b, a});
-      });
+  physics_engine_->SetContactCallback([this](ContactEvent event, kEntityId a,
+                                             kEntityId b) {
+    static constexpr CollisionEvent kMap[] = {
+        CollisionEvent::kEnter, CollisionEvent::kStay, CollisionEvent::kLeave};
+    std::lock_guard lock(collision_mutex_);
+    collisions_.push_back({kMap[static_cast<int>(event)], a, b});
+    collisions_.push_back({kMap[static_cast<int>(event)], b, a});
+  });
 }
 
 void MapScene::ApplyProjectSettings() {
@@ -293,7 +301,8 @@ void MapScene::SetProject(std::shared_ptr<Project> project) {
   ApplyProjectSettings();
 }
 
-void MapScene::OnAudioSourceDestroyed(entt::registry& registry, kEntityId entity) {
+void MapScene::OnAudioSourceDestroyed(entt::registry& registry,
+                                      kEntityId entity) {
   if (auto* source = registry.try_get<AudioSource>(entity)) {
     if (source->audio_) source->audio_->DestroySource(source->source_);
     source->audio_ = nullptr;
@@ -311,11 +320,13 @@ MapScene::~MapScene() {
     if (behaviour->awoken_) behaviour->OnDestroy();
   }
   behaviours_.clear();
-  // Scripts hold the serial, never the pointer; from here on they see "scene unloaded".
+  // Scripts hold the serial, never the pointer; from here on they see "scene
+  // unloaded".
   ScriptRuntime::Instance().UnregisterScene(serial_);
 }
 
-void MapScene::OnUIDocumentDestroyed(entt::registry& registry, kEntityId entity) {
+void MapScene::OnUIDocumentDestroyed(entt::registry& registry,
+                                     kEntityId entity) {
   if (auto* document = registry.try_get<UIDocument>(entity)) {
     if (document->root) ui_.RemoveDocument(document->root);
     document->root = nullptr;
@@ -393,7 +404,8 @@ void MapScene::FinishLoadingMap() {
   if (running_) PlayAudioOnAwake();
 }
 
-std::vector<ModelPreloader::Job> MapScene::MissingModels(const Map& map, bool all) {
+std::vector<ModelPreloader::Job> MapScene::MissingModels(const Map& map,
+                                                         bool all) {
   std::vector<ModelPreloader::Job> jobs;
   if (!project_ || !map.GetRoot()) return jobs;
   std::vector<std::string> paths;
@@ -435,7 +447,8 @@ void MapScene::SyncFromMap(const Map& map) {
 
 bool MapScene::SyncNodeTransform(const MapNode& node) {
   auto found = by_uid_.find(node.uid);
-  if (found == by_uid_.end() || !GetRegistry().valid(found->second)) return false;
+  if (found == by_uid_.end() || !GetRegistry().valid(found->second))
+    return false;
   const kEntityId entity = found->second;
   auto transform = object_manager_->GetProperty<Transform>(entity);
   if (!transform) return false;
@@ -495,7 +508,8 @@ void MapScene::ApplyEnvironment() {
 void MapScene::GatherPointLights() {
   auto& registry = GetRegistry();
   lighting_.point_lights.clear();
-  for (auto [entity, light, transform] : registry.view<PointLight, Transform>().each()) {
+  for (auto [entity, light, transform] :
+       registry.view<PointLight, Transform>().each()) {
     if (light.range <= 0.0f || !IsActiveInHierarchy(entity)) continue;
     PointLightData data;
     data.position = transform.GetInterpolatedPosition();
@@ -507,14 +521,16 @@ void MapScene::GatherPointLights() {
     lighting_.point_lights.push_back(data);
   }
   lighting_.area_lights.clear();
-  for (auto [entity, light, transform] : registry.view<AreaLight, Transform>().each()) {
+  for (auto [entity, light, transform] :
+       registry.view<AreaLight, Transform>().each()) {
     if (light.range <= 0.0f || !IsActiveInHierarchy(entity)) continue;
     const glm::quat rotation = transform.GetRotationQuat();
     const glm::vec3 scale = transform.GetScale();
     AreaLightData data;
     data.position = transform.GetInterpolatedPosition();
     // right x up = -Z: the light shines along the node's -Z.
-    data.right = rotation * glm::vec3(0.5f * light.size.x * scale.x, 0.0f, 0.0f);
+    data.right =
+        rotation * glm::vec3(0.5f * light.size.x * scale.x, 0.0f, 0.0f);
     data.up = rotation * glm::vec3(0.0f, -0.5f * light.size.y * scale.y, 0.0f);
     data.color = glm::vec3(light.color) * light.intensity;
     data.range = light.range;
@@ -527,7 +543,8 @@ void MapScene::GatherPointLights() {
   lighting_.probes = ProbeVolumeData{};
   lighting_.probes.enabled = true;
   lighting_.probes.automatic = true;
-  for (auto [entity, volume, transform] : registry.view<LightProbeVolume, Transform>().each()) {
+  for (auto [entity, volume, transform] :
+       registry.view<LightProbeVolume, Transform>().each()) {
     if (!IsActiveInHierarchy(entity)) continue;
     ProbeVolumeData& data = lighting_.probes;
     const glm::vec3 half = glm::abs(volume.size * transform.GetScale()) * 0.5f;
@@ -535,8 +552,8 @@ void MapScene::GatherPointLights() {
     data.automatic = volume.fit_to_scene;
     data.min = transform.GetPosition() - half;
     data.max = transform.GetPosition() + half;
-    data.counts = glm::clamp(glm::ivec3(glm::round(volume.resolution)), glm::ivec3(2),
-                             glm::ivec3(16));
+    data.counts = glm::clamp(glm::ivec3(glm::round(volume.resolution)),
+                             glm::ivec3(2), glm::ivec3(16));
     data.intensity = volume.intensity;
     data.bounces = std::max(volume.bounces, 1);
     data.include_emission = volume.include_emission;
@@ -617,7 +634,8 @@ void MapScene::FinishCreated(const std::vector<kEntityId>& created) {
     const bool parent_active =
         info->parent == entt::null || IsActiveInHierarchy(info->parent);
     info->active_in_hierarchy = parent_active && info->active;
-    if (!info->active_in_hierarchy) object_manager_->AddProperty(entity, InactiveTag{});
+    if (!info->active_in_hierarchy)
+      object_manager_->AddProperty(entity, InactiveTag{});
   }
   if (mode_ != Mode::kPlay) return;
   for (kEntityId entity : created) CreatePhysicsBody(entity);
@@ -760,7 +778,8 @@ void MapScene::CreatePhysicsBody(kEntityId entity) {
   if (!info || !transform) return;
   const int layer = info->layer;
 
-  if (auto controller = object_manager_->GetProperty<CharacterController>(entity)) {
+  if (auto controller =
+          object_manager_->GetProperty<CharacterController>(entity)) {
     CharacterDesc desc;
     const glm::vec3 scale = glm::abs(transform->GetScale());
     desc.height = controller->height * scale.y;
@@ -781,9 +800,11 @@ void MapScene::CreatePhysicsBody(kEntityId entity) {
     // Colliders under a moving Rigidbody belong to it in Unity; here they
     // ride along through the hierarchy without a body of their own.
     if (!rigidbody) {
-      for (kEntityId p = info->parent; p != entt::null && GetRegistry().valid(p);) {
+      for (kEntityId p = info->parent;
+           p != entt::null && GetRegistry().valid(p);) {
         auto parent_body = object_manager_->GetProperty<Rigidbody>(p);
-        if (parent_body && parent_body->motion_type != MotionType::kStatic) return;
+        if (parent_body && parent_body->motion_type != MotionType::kStatic)
+          return;
         auto parent_info = object_manager_->GetProperty<NodeInfo>(p);
         p = parent_info ? parent_info->parent : entt::null;
       }
@@ -791,15 +812,23 @@ void MapScene::CreatePhysicsBody(kEntityId entity) {
     BodyDesc desc;
     if (rigidbody) {
       switch (rigidbody->motion_type) {
-        case MotionType::kStatic: desc.motion = BodyDesc::Motion::kStatic; break;
-        case MotionType::kKinematic: desc.motion = BodyDesc::Motion::kKinematic; break;
-        case MotionType::kDynamic: desc.motion = BodyDesc::Motion::kDynamic; break;
+        case MotionType::kStatic:
+          desc.motion = BodyDesc::Motion::kStatic;
+          break;
+        case MotionType::kKinematic:
+          desc.motion = BodyDesc::Motion::kKinematic;
+          break;
+        case MotionType::kDynamic:
+          desc.motion = BodyDesc::Motion::kDynamic;
+          break;
       }
       desc.allowed_dofs = rigidbody->ComputeAllowedDOFs();
       if (desc.allowed_dofs == 0) desc.motion = BodyDesc::Motion::kStatic;
       desc.mass = rigidbody->mass;
-      desc.linear_cast = rigidbody->motion_quality == MotionQuality::kLinearCast;
-      desc.gravity_factor = rigidbody->use_gravity ? rigidbody->gravity_factor : 0.0f;
+      desc.linear_cast =
+          rigidbody->motion_quality == MotionQuality::kLinearCast;
+      desc.gravity_factor =
+          rigidbody->use_gravity ? rigidbody->gravity_factor : 0.0f;
       desc.linear_damping = rigidbody->linear_damping;
       desc.angular_damping = rigidbody->angular_damping;
       desc.allow_sleeping = rigidbody->allow_sleeping;
@@ -812,19 +841,22 @@ void MapScene::CreatePhysicsBody(kEntityId entity) {
     physics_engine_->CreateBody(entity, shapes, desc, layer);
   } else if (auto plane = object_manager_->GetProperty<PlaneCollider>(entity)) {
     // Infinite planes have no Jolt shape that can be compounded.
-    const auto material = assets_->LoadAs<PhysicsMaterialAsset>(plane->material.path);
+    const auto material =
+        assets_->LoadAs<PhysicsMaterialAsset>(plane->material.path);
     const bool is_trigger = plane->is_trigger;
     glm::vec3 normal = plane->normal;
     if (glm::length(normal) < 1e-6f) normal = glm::vec3(0, 1, 0);
-    physics_engine_->CreatePlane(entity, glm::normalize(normal),
-                                 [material, is_trigger](JPH::BodyCreationSettings& settings) {
-                                   settings.mFriction = material.friction;
-                                   settings.mRestitution = material.restitution;
-                                   settings.mIsSensor = is_trigger;
-                                 });
+    physics_engine_->CreatePlane(
+        entity, glm::normalize(normal),
+        [material, is_trigger](JPH::BodyCreationSettings& settings) {
+          settings.mFriction = material.friction;
+          settings.mRestitution = material.restitution;
+          settings.mIsSensor = is_trigger;
+        });
     physics_engine_->SetLayer(entity, layer);
   }
-  if (!info->active_in_hierarchy) physics_engine_->SetBodyEnabled(entity, false);
+  if (!info->active_in_hierarchy)
+    physics_engine_->SetBodyEnabled(entity, false);
 }
 
 void MapScene::DispatchCollisions() {
@@ -835,7 +867,8 @@ void MapScene::DispatchCollisions() {
   }
   auto& registry = GetRegistry();
   for (const auto& collision : pending) {
-    if (!registry.valid(collision.self) || !registry.valid(collision.other)) continue;
+    if (!registry.valid(collision.self) || !registry.valid(collision.other))
+      continue;
     auto it = behaviours_by_entity_.find(collision.self);
     if (it == behaviours_by_entity_.end()) continue;
     GameObject other(this, collision.other);
@@ -844,12 +877,24 @@ void MapScene::DispatchCollisions() {
     for (Behaviour* behaviour : behaviours) {
       if (!behaviour->awoken_ || !behaviour->IsActiveAndEnabled()) continue;
       switch (collision.event) {
-        case CollisionEvent::kEnter: behaviour->OnCollisionEnter(other); break;
-        case CollisionEvent::kStay: behaviour->OnCollisionStay(other); break;
-        case CollisionEvent::kLeave: behaviour->OnCollisionLeave(other); break;
-        case CollisionEvent::kTriggerEnter: behaviour->OnTriggerEnter(other); break;
-        case CollisionEvent::kTriggerStay: behaviour->OnTriggerStay(other); break;
-        case CollisionEvent::kTriggerExit: behaviour->OnTriggerExit(other); break;
+        case CollisionEvent::kEnter:
+          behaviour->OnCollisionEnter(other);
+          break;
+        case CollisionEvent::kStay:
+          behaviour->OnCollisionStay(other);
+          break;
+        case CollisionEvent::kLeave:
+          behaviour->OnCollisionLeave(other);
+          break;
+        case CollisionEvent::kTriggerEnter:
+          behaviour->OnTriggerEnter(other);
+          break;
+        case CollisionEvent::kTriggerStay:
+          behaviour->OnTriggerStay(other);
+          break;
+        case CollisionEvent::kTriggerExit:
+          behaviour->OnTriggerExit(other);
+          break;
       }
       // A handler may have destroyed the other object already; it stays
       // valid until DestroyPending, as in Unity.
@@ -864,7 +909,8 @@ void MapScene::AwakeBehaviours() {
   // Awake/OnEnable may add more behaviours; index so the loop sees them.
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
-    if (behaviour->awoken_ || !IsActiveInHierarchy(behaviour->entity_)) continue;
+    if (behaviour->awoken_ || !IsActiveInHierarchy(behaviour->entity_))
+      continue;
     behaviour->awoken_ = true;
     auto binder = Reflector::Events([this](Event& event) { event.Bind(this); });
     behaviour->Reflect(binder);
@@ -906,7 +952,8 @@ void MapScene::PlayAudioOnAwake() {
   // Sources set to play on awake start with the scene.
   auto sources = GetRegistry().view<AudioSource>();
   for (auto [entity, source] : sources.each()) {
-    if (source.play_on_awake && source.enabled && IsActiveInHierarchy(entity)) source.Play();
+    if (source.play_on_awake && source.enabled && IsActiveInHierarchy(entity))
+      source.Play();
   }
 }
 
@@ -937,16 +984,19 @@ void MapScene::OnFrame(double delta_t) {
   Profiler::SetLoading(!pending_map_.empty() || loading_map_.has_value());
   if (mode_ == Mode::kPlay) {
     Time::BeginFrame(seconds);
-    if (input_actions_ && input_manager_) input_actions_->Update(*input_manager_);
+    if (input_actions_ && input_manager_)
+      input_actions_->Update(*input_manager_);
     StartPendingBehaviours();
   }
   const bool ui = mode_ == Mode::kPlay && !ui_.empty();
   // UI callbacks (clicked, value changes) run before the scripts' OnFrame...
   if (ui && input_manager_) ui_.ProcessInput(*input_manager_);
-  const float dt = mode_ == Mode::kPlay ? Time::GetDeltaTime() : static_cast<float>(seconds);
+  const float dt =
+      mode_ == Mode::kPlay ? Time::GetDeltaTime() : static_cast<float>(seconds);
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
-    if (behaviour->started_ && behaviour->IsActiveAndEnabled()) behaviour->OnFrame(dt);
+    if (behaviour->started_ && behaviour->IsActiveAndEnabled())
+      behaviour->OnFrame(dt);
   }
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
@@ -973,7 +1023,8 @@ void MapScene::OnTick(double delta_t) {
   const float dt = Time::GetDeltaTime();
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
-    if (behaviour->started_ && behaviour->IsActiveAndEnabled()) behaviour->OnTick(dt);
+    if (behaviour->started_ && behaviour->IsActiveAndEnabled())
+      behaviour->OnTick(dt);
   }
   ScriptRuntime::Instance().SetCurrentScene(serial_);
   ScriptRuntime::Instance().PumpTimers();
@@ -996,13 +1047,15 @@ void MapScene::SetupAnimator(kEntityId entity) {
 
   // The controller (loaded once per file).
   std::shared_ptr<const AnimatorController> controller;
-  if (auto it = controllers_.find(animator->controller.path); it != controllers_.end()) {
+  if (auto it = controllers_.find(animator->controller.path);
+      it != controllers_.end()) {
     controller = it->second;
   } else {
     std::string error;
-    controller = AnimatorController::Load(project_->Resolve(animator->controller.path).string(),
-                                          &error);
-    if (!controller) PDebug::error("Could not load animator controller: {}", error);
+    controller = AnimatorController::Load(
+        project_->Resolve(animator->controller.path).string(), &error);
+    if (!controller)
+      PDebug::error("Could not load animator controller: {}", error);
     controllers_.emplace(animator->controller.path, controller);
   }
   if (!controller) return;
@@ -1024,12 +1077,16 @@ void MapScene::SetupAnimator(kEntityId entity) {
       }
     }
   }
-  auto mesh = target != entt::null ? object_manager_->GetProperty<RenderMesh>(target) : nullptr;
+  auto mesh = target != entt::null
+                  ? object_manager_->GetProperty<RenderMesh>(target)
+                  : nullptr;
   if (!mesh || !mesh->model) {
-    PDebug::warn("{}: Animator has no model to animate", GetGameObject(entity).GetPath());
+    PDebug::warn("{}: Animator has no model to animate",
+                 GetGameObject(entity).GetPath());
     return;
   }
-  animator->runtime_ = std::make_shared<AnimatorRuntime>(controller, mesh->model);
+  animator->runtime_ =
+      std::make_shared<AnimatorRuntime>(controller, mesh->model);
   mesh->pose_entity = entity;
   ModelPose pose;
   object_manager_->AddProperty(entity, std::move(pose));
@@ -1038,7 +1095,8 @@ void MapScene::SetupAnimator(kEntityId entity) {
 void MapScene::UpdateFrameSystems(float dt) {
   auto animators = GetRegistry().view<Animator, ModelPose>();
   for (auto [entity, animator, pose] : animators.each()) {
-    if (!animator.runtime_ || !animator.enabled || !IsActiveInHierarchy(entity)) continue;
+    if (!animator.runtime_ || !animator.enabled || !IsActiveInHierarchy(entity))
+      continue;
     animator.runtime_->SetHoldRoot(!animator.apply_root_motion);
     animator.runtime_->Update(dt * animator.speed, pose.locals);
     animator.runtime_->GetModel().ComputeGlobals(pose.locals, pose.globals);
@@ -1049,16 +1107,19 @@ void MapScene::UpdateFrameSystems(float dt) {
     // The listener follows the first enabled AudioListener.
     for (kEntityId entity : entities_) {
       auto listener = object_manager_->GetProperty<AudioListener>(entity);
-      if (!listener || !listener->enabled || !IsActiveInHierarchy(entity)) continue;
+      if (!listener || !listener->enabled || !IsActiveInHierarchy(entity))
+        continue;
       auto transform = object_manager_->GetProperty<Transform>(entity);
       const glm::quat rotation = transform->GetRotationQuat();
-      audio->SetListener(transform->GetPosition(), rotation * glm::vec3(0, 0, -1),
+      audio->SetListener(transform->GetPosition(),
+                         rotation * glm::vec3(0, 0, -1),
                          rotation * glm::vec3(0, 1, 0));
       break;
     }
     auto view = GetRegistry().view<AudioSource, Transform>();
     for (auto [entity, source, transform] : view.each()) {
-      if (source.spatial_blend > 0.5f) audio->SetPosition(source.source_, transform.GetPosition());
+      if (source.spatial_blend > 0.5f)
+        audio->SetPosition(source.source_, transform.GetPosition());
     }
     audio->Update();
   }
@@ -1072,13 +1133,17 @@ RenderSettings MapScene::GetRenderSettings() const {
   if (render) {
     const auto& p = render->properties;
     settings.post_processing = p.GetBool("post_processing", false);
-    settings.ssao_intensity =
-        static_cast<float>(p.GetFloat("ssao_intensity", settings.ssao_intensity));
-    settings.ssao_radius = static_cast<float>(p.GetFloat("ssao_radius", settings.ssao_radius));
-    settings.ssao_samples = static_cast<int>(p.GetInt("ssao_samples", settings.ssao_samples));
+    settings.ssao_intensity = static_cast<float>(
+        p.GetFloat("ssao_intensity", settings.ssao_intensity));
+    settings.ssao_radius =
+        static_cast<float>(p.GetFloat("ssao_radius", settings.ssao_radius));
+    settings.ssao_samples =
+        static_cast<int>(p.GetInt("ssao_samples", settings.ssao_samples));
     settings.fxaa = p.GetBool("fxaa", settings.fxaa);
-    settings.outline_layers = static_cast<uint32_t>(p.GetInt("outline_layers", 0));
-    settings.outline_width = static_cast<float>(p.GetFloat("outline_width", 3.0));
+    settings.outline_layers =
+        static_cast<uint32_t>(p.GetInt("outline_layers", 0));
+    settings.outline_width =
+        static_cast<float>(p.GetFloat("outline_width", 3.0));
     if (auto color = p.Get("outline_color")) {
       if (auto c = color->Get<mtext::Color>()) settings.outline_color = c->rgba;
     }
@@ -1090,7 +1155,8 @@ RenderSettings MapScene::GetRenderSettings() const {
   // A global volume in the map overrides the project's default profile.
   for (kEntityId entity : entities_) {
     auto volume = object_manager_->GetProperty<PostProcessVolume>(entity);
-    if (!volume || volume->weight < 0.5f || !IsActiveInHierarchy(entity)) continue;
+    if (!volume || volume->weight < 0.5f || !IsActiveInHierarchy(entity))
+      continue;
     if (volume->profile.IsSet()) profile_path = volume->profile.path;
     settings.post_processing = true;
     break;
@@ -1113,7 +1179,8 @@ RenderSettings MapScene::GetRenderSettings() const {
   return settings;
 }
 
-void MapScene::GetRenderTextureSize(std::string_view res_path, int& width, int& height) {
+void MapScene::GetRenderTextureSize(std::string_view res_path, int& width,
+                                    int& height) {
   width = height = 1024;
   if (res_path.empty()) return;
   const auto asset = assets_->LoadAs<RenderTextureAsset>(res_path);
@@ -1121,7 +1188,8 @@ void MapScene::GetRenderTextureSize(std::string_view res_path, int& width, int& 
   height = asset.height;
 }
 
-std::vector<RenderCamera> MapScene::GetRenderCameras(float width, float height) {
+std::vector<RenderCamera> MapScene::GetRenderCameras(float width,
+                                                     float height) {
   std::vector<RenderCamera> result;
   if (mode_ != Mode::kPlay) return result;
 
@@ -1132,7 +1200,8 @@ std::vector<RenderCamera> MapScene::GetRenderCameras(float width, float height) 
   std::vector<Candidate> bases, overlays, textures;
   for (kEntityId entity : entities_) {
     auto settings = object_manager_->GetProperty<CameraComponent>(entity);
-    if (!settings || !settings->enabled || !IsActiveInHierarchy(entity)) continue;
+    if (!settings || !settings->enabled || !IsActiveInHierarchy(entity))
+      continue;
     if (!object_manager_->GetProperty<Camera>(entity)) continue;
     if (settings->target_texture.IsSet()) {
       textures.push_back({entity, settings});
@@ -1154,10 +1223,12 @@ std::vector<RenderCamera> MapScene::GetRenderCameras(float width, float height) 
   const Candidate* main = nullptr;
   for (const auto& candidate : bases) {
     if (!candidate.settings->current) continue;
-    if (!main || candidate.settings->depth >= main->settings->depth) main = &candidate;
+    if (!main || candidate.settings->depth >= main->settings->depth)
+      main = &candidate;
   }
   for (const auto& candidate : bases) {
-    if (!main || candidate.settings->depth > main->settings->depth) main = &candidate;
+    if (!main || candidate.settings->depth > main->settings->depth)
+      main = &candidate;
   }
 
   auto make = [&](const Candidate& candidate, float w, float h) {
@@ -1166,15 +1237,18 @@ std::vector<RenderCamera> MapScene::GetRenderCameras(float width, float height) 
     auto cam = object_manager_->GetProperty<Camera>(candidate.entity);
     auto transform = object_manager_->GetProperty<Transform>(candidate.entity);
     cam->SetFOV(candidate.settings->fov);
-    cam->SetClipPlanes(candidate.settings->near_clip, candidate.settings->far_clip);
+    cam->SetClipPlanes(candidate.settings->near_clip,
+                       candidate.settings->far_clip);
     camera.view = cam->GetView(*transform);
     camera.projection = cam->GetProjection(w, h);
     camera.position = transform->GetInterpolatedPosition();
     camera.near_clip = candidate.settings->near_clip;
     camera.far_clip = candidate.settings->far_clip;
-    camera.culling_mask = static_cast<uint32_t>(candidate.settings->culling_mask);
+    camera.culling_mask =
+        static_cast<uint32_t>(candidate.settings->culling_mask);
     camera.clear = static_cast<int>(candidate.settings->clear);
-    if (candidate.settings->skybox.IsSet()) camera.clear = static_cast<int>(CameraClear::kSkybox);
+    if (candidate.settings->skybox.IsSet())
+      camera.clear = static_cast<int>(CameraClear::kSkybox);
     camera.background = candidate.settings->background;
     camera.overlay = candidate.settings->overlay;
     camera.post_processing = candidate.settings->post_processing;
@@ -1184,7 +1258,8 @@ std::vector<RenderCamera> MapScene::GetRenderCameras(float width, float height) 
   for (const auto& candidate : textures) {
     int w = 1024, h = 1024;
     GetRenderTextureSize(candidate.settings->target_texture.path, w, h);
-    RenderCamera camera = make(candidate, static_cast<float>(w), static_cast<float>(h));
+    RenderCamera camera =
+        make(candidate, static_cast<float>(w), static_cast<float>(h));
     camera.target_texture = candidate.settings->target_texture.path;
     camera.target_width = w;
     camera.target_height = h;
@@ -1209,7 +1284,8 @@ std::vector<RenderCamera> MapScene::GetRenderCameras(float width, float height) 
 
 // ---------------------------------------------------- Runtime objects ---
 
-std::string MapScene::UniqueChildPath(kEntityId parent, std::string_view name) const {
+std::string MapScene::UniqueChildPath(kEntityId parent,
+                                      std::string_view name) const {
   std::string prefix;
   if (parent != entt::null && parent != root_entity_) {
     if (auto info = object_manager_->GetProperty<NodeInfo>(parent)) {
@@ -1239,14 +1315,16 @@ GameObject MapScene::InstantiateNode(const MapNode& node, GameObject parent,
   return {this, entity};
 }
 
-GameObject MapScene::InstantiatePrefab(std::string_view res_path, glm::vec3 position,
-                                       glm::quat rotation, GameObject parent,
-                                       bool world_space) {
+GameObject MapScene::InstantiatePrefab(std::string_view res_path,
+                                       glm::vec3 position, glm::quat rotation,
+                                       GameObject parent, bool world_space) {
   const Map* prefab = GetPrefab(res_path);
   if (!prefab) return {};
   const MapNode& root = *prefab->GetRoot();
-  kEntityId parent_entity = parent.IsValid() ? parent.GetEntity() : root_entity_;
-  const std::string path = UniqueChildPath(parent_entity, root.name + "(Clone)");
+  kEntityId parent_entity =
+      parent.IsValid() ? parent.GetEntity() : root_entity_;
+  const std::string path =
+      UniqueChildPath(parent_entity, root.name + "(Clone)");
   auto copy = Map::CloneTree(root);
   Map::RebaseNodePaths(*copy, path);
   // Place the root before bodies and scripts see it.
@@ -1284,7 +1362,8 @@ GameObject MapScene::InstantiatePrefab(std::string_view res_path, glm::vec3 posi
   return {this, entity};
 }
 
-GameObject MapScene::CreateGameObject(std::string_view name, GameObject parent) {
+GameObject MapScene::CreateGameObject(std::string_view name,
+                                      GameObject parent) {
   MapNode node;
   node.name = std::string(name);
   return InstantiateNode(node, parent, name);
@@ -1295,15 +1374,17 @@ bool MapScene::AddComponent(GameObject object, std::string_view type,
   if (!object.IsValid() || object.GetScene() != this) return false;
   const ComponentInfo* info = TypeRegistry::Instance().FindComponent(type);
   if (!info || !info->attach) {
-    PDebug::warn("{}: cannot add unknown component \"{}\"", object.GetPath(), type);
+    PDebug::warn("{}: cannot add unknown component \"{}\"", object.GetPath(),
+                 type);
     return false;
   }
   if (info->is_script && mode_ == Mode::kEdit) return false;
   const kEntityId entity = object.GetEntity();
   info->attach(*this, entity, properties);
   static const std::set<std::string, std::less<>> kPhysicsTypes = {
-      "Rigidbody",     "BoxCollider",  "SphereCollider",     "CapsuleCollider",
-      "CylinderCollider", "PlaneCollider", "MeshCollider", "CharacterController"};
+      "Rigidbody",       "BoxCollider",        "SphereCollider",
+      "CapsuleCollider", "CylinderCollider",   "PlaneCollider",
+      "MeshCollider",    "CharacterController"};
   if (kPhysicsTypes.contains(type)) CreatePhysicsBody(entity);
   if (info->is_script) AwakeBehaviours();
   return true;
@@ -1313,14 +1394,15 @@ void MapScene::RemoveComponent(GameObject object, std::string_view type) {
   if (!object.IsValid()) return;
   const kEntityId entity = object.GetEntity();
   if (type == "MeshRenderer") {
-    object_manager_->GetRegistry().remove<MeshRenderer, Mesh, TextureRef>(entity);
+    object_manager_->GetRegistry().remove<MeshRenderer, Mesh, TextureRef>(
+        entity);
   } else if (type == "Rigidbody") {
     object_manager_->GetRegistry().remove<Rigidbody>(entity);
     CreatePhysicsBody(entity);
   } else if (type.ends_with("Collider")) {
-    object_manager_->GetRegistry().remove<ColliderSet, BoxCollider, SphereCollider,
-                                          CapsuleCollider, CylinderCollider,
-                                          MeshCollider, PlaneCollider>(entity);
+    object_manager_->GetRegistry()
+        .remove<ColliderSet, BoxCollider, SphereCollider, CapsuleCollider,
+                CylinderCollider, MeshCollider, PlaneCollider>(entity);
     CreatePhysicsBody(entity);
   } else if (type == "CharacterController") {
     object_manager_->GetRegistry().remove<CharacterController>(entity);
@@ -1392,7 +1474,8 @@ std::string MapScene::LayerToName(int layer) const {
 GameObject MapScene::FindWithTag(std::string_view tag) {
   for (kEntityId entity : entities_) {
     auto info = object_manager_->GetProperty<NodeInfo>(entity);
-    if (info && info->tag == tag && info->active_in_hierarchy) return {this, entity};
+    if (info && info->tag == tag && info->active_in_hierarchy)
+      return {this, entity};
   }
   return {};
 }
@@ -1411,7 +1494,8 @@ std::vector<GameObject> MapScene::FindGameObjectsWithTag(std::string_view tag) {
 bool MapScene::HasParent(kEntityId entity) const {
   if (!GetRegistry().valid(entity)) return false;
   if (auto node_info = object_manager_->GetProperty<NodeInfo>(entity)) {
-    return node_info->parent != entt::null && node_info->parent != root_entity_ &&
+    return node_info->parent != entt::null &&
+           node_info->parent != root_entity_ &&
            GetRegistry().valid(node_info->parent);
   }
   return false;
@@ -1433,10 +1517,10 @@ void MapScene::OnWorldTransformChanged(kEntityId entity) {
         const glm::vec3 p_scale = parent_transform->GetScale();
         const glm::quat p_rot_inv = glm::inverse(p_rot);
 
-        const glm::vec3 safe_scale = glm::vec3(
-            std::abs(p_scale.x) < 1e-6f ? 1.0f : p_scale.x,
-            std::abs(p_scale.y) < 1e-6f ? 1.0f : p_scale.y,
-            std::abs(p_scale.z) < 1e-6f ? 1.0f : p_scale.z);
+        const glm::vec3 safe_scale =
+            glm::vec3(std::abs(p_scale.x) < 1e-6f ? 1.0f : p_scale.x,
+                      std::abs(p_scale.y) < 1e-6f ? 1.0f : p_scale.y,
+                      std::abs(p_scale.z) < 1e-6f ? 1.0f : p_scale.z);
 
         const glm::vec3 local_pos =
             (p_rot_inv * (transform->GetPosition() - p_pos)) / safe_scale;
@@ -1483,9 +1567,9 @@ void MapScene::OnLocalTransformChanged(kEntityId entity) {
             world_pos, Transform::QuatToEuler(world_rot), world_scale);
       }
     } else {
-      transform->SetWorldTransformInternal(
-          transform->GetLocalPosition(), transform->GetLocalRotate(),
-          transform->GetLocalScale());
+      transform->SetWorldTransformInternal(transform->GetLocalPosition(),
+                                           transform->GetLocalRotate(),
+                                           transform->GetLocalScale());
     }
 
     UpdateEntityTransformHierarchy(entity);
@@ -1533,12 +1617,15 @@ void MapScene::UpdateInterpolatedHierarchy() {
   for (kEntityId entity : entities_) {
     if (!registry.valid(entity)) continue;
     auto* node_info = registry.try_get<NodeInfo>(entity);
-    if (!node_info || node_info->parent == entt::null || node_info->parent == root_entity_) {
+    if (!node_info || node_info->parent == entt::null ||
+        node_info->parent == root_entity_) {
       continue;
     }
     if (node_info->parent != parent) {
       parent = node_info->parent;
-      parent_transform = registry.valid(parent) ? registry.try_get<Transform>(parent) : nullptr;
+      parent_transform = registry.valid(parent)
+                             ? registry.try_get<Transform>(parent)
+                             : nullptr;
     }
     auto* child_transform = registry.try_get<Transform>(entity);
     if (!parent_transform || !child_transform) continue;
@@ -1555,8 +1642,7 @@ void MapScene::UpdateInterpolatedHierarchy() {
     const glm::quat child_local_rot = child_transform->GetLocalRotationQuat();
     const glm::vec3 child_local_scale = child_transform->GetLocalScale();
 
-    const glm::vec3 interp_pos =
-        p_pos + p_rot * (p_scale * child_local_pos);
+    const glm::vec3 interp_pos = p_pos + p_rot * (p_scale * child_local_pos);
     const glm::quat interp_rot = p_rot * child_local_rot;
     const glm::vec3 interp_scale = p_scale * child_local_scale;
 
@@ -1575,7 +1661,7 @@ void MapScene::ProcessOnFrame(float alpha) {
 }
 
 void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
-                              bool keep_world_transform) {
+                               bool keep_world_transform) {
   if (!GetRegistry().valid(entity)) return;
   auto node_info = object_manager_->GetProperty<NodeInfo>(entity);
   auto transform = object_manager_->GetProperty<Transform>(entity);
@@ -1584,7 +1670,8 @@ void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
   if (node_info->parent == new_parent) return;
 
   // Remove from old parent's children
-  if (node_info->parent != entt::null && GetRegistry().valid(node_info->parent)) {
+  if (node_info->parent != entt::null &&
+      GetRegistry().valid(node_info->parent)) {
     if (auto old_p_info =
             object_manager_->GetProperty<NodeInfo>(node_info->parent)) {
       std::erase(old_p_info->children, entity);
@@ -1609,10 +1696,10 @@ void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
         const glm::vec3 p_pos = p_trans->GetPosition();
         const glm::quat p_rot_inv = glm::inverse(p_trans->GetRotationQuat());
         const glm::vec3 p_scale = p_trans->GetScale();
-        const glm::vec3 safe_scale = glm::vec3(
-            std::abs(p_scale.x) < 1e-6f ? 1.0f : p_scale.x,
-            std::abs(p_scale.y) < 1e-6f ? 1.0f : p_scale.y,
-            std::abs(p_scale.z) < 1e-6f ? 1.0f : p_scale.z);
+        const glm::vec3 safe_scale =
+            glm::vec3(std::abs(p_scale.x) < 1e-6f ? 1.0f : p_scale.x,
+                      std::abs(p_scale.y) < 1e-6f ? 1.0f : p_scale.y,
+                      std::abs(p_scale.z) < 1e-6f ? 1.0f : p_scale.z);
         transform->SetLocalPosition(
             (p_rot_inv * (transform->GetPosition() - p_pos)) / safe_scale);
         transform->SetLocalRotate(
@@ -1644,7 +1731,8 @@ void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
   UpdatePaths(entity);
   UpdateEntityTransformHierarchy(entity);
   // A moved object takes the active state of its new parent.
-  const bool parent_active = new_parent == entt::null || IsActiveInHierarchy(new_parent);
+  const bool parent_active =
+      new_parent == entt::null || IsActiveInHierarchy(new_parent);
   RefreshActive(entity, parent_active);
 }
 
@@ -1657,7 +1745,8 @@ void MapScene::UpdatePaths(kEntityId entity) {
       parent_path = parent->path;
     }
   }
-  std::string path = parent_path.empty() ? info->name : parent_path + "/" + info->name;
+  std::string path =
+      parent_path.empty() ? info->name : parent_path + "/" + info->name;
   if (path != info->path) {
     // Keep paths unique, as the map does.
     if (by_path_.contains(path) && by_path_[path] != entity) {
@@ -1670,7 +1759,8 @@ void MapScene::UpdatePaths(kEntityId entity) {
         }
       }
     }
-    if (auto it = by_path_.find(info->path); it != by_path_.end() && it->second == entity) {
+    if (auto it = by_path_.find(info->path);
+        it != by_path_.end() && it->second == entity) {
       by_path_.erase(it);
     }
     info->path = path;
@@ -1708,7 +1798,8 @@ uint64_t MapScene::GetNodeUid(kEntityId entity) const {
   return 0;
 }
 
-void MapScene::AddBehaviour(kEntityId entity, std::unique_ptr<Behaviour> behaviour,
+void MapScene::AddBehaviour(kEntityId entity,
+                            std::unique_ptr<Behaviour> behaviour,
                             std::string type_name) {
   behaviour->scene_ = this;
   behaviour->entity_ = entity;
@@ -1770,16 +1861,17 @@ void MapScene::DestroyPending() {
           if (behaviour->awoken_) behaviour->OnDestroy();
         }
         for (Behaviour* behaviour : behaviours) {
-          auto owned = std::find_if(
-              behaviours_.begin(), behaviours_.end(),
-              [&](const auto& b) { return b.get() == behaviour; });
+          auto owned =
+              std::find_if(behaviours_.begin(), behaviours_.end(),
+                           [&](const auto& b) { return b.get() == behaviour; });
           if (owned != behaviours_.end()) behaviours_.erase(owned);
         }
         behaviours_by_entity_.erase(entity);
       }
       if (auto node = object_manager_->GetProperty<NodeInfo>(entity)) {
         if (node->parent != entt::null && GetRegistry().valid(node->parent)) {
-          if (auto p_info = object_manager_->GetProperty<NodeInfo>(node->parent)) {
+          if (auto p_info =
+                  object_manager_->GetProperty<NodeInfo>(node->parent)) {
             std::erase(p_info->children, entity);
           }
         }
@@ -1804,23 +1896,27 @@ ModelImportSettings MapScene::ModelSettings(const std::string& file) const {
   return ModelImportSettings::ForFile(file, defaults);
 }
 
-std::shared_ptr<const Model> MapScene::GetModelAsset(std::string_view res_path) {
+std::shared_ptr<const Model> MapScene::GetModelAsset(
+    std::string_view res_path) {
   if (res_path.empty() || !project_) return nullptr;
   if (auto it = model_assets_.find(res_path); it != model_assets_.end()) {
     return it->second;
   }
   const std::string file = project_->Resolve(res_path).string();
   std::string error;
-  std::shared_ptr<const Model> model = Model::Load(file, ModelSettings(file), &error);
+  std::shared_ptr<const Model> model =
+      Model::Load(file, ModelSettings(file), &error);
   if (!model) PDebug::warn("Could not load model {}: {}", res_path, error);
   model_assets_.emplace(std::string(res_path), model);
   return model;
 }
 
-std::shared_ptr<ImageData> MapScene::GetImage(std::string_view res_path, bool srgb) {
+std::shared_ptr<ImageData> MapScene::GetImage(std::string_view res_path,
+                                              bool srgb) {
   if (res_path.empty() || !project_) return nullptr;
   // Data textures (normal maps) are decoded separately from color ones.
-  const std::string key = srgb ? std::string(res_path) : "linear:" + std::string(res_path);
+  const std::string key =
+      srgb ? std::string(res_path) : "linear:" + std::string(res_path);
   if (auto it = images_.find(key); it != images_.end()) return it->second;
   auto image = ImageData::Load(project_->Resolve(res_path).string());
   if (!image) PDebug::warn("Could not load image {}", res_path);
@@ -1829,22 +1925,36 @@ std::shared_ptr<ImageData> MapScene::GetImage(std::string_view res_path, bool sr
   return image;
 }
 
-std::shared_ptr<const MeshGeometry> MapScene::GetPrimitive(MeshShape shape,
-                                                           glm::vec3 mesh_scale) {
+std::shared_ptr<const MeshGeometry> MapScene::GetPrimitive(
+    MeshShape shape, glm::vec3 mesh_scale) {
   const std::string key = std::to_string(static_cast<int>(shape)) + ":" +
                           std::to_string(mesh_scale.x) + "," +
                           std::to_string(mesh_scale.y) + "," +
                           std::to_string(mesh_scale.z);
-  if (auto it = primitives_.find(key); it != primitives_.end()) return it->second;
+  if (auto it = primitives_.find(key); it != primitives_.end())
+    return it->second;
   std::optional<Mesh> mesh;
   switch (shape) {
-    case MeshShape::kCube: mesh = Primitives::Cube(glm::vec4(1.0f)); break;
-    case MeshShape::kSphere: mesh = Primitives::Sphere(glm::vec4(1.0f)); break;
-    case MeshShape::kCapsule: mesh = Primitives::Capsule(glm::vec4(1.0f)); break;
-    case MeshShape::kCylinder: mesh = Primitives::Cylinder(glm::vec4(1.0f)); break;
-    case MeshShape::kPlane: mesh = Primitives::Plane(glm::vec4(1.0f)); break;
-    case MeshShape::kQuad: mesh = Primitives::Quad(glm::vec4(1.0f)); break;
-    case MeshShape::kModel: return nullptr;
+    case MeshShape::kCube:
+      mesh = Primitives::Cube(glm::vec4(1.0f));
+      break;
+    case MeshShape::kSphere:
+      mesh = Primitives::Sphere(glm::vec4(1.0f));
+      break;
+    case MeshShape::kCapsule:
+      mesh = Primitives::Capsule(glm::vec4(1.0f));
+      break;
+    case MeshShape::kCylinder:
+      mesh = Primitives::Cylinder(glm::vec4(1.0f));
+      break;
+    case MeshShape::kPlane:
+      mesh = Primitives::Plane(glm::vec4(1.0f));
+      break;
+    case MeshShape::kQuad:
+      mesh = Primitives::Quad(glm::vec4(1.0f));
+      break;
+    case MeshShape::kModel:
+      return nullptr;
   }
   std::vector<ModelVertex> vertices;
   vertices.reserve(mesh->vertices_.size());
@@ -1861,7 +1971,8 @@ std::shared_ptr<const MeshGeometry> MapScene::GetPrimitive(MeshShape shape,
   return geometry;
 }
 
-bool MapScene::GetModelTriangles(std::string_view res_path, std::string_view node,
+bool MapScene::GetModelTriangles(std::string_view res_path,
+                                 std::string_view node,
                                  std::vector<glm::vec3>& vertices,
                                  std::vector<uint32_t>& indices) {
   auto model = GetModelAsset(res_path);
@@ -1885,7 +1996,8 @@ void MapScene::BuildTextMesh(kEntityId entity) {
   auto text = object_manager_->GetProperty<TextMesh>(entity);
   if (!text) return;
   const std::string font_path =
-      text->font.IsSet() ? text->font.path : "mercury://fonts/LiberationSans-Regular.ttf";
+      text->font.IsSet() ? text->font.path
+                         : "mercury://fonts/LiberationSans-Regular.ttf";
   std::shared_ptr<UI::Font> font = ui_.resources().LoadFont(font_path);
   if (!font) font = ui_.resources().DefaultFont();
   RenderMesh mesh;
@@ -1902,7 +2014,8 @@ void MapScene::BuildTextMesh(kEntityId entity) {
   settings.size = text->font_size * 0.1f;
   settings.color = UI::Color(1.0f, 1.0f, 1.0f, 1.0f);
   settings.rich_text = text->rich_text;
-  settings.white_space = text->word_wrap ? UI::WhiteSpace::kNormal : UI::WhiteSpace::kNoWrap;
+  settings.white_space =
+      text->word_wrap ? UI::WhiteSpace::kNormal : UI::WhiteSpace::kNoWrap;
   const int align = static_cast<int>(text->alignment);
   const int column = align % 3;  // 0 left, 1 center, 2 right
   const int row = align / 3;     // 0 top, 1 middle, 2 bottom
@@ -1952,7 +2065,8 @@ void MapScene::BuildTextMesh(kEntityId entity) {
   if (auto it = text_atlases_.find(key); it != text_atlases_.end()) {
     image = it->second;
   } else {
-    image = ImageData::FromPixels(atlas.width, atlas.height, atlas.rgba, font_path);
+    image =
+        ImageData::FromPixels(atlas.width, atlas.height, atlas.rgba, font_path);
     image->srgb = false;
     text_atlases_[key] = image;
   }
@@ -1972,18 +2086,22 @@ void MapScene::BuildTextMesh(kEntityId entity) {
   object_manager_->AddProperty(entity, std::move(mesh));
 }
 
-RenderMaterial MapScene::MakeRenderMaterial(const MaterialAsset& material, glm::vec4 color) {
+RenderMaterial MapScene::MakeRenderMaterial(const MaterialAsset& material,
+                                            glm::vec4 color) {
   RenderMaterial result;
   result.color = material.color * color;
-  if (material.texture.IsSet()) result.texture = GetImage(material.texture.path);
+  if (material.texture.IsSet())
+    result.texture = GetImage(material.texture.path);
   result.render_texture = material.render_texture.path;
   result.tiling = material.tiling;
   result.offset = material.offset;
   result.metallic = material.metallic;
   result.smoothness = 1.0f - material.roughness;
   result.emission = glm::vec3(material.emission);
-  if (material.emission_map.IsSet()) result.emission_texture = GetImage(material.emission_map.path);
-  if (material.normal_map.IsSet()) result.normal_texture = GetImage(material.normal_map.path, false);
+  if (material.emission_map.IsSet())
+    result.emission_texture = GetImage(material.emission_map.path);
+  if (material.normal_map.IsSet())
+    result.normal_texture = GetImage(material.normal_map.path, false);
   result.normal_scale = material.normal_scale;
   result.transparent = material.surface == SurfaceType::kTransparent;
   if (material.surface == SurfaceType::kTransmissive) {

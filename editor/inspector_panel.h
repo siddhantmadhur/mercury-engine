@@ -41,7 +41,8 @@ class InspectorPanel : public wxPanel {
   void BuildNodeInspector(MapNode& node);
   void BuildAssetInspector(const std::string& res_path);
 
-  using WriteVariantFn = std::function<void(const mtext::Variant&, bool coalesced)>;
+  using WriteVariantFn =
+      std::function<void(const mtext::Variant&, bool coalesced)>;
 
   wxWindow* CreateValueEditor(wxWindow* parent, const FieldInfo& field,
                               FieldType type, const mtext::Variant& current,
@@ -66,10 +67,10 @@ class InspectorPanel : public wxPanel {
                        const char* label, const std::string& prefix,
                        mtext::PropertyList& props,
                        std::function<void(bool coalesced)> on_prop_changed);
-  void AddRawPropertyRow(wxWindow* parent, wxBoxSizer* parent_sizer,
-                         const mtext::Property& prop,
-                         std::function<void(const std::string& new_val_text)> on_commit,
-                         std::function<void()> on_remove);
+  void AddRawPropertyRow(
+      wxWindow* parent, wxBoxSizer* parent_sizer, const mtext::Property& prop,
+      std::function<void(const std::string& new_val_text)> on_commit,
+      std::function<void()> on_remove);
 
   EditorScene& scene_;
   wxScrolledWindow* scroll_ = nullptr;

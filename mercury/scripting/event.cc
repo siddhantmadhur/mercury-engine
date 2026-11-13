@@ -8,25 +8,42 @@ namespace Mercury {
 
 const char* ArgTypeName(MethodReflector::ArgType type) {
   switch (type) {
-    case MethodReflector::ArgType::kNone: return "";
-    case MethodReflector::ArgType::kBool: return "bool";
-    case MethodReflector::ArgType::kInt: return "int";
-    case MethodReflector::ArgType::kFloat: return "float";
-    case MethodReflector::ArgType::kString: return "string";
+    case MethodReflector::ArgType::kNone:
+      return "";
+    case MethodReflector::ArgType::kBool:
+      return "bool";
+    case MethodReflector::ArgType::kInt:
+      return "int";
+    case MethodReflector::ArgType::kFloat:
+      return "float";
+    case MethodReflector::ArgType::kString:
+      return "string";
   }
   return "";
 }
 
-bool MethodReflector::Invoke(std::string_view name, const mtext::Variant& argument) const {
+bool MethodReflector::Invoke(std::string_view name,
+                             const mtext::Variant& argument) const {
   using T = mtext::Variant::Type;
   ArgType wanted = ArgType::kNone;
   switch (argument.GetType()) {
-    case T::kNil: wanted = ArgType::kNone; break;
-    case T::kBool: wanted = ArgType::kBool; break;
-    case T::kInt: wanted = ArgType::kInt; break;
-    case T::kFloat: wanted = ArgType::kFloat; break;
-    case T::kString: wanted = ArgType::kString; break;
-    default: break;
+    case T::kNil:
+      wanted = ArgType::kNone;
+      break;
+    case T::kBool:
+      wanted = ArgType::kBool;
+      break;
+    case T::kInt:
+      wanted = ArgType::kInt;
+      break;
+    case T::kFloat:
+      wanted = ArgType::kFloat;
+      break;
+    case T::kString:
+      wanted = ArgType::kString;
+      break;
+    default:
+      break;
   }
   // Exact argument type first, then any method of that name that can take
   // the value (an int saved for a float parameter, say).
@@ -37,8 +54,9 @@ bool MethodReflector::Invoke(std::string_view name, const mtext::Variant& argume
       method.invoke(argument);
       return true;
     }
-    const bool numeric = (method.arg == ArgType::kInt || method.arg == ArgType::kFloat) &&
-                         (wanted == ArgType::kInt || wanted == ArgType::kFloat);
+    const bool numeric =
+        (method.arg == ArgType::kInt || method.arg == ArgType::kFloat) &&
+        (wanted == ArgType::kInt || wanted == ArgType::kFloat);
     if (numeric || !fallback) fallback = &method;
   }
   if (fallback) {
@@ -58,7 +76,8 @@ void Event::Invoke() const {
         continue;
       }
       if (call.component == "GameObject") {
-        if (call.method == "SetActive") target.SetActive(call.argument.ToBool().value_or(true));
+        if (call.method == "SetActive")
+          target.SetActive(call.argument.ToBool().value_or(true));
         continue;
       }
       bool called = false;
@@ -95,14 +114,16 @@ mtext::Variant Event::ToVariant(const std::vector<EventCall>& calls) {
   mtext::Array array;
   for (const auto& call : calls) {
     mtext::Array item{mtext::Variant(mtext::NodePath{call.target.path}),
-                      mtext::Variant(call.component), mtext::Variant(call.method)};
+                      mtext::Variant(call.component),
+                      mtext::Variant(call.method)};
     if (!call.argument.IsNil()) item.push_back(call.argument);
     array.emplace_back(std::move(item));
   }
   return mtext::Variant(std::move(array));
 }
 
-std::optional<std::vector<EventCall>> Event::FromVariant(const mtext::Variant& value) {
+std::optional<std::vector<EventCall>> Event::FromVariant(
+    const mtext::Variant& value) {
   const auto* array = value.Get<mtext::Array>();
   if (!array) return std::nullopt;
   std::vector<EventCall> calls;

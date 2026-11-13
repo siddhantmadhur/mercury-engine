@@ -9,36 +9,59 @@ namespace Mercury {
 
 const char* FieldTypeName(FieldType type) {
   switch (type) {
-    case FieldType::kBool: return "bool";
-    case FieldType::kInt: return "int";
-    case FieldType::kFloat: return "float";
-    case FieldType::kString: return "string";
-    case FieldType::kVector2: return "Vector2";
-    case FieldType::kVector3: return "Vector3";
-    case FieldType::kColor: return "Color";
-    case FieldType::kNodeRef: return "NodePath";
-    case FieldType::kAsset: return "Resource";
-    case FieldType::kEnum: return "enum";
-    case FieldType::kList: return "list";
-    case FieldType::kEvent: return "event";
+    case FieldType::kBool:
+      return "bool";
+    case FieldType::kInt:
+      return "int";
+    case FieldType::kFloat:
+      return "float";
+    case FieldType::kString:
+      return "string";
+    case FieldType::kVector2:
+      return "Vector2";
+    case FieldType::kVector3:
+      return "Vector3";
+    case FieldType::kColor:
+      return "Color";
+    case FieldType::kNodeRef:
+      return "NodePath";
+    case FieldType::kAsset:
+      return "Resource";
+    case FieldType::kEnum:
+      return "enum";
+    case FieldType::kList:
+      return "list";
+    case FieldType::kEvent:
+      return "event";
   }
   return "unknown";
 }
 
 mtext::Variant EmptyValueFor(FieldType type) {
   switch (type) {
-    case FieldType::kBool: return false;
-    case FieldType::kInt: return 0;
-    case FieldType::kFloat: return 0.0;
-    case FieldType::kString: return std::string();
-    case FieldType::kEnum: return std::string();
-    case FieldType::kVector2: return glm::vec2(0.0f);
-    case FieldType::kVector3: return glm::vec3(0.0f);
-    case FieldType::kColor: return mtext::Color{};
-    case FieldType::kNodeRef: return mtext::NodePath{};
-    case FieldType::kAsset: return mtext::Resource{};
+    case FieldType::kBool:
+      return false;
+    case FieldType::kInt:
+      return 0;
+    case FieldType::kFloat:
+      return 0.0;
+    case FieldType::kString:
+      return std::string();
+    case FieldType::kEnum:
+      return std::string();
+    case FieldType::kVector2:
+      return glm::vec2(0.0f);
+    case FieldType::kVector3:
+      return glm::vec3(0.0f);
+    case FieldType::kColor:
+      return mtext::Color{};
+    case FieldType::kNodeRef:
+      return mtext::NodePath{};
+    case FieldType::kAsset:
+      return mtext::Resource{};
     case FieldType::kList:
-    case FieldType::kEvent: return mtext::Array{};
+    case FieldType::kEvent:
+      return mtext::Array{};
   }
   return {};
 }
@@ -46,18 +69,29 @@ mtext::Variant EmptyValueFor(FieldType type) {
 FieldType FieldTypeOf(const mtext::Variant& value) {
   using T = mtext::Variant::Type;
   switch (value.GetType()) {
-    case T::kBool: return FieldType::kBool;
-    case T::kInt: return FieldType::kInt;
-    case T::kFloat: return FieldType::kFloat;
-    case T::kString: return FieldType::kString;
-    case T::kVector2: return FieldType::kVector2;
-    case T::kVector3: return FieldType::kVector3;
-    case T::kColor: return FieldType::kColor;
-    case T::kNodePath: return FieldType::kNodeRef;
+    case T::kBool:
+      return FieldType::kBool;
+    case T::kInt:
+      return FieldType::kInt;
+    case T::kFloat:
+      return FieldType::kFloat;
+    case T::kString:
+      return FieldType::kString;
+    case T::kVector2:
+      return FieldType::kVector2;
+    case T::kVector3:
+      return FieldType::kVector3;
+    case T::kColor:
+      return FieldType::kColor;
+    case T::kNodePath:
+      return FieldType::kNodeRef;
     case T::kResource:
-    case T::kExtResource: return FieldType::kAsset;
-    case T::kArray: return FieldType::kList;
-    default: return FieldType::kString;
+    case T::kExtResource:
+      return FieldType::kAsset;
+    case T::kArray:
+      return FieldType::kList;
+    default:
+      return FieldType::kString;
   }
 }
 
@@ -80,7 +114,8 @@ Reflector& Reflector::Visit(const char* name, FieldType type, T& member,
     case Mode::kSet:
       if (!found_ && lookup_ == name) {
         found_ = true;
-        if (std::optional<T> converted = from_variant(*in_)) member = std::move(*converted);
+        if (std::optional<T> converted = from_variant(*in_))
+          member = std::move(*converted);
       }
       break;
     case Mode::kRead:
@@ -131,8 +166,7 @@ Reflector& Reflector::VisitList(const char* name, FieldType element,
 
 Reflector& Reflector::Field(const char* name, bool& value) {
   return Visit(
-      name, FieldType::kBool, value,
-      [](bool v) { return mtext::Variant(v); },
+      name, FieldType::kBool, value, [](bool v) { return mtext::Variant(v); },
       [](const mtext::Variant& v) { return v.ToBool(); });
 }
 
@@ -147,8 +181,7 @@ Reflector& Reflector::Field(const char* name, int& value) {
 
 Reflector& Reflector::Field(const char* name, float& value) {
   return Visit(
-      name, FieldType::kFloat, value,
-      [](float v) { return mtext::Variant(v); },
+      name, FieldType::kFloat, value, [](float v) { return mtext::Variant(v); },
       [](const mtext::Variant& v) -> std::optional<float> {
         if (auto f = v.ToFloat()) return static_cast<float>(*f);
         return std::nullopt;
@@ -345,9 +378,9 @@ void Reflector::EnumImpl(const char* name, int& index,
   }
 }
 
-Reflector& Reflector::Property(const char* name,
-                               const std::function<mtext::Variant()>& get,
-                               const std::function<void(const mtext::Variant&)>& set) {
+Reflector& Reflector::Property(
+    const char* name, const std::function<mtext::Variant()>& get,
+    const std::function<void(const mtext::Variant&)>& set) {
   if (found_ || lookup_ != name) return *this;
   if (mode_ == Mode::kGet && get) {
     *out_ = get();

@@ -21,15 +21,16 @@ bool IsSourceFile(const fs::path& path) {
   std::string ext = path.extension().string();
   std::transform(ext.begin(), ext.end(), ext.begin(),
                  [](unsigned char c) { return std::tolower(c); });
-  for (const char* skip : {".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp", ".tmp"}) {
+  for (const char* skip :
+       {".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp", ".tmp"}) {
     if (ext == skip) return true;
   }
   return false;
 }
 
 bool IsSkippedAtRoot(const std::string& name) {
-  return name == "CMakeLists.txt" ||
-         name == "MODULE.bazel" || name == "MODULE.bazel.lock" || name == "WORKSPACE" ||
+  return name == "CMakeLists.txt" || name == "MODULE.bazel" ||
+         name == "MODULE.bazel.lock" || name == "WORKSPACE" ||
          name == "WORKSPACE.bazel" || name.starts_with("bazel-") ||
          name == "Builds";
 }
@@ -82,13 +83,14 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
   project_name_ = project.GetName();
   output_dir_ = output_dir;
   cancelled_ = false;
-  console_.Add(Console::Level::kInfo, Console::Source::kBuild,
-               "Build Game: building a Release executable for " +
-                   output_dir_.string());
+  console_.Add(
+      Console::Level::kInfo, Console::Source::kBuild,
+      "Build Game: building a Release executable for " + output_dir_.string());
 
   config_ = MakeConfig();
   if (!fs::exists(fs::path(config_->source_dir) / "MODULE.bazel")) {
-    Finish("The engine checkout this editor was built from is missing (" + config_->source_dir + ")",
+    Finish("The engine checkout this editor was built from is missing (" +
+               config_->source_dir + ")",
            true);
     return;
   }
@@ -98,12 +100,16 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
 ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
   Config config;
   config.source_dir = fs::path(MERCURY_ENGINE_DIR).string();
-  config.ui_resources = (fs::path(config.source_dir) / "mercury" / "ui" / "resources").string();
-  config.spirv_dir = (fs::path(config.source_dir) / "bazel-bin" / "mercury" / "shaders").string();
+  config.ui_resources =
+      (fs::path(config.source_dir) / "mercury" / "ui" / "resources").string();
+  config.spirv_dir =
+      (fs::path(config.source_dir) / "bazel-bin" / "mercury" / "shaders")
+          .string();
   std::string name;
   for (char c : project_name_) {
     if (std::isalnum(static_cast<unsigned char>(c))) {
-      name.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+      name.push_back(
+          static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
     } else if (!name.empty() && name.back() != '_') {
       name.push_back('_');
     }
@@ -137,7 +143,8 @@ bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
 
   process_ = std::make_unique<os::Process>();
   std::string error;
-  const fs::path working_dir = config_ ? fs::path(config_->source_dir) : project_root_;
+  const fs::path working_dir =
+      config_ ? fs::path(config_->source_dir) : project_root_;
   if (!process_->Start(args, working_dir, &error)) {
     process_.reset();
     Finish(error, true);
@@ -148,8 +155,10 @@ bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
 
 bool ReleaseBuild::StartBuild() {
   console_.Add(Console::Level::kInfo, Console::Source::kBuild,
-               "Building a Release mercury_player with Bazel; the first one takes a while.");
-  if (!Launch({FindBazel(), "build", "-c", "opt", "//mercury:mercury_player"})) {
+               "Building a Release mercury_player with Bazel; the first one "
+               "takes a while.");
+  if (!Launch(
+          {FindBazel(), "build", "-c", "opt", "//mercury:mercury_player"})) {
     return false;
   }
   state_ = State::kBuilding;
@@ -179,7 +188,8 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
     std::string build_log;
     const bool built = ScriptBuilder::Build(root, options, &build_log);
     std::istringstream lines(build_log);
-    for (std::string line; std::getline(lines, line);) result.log.push_back(line);
+    for (std::string line; std::getline(lines, line);)
+      result.log.push_back(line);
     if (!built) return fail("building the scripts failed");
   }
   std::error_code ec;
@@ -190,8 +200,8 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
   // Archives from an earlier build would shadow or outlive the new ones.
   for (const auto& entry : fs::directory_iterator(output, ec)) {
     const auto extension = entry.path().extension();
-    if (entry.is_regular_file() &&
-        (extension == mpack::kExtension || extension == mpack::kIndexExtension)) {
+    if (entry.is_regular_file() && (extension == mpack::kExtension ||
+                                    extension == mpack::kIndexExtension)) {
       fs::remove(entry.path(), ec);
     }
   }
@@ -203,7 +213,8 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
       root, fs::directory_options::skip_permission_denied, ec);
   if (ec) return fail("could not read " + root.string() + ": " + ec.message());
   for (; it != fs::recursive_directory_iterator(); it.increment(ec)) {
-    if (ec) return fail("could not read " + root.string() + ": " + ec.message());
+    if (ec)
+      return fail("could not read " + root.string() + ": " + ec.message());
     const fs::path& path = it->path();
     const std::string name = path.filename().string();
     const bool is_dir = it->is_directory(ec);
@@ -235,7 +246,8 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
   const fs::path spirv = config.spirv_dir;
   int shaders = 0;
   for (const auto& entry : fs::directory_iterator(spirv, ec)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".spv") continue;
+    if (!entry.is_regular_file() || entry.path().extension() != ".spv")
+      continue;
     engine.Add(std::string(mpack::kEngineShaderFolder) +
                    entry.path().filename().generic_string(),
                entry.path());
@@ -261,7 +273,8 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
   }
 
   const fs::path exe = config.executable;
-  const fs::path shipped = output / (config.target_name + exe.extension().string());
+  const fs::path shipped =
+      output / (config.target_name + exe.extension().string());
   fs::copy_file(exe, shipped, fs::copy_options::overwrite_existing, ec);
   if (ec) return fail("could not copy " + exe.string() + ": " + ec.message());
   result.log.push_back("Copied the player as " + shipped.filename().string());
@@ -297,7 +310,8 @@ void ReleaseBuild::Cancel() {
 
 void ReleaseBuild::Update() {
   if (state_ == State::kPacking) {
-    if (packing_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+    if (packing_.wait_for(std::chrono::seconds(0)) !=
+        std::future_status::ready) {
       return;
     }
     PackResult result = packing_.get();

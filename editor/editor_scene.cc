@@ -473,14 +473,15 @@ bool EditorScene::AddComponent(MapNode* node, const std::string& type) {
 
 bool EditorScene::RemoveComponent(MapNode* node, size_t index) {
   if (!node || index >= node->components.size()) return false;
-  node->components.erase(node->components.begin() + static_cast<ptrdiff_t>(index));
+  node->components.erase(node->components.begin() +
+                         static_cast<ptrdiff_t>(index));
   MarkChanged();
   return true;
 }
 
 bool EditorScene::MoveComponent(MapNode* node, size_t from, size_t to) {
-  if (!node || from >= node->components.size() || to >= node->components.size() ||
-      from == to) {
+  if (!node || from >= node->components.size() ||
+      to >= node->components.size() || from == to) {
     return false;
   }
   std::swap(node->components[from], node->components[to]);
@@ -527,9 +528,9 @@ void EditorScene::FinishModelImport() {
   for (size_t i = 1; i < nodes.size(); i++) {
     const int count = ++seen[nodes[i].name];
     if (nodes[i].meshes.empty()) continue;
-    parts.emplace_back(
-        nodes[i].name,
-        count == 1 ? nodes[i].name : nodes[i].name + "#" + std::to_string(count));
+    parts.emplace_back(nodes[i].name, count == 1 ? nodes[i].name
+                                                 : nodes[i].name + "#" +
+                                                       std::to_string(count));
   }
   if (parts.empty()) {
     console_.Warn(res_path + " has nothing to import");
@@ -556,9 +557,18 @@ void EditorScene::FinishModelImport() {
 
 MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
   static constexpr const char* kNames[] = {
-      "Node",      "Cube",      "Sphere",    "Capsule",
-      "Cylinder",  "Plane",     "Quad",      "Sprite",
-      "DirectionalLight", "Camera", "PointLight", "AreaLight",
+      "Node",
+      "Cube",
+      "Sphere",
+      "Capsule",
+      "Cylinder",
+      "Plane",
+      "Quad",
+      "Sprite",
+      "DirectionalLight",
+      "Camera",
+      "PointLight",
+      "AreaLight",
       "LightProbeVolume",
   };
   if (!parent) parent = map_.GetRoot();
@@ -575,7 +585,8 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
   glm::vec3 rotation(0.0f);
   float size = 1.0f;
   if (view_2d_) {
-    size = std::pow(10.0f, std::round(std::log10(WorldPerPixel(world) * 80.0f)));
+    size =
+        std::pow(10.0f, std::round(std::log10(WorldPerPixel(world) * 80.0f)));
   }
   glm::vec3 scale(size);
 
@@ -585,7 +596,8 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
     node->components.push_back(std::move(renderer));
   };
   switch (preset) {
-    case Preset::kEmpty: break;
+    case Preset::kEmpty:
+      break;
     case Preset::kCube:
       mesh(nullptr);
       node->components.push_back({"BoxCollider", {}});
@@ -610,8 +622,12 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
       scale = glm::vec3(10.0f * size, 1.0f, 10.0f * size);
       break;
     }
-    case Preset::kQuad: mesh("quad"); break;
-    case Preset::kSprite: node->components.push_back({"SpriteRenderer", {}}); break;
+    case Preset::kQuad:
+      mesh("quad");
+      break;
+    case Preset::kSprite:
+      node->components.push_back({"SpriteRenderer", {}});
+      break;
     case Preset::kDirectionalLight:
       rotation = glm::vec3(-50.0f, -30.0f, 0.0f);
       scale = glm::vec3(1.0f);
@@ -635,9 +651,11 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
       scale = glm::vec3(1.0f);
       if (view_2d_) {
         const float fit = WorldPerPixel(world) * scene_size_.y;
-        camera.properties.Set("fit_height", static_cast<double>(std::round(fit)));
+        camera.properties.Set("fit_height",
+                              static_cast<double>(std::round(fit)));
       } else {
-        position = glm::round((CameraPosition() - parent_world) * 100.0f) / 100.0f;
+        position =
+            glm::round((CameraPosition() - parent_world) * 100.0f) / 100.0f;
         rotation = glm::round(glm::vec3(camera_pitch_, camera_yaw_, 0.0f));
       }
       bool has_camera = false;
@@ -651,8 +669,10 @@ MapNode* EditorScene::CreatePreset(MapNode* parent, Preset preset) {
   }
 
   ComponentData transform{"Transform", {}};
-  if (position != glm::vec3(0.0f)) transform.properties.Set("position", position);
-  if (rotation != glm::vec3(0.0f)) transform.properties.Set("rotation", rotation);
+  if (position != glm::vec3(0.0f))
+    transform.properties.Set("position", position);
+  if (rotation != glm::vec3(0.0f))
+    transform.properties.Set("rotation", rotation);
   if (scale != glm::vec3(1.0f)) transform.properties.Set("scale", scale);
   node->components.insert(node->components.begin(), std::move(transform));
 
@@ -864,7 +884,8 @@ void EditorScene::CreateUIFile(const fs::path& dir, const std::string& kind) {
   for (int i = 2; fs::exists(file); i++) {
     file = dir / (base + std::to_string(i) + extension);
   }
-  const bool ok = uxml ? Templates::CreateUxml(file) : Templates::CreateUss(file);
+  const bool ok =
+      uxml ? Templates::CreateUxml(file) : Templates::CreateUss(file);
   if (!ok) {
     console_.Error("Could not create " + file.string());
     return;

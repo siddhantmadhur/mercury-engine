@@ -31,11 +31,11 @@ constexpr float kSdfBaseSize = 48.0f;  // pixel size glyphs are rasterized at
 constexpr int kSdfPadding = 6;         // distance range around each glyph
 
 struct GlyphInfo {
-  float advance = 0.0f;       // base-size pixels
-  glm::vec2 offset{0.0f};     // bitmap top-left from the pen, base pixels
-  glm::vec2 size{0.0f};       // bitmap size, base pixels
-  glm::ivec4 atlas_rect{0};   // x, y, w, h in the atlas
-  bool visible = false;       // false for spaces
+  float advance = 0.0f;      // base-size pixels
+  glm::vec2 offset{0.0f};    // bitmap top-left from the pen, base pixels
+  glm::vec2 size{0.0f};      // bitmap size, base pixels
+  glm::ivec4 atlas_rect{0};  // x, y, w, h in the atlas
+  bool visible = false;      // false for spaces
 };
 
 class Font {
@@ -96,7 +96,7 @@ struct PositionedGlyph {
   char32_t codepoint = 0;
   glm::vec2 position{0.0f};  // quad top-left
   glm::vec2 size{0.0f};
-  glm::vec4 uv{0.0f};        // u0, v0, u1, v1
+  glm::vec4 uv{0.0f};  // u0, v0, u1, v1
   Color color;
   bool bold = false;
   bool italic = false;

@@ -22,7 +22,8 @@ namespace {
 
 namespace fs = std::filesystem;
 
-const fs::path kModels = fs::path(MERCURY_SOURCE_DIR) / "examples/model_viewer/models";
+const fs::path kModels =
+    fs::path(MERCURY_SOURCE_DIR) / "examples/model_viewer/models";
 
 ModelImportSettings Whole() {
   ModelImportSettings settings;
@@ -54,18 +55,24 @@ std::string MaterialNameOf(const Model& model, int index) {
 // Same nodes, meshes (in order, with the same material and size) and materials.
 // `names` also compares the meshes' names, which differ where an "o" line
 // repeats an object's name (Assimp names the continuing mesh after a material).
-void ExpectSameModel(const Model& whole, const Model& pieces, bool names = true) {
+void ExpectSameModel(const Model& whole, const Model& pieces,
+                     bool names = true) {
   ASSERT_EQ(whole.Nodes().size(), pieces.Nodes().size());
   for (size_t i = 0; i < whole.Nodes().size(); i++) {
     EXPECT_EQ(whole.Nodes()[i].name, pieces.Nodes()[i].name) << "node " << i;
-    EXPECT_EQ(whole.Nodes()[i].parent, pieces.Nodes()[i].parent) << "node " << i;
-    EXPECT_EQ(whole.Nodes()[i].meshes, pieces.Nodes()[i].meshes) << "node " << i;
+    EXPECT_EQ(whole.Nodes()[i].parent, pieces.Nodes()[i].parent)
+        << "node " << i;
+    EXPECT_EQ(whole.Nodes()[i].meshes, pieces.Nodes()[i].meshes)
+        << "node " << i;
   }
   ASSERT_EQ(whole.Materials().size(), pieces.Materials().size());
   for (size_t i = 0; i < whole.Materials().size(); i++) {
-    EXPECT_EQ(whole.Materials()[i].name, pieces.Materials()[i].name) << "material " << i;
-    EXPECT_EQ(whole.Materials()[i].color, pieces.Materials()[i].color) << "material " << i;
-    EXPECT_EQ(bool(whole.Materials()[i].texture), bool(pieces.Materials()[i].texture))
+    EXPECT_EQ(whole.Materials()[i].name, pieces.Materials()[i].name)
+        << "material " << i;
+    EXPECT_EQ(whole.Materials()[i].color, pieces.Materials()[i].color)
+        << "material " << i;
+    EXPECT_EQ(bool(whole.Materials()[i].texture),
+              bool(pieces.Materials()[i].texture))
         << "material " << i;
   }
   ASSERT_EQ(whole.Meshes().size(), pieces.Meshes().size());
@@ -74,16 +81,20 @@ void ExpectSameModel(const Model& whole, const Model& pieces, bool names = true)
     const ModelMesh& b = pieces.Meshes()[i];
     if (names) EXPECT_EQ(a.name, b.name) << "mesh " << i;
     EXPECT_EQ(a.node, b.node) << "mesh " << i;
-    EXPECT_EQ(MaterialNameOf(whole, a.material), MaterialNameOf(pieces, b.material))
+    EXPECT_EQ(MaterialNameOf(whole, a.material),
+              MaterialNameOf(pieces, b.material))
         << "mesh " << i;
-    EXPECT_EQ(a.geometry->vertices.size(), b.geometry->vertices.size()) << "mesh " << i;
-    EXPECT_EQ(a.geometry->indices.size(), b.geometry->indices.size()) << "mesh " << i;
+    EXPECT_EQ(a.geometry->vertices.size(), b.geometry->vertices.size())
+        << "mesh " << i;
+    EXPECT_EQ(a.geometry->indices.size(), b.geometry->indices.size())
+        << "mesh " << i;
     if (a.geometry->vertices.size() == b.geometry->vertices.size()) {
       size_t different = 0;
       for (size_t v = 0; v < a.geometry->vertices.size(); v++) {
         const ModelVertex& x = a.geometry->vertices[v];
         const ModelVertex& y = b.geometry->vertices[v];
-        if (x.position != y.position || x.normal != y.normal || x.uv != y.uv) different++;
+        if (x.position != y.position || x.normal != y.normal || x.uv != y.uv)
+          different++;
       }
       EXPECT_EQ(different, 0u) << "mesh " << i << " has vertices that differ";
     }
@@ -100,8 +111,9 @@ struct ObjFiles {
   explicit ObjFiles(const char* name) : dir(fs::temp_directory_path() / name) {
     fs::remove_all(dir);
     fs::create_directories(dir);
-    std::ofstream(dir / "scene.mtl") << "newmtl red\nKd 1 0 0\nnewmtl green\nKd 0 1 0\n"
-                                        "newmtl blue\nKd 0 0 1\n";
+    std::ofstream(dir / "scene.mtl")
+        << "newmtl red\nKd 1 0 0\nnewmtl green\nKd 0 1 0\n"
+           "newmtl blue\nKd 0 0 1\n";
   }
   ~ObjFiles() { fs::remove_all(dir); }
   std::string Write(const std::string& text) const {
@@ -125,11 +137,13 @@ std::string ManyObjects(int count, const char* keyword, bool usemtl) {
     }
     out << "vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nvn 0 0 1\n";
     if (usemtl) out << "usemtl " << materials[i % 3] << "\n";
-    out << "f " << v + 1 << "/" << vt + 1 << "/" << vn + 1 << " " << v + 2 << "/" << vt + 2 << "/"
-        << vn + 1 << " " << v + 3 << "/" << vt + 3 << "/" << vn + 1 << " " << v + 4 << "/"
-        << vt + 4 << "/" << vn + 1 << "\n";
-    out << "f " << v + 1 << "/" << vt + 1 << "/" << vn + 1 << " " << v + 4 << "/" << vt + 4
-        << "/" << vn + 1 << " " << v + 5 << "/" << vt + 3 << "/" << vn + 1 << "\n";
+    out << "f " << v + 1 << "/" << vt + 1 << "/" << vn + 1 << " " << v + 2
+        << "/" << vt + 2 << "/" << vn + 1 << " " << v + 3 << "/" << vt + 3
+        << "/" << vn + 1 << " " << v + 4 << "/" << vt + 4 << "/" << vn + 1
+        << "\n";
+    out << "f " << v + 1 << "/" << vt + 1 << "/" << vn + 1 << " " << v + 4
+        << "/" << vt + 4 << "/" << vn + 1 << " " << v + 5 << "/" << vt + 3
+        << "/" << vn + 1 << "\n";
     v += 5;
     vt += 4;
     vn += 1;
@@ -264,7 +278,8 @@ TEST(ParallelObj, ReportsProgress) {
 // give them to the object of that name, so the meshes are not the same one
 // for one: the nodes, materials and everything drawn are.
 TEST(ParallelObj, DISABLED_SanMiguelMatchesTheWholeFile) {
-  const std::string path = (kModels / "san_miguel/san-miguel-low-poly.obj").string();
+  const std::string path =
+      (kModels / "san_miguel/san-miguel-low-poly.obj").string();
   if (!fs::exists(path)) GTEST_SKIP();
   std::string error;
   auto pieces = Model::Load(path, InPieces(0), &error);
@@ -272,7 +287,8 @@ TEST(ParallelObj, DISABLED_SanMiguelMatchesTheWholeFile) {
   ASSERT_TRUE(whole && pieces) << error;
 
   auto totals = [](const Model& model) {
-    std::map<std::string, std::pair<size_t, size_t>> per_material;  // vertices, indices
+    std::map<std::string, std::pair<size_t, size_t>>
+        per_material;  // vertices, indices
     for (const ModelMesh& mesh : model.Meshes()) {
       auto& entry = per_material[model.Materials()[mesh.material].name];
       entry.first += mesh.geometry->vertices.size();
@@ -286,7 +302,9 @@ TEST(ParallelObj, DISABLED_SanMiguelMatchesTheWholeFile) {
     std::vector<size_t> result;
     for (const ModelMesh& mesh : model.Meshes()) {
       size_t hash = mesh.node * 31u + mesh.material;
-      auto mix = [&](float f) { hash = hash * 1000003u ^ std::hash<float>()(f); };
+      auto mix = [&](float f) {
+        hash = hash * 1000003u ^ std::hash<float>()(f);
+      };
       for (const ModelVertex& v : mesh.geometry->vertices) {
         mix(v.position.x), mix(v.position.y), mix(v.position.z);
         mix(v.normal.x), mix(v.normal.y), mix(v.normal.z);
@@ -301,8 +319,10 @@ TEST(ParallelObj, DISABLED_SanMiguelMatchesTheWholeFile) {
   {
     const auto a = hashes(*whole), b = hashes(*pieces);
     std::vector<size_t> only_whole, only_pieces;
-    std::set_difference(a.begin(), a.end(), b.begin(), b.end(), std::back_inserter(only_whole));
-    std::set_difference(b.begin(), b.end(), a.begin(), a.end(), std::back_inserter(only_pieces));
+    std::set_difference(a.begin(), a.end(), b.begin(), b.end(),
+                        std::back_inserter(only_whole));
+    std::set_difference(b.begin(), b.end(), a.begin(), a.end(),
+                        std::back_inserter(only_pieces));
     // Only the meshes the repeated "o" line moves differ.
     EXPECT_LE(only_whole.size(), 2u);
     EXPECT_LE(only_pieces.size(), 2u);
@@ -313,7 +333,8 @@ TEST(ParallelObj, DISABLED_SanMiguelMatchesTheWholeFile) {
   }
   ASSERT_EQ(whole->Materials().size(), pieces->Materials().size());
   for (size_t i = 0; i < whole->Materials().size(); i++) {
-    EXPECT_EQ(whole->Materials()[i].name, pieces->Materials()[i].name) << "material " << i;
+    EXPECT_EQ(whole->Materials()[i].name, pieces->Materials()[i].name)
+        << "material " << i;
   }
   EXPECT_EQ(whole->BoundsMin(), pieces->BoundsMin());
   EXPECT_EQ(whole->BoundsMax(), pieces->BoundsMax());

@@ -30,7 +30,8 @@ glm::mat3 Scaling(float s) {
   return m;
 }
 
-using AliveList = std::vector<std::pair<VisualElement*, std::shared_ptr<const bool>>>;
+using AliveList =
+    std::vector<std::pair<VisualElement*, std::shared_ptr<const bool>>>;
 
 // Snapshot of every element, so callbacks may change the tree safely.
 AliveList CollectElements(VisualElement* root) {
@@ -47,7 +48,8 @@ glm::ivec4 Intersect(glm::ivec4 a, glm::ivec4 b) {
   if (a.z < 0) return b;
   if (b.z < 0) return a;
   const int x0 = std::max(a.x, b.x), y0 = std::max(a.y, b.y);
-  const int x1 = std::min(a.x + a.z, b.x + b.z), y1 = std::min(a.y + a.w, b.y + b.w);
+  const int x1 = std::min(a.x + a.z, b.x + b.z),
+            y1 = std::min(a.y + a.w, b.y + b.w);
   return {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
 }
 
@@ -69,14 +71,17 @@ void Paint(VisualElement* e, const glm::mat3& parent, float opacity,
   glm::ivec4 child_clip = clip;
   if (s.overflow == Overflow::kHidden) {
     const Rect r = e->paddingRect();
-    glm::vec2 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
-    for (glm::vec2 c : {glm::vec2(r.x, r.y), glm::vec2(r.xMax(), r.y),
-                        glm::vec2(r.x, r.yMax()), glm::vec2(r.xMax(), r.yMax())}) {
+    glm::vec2 lo(std::numeric_limits<float>::max()),
+        hi(-std::numeric_limits<float>::max());
+    for (glm::vec2 c :
+         {glm::vec2(r.x, r.y), glm::vec2(r.xMax(), r.y),
+          glm::vec2(r.x, r.yMax()), glm::vec2(r.xMax(), r.yMax())}) {
       const glm::vec2 p = glm::vec2(m * glm::vec3(c, 1.0f));
       lo = glm::min(lo, p);
       hi = glm::max(hi, p);
     }
-    const glm::ivec4 rect(static_cast<int>(std::floor(lo.x)), static_cast<int>(std::floor(lo.y)),
+    const glm::ivec4 rect(static_cast<int>(std::floor(lo.x)),
+                          static_cast<int>(std::floor(lo.y)),
                           static_cast<int>(std::ceil(hi.x) - std::floor(lo.x)),
                           static_cast<int>(std::ceil(hi.y) - std::floor(lo.y)));
     child_clip = Intersect(clip, rect);
@@ -88,7 +93,8 @@ void Paint(VisualElement* e, const glm::mat3& parent, float opacity,
   }
 }
 
-VisualElement* PickRec(VisualElement* e, glm::vec2 point, const glm::mat3& parent,
+VisualElement* PickRec(VisualElement* e, glm::vec2 point,
+                       const glm::mat3& parent,
                        std::vector<VisualElement*>* all) {
   const ComputedStyle& s = e->resolvedStyle();
   if (s.display == DisplayStyle::kNone) return nullptr;
@@ -122,20 +128,25 @@ float ComputePanelScale(const PanelSettings& settings, glm::vec2 target,
                         float dpi_scale) {
   float scale = 1.0f;
   switch (settings.scale_mode) {
-    case PanelScaleMode::kConstantPixelSize: scale = 1.0f; break;
+    case PanelScaleMode::kConstantPixelSize:
+      scale = 1.0f;
+      break;
     case PanelScaleMode::kConstantPhysicalSize: {
-      const float dpi = dpi_scale > 0 ? 96.0f * dpi_scale : settings.fallback_dpi;
+      const float dpi =
+          dpi_scale > 0 ? 96.0f * dpi_scale : settings.fallback_dpi;
       scale = dpi / std::max(1.0f, settings.reference_dpi);
       break;
     }
     case PanelScaleMode::kScaleWithScreenSize: {
-      const glm::vec2 ref = glm::max(settings.reference_resolution, glm::vec2(1.0f));
+      const glm::vec2 ref =
+          glm::max(settings.reference_resolution, glm::vec2(1.0f));
       if (target.x <= 0 || target.y <= 0) break;
       switch (settings.screen_match_mode) {
         case PanelScreenMatchMode::kMatchWidthOrHeight: {
           const float lw = std::log2(target.x / ref.x);
           const float lh = std::log2(target.y / ref.y);
-          scale = std::pow(2.0f, lw + (lh - lw) * std::clamp(settings.match, 0.0f, 1.0f));
+          scale = std::pow(
+              2.0f, lw + (lh - lw) * std::clamp(settings.match, 0.0f, 1.0f));
           break;
         }
         case PanelScreenMatchMode::kShrink:
@@ -183,7 +194,8 @@ void FocusController::SwitchFocus(VisualElement* element) {
   }
 }
 
-VisualElement* FocusController::FindNext(VisualElement* from, bool forward) const {
+VisualElement* FocusController::FindNext(VisualElement* from,
+                                         bool forward) const {
   std::vector<VisualElement*> order;
   std::function<void(VisualElement*)> walk = [&](VisualElement* e) {
     if (e->resolvedStyle().display == DisplayStyle::kNone) return;
@@ -193,11 +205,14 @@ VisualElement* FocusController::FindNext(VisualElement* from, bool forward) cons
   walk(panel_->visualTree());
   if (order.empty()) return nullptr;
   // Positive tab indices first (ascending), then 0 in tree order.
-  std::stable_sort(order.begin(), order.end(), [](VisualElement* a, VisualElement* b) {
-    const int ta = a->tabIndex() == 0 ? std::numeric_limits<int>::max() : a->tabIndex();
-    const int tb = b->tabIndex() == 0 ? std::numeric_limits<int>::max() : b->tabIndex();
-    return ta < tb;
-  });
+  std::stable_sort(
+      order.begin(), order.end(), [](VisualElement* a, VisualElement* b) {
+        const int ta = a->tabIndex() == 0 ? std::numeric_limits<int>::max()
+                                          : a->tabIndex();
+        const int tb = b->tabIndex() == 0 ? std::numeric_limits<int>::max()
+                                          : b->tabIndex();
+        return ta < tb;
+      });
   auto it = std::find(order.begin(), order.end(), from);
   if (it == order.end()) return forward ? order.front() : order.back();
   const int n = static_cast<int>(order.size());
@@ -205,18 +220,27 @@ VisualElement* FocusController::FindNext(VisualElement* from, bool forward) cons
   return order[(i + (forward ? 1 : n - 1)) % n];
 }
 
-VisualElement* FocusController::FindInDirection(VisualElement* from,
-                                                NavigationDirection direction) const {
+VisualElement* FocusController::FindInDirection(
+    VisualElement* from, NavigationDirection direction) const {
   if (direction == NavigationDirection::kNext) return FindNext(from, true);
   if (direction == NavigationDirection::kPrevious) return FindNext(from, false);
   if (!from) return FindNext(nullptr, true);
   glm::vec2 dir(0.0f);
   switch (direction) {
-    case NavigationDirection::kLeft: dir = {-1, 0}; break;
-    case NavigationDirection::kRight: dir = {1, 0}; break;
-    case NavigationDirection::kUp: dir = {0, -1}; break;
-    case NavigationDirection::kDown: dir = {0, 1}; break;
-    default: return nullptr;
+    case NavigationDirection::kLeft:
+      dir = {-1, 0};
+      break;
+    case NavigationDirection::kRight:
+      dir = {1, 0};
+      break;
+    case NavigationDirection::kUp:
+      dir = {0, -1};
+      break;
+    case NavigationDirection::kDown:
+      dir = {0, 1};
+      break;
+    default:
+      return nullptr;
   }
   const glm::vec2 origin = from->worldBound().center();
   VisualElement* best = nullptr;
@@ -259,7 +283,9 @@ Panel::Panel(UIResources* resources) {
   root_->SetPseudoState(kPseudoRoot, true);
   root_->SetPanel(this);
   clipboard.get = [this] { return fallback_clipboard_; };
-  clipboard.set = [this](const std::string& text) { fallback_clipboard_ = text; };
+  clipboard.set = [this](const std::string& text) {
+    fallback_clipboard_ = text;
+  };
 }
 
 Panel::~Panel() {
@@ -321,12 +347,14 @@ VisualElement* Panel::GetCapturingElement(int pointer_id) const {
   return pointer_id == 0 ? capture_ : nullptr;
 }
 
-void Panel::Dispatch(EventBase& event, VisualElement* target, bool skip_disabled) {
+void Panel::Dispatch(EventBase& event, VisualElement* target,
+                     bool skip_disabled) {
   if (!target) return;
   event.SetTarget(target);
   event.SetTimestamp(time_);
   std::vector<VisualElement*> path;  // root first, target excluded
-  for (VisualElement* p = target->hierarchyParent(); p; p = p->hierarchyParent()) {
+  for (VisualElement* p = target->hierarchyParent(); p;
+       p = p->hierarchyParent()) {
     path.push_back(p);
   }
   std::reverse(path.begin(), path.end());
@@ -386,7 +414,8 @@ std::vector<VisualElement*> Panel::PickAll(glm::vec2 point) const {
 }
 
 template <typename E>
-void Panel::FillPointer(E& event, glm::vec2 point, int button, KeyModifiers mods) {
+void Panel::FillPointer(E& event, glm::vec2 point, int button,
+                        KeyModifiers mods) {
   event.position = point;
   event.button = button;
   event.pressedButtons = pressed_buttons_;
@@ -416,7 +445,8 @@ void Panel::UpdateHover(glm::vec2 point, bool inside, KeyModifiers mods) {
   }
   for (VisualElement* e : old_chain) {
     if (std::find(chain.begin(), chain.end(), e) == chain.end() &&
-        std::find(hover_chain_.begin(), hover_chain_.end(), e) == hover_chain_.end()) {
+        std::find(hover_chain_.begin(), hover_chain_.end(), e) ==
+            hover_chain_.end()) {
       PointerLeaveEvent leave;
       FillPointer(leave, point, -1, mods);
       // The element may have been removed by an earlier handler.
@@ -447,11 +477,13 @@ void Panel::HandleNavigationKey(const UIInputEvent& input) {
     case KeyCode::kTab: {
       const bool back = input.modifiers & kModShift;
       NavigationMoveEvent move;
-      move.direction = back ? NavigationDirection::kPrevious : NavigationDirection::kNext;
+      move.direction =
+          back ? NavigationDirection::kPrevious : NavigationDirection::kNext;
       move.modifiers = input.modifiers;
       Dispatch(move, target, true);
       if (!move.isDefaultPrevented()) {
-        if (VisualElement* next = focus_.FindNext(focused, !back)) next->Focus();
+        if (VisualElement* next = focus_.FindNext(focused, !back))
+          next->Focus();
       }
       break;
     }
@@ -461,17 +493,21 @@ void Panel::HandleNavigationKey(const UIInputEvent& input) {
     case KeyCode::kDown: {
       NavigationMoveEvent move;
       move.modifiers = input.modifiers;
-      move.direction = input.key == KeyCode::kLeft    ? NavigationDirection::kLeft
-                       : input.key == KeyCode::kRight ? NavigationDirection::kRight
-                       : input.key == KeyCode::kUp    ? NavigationDirection::kUp
-                                                      : NavigationDirection::kDown;
-      move.move = move.direction == NavigationDirection::kLeft    ? glm::vec2(-1, 0)
-                  : move.direction == NavigationDirection::kRight ? glm::vec2(1, 0)
-                  : move.direction == NavigationDirection::kUp    ? glm::vec2(0, -1)
-                                                                  : glm::vec2(0, 1);
+      move.direction = input.key == KeyCode::kLeft ? NavigationDirection::kLeft
+                       : input.key == KeyCode::kRight
+                           ? NavigationDirection::kRight
+                       : input.key == KeyCode::kUp ? NavigationDirection::kUp
+                                                   : NavigationDirection::kDown;
+      move.move =
+          move.direction == NavigationDirection::kLeft    ? glm::vec2(-1, 0)
+          : move.direction == NavigationDirection::kRight ? glm::vec2(1, 0)
+          : move.direction == NavigationDirection::kUp    ? glm::vec2(0, -1)
+                                                          : glm::vec2(0, 1);
       Dispatch(move, target, true);
-      if (!move.isPropagationStopped() && !move.isDefaultPrevented() && focused) {
-        if (VisualElement* next = focus_.FindInDirection(focused, move.direction)) {
+      if (!move.isPropagationStopped() && !move.isDefaultPrevented() &&
+          focused) {
+        if (VisualElement* next =
+                focus_.FindInDirection(focused, move.direction)) {
           next->Focus();
         }
       }
@@ -488,7 +524,8 @@ void Panel::HandleNavigationKey(const UIInputEvent& input) {
       Dispatch(cancel, target, true);
       break;
     }
-    default: break;
+    default:
+      break;
   }
 }
 
@@ -512,8 +549,9 @@ void Panel::DispatchInput(const UIInputFrame& input) {
     switch (e.type) {
       case UIInputEvent::Type::kPointerDown: {
         if (!inside || e.button < 0 || e.button > 2) break;
-        const bool repeat = time_ - last_click_time_ < kDoubleClickSeconds &&
-                            glm::distance(point, last_click_pos_) < kDoubleClickDistance;
+        const bool repeat =
+            time_ - last_click_time_ < kDoubleClickSeconds &&
+            glm::distance(point, last_click_pos_) < kDoubleClickDistance;
         click_count_ = repeat ? click_count_ + 1 : 1;
         last_click_time_ = time_;
         last_click_pos_ = point;
@@ -551,7 +589,8 @@ void Panel::DispatchInput(const UIInputFrame& input) {
         Dispatch(up, target, true);
         VisualElement* pressed = press_target_[e.button];
         press_target_[e.button] = nullptr;
-        if (pressed && hit && pressed->Contains(hit) && pressed->panel() == this) {
+        if (pressed && hit && pressed->Contains(hit) &&
+            pressed->panel() == this) {
           ClickEvent click;
           FillPointer(click, point, e.button, e.modifiers);
           Dispatch(click, pressed, true);
@@ -589,7 +628,8 @@ void Panel::DispatchInput(const UIInputFrame& input) {
         break;
       }
       case UIInputEvent::Type::kChar: {
-        if (!input.keyboard_available || e.character < 32 || e.character == 127) break;
+        if (!input.keyboard_available || e.character < 32 || e.character == 127)
+          break;
         VisualElement* target = focus_.focusedElement();
         if (!target) break;
         KeyDownEvent key;

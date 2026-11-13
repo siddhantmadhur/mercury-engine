@@ -18,11 +18,15 @@ std::string ToLower(std::string s) {
 
 const char* SourceTag(Console::Source src) {
   switch (src) {
-    case Console::Source::kGame: return "[game]  ";
-    case Console::Source::kBuild: return "[build] ";
-    case Console::Source::kLore: return "[lore]  ";
+    case Console::Source::kGame:
+      return "[game]  ";
+    case Console::Source::kBuild:
+      return "[build] ";
+    case Console::Source::kLore:
+      return "[lore]  ";
     case Console::Source::kEditor:
-    default: return "[editor]";
+    default:
+      return "[editor]";
   }
 }
 
@@ -72,9 +76,9 @@ ConsolePanel::ConsolePanel(wxWindow* parent, EditorScene& scene)
   header_wrap->SetSizer(bar_wrap);
   root->Add(header_wrap, 0, wxEXPAND);
 
-  list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                         wxLC_REPORT | wxLC_NO_HEADER | wxLC_SINGLE_SEL |
-                             wxBORDER_NONE);
+  list_ = new wxListCtrl(
+      this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+      wxLC_REPORT | wxLC_NO_HEADER | wxLC_SINGLE_SEL | wxBORDER_NONE);
   list_->SetFont(MonospaceFont());
   list_->InsertColumn(0, "Source", wxLIST_FORMAT_LEFT, 78);
   list_->InsertColumn(1, "Message", wxLIST_FORMAT_LEFT, 700);
@@ -144,7 +148,8 @@ void ConsolePanel::RebuildList(bool force_scroll) {
 
   visible_lines_.clear();
   for (const auto& line : snapshot) {
-    if (line.level == Console::Level::kInfo && !show_info_->GetValue()) continue;
+    if (line.level == Console::Level::kInfo && !show_info_->GetValue())
+      continue;
     if (line.level == Console::Level::kWarning && !show_warnings_->GetValue())
       continue;
     if (line.level == Console::Level::kError && !show_errors_->GetValue())
@@ -155,7 +160,8 @@ void ConsolePanel::RebuildList(bool force_scroll) {
       continue;
     if (line.source == Console::Source::kLore && !show_lore_->GetValue())
       continue;
-    if (!needle.empty() && ToLower(line.text).find(needle) == std::string::npos) {
+    if (!needle.empty() &&
+        ToLower(line.text).find(needle) == std::string::npos) {
       continue;
     }
     visible_lines_.push_back(line);
@@ -164,13 +170,12 @@ void ConsolePanel::RebuildList(bool force_scroll) {
   list_->Freeze();
   list_->DeleteAllItems();
   const wxColour win_bg = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
-  const bool dark_theme =
-      (win_bg.Red() * 299 + win_bg.Green() * 587 + win_bg.Blue() * 114) <
-      128000;
+  const bool dark_theme = (win_bg.Red() * 299 + win_bg.Green() * 587 +
+                           win_bg.Blue() * 114) < 128000;
   for (size_t i = 0; i < visible_lines_.size(); ++i) {
     const auto& line = visible_lines_[i];
-    const long row = list_->InsertItem(static_cast<long>(i),
-                                       wxString::FromUTF8(SourceTag(line.source)));
+    const long row = list_->InsertItem(
+        static_cast<long>(i), wxString::FromUTF8(SourceTag(line.source)));
     list_->SetItem(row, 1, wxString::FromUTF8(line.text));
     if (line.level == Console::Level::kWarning) {
       list_->SetItemTextColour(

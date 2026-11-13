@@ -149,7 +149,8 @@ class LoreVcs {
     bool quiet = false;
   };
 
-  void Run(std::vector<std::string> args, Callback done = {}, bool quiet = false);
+  void Run(std::vector<std::string> args, Callback done = {},
+           bool quiet = false);
   void StartNext();
   void Finish();
 

@@ -39,8 +39,10 @@ std::string ReadTextFile(const std::filesystem::path& path) {
 std::string Trim(std::string_view text) {
   size_t begin = 0;
   size_t end = text.size();
-  while (begin < end && std::isspace(static_cast<unsigned char>(text[begin]))) begin++;
-  while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1]))) end--;
+  while (begin < end && std::isspace(static_cast<unsigned char>(text[begin])))
+    begin++;
+  while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1])))
+    end--;
   return std::string(text.substr(begin, end - begin));
 }
 
@@ -52,7 +54,8 @@ size_t FindMetaKey(const std::string& entry, std::string_view key) {
     }
     if (entry.compare(i, key.size(), key) != 0) continue;
     const size_t after = i + key.size();
-    if (after == entry.size() || std::isspace(static_cast<unsigned char>(entry[after])) ||
+    if (after == entry.size() ||
+        std::isspace(static_cast<unsigned char>(entry[after])) ||
         entry[after] == '=') {
       return i;
     }
@@ -71,13 +74,15 @@ bool HasMeta(const std::vector<std::string>& metadata, std::string_view key) {
   return false;
 }
 
-std::string MetaValue(const std::vector<std::string>& metadata, std::string_view key) {
+std::string MetaValue(const std::vector<std::string>& metadata,
+                      std::string_view key) {
   for (const std::string& entry : metadata) {
     const size_t found = FindMetaKey(entry, key);
     if (found == std::string::npos) continue;
     size_t at = found + key.size();
     while (at < entry.size() &&
-           (std::isspace(static_cast<unsigned char>(entry[at])) || entry[at] == '=')) {
+           (std::isspace(static_cast<unsigned char>(entry[at])) ||
+            entry[at] == '=')) {
       at++;
     }
     if (at < entry.size() && (entry[at] == '"' || entry[at] == '\'')) {
@@ -94,7 +99,8 @@ std::string MetaValue(const std::vector<std::string>& metadata, std::string_view
   return {};
 }
 
-std::vector<std::string> MetaQuoted(const std::vector<std::string>& metadata, std::string_view key) {
+std::vector<std::string> MetaQuoted(const std::vector<std::string>& metadata,
+                                    std::string_view key) {
   std::vector<std::string> values;
   for (const std::string& entry : metadata) {
     const size_t found = FindMetaKey(entry, key);
@@ -120,9 +126,11 @@ std::vector<std::string> MetaQuoted(const std::vector<std::string>& metadata, st
 
 FieldType PrimitiveFieldType(int type_id) {
   if (type_id == asTYPEID_BOOL) return FieldType::kBool;
-  if (type_id == asTYPEID_FLOAT || type_id == asTYPEID_DOUBLE) return FieldType::kFloat;
-  if (type_id == asTYPEID_INT8 || type_id == asTYPEID_INT16 || type_id == asTYPEID_INT32 ||
-      type_id == asTYPEID_INT64 || type_id == asTYPEID_UINT8 || type_id == asTYPEID_UINT16 ||
+  if (type_id == asTYPEID_FLOAT || type_id == asTYPEID_DOUBLE)
+    return FieldType::kFloat;
+  if (type_id == asTYPEID_INT8 || type_id == asTYPEID_INT16 ||
+      type_id == asTYPEID_INT32 || type_id == asTYPEID_INT64 ||
+      type_id == asTYPEID_UINT8 || type_id == asTYPEID_UINT16 ||
       type_id == asTYPEID_UINT32 || type_id == asTYPEID_UINT64) {
     return FieldType::kInt;
   }
@@ -142,8 +150,9 @@ FieldType ElementFieldType(asITypeInfo* type) {
 std::string CallArgName(int type_id) {
   if (type_id == asTYPEID_BOOL) return "bool";
   if (type_id == asTYPEID_FLOAT || type_id == asTYPEID_DOUBLE) return "float";
-  if (type_id == asTYPEID_INT8 || type_id == asTYPEID_INT16 || type_id == asTYPEID_INT32 ||
-      type_id == asTYPEID_INT64 || type_id == asTYPEID_UINT8 || type_id == asTYPEID_UINT16 ||
+  if (type_id == asTYPEID_INT8 || type_id == asTYPEID_INT16 ||
+      type_id == asTYPEID_INT32 || type_id == asTYPEID_INT64 ||
+      type_id == asTYPEID_UINT8 || type_id == asTYPEID_UINT16 ||
       type_id == asTYPEID_UINT32 || type_id == asTYPEID_UINT64) {
     return "int";
   }
@@ -159,7 +168,9 @@ ScriptRuntime& ScriptRuntime::Instance() {
 
 ScriptRuntime::~ScriptRuntime() { Shutdown(); }
 
-uint32_t ScriptRuntime::NextSceneSerial() { return g_next_scene_serial.fetch_add(1); }
+uint32_t ScriptRuntime::NextSceneSerial() {
+  return g_next_scene_serial.fetch_add(1);
+}
 
 void ScriptRuntime::Throw(const char* message) {
   if (asIScriptContext* context = asGetActiveContext()) {
@@ -220,7 +231,9 @@ void ScriptRuntime::MessageCallback(const asSMessageInfo* msg, void* param) {
   if (!msg) return;
   auto* self = static_cast<ScriptRuntime*>(param);
   const std::string where =
-      msg->section && *msg->section ? std::format("{}:{}:{}", msg->section, msg->row, msg->col) : "<engine>";
+      msg->section && *msg->section
+          ? std::format("{}:{}:{}", msg->section, msg->row, msg->col)
+          : "<engine>";
   switch (msg->type) {
     case asMSGTYPE_ERROR:
       if (self) self->compile_failed_ = true;
@@ -279,7 +292,8 @@ bool ScriptRuntime::BuildFromSections(
   return true;
 }
 
-void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& builder,
+void ScriptRuntime::RegisterClasses(asIScriptModule* module,
+                                    CScriptBuilder& builder,
                                     bool register_types) {
   if (!module) return;
   for (asUINT i = 0; i < module->GetObjectTypeCount(); i++) {
@@ -302,7 +316,8 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
     script_class->name = type_name;
     script_class->type = type;
     script_class->data_asset = is_data_asset;
-    if (const std::string custom = MetaValue(type_meta, "script"); !custom.empty()) {
+    if (const std::string custom = MetaValue(type_meta, "script");
+        !custom.empty()) {
       script_class->name = custom;
     }
     script_class->factory = type->GetFactoryByIndex(0);
@@ -310,13 +325,17 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
     const char* section = nullptr;
     int row = 0;
     int column = 0;
-    if (asIScriptFunction* factory = script_class->factory; factory &&
+    if (asIScriptFunction* factory = script_class->factory;
+        factory &&
         factory->GetDeclaredAt(&section, &row, &column) == asSUCCESS) {
-      script_class->location = std::format("{}:{}:{}", section ? section : "", row, column);
+      script_class->location =
+          std::format("{}:{}:{}", section ? section : "", row, column);
     } else if (type->GetMethodCount() > 0) {
       asIScriptFunction* method = type->GetMethodByIndex(0, true);
-      if (method && method->GetDeclaredAt(&section, &row, &column) == asSUCCESS) {
-        script_class->location = std::format("{}:{}:{}", section ? section : "", row, column);
+      if (method &&
+          method->GetDeclaredAt(&section, &row, &column) == asSUCCESS) {
+        script_class->location =
+            std::format("{}:{}:{}", section ? section : "", row, column);
       }
     }
 
@@ -336,7 +355,8 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
       field.property_index = static_cast<int>(p);
       field.type_id = property_type_id;
       asITypeInfo* field_type = engine_->GetTypeInfoById(field.type_id);
-      const std::string field_type_name = field_type ? field_type->GetName() : "";
+      const std::string field_type_name =
+          field_type ? field_type->GetName() : "";
 
       if (field_type_name == "Vector2") {
         field.type = FieldType::kVector2;
@@ -348,7 +368,8 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
         field.type = FieldType::kEvent;
       } else if (field_type_name == "string") {
         field.type = FieldType::kString;
-        if (MetaValue(metadata, "nodeRef").empty() && HasMeta(metadata, "nodeRef")) {
+        if (MetaValue(metadata, "nodeRef").empty() &&
+            HasMeta(metadata, "nodeRef")) {
           field.type = FieldType::kNodeRef;
         }
         if (!MetaValue(metadata, "asset").empty()) {
@@ -357,7 +378,8 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
         }
       } else if (field_type_name == "array") {
         field.type = FieldType::kList;
-        field.element_type = ElementFieldType(field_type ? field_type->GetSubType() : nullptr);
+        field.element_type =
+            ElementFieldType(field_type ? field_type->GetSubType() : nullptr);
       } else {
         field.type = PrimitiveFieldType(field.type_id);
       }
@@ -400,11 +422,16 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
     }
 
     static constexpr const char* kCallbackNames[kScriptCallbackCount] = {
-        "awake", "onEnable", "onDisable", "onStart", "onFrame", "onLateFrame", "onTick",
-        "onCollisionEnter", "onCollisionStay", "onCollisionLeave", "onTriggerEnter",
-        "onTriggerStay", "onTriggerExit", "onDestroy"};
+        "awake",           "onEnable",
+        "onDisable",       "onStart",
+        "onFrame",         "onLateFrame",
+        "onTick",          "onCollisionEnter",
+        "onCollisionStay", "onCollisionLeave",
+        "onTriggerEnter",  "onTriggerStay",
+        "onTriggerExit",   "onDestroy"};
     for (int c = 0; c < kScriptCallbackCount; c++) {
-      asIScriptFunction* method = type->GetMethodByName(kCallbackNames[c], true);
+      asIScriptFunction* method =
+          type->GetMethodByName(kCallbackNames[c], true);
       if (!method) continue;
       script_class->callbacks |= (1u << c);
       script_class->callbacks_by_slot[c] = method;
@@ -417,7 +444,8 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
           script_class->callback_arg_types[c] = 2;
         } else {
           asITypeInfo* param_type = engine_->GetTypeInfoById(param);
-          if (param_type && std::string(param_type->GetName()) == "GameObject") {
+          if (param_type &&
+              std::string(param_type->GetName()) == "GameObject") {
             script_class->callback_arg_types[c] = 3;
           }
         }
@@ -435,7 +463,8 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
 
   for (const auto& script_class : classes_) {
     std::vector<FieldInfo> fields;
-    if (auto instance = ScriptBehaviour::Create(*script_class, nullptr, entt::null)) {
+    if (auto instance =
+            ScriptBehaviour::Create(*script_class, nullptr, entt::null)) {
       auto reflector = Reflector::Describe();
       instance->Reflect(reflector);
       fields = reflector.GetFields();
@@ -453,21 +482,26 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module, CScriptBuilder& bui
     for (const auto& callable : script_class->callables) {
       info.methods.push_back({callable.name, callable.arg});
     }
-    info.attach = [name = script_class->name](MapScene& scene, kEntityId entity,
-                                              const mtext::PropertyList& properties) {
-      const ScriptClass* found = ScriptRuntime::Instance().FindScriptClass(name);
+    info.attach = [name = script_class->name](
+                      MapScene& scene, kEntityId entity,
+                      const mtext::PropertyList& properties) {
+      const ScriptClass* found =
+          ScriptRuntime::Instance().FindScriptClass(name);
       if (!found) return;
       auto behaviour = ScriptBehaviour::Create(*found, &scene, entity);
       if (!behaviour) return;
       auto reflector = Reflector::Read(properties);
       behaviour->Reflect(reflector);
-      const std::string context = scene.GetGameObject(entity).GetPath() + "." + name;
+      const std::string context =
+          scene.GetGameObject(entity).GetPath() + "." + name;
       LogReflectionWarnings(reflector, context);
       for (const auto& property : properties) {
         bool known = false;
-        for (const auto& field : found->fields) known = known || field.name == property.key;
+        for (const auto& field : found->fields)
+          known = known || field.name == property.key;
         if (!known) {
-          PDebug::warn("{}: no field named \"{}\" (was it renamed?)", context, property.key);
+          PDebug::warn("{}: no field named \"{}\" (was it renamed?)", context,
+                       property.key);
         }
       }
       scene.AddBehaviour(entity, std::move(behaviour), name);
@@ -484,7 +518,8 @@ bool ScriptRuntime::LoadScripts(const std::filesystem::path& project_root) {
   std::vector<std::filesystem::path> files;
   std::error_code ec;
   if (std::filesystem::is_directory(scripts, ec)) {
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(scripts, ec)) {
+    for (const auto& entry :
+         std::filesystem::recursive_directory_iterator(scripts, ec)) {
       if (!entry.is_regular_file(ec)) continue;
       if (entry.path().extension() != ".as") continue;
       if (entry.path().filename().string().starts_with(".")) continue;
@@ -508,7 +543,8 @@ bool ScriptRuntime::LoadScripts(const std::filesystem::path& project_root) {
 }
 
 bool ScriptRuntime::LoadFiles(const std::vector<std::filesystem::path>& files,
-                              const std::string& module_name, bool register_types) {
+                              const std::string& module_name,
+                              bool register_types) {
   std::vector<std::pair<std::string, std::string>> sections;
   sections.reserve(files.size());
   for (const auto& file : files) {
@@ -519,13 +555,16 @@ bool ScriptRuntime::LoadFiles(const std::vector<std::filesystem::path>& files,
   return BuildFromSections(sections, module_name, register_types);
 }
 
-bool ScriptRuntime::RunString(std::string_view source, std::string_view name, std::string* result) {
+bool ScriptRuntime::RunString(std::string_view source, std::string_view name,
+                              std::string* result) {
   if (!engine_) return false;
-  const std::string module_name = std::format("eval_{}", reinterpret_cast<uintptr_t>(&source));
+  const std::string module_name =
+      std::format("eval_{}", reinterpret_cast<uintptr_t>(&source));
   CScriptBuilder builder;
   if (builder.StartNewModule(engine_, module_name.c_str()) < 0) return false;
   builder.AddSectionFromMemory("<engine>", kApiPreludeSource);
-  builder.AddSectionFromMemory(std::string(name).c_str(), std::string(source).c_str());
+  builder.AddSectionFromMemory(std::string(name).c_str(),
+                               std::string(source).c_str());
   compile_failed_ = false;
   if (builder.BuildModule() < 0 || compile_failed_) {
     engine_->DiscardModule(module_name.c_str());
@@ -552,7 +591,8 @@ bool ScriptRuntime::RunString(std::string_view source, std::string_view name, st
       ok = true;
       if (result) {
         if (string_result) {
-          *result = *static_cast<std::string*>(context->GetAddressOfReturnValue());
+          *result =
+              *static_cast<std::string*>(context->GetAddressOfReturnValue());
         } else {
           *result = std::to_string(context->GetReturnDWord());
         }
@@ -569,8 +609,8 @@ bool ScriptRuntime::RunString(std::string_view source, std::string_view name, st
 }
 
 bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
-                         std::span<const ScriptArg> args, std::string_view label,
-                         ScriptArg* result) {
+                         std::span<const ScriptArg> args,
+                         std::string_view label, ScriptArg* result) {
   if (!engine_ || !function) return false;
   asIScriptContext* context = engine_->CreateContext();
   if (!context) return false;
@@ -583,19 +623,29 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
   for (size_t i = 0; i < args.size(); i++) {
     const ScriptArg& arg = args[i];
     switch (arg.kind) {
-      case ScriptArg::Kind::kBool: context->SetArgByte(static_cast<asUINT>(i), arg.b ? 1 : 0); break;
-      case ScriptArg::Kind::kInt: context->SetArgDWord(static_cast<asUINT>(i), arg.i); break;
-      case ScriptArg::Kind::kFloat: context->SetArgFloat(static_cast<asUINT>(i), arg.f); break;
-      case ScriptArg::Kind::kDouble: context->SetArgDouble(static_cast<asUINT>(i), arg.d); break;
+      case ScriptArg::Kind::kBool:
+        context->SetArgByte(static_cast<asUINT>(i), arg.b ? 1 : 0);
+        break;
+      case ScriptArg::Kind::kInt:
+        context->SetArgDWord(static_cast<asUINT>(i), arg.i);
+        break;
+      case ScriptArg::Kind::kFloat:
+        context->SetArgFloat(static_cast<asUINT>(i), arg.f);
+        break;
+      case ScriptArg::Kind::kDouble:
+        context->SetArgDouble(static_cast<asUINT>(i), arg.d);
+        break;
       case ScriptArg::Kind::kString: {
         std::string text = arg.s;
         context->SetArgObject(static_cast<asUINT>(i), &text);
         break;
       }
       case ScriptArg::Kind::kObject:
-        if (arg.object) context->SetArgObject(static_cast<asUINT>(i), arg.object);
+        if (arg.object)
+          context->SetArgObject(static_cast<asUINT>(i), arg.object);
         break;
-      case ScriptArg::Kind::kNone: break;
+      case ScriptArg::Kind::kNone:
+        break;
     }
   }
 
@@ -623,7 +673,8 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
       } else {
         asITypeInfo* type = engine_->GetTypeInfoById(type_id);
         if (type && std::string(type->GetName()) == "string") {
-          *result = ScriptArg::String(*static_cast<std::string*>(context->GetAddressOfReturnValue()));
+          *result = ScriptArg::String(
+              *static_cast<std::string*>(context->GetAddressOfReturnValue()));
         } else {
           *result = ScriptArg::Int(static_cast<int>(context->GetReturnDWord()));
         }
@@ -646,9 +697,11 @@ std::string ScriptRuntime::FormatException(asIScriptContext* context) const {
   const char* message = context->GetExceptionString();
   std::string text;
   if (section && *section) {
-    text = std::format("{}:{}:{}: {}", section, line, column, message ? message : "exception");
+    text = std::format("{}:{}:{}: {}", section, line, column,
+                       message ? message : "exception");
   } else {
-    text = std::format("{}:{}: {}", line, column, message ? message : "exception");
+    text =
+        std::format("{}:{}: {}", line, column, message ? message : "exception");
   }
   if (asIScriptFunction* function = context->GetExceptionFunction()) {
     text += std::format(" (in {})", function->GetDeclaration());
@@ -662,11 +715,13 @@ ScriptBehaviour* ScriptRuntime::BehaviourOf(asIScriptObject* object) const {
 }
 
 bool ScriptRuntime::CallMethod(asIScriptObject* object, std::string_view method,
-                               std::span<const ScriptArg> args, std::string_view label) {
+                               std::span<const ScriptArg> args,
+                               std::string_view label) {
   if (!object) return false;
   asITypeInfo* type = object->GetObjectType();
   if (!type) return false;
-  asIScriptFunction* function = type->GetMethodByName(std::string(method).c_str(), true);
+  asIScriptFunction* function =
+      type->GetMethodByName(std::string(method).c_str(), true);
   if (!function) {
     PDebug::warn("{}: the script has no method {}", label, method);
     return false;
@@ -674,7 +729,9 @@ bool ScriptRuntime::CallMethod(asIScriptObject* object, std::string_view method,
   return Call(function, object, args, label);
 }
 
-void ScriptRuntime::RegisterScene(uint32_t serial, MapScene* scene) { scenes_[serial] = scene; }
+void ScriptRuntime::RegisterScene(uint32_t serial, MapScene* scene) {
+  scenes_[serial] = scene;
+}
 void ScriptRuntime::UnregisterScene(uint32_t serial) {
   scenes_.erase(serial);
   if (current_scene_ == serial) current_scene_ = 0;
@@ -699,7 +756,8 @@ void ScriptRuntime::OwnDataAsset(std::unique_ptr<ScriptBehaviour> asset) {
   data_assets_.push_back(std::move(asset));
 }
 
-int ScriptRuntime::AddTimer(int behaviour, std::string method, double seconds, bool repeat) {
+int ScriptRuntime::AddTimer(int behaviour, std::string method, double seconds,
+                            bool repeat) {
   const int id = next_timer_id_++;
   timers_[id] = Timer{behaviour, std::move(method), seconds, seconds, repeat};
   return id;
@@ -722,7 +780,8 @@ void ScriptRuntime::PumpTimers() {
       timers_.erase(id);
       continue;
     }
-    CallMethod(behaviour->Instance(), timer.method, {}, "timer " + timer.method);
+    CallMethod(behaviour->Instance(), timer.method, {},
+               "timer " + timer.method);
     if (timer.repeat) {
       auto again = timers_.find(id);
       if (again != timers_.end()) again->second.remaining += timer.interval;
@@ -732,12 +791,14 @@ void ScriptRuntime::PumpTimers() {
   }
 }
 
-bool ScriptRuntime::AddScriptClass(std::unique_ptr<ScriptClass> script_class, std::string* error) {
+bool ScriptRuntime::AddScriptClass(std::unique_ptr<ScriptClass> script_class,
+                                   std::string* error) {
   for (const auto& existing : classes_) {
     if (existing->name == script_class->name) {
       if (error) {
-        *error = std::format("Two scripts are named \"{}\": {} and {}", script_class->name,
-                             existing->location, script_class->location);
+        *error = std::format("Two scripts are named \"{}\": {} and {}",
+                             script_class->name, existing->location,
+                             script_class->location);
       }
       return false;
     }

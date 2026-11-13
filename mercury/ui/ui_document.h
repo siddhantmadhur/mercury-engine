@@ -33,7 +33,8 @@ struct UIDocument {
   float sort_order = 0.0f;  // higher draws on top within the panel
 
   void Reflect(Reflector& r) {
-    r.Field("source_asset", source_asset, "UXML").Tooltip("The .uxml file to show");
+    r.Field("source_asset", source_asset, "UXML")
+        .Tooltip("The .uxml file to show");
     r.Field("panel_settings", panel_settings, "PanelSettings")
         .Tooltip("Scaling and theme; documents sharing one share a panel");
     r.Field("sort_order", sort_order).Tooltip("Higher draws on top");
@@ -73,10 +74,12 @@ struct PanelSettingsAsset {
     r.Enum("screen_match_mode", screen_match_mode,
            {"MatchWidthOrHeight", "Shrink", "Expand"});
     r.Field("match", match).Tooltip("0 = match width, 1 = match height");
-    r.Field("reference_dpi", reference_dpi).Tooltip("ConstantPhysicalSize only");
+    r.Field("reference_dpi", reference_dpi)
+        .Tooltip("ConstantPhysicalSize only");
     r.Field("theme_style_sheet", theme_style_sheet, "StyleSheet")
         .Tooltip("A .uss theme; empty uses the default runtime theme");
-    r.Field("sort_order", sort_order).Tooltip("Panels with higher values draw on top");
+    r.Field("sort_order", sort_order)
+        .Tooltip("Panels with higher values draw on top");
   }
 
   UI::PanelSettings ToSettings() const {

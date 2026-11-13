@@ -23,22 +23,23 @@ const ::testing::Environment* const kEnvironment =
 
 TEST(ScriptRuntime, EvaluatesAString) {
   std::string result;
-  ASSERT_TRUE(ScriptRuntime::Instance().RunString("string main() { return \"hello\"; }", "test",
-                                                  &result));
+  ASSERT_TRUE(ScriptRuntime::Instance().RunString(
+      "string main() { return \"hello\"; }", "test", &result));
   EXPECT_EQ(result, "hello");
 }
 
 TEST(ScriptRuntime, ConstructsAValueType) {
   std::string result;
   ASSERT_TRUE(ScriptRuntime::Instance().RunString(
-      "string main() { Vector3 v(1.0f, 2.0f, 3.0f); return \"\" + v.y; }", "vec", &result));
+      "string main() { Vector3 v(1.0f, 2.0f, 3.0f); return \"\" + v.y; }",
+      "vec", &result));
   EXPECT_EQ(result, "2");
 }
 
 TEST(ScriptRuntime, ReturnsANumber) {
   std::string result;
-  ASSERT_TRUE(ScriptRuntime::Instance().RunString("int main() { return 40 + 2; }", "test",
-                                                  &result));
+  ASSERT_TRUE(ScriptRuntime::Instance().RunString(
+      "int main() { return 40 + 2; }", "test", &result));
   EXPECT_EQ(result, "42");
 }
 
@@ -47,12 +48,14 @@ TEST(ScriptRuntime, AThrownErrorIsCaughtNotFatal) {
   EXPECT_FALSE(runtime.RunString(
       "int main() { int[] values; return values[3]; }", "thrower"));
   std::string result;
-  EXPECT_TRUE(runtime.RunString("string main() { return \"still alive\"; }", "after", &result));
+  EXPECT_TRUE(runtime.RunString("string main() { return \"still alive\"; }",
+                                "after", &result));
   EXPECT_EQ(result, "still alive");
 }
 
 TEST(ScriptRuntime, ASyntaxErrorFailsTheRun) {
-  EXPECT_FALSE(ScriptRuntime::Instance().RunString("int main() { let = = ; }", "bad"));
+  EXPECT_FALSE(
+      ScriptRuntime::Instance().RunString("int main() { let = = ; }", "bad"));
 }
 
 TEST(ScriptRuntime, TheTimeoutAbortsAnInfiniteLoop) {

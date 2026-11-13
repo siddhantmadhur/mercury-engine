@@ -16,7 +16,8 @@ namespace {
 
 std::string LocalName(std::string_view tag) {
   const size_t colon = tag.rfind(':');
-  return std::string(colon == std::string_view::npos ? tag : tag.substr(colon + 1));
+  return std::string(colon == std::string_view::npos ? tag
+                                                     : tag.substr(colon + 1));
 }
 
 // "UnityEngine.UIElements.Button" style fully qualified names.
@@ -30,12 +31,23 @@ std::string Escape(std::string_view s) {
   std::string out;
   for (char c : s) {
     switch (c) {
-      case '&': out += "&amp;"; break;
-      case '<': out += "&lt;"; break;
-      case '>': out += "&gt;"; break;
-      case '"': out += "&quot;"; break;
-      case '\n': out += "&#10;"; break;
-      default: out += c;
+      case '&':
+        out += "&amp;";
+        break;
+      case '<':
+        out += "&lt;";
+        break;
+      case '>':
+        out += "&gt;";
+        break;
+      case '"':
+        out += "&quot;";
+        break;
+      case '\n':
+        out += "&#10;";
+        break;
+      default:
+        out += c;
     }
   }
   return out;
@@ -58,15 +70,19 @@ void ParseElement(const tinyxml2::XMLElement* xml, UxmlNode& node,
         node.style_sheets.emplace_back(p);
       }
     } else if (type == "Bindings") {
-      for (const auto* b = child->FirstChildElement(); b; b = b->NextSiblingElement()) {
+      for (const auto* b = child->FirstChildElement(); b;
+           b = b->NextSiblingElement()) {
         UxmlBindingDesc binding;
         if (const char* p = b->Attribute("property")) binding.property = p;
-        if (const char* p = b->Attribute("data-source-path")) binding.data_source_path = p;
+        if (const char* p = b->Attribute("data-source-path"))
+          binding.data_source_path = p;
         if (const char* m = b->Attribute("binding-mode")) {
           if (auto mode = BindingModeFromName(m)) binding.mode = *mode;
         }
         if (binding.property.empty()) {
-          if (errors) errors->push_back({b->GetLineNum(), "DataBinding needs a property"});
+          if (errors)
+            errors->push_back(
+                {b->GetLineNum(), "DataBinding needs a property"});
           continue;
         }
         node.bindings.push_back(std::move(binding));
@@ -108,8 +124,8 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
     out += std::format("{}    <Style src=\"{}\" />\n", indent, Escape(sheet));
   }
   for (const auto& o : node.overrides) {
-    out += std::format("{}    <ui:AttributeOverrides element-name=\"{}\"", indent,
-                       Escape(o.element_name));
+    out += std::format("{}    <ui:AttributeOverrides element-name=\"{}\"",
+                       indent, Escape(o.element_name));
     for (const auto& a : o.attributes) {
       out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
     }
@@ -118,8 +134,9 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
   if (!node.bindings.empty()) {
     out += indent + "    <Bindings>\n";
     for (const auto& b : node.bindings) {
-      out += std::format("{}        <ui:DataBinding property=\"{}\" data-source-path=\"{}\"",
-                         indent, Escape(b.property), Escape(b.data_source_path));
+      out += std::format(
+          "{}        <ui:DataBinding property=\"{}\" data-source-path=\"{}\"",
+          indent, Escape(b.property), Escape(b.data_source_path));
       if (b.mode != BindingMode::kToTarget) {
         out += std::format(" binding-mode=\"{}\"", BindingModeName(b.mode));
       }
@@ -140,8 +157,11 @@ mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
       std::transform(v.begin(), v.end(), v.begin(), ::tolower);
       return v == "true" || v == "1";
     }
-    case FieldType::kInt: return static_cast<int64_t>(std::strtoll(std::string(value).c_str(), nullptr, 10));
-    case FieldType::kFloat: return std::strtod(std::string(value).c_str(), nullptr);
+    case FieldType::kInt:
+      return static_cast<int64_t>(
+          std::strtoll(std::string(value).c_str(), nullptr, 10));
+    case FieldType::kFloat:
+      return std::strtod(std::string(value).c_str(), nullptr);
     case FieldType::kColor:
       if (auto c = ParseColor(value)) return mtext::Color{c->rgba};
       return std::string(value);
@@ -150,16 +170,18 @@ mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
       // project://database/... or url("...") forms.
       if (v.starts_with("url(")) {
         auto tokens = TokenizeStyleValue(v);
-        if (!tokens.empty() && !tokens[0].args.empty()) v = tokens[0].args[0].text;
+        if (!tokens.empty() && !tokens[0].args.empty())
+          v = tokens[0].args[0].text;
       }
       return mtext::Resource{ResolveRelativePath(base, v)};
     }
-    default: return std::string(value);
+    default:
+      return std::string(value);
   }
 }
 
-void CloneNode(const UxmlNode& node, VisualElement* parent, UIResources& resources,
-               const VisualTreeAsset& asset) {
+void CloneNode(const UxmlNode& node, VisualElement* parent,
+               UIResources& resources, const VisualTreeAsset& asset) {
   auto& registry = UxmlFactoryRegistry::Instance();
   if (node.type == "Instance") {
     const std::string* name = node.FindAttribute("template");
@@ -168,12 +190,13 @@ void CloneNode(const UxmlNode& node, VisualElement* parent, UIResources& resourc
     container->uxmlSource = &node;
     if (ref) {
       container->templateId = ref->name;
-      if (auto tree = resources.LoadUxml(ResolveRelativePath(asset.path, ref->src))) {
+      if (auto tree =
+              resources.LoadUxml(ResolveRelativePath(asset.path, ref->src))) {
         tree->CloneTree(container.get(), resources);
       }
     } else {
-      PDebug::warn("UI: {}:{}: no <Template> named \"{}\"", asset.path, node.line,
-                   name ? *name : "");
+      PDebug::warn("UI: {}:{}: no <Template> named \"{}\"", asset.path,
+                   node.line, name ? *name : "");
     }
     const UxmlTypeInfo* info = registry.Find("TemplateContainer");
     for (const auto& a : node.attributes) {
@@ -181,15 +204,17 @@ void CloneNode(const UxmlNode& node, VisualElement* parent, UIResources& resourc
       ApplyUxmlAttribute(container.get(), info, a.name, a.value, asset.path);
     }
     for (const auto& o : node.overrides) {
-      container->Query<VisualElement>(o.element_name).ForEach([&](VisualElement* e) {
-        const UxmlTypeInfo* type = registry.Find(e->typeName());
-        for (const auto& a : o.attributes) {
-          ApplyUxmlAttribute(e, type, a.name, a.value, asset.path);
-        }
-      });
+      container->Query<VisualElement>(o.element_name)
+          .ForEach([&](VisualElement* e) {
+            const UxmlTypeInfo* type = registry.Find(e->typeName());
+            for (const auto& a : o.attributes) {
+              ApplyUxmlAttribute(e, type, a.name, a.value, asset.path);
+            }
+          });
     }
     for (const auto& sheet : node.style_sheets) {
-      container->AddStyleSheet(resources.LoadStyleSheet(ResolveRelativePath(asset.path, sheet)));
+      container->AddStyleSheet(
+          resources.LoadStyleSheet(ResolveRelativePath(asset.path, sheet)));
     }
     parent->Add(std::move(container));
     return;
@@ -200,7 +225,8 @@ void CloneNode(const UxmlNode& node, VisualElement* parent, UIResources& resourc
   if (info) {
     element = info->create();
   } else {
-    PDebug::warn("UI: {}:{}: unknown element type \"{}\"", asset.path, node.line, node.type);
+    PDebug::warn("UI: {}:{}: unknown element type \"{}\"", asset.path,
+                 node.line, node.type);
     element = std::make_unique<VisualElement>();
   }
   element->uxmlSource = &node;
@@ -208,13 +234,15 @@ void CloneNode(const UxmlNode& node, VisualElement* parent, UIResources& resourc
     ApplyUxmlAttribute(element.get(), info, a.name, a.value, asset.path);
   }
   for (const auto& sheet : node.style_sheets) {
-    element->AddStyleSheet(resources.LoadStyleSheet(ResolveRelativePath(asset.path, sheet)));
+    element->AddStyleSheet(
+        resources.LoadStyleSheet(ResolveRelativePath(asset.path, sheet)));
   }
   for (const auto& b : node.bindings) {
     element->SetBinding(b.property, DataBinding{b.data_source_path, b.mode});
   }
   VisualElement* raw = parent->Add(std::move(element));
-  for (const auto& child : node.children) CloneNode(child, raw, resources, asset);
+  for (const auto& child : node.children)
+    CloneNode(child, raw, resources, asset);
 }
 
 }  // namespace
@@ -237,24 +265,27 @@ void UxmlNode::SetAttribute(std::string_view name, std::string value) {
 }
 
 void UxmlNode::RemoveAttribute(std::string_view name) {
-  std::erase_if(attributes, [&](const UxmlAttribute& a) { return a.name == name; });
+  std::erase_if(attributes,
+                [&](const UxmlAttribute& a) { return a.name == name; });
 }
 
-std::shared_ptr<VisualTreeAsset> VisualTreeAsset::Parse(std::string_view xml,
-                                                        std::string path,
-                                                        std::vector<UxmlError>* errors) {
+std::shared_ptr<VisualTreeAsset> VisualTreeAsset::Parse(
+    std::string_view xml, std::string path, std::vector<UxmlError>* errors) {
   auto asset = std::make_shared<VisualTreeAsset>();
   asset->path = std::move(path);
   tinyxml2::XMLDocument doc;
   if (doc.Parse(xml.data(), xml.size()) != tinyxml2::XML_SUCCESS) {
     if (errors) {
-      errors->push_back({doc.ErrorLineNum(), doc.ErrorStr() ? doc.ErrorStr() : "bad XML"});
+      errors->push_back(
+          {doc.ErrorLineNum(), doc.ErrorStr() ? doc.ErrorStr() : "bad XML"});
     }
     return asset;
   }
   const tinyxml2::XMLElement* root = doc.RootElement();
   if (!root || TypeNameOf(root->Name()) != "UXML") {
-    if (errors) errors->push_back({root ? root->GetLineNum() : 1, "the root must be <ui:UXML>"});
+    if (errors)
+      errors->push_back(
+          {root ? root->GetLineNum() : 1, "the root must be <ui:UXML>"});
     return asset;
   }
   for (const auto* a = root->FirstAttribute(); a; a = a->Next()) {
@@ -265,12 +296,15 @@ std::shared_ptr<VisualTreeAsset> VisualTreeAsset::Parse(std::string_view xml,
        child = child->NextSiblingElement()) {
     const std::string type = TypeNameOf(child->Name());
     if (type == "Style") {
-      if (const char* src = child->Attribute("src")) asset->root.style_sheets.emplace_back(src);
+      if (const char* src = child->Attribute("src"))
+        asset->root.style_sheets.emplace_back(src);
     } else if (type == "Template") {
       UxmlTemplateRef ref;
       if (const char* n = child->Attribute("name")) ref.name = n;
-      if (const char* s = child->Attribute("src")) ref.src = s;
-      else if (const char* p = child->Attribute("path")) ref.src = p;
+      if (const char* s = child->Attribute("src"))
+        ref.src = s;
+      else if (const char* p = child->Attribute("path"))
+        ref.src = p;
       asset->templates.push_back(std::move(ref));
     } else {
       UxmlNode& node = asset->root.children.emplace_back();
@@ -295,29 +329,34 @@ std::string VisualTreeAsset::Write() const {
     out += std::format("    <Style src=\"{}\" />\n", Escape(sheet));
   }
   for (const auto& t : templates) {
-    out += std::format("    <ui:Template name=\"{}\" src=\"{}\" />\n", Escape(t.name),
-                       Escape(t.src));
+    out += std::format("    <ui:Template name=\"{}\" src=\"{}\" />\n",
+                       Escape(t.name), Escape(t.src));
   }
   for (const auto& child : root.children) WriteNode(child, 1, out);
   out += "</ui:UXML>\n";
   return out;
 }
 
-void VisualTreeAsset::CloneTree(VisualElement* target, UIResources& resources) const {
+void VisualTreeAsset::CloneTree(VisualElement* target,
+                                UIResources& resources) const {
   for (const auto& sheet : root.style_sheets) {
-    target->AddStyleSheet(resources.LoadStyleSheet(ResolveRelativePath(path, sheet)));
+    target->AddStyleSheet(
+        resources.LoadStyleSheet(ResolveRelativePath(path, sheet)));
   }
-  for (const auto& child : root.children) CloneNode(child, target, resources, *this);
+  for (const auto& child : root.children)
+    CloneNode(child, target, resources, *this);
 }
 
-std::unique_ptr<VisualElement> VisualTreeAsset::Instantiate(UIResources& resources) const {
+std::unique_ptr<VisualElement> VisualTreeAsset::Instantiate(
+    UIResources& resources) const {
   auto container = std::make_unique<TemplateContainer>();
   container->templateId = path;
   CloneTree(container.get(), resources);
   return container;
 }
 
-const UxmlTemplateRef* VisualTreeAsset::FindTemplate(std::string_view name) const {
+const UxmlTemplateRef* VisualTreeAsset::FindTemplate(
+    std::string_view name) const {
   for (const auto& t : templates) {
     if (t.name == name) return &t;
   }
@@ -360,7 +399,11 @@ std::vector<UxmlAttributeDescription> VisualElementAttributes() {
       {"name", F::kString, "", {}, "", "Used by #name selectors and Q()"},
       {"class", F::kString, "", {}, "", "Space-separated USS classes"},
       {"style", F::kString, "", {}, "", "Inline USS declarations"},
-      {"picking-mode", F::kEnum, "Position", {"Position", "Ignore"}, "",
+      {"picking-mode",
+       F::kEnum,
+       "Position",
+       {"Position", "Ignore"},
+       "",
        "Ignore lets pointer events pass through"},
       {"tooltip", F::kString, ""},
       {"focusable", F::kBool, "false"},
@@ -406,9 +449,10 @@ bool ApplyUxmlAttribute(VisualElement* element, const UxmlTypeInfo* type,
       if (a.name == name) desc = &a;
     }
   }
-  const std::string property = desc && !desc->property.empty() ? desc->property
-                                                               : std::string(name);
-  return element->SetProperty(property, ConvertAttribute(desc, value, base_path));
+  const std::string property =
+      desc && !desc->property.empty() ? desc->property : std::string(name);
+  return element->SetProperty(property,
+                              ConvertAttribute(desc, value, base_path));
 }
 
 }  // namespace Mercury::UI

@@ -8,11 +8,13 @@
 
 namespace Mercury {
 
-AnimatorRuntime::AnimatorRuntime(std::shared_ptr<const AnimatorController> controller,
-                                 std::shared_ptr<const Model> model)
+AnimatorRuntime::AnimatorRuntime(
+    std::shared_ptr<const AnimatorController> controller,
+    std::shared_ptr<const Model> model)
     : controller_(std::move(controller)), model_(std::move(model)) {
   for (const auto& parameter : controller_->Parameters()) {
-    parameters_[parameter.name] = {parameter.type, parameter.default_value, 0.0f};
+    parameters_[parameter.name] = {parameter.type, parameter.default_value,
+                                   0.0f};
   }
   for (const auto& layer : controller_->Layers()) {
     LayerState state;
@@ -39,16 +41,16 @@ void AnimatorRuntime::SetFloat(std::string_view name, float value) {
   if (it != parameters_.end()) it->second.value = value;
 }
 
-void AnimatorRuntime::SetFloat(std::string_view name, float value, float damp_time,
-                               float delta_time) {
+void AnimatorRuntime::SetFloat(std::string_view name, float value,
+                               float damp_time, float delta_time) {
   auto it = parameters_.find(name);
   if (it == parameters_.end()) return;
   if (damp_time <= 0.0f || delta_time <= 0.0f) {
     it->second.value = value;
     return;
   }
-  it->second.value = Mathf::SmoothDamp(it->second.value, value, it->second.velocity,
-                                       damp_time, delta_time);
+  it->second.value = Mathf::SmoothDamp(
+      it->second.value, value, it->second.velocity, damp_time, delta_time);
 }
 
 void AnimatorRuntime::SetInteger(std::string_view name, int value) {
@@ -59,8 +61,12 @@ void AnimatorRuntime::SetBool(std::string_view name, bool value) {
   SetFloat(name, value ? 1.0f : 0.0f);
 }
 
-void AnimatorRuntime::SetTrigger(std::string_view name) { SetFloat(name, 1.0f); }
-void AnimatorRuntime::ResetTrigger(std::string_view name) { SetFloat(name, 0.0f); }
+void AnimatorRuntime::SetTrigger(std::string_view name) {
+  SetFloat(name, 1.0f);
+}
+void AnimatorRuntime::ResetTrigger(std::string_view name) {
+  SetFloat(name, 0.0f);
+}
 
 float AnimatorRuntime::GetFloat(std::string_view name) const {
   auto it = parameters_.find(name);
@@ -71,7 +77,9 @@ int AnimatorRuntime::GetInteger(std::string_view name) const {
   return static_cast<int>(std::lround(GetFloat(name)));
 }
 
-bool AnimatorRuntime::GetBool(std::string_view name) const { return GetFloat(name) != 0.0f; }
+bool AnimatorRuntime::GetBool(std::string_view name) const {
+  return GetFloat(name) != 0.0f;
+}
 
 bool AnimatorRuntime::HasParameter(std::string_view name) const {
   return parameters_.contains(name);
@@ -79,7 +87,8 @@ bool AnimatorRuntime::HasParameter(std::string_view name) const {
 
 // ----------------------------------------------------------------- states --
 
-void AnimatorRuntime::Play(std::string_view state, int layer, float normalized_time) {
+void AnimatorRuntime::Play(std::string_view state, int layer,
+                           float normalized_time) {
   const auto& layers = controller_->Layers();
   for (size_t l = 0; l < layers.size(); l++) {
     if (layer >= 0 && static_cast<int>(l) != layer) continue;
@@ -95,15 +104,20 @@ std::string AnimatorRuntime::GetCurrentState(int layer) const {
   if (layer < 0 || layer >= static_cast<int>(layers_.size())) return "";
   const auto& states = controller_->Layers()[layer].states;
   const int index = layers_[layer].state;
-  return index >= 0 && index < static_cast<int>(states.size()) ? states[index].name : "";
+  return index >= 0 && index < static_cast<int>(states.size())
+             ? states[index].name
+             : "";
 }
 
 float AnimatorRuntime::GetNormalizedTime(int layer) const {
-  return layer >= 0 && layer < static_cast<int>(layers_.size()) ? layers_[layer].time : 0.0f;
+  return layer >= 0 && layer < static_cast<int>(layers_.size())
+             ? layers_[layer].time
+             : 0.0f;
 }
 
 bool AnimatorRuntime::IsInTransition(int layer) const {
-  return layer >= 0 && layer < static_cast<int>(layers_.size()) && layers_[layer].next >= 0;
+  return layer >= 0 && layer < static_cast<int>(layers_.size()) &&
+         layers_[layer].next >= 0;
 }
 
 const AnimationClip* AnimatorRuntime::Clip(std::string_view name) const {
@@ -218,15 +232,17 @@ float AnimatorRuntime::StateLength(const AnimatorState& state) const {
 void AnimatorRuntime::ResetPose(Pose& pose) const {
   std::fill(pose.weight.begin(), pose.weight.end(), 0.0f);
   std::fill(pose.position.begin(), pose.position.end(), glm::vec3(0.0f));
-  std::fill(pose.rotation.begin(), pose.rotation.end(), glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
+  std::fill(pose.rotation.begin(), pose.rotation.end(),
+            glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
   std::fill(pose.scale.begin(), pose.scale.end(), glm::vec3(0.0f));
 }
 
-void AnimatorRuntime::SampleClip(const AnimationClip& clip, float seconds, float weight,
-                                 Pose& pose) const {
+void AnimatorRuntime::SampleClip(const AnimationClip& clip, float seconds,
+                                 float weight, Pose& pose) const {
   const auto& nodes = model_->Nodes();
   for (const auto& channel : clip.channels) {
-    if (channel.node < 0 || channel.node >= static_cast<int>(nodes.size())) continue;
+    if (channel.node < 0 || channel.node >= static_cast<int>(nodes.size()))
+      continue;
     const ModelNode& rest = nodes[channel.node];
     glm::vec3 position = rest.position;
     glm::quat rotation = rest.rotation;
@@ -242,8 +258,9 @@ void AnimatorRuntime::SampleClip(const AnimationClip& clip, float seconds, float
   }
 }
 
-void AnimatorRuntime::SampleState(const AnimatorState& state, float normalized_time,
-                                  float weight, Pose& pose) const {
+void AnimatorRuntime::SampleState(const AnimatorState& state,
+                                  float normalized_time, float weight,
+                                  Pose& pose) const {
   auto sample = [&](const std::string& name, float time_scale, float w) {
     const AnimationClip* clip = Clip(name);
     if (!clip || w <= 0.0f) return;
@@ -267,17 +284,30 @@ void AnimatorRuntime::SampleState(const AnimatorState& state, float normalized_t
   }
 }
 
-bool AnimatorRuntime::ConditionsMet(const AnimatorTransition& transition) const {
+bool AnimatorRuntime::ConditionsMet(
+    const AnimatorTransition& transition) const {
   for (const auto& condition : transition.conditions) {
     const float value = GetFloat(condition.parameter);
     using Mode = AnimatorCondition::Mode;
     switch (condition.mode) {
-      case Mode::kIf: if (value == 0.0f) return false; break;
-      case Mode::kIfNot: if (value != 0.0f) return false; break;
-      case Mode::kGreater: if (!(value > condition.threshold)) return false; break;
-      case Mode::kLess: if (!(value < condition.threshold)) return false; break;
-      case Mode::kEquals: if (value != condition.threshold) return false; break;
-      case Mode::kNotEqual: if (value == condition.threshold) return false; break;
+      case Mode::kIf:
+        if (value == 0.0f) return false;
+        break;
+      case Mode::kIfNot:
+        if (value != 0.0f) return false;
+        break;
+      case Mode::kGreater:
+        if (!(value > condition.threshold)) return false;
+        break;
+      case Mode::kLess:
+        if (!(value < condition.threshold)) return false;
+        break;
+      case Mode::kEquals:
+        if (value != condition.threshold) return false;
+        break;
+      case Mode::kNotEqual:
+        if (value == condition.threshold) return false;
+        break;
     }
   }
   return true;
@@ -286,7 +316,8 @@ bool AnimatorRuntime::ConditionsMet(const AnimatorTransition& transition) const 
 void AnimatorRuntime::ConsumeTriggers(const AnimatorTransition& transition) {
   for (const auto& condition : transition.conditions) {
     auto it = parameters_.find(condition.parameter);
-    if (it != parameters_.end() && it->second.type == AnimatorParameter::Type::kTrigger) {
+    if (it != parameters_.end() &&
+        it->second.type == AnimatorParameter::Type::kTrigger) {
       it->second.value = 0.0f;
     }
   }
@@ -302,7 +333,8 @@ void AnimatorRuntime::Update(float dt, std::vector<glm::mat4>& locals) {
     const AnimatorLayer& layer = layers[l];
     if (layer.states.empty()) continue;
     LayerState& run = layers_[l];
-    run.state = std::clamp(run.state, 0, static_cast<int>(layer.states.size()) - 1);
+    run.state =
+        std::clamp(run.state, 0, static_cast<int>(layer.states.size()) - 1);
     const AnimatorState& current = layer.states[run.state];
 
     // Advance time.
@@ -326,16 +358,19 @@ void AnimatorRuntime::Update(float dt, std::vector<glm::mat4>& locals) {
         if (transition.from != -1 && transition.from != run.state) continue;
         if (transition.from == -1 && transition.to == run.state) continue;
         // Exit time: how far (normalized) the state must have played.
-        if (transition.has_exit_time && run.time < transition.exit_time) continue;
+        if (transition.has_exit_time && run.time < transition.exit_time)
+          continue;
         if (!ConditionsMet(transition)) continue;
-        if (transition.conditions.empty() && !transition.has_exit_time) continue;
+        if (transition.conditions.empty() && !transition.has_exit_time)
+          continue;
         ConsumeTriggers(transition);
         const float state_length = StateLength(layer.states[run.state]);
         run.next = transition.to;
         run.next_time = transition.offset;
         run.blend = 0.0f;
-        run.blend_duration = transition.fixed_duration ? transition.duration
-                                                       : transition.duration * state_length;
+        run.blend_duration = transition.fixed_duration
+                                 ? transition.duration
+                                 : transition.duration * state_length;
         if (run.blend_duration <= 0.0f) {
           run.state = run.next;
           run.time = run.next_time;
@@ -347,9 +382,11 @@ void AnimatorRuntime::Update(float dt, std::vector<glm::mat4>& locals) {
 
     // Sample this layer.
     ResetPose(layer_pose_);
-    const float blend = run.next >= 0 ? std::clamp(run.blend, 0.0f, 1.0f) : 0.0f;
+    const float blend =
+        run.next >= 0 ? std::clamp(run.blend, 0.0f, 1.0f) : 0.0f;
     SampleState(layer.states[run.state], run.time, 1.0f - blend, layer_pose_);
-    if (run.next >= 0) SampleState(layer.states[run.next], run.next_time, blend, layer_pose_);
+    if (run.next >= 0)
+      SampleState(layer.states[run.next], run.next_time, blend, layer_pose_);
 
     // Override blending: the layer replaces what is below by its weight.
     const float layer_weight = l == 0 ? 1.0f : layer.weight;
@@ -364,9 +401,12 @@ void AnimatorRuntime::Update(float dt, std::vector<glm::mat4>& locals) {
         final_pose_.rotation[n] = rotation;
         final_pose_.scale[n] = scale;
       } else {
-        final_pose_.position[n] = glm::mix(final_pose_.position[n], position, layer_weight);
-        final_pose_.rotation[n] = glm::slerp(final_pose_.rotation[n], rotation, layer_weight);
-        final_pose_.scale[n] = glm::mix(final_pose_.scale[n], scale, layer_weight);
+        final_pose_.position[n] =
+            glm::mix(final_pose_.position[n], position, layer_weight);
+        final_pose_.rotation[n] =
+            glm::slerp(final_pose_.rotation[n], rotation, layer_weight);
+        final_pose_.scale[n] =
+            glm::mix(final_pose_.scale[n], scale, layer_weight);
       }
       final_pose_.weight[n] = 1.0f;
       any = true;
@@ -388,15 +428,16 @@ void AnimatorRuntime::Update(float dt, std::vector<glm::mat4>& locals) {
     // Without root motion the character stays where its object is: the
     // root motion node keeps its rest position on the ground plane (model
     // space X and Z), only moving up and down.
-    if (hold_root_ && static_cast<int>(n) == root_motion_node_ && rest.parent >= 0) {
+    if (hold_root_ && static_cast<int>(n) == root_motion_node_ &&
+        rest.parent >= 0) {
       const glm::mat3 parent = glm::mat3(model_->BindGlobals()[rest.parent]);
       glm::vec3 delta = parent * (position - rest.position);
       delta.x = 0.0f;
       delta.z = 0.0f;
       position = rest.position + glm::inverse(parent) * delta;
     }
-    locals[n] = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) *
-                glm::scale(glm::mat4(1.0f), scale);
+    locals[n] = glm::translate(glm::mat4(1.0f), position) *
+                glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
   }
 }
 

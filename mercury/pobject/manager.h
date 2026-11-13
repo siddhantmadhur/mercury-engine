@@ -30,7 +30,7 @@ enum Node {
 
 constexpr unsigned int kMaxEntities = 80960;
 // TODO: Going to replace this with a sparsed set later
-#define MERCURY_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Type) std::optional<Type> *
+#define MERCURY_MACRO_DO_NOT_USE_PROPERTY_LIST_TYPE(Type) std::optional<Type>*
 
 /**
  * @brief Manager to handle creating and deleting PObjects
@@ -49,7 +49,7 @@ class PObjectManager {
  public:
   PObjectManager();
 
-  void UpdateAtlas(entt::registry &, entt::entity);
+  void UpdateAtlas(entt::registry&, entt::entity);
 
   kEntityId NewObject();
 
@@ -65,7 +65,7 @@ class PObjectManager {
   kEntityId NewPlane2D(glm::vec3 position, glm::vec2 size,
                        glm::vec4 color = glm::vec4(1.0));
 
-  kEntityId NewObjectFromFile(const std::string &file_path, float scale = 1.0,
+  kEntityId NewObjectFromFile(const std::string& file_path, float scale = 1.0,
                               glm::vec4 color = glm::vec4(1));
 
   kEntityId NewCube3D(glm::vec3 position = glm::vec3(0.0),
@@ -77,7 +77,7 @@ class PObjectManager {
 
   template <class T, typename... Args>
     requires std::constructible_from<T, Args...>
-  void AddProperty(kEntityId self, Args &&...args) {
+  void AddProperty(kEntityId self, Args&&... args) {
     registry_.emplace_or_replace<T>(self, std::forward<Args>(args)...);
   };
 
@@ -88,7 +88,7 @@ class PObjectManager {
 
   // nullptr if the entity lacks T, or is null or destroyed.
   template <typename T>
-  T *GetProperty(kEntityId self) {
+  T* GetProperty(kEntityId self) {
     if (!registry_.valid(self)) return nullptr;
     return registry_.try_get<T>(self);
   }
@@ -98,8 +98,8 @@ class PObjectManager {
     registry_.remove<T>(self);
   }
 
-  entt::registry &GetRegistry() { return registry_; }
-  const entt::registry &GetRegistry() const { return registry_; }
+  entt::registry& GetRegistry() { return registry_; }
+  const entt::registry& GetRegistry() const { return registry_; }
 
   /**
    * Moves object to a static buffer which means while its data cannot be
@@ -122,13 +122,13 @@ class PObjectManager {
   // Removes the entity and every property it has.
   void DestroyObject(kEntityId id);
 
-  TextureAtlas &GetAtlas() { return atlas_; }
+  TextureAtlas& GetAtlas() { return atlas_; }
 
  private:
   struct StaticRange {
     size_t vertex_start;
     size_t vertex_count;
-    Texture2D *tex;  // nullptr -> use atlas white pixel UV
+    Texture2D* tex;  // nullptr -> use atlas white pixel UV
   };
 
   void RefreshStaticAtlasUVs();

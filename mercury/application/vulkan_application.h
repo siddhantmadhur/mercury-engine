@@ -33,8 +33,8 @@ struct MeshLayoutEntry {
 
 class VulkanApplication : public Application {
  public:
-  VulkanApplication(const std::string& window_title,
-                    float initial_width = 1280, float initial_height = 720);
+  VulkanApplication(const std::string& window_title, float initial_width = 1280,
+                    float initial_height = 720);
   ~VulkanApplication() override;
 
   void EnableSceneTexture(bool enabled) override;
@@ -161,7 +161,8 @@ class VulkanApplication : public Application {
   // (Re)creates the camera preview target at preview_requested_.
   void RecreatePreviewTarget();
   // Clears the UI preview target to its background and draws `batch`.
-  void RecordUIPreviewPass(VkCommandBuffer cmd, const vk::UIRenderer::Batch& batch);
+  void RecordUIPreviewPass(VkCommandBuffer cmd,
+                           const vk::UIRenderer::Batch& batch);
 
   // MERCURY_CAPTURE=<file.png> saves frame MERCURY_CAPTURE_FRAME (default
   // 90) of the window; MERCURY_CAPTURE_QUIT=1 closes the window afterwards.
@@ -273,8 +274,8 @@ class VulkanApplication : public Application {
   void RenderSceneTo(VkCommandBuffer cmd, FrameData& frame,
                      const std::vector<RenderCamera>& cameras, VkImage image,
                      VkImageView view, VkExtent2D extent, VkImageLayout layout,
-                     VkDescriptorSet legacy_set, bool draw_static, UINT static_index_count,
-                     bool draw_instanced);
+                     VkDescriptorSet legacy_set, bool draw_static,
+                     UINT static_index_count, bool draw_instanced);
   const UI::UIDrawData* ui_preview_data_ = nullptr;
   glm::vec4 ui_preview_background_ = glm::vec4(0.0f);
   bool ui_preview_target_dirty_ = false;

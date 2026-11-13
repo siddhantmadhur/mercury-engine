@@ -63,8 +63,9 @@ TEST(MText, WriteThenParseGivesTheSameDocument) {
   node.properties.Set("big", 1.0e20);
   node.properties.Set("text", "line\nbreak\t\"q\"");
   node.properties.Set("v", glm::vec3(0.1f, -0.0f, 1e-7f));
-  node.properties.Set("items", mtext::Array{mtext::Variant(1),
-                                            mtext::Variant(mtext::NodePath{"."})});
+  node.properties.Set(
+      "items",
+      mtext::Array{mtext::Variant(1), mtext::Variant(mtext::NodePath{"."})});
 
   const std::string text = mtext::Write(doc);
   // Floats keep a decimal point and print at the precision they came from.

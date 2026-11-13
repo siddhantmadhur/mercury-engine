@@ -59,17 +59,21 @@ const std::vector<UIBuilder::StyleGroup>& UIBuilder::StyleGroups() {
       {"Display", {P::kOpacity, P::kDisplay, P::kVisibility, P::kOverflow}},
       {"Position", {P::kPosition, P::kLeft, P::kTop, P::kRight, P::kBottom}},
       {"Flex",
-       {P::kFlexBasis, P::kFlexShrink, P::kFlexGrow, P::kFlexDirection, P::kFlexWrap}},
-      {"Align", {P::kAlignItems, P::kJustifyContent, P::kAlignSelf, P::kAlignContent}},
+       {P::kFlexBasis, P::kFlexShrink, P::kFlexGrow, P::kFlexDirection,
+        P::kFlexWrap}},
+      {"Align",
+       {P::kAlignItems, P::kJustifyContent, P::kAlignSelf, P::kAlignContent}},
       {"Size",
-       {P::kWidth, P::kHeight, P::kMinWidth, P::kMinHeight, P::kMaxWidth, P::kMaxHeight}},
+       {P::kWidth, P::kHeight, P::kMinWidth, P::kMinHeight, P::kMaxWidth,
+        P::kMaxHeight}},
       {"Margin & Padding",
        {P::kMarginLeft, P::kMarginTop, P::kMarginRight, P::kMarginBottom,
         P::kPaddingLeft, P::kPaddingTop, P::kPaddingRight, P::kPaddingBottom}},
       {"Text",
-       {P::kFont, P::kFontStyle, P::kFontSize, P::kColor, P::kTextAlign, P::kWhiteSpace,
-        P::kTextOverflow, P::kLetterSpacing, P::kWordSpacing, P::kParagraphSpacing,
-        P::kTextOutlineWidth, P::kTextOutlineColor, P::kTextShadow}},
+       {P::kFont, P::kFontStyle, P::kFontSize, P::kColor, P::kTextAlign,
+        P::kWhiteSpace, P::kTextOverflow, P::kLetterSpacing, P::kWordSpacing,
+        P::kParagraphSpacing, P::kTextOutlineWidth, P::kTextOutlineColor,
+        P::kTextShadow}},
       {"Background",
        {P::kBackgroundColor, P::kBackgroundImage, P::kBackgroundImageTintColor,
         P::kBackgroundScaleMode, P::kSliceLeft, P::kSliceTop, P::kSliceRight,
@@ -80,16 +84,18 @@ const std::vector<UIBuilder::StyleGroup>& UIBuilder::StyleGroups() {
         P::kBorderRightWidth, P::kBorderBottomWidth, P::kBorderTopLeftRadius,
         P::kBorderTopRightRadius, P::kBorderBottomRightRadius,
         P::kBorderBottomLeftRadius}},
-      {"Transform", {P::kTransformOrigin, P::kTranslate, P::kScale, P::kRotate}},
+      {"Transform",
+       {P::kTransformOrigin, P::kTranslate, P::kScale, P::kRotate}},
       {"Transition Animations",
-       {P::kTransitionProperty, P::kTransitionDuration, P::kTransitionTimingFunction,
-        P::kTransitionDelay}},
+       {P::kTransitionProperty, P::kTransitionDuration,
+        P::kTransitionTimingFunction, P::kTransitionDelay}},
   };
   return kGroups;
 }
 
 bool UIBuilder::IsListValue(const StyleValue& v) {
-  return std::holds_alternative<PropertyNameList>(v) || std::holds_alternative<TimeList>(v) ||
+  return std::holds_alternative<PropertyNameList>(v) ||
+         std::holds_alternative<TimeList>(v) ||
          std::holds_alternative<EasingList>(v);
 }
 
@@ -173,14 +179,16 @@ void UIBuilder::LoadSheets() {
     std::vector<StyleParseError> errors;
     entry.sheet = StyleSheet::Parse(text, entry.res_path, &errors);
     for (const auto& e : errors) {
-      console_.Warn(std::format("{}:{}: {}", entry.res_path, e.line, e.message));
+      console_.Warn(
+          std::format("{}:{}: {}", entry.res_path, e.line, e.message));
     }
     sheets_.push_back(std::move(entry));
   }
 }
 
 void UIBuilder::SetActiveSheet(int index) {
-  if (index >= 0 && index < static_cast<int>(sheets_.size()) && active_sheet_ != index) {
+  if (index >= 0 && index < static_cast<int>(sheets_.size()) &&
+      active_sheet_ != index) {
     active_sheet_ = index;
     selection_revision_++;
   }
@@ -215,7 +223,8 @@ int UIBuilder::CreateNewSheetNextToDoc() {
   const std::string stem = fs::path(doc_path_).stem().string();
   std::string name = stem + ".uss";
   for (int i = 2;
-       project_ && fs::exists(project_->Resolve(ResolveRelativePath(doc_path_, name)));
+       project_ &&
+       fs::exists(project_->Resolve(ResolveRelativePath(doc_path_, name)));
        i++) {
     name = stem + std::to_string(i) + ".uss";
   }
@@ -225,7 +234,8 @@ int UIBuilder::CreateNewSheetNextToDoc() {
 }
 
 void UIBuilder::RemoveSheet(int sheet_idx) {
-  if (!doc_ || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size())) return;
+  if (!doc_ || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size()))
+    return;
   BeginEdit();
   std::erase(doc_->root.style_sheets, sheets_[sheet_idx].src);
   sheets_.erase(sheets_.begin() + sheet_idx);
@@ -236,12 +246,14 @@ void UIBuilder::RemoveSheet(int sheet_idx) {
   selection_revision_++;
 }
 
-bool UIBuilder::ValidateSelectorList(const std::string& text, std::string* error_out) {
+bool UIBuilder::ValidateSelectorList(const std::string& text,
+                                     std::string* error_out) {
   if (text.empty()) return false;
   for (size_t start = 0; start <= text.size();) {
     size_t comma = text.find(',', start);
     if (comma == std::string::npos) comma = text.size();
-    if (!ParseSelector(text.substr(start, comma - start), error_out).has_value()) {
+    if (!ParseSelector(text.substr(start, comma - start), error_out)
+             .has_value()) {
       return false;
     }
     start = comma + 1;
@@ -249,7 +261,8 @@ bool UIBuilder::ValidateSelectorList(const std::string& text, std::string* error
   return true;
 }
 
-bool UIBuilder::AddRuleToActiveSheet(const std::string& selector_text, std::string* error_out) {
+bool UIBuilder::AddRuleToActiveSheet(const std::string& selector_text,
+                                     std::string* error_out) {
   if (!doc_ || !ValidateSelectorList(selector_text, error_out)) return false;
   BeginEdit();
   if (sheets_.empty()) {
@@ -272,7 +285,9 @@ bool UIBuilder::AddRuleToActiveSheet(const std::string& selector_text, std::stri
   auto& sheet = sheets_[active_sheet_];
   sheet.sheet->AddRule(selector_text);
   sheet.dirty = true;
-  selection_ = {Selection::Kind::kSelector, {}, active_sheet_,
+  selection_ = {Selection::Kind::kSelector,
+                {},
+                active_sheet_,
                 static_cast<int>(sheet.sheet->rules.size()) - 1};
   MarkChanged();
   CommitEdit();
@@ -283,10 +298,12 @@ bool UIBuilder::AddRuleToActiveSheet(const std::string& selector_text, std::stri
 void UIBuilder::DuplicateRule(int sheet_idx, int rule_idx) {
   if (sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size())) return;
   auto& entry = sheets_[sheet_idx];
-  if (rule_idx < 0 || rule_idx >= static_cast<int>(entry.sheet->rules.size())) return;
+  if (rule_idx < 0 || rule_idx >= static_cast<int>(entry.sheet->rules.size()))
+    return;
   BeginEdit();
   StyleRule copy = entry.sheet->rules[rule_idx];
-  entry.sheet->rules.insert(entry.sheet->rules.begin() + rule_idx + 1, std::move(copy));
+  entry.sheet->rules.insert(entry.sheet->rules.begin() + rule_idx + 1,
+                            std::move(copy));
   entry.dirty = true;
   selection_ = {Selection::Kind::kSelector, {}, sheet_idx, rule_idx + 1};
   MarkChanged();
@@ -297,12 +314,13 @@ void UIBuilder::DuplicateRule(int sheet_idx, int rule_idx) {
 void UIBuilder::DeleteRule(int sheet_idx, int rule_idx) {
   if (sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size())) return;
   auto& entry = sheets_[sheet_idx];
-  if (rule_idx < 0 || rule_idx >= static_cast<int>(entry.sheet->rules.size())) return;
+  if (rule_idx < 0 || rule_idx >= static_cast<int>(entry.sheet->rules.size()))
+    return;
   BeginEdit();
   entry.sheet->rules.erase(entry.sheet->rules.begin() + rule_idx);
   entry.dirty = true;
-  if (selection_.kind == Selection::Kind::kSelector && selection_.sheet == sheet_idx &&
-      selection_.rule == rule_idx) {
+  if (selection_.kind == Selection::Kind::kSelector &&
+      selection_.sheet == sheet_idx && selection_.rule == rule_idx) {
     selection_ = {Selection::Kind::kDocument};
     selection_revision_++;
   }
@@ -310,8 +328,10 @@ void UIBuilder::DeleteRule(int sheet_idx, int rule_idx) {
   CommitEdit();
 }
 
-bool UIBuilder::RenameRule(StyleRule* rule, int sheet_idx, const std::string& selector_text) {
-  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size())) return false;
+bool UIBuilder::RenameRule(StyleRule* rule, int sheet_idx,
+                           const std::string& selector_text) {
+  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size()))
+    return false;
   StyleRule renamed;
   bool ok = !selector_text.empty();
   for (size_t start = 0; ok && start <= selector_text.size();) {
@@ -338,7 +358,8 @@ bool UIBuilder::RenameRule(StyleRule* rule, int sheet_idx, const std::string& se
 }
 
 std::string UIBuilder::RelativeToDocument(const std::string& res_path) const {
-  if (!res_path.starts_with("res://") || !doc_path_.starts_with("res://")) return res_path;
+  if (!res_path.starts_with("res://") || !doc_path_.starts_with("res://"))
+    return res_path;
   const fs::path target(res_path.substr(6));
   const fs::path base = fs::path(doc_path_.substr(6)).parent_path();
   return target.lexically_relative(base).generic_string();
@@ -347,14 +368,17 @@ std::string UIBuilder::RelativeToDocument(const std::string& res_path) const {
 std::string UIBuilder::WriteUxml() const { return doc_ ? doc_->Write() : ""; }
 
 std::string UIBuilder::WriteSheet(size_t index) const {
-  return index < sheets_.size() && sheets_[index].sheet ? sheets_[index].sheet->Write() : "";
+  return index < sheets_.size() && sheets_[index].sheet
+             ? sheets_[index].sheet->Write()
+             : "";
 }
 
 UIBuilder::Snapshot UIBuilder::TakeSnapshot() const {
   Snapshot s;
   if (!doc_) return s;
   s.uxml = doc_->Write();
-  for (const auto& sheet : sheets_) s.sheets.emplace_back(sheet.src, sheet.sheet->Write());
+  for (const auto& sheet : sheets_)
+    s.sheets.emplace_back(sheet.src, sheet.sheet->Write());
   s.selection = selection_;
   return s;
 }
@@ -366,9 +390,10 @@ void UIBuilder::RestoreSnapshot(const Snapshot& snapshot) {
     SheetEntry entry;
     entry.src = src;
     entry.res_path = ResolveRelativePath(doc_path_, src);
-    auto same = std::find_if(sheets_.begin(), sheets_.end(), [&](const SheetEntry& old) {
-      return old.src == src && old.sheet->Write() == text;
-    });
+    auto same = std::find_if(
+        sheets_.begin(), sheets_.end(), [&](const SheetEntry& old) {
+          return old.src == src && old.sheet->Write() == text;
+        });
     if (same != sheets_.end()) {
       entry.sheet = same->sheet;
       entry.dirty = same->dirty;
@@ -380,13 +405,15 @@ void UIBuilder::RestoreSnapshot(const Snapshot& snapshot) {
   }
   sheets_ = std::move(sheets);
   selection_ = snapshot.selection;
-  if (selection_.kind == Selection::Kind::kElement && !NodeAt(selection_.element)) {
+  if (selection_.kind == Selection::Kind::kElement &&
+      !NodeAt(selection_.element)) {
     selection_ = {Selection::Kind::kDocument};
   }
   if (selection_.kind == Selection::Kind::kSelector && !SelectedRule()) {
     selection_ = {Selection::Kind::kDocument};
   }
-  active_sheet_ = std::clamp(active_sheet_, 0, std::max(0, int(sheets_.size()) - 1));
+  active_sheet_ =
+      std::clamp(active_sheet_, 0, std::max(0, int(sheets_.size()) - 1));
   hovered_node_ = nullptr;
   dirty_ = true;
   preview_dirty_ = true;
@@ -404,7 +431,8 @@ void UIBuilder::BeginEdit() {
 void UIBuilder::CommitEdit() {
   if (!edit_open_ || !doc_) return;
   Snapshot current = TakeSnapshot();
-  if (current.uxml != last_committed_.uxml || current.sheets != last_committed_.sheets) {
+  if (current.uxml != last_committed_.uxml ||
+      current.sheets != last_committed_.sheets) {
     undo_.push_back(std::move(last_committed_));
     if (undo_.size() > kMaxUndoSteps) undo_.erase(undo_.begin());
     redo_.clear();
@@ -475,7 +503,8 @@ void UIBuilder::Select(Selection selection) {
   if (selection_ != selection) {
     CommitEdit();
     selection_ = std::move(selection);
-    if (selection_.kind == Selection::Kind::kSelector && selection_.sheet >= 0 &&
+    if (selection_.kind == Selection::Kind::kSelector &&
+        selection_.sheet >= 0 &&
         selection_.sheet < static_cast<int>(sheets_.size())) {
       active_sheet_ = selection_.sheet;
     }
@@ -487,13 +516,15 @@ UxmlNode* UIBuilder::NodeAt(const std::vector<int>& path) {
   if (!doc_) return nullptr;
   UxmlNode* node = &doc_->root;
   for (int index : path) {
-    if (index < 0 || index >= static_cast<int>(node->children.size())) return nullptr;
+    if (index < 0 || index >= static_cast<int>(node->children.size()))
+      return nullptr;
     node = &node->children[index];
   }
   return node;
 }
 
-std::optional<std::vector<int>> UIBuilder::PathOf(const UxmlNode* target) const {
+std::optional<std::vector<int>> UIBuilder::PathOf(
+    const UxmlNode* target) const {
   if (!doc_ || !target) return std::nullopt;
   std::vector<int> path;
   std::function<bool(const UxmlNode&)> find = [&](const UxmlNode& node) {
@@ -516,11 +547,13 @@ UxmlNode* UIBuilder::SelectedNode() {
 
 StyleRule* UIBuilder::SelectedRule() {
   if (selection_.kind != Selection::Kind::kSelector) return nullptr;
-  if (selection_.sheet < 0 || selection_.sheet >= static_cast<int>(sheets_.size())) {
+  if (selection_.sheet < 0 ||
+      selection_.sheet >= static_cast<int>(sheets_.size())) {
     return nullptr;
   }
   auto& rules = sheets_[selection_.sheet].sheet->rules;
-  if (selection_.rule < 0 || selection_.rule >= static_cast<int>(rules.size())) return nullptr;
+  if (selection_.rule < 0 || selection_.rule >= static_cast<int>(rules.size()))
+    return nullptr;
   return &rules[selection_.rule];
 }
 
@@ -545,8 +578,8 @@ UxmlNode UIBuilder::NewNode(const std::string& type) const {
   if (type == "Label" || type == "Button" || type == "RepeatButton") {
     node.attributes.push_back({"text", type});
   } else if (type == "Toggle" || type == "Slider" || type == "SliderInt" ||
-             type == "TextField" || type == "IntegerField" || type == "FloatField" ||
-             type == "RadioButton") {
+             type == "TextField" || type == "IntegerField" ||
+             type == "FloatField" || type == "RadioButton") {
     node.attributes.push_back({"label", type});
   } else if (type == "Foldout" || type == "GroupBox") {
     node.attributes.push_back({"text", type});
@@ -557,7 +590,8 @@ UxmlNode UIBuilder::NewNode(const std::string& type) const {
   return node;
 }
 
-void UIBuilder::InsertNode(const std::vector<int>& parent_path, int index, UxmlNode node) {
+void UIBuilder::InsertNode(const std::vector<int>& parent_path, int index,
+                           UxmlNode node) {
   BeginEdit();
   UxmlNode* parent = NodeAt(parent_path);
   if (!parent) return;
@@ -586,8 +620,8 @@ std::optional<UxmlNode> UIBuilder::RemoveNode(const std::vector<int>& path) {
   return node;
 }
 
-void UIBuilder::MoveNode(const std::vector<int>& from, const std::vector<int>& parent_path,
-                         int index) {
+void UIBuilder::MoveNode(const std::vector<int>& from,
+                         const std::vector<int>& parent_path, int index) {
   if (parent_path.size() >= from.size() &&
       std::equal(from.begin(), from.end(), parent_path.begin())) {
     return;
@@ -654,10 +688,12 @@ void UIBuilder::UnwrapElement(const std::vector<int>& path) {
     CommitEdit();
     return;
   }
-  int index = std::clamp(path.back(), 0, static_cast<int>(parent->children.size()));
+  int index =
+      std::clamp(path.back(), 0, static_cast<int>(parent->children.size()));
   for (size_t i = 0; i < removed->children.size(); i++) {
-    parent->children.insert(parent->children.begin() + index + static_cast<int>(i),
-                            std::move(removed->children[i]));
+    parent->children.insert(
+        parent->children.begin() + index + static_cast<int>(i),
+        std::move(removed->children[i]));
   }
   selection_ = {Selection::Kind::kElement, parent_path};
   selection_.element.push_back(index);
@@ -687,27 +723,30 @@ void UIBuilder::DuplicateSelected() {
   if (auto name = copy.FindAttribute("name"); name && !name->empty()) {
     copy.SetAttribute("name", *name + "-copy");
   }
-  std::vector<int> parent(selection_.element.begin(), selection_.element.end() - 1);
+  std::vector<int> parent(selection_.element.begin(),
+                          selection_.element.end() - 1);
   InsertNode(parent, selection_.element.back() + 1, std::move(copy));
 }
 
 void UIBuilder::RemoveTemplate(size_t index) {
   if (!doc_ || index >= doc_->templates.size()) return;
   BeginEdit();
-  doc_->templates.erase(doc_->templates.begin() + static_cast<ptrdiff_t>(index));
+  doc_->templates.erase(doc_->templates.begin() +
+                        static_cast<ptrdiff_t>(index));
   MarkChanged();
   CommitEdit();
 }
 
 // ------------------------------------------------------------------ Style ---
 
-std::vector<StyleDeclaration> UIBuilder::InlineDeclarations(const UxmlNode& node) const {
+std::vector<StyleDeclaration> UIBuilder::InlineDeclarations(
+    const UxmlNode& node) const {
   if (auto style = node.FindAttribute("style")) return ParseInlineStyle(*style);
   return {};
 }
 
-void UIBuilder::SetInlineDeclarations(UxmlNode& node,
-                                      const std::vector<StyleDeclaration>& declarations) {
+void UIBuilder::SetInlineDeclarations(
+    UxmlNode& node, const std::vector<StyleDeclaration>& declarations) {
   std::string text;
   for (const auto& d : declarations) {
     text += (text.empty() ? "" : " ") + d.property + ": " + d.value + ";";
@@ -719,13 +758,16 @@ void UIBuilder::SetInlineDeclarations(UxmlNode& node,
   }
 }
 
-void UIBuilder::ResolveDeclaredStyles(const UxmlNode* node, const StyleRule* rule,
-                                      std::vector<std::optional<StyleValue>>& declared,
-                                      std::vector<std::string>& declared_text) const {
+void UIBuilder::ResolveDeclaredStyles(
+    const UxmlNode* node, const StyleRule* rule,
+    std::vector<std::optional<StyleValue>>& declared,
+    std::vector<std::string>& declared_text) const {
   declared.assign(kStylePropertyCount, std::nullopt);
   declared_text.assign(kStylePropertyCount, "");
   std::vector<StyleDeclaration> declarations =
-      rule ? rule->declarations : (node ? InlineDeclarations(*node) : std::vector<StyleDeclaration>{});
+      rule ? rule->declarations
+           : (node ? InlineDeclarations(*node)
+                   : std::vector<StyleDeclaration>{});
   std::unordered_map<std::string, TokenList> variables;
   const std::string base = (rule && selection_.sheet >= 0 &&
                             selection_.sheet < static_cast<int>(sheets_.size()))
@@ -736,15 +778,18 @@ void UIBuilder::ResolveDeclaredStyles(const UxmlNode* node, const StyleRule* rul
       declared_text[static_cast<size_t>(e.id)] = TokensToString(e.tokens);
       TokenList tokens;
       if (!SubstituteVariables(e.tokens, variables, tokens)) continue;
-      if (auto v = ParseStyleValue(e.id, tokens, base)) declared[static_cast<size_t>(e.id)] = *v;
+      if (auto v = ParseStyleValue(e.id, tokens, base))
+        declared[static_cast<size_t>(e.id)] = *v;
     }
   }
 }
 
-void UIBuilder::SetStyle(UxmlNode* node, StyleRule* rule, std::string_view property,
-                         std::string_view value, bool coalesced) {
+void UIBuilder::SetStyle(UxmlNode* node, StyleRule* rule,
+                         std::string_view property, std::string_view value,
+                         bool coalesced) {
   if (!coalesced) BeginEdit();
-  if (rule && selection_.sheet >= 0 && selection_.sheet < static_cast<int>(sheets_.size())) {
+  if (rule && selection_.sheet >= 0 &&
+      selection_.sheet < static_cast<int>(sheets_.size())) {
     rule->SetDeclaration(property, value);
     sheets_[selection_.sheet].dirty = true;
   } else if (node) {
@@ -756,14 +801,16 @@ void UIBuilder::SetStyle(UxmlNode* node, StyleRule* rule, std::string_view prope
         found = true;
       }
     }
-    if (!found) decls.push_back({std::string(property), std::string(value), {}, 0});
+    if (!found)
+      decls.push_back({std::string(property), std::string(value), {}, 0});
     SetInlineDeclarations(*node, decls);
   }
   MarkChanged(coalesced);
   if (!coalesced) CommitEdit();
 }
 
-void UIBuilder::UnsetStyle(UxmlNode* node, StyleRule* rule, std::string_view property) {
+void UIBuilder::UnsetStyle(UxmlNode* node, StyleRule* rule,
+                           std::string_view property) {
   auto covers = [&](const StyleDeclaration& d) {
     if (d.property == property) return true;
     for (const auto& e : ExpandDeclaration(d.property, d.tokens)) {
@@ -772,7 +819,8 @@ void UIBuilder::UnsetStyle(UxmlNode* node, StyleRule* rule, std::string_view pro
     return false;
   };
   BeginEdit();
-  if (rule && selection_.sheet >= 0 && selection_.sheet < static_cast<int>(sheets_.size())) {
+  if (rule && selection_.sheet >= 0 &&
+      selection_.sheet < static_cast<int>(sheets_.size())) {
     std::erase_if(rule->declarations, covers);
     sheets_[selection_.sheet].dirty = true;
   } else if (node) {
@@ -784,9 +832,11 @@ void UIBuilder::UnsetStyle(UxmlNode* node, StyleRule* rule, std::string_view pro
   CommitEdit();
 }
 
-void UIBuilder::SetVariable(StyleRule* rule, int sheet_idx, const std::string& property,
+void UIBuilder::SetVariable(StyleRule* rule, int sheet_idx,
+                            const std::string& property,
                             const std::string& value, bool coalesced) {
-  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size())) return;
+  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size()))
+    return;
   if (!coalesced) BeginEdit();
   rule->SetDeclaration(property, value);
   sheets_[sheet_idx].dirty = true;
@@ -794,18 +844,23 @@ void UIBuilder::SetVariable(StyleRule* rule, int sheet_idx, const std::string& p
   if (!coalesced) CommitEdit();
 }
 
-void UIBuilder::RemoveVariable(StyleRule* rule, int sheet_idx, size_t decl_index) {
-  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size())) return;
+void UIBuilder::RemoveVariable(StyleRule* rule, int sheet_idx,
+                               size_t decl_index) {
+  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size()))
+    return;
   if (decl_index >= rule->declarations.size()) return;
   BeginEdit();
-  rule->declarations.erase(rule->declarations.begin() + static_cast<ptrdiff_t>(decl_index));
+  rule->declarations.erase(rule->declarations.begin() +
+                           static_cast<ptrdiff_t>(decl_index));
   sheets_[sheet_idx].dirty = true;
   MarkChanged();
   CommitEdit();
 }
 
-bool UIBuilder::AddVariable(StyleRule* rule, int sheet_idx, const std::string& property) {
-  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size())) return false;
+bool UIBuilder::AddVariable(StyleRule* rule, int sheet_idx,
+                            const std::string& property) {
+  if (!rule || sheet_idx < 0 || sheet_idx >= static_cast<int>(sheets_.size()))
+    return false;
   if (!property.starts_with("--") || property.size() <= 2) return false;
   BeginEdit();
   rule->SetDeclaration(property, "0");
@@ -815,7 +870,8 @@ bool UIBuilder::AddVariable(StyleRule* rule, int sheet_idx, const std::string& p
   return true;
 }
 
-void UIBuilder::ExtractInlineStylesToClass(UxmlNode& node, const std::string& class_name) {
+void UIBuilder::ExtractInlineStylesToClass(UxmlNode& node,
+                                           const std::string& class_name) {
   std::string clean = class_name;
   if (clean.starts_with('.')) clean = clean.substr(1);
   if (clean.empty() || !ParseSelector("." + clean)) {
@@ -843,10 +899,12 @@ void UIBuilder::ExtractInlineStylesToClass(UxmlNode& node, const std::string& cl
   auto& sheet = sheets_[active_sheet_];
   StyleRule* rule = sheet.sheet->FindRule("." + clean);
   if (!rule) rule = &sheet.sheet->AddRule("." + clean);
-  for (const auto& d : InlineDeclarations(node)) rule->SetDeclaration(d.property, d.value);
+  for (const auto& d : InlineDeclarations(node))
+    rule->SetDeclaration(d.property, d.value);
   sheet.dirty = true;
   node.RemoveAttribute("style");
-  std::string classes = node.FindAttribute("class") ? *node.FindAttribute("class") : "";
+  std::string classes =
+      node.FindAttribute("class") ? *node.FindAttribute("class") : "";
   node.SetAttribute("class", classes.empty() ? clean : classes + " " + clean);
   MarkChanged();
   CommitEdit();
@@ -857,8 +915,8 @@ std::vector<UIBuilder::MatchingRuleInfo> UIBuilder::MatchingSelectors(
   std::vector<MatchingRuleInfo> result;
   if (!element || !resources_ || !panel_) return result;
   std::vector<const StyleSheet*> panel_sheets;
-  if (auto theme =
-          theme_.empty() ? resources_->DefaultTheme() : resources_->LoadStyleSheet(theme_)) {
+  if (auto theme = theme_.empty() ? resources_->DefaultTheme()
+                                  : resources_->LoadStyleSheet(theme_)) {
     resources_->CollectSheets(theme, panel_sheets);
   }
   const auto sheets = ApplicableSheets(element, *resources_, panel_sheets);
@@ -868,7 +926,8 @@ std::vector<UIBuilder::MatchingRuleInfo> UIBuilder::MatchingSelectors(
     info.selector_text = it->selector->text;
     info.sheet_file = fs::path(it->sheet->path).filename().string();
     for (size_t s = 0; s < sheets_.size(); s++) {
-      if (sheets_[s].sheet.get() == it->sheet) info.sheet_index = static_cast<int>(s);
+      if (sheets_[s].sheet.get() == it->sheet)
+        info.sheet_index = static_cast<int>(s);
     }
     info.rule_order = it->rule_order;
     for (const auto& d : it->rule->declarations) {
@@ -879,7 +938,8 @@ std::vector<UIBuilder::MatchingRuleInfo> UIBuilder::MatchingSelectors(
   return result;
 }
 
-void UIBuilder::SetAttribute(UxmlNode& node, const std::string& name, const std::string& value,
+void UIBuilder::SetAttribute(UxmlNode& node, const std::string& name,
+                             const std::string& value,
                              const std::string& default_value, bool coalesced) {
   if (!coalesced) BeginEdit();
   if (value == default_value && name != "text") {
@@ -898,7 +958,8 @@ void UIBuilder::UnsetAttribute(UxmlNode& node, const std::string& name) {
   CommitEdit();
 }
 
-void UIBuilder::SetClassList(UxmlNode& node, const std::vector<std::string>& classes) {
+void UIBuilder::SetClassList(UxmlNode& node,
+                             const std::vector<std::string>& classes) {
   BeginEdit();
   std::string joined;
   for (const auto& c : classes) joined += (joined.empty() ? "" : " ") + c;
@@ -915,7 +976,8 @@ void UIBuilder::AddBinding(UxmlNode& node) {
   BeginEdit();
   const UxmlTypeInfo* type = UxmlFactoryRegistry::Instance().Find(node.type);
   const std::string prop =
-      node.FindAttribute("value") || (type && type->name != "Label" && type->name != "Button")
+      node.FindAttribute("value") ||
+              (type && type->name != "Label" && type->name != "Button")
           ? "value"
           : "text";
   node.bindings.push_back({prop, "", BindingMode::kToTarget});
@@ -931,7 +993,8 @@ void UIBuilder::RemoveBinding(UxmlNode& node, size_t idx) {
   CommitEdit();
 }
 
-void UIBuilder::UpdateBinding(UxmlNode& node, size_t idx, const UI::UxmlBindingDesc& binding,
+void UIBuilder::UpdateBinding(UxmlNode& node, size_t idx,
+                              const UI::UxmlBindingDesc& binding,
                               bool coalesced) {
   if (idx >= node.bindings.size()) return;
   if (!coalesced) BeginEdit();
@@ -958,7 +1021,8 @@ void UIBuilder::RebuildPreview() {
   });
   resources_->ClearOverrides();
   resources_->Reload();
-  for (const auto& sheet : sheets_) resources_->Override(sheet.res_path, sheet.sheet);
+  for (const auto& sheet : sheets_)
+    resources_->Override(sheet.res_path, sheet.sheet);
 
   panel_ = std::make_unique<Panel>(resources_.get());
   PanelSettings settings;
@@ -990,10 +1054,12 @@ void UIBuilder::UpdatePreview(RenderHost* host, float dt) {
     settings.theme_style_sheet = theme_;
     panel_->SetSettings(settings);
   }
-  const glm::vec2 pixels = glm::max(glm::vec2(canvas_size_) * zoom_, glm::vec2(1.0f));
+  const glm::vec2 pixels =
+      glm::max(glm::vec2(canvas_size_) * zoom_, glm::vec2(1.0f));
   panel_->Update(dt, glm::round(pixels));
   if (host) {
-    host->SetUIPreview(&panel_->drawData(), static_cast<int>(std::round(pixels.x)),
+    host->SetUIPreview(&panel_->drawData(),
+                       static_cast<int>(std::round(pixels.x)),
                        static_cast<int>(std::round(pixels.y)), background_);
   }
 }
@@ -1027,7 +1093,8 @@ void UIBuilder::SetPreviewMode(bool preview) {
 }
 
 bool UIBuilder::FitIfRequested(glm::vec2 viewport_size) {
-  if (!fit_on_open_ || viewport_size.x < 8.0f || viewport_size.y < 8.0f) return false;
+  if (!fit_on_open_ || viewport_size.x < 8.0f || viewport_size.y < 8.0f)
+    return false;
   FitToViewport(viewport_size);
   fit_on_open_ = false;
   return true;
@@ -1035,8 +1102,9 @@ bool UIBuilder::FitIfRequested(glm::vec2 viewport_size) {
 
 void UIBuilder::FitToViewport(glm::vec2 viewport_size) {
   if (viewport_size.x < 8.0f || viewport_size.y < 8.0f) return;
-  zoom_ = std::min((viewport_size.x - 40.0f) / static_cast<float>(canvas_size_.x),
-                   (viewport_size.y - 40.0f) / static_cast<float>(canvas_size_.y));
+  zoom_ =
+      std::min((viewport_size.x - 40.0f) / static_cast<float>(canvas_size_.x),
+               (viewport_size.y - 40.0f) / static_cast<float>(canvas_size_.y));
   zoom_ = std::clamp(zoom_, 0.1f, 4.0f);
   pan_ = {0.0f, 0.0f};
 }
@@ -1058,14 +1126,16 @@ VisualElement* UIBuilder::PickForEditing(glm::vec2 point) const {
   VisualElement* found = nullptr;
   std::function<void(VisualElement*)> walk = [&](VisualElement* e) {
     if (e->resolvedStyle().display == DisplayStyle::kNone) return;
-    if (e->uxmlSource && e != preview_root_ && e->worldBound().Contains(point)) found = e;
+    if (e->uxmlSource && e != preview_root_ && e->worldBound().Contains(point))
+      found = e;
     for (const auto& child : e->hierarchyChildren()) walk(child.get());
   };
   walk(preview_root_);
   return found;
 }
 
-UIBuilder::Handle UIBuilder::HitTestHandle(glm::vec2 local_mouse, glm::vec2 origin) const {
+UIBuilder::Handle UIBuilder::HitTestHandle(glm::vec2 local_mouse,
+                                           glm::vec2 origin) const {
   UxmlNode* node = const_cast<UIBuilder*>(this)->SelectedNode();
   VisualElement* element = ElementFor(node);
   if (!element) return Handle::kNone;
@@ -1073,19 +1143,22 @@ UIBuilder::Handle UIBuilder::HitTestHandle(glm::vec2 local_mouse, glm::vec2 orig
   const glm::vec2 min(origin.x + b.x * zoom_, origin.y + b.y * zoom_);
   const glm::vec2 max(origin.x + b.xMax() * zoom_, origin.y + b.yMax() * zoom_);
   auto near_pt = [&](glm::vec2 p) {
-    return std::abs(local_mouse.x - p.x) <= 6.0f && std::abs(local_mouse.y - p.y) <= 6.0f;
+    return std::abs(local_mouse.x - p.x) <= 6.0f &&
+           std::abs(local_mouse.y - p.y) <= 6.0f;
   };
   if (near_pt(max)) return Handle::kCorner;
   if (near_pt(glm::vec2(max.x, (min.y + max.y) * 0.5f))) return Handle::kRight;
   if (near_pt(glm::vec2((min.x + max.x) * 0.5f, max.y))) return Handle::kBottom;
-  if (local_mouse.x >= min.x && local_mouse.y >= min.y && local_mouse.x <= max.x &&
-      local_mouse.y <= max.y && element->resolvedStyle().position == Position::kAbsolute) {
+  if (local_mouse.x >= min.x && local_mouse.y >= min.y &&
+      local_mouse.x <= max.x && local_mouse.y <= max.y &&
+      element->resolvedStyle().position == Position::kAbsolute) {
     return Handle::kMove;
   }
   return Handle::kNone;
 }
 
-void UIBuilder::OnCanvasWheel(float wheel_delta, float wheel_h, bool ctrl_down) {
+void UIBuilder::OnCanvasWheel(float wheel_delta, float wheel_h,
+                              bool ctrl_down) {
   if (ctrl_down && wheel_delta != 0.0f) {
     const float old_zoom = zoom_;
     zoom_ = std::clamp(zoom_ * std::pow(1.15f, wheel_delta), 0.1f, 4.0f);
@@ -1097,8 +1170,8 @@ void UIBuilder::OnCanvasWheel(float wheel_delta, float wheel_h, bool ctrl_down) 
   }
 }
 
-void UIBuilder::OnCanvasMouseDown(glm::vec2 local_mouse, glm::vec2 origin, int button,
-                                  bool alt_down) {
+void UIBuilder::OnCanvasMouseDown(glm::vec2 local_mouse, glm::vec2 origin,
+                                  int button, bool alt_down) {
   drag_start_mouse_ = local_mouse;
   if (button == 1 || alt_down) {
     drag_ = Handle::kPan;
@@ -1106,7 +1179,8 @@ void UIBuilder::OnCanvasMouseDown(glm::vec2 local_mouse, glm::vec2 origin, int b
   }
   if (button != 0) return;
 
-  const glm::vec2 point((local_mouse.x - origin.x) / zoom_, (local_mouse.y - origin.y) / zoom_);
+  const glm::vec2 point((local_mouse.x - origin.x) / zoom_,
+                        (local_mouse.y - origin.y) / zoom_);
   VisualElement* hover = PickForEditing(point);
   UxmlNode* node = SelectedNode();
   drag_ = HitTestHandle(local_mouse, origin);
@@ -1133,7 +1207,8 @@ void UIBuilder::OnCanvasMouseDown(glm::vec2 local_mouse, glm::vec2 origin, int b
   }
 }
 
-void UIBuilder::OnCanvasMouseDrag(glm::vec2 local_mouse, glm::vec2 mouse_delta) {
+void UIBuilder::OnCanvasMouseDrag(glm::vec2 local_mouse,
+                                  glm::vec2 mouse_delta) {
   if (drag_ == Handle::kNone) return;
   if (drag_ == Handle::kPan) {
     pan_ += mouse_delta;
@@ -1142,22 +1217,30 @@ void UIBuilder::OnCanvasMouseDrag(glm::vec2 local_mouse, glm::vec2 mouse_delta) 
   UxmlNode* node = SelectedNode();
   const glm::vec2 delta = local_mouse - drag_start_mouse_;
   if (!node || (delta.x == 0.0f && delta.y == 0.0f)) return;
-  auto px = [](float v) { return std::format("{}px", static_cast<int>(std::round(v))); };
+  auto px = [](float v) {
+    return std::format("{}px", static_cast<int>(std::round(v)));
+  };
   switch (drag_) {
     case Handle::kRight:
-      SetStyle(node, nullptr, "width", px(drag_start_size_.x + delta.x / zoom_), true);
+      SetStyle(node, nullptr, "width", px(drag_start_size_.x + delta.x / zoom_),
+               true);
       break;
     case Handle::kBottom:
-      SetStyle(node, nullptr, "height", px(drag_start_size_.y + delta.y / zoom_), true);
+      SetStyle(node, nullptr, "height",
+               px(drag_start_size_.y + delta.y / zoom_), true);
       break;
     case Handle::kCorner:
-      SetStyle(node, nullptr, "width", px(drag_start_size_.x + delta.x / zoom_), true);
-      SetStyle(node, nullptr, "height", px(drag_start_size_.y + delta.y / zoom_), true);
+      SetStyle(node, nullptr, "width", px(drag_start_size_.x + delta.x / zoom_),
+               true);
+      SetStyle(node, nullptr, "height",
+               px(drag_start_size_.y + delta.y / zoom_), true);
       break;
     case Handle::kMove:
       if (std::abs(delta.x) + std::abs(delta.y) < 3.0f) return;
-      SetStyle(node, nullptr, "left", px(drag_start_pos_.x + delta.x / zoom_), true);
-      SetStyle(node, nullptr, "top", px(drag_start_pos_.y + delta.y / zoom_), true);
+      SetStyle(node, nullptr, "left", px(drag_start_pos_.x + delta.x / zoom_),
+               true);
+      SetStyle(node, nullptr, "top", px(drag_start_pos_.y + delta.y / zoom_),
+               true);
       break;
     default:
       break;
@@ -1170,14 +1253,17 @@ void UIBuilder::OnCanvasMouseUp() {
 }
 
 void UIBuilder::UpdateHoveredElement(glm::vec2 local_mouse, glm::vec2 origin) {
-  const glm::vec2 point((local_mouse.x - origin.x) / zoom_, (local_mouse.y - origin.y) / zoom_);
+  const glm::vec2 point((local_mouse.x - origin.x) / zoom_,
+                        (local_mouse.y - origin.y) / zoom_);
   VisualElement* hover = PickForEditing(point);
-  hovered_node_ = hover ? static_cast<const UxmlNode*>(hover->uxmlSource) : nullptr;
+  hovered_node_ =
+      hover ? static_cast<const UxmlNode*>(hover->uxmlSource) : nullptr;
 }
 
 void UIBuilder::SetHoveredNode(const UxmlNode* node) { hovered_node_ = node; }
 
-void UIBuilder::RenderCanvasOverlay(OverlayCanvas& draw, glm::vec2 origin) const {
+void UIBuilder::RenderCanvasOverlay(OverlayCanvas& draw,
+                                    glm::vec2 origin) const {
   auto to_screen = [&](float x, float y) {
     return glm::vec2(origin.x + x * zoom_, origin.y + y * zoom_);
   };
@@ -1185,7 +1271,8 @@ void UIBuilder::RenderCanvasOverlay(OverlayCanvas& draw, glm::vec2 origin) const
   if (hovered_node_ && hovered_node_ != selected_node) {
     if (auto* hover = ElementFor(hovered_node_)) {
       const Rect b = hover->worldBound();
-      draw.AddRect(to_screen(b.x, b.y), to_screen(b.xMax(), b.yMax()), kHoverColor, 0.0f, 1.0f);
+      draw.AddRect(to_screen(b.x, b.y), to_screen(b.xMax(), b.yMax()),
+                   kHoverColor, 0.0f, 1.0f);
     }
   }
 
@@ -1193,66 +1280,79 @@ void UIBuilder::RenderCanvasOverlay(OverlayCanvas& draw, glm::vec2 origin) const
   if (!element) return;
   const Rect b = element->worldBound();
   const ComputedStyle& s = element->resolvedStyle();
-  const float parent_width =
-      element->hierarchyParent() ? element->hierarchyParent()->layout().width : 0.0f;
-  const float ml = s.marginLeft.Resolve(parent_width), mr = s.marginRight.Resolve(parent_width);
-  const float mt = s.marginTop.Resolve(parent_width), mb = s.marginBottom.Resolve(parent_width);
+  const float parent_width = element->hierarchyParent()
+                                 ? element->hierarchyParent()->layout().width
+                                 : 0.0f;
+  const float ml = s.marginLeft.Resolve(parent_width),
+              mr = s.marginRight.Resolve(parent_width);
+  const float mt = s.marginTop.Resolve(parent_width),
+              mb = s.marginBottom.Resolve(parent_width);
   const glm::vec2 outer_min = to_screen(b.x - ml, b.y - mt);
   const glm::vec2 outer_max = to_screen(b.xMax() + mr, b.yMax() + mb);
   const glm::vec2 min = to_screen(b.x, b.y);
   const glm::vec2 max = to_screen(b.xMax(), b.yMax());
   draw.AddRectFilled(outer_min, glm::vec2(outer_max.x, min.y), kMarginColor);
   draw.AddRectFilled(glm::vec2(outer_min.x, max.y), outer_max, kMarginColor);
-  draw.AddRectFilled(glm::vec2(outer_min.x, min.y), glm::vec2(min.x, max.y), kMarginColor);
-  draw.AddRectFilled(glm::vec2(max.x, min.y), glm::vec2(outer_max.x, max.y), kMarginColor);
+  draw.AddRectFilled(glm::vec2(outer_min.x, min.y), glm::vec2(min.x, max.y),
+                     kMarginColor);
+  draw.AddRectFilled(glm::vec2(max.x, min.y), glm::vec2(outer_max.x, max.y),
+                     kMarginColor);
 
   const Rect content = element->contentRect();
   const glm::vec2 cmin = to_screen(b.x + content.x, b.y + content.y);
   const glm::vec2 cmax = to_screen(b.x + content.xMax(), b.y + content.yMax());
   draw.AddRectFilled(min, glm::vec2(max.x, cmin.y), kPaddingColor);
   draw.AddRectFilled(glm::vec2(min.x, cmax.y), max, kPaddingColor);
-  draw.AddRectFilled(glm::vec2(min.x, cmin.y), glm::vec2(cmin.x, cmax.y), kPaddingColor);
-  draw.AddRectFilled(glm::vec2(cmax.x, cmin.y), glm::vec2(max.x, cmax.y), kPaddingColor);
+  draw.AddRectFilled(glm::vec2(min.x, cmin.y), glm::vec2(cmin.x, cmax.y),
+                     kPaddingColor);
+  draw.AddRectFilled(glm::vec2(cmax.x, cmin.y), glm::vec2(max.x, cmax.y),
+                     kPaddingColor);
 
   draw.AddRect(min, max, kSelectionColor, 0.0f, 2.0f);
   constexpr OverlayColor kWhite{255, 255, 255, 255};
-  for (glm::vec2 h :
-       {max, glm::vec2(max.x, (min.y + max.y) * 0.5f), glm::vec2((min.x + max.x) * 0.5f, max.y)}) {
-    draw.AddRectFilled(glm::vec2(h.x - 4.0f, h.y - 4.0f), glm::vec2(h.x + 4.0f, h.y + 4.0f),
-                       kWhite);
-    draw.AddRect(glm::vec2(h.x - 4.0f, h.y - 4.0f), glm::vec2(h.x + 4.0f, h.y + 4.0f),
-                 kSelectionColor);
+  for (glm::vec2 h : {max, glm::vec2(max.x, (min.y + max.y) * 0.5f),
+                      glm::vec2((min.x + max.x) * 0.5f, max.y)}) {
+    draw.AddRectFilled(glm::vec2(h.x - 4.0f, h.y - 4.0f),
+                       glm::vec2(h.x + 4.0f, h.y + 4.0f), kWhite);
+    draw.AddRect(glm::vec2(h.x - 4.0f, h.y - 4.0f),
+                 glm::vec2(h.x + 4.0f, h.y + 4.0f), kSelectionColor);
   }
-  const std::string size =
-      std::format("{} x {}", static_cast<int>(b.width), static_cast<int>(b.height));
+  const std::string size = std::format("{} x {}", static_cast<int>(b.width),
+                                       static_cast<int>(b.height));
   draw.AddText(glm::vec2(min.x, max.y + 4.0f), kSelectionColor, size);
 }
 
-void UIBuilder::DropNewTypeAtPoint(const std::string& type_name, glm::vec2 local_mouse,
-                                   glm::vec2 origin) {
+void UIBuilder::DropNewTypeAtPoint(const std::string& type_name,
+                                   glm::vec2 local_mouse, glm::vec2 origin) {
   if (!doc_) return;
-  const glm::vec2 pt((local_mouse.x - origin.x) / zoom_, (local_mouse.y - origin.y) / zoom_);
+  const glm::vec2 pt((local_mouse.x - origin.x) / zoom_,
+                     (local_mouse.y - origin.y) / zoom_);
   VisualElement* target = PickForEditing(pt);
   std::vector<int> parent;
   if (target) {
-    if (auto p = PathOf(static_cast<const UxmlNode*>(target->uxmlSource))) parent = *p;
+    if (auto p = PathOf(static_cast<const UxmlNode*>(target->uxmlSource)))
+      parent = *p;
   }
   UxmlNode* parent_node = NodeAt(parent);
-  const int index = parent_node ? static_cast<int>(parent_node->children.size()) : 0;
+  const int index =
+      parent_node ? static_cast<int>(parent_node->children.size()) : 0;
   InsertNode(parent, index, NewNode(type_name));
 }
 
-void UIBuilder::DropTemplateAtPoint(const std::string& template_res_path, glm::vec2 local_mouse,
-                                    glm::vec2 origin) {
+void UIBuilder::DropTemplateAtPoint(const std::string& template_res_path,
+                                    glm::vec2 local_mouse, glm::vec2 origin) {
   if (!doc_) return;
-  const glm::vec2 pt((local_mouse.x - origin.x) / zoom_, (local_mouse.y - origin.y) / zoom_);
+  const glm::vec2 pt((local_mouse.x - origin.x) / zoom_,
+                     (local_mouse.y - origin.y) / zoom_);
   VisualElement* target = PickForEditing(pt);
   std::vector<int> parent;
   if (target) {
-    if (auto p = PathOf(static_cast<const UxmlNode*>(target->uxmlSource))) parent = *p;
+    if (auto p = PathOf(static_cast<const UxmlNode*>(target->uxmlSource)))
+      parent = *p;
   }
   UxmlNode* parent_node = NodeAt(parent);
-  const int index = parent_node ? static_cast<int>(parent_node->children.size()) : 0;
+  const int index =
+      parent_node ? static_cast<int>(parent_node->children.size()) : 0;
   std::string name = fs::path(template_res_path).stem().string();
   BeginEdit();
   if (!doc_->FindTemplate(name)) {

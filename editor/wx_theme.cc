@@ -25,8 +25,7 @@ uint32_t PackRgba(const wxColour& c) {
 uint32_t PackRgba(OverlayColor c) {
   return (static_cast<uint32_t>(c.r) << 24) |
          (static_cast<uint32_t>(c.g) << 16) |
-         (static_cast<uint32_t>(c.b) << 8) |
-         static_cast<uint32_t>(c.a);
+         (static_cast<uint32_t>(c.b) << 8) | static_cast<uint32_t>(c.a);
 }
 }  // namespace
 
@@ -38,17 +37,21 @@ wxFont MonospaceFont(int point_delta) {
 wxFont HeaderFont(int point_delta) {
   wxFont font = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
   font.SetWeight(wxFONTWEIGHT_BOLD);
-  if (point_delta != 0) font.SetPointSize(std::max(7, font.GetPointSize() + point_delta));
+  if (point_delta != 0)
+    font.SetPointSize(std::max(7, font.GetPointSize() + point_delta));
   return font;
 }
 
 wxBitmap RgbaToWxBitmap(const uint8_t* rgba, int width, int height,
                         bool with_alpha) {
   if (!rgba || width <= 0 || height <= 0) return wxNullBitmap;
-  const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
-  unsigned char* rgb = static_cast<unsigned char*>(std::malloc(pixel_count * 3));
+  const size_t pixel_count =
+      static_cast<size_t>(width) * static_cast<size_t>(height);
+  unsigned char* rgb =
+      static_cast<unsigned char*>(std::malloc(pixel_count * 3));
   unsigned char* alpha =
-      with_alpha ? static_cast<unsigned char*>(std::malloc(pixel_count)) : nullptr;
+      with_alpha ? static_cast<unsigned char*>(std::malloc(pixel_count))
+                 : nullptr;
   if (!rgb || (with_alpha && !alpha)) {
     std::free(rgb);
     std::free(alpha);
@@ -111,7 +114,7 @@ void DrawCheckerboard(wxGraphicsContext* gc, double x, double y, double w,
 }
 
 wxGraphicsFont CachedGraphicsFont(wxGraphicsContext* gc, const wxFont& font,
-                                    const wxColour& color) {
+                                  const wxColour& color) {
   if (!gc) return wxNullGraphicsFont;
   struct Entry {
     const wxGraphicsRenderer* renderer = nullptr;
@@ -133,7 +136,8 @@ wxGraphicsFont CachedGraphicsFont(wxGraphicsContext* gc, const wxFont& font,
   return gfx;
 }
 
-// ------------------------------------------------------------ OverlayCanvas ---
+// ------------------------------------------------------------ OverlayCanvas
+// ---
 
 WxOverlayCanvas::WxOverlayCanvas(wxGraphicsContext* gc, const wxFont& font)
     : gc_(gc), font_(font) {}
@@ -290,7 +294,8 @@ glm::vec2 WxOverlayCanvas::MeasureText(const std::string& text) const {
       return e.extent;
     }
   }
-  const wxColour text_col = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+  const wxColour text_col =
+      wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
   gc_->SetFont(CachedGraphicsFont(gc_, font_, text_col));
   has_active_font_ = false;
   double w = 0.0;
@@ -306,8 +311,7 @@ glm::vec2 WxOverlayCanvas::MeasureText(const std::string& text) const {
 
 CollapsibleSection::CollapsibleSection(
     wxWindow* parent, const wxString& title, bool expanded,
-    const wxString& badge,
-    std::function<void(const wxPoint&)> on_context_menu,
+    const wxString& badge, std::function<void(const wxPoint&)> on_context_menu,
     std::function<void(bool)> on_toggle)
     : wxPanel(parent, wxID_ANY),
       title_(title),
@@ -588,7 +592,8 @@ void Vec2Field::SetValue(glm::vec2 v) {
 }
 
 glm::vec2 Vec2Field::GetValue() const {
-  return {static_cast<float>(x_->GetValue()), static_cast<float>(y_->GetValue())};
+  return {static_cast<float>(x_->GetValue()),
+          static_cast<float>(y_->GetValue())};
 }
 
 void Vec2Field::SetCallbacks(std::function<void()> on_begin,
@@ -626,7 +631,8 @@ void Vec3Field::SetValue(glm::vec3 v) {
 }
 
 glm::vec3 Vec3Field::GetValue() const {
-  return {static_cast<float>(x_->GetValue()), static_cast<float>(y_->GetValue()),
+  return {static_cast<float>(x_->GetValue()),
+          static_cast<float>(y_->GetValue()),
           static_cast<float>(z_->GetValue())};
 }
 
@@ -670,14 +676,17 @@ void ColorSwatchCtrl::OnPaint(wxPaintEvent&) {
   wxAutoBufferedPaintDC dc(this);
   const wxSize sz = GetClientSize();
   auto to_u8 = [](float f) -> unsigned char {
-    return static_cast<unsigned char>(std::clamp(f, 0.0f, 1.0f) * 255.0f + 0.5f);
+    return static_cast<unsigned char>(std::clamp(f, 0.0f, 1.0f) * 255.0f +
+                                      0.5f);
   };
   dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
-  dc.SetBrush(wxBrush(wxColour(to_u8(rgba_.r), to_u8(rgba_.g), to_u8(rgba_.b))));
+  dc.SetBrush(
+      wxBrush(wxColour(to_u8(rgba_.r), to_u8(rgba_.g), to_u8(rgba_.b))));
   dc.DrawRectangle(0, 0, sz.x, sz.y);
 
   // Alpha bottom bar.
-  const int alpha_w = static_cast<int>(std::clamp(rgba_.a, 0.0f, 1.0f) * (sz.x - 2));
+  const int alpha_w =
+      static_cast<int>(std::clamp(rgba_.a, 0.0f, 1.0f) * (sz.x - 2));
   dc.SetPen(*wxTRANSPARENT_PEN);
   dc.SetBrush(wxBrush(*wxWHITE));
   dc.DrawRectangle(1, sz.y - 4, alpha_w, 3);
@@ -685,13 +694,14 @@ void ColorSwatchCtrl::OnPaint(wxPaintEvent&) {
 
 void ColorSwatchCtrl::OnClick(wxMouseEvent&) {
   auto to_u8 = [](float f) -> unsigned char {
-    return static_cast<unsigned char>(std::clamp(f, 0.0f, 1.0f) * 255.0f + 0.5f);
+    return static_cast<unsigned char>(std::clamp(f, 0.0f, 1.0f) * 255.0f +
+                                      0.5f);
   };
   wxColourData data;
   data.SetChooseFull(true);
   data.SetChooseAlpha(true);
-  data.SetColour(wxColour(to_u8(rgba_.r), to_u8(rgba_.g), to_u8(rgba_.b),
-                          to_u8(rgba_.a)));
+  data.SetColour(
+      wxColour(to_u8(rgba_.r), to_u8(rgba_.g), to_u8(rgba_.b), to_u8(rgba_.a)));
   wxColourDialog dlg(this, &data);
   if (dlg.ShowModal() == wxID_OK) {
     const wxColour c = dlg.GetColourData().GetColour();

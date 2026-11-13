@@ -44,7 +44,7 @@ void DrawCheckerboard(wxGraphicsContext* gc, double x, double y, double w,
                       double h, int tile = 10);
 
 wxGraphicsFont CachedGraphicsFont(wxGraphicsContext* gc, const wxFont& font,
-                                    const wxColour& color);
+                                  const wxColour& color);
 
 // wxGraphicsContext-backed OverlayCanvas for Scene Viewport & gizmo overlays.
 class WxOverlayCanvas : public OverlayCanvas {
@@ -92,10 +92,11 @@ class WxOverlayCanvas : public OverlayCanvas {
 // Collapsible inspector card.
 class CollapsibleSection : public wxPanel {
  public:
-  CollapsibleSection(wxWindow* parent, const wxString& title,
-                     bool expanded = true, const wxString& badge = wxEmptyString,
-                     std::function<void(const wxPoint&)> on_context_menu = nullptr,
-                     std::function<void(bool)> on_toggle = nullptr);
+  CollapsibleSection(
+      wxWindow* parent, const wxString& title, bool expanded = true,
+      const wxString& badge = wxEmptyString,
+      std::function<void(const wxPoint&)> on_context_menu = nullptr,
+      std::function<void(bool)> on_toggle = nullptr);
 
   wxPanel* Body() { return body_; }
   wxBoxSizer* BodySizer() { return body_sizer_; }
@@ -128,9 +129,9 @@ class CollapsibleSection : public wxPanel {
 class DragNumberCtrl : public wxPanel {
  public:
   DragNumberCtrl(wxWindow* parent, const wxString& label = wxEmptyString,
-                 const wxColour& tag_color = wxNullColour,
-                 double value = 0.0, double step = 0.05,
-                 bool integer_only = false, int precision = 3);
+                 const wxColour& tag_color = wxNullColour, double value = 0.0,
+                 double step = 0.05, bool integer_only = false,
+                 int precision = 3);
 
   void SetValue(double v);
   double GetValue() const { return value_; }

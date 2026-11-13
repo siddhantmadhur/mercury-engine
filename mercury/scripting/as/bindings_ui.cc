@@ -35,10 +35,12 @@ namespace {
 int64_t MakeHandle(UI::VisualElement* element) {
   if (!element) return -1;
   for (size_t i = 0; i < g_elements.size(); i++) {
-    if (g_elements[i] == element) return static_cast<int64_t>(uint64_t{g_generation} << 20 | i);
+    if (g_elements[i] == element)
+      return static_cast<int64_t>(uint64_t{g_generation} << 20 | i);
   }
   g_elements.push_back(element);
-  return static_cast<int64_t>(uint64_t{g_generation} << 20 | (g_elements.size() - 1));
+  return static_cast<int64_t>(uint64_t{g_generation} << 20 |
+                              (g_elements.size() - 1));
 }
 
 UI::VisualElement* ArgElement(const ScriptUiHandle& handle) {
@@ -54,24 +56,32 @@ UI::VisualElement* ArgElement(const ScriptUiHandle& handle) {
 
 ScriptUiHandle Root() {
   asIScriptContext* context = asGetActiveContext();
-  auto* object = context ? static_cast<asIScriptObject*>(context->GetThisPointer(0)) : nullptr;
-  ScriptBehaviour* behaviour = object ? ScriptRuntime::Instance().BehaviourOf(object) : nullptr;
+  auto* object = context
+                     ? static_cast<asIScriptObject*>(context->GetThisPointer(0))
+                     : nullptr;
+  ScriptBehaviour* behaviour =
+      object ? ScriptRuntime::Instance().BehaviourOf(object) : nullptr;
   if (!behaviour) return {};
   auto* document = behaviour->GetComponent<UIDocument>();
-  return ScriptUiHandle{document ? MakeHandle(document->rootVisualElement()) : -1};
+  return ScriptUiHandle{document ? MakeHandle(document->rootVisualElement())
+                                 : -1};
 }
 
-ScriptUiHandle Query(const ScriptUiHandle& handle, const std::string& name, const std::string& class_name) {
+ScriptUiHandle Query(const ScriptUiHandle& handle, const std::string& name,
+                     const std::string& class_name) {
   UI::VisualElement* element = ArgElement(handle);
   if (!element) return {};
-  return ScriptUiHandle{MakeHandle(element->Q<UI::VisualElement>(name, class_name))};
+  return ScriptUiHandle{
+      MakeHandle(element->Q<UI::VisualElement>(name, class_name))};
 }
 
-ScriptUiHandle QueryByName(const ScriptUiHandle& handle, const std::string& name) {
+ScriptUiHandle QueryByName(const ScriptUiHandle& handle,
+                           const std::string& name) {
   return Query(handle, name, "");
 }
 
-ScriptUiHandle QueryByClass(const ScriptUiHandle& handle, const std::string& class_name) {
+ScriptUiHandle QueryByClass(const ScriptUiHandle& handle,
+                            const std::string& class_name) {
   return Query(handle, "", class_name);
 }
 
@@ -90,7 +100,8 @@ void SetText(const ScriptUiHandle& handle, const std::string& text) {
 std::string GetText(const ScriptUiHandle& handle) {
   UI::VisualElement* element = ArgElement(handle);
   if (!element) return {};
-  if (auto* label = dynamic_cast<UI::TextElement*>(element)) return label->text();
+  if (auto* label = dynamic_cast<UI::TextElement*>(element))
+    return label->text();
   return {};
 }
 
@@ -103,7 +114,9 @@ void OnClick(const ScriptUiHandle& handle, const std::string& method) {
     return;
   }
   asIScriptContext* context = asGetActiveContext();
-  auto* owner = context ? static_cast<asIScriptObject*>(context->GetThisPointer(0)) : nullptr;
+  auto* owner = context
+                    ? static_cast<asIScriptObject*>(context->GetThisPointer(0))
+                    : nullptr;
   if (!owner) {
     Throw("OnClick must be called from a script method");
     return;
@@ -124,7 +137,9 @@ void OnClickArg(const ScriptUiHandle& handle, const std::string& method,
     return;
   }
   asIScriptContext* context = asGetActiveContext();
-  auto* owner = context ? static_cast<asIScriptObject*>(context->GetThisPointer(0)) : nullptr;
+  auto* owner = context
+                    ? static_cast<asIScriptObject*>(context->GetThisPointer(0))
+                    : nullptr;
   if (!owner) {
     Throw("OnClick must be called from a script method");
     return;
@@ -132,7 +147,8 @@ void OnClickArg(const ScriptUiHandle& handle, const std::string& method,
   owner->AddRef();
   button->clicked += [owner, method, argument] {
     const ScriptArg args[] = {ScriptArg::String(argument)};
-    ScriptRuntime::Instance().CallMethod(owner, method, args, "Button." + method);
+    ScriptRuntime::Instance().CallMethod(owner, method, args,
+                                         "Button." + method);
   };
 }
 
@@ -145,16 +161,20 @@ void OnToggleChanged(const ScriptUiHandle& handle, const std::string& method) {
     return;
   }
   asIScriptContext* context = asGetActiveContext();
-  auto* owner = context ? static_cast<asIScriptObject*>(context->GetThisPointer(0)) : nullptr;
+  auto* owner = context
+                    ? static_cast<asIScriptObject*>(context->GetThisPointer(0))
+                    : nullptr;
   if (!owner) {
     Throw("OnToggleChanged must be called from a script method");
     return;
   }
   owner->AddRef();
-  toggle->RegisterValueChangedCallback<bool>([owner, method](UI::ChangeEvent<bool>& event) {
-    const ScriptArg args[] = {ScriptArg::Bool(event.newValue)};
-    ScriptRuntime::Instance().CallMethod(owner, method, args, "Toggle." + method);
-  });
+  toggle->RegisterValueChangedCallback<bool>(
+      [owner, method](UI::ChangeEvent<bool>& event) {
+        const ScriptArg args[] = {ScriptArg::Bool(event.newValue)};
+        ScriptRuntime::Instance().CallMethod(owner, method, args,
+                                             "Toggle." + method);
+      });
 }
 
 bool ToggleValue(const ScriptUiHandle& handle) {
@@ -179,8 +199,10 @@ void SetToggleValue(const ScriptUiHandle& handle, bool value) {
   toggle->SetValue(value);
 }
 
-void SetClass(const ScriptUiHandle& handle, const std::string& name, bool enable) {
-  if (UI::VisualElement* element = ArgElement(handle)) element->EnableInClassList(name, enable);
+void SetClass(const ScriptUiHandle& handle, const std::string& name,
+              bool enable) {
+  if (UI::VisualElement* element = ArgElement(handle))
+    element->EnableInClassList(name, enable);
 }
 
 bool HasClass(const ScriptUiHandle& handle, const std::string& name) {
@@ -201,7 +223,8 @@ void BlurFocused(const ScriptUiHandle& handle) {
 void SetDisplay(const ScriptUiHandle& handle, bool visible) {
   UI::VisualElement* element = ArgElement(handle);
   if (!element) return;
-  element->style().display = visible ? UI::DisplayStyle::kFlex : UI::DisplayStyle::kNone;
+  element->style().display =
+      visible ? UI::DisplayStyle::kFlex : UI::DisplayStyle::kNone;
 }
 
 bool IsValid(const ScriptUiHandle& handle) {
@@ -214,8 +237,11 @@ bool IsValid(const ScriptUiHandle& handle) {
 void SetDataSource(const ScriptUiHandle& handle) {
   UI::VisualElement* element = ArgElement(handle);
   asIScriptContext* context = asGetActiveContext();
-  auto* object = context ? static_cast<asIScriptObject*>(context->GetThisPointer(0)) : nullptr;
-  ScriptBehaviour* behaviour = object ? ScriptRuntime::Instance().BehaviourOf(object) : nullptr;
+  auto* object = context
+                     ? static_cast<asIScriptObject*>(context->GetThisPointer(0))
+                     : nullptr;
+  ScriptBehaviour* behaviour =
+      object ? ScriptRuntime::Instance().BehaviourOf(object) : nullptr;
   if (!element || !behaviour) return;
   element->SetDataSource(behaviour->AsDataSource());
 }
@@ -223,51 +249,67 @@ void SetDataSource(const ScriptUiHandle& handle) {
 }  // namespace
 
 void InstallUi(asIScriptEngine* engine) {
-  RegisterValueType<ScriptUiHandle>(engine, "VisualElement", asOBJ_APP_CLASS_ALLINTS);
+  RegisterValueType<ScriptUiHandle>(engine, "VisualElement",
+                                    asOBJ_APP_CLASS_ALLINTS);
 
   engine->SetDefaultNamespace("UI");
-  engine->RegisterGlobalFunction("VisualElement Root()", asFUNCTION(Root), asCALL_CDECL);
+  engine->RegisterGlobalFunction("VisualElement Root()", asFUNCTION(Root),
+                                 asCALL_CDECL);
   engine->SetDefaultNamespace("");
 
-  engine->RegisterObjectMethod("VisualElement", "VisualElement Q(const string &in, const string &in)",
-                               asFUNCTION(Query), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "VisualElement Q(const string &in)",
-                               asFUNCTION(QueryByName), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "VisualElement QClass(const string &in)",
-                               asFUNCTION(QueryByClass), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void SetText(const string &in)",
-                               asFUNCTION(SetText), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "string GetText() const", asFUNCTION(GetText),
-                               asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "string get_text() const property",
-                               asFUNCTION(GetText), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void set_text(const string &in) property",
-                               asFUNCTION(SetText), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void OnClick(const string &in)",
-                               asFUNCTION(OnClick), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod(
+      "VisualElement", "VisualElement Q(const string &in, const string &in)",
+      asFUNCTION(Query), asCALL_CDECL_OBJFIRST);
   engine->RegisterObjectMethod("VisualElement",
-                               "void OnClick(const string &in, const string &in)",
-                               asFUNCTION(OnClickArg), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void OnToggleChanged(const string &in)",
-                               asFUNCTION(OnToggleChanged), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "bool get_toggleValue() const property",
+                               "VisualElement Q(const string &in)",
+                               asFUNCTION(QueryByName), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "VisualElement QClass(const string &in)",
+                               asFUNCTION(QueryByClass), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "void SetText(const string &in)",
+                               asFUNCTION(SetText), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement", "string GetText() const",
+                               asFUNCTION(GetText), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "string get_text() const property",
+                               asFUNCTION(GetText), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "void set_text(const string &in) property",
+                               asFUNCTION(SetText), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "void OnClick(const string &in)",
+                               asFUNCTION(OnClick), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod(
+      "VisualElement", "void OnClick(const string &in, const string &in)",
+      asFUNCTION(OnClickArg), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod(
+      "VisualElement", "void OnToggleChanged(const string &in)",
+      asFUNCTION(OnToggleChanged), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "bool get_toggleValue() const property",
                                asFUNCTION(ToggleValue), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void set_toggleValue(bool) property",
-                               asFUNCTION(SetToggleValue), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void SetClass(const string &in, bool)",
+  engine->RegisterObjectMethod(
+      "VisualElement", "void set_toggleValue(bool) property",
+      asFUNCTION(SetToggleValue), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "void SetClass(const string &in, bool)",
                                asFUNCTION(SetClass), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "bool HasClass(const string &in) const",
+  engine->RegisterObjectMethod("VisualElement",
+                               "bool HasClass(const string &in) const",
                                asFUNCTION(HasClass), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void Focus()", asFUNCTION(Focus),
-                               asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void BlurFocused()", asFUNCTION(BlurFocused),
-                               asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "void SetDisplay(bool)", asFUNCTION(SetDisplay),
-                               asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod("VisualElement", "bool get_isValid() const property", asFUNCTION(IsValid),
-                               asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement", "void Focus()",
+                               asFUNCTION(Focus), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement", "void BlurFocused()",
+                               asFUNCTION(BlurFocused), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement", "void SetDisplay(bool)",
+                               asFUNCTION(SetDisplay), asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod("VisualElement",
+                               "bool get_isValid() const property",
+                               asFUNCTION(IsValid), asCALL_CDECL_OBJFIRST);
   engine->RegisterObjectMethod("VisualElement", "void SetDataSource()",
-                               asFUNCTION(SetDataSource), asCALL_CDECL_OBJFIRST);
+                               asFUNCTION(SetDataSource),
+                               asCALL_CDECL_OBJFIRST);
 }
 
 }  // namespace as

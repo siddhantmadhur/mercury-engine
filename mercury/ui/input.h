@@ -80,7 +80,8 @@ struct UIInputFrame {
   std::vector<UIInputEvent> events;
 };
 
-// Clipboard access, provided by the host (GLFW in games, wxWidgets in the editor).
+// Clipboard access, provided by the host (GLFW in games, wxWidgets in the
+// editor).
 struct UIClipboard {
   std::function<std::string()> get;
   std::function<void(const std::string&)> set;

@@ -17,18 +17,22 @@ namespace Mercury {
 namespace {
 
 void LogException(asIScriptContext* context, std::string_view label) {
-  PDebug::error("{}: {}", label, ScriptRuntime::Instance().FormatException(context));
+  PDebug::error("{}: {}", label,
+                ScriptRuntime::Instance().FormatException(context));
 }
 
-// --- field conversion ---------------------------------------------------------------------
+// --- field conversion
+// ---------------------------------------------------------------------
 
-// --- list fields --------------------------------------------------------------------------
+// --- list fields
+// --------------------------------------------------------------------------
 
 std::vector<int> ReadIntArray(CScriptArray* array) {
   std::vector<int> values;
   if (!array) return values;
   values.reserve(array->GetSize());
-  for (asUINT i = 0; i < array->GetSize(); i++) values.push_back(*static_cast<int*>(array->At(i)));
+  for (asUINT i = 0; i < array->GetSize(); i++)
+    values.push_back(*static_cast<int*>(array->At(i)));
   return values;
 }
 
@@ -36,7 +40,8 @@ std::vector<float> ReadFloatArray(CScriptArray* array) {
   std::vector<float> values;
   if (!array) return values;
   values.reserve(array->GetSize());
-  for (asUINT i = 0; i < array->GetSize(); i++) values.push_back(*static_cast<float*>(array->At(i)));
+  for (asUINT i = 0; i < array->GetSize(); i++)
+    values.push_back(*static_cast<float*>(array->At(i)));
   return values;
 }
 
@@ -51,7 +56,8 @@ std::vector<std::string> ReadStringArray(CScriptArray* array) {
 }
 
 template <typename T>
-void WriteArray(CScriptArray** handle, asITypeInfo* type, const std::vector<T>& values) {
+void WriteArray(CScriptArray** handle, asITypeInfo* type,
+                const std::vector<T>& values) {
   if (!handle) return;
   CScriptArray* array = *handle;
   if (!array && type) {
@@ -60,7 +66,8 @@ void WriteArray(CScriptArray** handle, asITypeInfo* type, const std::vector<T>& 
   }
   if (!array) return;
   array->Resize(static_cast<asUINT>(values.size()));
-  for (asUINT i = 0; i < values.size(); i++) array->SetValue(i, const_cast<T*>(&values[i]));
+  for (asUINT i = 0; i < values.size(); i++)
+    array->SetValue(i, const_cast<T*>(&values[i]));
 }
 
 ScriptArg VariantToArg(const mtext::Variant& value) {
@@ -73,19 +80,25 @@ ScriptArg VariantToArg(const mtext::Variant& value) {
 
 mtext::Variant ArgToVariant(const ScriptArg& value) {
   switch (value.kind) {
-    case ScriptArg::Kind::kBool: return mtext::Variant(value.b);
-    case ScriptArg::Kind::kInt: return mtext::Variant(value.i);
-    case ScriptArg::Kind::kFloat: return mtext::Variant(value.f);
-    case ScriptArg::Kind::kDouble: return mtext::Variant(static_cast<float>(value.d));
-    case ScriptArg::Kind::kString: return mtext::Variant(value.s);
-    default: return mtext::Variant();
+    case ScriptArg::Kind::kBool:
+      return mtext::Variant(value.b);
+    case ScriptArg::Kind::kInt:
+      return mtext::Variant(value.i);
+    case ScriptArg::Kind::kFloat:
+      return mtext::Variant(value.f);
+    case ScriptArg::Kind::kDouble:
+      return mtext::Variant(static_cast<float>(value.d));
+    case ScriptArg::Kind::kString:
+      return mtext::Variant(value.s);
+    default:
+      return mtext::Variant();
   }
 }
 
 }  // namespace
 
-std::unique_ptr<ScriptBehaviour> ScriptBehaviour::Create(const ScriptClass& script_class,
-                                                         MapScene* scene, kEntityId entity) {
+std::unique_ptr<ScriptBehaviour> ScriptBehaviour::Create(
+    const ScriptClass& script_class, MapScene* scene, kEntityId entity) {
   auto& runtime = ScriptRuntime::Instance();
   if (!runtime.IsInitialized() || !script_class.factory) {
     PDebug::error("{}: the script engine is not ready", script_class.name);
@@ -98,7 +111,8 @@ std::unique_ptr<ScriptBehaviour> ScriptBehaviour::Create(const ScriptClass& scri
   asIScriptObject* instance = nullptr;
   if (context->Prepare(script_class.factory) >= 0) {
     if (context->Execute() == asEXECUTION_FINISHED) {
-      instance = *static_cast<asIScriptObject**>(context->GetAddressOfReturnValue());
+      instance =
+          *static_cast<asIScriptObject**>(context->GetAddressOfReturnValue());
       if (instance) instance->AddRef();
     } else {
       LogException(context, script_class.name + ".constructor");
@@ -141,34 +155,42 @@ void ScriptBehaviour::Forward(ScriptCallback callback, const char* method) {
   asIScriptFunction* function = class_->callbacks_by_slot[slot];
   if (!function) return;
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
-  ScriptRuntime::Instance().Call(function, instance_, {}, class_->name + "." + method);
+  ScriptRuntime::Instance().Call(function, instance_, {},
+                                 class_->name + "." + method);
 }
 
-void ScriptBehaviour::Forward(ScriptCallback callback, const char* method, double dt) {
+void ScriptBehaviour::Forward(ScriptCallback callback, const char* method,
+                              double dt) {
   const int slot = std::countr_zero(static_cast<uint32_t>(callback));
   asIScriptFunction* function = class_->callbacks_by_slot[slot];
   if (!function) return;
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
   if (class_->callback_arg_types[slot] == 1) {
     const ScriptArg args[] = {ScriptArg::Float(static_cast<float>(dt))};
-    ScriptRuntime::Instance().Call(function, instance_, args, class_->name + "." + method);
+    ScriptRuntime::Instance().Call(function, instance_, args,
+                                   class_->name + "." + method);
   } else {
     const ScriptArg args[] = {ScriptArg::Double(dt)};
-    ScriptRuntime::Instance().Call(function, instance_, args, class_->name + "." + method);
+    ScriptRuntime::Instance().Call(function, instance_, args,
+                                   class_->name + "." + method);
   }
 }
 
-void ScriptBehaviour::ForwardObject(ScriptCallback callback, const char* method, GameObject other) {
+void ScriptBehaviour::ForwardObject(ScriptCallback callback, const char* method,
+                                    GameObject other) {
   const int slot = std::countr_zero(static_cast<uint32_t>(callback));
   asIScriptFunction* function = class_->callbacks_by_slot[slot];
   if (!function || !other.GetScene()) return;
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
-  const int type_id = ScriptRuntime::Instance().GetEngine()->GetTypeIdByDecl("GameObject");
+  const int type_id =
+      ScriptRuntime::Instance().GetEngine()->GetTypeIdByDecl("GameObject");
   const ScriptArg args[] = {ScriptArg::Object(&other, type_id)};
-  ScriptRuntime::Instance().Call(function, instance_, args, class_->name + "." + method);
+  ScriptRuntime::Instance().Call(function, instance_, args,
+                                 class_->name + "." + method);
 }
 
-void ScriptBehaviour::CallMethod(const std::string& name, const ScriptArg* argument) {
+void ScriptBehaviour::CallMethod(const std::string& name,
+                                 const ScriptArg* argument) {
   asITypeInfo* type = instance_ ? instance_->GetObjectType() : nullptr;
   if (!type) return;
   asIScriptFunction* function = type->GetMethodByName(name.c_str(), true);
@@ -176,9 +198,11 @@ void ScriptBehaviour::CallMethod(const std::string& name, const ScriptArg* argum
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
   if (argument) {
     const ScriptArg args[] = {*argument};
-    ScriptRuntime::Instance().Call(function, instance_, args, class_->name + "." + name);
+    ScriptRuntime::Instance().Call(function, instance_, args,
+                                   class_->name + "." + name);
   } else {
-    ScriptRuntime::Instance().Call(function, instance_, {}, class_->name + "." + name);
+    ScriptRuntime::Instance().Call(function, instance_, {},
+                                   class_->name + "." + name);
   }
 }
 
@@ -186,7 +210,9 @@ void ScriptBehaviour::Reflect(Reflector& r) { ReflectFields(r); }
 
 void ScriptBehaviour::ReflectFields(Reflector& r) {
   for (const ScriptField& field : class_->fields) {
-    void* address = instance_ ? instance_->GetAddressOfProperty(field.property_index) : nullptr;
+    void* address = instance_
+                        ? instance_->GetAddressOfProperty(field.property_index)
+                        : nullptr;
     if (!address) continue;
     const char* name = field.name.c_str();
 
@@ -262,7 +288,9 @@ void ScriptBehaviour::ReflectFields(Reflector& r) {
         break;
       case FieldType::kList: {
         auto** handle = static_cast<CScriptArray**>(address);
-        asITypeInfo* array_type = ScriptRuntime::Instance().GetEngine()->GetTypeInfoById(field.type_id);
+        asITypeInfo* array_type =
+            ScriptRuntime::Instance().GetEngine()->GetTypeInfoById(
+                field.type_id);
         switch (field.element_type) {
           case FieldType::kInt: {
             auto values = ReadIntArray(handle ? *handle : nullptr);
@@ -284,13 +312,15 @@ void ScriptBehaviour::ReflectFields(Reflector& r) {
               r.Field(name, values);
             } else if (field.element_type == FieldType::kNodeRef) {
               std::vector<NodeRef> refs;
-              for (auto& value : values) refs.push_back(NodeRef{std::move(value)});
+              for (auto& value : values)
+                refs.push_back(NodeRef{std::move(value)});
               r.Field(name, refs);
               values.clear();
               for (auto& ref : refs) values.push_back(ref.path);
             } else {
               std::vector<AssetRef> refs;
-              for (auto& value : values) refs.push_back(AssetRef{std::move(value)});
+              for (auto& value : values)
+                refs.push_back(AssetRef{std::move(value)});
               r.Field(name, refs, field.asset_type.c_str());
               values.clear();
               for (auto& ref : refs) values.push_back(ref.path);
@@ -314,16 +344,20 @@ void ScriptBehaviour::ReflectData(Reflector& r) {
     r.Property(
         name.c_str(),
         [this, name]() -> mtext::Variant {
-          asIScriptFunction* getter = instance_->GetObjectType()->GetMethodByName(
-              ("get_" + name).c_str(), true);
+          asIScriptFunction* getter =
+              instance_->GetObjectType()->GetMethodByName(
+                  ("get_" + name).c_str(), true);
           if (!getter) return {};
           ScriptArg result;
-          if (!ScriptRuntime::Instance().Call(getter, instance_, {}, name, &result)) return {};
+          if (!ScriptRuntime::Instance().Call(getter, instance_, {}, name,
+                                              &result))
+            return {};
           return ArgToVariant(result);
         },
         [this, name](const mtext::Variant& value) {
-          asIScriptFunction* setter = instance_->GetObjectType()->GetMethodByName(
-              ("set_" + name).c_str(), true);
+          asIScriptFunction* setter =
+              instance_->GetObjectType()->GetMethodByName(
+                  ("set_" + name).c_str(), true);
           if (!setter) return;
           const ScriptArg args[] = {VariantToArg(value)};
           ScriptRuntime::Instance().Call(setter, instance_, args, name);

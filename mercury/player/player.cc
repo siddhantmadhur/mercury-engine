@@ -158,8 +158,7 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
   }
 
   auto application = std::make_unique<DefaultApplication>(
-      project->GetWindowTitle(),
-      static_cast<float>(project->GetWindowWidth()),
+      project->GetWindowTitle(), static_cast<float>(project->GetWindowWidth()),
       static_cast<float>(project->GetWindowHeight()));
   auto scene = std::make_unique<MapScene>(project, MapScene::Mode::kPlay);
 

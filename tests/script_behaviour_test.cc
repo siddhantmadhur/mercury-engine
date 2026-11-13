@@ -30,7 +30,8 @@ class ScriptBehaviourTest : public ::testing::Test {
   static void SetUpTestSuite() {
     static std::once_flag once;
     std::call_once(once, [] {
-      const fs::path source = fs::path(MERCURY_SOURCE_DIR) / "tests/scripts/project";
+      const fs::path source =
+          fs::path(MERCURY_SOURCE_DIR) / "tests/scripts/project";
       const fs::path work = Mercury::test::CacheDir() / "script_project";
       std::error_code ec;
       fs::remove_all(work, ec);
@@ -61,9 +62,12 @@ class ScriptBehaviourTest : public ::testing::Test {
     scene.Instantiate(map);
     scene.OnStart();
   }
-  static ScriptBehaviour* Script(MapScene& scene, const char* path, const char* type) {
-    for (Behaviour* behaviour : scene.GetBehaviours(scene.Find(path).GetEntity())) {
-      if (behaviour->GetTypeName() == type) return dynamic_cast<ScriptBehaviour*>(behaviour);
+  static ScriptBehaviour* Script(MapScene& scene, const char* path,
+                                 const char* type) {
+    for (Behaviour* behaviour :
+         scene.GetBehaviours(scene.Find(path).GetEntity())) {
+      if (behaviour->GetTypeName() == type)
+        return dynamic_cast<ScriptBehaviour*>(behaviour);
     }
     return nullptr;
   }
@@ -72,7 +76,8 @@ class ScriptBehaviourTest : public ::testing::Test {
     auto writer = Reflector::Write(properties);
     script->Reflect(writer);
     std::map<std::string, mtext::Variant> fields;
-    for (const auto& property : properties) fields[property.key] = property.value;
+    for (const auto& property : properties)
+      fields[property.key] = property.value;
     return fields;
   }
 };

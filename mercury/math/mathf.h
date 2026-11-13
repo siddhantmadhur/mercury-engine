@@ -29,8 +29,12 @@ inline int Clamp(int value, int min, int max) {
 inline float Clamp01(float value) { return Clamp(value, 0.0f, 1.0f); }
 
 // t is clamped to [0, 1], as in Unity.
-inline float Lerp(float a, float b, float t) { return a + (b - a) * Clamp01(t); }
-inline float LerpUnclamped(float a, float b, float t) { return a + (b - a) * t; }
+inline float Lerp(float a, float b, float t) {
+  return a + (b - a) * Clamp01(t);
+}
+inline float LerpUnclamped(float a, float b, float t) {
+  return a + (b - a) * t;
+}
 inline float InverseLerp(float a, float b, float value) {
   return a != b ? Clamp01((value - a) / (b - a)) : 0.0f;
 }
@@ -78,8 +82,9 @@ inline float SmoothStep(float from, float to, float t) {
  * @brief Gradually changes a value towards a goal, like a spring-damper
  * (Unity's Mathf.SmoothDamp)
  */
-float SmoothDamp(float current, float target, float& velocity, float smooth_time,
-                 float delta_time, float max_speed = kInfinity);
+float SmoothDamp(float current, float target, float& velocity,
+                 float smooth_time, float delta_time,
+                 float max_speed = kInfinity);
 
 }  // namespace Mathf
 

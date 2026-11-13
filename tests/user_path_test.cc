@@ -1,4 +1,5 @@
-// os::UserPath: command-line paths under `bazel run`, which starts programs in the runfiles tree.
+// os::UserPath: command-line paths under `bazel run`, which starts programs in
+// the runfiles tree.
 #include <gtest/gtest.h>
 
 #include <cstdlib>
@@ -41,18 +42,21 @@ class UserPathTest : public ::testing::Test {
 
 TEST_F(UserPathTest, RelativePathIsTriedFromTheBazelRunDirectory) {
   SetEnv("BUILD_WORKING_DIRECTORY", dir_.string());
-  EXPECT_EQ(Mercury::os::UserPath("examples/game.mproj"), dir_ / "examples" / "game.mproj");
+  EXPECT_EQ(Mercury::os::UserPath("examples/game.mproj"),
+            dir_ / "examples" / "game.mproj");
 }
 
 TEST_F(UserPathTest, OtherPathsComeBackAsGiven) {
   SetEnv("BUILD_WORKING_DIRECTORY", dir_.string());
   // Not there either: left alone, so the error names what the user typed.
-  EXPECT_EQ(Mercury::os::UserPath("examples/none.mproj"), fs::path("examples/none.mproj"));
+  EXPECT_EQ(Mercury::os::UserPath("examples/none.mproj"),
+            fs::path("examples/none.mproj"));
   // Absolute paths and empty ones are never rewritten.
   EXPECT_EQ(Mercury::os::UserPath(dir_ / "examples" / "game.mproj"),
             dir_ / "examples" / "game.mproj");
   EXPECT_EQ(Mercury::os::UserPath(""), fs::path());
   // Without the variable nothing changes.
   SetEnv("BUILD_WORKING_DIRECTORY", "");
-  EXPECT_EQ(Mercury::os::UserPath("examples/game.mproj"), fs::path("examples/game.mproj"));
+  EXPECT_EQ(Mercury::os::UserPath("examples/game.mproj"),
+            fs::path("examples/game.mproj"));
 }

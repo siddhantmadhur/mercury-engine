@@ -101,7 +101,8 @@ std::shared_ptr<Font> UIResources::LoadFont(std::string_view path) {
   if (path.empty()) return DefaultFont();
   if (auto it = fonts_.find(path); it != fonts_.end()) {
     if (it->second) return it->second;
-    return path == "mercury://fonts/Roboto-Medium.ttf" ? nullptr : DefaultFont();
+    return path == "mercury://fonts/Roboto-Medium.ttf" ? nullptr
+                                                       : DefaultFont();
   }
   auto font = Font::LoadFile(Resolve(path).string());
   fonts_.emplace(std::string(path), font);
@@ -121,16 +122,19 @@ std::shared_ptr<UITexture> UIResources::LoadTexture(std::string_view path) {
 }
 
 std::shared_ptr<StyleSheet> UIResources::DefaultTheme() {
-  if (!default_theme_) default_theme_ = LoadStyleSheet("mercury://default_theme.uss");
+  if (!default_theme_)
+    default_theme_ = LoadStyleSheet("mercury://default_theme.uss");
   return default_theme_;
 }
 
-void UIResources::Override(const std::string& path, std::shared_ptr<StyleSheet> sheet) {
+void UIResources::Override(const std::string& path,
+                           std::shared_ptr<StyleSheet> sheet) {
   sheet_overrides_[path] = std::move(sheet);
   version_++;
 }
 
-void UIResources::Override(const std::string& path, std::shared_ptr<VisualTreeAsset> tree) {
+void UIResources::Override(const std::string& path,
+                           std::shared_ptr<VisualTreeAsset> tree) {
   tree_overrides_[path] = std::move(tree);
   version_++;
 }

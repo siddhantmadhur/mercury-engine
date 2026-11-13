@@ -39,9 +39,12 @@ OverlayColor Rgba(float r, float g, float b, float a) {
 OverlayColor AxisColor(int axis, bool highlighted, float alpha = 1.0f) {
   if (highlighted) return Rgba(1.0f, 0.85f, 0.2f, 1.0f);
   switch (axis) {
-    case 0: return Rgba(0.95f, 0.3f, 0.3f, alpha);
-    case 1: return Rgba(0.4f, 0.9f, 0.3f, alpha);
-    default: return Rgba(0.3f, 0.55f, 1.0f, alpha);
+    case 0:
+      return Rgba(0.95f, 0.3f, 0.3f, alpha);
+    case 1:
+      return Rgba(0.4f, 0.9f, 0.3f, alpha);
+    default:
+      return Rgba(0.3f, 0.55f, 1.0f, alpha);
   }
 }
 
@@ -266,11 +269,16 @@ void EditorScene::DrawLine3D(OverlayCanvas& draw,
   glm::vec4 cb = view_projection * glm::vec4(b, 1.0f);
   auto distance = [](const glm::vec4& c, int plane) {
     switch (plane) {
-      case 0: return c.z;
-      case 1: return c.w + c.x;
-      case 2: return c.w - c.x;
-      case 3: return c.w + c.y;
-      default: return c.w - c.y;
+      case 0:
+        return c.z;
+      case 1:
+        return c.w + c.x;
+      case 2:
+        return c.w - c.x;
+      case 3:
+        return c.w + c.y;
+      default:
+        return c.w - c.y;
     }
   };
   for (int plane = 0; plane < 5; plane++) {
@@ -359,8 +367,9 @@ void EditorScene::DrawGrid(OverlayCanvas& draw) {
   constexpr int kLines = 50;
   const float extent = spacing * kLines;
   const float major_step = spacing * 10.0f;
-  const glm::vec2 center(std::round(camera_target_.x / major_step) * major_step,
-                         std::round(camera_target_.z / major_step) * major_step);
+  const glm::vec2 center(
+      std::round(camera_target_.x / major_step) * major_step,
+      std::round(camera_target_.z / major_step) * major_step);
   const OverlayColor minor = Rgba(1, 1, 1, 0.06f);
   const OverlayColor major = Rgba(1, 1, 1, 0.14f);
   // Group minor lines first and major lines second so backends (e.g.
@@ -518,10 +527,9 @@ MapNode* EditorScene::PickNode(glm::vec2 mouse) {
       const float half_h = camera->fit_height * 0.5f;
       const float half_w = half_h * game_aspect_;
       const glm::vec3 c(position.x, position.y, 0.0f);
-      const glm::vec3 corners[4] = {c + glm::vec3(-half_w, -half_h, 0),
-                                    c + glm::vec3(half_w, -half_h, 0),
-                                    c + glm::vec3(half_w, half_h, 0),
-                                    c + glm::vec3(-half_w, half_h, 0)};
+      const glm::vec3 corners[4] = {
+          c + glm::vec3(-half_w, -half_h, 0), c + glm::vec3(half_w, -half_h, 0),
+          c + glm::vec3(half_w, half_h, 0), c + glm::vec3(-half_w, half_h, 0)};
       glm::vec2 projected[4];
       bool visible = true;
       for (int i = 0; i < 4; i++) {
@@ -530,8 +538,9 @@ MapNode* EditorScene::PickNode(glm::vec2 mouse) {
       if (visible) {
         float distance = std::numeric_limits<float>::max();
         for (int i = 0; i < 4; i++) {
-          distance = std::min(distance, DistanceToSegment(mouse, projected[i],
-                                                          projected[(i + 1) % 4]));
+          distance = std::min(
+              distance,
+              DistanceToSegment(mouse, projected[i], projected[(i + 1) % 4]));
         }
         if (distance < kPickRadiusPixels) {
           consider(node, kCameraFrame, distance, 0);
@@ -599,9 +608,11 @@ void EditorScene::UpdateHoveredHandle(glm::vec2 local_mouse, bool hovered,
         const float angle = static_cast<float>(i) / 48 * 2.0f * kPi;
         glm::vec2 point;
         const bool ok = WorldToScreen(
-            origin + (u * std::cos(angle) + v * std::sin(angle)) * radius, point);
+            origin + (u * std::cos(angle) + v * std::sin(angle)) * radius,
+            point);
         if (ok && have_previous) {
-          const float distance = DistanceToSegment(local_mouse, previous, point);
+          const float distance =
+              DistanceToSegment(local_mouse, previous, point);
           if (distance < best) {
             best = distance;
             hovered_handle_ = axis;
@@ -619,7 +630,8 @@ void EditorScene::UpdateHoveredHandle(glm::vec2 local_mouse, bool hovered,
   const glm::quat rotation =
       tool_ == Tool::kScale ? transform->GetRotationQuat() : handle_rotation;
   glm::vec3 directions[3];
-  for (int axis = 0; axis < 3; axis++) directions[axis] = rotation * kAxes[axis];
+  for (int axis = 0; axis < 3; axis++)
+    directions[axis] = rotation * kAxes[axis];
 
   if (tool_ == Tool::kMove && !view_2d_) {
     const glm::vec3 to_camera = CameraPosition() - origin;
@@ -633,10 +645,9 @@ void EditorScene::UpdateHoveredHandle(glm::vec2 local_mouse, bool hovered,
       if (glm::dot(b, to_camera) < 0.0f) b = -b;
       const float inner = kPlaneInner * length;
       const float outer = kPlaneOuter * length;
-      const glm::vec3 corners[4] = {origin + a * inner + b * inner,
-                                    origin + a * outer + b * inner,
-                                    origin + a * outer + b * outer,
-                                    origin + a * inner + b * outer};
+      const glm::vec3 corners[4] = {
+          origin + a * inner + b * inner, origin + a * outer + b * inner,
+          origin + a * outer + b * outer, origin + a * inner + b * outer};
       glm::vec2 plane[4];
       bool shown = true;
       for (int i = 0; i < 4; i++) shown &= WorldToScreen(corners[i], plane[i]);
@@ -681,9 +692,9 @@ bool EditorScene::BeginHandleDrag(glm::vec2 mouse) {
   GetVec3(*node, "rotation", drag_start_rotation_);
   GetVec3(*node, "scale", drag_start_scale_);
 
-  drag_parent_rotation_ = glm::normalize(
-      transform->GetRotationQuat() *
-      glm::inverse(transform->GetLocalRotationQuat()));
+  drag_parent_rotation_ =
+      glm::normalize(transform->GetRotationQuat() *
+                     glm::inverse(transform->GetLocalRotationQuat()));
   const glm::vec3 local_scale = transform->GetLocalScale();
   const glm::vec3 world_scale = transform->GetScale();
   for (int i = 0; i < 3; i++) {
@@ -701,8 +712,7 @@ bool EditorScene::BeginHandleDrag(glm::vec2 mouse) {
       if (hovered_handle_ >= kCenterHandle) {
         drag_ = Drag::kPlane;
         if (hovered_handle_ == kCenterHandle) {
-          drag_plane_normal_ =
-              view_2d_ ? glm::vec3(0, 0, 1) : -CameraForward();
+          drag_plane_normal_ = view_2d_ ? glm::vec3(0, 0, 1) : -CameraForward();
         } else {
           drag_plane_normal_ =
               drag_handle_rotation_ * kAxes[hovered_handle_ - kPlaneHandle];
@@ -779,8 +789,8 @@ void EditorScene::UpdateDrag(glm::vec2 mouse, bool snap) {
 
   switch (drag_) {
     case Drag::kPlane: {
-      auto hit = RayPlane(ray.origin, ray.direction, drag_origin_,
-                          drag_plane_normal_);
+      auto hit =
+          RayPlane(ray.origin, ray.direction, drag_origin_, drag_plane_normal_);
       if (!hit) return;
       glm::vec3 delta = *hit - drag_start_world_;
       const int fixed = drag_axis_ - kPlaneHandle;
@@ -837,7 +847,8 @@ void EditorScene::UpdateDrag(glm::vec2 mouse, bool snap) {
       } else {
         const glm::quat world =
             glm::angleAxis(glm::radians(degrees), drag_axis_dir_) *
-            drag_parent_rotation_ * Transform::EulerToQuat(drag_start_rotation_);
+            drag_parent_rotation_ *
+            Transform::EulerToQuat(drag_start_rotation_);
         euler =
             Transform::QuatToEuler(glm::inverse(drag_parent_rotation_) * world);
       }
@@ -845,8 +856,8 @@ void EditorScene::UpdateDrag(glm::vec2 mouse, bool snap) {
       break;
     }
     case Drag::kScale: {
-      const float delta = ClosestOnLine(drag_origin_, drag_axis_dir_, ray.origin,
-                                        ray.direction) -
+      const float delta = ClosestOnLine(drag_origin_, drag_axis_dir_,
+                                        ray.origin, ray.direction) -
                           drag_start_param_;
       glm::vec3 scale = drag_start_scale_;
       scale[drag_axis_] *= std::max(1.0f + delta / drag_length_, 0.01f);
@@ -900,7 +911,8 @@ void EditorScene::DrawToolHandles(OverlayCanvas& draw) {
   const glm::quat rotation =
       tool_ == Tool::kScale ? transform->GetRotationQuat() : handle_rotation;
   glm::vec3 directions[3];
-  for (int axis = 0; axis < 3; axis++) directions[axis] = rotation * kAxes[axis];
+  for (int axis = 0; axis < 3; axis++)
+    directions[axis] = rotation * kAxes[axis];
 
   glm::vec2 planes[3][4];
   bool plane_shown[3] = {false, false, false};
@@ -916,10 +928,9 @@ void EditorScene::DrawToolHandles(OverlayCanvas& draw) {
       if (glm::dot(b, to_camera) < 0.0f) b = -b;
       const float inner = kPlaneInner * length;
       const float outer = kPlaneOuter * length;
-      const glm::vec3 corners[4] = {origin + a * inner + b * inner,
-                                    origin + a * outer + b * inner,
-                                    origin + a * outer + b * outer,
-                                    origin + a * inner + b * outer};
+      const glm::vec3 corners[4] = {
+          origin + a * inner + b * inner, origin + a * outer + b * inner,
+          origin + a * outer + b * outer, origin + a * inner + b * outer};
       plane_shown[fixed] = true;
       for (int i = 0; i < 4; i++) {
         plane_shown[fixed] &= WorldToScreen(corners[i], planes[fixed][i]);
@@ -962,9 +973,10 @@ void EditorScene::DrawToolHandles(OverlayCanvas& draw) {
   if (active(kCenterHandle)) {
     draw.AddRectFilled(square_min, square_max, Rgba(1.0f, 0.85f, 0.2f, 0.35f));
   }
-  draw.AddRect(square_min, square_max,
-               active(kCenterHandle) ? AxisColor(0, true) : Rgba(1, 1, 1, 0.75f),
-               0.0f, 2.0f);
+  draw.AddRect(
+      square_min, square_max,
+      active(kCenterHandle) ? AxisColor(0, true) : Rgba(1, 1, 1, 0.75f), 0.0f,
+      2.0f);
 }
 
 // ----------------------------------------------------------------- Gizmos ---
@@ -986,9 +998,10 @@ void EditorScene::DrawAllGizmos(OverlayCanvas& draw) {
   add(registry.view<LightProbeVolume>());
   add(registry.view<PointLight>());
   add(registry.view<Transform, NodeInfo>(
-      entt::exclude<RenderMesh, Mesh, PlaneCollider, BoxCollider, SphereCollider,
-                    CapsuleCollider, CylinderCollider, CameraComponent,
-                    DirectionalLight, AreaLight, LightProbeVolume, PointLight>));
+      entt::exclude<RenderMesh, Mesh, PlaneCollider, BoxCollider,
+                    SphereCollider, CapsuleCollider, CylinderCollider,
+                    CameraComponent, DirectionalLight, AreaLight,
+                    LightProbeVolume, PointLight>));
   if (selected_uid_) shown.push_back(GetEntityForNode(selected_uid_));
   std::sort(shown.begin(), shown.end());
   shown.erase(std::unique(shown.begin(), shown.end()), shown.end());
@@ -1058,8 +1071,7 @@ void EditorScene::DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
   if (auto sphere = show_colliders
                         ? Objects().GetProperty<SphereCollider>(entity)
                         : nullptr) {
-    const float radius =
-        sphere->radius * std::max({scale.x, scale.y, scale.z});
+    const float radius = sphere->radius * std::max({scale.x, scale.y, scale.z});
     for (const auto& axis : kAxes) {
       DrawCircle3D(draw, position, rotation * axis, radius, collider_color);
     }
@@ -1095,8 +1107,9 @@ void EditorScene::DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
                          ? Objects().GetProperty<CapsuleCollider>(entity)
                          : nullptr) {
     const float radius = capsule->radius * std::max(scale.x, scale.z);
-    draw_upright(
-        radius, std::max(capsule->height * scale.y * 0.5f - radius, 0.0f), true);
+    draw_upright(radius,
+                 std::max(capsule->height * scale.y * 0.5f - radius, 0.0f),
+                 true);
     drew_something = true;
   }
   if (auto cylinder = show_colliders
@@ -1114,9 +1127,10 @@ void EditorScene::DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
       const float half_h = camera->fit_height * 0.5f;
       const float half_w = half_h * game_aspect_;
       const glm::vec3 c(position.x, position.y, 0.0f);
-      const glm::vec3 corners[4] = {
-          c + glm::vec3(-half_w, half_h, 0), c + glm::vec3(half_w, half_h, 0),
-          c + glm::vec3(half_w, -half_h, 0), c + glm::vec3(-half_w, -half_h, 0)};
+      const glm::vec3 corners[4] = {c + glm::vec3(-half_w, half_h, 0),
+                                    c + glm::vec3(half_w, half_h, 0),
+                                    c + glm::vec3(half_w, -half_h, 0),
+                                    c + glm::vec3(-half_w, -half_h, 0)};
       for (int i = 0; i < 4; i++) {
         DrawLine3D(draw, corners[i], corners[(i + 1) % 4], color, thickness);
       }
@@ -1139,7 +1153,8 @@ void EditorScene::DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
       DrawLine3D(draw, local({-half_w * 0.4f, half_h * 1.1f, -depth}),
                  local({0, half_h * 1.5f, -depth}), color, thickness);
       DrawLine3D(draw, local({0, half_h * 1.5f, -depth}),
-                 local({half_w * 0.4f, half_h * 1.1f, -depth}), color, thickness);
+                 local({half_w * 0.4f, half_h * 1.1f, -depth}), color,
+                 thickness);
     }
     drew_something = true;
   }
@@ -1163,7 +1178,8 @@ void EditorScene::DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
 
   if (auto* area = Objects().GetProperty<AreaLight>(entity)) {
     const OverlayColor color = selected ? selection_color : light_color;
-    const glm::vec3 area_scale = transform ? transform->GetScale() : glm::vec3(1.0f);
+    const glm::vec3 area_scale =
+        transform ? transform->GetScale() : glm::vec3(1.0f);
     const glm::vec3 right =
         rotation * glm::vec3(0.5f * area->size.x * area_scale.x, 0, 0);
     const glm::vec3 up =
@@ -1191,7 +1207,8 @@ void EditorScene::DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
     };
     for (int i = 0; i < 8; i++) {
       for (int bit : {1, 2, 4}) {
-        if (!(i & bit)) DrawLine3D(draw, corner(i), corner(i | bit), color, 1.0f);
+        if (!(i & bit))
+          DrawLine3D(draw, corner(i), corner(i | bit), color, 1.0f);
       }
     }
     if (selected) {
@@ -1229,7 +1246,8 @@ void EditorScene::DrawNodeGizmos(OverlayCanvas& draw, kEntityId entity,
           offset[(axis + 1) % 3] = std::cos(angle) * point->range;
           offset[(axis + 2) % 3] = std::sin(angle) * point->range;
           if (i > 0) {
-            DrawLine3D(draw, position + previous, position + offset, color, 1.0f);
+            DrawLine3D(draw, position + previous, position + offset, color,
+                       1.0f);
           }
           previous = offset;
         }
@@ -1301,9 +1319,8 @@ EditorScene::CameraPreviewInfo EditorScene::UpdatePreviewCamera(
   int height = override_height;
   if (width <= 0 || height <= 0) {
     float aspect = 16.0f / 9.0f;
-    if (auto project = GetProject();
-        project && project->GetWindowWidth() > 0 &&
-        project->GetWindowHeight() > 0) {
+    if (auto project = GetProject(); project && project->GetWindowWidth() > 0 &&
+                                     project->GetWindowHeight() > 0) {
       aspect = static_cast<float>(project->GetWindowWidth()) /
                static_cast<float>(project->GetWindowHeight());
     }
@@ -1347,14 +1364,14 @@ void EditorScene::OnViewportWheel(float wheel_steps, glm::vec2 local_mouse) {
   RequestViewRedraw();
 }
 
-void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down,
-                                           bool right_down, bool middle_down,
-                                           int wasdqe_mask, bool shift_down,
-                                           float dt) {
+void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta,
+                                           bool left_down, bool right_down,
+                                           bool middle_down, int wasdqe_mask,
+                                           bool shift_down, float dt) {
   const glm::quat orientation =
-      view_2d_ ? glm::quat(1, 0, 0, 0)
-               : Transform::EulerToQuat(
-                     glm::vec3(camera_pitch_, camera_yaw_, 0.0f));
+      view_2d_
+          ? glm::quat(1, 0, 0, 0)
+          : Transform::EulerToQuat(glm::vec3(camera_pitch_, camera_yaw_, 0.0f));
   const glm::vec3 right = orientation * glm::vec3(1, 0, 0);
   const glm::vec3 up = orientation * glm::vec3(0, 1, 0);
 
@@ -1379,8 +1396,8 @@ void EditorScene::UpdateViewportNavigation(glm::vec2 mouse_delta, bool left_down
       if (wasdqe_mask & kFlyS) key_pan.y -= 1.0f;
     }
     if (key_pan != glm::vec2(0.0f)) {
-      const float pan_speed =
-          std::max(camera_distance_ * 0.85f, 12.0f) * (shift_down ? 2.5f : 1.0f);
+      const float pan_speed = std::max(camera_distance_ * 0.85f, 12.0f) *
+                              (shift_down ? 2.5f : 1.0f);
       const glm::vec2 dir = glm::normalize(key_pan);
       camera_target_ += (right * dir.x + up * dir.y) * pan_speed * dt;
       changed = true;
@@ -1537,8 +1554,8 @@ void EditorScene::FrameMap() {
         GetVec3(node, "scale", scale);
         position += parent;
         if (auto camera = node.FindComponent("Camera")) {
-          const float fit =
-              static_cast<float>(camera->properties.GetFloat("fit_height", 0.0));
+          const float fit = static_cast<float>(
+              camera->properties.GetFloat("fit_height", 0.0));
           if (fit > 0.0f && fit_height == 0.0f) {
             fit_height = fit;
             camera_center = glm::vec2(position);
@@ -1579,8 +1596,7 @@ void EditorScene::FrameMap() {
     return;
   }
   camera_target_ = (min + max) * 0.5f;
-  camera_distance_ =
-      std::clamp(glm::length(max - min) * 0.8f, 6.0f, 10000.0f);
+  camera_distance_ = std::clamp(glm::length(max - min) * 0.8f, 6.0f, 10000.0f);
   editor_camera_dirty_ = true;
   UpdateEditorCamera();
   RequestViewRedraw();

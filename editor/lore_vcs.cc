@@ -37,7 +37,9 @@ std::string StripAnsi(const std::string& line) {
   for (size_t i = 0; i < line.size(); i++) {
     if (line[i] == '\x1b' && i + 1 < line.size() && line[i + 1] == '[') {
       i += 2;
-      while (i < line.size() && !std::isalpha(static_cast<unsigned char>(line[i]))) i++;
+      while (i < line.size() &&
+             !std::isalpha(static_cast<unsigned char>(line[i])))
+        i++;
       continue;
     }
     out.push_back(line[i]);
@@ -129,7 +131,8 @@ void LoreVcs::StartNext() {
         command += ' ';
         command += arg.find(' ') == std::string::npos ? arg : '"' + arg + '"';
       }
-      console_.Add(Console::Level::kInfo, Console::Source::kLore, "> " + command);
+      console_.Add(Console::Level::kInfo, Console::Source::kLore,
+                   "> " + command);
     }
 
     output_.clear();
@@ -145,7 +148,8 @@ void LoreVcs::StartNext() {
     Result result;
     result.error = error + " (set the lore executable in Options)";
     if (last_error_ != result.error) {
-      console_.Add(Console::Level::kError, Console::Source::kLore, result.error);
+      console_.Add(Console::Level::kError, Console::Source::kLore,
+                   result.error);
     }
     last_error_ = result.error;
     Job job = std::move(current_);
@@ -195,15 +199,32 @@ void LoreVcs::Finish() {
 void LoreVcs::Refresh() {
   if (!IsRepository() || refresh_queued_) return;
   refresh_queued_ = true;
-  Run({"status", "--scan"},
-      [this](const Result& r) { if (r.ok()) ParseStatus(r.lines); }, true);
-  Run({"lock", "query"},
-      [this](const Result& r) { if (r.ok()) ParseLocks(r.lines); }, true);
-  Run({"history", std::to_string(kHistoryLength)},
-      [this](const Result& r) { if (r.ok()) ParseHistory(r.lines); }, true);
-  Run({"branch", "list"},
-      [this](const Result& r) { if (r.ok()) ParseBranches(r.lines); }, true);
-  Run({"repository", "info"},
+  Run(
+      {"status", "--scan"},
+      [this](const Result& r) {
+        if (r.ok()) ParseStatus(r.lines);
+      },
+      true);
+  Run(
+      {"lock", "query"},
+      [this](const Result& r) {
+        if (r.ok()) ParseLocks(r.lines);
+      },
+      true);
+  Run(
+      {"history", std::to_string(kHistoryLength)},
+      [this](const Result& r) {
+        if (r.ok()) ParseHistory(r.lines);
+      },
+      true);
+  Run(
+      {"branch", "list"},
+      [this](const Result& r) {
+        if (r.ok()) ParseBranches(r.lines);
+      },
+      true);
+  Run(
+      {"repository", "info"},
       [this](const Result& r) {
         if (r.ok()) ParseInfo(r.lines);
         refresh_queued_ = false;
@@ -212,7 +233,8 @@ void LoreVcs::Refresh() {
       true);
 }
 
-void LoreVcs::Initialize(const std::string& server_url, const std::string& repo_name) {
+void LoreVcs::Initialize(const std::string& server_url,
+                         const std::string& repo_name) {
   if (!project_) return;
   std::string server = Trim(server_url);
   while (server.ends_with('/')) server.pop_back();
@@ -321,13 +343,14 @@ void LoreVcs::ShowDiff(const std::string& path) {
   selected_path_ = path;
   diff_lines_ = {"Loading..."};
   state_revision_++;
-  Run({"diff", "--", path},
+  Run(
+      {"diff", "--", path},
       [this, path](const Result& r) {
         if (selected_path_ != path) return;
         diff_lines_ = r.ok() ? r.lines : std::vector<std::string>{r.error};
         // Lore starts with a blank line and the path, already shown above.
-        while (!diff_lines_.empty() &&
-               (Trim(diff_lines_.front()).empty() || diff_lines_.front() == path)) {
+        while (!diff_lines_.empty() && (Trim(diff_lines_.front()).empty() ||
+                                        diff_lines_.front() == path)) {
           diff_lines_.erase(diff_lines_.begin());
         }
         if (diff_lines_.empty()) diff_lines_ = {"No differences"};
@@ -340,7 +363,8 @@ void LoreVcs::ShowRevision(const Revision& revision) {
   revision_lines_ = {"Loading..."};
   state_revision_++;
   const int number = revision.number;
-  Run({"revision", "info", "--delta", revision.signature},
+  Run(
+      {"revision", "info", "--delta", revision.signature},
       [this, number](const Result& r) {
         if (selected_revision_ != number) return;
         revision_lines_ = r.ok() ? r.lines : std::vector<std::string>{r.error};
@@ -359,9 +383,13 @@ bool LoreVcs::IsLocked(const fs::path& path) const {
   return locks_.contains(RelativePath(path));
 }
 
-void LoreVcs::Lock(const fs::path& path) { LockPaths({RelativePath(path)}, true); }
+void LoreVcs::Lock(const fs::path& path) {
+  LockPaths({RelativePath(path)}, true);
+}
 
-void LoreVcs::Unlock(const fs::path& path) { LockPaths({RelativePath(path)}, false); }
+void LoreVcs::Unlock(const fs::path& path) {
+  LockPaths({RelativePath(path)}, false);
+}
 
 std::string LoreVcs::RelativePath(const fs::path& path) const {
   if (!project_) return "";
@@ -405,9 +433,9 @@ bool LoreVcs::WriteRemoteUrl(const std::string& url) {
     while (std::getline(file, line)) lines.push_back(line);
   }
   const std::string entry = "remote_url = \"" + url + "\"";
-  auto it = std::find_if(lines.begin(), lines.end(), [](const std::string& line) {
-    return line.starts_with("remote_url");
-  });
+  auto it = std::find_if(
+      lines.begin(), lines.end(),
+      [](const std::string& line) { return line.starts_with("remote_url"); });
   if (it != lines.end()) {
     *it = entry;
   } else {
@@ -432,10 +460,12 @@ void LoreVcs::ParseStatus(const std::vector<std::string>& lines) {
       const std::string rest = line.substr(10);
       const auto at = rest.find(" revision ");
       branch_ = rest.substr(0, at);
-      if (at != std::string::npos) local_revision_ = ParseInt(rest.substr(at + 10));
+      if (at != std::string::npos)
+        local_revision_ = ParseInt(rest.substr(at + 10));
     } else if (line.starts_with("Remote revision ")) {
       remote_revision_ = ParseInt(line.substr(16));
-    } else if (line.starts_with("Local branch ") || line.starts_with("Remote branch ")) {
+    } else if (line.starts_with("Local branch ") ||
+               line.starts_with("Remote branch ")) {
       sync_state_ = Trim(line);
     } else if (line == "Changes staged for commit:") {
       in_list = true;
@@ -449,7 +479,8 @@ void LoreVcs::ParseStatus(const std::vector<std::string>& lines) {
     } else if (line.starts_with("Tracked changes")) {
       in_list = false;
     } else if (in_list && line.size() > 2 &&
-               std::isupper(static_cast<unsigned char>(line[0])) && line[1] == ' ') {
+               std::isupper(static_cast<unsigned char>(line[0])) &&
+               line[1] == ' ') {
       std::string text = Trim(line.substr(2));
       // Folders come and go with the files in them.
       if (text.empty() || text.ends_with('/')) continue;
@@ -468,14 +499,16 @@ void LoreVcs::ParseStatus(const std::vector<std::string>& lines) {
   // A staged move is also listed as a delete of its new path; keep the move.
   std::erase_if(changes_, [this](const Change& change) {
     return change.code == 'D' &&
-           std::any_of(changes_.begin(), changes_.end(), [&](const Change& other) {
-             return other.code == 'V' && other.path == change.path &&
-                    other.section == change.section;
-           });
+           std::any_of(
+               changes_.begin(), changes_.end(), [&](const Change& other) {
+                 return other.code == 'V' && other.path == change.path &&
+                        other.section == change.section;
+               });
   });
   if (!selected_path_.empty() &&
-      std::none_of(changes_.begin(), changes_.end(),
-                   [this](const Change& c) { return c.path == selected_path_; })) {
+      std::none_of(changes_.begin(), changes_.end(), [this](const Change& c) {
+        return c.path == selected_path_;
+      })) {
     selected_path_.clear();
     diff_lines_.clear();
   }

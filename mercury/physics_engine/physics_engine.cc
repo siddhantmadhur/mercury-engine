@@ -228,7 +228,8 @@ bool PhysicsEngine::CreateCapsule(
     std::function<void(JPH::BodyCreationSettings&)> override_function) {
   radius = std::max(std::abs(radius), 1e-3f);
   // A capsule with no straight part is a sphere.
-  if (half_height <= 1e-4f) return CreateSphere(self, radius, override_function);
+  if (half_height <= 1e-4f)
+    return CreateSphere(self, radius, override_function);
   JPH::CapsuleShapeSettings settings(half_height, radius);
   settings.SetEmbedded();
   return CreateBodyFromShape(self, settings, override_function);
@@ -260,7 +261,8 @@ bool IsFiniteVec(const glm::vec3& v) {
 
 void PhysicsEngine::AddForce(kEntityId self, glm::vec3 force, ForceMode mode) {
   if (!IsFiniteVec(force)) {
-    PDebug::error("AddForce ignored: non-finite force (normalized a zero vector?)");
+    PDebug::error(
+        "AddForce ignored: non-finite force (normalized a zero vector?)");
     return;
   }
   auto it = entity_bodies_ref_.find(self);
@@ -295,9 +297,11 @@ void PhysicsEngine::AddImpulse(kEntityId self, glm::vec3 impulse) {
   AddForce(self, impulse, ForceMode::kImpulse);
 }
 
-void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque, ForceMode mode) {
+void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque,
+                              ForceMode mode) {
   if (!IsFiniteVec(torque)) {
-    PDebug::error("AddTorque ignored: non-finite torque (normalized a zero vector?)");
+    PDebug::error(
+        "AddTorque ignored: non-finite torque (normalized a zero vector?)");
     return;
   }
   auto it = entity_bodies_ref_.find(self);
@@ -318,12 +322,12 @@ void PhysicsEngine::AddTorque(kEntityId self, glm::vec3 torque, ForceMode mode) 
       bi.AddAngularImpulse(body_id, JPH::Vec3(torque.x, torque.y, torque.z));
       break;
     case ForceMode::kAcceleration:
-      bi.AddTorque(body_id,
-                   JPH::Vec3(torque.x * mass, torque.y * mass, torque.z * mass));
+      bi.AddTorque(body_id, JPH::Vec3(torque.x * mass, torque.y * mass,
+                                      torque.z * mass));
       break;
     case ForceMode::kVelocityChange:
-      bi.AddAngularImpulse(body_id,
-                           JPH::Vec3(torque.x * mass, torque.y * mass, torque.z * mass));
+      bi.AddAngularImpulse(body_id, JPH::Vec3(torque.x * mass, torque.y * mass,
+                                              torque.z * mass));
       break;
   }
 }
@@ -517,10 +521,12 @@ void PhysicsEngine::Compute(int steps) {
   // Trigger bodies that share an entity follow its solid body.
   for (const auto& [entity, sensor] : sensor_bodies_) {
     auto main = entity_bodies_ref_.find(entity);
-    if (main == entity_bodies_ref_.end() || disabled_.contains(entity)) continue;
+    if (main == entity_bodies_ref_.end() || disabled_.contains(entity))
+      continue;
     body_interface.SetPositionAndRotation(
         sensor, body_interface.GetPosition(main->second),
-        body_interface.GetRotation(main->second), JPH::EActivation::DontActivate);
+        body_interface.GetRotation(main->second),
+        JPH::EActivation::DontActivate);
   }
 
   UpdateTriggers();
@@ -576,7 +582,8 @@ kEntityId PhysicsEngine::Get(JPH::BodyID jolt_id) {
   if (auto it = jolt_bodies_ref_.find(jolt_id); it != jolt_bodies_ref_.end()) {
     return it->second;
   }
-  if (auto it = secondary_bodies_.find(jolt_id); it != secondary_bodies_.end()) {
+  if (auto it = secondary_bodies_.find(jolt_id);
+      it != secondary_bodies_.end()) {
     return it->second;
   }
   return entt::null;
@@ -639,7 +646,9 @@ void PhysicsEngine::AddCollisionCallback<kCollisionLeave>(
 namespace {
 
 JPH::Vec3 ToJoltVec(glm::vec3 v) { return JPH::Vec3(v.x, v.y, v.z); }
-glm::vec3 FromJoltVec(JPH::Vec3 v) { return glm::vec3(v.GetX(), v.GetY(), v.GetZ()); }
+glm::vec3 FromJoltVec(JPH::Vec3 v) {
+  return glm::vec3(v.GetX(), v.GetY(), v.GetZ());
+}
 
 // One shape's settings, centered on its own origin.
 JPH::Ref<JPH::Shape> BuildSingleShape(const ColliderShape& shape) {
@@ -647,15 +656,16 @@ JPH::Ref<JPH::Shape> BuildSingleShape(const ColliderShape& shape) {
   switch (shape.kind) {
     case ColliderShape::Kind::kBox: {
       glm::vec3 half = glm::max(glm::abs(shape.size) / 2.0f, glm::vec3(1e-3f));
-      const float convex_radius =
-          std::min(JPH::cDefaultConvexRadius, std::min({half.x, half.y, half.z}) * 0.5f);
+      const float convex_radius = std::min(
+          JPH::cDefaultConvexRadius, std::min({half.x, half.y, half.z}) * 0.5f);
       JPH::BoxShapeSettings settings(ToJoltVec(half), convex_radius);
       settings.SetEmbedded();
       result = settings.Create();
       break;
     }
     case ColliderShape::Kind::kSphere: {
-      JPH::SphereShapeSettings settings(std::max(std::abs(shape.radius), 1e-3f));
+      JPH::SphereShapeSettings settings(
+          std::max(std::abs(shape.radius), 1e-3f));
       settings.SetEmbedded();
       result = settings.Create();
       break;
@@ -679,7 +689,8 @@ JPH::Ref<JPH::Shape> BuildSingleShape(const ColliderShape& shape) {
       const float radius = std::max(std::abs(shape.radius), 1e-3f);
       JPH::CylinderShapeSettings settings(
           half_height, radius,
-          std::min(JPH::cDefaultConvexRadius, std::min(half_height, radius) * 0.5f));
+          std::min(JPH::cDefaultConvexRadius,
+                   std::min(half_height, radius) * 0.5f));
       settings.SetEmbedded();
       result = settings.Create();
       break;
@@ -687,15 +698,17 @@ JPH::Ref<JPH::Shape> BuildSingleShape(const ColliderShape& shape) {
     case ColliderShape::Kind::kMesh: {
       JPH::VertexList vertices;
       vertices.reserve(shape.vertices.size());
-      for (const auto& v : shape.vertices) vertices.push_back(JPH::Float3(v.x, v.y, v.z));
+      for (const auto& v : shape.vertices)
+        vertices.push_back(JPH::Float3(v.x, v.y, v.z));
       JPH::IndexedTriangleList triangles;
       triangles.reserve(shape.indices.size() / 3);
       for (size_t i = 0; i + 2 < shape.indices.size(); i += 3) {
-        triangles.push_back(JPH::IndexedTriangle(shape.indices[i], shape.indices[i + 1],
-                                                 shape.indices[i + 2]));
+        triangles.push_back(JPH::IndexedTriangle(
+            shape.indices[i], shape.indices[i + 1], shape.indices[i + 2]));
       }
       if (triangles.empty()) return nullptr;
-      JPH::MeshShapeSettings settings(std::move(vertices), std::move(triangles));
+      JPH::MeshShapeSettings settings(std::move(vertices),
+                                      std::move(triangles));
       settings.SetEmbedded();
       result = settings.Create();
       break;
@@ -712,7 +725,8 @@ JPH::Ref<JPH::Shape> BuildSingleShape(const ColliderShape& shape) {
     }
   }
   if (result.HasError()) {
-    PDebug::error("Physics: could not create shape: {}", result.GetError().c_str());
+    PDebug::error("Physics: could not create shape: {}",
+                  result.GetError().c_str());
     return nullptr;
   }
   return result.Get();
@@ -725,13 +739,14 @@ JPH::Ref<JPH::Shape> PhysicsEngine::BuildShape(
   if (shapes.empty()) return nullptr;
   auto is_offset = [](const ColliderShape& shape) {
     return glm::length(shape.center) > 1e-6f ||
-           std::abs(glm::dot(shape.rotation, glm::quat(1, 0, 0, 0))) < 1.0f - 1e-6f;
+           std::abs(glm::dot(shape.rotation, glm::quat(1, 0, 0, 0))) <
+               1.0f - 1e-6f;
   };
   if (shapes.size() == 1) {
     JPH::Ref<JPH::Shape> single = BuildSingleShape(*shapes[0]);
     if (!single || !is_offset(*shapes[0])) return single;
-    JPH::RotatedTranslatedShapeSettings settings(ToJoltVec(shapes[0]->center),
-                                                 ToJolt(shapes[0]->rotation), single);
+    JPH::RotatedTranslatedShapeSettings settings(
+        ToJoltVec(shapes[0]->center), ToJolt(shapes[0]->rotation), single);
     settings.SetEmbedded();
     auto result = settings.Create();
     return result.HasError() ? nullptr : result.Get();
@@ -755,7 +770,8 @@ JPH::Ref<JPH::Shape> PhysicsEngine::BuildShape(
   return result.Get();
 }
 
-bool PhysicsEngine::CreateBody(kEntityId self, const std::vector<ColliderShape>& shapes,
+bool PhysicsEngine::CreateBody(kEntityId self,
+                               const std::vector<ColliderShape>& shapes,
                                const BodyDesc& desc, int layer) {
   auto transform = object_manager_.GetProperty<Transform>(self);
   if (!transform) {
@@ -794,15 +810,18 @@ bool PhysicsEngine::CreateBody(kEntityId self, const std::vector<ColliderShape>&
     JPH::Ref<JPH::Shape> shape = BuildShape(parts);
     if (!shape) return JPH::BodyID();
     JPH::EMotionType motion = JPH::EMotionType::Static;
-    if (desc.motion == BodyDesc::Motion::kKinematic) motion = JPH::EMotionType::Kinematic;
-    if (desc.motion == BodyDesc::Motion::kDynamic) motion = JPH::EMotionType::Dynamic;
+    if (desc.motion == BodyDesc::Motion::kKinematic)
+      motion = JPH::EMotionType::Kinematic;
+    if (desc.motion == BodyDesc::Motion::kDynamic)
+      motion = JPH::EMotionType::Dynamic;
     // A trigger riding on a moving body is moved along with it.
     if (sensor && motion == JPH::EMotionType::Dynamic && !solid.empty()) {
       motion = JPH::EMotionType::Kinematic;
     }
     JPH::BodyCreationSettings settings(
         shape, JPH::RVec3(position.x, position.y, position.z), rotation, motion,
-        motion == JPH::EMotionType::Static ? Layers::NON_MOVING : Layers::MOVING);
+        motion == JPH::EMotionType::Static ? Layers::NON_MOVING
+                                           : Layers::MOVING);
     settings.mIsSensor = sensor;
     settings.mFriction = parts[0]->friction;
     settings.mRestitution = parts[0]->restitution;
@@ -811,13 +830,15 @@ bool PhysicsEngine::CreateBody(kEntityId self, const std::vector<ColliderShape>&
       settings.mLinearDamping = desc.linear_damping;
       settings.mAngularDamping = desc.angular_damping;
       settings.mAllowSleeping = desc.allow_sleeping;
-      settings.mMotionQuality = desc.linear_cast ? JPH::EMotionQuality::LinearCast
-                                                 : JPH::EMotionQuality::Discrete;
+      settings.mMotionQuality = desc.linear_cast
+                                    ? JPH::EMotionQuality::LinearCast
+                                    : JPH::EMotionQuality::Discrete;
       if (desc.allowed_dofs != 0 && desc.allowed_dofs != 0b111111) {
         settings.mAllowedDOFs = JPH::EAllowedDOFs(desc.allowed_dofs);
       }
       if (desc.mass > 0.0f) {
-        settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        settings.mOverrideMassProperties =
+            JPH::EOverrideMassProperties::CalculateInertia;
         settings.mMassPropertiesOverride.mMass = desc.mass;
       }
     }
@@ -825,7 +846,8 @@ bool PhysicsEngine::CreateBody(kEntityId self, const std::vector<ColliderShape>&
       // Unity's kinematic bodies still report contacts with static colliders.
       settings.mCollideKinematicVsNonDynamic = true;
       if (desc.mass > 0.0f) {
-        settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        settings.mOverrideMassProperties =
+            JPH::EOverrideMassProperties::CalculateInertia;
         settings.mMassPropertiesOverride.mMass = desc.mass;
       }
     }
@@ -866,7 +888,9 @@ bool PhysicsEngine::CreateBody(kEntityId self, const std::vector<ColliderShape>&
   return created;
 }
 
-void PhysicsEngine::SetLayer(kEntityId self, int layer) { layers_[self] = layer; }
+void PhysicsEngine::SetLayer(kEntityId self, int layer) {
+  layers_[self] = layer;
+}
 
 void PhysicsEngine::SetBodyEnabled(kEntityId self, bool enabled) {
   auto& bi = physics_system_.GetBodyInterface();
@@ -912,14 +936,16 @@ glm::vec3 PhysicsEngine::GetLinearVelocity(kEntityId self) {
   }
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return glm::vec3(0.0f);
-  return FromJoltVec(physics_system_.GetBodyInterface().GetLinearVelocity(it->second));
+  return FromJoltVec(
+      physics_system_.GetBodyInterface().GetLinearVelocity(it->second));
 }
 
 void PhysicsEngine::SetLinearVelocity(kEntityId self, glm::vec3 velocity) {
   if (!IsFiniteVec(velocity)) return;
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return;
-  physics_system_.GetBodyInterface().SetLinearVelocity(it->second, ToJoltVec(velocity));
+  physics_system_.GetBodyInterface().SetLinearVelocity(it->second,
+                                                       ToJoltVec(velocity));
   if (auto transform = object_manager_.GetProperty<Transform>(self)) {
     transform->SetVelocity(velocity);
   }
@@ -930,9 +956,10 @@ void PhysicsEngine::SetKinematic(kEntityId self, bool kinematic) {
   if (it == entity_bodies_ref_.end()) return;
   auto& bi = physics_system_.GetBodyInterface();
   if (bi.GetMotionType(it->second) == JPH::EMotionType::Static) return;
-  bi.SetMotionType(it->second,
-                   kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic,
-                   JPH::EActivation::Activate);
+  bi.SetMotionType(
+      it->second,
+      kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic,
+      JPH::EActivation::Activate);
 }
 
 bool PhysicsEngine::IsKinematic(kEntityId self) {
@@ -942,12 +969,13 @@ bool PhysicsEngine::IsKinematic(kEntityId self) {
          JPH::EMotionType::Kinematic;
 }
 
-void PhysicsEngine::MoveKinematic(kEntityId self, glm::vec3 position, glm::quat rotation) {
+void PhysicsEngine::MoveKinematic(kEntityId self, glm::vec3 position,
+                                  glm::quat rotation) {
   auto it = entity_bodies_ref_.find(self);
   if (it == entity_bodies_ref_.end()) return;
   physics_system_.GetBodyInterface().MoveKinematic(
-      it->second, JPH::RVec3(position.x, position.y, position.z), ToJolt(rotation),
-      1.0f / static_cast<float>(tick_rate_));
+      it->second, JPH::RVec3(position.x, position.y, position.z),
+      ToJolt(rotation), 1.0f / static_cast<float>(tick_rate_));
 }
 
 void PhysicsEngine::SetCollisionsEnabled(kEntityId self, bool enabled) {
@@ -993,7 +1021,8 @@ class LambdaBodyFilter : public JPH::BodyFilter {
 };
 }  // namespace
 
-std::vector<RaycastHit> PhysicsEngine::RaycastAll(glm::vec3 origin, glm::vec3 direction,
+std::vector<RaycastHit> PhysicsEngine::RaycastAll(glm::vec3 origin,
+                                                  glm::vec3 direction,
                                                   float max_distance,
                                                   uint32_t layer_mask,
                                                   bool query_triggers) {
@@ -1014,7 +1043,8 @@ std::vector<RaycastHit> PhysicsEngine::RaycastAll(glm::vec3 origin, glm::vec3 di
   LambdaBodyFilter filter([&](const JPH::BodyID& id) {
     return BodyMatches(id, layer_mask, query_triggers);
   });
-  physics_system_.GetNarrowPhaseQuery().CastRay(ray, settings, collector, {}, {}, filter);
+  physics_system_.GetNarrowPhaseQuery().CastRay(ray, settings, collector, {},
+                                                {}, filter);
   collector.Sort();
 
   std::set<kEntityId> seen;
@@ -1024,28 +1054,33 @@ std::vector<RaycastHit> PhysicsEngine::RaycastAll(glm::vec3 origin, glm::vec3 di
     result.entity = entity;
     result.distance = hit.mFraction * max_distance;
     result.point = origin + direction * result.distance;
-    JPH::BodyLockRead lock(physics_system_.GetBodyLockInterfaceNoLock(), hit.mBodyID);
+    JPH::BodyLockRead lock(physics_system_.GetBodyLockInterfaceNoLock(),
+                           hit.mBodyID);
     if (lock.Succeeded()) {
       const JPH::Body& body = lock.GetBody();
       result.is_trigger = body.IsSensor();
       result.normal = FromJoltVec(body.GetWorldSpaceSurfaceNormal(
-          hit.mSubShapeID2, JPH::RVec3(result.point.x, result.point.y, result.point.z)));
+          hit.mSubShapeID2,
+          JPH::RVec3(result.point.x, result.point.y, result.point.z)));
     }
     hits.push_back(result);
   }
   return hits;
 }
 
-std::optional<RaycastHit> PhysicsEngine::Raycast(glm::vec3 origin, glm::vec3 direction,
+std::optional<RaycastHit> PhysicsEngine::Raycast(glm::vec3 origin,
+                                                 glm::vec3 direction,
                                                  float max_distance,
                                                  uint32_t layer_mask,
                                                  bool query_triggers) {
-  auto hits = RaycastAll(origin, direction, max_distance, layer_mask, query_triggers);
+  auto hits =
+      RaycastAll(origin, direction, max_distance, layer_mask, query_triggers);
   if (hits.empty()) return std::nullopt;
   return hits.front();
 }
 
-std::vector<kEntityId> PhysicsEngine::OverlapSphere(glm::vec3 center, float radius,
+std::vector<kEntityId> PhysicsEngine::OverlapSphere(glm::vec3 center,
+                                                    float radius,
                                                     uint32_t layer_mask,
                                                     bool query_triggers) {
   std::vector<kEntityId> result;
@@ -1058,12 +1093,13 @@ std::vector<kEntityId> PhysicsEngine::OverlapSphere(glm::vec3 center, float radi
   });
   physics_system_.GetNarrowPhaseQuery().CollideShape(
       &sphere, JPH::Vec3::sOne(),
-      JPH::RMat44::sTranslation(JPH::RVec3(center.x, center.y, center.z)), settings,
-      JPH::RVec3::sZero(), collector, {}, {}, filter);
+      JPH::RMat44::sTranslation(JPH::RVec3(center.x, center.y, center.z)),
+      settings, JPH::RVec3::sZero(), collector, {}, {}, filter);
   std::set<kEntityId> seen;
   for (const auto& hit : collector.mHits) {
     const kEntityId entity = Get(hit.mBodyID2);
-    if (entity != entt::null && seen.insert(entity).second) result.push_back(entity);
+    if (entity != entt::null && seen.insert(entity).second)
+      result.push_back(entity);
   }
   return result;
 }
@@ -1092,7 +1128,8 @@ void PhysicsEngine::UpdateTriggers() {
       if (id == sensor_id) return false;
       const kEntityId entity = Get(id);
       if (entity == entt::null || entity == trigger_entity) return false;
-      if (disabled_.contains(entity) || no_collisions_.contains(entity)) return false;
+      if (disabled_.contains(entity) || no_collisions_.contains(entity))
+        return false;
       JPH::BodyLockRead other(lock_interface, id);
       if (!other.Succeeded()) return false;
       const JPH::Body& body = other.GetBody();
@@ -1103,15 +1140,16 @@ void PhysicsEngine::UpdateTriggers() {
       return true;
     });
     physics_system_.GetNarrowPhaseQuery().CollideShape(
-        shape, JPH::Vec3::sOne(), com, settings, JPH::RVec3::sZero(), collector, {}, {},
-        filter);
+        shape, JPH::Vec3::sOne(), com, settings, JPH::RVec3::sZero(), collector,
+        {}, {}, filter);
     for (const auto& hit : collector.mHits) {
       const kEntityId other = Get(hit.mBodyID2);
       if (other != entt::null) current.insert({trigger_entity, other});
     }
   };
   for (const auto& [body_id, entity] : jolt_bodies_ref_) scan(entity, body_id);
-  for (const auto& [entity, sensor_id] : sensor_bodies_) scan(entity, sensor_id);
+  for (const auto& [entity, sensor_id] : sensor_bodies_)
+    scan(entity, sensor_id);
 
   if (trigger_callback_) {
     for (const auto& pair : current) {
@@ -1173,7 +1211,8 @@ void PhysicsEngine::UpdateContacts() {
 
 namespace {
 
-JPH::Ref<JPH::Shape> CharacterShape(float height, float radius, glm::vec3 center) {
+JPH::Ref<JPH::Shape> CharacterShape(float height, float radius,
+                                    glm::vec3 center) {
   radius = std::max(radius, 0.01f);
   const float half_height = std::max(height / 2.0f - radius, 0.0f);
   JPH::Ref<JPH::Shape> capsule;
@@ -1183,8 +1222,8 @@ JPH::Ref<JPH::Shape> CharacterShape(float height, float radius, glm::vec3 center
     capsule = new JPH::CapsuleShape(half_height, radius);
   }
   if (glm::length(center) < 1e-6f) return capsule;
-  return JPH::RotatedTranslatedShapeSettings(ToJoltVec(center), JPH::Quat::sIdentity(),
-                                             capsule)
+  return JPH::RotatedTranslatedShapeSettings(ToJoltVec(center),
+                                             JPH::Quat::sIdentity(), capsule)
       .Create()
       .Get();
 }
@@ -1193,7 +1232,9 @@ JPH::Ref<JPH::Shape> CharacterShape(float height, float radius, glm::vec3 center
 class CharacterBodyFilter : public JPH::BodyFilter {
  public:
   explicit CharacterBodyFilter(JPH::BodyID self) : self_(self) {}
-  bool ShouldCollide(const JPH::BodyID& id) const override { return id != self_; }
+  bool ShouldCollide(const JPH::BodyID& id) const override {
+    return id != self_;
+  }
 
  private:
   JPH::BodyID self_;
@@ -1201,12 +1242,14 @@ class CharacterBodyFilter : public JPH::BodyFilter {
 
 }  // namespace
 
-bool PhysicsEngine::CreateCharacter(kEntityId self, const CharacterDesc& desc, int layer) {
+bool PhysicsEngine::CreateCharacter(kEntityId self, const CharacterDesc& desc,
+                                    int layer) {
   auto transform = object_manager_.GetProperty<Transform>(self);
   if (!transform) return false;
   RemoveCharacter(self);
 
-  JPH::Ref<JPH::CharacterVirtualSettings> settings = new JPH::CharacterVirtualSettings();
+  JPH::Ref<JPH::CharacterVirtualSettings> settings =
+      new JPH::CharacterVirtualSettings();
   settings->mShape = CharacterShape(desc.height, desc.radius, desc.center);
   settings->mInnerBodyShape = settings->mShape;
   settings->mInnerBodyLayer = Layers::MOVING;
@@ -1221,8 +1264,8 @@ bool PhysicsEngine::CreateCharacter(kEntityId self, const CharacterDesc& desc, i
   data.layer = layer;
   data.last_position = position;
   data.character = new JPH::CharacterVirtual(
-      settings, JPH::RVec3(position.x, position.y, position.z), JPH::Quat::sIdentity(),
-      0, &physics_system_);
+      settings, JPH::RVec3(position.x, position.y, position.z),
+      JPH::Quat::sIdentity(), 0, &physics_system_);
   const JPH::BodyID inner = data.character->GetInnerBodyID();
   if (!inner.IsInvalid()) secondary_bodies_[inner] = self;
   layers_[self] = layer;
@@ -1240,7 +1283,8 @@ void PhysicsEngine::RemoveCharacter(kEntityId self) {
 
 uint32_t PhysicsEngine::MoveCharacter(kEntityId self, glm::vec3 displacement) {
   auto it = characters_.find(self);
-  if (it == characters_.end() || !IsFiniteVec(displacement)) return kCollidedNone;
+  if (it == characters_.end() || !IsFiniteVec(displacement))
+    return kCollidedNone;
   CharacterData& data = it->second;
   auto transform = object_manager_.GetProperty<Transform>(self);
   if (!transform) return kCollidedNone;
@@ -1261,17 +1305,20 @@ uint32_t PhysicsEngine::MoveCharacter(kEntityId self, glm::vec3 displacement) {
   character.SetLinearVelocity(ToJoltVec(displacement / dt));
   JPH::CharacterVirtual::ExtendedUpdateSettings update_settings;
   update_settings.mStickToFloorStepDown = JPH::Vec3::sZero();
-  update_settings.mWalkStairsStepUp = JPH::Vec3(0.0f, data.desc.step_offset, 0.0f);
+  update_settings.mWalkStairsStepUp =
+      JPH::Vec3(0.0f, data.desc.step_offset, 0.0f);
   CharacterBodyFilter body_filter(character.GetInnerBodyID());
   const JPH::BroadPhaseLayerFilter broad_phase_filter;
   const JPH::ObjectLayerFilter layer_filter;
   const JPH::ShapeFilter shape_filter;
-  character.ExtendedUpdate(dt, JPH::Vec3::sZero(), update_settings, broad_phase_filter,
-                           layer_filter, body_filter, shape_filter, *temp_allocator_);
+  character.ExtendedUpdate(dt, JPH::Vec3::sZero(), update_settings,
+                           broad_phase_filter, layer_filter, body_filter,
+                           shape_filter, *temp_allocator_);
 
   const glm::vec3 before = current;
   const JPH::RVec3 after_jolt = character.GetPosition();
-  const glm::vec3 after(after_jolt.GetX(), after_jolt.GetY(), after_jolt.GetZ());
+  const glm::vec3 after(after_jolt.GetX(), after_jolt.GetY(),
+                        after_jolt.GetZ());
   data.velocity = (after - before) / dt;
   data.last_position = after;
   transform->SetPosition(after);
@@ -1305,8 +1352,8 @@ glm::vec3 PhysicsEngine::GetCharacterVelocity(kEntityId self) const {
   return it != characters_.end() ? it->second.velocity : glm::vec3(0.0f);
 }
 
-bool PhysicsEngine::SetCharacterShape(kEntityId self, float height, float radius,
-                                      glm::vec3 center) {
+bool PhysicsEngine::SetCharacterShape(kEntityId self, float height,
+                                      float radius, glm::vec3 center) {
   auto it = characters_.find(self);
   if (it == characters_.end()) return false;
   JPH::Ref<JPH::Shape> shape = CharacterShape(height, radius, center);
@@ -1316,8 +1363,9 @@ bool PhysicsEngine::SetCharacterShape(kEntityId self, float height, float radius
   const JPH::ShapeFilter shape_filter;
   // Unity resizes a CharacterController unconditionally; the caller checks
   // for room first (as PlayerMotor does with a raycast).
-  it->second.character->SetShape(shape, FLT_MAX, broad_phase_filter, layer_filter,
-                                 body_filter, shape_filter, *temp_allocator_);
+  it->second.character->SetShape(shape, FLT_MAX, broad_phase_filter,
+                                 layer_filter, body_filter, shape_filter,
+                                 *temp_allocator_);
   it->second.character->SetInnerBodyShape(shape);
   it->second.desc.height = height;
   it->second.desc.radius = radius;

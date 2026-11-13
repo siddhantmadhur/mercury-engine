@@ -6,7 +6,8 @@
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
 
-// Built with static linkage to keep stb_truetype symbols translation-unit local.
+// Built with static linkage to keep stb_truetype symbols translation-unit
+// local.
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include "stb/stb_truetype.h"
@@ -38,8 +39,10 @@ std::shared_ptr<Font> Font::LoadFile(const std::string& path) {
     return nullptr;
   }
   auto font = FromMemory(std::move(*data));
-  if (font) font->path_ = path;
-  else PDebug::warn("UI: {} is not a TrueType font", path);
+  if (font)
+    font->path_ = path;
+  else
+    PDebug::warn("UI: {} is not a TrueType font", path);
   return font;
 }
 
@@ -62,7 +65,8 @@ bool Font::Init(std::vector<uint8_t> data) {
   ascent_ = ascent * scale_;
   descent_ = descent * scale_;
   line_gap_ = gap * scale_;
-  atlas_ = UITextureRegistry::Instance().Create(kAtlasWidth, kInitialAtlasHeight);
+  atlas_ =
+      UITextureRegistry::Instance().Create(kAtlasWidth, kInitialAtlasHeight);
   // White everywhere; the distance lives in alpha.
   for (size_t i = 0; i < atlas_->rgba.size(); i += 4) {
     atlas_->rgba[i] = atlas_->rgba[i + 1] = atlas_->rgba[i + 2] = 255;
@@ -81,7 +85,8 @@ bool Font::Pack(int w, int h, glm::ivec2& out) {
     if (atlas_->height >= kMaxAtlasHeight) return false;
     // Growing downwards keeps every packed glyph where it is.
     const int new_height = atlas_->height * 2;
-    std::vector<uint8_t> grown(static_cast<size_t>(atlas_->width) * new_height * 4);
+    std::vector<uint8_t> grown(static_cast<size_t>(atlas_->width) * new_height *
+                               4);
     for (size_t i = 0; i < grown.size(); i += 4) {
       grown[i] = grown[i + 1] = grown[i + 2] = 255;
       grown[i + 3] = 0;
@@ -102,11 +107,13 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
   if (it != glyphs_.end()) return it->second;
 
   GlyphInfo glyph;
-  int glyph_index = stbtt_FindGlyphIndex(info_.get(), static_cast<int>(codepoint));
+  int glyph_index =
+      stbtt_FindGlyphIndex(info_.get(), static_cast<int>(codepoint));
   if (glyph_index == 0 && codepoint != 0xFFFD && codepoint > 32) {
     // Missing glyph: show the replacement character (or '?').
-    const GlyphInfo& fallback = Glyph(
-        stbtt_FindGlyphIndex(info_.get(), 0xFFFD) ? char32_t(0xFFFD) : char32_t('?'));
+    const GlyphInfo& fallback =
+        Glyph(stbtt_FindGlyphIndex(info_.get(), 0xFFFD) ? char32_t(0xFFFD)
+                                                        : char32_t('?'));
     return glyphs_.emplace(codepoint, fallback).first->second;
   }
   int advance = 0, lsb = 0;
@@ -114,9 +121,9 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
   glyph.advance = advance * scale_;
 
   int w = 0, h = 0, xoff = 0, yoff = 0;
-  unsigned char* sdf = stbtt_GetGlyphSDF(info_.get(), scale_, glyph_index,
-                                         kSdfPadding, 128,
-                                         128.0f / kSdfPadding, &w, &h, &xoff, &yoff);
+  unsigned char* sdf =
+      stbtt_GetGlyphSDF(info_.get(), scale_, glyph_index, kSdfPadding, 128,
+                        128.0f / kSdfPadding, &w, &h, &xoff, &yoff);
   if (sdf && w > 0 && h > 0) {
     glm::ivec2 at;
     if (Pack(w, h, at)) {
@@ -242,12 +249,17 @@ std::vector<StyledChar> ApplyRichText(std::u32string_view text,
           }
           return v;
         };
-        if (lower == "b") bold++;
-        else if (lower == "/b") bold = std::max(0, bold - 1);
-        else if (lower == "i") italic++;
-        else if (lower == "/i") italic = std::max(0, italic - 1);
+        if (lower == "b")
+          bold++;
+        else if (lower == "/b")
+          bold = std::max(0, bold - 1);
+        else if (lower == "i")
+          italic++;
+        else if (lower == "/i")
+          italic = std::max(0, italic - 1);
         else if (lower == "br" || lower == "br/") {
-          out.push_back({'\n', colors.back(), sizes.back(), bold > 0, italic > 0});
+          out.push_back(
+              {'\n', colors.back(), sizes.back(), bold > 0, italic > 0});
         } else if (lower.starts_with("color=")) {
           auto c = ParseColor(value());
           colors.push_back(c ? *c : colors.back());
@@ -364,7 +376,8 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
     if (wrap && !IsSpace(c) && pen + glyph.advance * scale > box_width &&
         pen > 0.0f) {
       // Move the current word to a new line.
-      size_t move_from = last_break != std::string::npos ? last_break : placed.size();
+      size_t move_from =
+          last_break != std::string::npos ? last_break : placed.size();
       float shift = move_from < placed.size() ? placed[move_from].x : pen;
       // Width of the finished line excludes trailing spaces.
       float width = shift;
@@ -421,15 +434,15 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
   if (ellipsis) {
     const GlyphInfo& dot = font->Glyph(U'…');
     const float dot_width = dot.advance * base_scale;
-    while (visible_count > 0 &&
-           placed[visible_count - 1].x + placed[visible_count - 1].advance +
-                   dot_width >
-               box_width) {
+    while (visible_count > 0 && placed[visible_count - 1].x +
+                                        placed[visible_count - 1].advance +
+                                        dot_width >
+                                    box_width) {
       visible_count--;
     }
-    ellipsis_x = visible_count > 0
-                     ? placed[visible_count - 1].x + placed[visible_count - 1].advance
-                     : 0.0f;
+    ellipsis_x = visible_count > 0 ? placed[visible_count - 1].x +
+                                         placed[visible_count - 1].advance
+                                   : 0.0f;
     lines[0].width = ellipsis_x + dot_width;
   }
 
@@ -441,7 +454,7 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
   std::vector<float> line_x(lines.size()), line_y(lines.size());
   float y = 0.0f;
   for (size_t l = 0; l < lines.size(); l++) {
-    line_x[l] = column == 0 ? 0.0f
+    line_x[l] = column == 0   ? 0.0f
                 : column == 1 ? (align_width - lines[l].width) / 2.0f
                               : align_width - lines[l].width;
     line_y[l] = y;
@@ -485,8 +498,10 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
       layout.caret_lines.push_back(static_cast<int>(p.line));
     }
     const size_t last_line = lines.size() - 1;
-    float end_x = placed.empty() ? 0.0f : placed.back().x + placed.back().advance;
-    if (!placed.empty() && chars[placed.back().char_index].c == '\n') end_x = 0.0f;
+    float end_x =
+        placed.empty() ? 0.0f : placed.back().x + placed.back().advance;
+    if (!placed.empty() && chars[placed.back().char_index].c == '\n')
+      end_x = 0.0f;
     layout.carets.push_back({line_x[last_line] + end_x, line_y[last_line]});
     layout.caret_lines.push_back(static_cast<int>(last_line));
   }

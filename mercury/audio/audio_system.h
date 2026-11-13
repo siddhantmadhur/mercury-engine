@@ -51,7 +51,8 @@ class AudioSystem {
   void UnPause(SourceId id);
   // Plays a clip once over whatever the source plays, with the source's
   // pitch and volume times `volume_scale` (AudioSource.PlayOneShot).
-  void PlayOneShot(SourceId id, std::string_view res_path, float volume_scale = 1.0f);
+  void PlayOneShot(SourceId id, std::string_view res_path,
+                   float volume_scale = 1.0f);
   // The main clip or a one-shot is playing (AudioSource.isPlaying).
   bool IsPlaying(SourceId id) const;
   // Seconds into the main clip.
@@ -62,7 +63,8 @@ class AudioSystem {
   void SetLoop(SourceId id, bool loop);
   void SetMute(SourceId id, bool mute);
   // spatial_blend 0 is 2D (no panning or fading), 1 is fully 3D.
-  void SetSpatial(SourceId id, float spatial_blend, float min_distance, float max_distance);
+  void SetSpatial(SourceId id, float spatial_blend, float min_distance,
+                  float max_distance);
   void SetPosition(SourceId id, glm::vec3 position);
 
   void SetListener(glm::vec3 position, glm::vec3 forward, glm::vec3 up);

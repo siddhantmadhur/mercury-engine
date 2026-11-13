@@ -57,7 +57,8 @@ void ApplyDeclarations(
     TokenList tokens;
     if (!SubstituteVariables(d.tokens, variables, tokens)) continue;
     for (const auto& expanded : ExpandDeclaration(d.property, tokens)) {
-      if (expanded.tokens.size() == 1 && expanded.tokens[0].IsIdent("inherit")) {
+      if (expanded.tokens.size() == 1 &&
+          expanded.tokens[0].IsIdent("inherit")) {
         computed.Set(expanded.id, parent.Get(expanded.id));
         continue;
       }
@@ -97,8 +98,9 @@ std::vector<const StyleSheet*> ApplicableSheets(
   return sheets;
 }
 
-std::vector<MatchedRule> MatchRules(const VisualElement* element,
-                                    const std::vector<const StyleSheet*>& sheets) {
+std::vector<MatchedRule> MatchRules(
+    const VisualElement* element,
+    const std::vector<const StyleSheet*>& sheets) {
   std::vector<MatchedRule> matches;
   for (size_t s = 0; s < sheets.size(); s++) {
     const StyleSheet* sheet = sheets[s];
@@ -142,7 +144,8 @@ void ResolveStyles(VisualElement* root, UIResources& resources,
     if (!need && !e->subtreeStyleDirty()) return;
     if (need) {
       const VisualElement* parent = e->hierarchyParent();
-      const ComputedStyle& parent_style = parent ? parent->computedStyle() : kDefault;
+      const ComputedStyle& parent_style =
+          parent ? parent->computedStyle() : kDefault;
       ComputedStyle computed;
       computed.InheritFrom(parent_style);
 

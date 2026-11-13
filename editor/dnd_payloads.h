@@ -1,7 +1,8 @@
 /*
  * dnd_payloads.h
  *
- * Shared internal & OS drag-and-drop payload helpers for wxWidgets editor panels.
+ * Shared internal & OS drag-and-drop payload helpers for wxWidgets editor
+ * panels.
  */
 #ifndef MERCURY_EDITOR_DND_PAYLOADS_H
 #define MERCURY_EDITOR_DND_PAYLOADS_H
@@ -25,7 +26,8 @@ inline constexpr const char* kNodePayloadPrefix = "MERCURY_NODE:";
 inline wxDataObjectComposite* MakeResourceDragObject(
     const std::string& res_path, const std::filesystem::path& abs_path) {
   auto* composite = new wxDataObjectComposite();
-  auto* text = new wxTextDataObject(wxString::FromUTF8(kResPayloadPrefix + res_path));
+  auto* text =
+      new wxTextDataObject(wxString::FromUTF8(kResPayloadPrefix + res_path));
   composite->Add(text, /*preferred=*/true);
   if (!abs_path.empty()) {
     auto* files = new wxFileDataObject();
@@ -36,8 +38,8 @@ inline wxDataObjectComposite* MakeResourceDragObject(
 }
 
 inline wxTextDataObject* MakeNodeDragObject(uint64_t uid) {
-  return new wxTextDataObject(
-      wxString::FromUTF8(std::string(kNodePayloadPrefix) + std::to_string(uid)));
+  return new wxTextDataObject(wxString::FromUTF8(
+      std::string(kNodePayloadPrefix) + std::to_string(uid)));
 }
 
 inline std::optional<std::string> ExtractResPathPayload(const wxString& text) {
@@ -64,8 +66,8 @@ inline std::optional<uint64_t> ExtractNodeUidPayload(const wxString& text) {
 // Generic drop target accepting both OS files and internal text payloads.
 class CompositeDropTarget : public wxDropTarget {
  public:
-  using OnFilesFn =
-      std::function<bool(const wxCoord x, const wxCoord y, const wxArrayString&)>;
+  using OnFilesFn = std::function<bool(const wxCoord x, const wxCoord y,
+                                       const wxArrayString&)>;
   using OnTextFn =
       std::function<bool(const wxCoord x, const wxCoord y, const wxString&)>;
 

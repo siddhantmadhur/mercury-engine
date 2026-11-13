@@ -105,7 +105,8 @@ void VisualElement::ClearClassList() {
   MarkStyleDirty();
 }
 
-void VisualElement::EnableInClassList(std::string_view class_name, bool enable) {
+void VisualElement::EnableInClassList(std::string_view class_name,
+                                      bool enable) {
   if (enable) {
     AddToClassList(class_name);
   } else {
@@ -118,7 +119,8 @@ void VisualElement::ToggleInClassList(std::string_view class_name) {
 }
 
 bool VisualElement::ClassListContains(std::string_view class_name) const {
-  return std::find(classes_.begin(), classes_.end(), class_name) != classes_.end();
+  return std::find(classes_.begin(), classes_.end(), class_name) !=
+         classes_.end();
 }
 
 // --------------------------------------------------------------- hierarchy --
@@ -131,8 +133,10 @@ VisualElement* VisualElement::Add(std::unique_ptr<VisualElement> child) {
   return raw;
 }
 
-VisualElement* VisualElement::Insert(int index, std::unique_ptr<VisualElement> child) {
-  VisualElement* raw = contentContainer()->HierarchyInsert(index, std::move(child));
+VisualElement* VisualElement::Insert(int index,
+                                     std::unique_ptr<VisualElement> child) {
+  VisualElement* raw =
+      contentContainer()->HierarchyInsert(index, std::move(child));
   if (raw) raw->parent_ = this;
   return raw;
 }
@@ -190,15 +194,24 @@ void VisualElement::SendToBack() {
 }
 
 int VisualElement::childCount() const {
-  return const_cast<VisualElement*>(this)->contentContainer()->hierarchy().childCount();
+  return const_cast<VisualElement*>(this)
+      ->contentContainer()
+      ->hierarchy()
+      .childCount();
 }
 
 VisualElement* VisualElement::ElementAt(int index) const {
-  return const_cast<VisualElement*>(this)->contentContainer()->hierarchy().ElementAt(index);
+  return const_cast<VisualElement*>(this)
+      ->contentContainer()
+      ->hierarchy()
+      .ElementAt(index);
 }
 
 int VisualElement::IndexOf(const VisualElement* child) const {
-  return const_cast<VisualElement*>(this)->contentContainer()->hierarchy().IndexOf(child);
+  return const_cast<VisualElement*>(this)
+      ->contentContainer()
+      ->hierarchy()
+      .IndexOf(child);
 }
 
 std::vector<VisualElement*> VisualElement::Children() const {
@@ -217,15 +230,17 @@ bool VisualElement::Contains(const VisualElement* element) const {
   return false;
 }
 
-VisualElement* VisualElement::Hierarchy::Add(std::unique_ptr<VisualElement> child) {
+VisualElement* VisualElement::Hierarchy::Add(
+    std::unique_ptr<VisualElement> child) {
   return owner->HierarchyInsert(static_cast<int>(owner->children_.size()),
                                 std::move(child));
 }
-VisualElement* VisualElement::Hierarchy::Insert(int index,
-                                                std::unique_ptr<VisualElement> child) {
+VisualElement* VisualElement::Hierarchy::Insert(
+    int index, std::unique_ptr<VisualElement> child) {
   return owner->HierarchyInsert(index, std::move(child));
 }
-std::unique_ptr<VisualElement> VisualElement::Hierarchy::Remove(VisualElement* child) {
+std::unique_ptr<VisualElement> VisualElement::Hierarchy::Remove(
+    VisualElement* child) {
   return owner->HierarchyRemove(child);
 }
 int VisualElement::Hierarchy::childCount() const {
@@ -242,8 +257,8 @@ int VisualElement::Hierarchy::IndexOf(const VisualElement* child) const {
   return -1;
 }
 
-VisualElement* VisualElement::HierarchyInsert(int index,
-                                              std::unique_ptr<VisualElement> child) {
+VisualElement* VisualElement::HierarchyInsert(
+    int index, std::unique_ptr<VisualElement> child) {
   if (!child) return nullptr;
   index = std::clamp(index, 0, static_cast<int>(children_.size()));
   if (has_measure_func_) {
@@ -264,7 +279,8 @@ VisualElement* VisualElement::HierarchyInsert(int index,
   return raw;
 }
 
-std::unique_ptr<VisualElement> VisualElement::HierarchyRemove(VisualElement* child) {
+std::unique_ptr<VisualElement> VisualElement::HierarchyRemove(
+    VisualElement* child) {
   auto it = std::find_if(children_.begin(), children_.end(),
                          [child](const auto& c) { return c.get() == child; });
   if (it == children_.end()) return nullptr;
@@ -365,7 +381,8 @@ bool VisualElement::IsFocused() const {
 }
 
 void VisualElement::SetPseudoState(uint32_t state, bool on) {
-  const uint32_t next = on ? (pseudo_states_ | state) : (pseudo_states_ & ~state);
+  const uint32_t next =
+      on ? (pseudo_states_ | state) : (pseudo_states_ & ~state);
   if (next == pseudo_states_) return;
   pseudo_states_ = next;
   MarkStyleDirty();
@@ -388,7 +405,8 @@ void VisualElement::AddStyleSheet(std::shared_ptr<StyleSheet> sheet) {
 }
 
 void VisualElement::RemoveStyleSheet(const StyleSheet* sheet) {
-  std::erase_if(style_sheets_, [sheet](const auto& s) { return s.get() == sheet; });
+  std::erase_if(style_sheets_,
+                [sheet](const auto& s) { return s.get() == sheet; });
   MarkStyleDirty();
 }
 
@@ -422,11 +440,13 @@ bool VisualElement::TryGetCustomStyle(std::string_view name, Color& out) const {
   return false;
 }
 
-bool VisualElement::TryGetCustomStyle(std::string_view name, std::string& out) const {
+bool VisualElement::TryGetCustomStyle(std::string_view name,
+                                      std::string& out) const {
   auto it = custom_properties_.find(std::string(name));
   if (it == custom_properties_.end() || it->second.empty()) return false;
   const auto& t = it->second[0];
-  out = t.type == StyleToken::Type::kString ? t.text : TokensToString(it->second);
+  out =
+      t.type == StyleToken::Type::kString ? t.text : TokensToString(it->second);
   return true;
 }
 
@@ -454,14 +474,16 @@ void VisualElement::MarkMeasureDirty() {
   MarkDirtyRepaint();
 }
 
-void VisualElement::SetComputedStyle(const ComputedStyle& computed, bool animate) {
+void VisualElement::SetComputedStyle(const ComputedStyle& computed,
+                                     bool animate) {
   const ComputedStyle before = resolved_;
   if (animate && has_been_styled_) {
     for (size_t i = 0; i < kStylePropertyCount; i++) {
       const auto id = static_cast<StylePropertyId>(i);
       const StyleValue next = computed.Get(id);
       if (computed_.Get(id) == next) continue;
-      std::erase_if(transitions_, [id](const Transition& t) { return t.property == id; });
+      std::erase_if(transitions_,
+                    [id](const Transition& t) { return t.property == id; });
       if (!GetStylePropertyInfo(id).animatable) continue;
 
       // Find the transition that names this property (or "all").
@@ -480,7 +502,8 @@ void VisualElement::SetComputedStyle(const ComputedStyle& computed, bool animate
         t.to = next;
         t.duration = duration;
         t.delay = pick(computed.transitionDelay.seconds, 0.0f);
-        t.easing = pick(computed.transitionTimingFunction.modes, EasingMode::kEase);
+        t.easing =
+            pick(computed.transitionTimingFunction.modes, EasingMode::kEase);
         transitions_.push_back(std::move(t));
         break;
       }
@@ -597,16 +620,17 @@ Rect VisualElement::contentRect() const {
 glm::mat3 VisualElement::localTransform() const {
   const ComputedStyle& s = resolved_;
   glm::mat3 local = Translation({layout_.x, layout_.y});
-  const bool transformed = s.rotate.degrees != 0.0f ||
-                           s.scale.value != glm::vec2(1.0f) ||
-                           s.translate.x.value != 0.0f || s.translate.y.value != 0.0f;
+  const bool transformed =
+      s.rotate.degrees != 0.0f || s.scale.value != glm::vec2(1.0f) ||
+      s.translate.x.value != 0.0f || s.translate.y.value != 0.0f;
   if (transformed) {
     const glm::vec2 origin(s.transformOrigin.x.Resolve(layout_.width),
                            s.transformOrigin.y.Resolve(layout_.height));
     const glm::vec2 translate(s.translate.x.Resolve(layout_.width),
                               s.translate.y.Resolve(layout_.height));
-    local = local * Translation(origin + translate) * Rotation(s.rotate.degrees) *
-            Scaling(s.scale.value) * Translation(-origin);
+    local = local * Translation(origin + translate) *
+            Rotation(s.rotate.degrees) * Scaling(s.scale.value) *
+            Translation(-origin);
   }
   return local;
 }
@@ -707,7 +731,8 @@ void VisualElement::SendEvent(EventBase& event) {
   HandleEventBubbleUp(event);
 }
 
-Manipulator* VisualElement::AddManipulator(std::unique_ptr<Manipulator> manipulator) {
+Manipulator* VisualElement::AddManipulator(
+    std::unique_ptr<Manipulator> manipulator) {
   Manipulator* raw = manipulator.get();
   manipulators_.push_back(std::move(manipulator));
   raw->SetTarget(this);
@@ -715,8 +740,9 @@ Manipulator* VisualElement::AddManipulator(std::unique_ptr<Manipulator> manipula
 }
 
 void VisualElement::RemoveManipulator(Manipulator* manipulator) {
-  auto it = std::find_if(manipulators_.begin(), manipulators_.end(),
-                         [manipulator](const auto& m) { return m.get() == manipulator; });
+  auto it = std::find_if(
+      manipulators_.begin(), manipulators_.end(),
+      [manipulator](const auto& m) { return m.get() == manipulator; });
   if (it == manipulators_.end()) return;
   (*it)->SetTarget(nullptr);
   manipulators_.erase(it);
@@ -763,8 +789,8 @@ void VisualElement::RunScheduledItems(double now_ms) {
     action();
     if (!*alive) return;
     ScheduledItem& after = *scheduled_[i];
-    if (!after.repeat_ ||
-        (after.duration_ms_ >= 0.0 && now_ms - after.started_at_ >= after.duration_ms_)) {
+    if (!after.repeat_ || (after.duration_ms_ >= 0.0 &&
+                           now_ms - after.started_at_ >= after.duration_ms_)) {
       after.done_ = true;
     } else {
       after.next_run_ = now_ms + after.interval_ms_;
@@ -837,7 +863,8 @@ DataBinding* VisualElement::GetBinding(std::string_view property) {
   return nullptr;
 }
 
-bool VisualElement::SetProperty(std::string_view name, const mtext::Variant& value) {
+bool VisualElement::SetProperty(std::string_view name,
+                                const mtext::Variant& value) {
   if (name == "name") {
     SetName(VariantToString(value));
   } else if (name == "tooltip") {
@@ -861,7 +888,8 @@ bool VisualElement::SetProperty(std::string_view name, const mtext::Variant& val
   return true;
 }
 
-std::optional<mtext::Variant> VisualElement::GetProperty(std::string_view name) const {
+std::optional<mtext::Variant> VisualElement::GetProperty(
+    std::string_view name) const {
   if (name == "name") return name_;
   if (name == "tooltip") return tooltip_;
   if (name == "enabled") return enabled_self_;
@@ -869,7 +897,8 @@ std::optional<mtext::Variant> VisualElement::GetProperty(std::string_view name) 
   if (name == "focusable") return focusable_;
   if (name == "tabindex" || name == "tab-index") return tab_index_;
   if (name == "picking-mode") {
-    return std::string(picking_mode_ == PickingMode::kIgnore ? "Ignore" : "Position");
+    return std::string(picking_mode_ == PickingMode::kIgnore ? "Ignore"
+                                                             : "Position");
   }
   if (name == "data-source-path") return data_source_path_;
   return std::nullopt;
@@ -885,7 +914,9 @@ void Manipulator::SetTarget(VisualElement* target) {
 
 Clickable::Clickable(std::function<void()> handler, double delay_ms,
                      double interval_ms)
-    : clicked(std::move(handler)), delay_ms_(delay_ms), interval_ms_(interval_ms) {}
+    : clicked(std::move(handler)),
+      delay_ms_(delay_ms),
+      interval_ms_(interval_ms) {}
 
 void Clickable::Invoke(EventBase& event) {
   if (clickedWithEventInfo) clickedWithEventInfo(event);
@@ -894,54 +925,59 @@ void Clickable::Invoke(EventBase& event) {
 
 void Clickable::RegisterCallbacksOnTarget() {
   VisualElement* t = target();
-  callbacks_.push_back(t->RegisterCallback<PointerDownEvent>([this](PointerDownEvent& e) {
-    if (e.button != 0 || !target()->enabledInHierarchy()) return;
-    active_ = true;
-    target()->CapturePointer(e.pointerId);
-    target()->SetPseudoState(kPseudoActive, true);
-    e.StopPropagation();
-    if (interval_ms_ > 0.0) {
-      // Repeating (scroller arrows): fire now, then after the delay.
-      Invoke(e);
-      repeater_ = &target()->Schedule([this] {
-                      if (!active_) return;
-                      PointerDownEvent repeat;
-                      Invoke(repeat);
-                    })
-                       .StartingIn(delay_ms_)
-                       .Every(interval_ms_);
-    }
-  }));
-  callbacks_.push_back(t->RegisterCallback<PointerMoveEvent>([this](PointerMoveEvent& e) {
-    if (!active_) return;
-    const bool over = target()->ContainsPoint(target()->WorldToLocal(e.position));
-    target()->SetPseudoState(kPseudoActive, over);
-    e.StopPropagation();
-  }));
-  callbacks_.push_back(t->RegisterCallback<PointerUpEvent>([this](PointerUpEvent& e) {
-    if (!active_ || e.button != 0) return;
-    active_ = false;
-    target()->ReleasePointer(e.pointerId);
-    target()->SetPseudoState(kPseudoActive, false);
-    if (repeater_) {
-      repeater_->Cancel();
-      repeater_ = nullptr;
-    }
-    e.StopPropagation();
-    if (interval_ms_ <= 0.0 &&
-        target()->ContainsPoint(target()->WorldToLocal(e.position))) {
-      Invoke(e);
-    }
-  }));
   callbacks_.push_back(
-      t->RegisterCallback<PointerCaptureOutEvent>([this](PointerCaptureOutEvent&) {
+      t->RegisterCallback<PointerDownEvent>([this](PointerDownEvent& e) {
+        if (e.button != 0 || !target()->enabledInHierarchy()) return;
+        active_ = true;
+        target()->CapturePointer(e.pointerId);
+        target()->SetPseudoState(kPseudoActive, true);
+        e.StopPropagation();
+        if (interval_ms_ > 0.0) {
+          // Repeating (scroller arrows): fire now, then after the delay.
+          Invoke(e);
+          repeater_ = &target()
+                           ->Schedule([this] {
+                             if (!active_) return;
+                             PointerDownEvent repeat;
+                             Invoke(repeat);
+                           })
+                           .StartingIn(delay_ms_)
+                           .Every(interval_ms_);
+        }
+      }));
+  callbacks_.push_back(
+      t->RegisterCallback<PointerMoveEvent>([this](PointerMoveEvent& e) {
+        if (!active_) return;
+        const bool over =
+            target()->ContainsPoint(target()->WorldToLocal(e.position));
+        target()->SetPseudoState(kPseudoActive, over);
+        e.StopPropagation();
+      }));
+  callbacks_.push_back(
+      t->RegisterCallback<PointerUpEvent>([this](PointerUpEvent& e) {
+        if (!active_ || e.button != 0) return;
+        active_ = false;
+        target()->ReleasePointer(e.pointerId);
+        target()->SetPseudoState(kPseudoActive, false);
+        if (repeater_) {
+          repeater_->Cancel();
+          repeater_ = nullptr;
+        }
+        e.StopPropagation();
+        if (interval_ms_ <= 0.0 &&
+            target()->ContainsPoint(target()->WorldToLocal(e.position))) {
+          Invoke(e);
+        }
+      }));
+  callbacks_.push_back(t->RegisterCallback<PointerCaptureOutEvent>(
+      [this](PointerCaptureOutEvent&) {
         if (!active_) return;
         active_ = false;
         target()->SetPseudoState(kPseudoActive, false);
       }));
   // Keyboard and gamepad activation.
-  callbacks_.push_back(
-      t->RegisterCallback<NavigationSubmitEvent>([this](NavigationSubmitEvent& e) {
+  callbacks_.push_back(t->RegisterCallback<NavigationSubmitEvent>(
+      [this](NavigationSubmitEvent& e) {
         if (!target()->enabledInHierarchy()) return;
         Invoke(e);
         e.StopPropagation();

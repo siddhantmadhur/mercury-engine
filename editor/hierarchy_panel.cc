@@ -44,7 +44,8 @@ HierarchyPanel::HierarchyPanel(wxWindow* parent, EditorScene& scene)
 
   map_label_ = new wxStaticText(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
                                 wxDefaultSize, wxST_ELLIPSIZE_END);
-  map_label_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  map_label_->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   bar_sizer->Add(map_label_, 1, wxALIGN_CENTER_VERTICAL);
 
   auto* wrap_bar = new wxBoxSizer(wxVERTICAL);
@@ -56,10 +57,9 @@ HierarchyPanel::HierarchyPanel(wxWindow* parent, EditorScene& scene)
   search_->SetHint("Search hierarchy...");
   root->Add(search_, 0, wxEXPAND | wxALL, 4);
 
-  tree_ = new wxTreeCtrl(
-      this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_EDIT_LABELS |
-          wxTR_SINGLE | wxBORDER_NONE);
+  tree_ = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                         wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT |
+                             wxTR_EDIT_LABELS | wxTR_SINGLE | wxBORDER_NONE);
   root->Add(tree_, 1, wxEXPAND);
   SetSizer(root);
 
@@ -145,7 +145,8 @@ HierarchyPanel::HierarchyPanel(wxWindow* parent, EditorScene& scene)
   tree_->Bind(wxEVT_TREE_ITEM_MENU, [this](wxTreeEvent& evt) {
     MapNode* node = nullptr;
     if (evt.GetItem().IsOk()) {
-      auto* data = static_cast<NodeItemData*>(tree_->GetItemData(evt.GetItem()));
+      auto* data =
+          static_cast<NodeItemData*>(tree_->GetItemData(evt.GetItem()));
       if (data) node = scene_.GetMap().FindByUid(data->uid);
     }
     if (node) scene_.Select(node);
@@ -185,7 +186,8 @@ HierarchyPanel::HierarchyPanel(wxWindow* parent, EditorScene& scene)
           const wxTreeItemId hit = tree_->HitTest(wxPoint(x, y), flags);
           MapNode* target_parent = scene_.GetMap().GetRoot();
           if (hit.IsOk()) {
-            if (auto* data = static_cast<NodeItemData*>(tree_->GetItemData(hit))) {
+            if (auto* data =
+                    static_cast<NodeItemData*>(tree_->GetItemData(hit))) {
               if (MapNode* target = scene_.GetMap().FindByUid(data->uid)) {
                 target_parent = target;
               }
@@ -244,14 +246,16 @@ void HierarchyPanel::CollectExpandedUids() {
   if (!tree_->GetRootItem().IsOk()) return;
   for (const auto& [uid, item] : uid_to_item_) {
     if (item.IsOk() && tree_->ItemHasChildren(item)) {
-      if (tree_->IsExpanded(item)) expanded_uids_.insert(uid);
-      else expanded_uids_.erase(uid);
+      if (tree_->IsExpanded(item))
+        expanded_uids_.insert(uid);
+      else
+        expanded_uids_.erase(uid);
     }
   }
 }
 
 bool HierarchyPanel::NodeMatchesFilter(const MapNode& node,
-                                         const std::string& filter_lower) const {
+                                       const std::string& filter_lower) const {
   if (filter_lower.empty()) return true;
   if (ToLower(node.name).find(filter_lower) != std::string::npos) return true;
   for (const auto& c : node.children) {
@@ -291,9 +295,8 @@ void HierarchyPanel::RebuildTree() {
 
   const MapNode* root = scene_.GetMap().GetRoot();
   if (root) {
-    wxTreeItemId root_item =
-        tree_->AddRoot(wxString::FromUTF8(root->name), -1, -1,
-                       new NodeItemData(root->uid));
+    wxTreeItemId root_item = tree_->AddRoot(wxString::FromUTF8(root->name), -1,
+                                            -1, new NodeItemData(root->uid));
     uid_to_item_[root->uid] = root_item;
     if (first_populate) expanded_uids_.insert(root->uid);
     PopulateChildren(root_item, *root, filter_lower);
@@ -361,9 +364,9 @@ void HierarchyPanel::ShowContextMenu(const wxPoint& screen_pos, MapNode* node) {
         up_item->GetId());
 
     wxMenuItem* down_item = menu.Append(wxID_ANY, "Move Down");
-    down_item->Enable(
-        node->parent &&
-        index + 1 < static_cast<int>(node->parent->children.size()));
+    down_item->Enable(node->parent &&
+                      index + 1 <
+                          static_cast<int>(node->parent->children.size()));
     menu.Bind(
         wxEVT_MENU,
         [this, node, index](wxCommandEvent&) {

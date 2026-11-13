@@ -50,12 +50,14 @@ void HashFile(Hash& hash, const fs::path& file) {
   const auto size = fs::file_size(file, ec);
   hash.Add(ec ? uint64_t{0} : static_cast<uint64_t>(size));
   const auto time = fs::last_write_time(file, ec);
-  hash.Add(ec ? int64_t{0} : static_cast<int64_t>(time.time_since_epoch().count()));
+  hash.Add(ec ? int64_t{0}
+              : static_cast<int64_t>(time.time_since_epoch().count()));
 }
 
 // What the cached model depends on: the file, the .mtl files beside an .obj,
 // the import settings and the format.
-uint64_t CacheKey(const std::string& path, const ModelImportSettings& settings) {
+uint64_t CacheKey(const std::string& path,
+                  const ModelImportSettings& settings) {
   Hash hash;
   hash.Add(kVersion);
   hash.Add(sizeof(ModelVertex));
@@ -63,12 +65,14 @@ uint64_t CacheKey(const std::string& path, const ModelImportSettings& settings) 
   HashFile(hash, path);
   const fs::path file(path);
   std::string extension = file.extension().string();
-  for (char& c : extension) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  for (char& c : extension)
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   if (extension == ".obj") {
     std::error_code ec;
     for (const auto& entry : fs::directory_iterator(file.parent_path(), ec)) {
       std::string other = entry.path().extension().string();
-      for (char& c : other) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      for (char& c : other)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
       if (other == ".mtl") {
         hash.Add(entry.path().filename().string());
         HashFile(hash, entry.path());
@@ -107,7 +111,8 @@ fs::path CacheFile(const std::string& path) {
   Hash hash;
   hash.Add(fs::absolute(path).lexically_normal().string());
   return dir / "models" /
-         std::format("{}-{:016x}.mcache", fs::path(path).stem().string(), hash.value);
+         std::format("{}-{:016x}.mcache", fs::path(path).stem().string(),
+                     hash.value);
 }
 
 class Writer {
@@ -241,7 +246,8 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     material.transmission_color = in.Pod<glm::vec3>();
     material.thickness = in.Pod<float>();
     Model::MaterialSources& sources = model->material_sources_[m];
-    for (Model::TextureSource* source : {&sources.texture, &sources.emission, &sources.normal}) {
+    for (Model::TextureSource* source :
+         {&sources.texture, &sources.emission, &sources.normal}) {
       source->reference = in.String();
       source->use = static_cast<ModelTextureUse>(in.Pod<uint8_t>());
       source->bump_scale = in.Pod<float>();
@@ -285,7 +291,8 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   }
   std::fclose(file);
   if (!in.ok()) {
-    PDebug::warn("{}: damaged model cache {}; importing again", path, cache.string());
+    PDebug::warn("{}: damaged model cache {}; importing again", path,
+                 cache.string());
     return nullptr;
   }
   // Indices into the arrays must be in range, or the renderer reads past
@@ -294,7 +301,8 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   for (const auto& node : model->nodes_) {
     if (node.parent >= node_count) return nullptr;
     for (int mesh : node.meshes) {
-      if (mesh < 0 || mesh >= static_cast<int>(model->meshes_.size())) return nullptr;
+      if (mesh < 0 || mesh >= static_cast<int>(model->meshes_.size()))
+        return nullptr;
     }
   }
   for (const auto& mesh : model->meshes_) {
@@ -308,7 +316,8 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     }
   }
   const double read_seconds =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
+          .count();
   if (progress) progress->store(0.5f);
 
   // The textures, from their files, each once.
@@ -316,9 +325,11 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   std::map<Key, std::shared_ptr<ImageData>> textures;
   std::vector<const Model::TextureSource*> wanted;
   for (const auto& sources : model->material_sources_) {
-    for (const auto* source : {&sources.texture, &sources.emission, &sources.normal}) {
+    for (const auto* source :
+         {&sources.texture, &sources.emission, &sources.normal}) {
       if (!source->reference.empty() &&
-          textures.emplace(Key(source->reference, source->use), nullptr).second) {
+          textures.emplace(Key(source->reference, source->use), nullptr)
+              .second) {
         wanted.push_back(source);
       }
     }
@@ -328,13 +339,15 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   ParallelFor(wanted.size(), [&](size_t i) {
     decoded[i] = Model::DecodeTexture(path, *wanted[i], settings);
     if (progress) {
-      progress->store(0.5f + 0.5f * static_cast<float>(++done) / static_cast<float>(wanted.size()));
+      progress->store(0.5f + 0.5f * static_cast<float>(++done) /
+                                 static_cast<float>(wanted.size()));
     }
   });
   for (size_t i = 0; i < wanted.size(); i++) {
     textures[Key(wanted[i]->reference, wanted[i]->use)] = std::move(decoded[i]);
   }
-  auto texture = [&](const Model::TextureSource& source) -> std::shared_ptr<ImageData> {
+  auto texture =
+      [&](const Model::TextureSource& source) -> std::shared_ptr<ImageData> {
     if (source.reference.empty()) return nullptr;
     return textures[Key(source.reference, source.use)];
   };
@@ -346,9 +359,11 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   }
   model->Finish();
   if (progress) progress->store(1.0f);
-  PDebug::log("Loaded {} from the cache in {:.2f}s (meshes {:.2f}s)", path,
-              std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count(),
-              read_seconds);
+  PDebug::log(
+      "Loaded {} from the cache in {:.2f}s (meshes {:.2f}s)", path,
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
+          .count(),
+      read_seconds);
   return model;
 }
 
@@ -391,8 +406,9 @@ void ModelCache::Write(const Model& model, const std::string& path,
     out.Pod(material.ior);
     out.Pod(material.transmission_color);
     out.Pod(material.thickness);
-    const Model::MaterialSources sources =
-        m < model.material_sources_.size() ? model.material_sources_[m] : Model::MaterialSources{};
+    const Model::MaterialSources sources = m < model.material_sources_.size()
+                                               ? model.material_sources_[m]
+                                               : Model::MaterialSources{};
     for (const Model::TextureSource* source :
          {&sources.texture, &sources.emission, &sources.normal}) {
       out.String(source->reference);
@@ -432,7 +448,8 @@ void ModelCache::Write(const Model& model, const std::string& path,
   if (std::fclose(file) != 0) written = false;
   if (!written) {
     fs::remove(temporary, ec);
-    PDebug::warn("{}: could not write the model cache {}", path, cache.string());
+    PDebug::warn("{}: could not write the model cache {}", path,
+                 cache.string());
     return;
   }
   fs::rename(temporary, cache, ec);

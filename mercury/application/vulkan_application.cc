@@ -130,7 +130,8 @@ bool VulkanApplication::Initialize() {
   if (!IsHeadless()) {
     int framebuffer_width = 0;
     int framebuffer_height = 0;
-    glfwGetFramebufferSize(GetWindow(), &framebuffer_width, &framebuffer_height);
+    glfwGetFramebufferSize(GetWindow(), &framebuffer_width,
+                           &framebuffer_height);
     if (!swapchain_.Create(context_, static_cast<uint32_t>(framebuffer_width),
                            static_cast<uint32_t>(framebuffer_height))) {
       PDebug::error("Vulkan: could not create swapchain");
@@ -727,10 +728,10 @@ bool VulkanApplication::OnLoad() {
   {
     VkShaderModule ui_vs = LoadShaderModule("ui.vs.spv");
     VkShaderModule ui_ps = LoadShaderModule("ui.ps.spv");
-    const bool ui_ok = ui_vs && ui_ps &&
-                       ui_renderer_.Init(context_, ColorFormat(),
-                                         vk::Swapchain::kDepthFormat, ui_vs,
-                                         ui_ps, kFramesInFlight);
+    const bool ui_ok =
+        ui_vs && ui_ps &&
+        ui_renderer_.Init(context_, ColorFormat(), vk::Swapchain::kDepthFormat,
+                          ui_vs, ui_ps, kFramesInFlight);
     vkDestroyShaderModule(context_.device, ui_vs, nullptr);
     vkDestroyShaderModule(context_.device, ui_ps, nullptr);
     if (!ui_ok) {
@@ -1450,8 +1451,8 @@ void VulkanApplication::Render() {
 
   uint32_t image_index = 0;
   if (!IsHeadless()) {
-    VkResult acquire = vkAcquireNextImageKHR(device, swapchain_.Get(), UINT64_MAX,
-                                             frame.image_available,
+    VkResult acquire = vkAcquireNextImageKHR(device, swapchain_.Get(),
+                                             UINT64_MAX, frame.image_available,
                                              VK_NULL_HANDLE, &image_index);
     if (acquire == VK_ERROR_OUT_OF_DATE_KHR) {
       swapchain_dirty_ = true;
@@ -1727,11 +1728,10 @@ void VulkanApplication::Render() {
   // Editor offscreen targets: render and copy to CPU-readable staging buffers.
   if (game_scene_ && scene_texture_enabled_ &&
       scene_target_.color.Get() != VK_NULL_HANDLE) {
-    RenderSceneTo(
-        cmd, frame, cameras, scene_target_.color.Get(),
-        scene_target_.color.View(), scene_target_.extent,
-        VK_IMAGE_LAYOUT_UNDEFINED, frame.descriptor_set, draw_static,
-        static_index_count, draw_instanced);
+    RenderSceneTo(cmd, frame, cameras, scene_target_.color.Get(),
+                  scene_target_.color.View(), scene_target_.extent,
+                  VK_IMAGE_LAYOUT_UNDEFINED, frame.descriptor_set, draw_static,
+                  static_index_count, draw_instanced);
     RecordTargetReadback(cmd, scene_target_,
                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1756,8 +1756,8 @@ void VulkanApplication::Render() {
       MERCURY_PROFILE_SCOPE("render_scene");
       RenderSceneTo(cmd, frame, cameras, swapchain_image,
                     swapchain_.ImageView(image_index), extent,
-                    VK_IMAGE_LAYOUT_UNDEFINED, frame.descriptor_set, draw_static,
-                    static_index_count, draw_instanced);
+                    VK_IMAGE_LAYOUT_UNDEFINED, frame.descriptor_set,
+                    draw_static, static_index_count, draw_instanced);
     } else {
       vk::TransitionImage(cmd, swapchain_image, VK_IMAGE_ASPECT_COLOR_BIT,
                           VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1769,8 +1769,8 @@ void VulkanApplication::Render() {
     }
     // One depth image is shared by all frames in flight, so wait for the
     // previous frame's depth writes before clearing it.
-    vk::TransitionImage(cmd, swapchain_.Depth().Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
-                        VK_IMAGE_LAYOUT_UNDEFINED,
+    vk::TransitionImage(cmd, swapchain_.Depth().Get(),
+                        VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
                         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                         kDepthStages,
@@ -2256,9 +2256,9 @@ bool VulkanApplication::CopyTargetPixels(OffscreenTarget& target, int& width,
     } else {
       for (int offset = 1; offset < static_cast<int>(kFramesInFlight);
            ++offset) {
-        const int prev_idx = (curr_idx + static_cast<int>(kFramesInFlight) -
-                              offset) %
-                             static_cast<int>(kFramesInFlight);
+        const int prev_idx =
+            (curr_idx + static_cast<int>(kFramesInFlight) - offset) %
+            static_cast<int>(kFramesInFlight);
         if (slot_ready(target.slots[prev_idx])) {
           chosen_idx = prev_idx;
           break;
@@ -2268,9 +2268,9 @@ bool VulkanApplication::CopyTargetPixels(OffscreenTarget& target, int& width,
     }
   } else {
     for (int offset = 1; offset < static_cast<int>(kFramesInFlight); ++offset) {
-      const int prev_idx = (curr_idx + static_cast<int>(kFramesInFlight) -
-                            offset) %
-                           static_cast<int>(kFramesInFlight);
+      const int prev_idx =
+          (curr_idx + static_cast<int>(kFramesInFlight) - offset) %
+          static_cast<int>(kFramesInFlight);
       if (slot_ready(target.slots[prev_idx])) {
         chosen_idx = prev_idx;
         break;
@@ -2294,8 +2294,8 @@ bool VulkanApplication::CopyTargetPixels(OffscreenTarget& target, int& width,
   rgba_out.resize(bytes);
 
   const VkFormat format = ColorFormat();
-  const bool swap_rb = (format == VK_FORMAT_B8G8R8A8_SRGB ||
-                        format == VK_FORMAT_B8G8R8A8_UNORM);
+  const bool swap_rb =
+      (format == VK_FORMAT_B8G8R8A8_SRGB || format == VK_FORMAT_B8G8R8A8_UNORM);
   const auto* src = static_cast<const uint8_t*>(slot.buffer.Mapped());
   uint8_t* dst = rgba_out.data();
 
@@ -2389,9 +2389,11 @@ void VulkanApplication::WriteCapture() {
   }
   for (size_t i = 3; i < pixels.size(); i += 4) pixels[i] = 255;
   {
-    // A capture into a folder that does not exist yet (captures/shot.png) makes it.
+    // A capture into a folder that does not exist yet (captures/shot.png) makes
+    // it.
     std::error_code ec;
-    const std::filesystem::path parent = std::filesystem::path(capture_path_).parent_path();
+    const std::filesystem::path parent =
+        std::filesystem::path(capture_path_).parent_path();
     if (!parent.empty()) std::filesystem::create_directories(parent, ec);
   }
   if (stbi_write_png(capture_path_.c_str(), static_cast<int>(w),

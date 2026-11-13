@@ -32,7 +32,8 @@ class ModelPreloader {
 
   struct Result {
     std::string res_path;
-    std::shared_ptr<const Model> model;  // null if the model could not be loaded
+    std::shared_ptr<const Model>
+        model;  // null if the model could not be loaded
   };
 
   ModelPreloader() = default;

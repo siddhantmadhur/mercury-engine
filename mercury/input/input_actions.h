@@ -5,7 +5,8 @@
  * keys, mouse and gamepad controls, read by value or through callbacks.
  * The project lists its actions file in [input] actions = "res://...".
  *
- *   [minput format=1 class="GameInput" header="res://scripts/generated/game_input.as"]
+ *   [minput format=1 class="GameInput"
+ * header="res://scripts/generated/game_input.as"]
  *
  *   [map name="Player"]
  *
@@ -113,8 +114,10 @@ class InputAction {
   // Bindings: single controls, or 2D composites of up/down/left/right parts
   // (each part may list several controls).
   void AddBinding(std::string path) { bindings_.push_back(std::move(path)); }
-  void AddComposite2D(std::vector<std::string> up, std::vector<std::string> down,
-                      std::vector<std::string> left, std::vector<std::string> right);
+  void AddComposite2D(std::vector<std::string> up,
+                      std::vector<std::string> down,
+                      std::vector<std::string> left,
+                      std::vector<std::string> right);
 
   // Reads the controls and fires callbacks; called once per frame.
   void Update(const InputManager& input);
@@ -159,7 +162,9 @@ class InputActionAsset {
 
   void Update(const InputManager& input);
 
-  const std::vector<std::unique_ptr<InputAction>>& GetActions() const { return actions_; }
+  const std::vector<std::unique_ptr<InputAction>>& GetActions() const {
+    return actions_;
+  }
 
  private:
   std::vector<std::unique_ptr<InputAction>> actions_;
@@ -188,7 +193,8 @@ struct InputActionsDesc {
   // Every map in order, including maps with no actions yet.
   std::vector<std::string> maps;
   std::vector<InputActionDesc> actions;
-  // Generated AngelScript file: res:// path ("" to not generate) and struct name.
+  // Generated AngelScript file: res:// path ("" to not generate) and struct
+  // name.
   std::string header;
   std::string class_name;
 
@@ -199,7 +205,8 @@ bool ParseInputActions(std::string_view source, InputActionsDesc* out,
                        std::string* error = nullptr);
 std::string SerializeInputActions(const InputActionsDesc& desc);
 // Writes through a temporary file, like mtext::SaveFile.
-bool SaveInputActions(const std::filesystem::path& file, const InputActionsDesc& desc);
+bool SaveInputActions(const std::filesystem::path& file,
+                      const InputActionsDesc& desc);
 
 // GLFW key for a Unity keyboard control name ("w", "leftShift", "f5");
 // GLFW_KEY_UNKNOWN if there is none.

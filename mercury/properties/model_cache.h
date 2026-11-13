@@ -27,7 +27,8 @@ namespace Mercury {
 class ModelCache {
  public:
   // The cached model for `path`, or null when there is none that is current.
-  static std::shared_ptr<Model> Read(const std::string& path, const ModelImportSettings& settings,
+  static std::shared_ptr<Model> Read(const std::string& path,
+                                     const ModelImportSettings& settings,
                                      std::atomic<float>* progress);
   // Saves a model Model::Import just built.
   static void Write(const Model& model, const std::string& path,

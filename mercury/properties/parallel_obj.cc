@@ -32,7 +32,8 @@ constexpr size_t kMinPieceBytes = 4 * 1024 * 1024;
 
 bool IsBlank(char c) { return c == ' ' || c == '\t'; }
 bool IsSpace(char c) {
-  return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' ||
+         c == '\f';
 }
 
 // What a line of the file is, as far as cutting it up is concerned.
@@ -41,8 +42,8 @@ enum class Line {
   kVertex,
   kTexCoord,
   kNormal,
-  kIndexed,      // f, l and p: the lines that refer to vertices
-  kObject,       // o and g
+  kIndexed,  // f, l and p: the lines that refer to vertices
+  kObject,   // o and g
   kUseMaterial,
   kMaterialLib,
   kUnsupported,  // freeform curves and surfaces refer to vertices too
@@ -53,7 +54,8 @@ enum class Line {
 const char* LineEnd(const char* start, const char* end) {
   const char* p = start;
   while (p < end) {
-    const char* newline = static_cast<const char*>(std::memchr(p, '\n', end - p));
+    const char* newline =
+        static_cast<const char*>(std::memchr(p, '\n', end - p));
     if (!newline) return end;
     const char* last = newline;
     if (last > start && last[-1] == '\r') last--;
@@ -68,7 +70,8 @@ const char* LineEnd(const char* start, const char* end) {
 
 bool StartsWith(const char* p, const char* end, std::string_view word) {
   return static_cast<size_t>(end - p) > word.size() &&
-         std::memcmp(p, word.data(), word.size()) == 0 && IsBlank(p[word.size()]);
+         std::memcmp(p, word.data(), word.size()) == 0 &&
+         IsBlank(p[word.size()]);
 }
 
 // Classifies the line [p, end); `after` is left just past its keyword.
@@ -115,8 +118,9 @@ Line Classify(const char* p, const char* end, const char*& after) {
       after = p + 6;
       return Line::kMaterialLib;
     case 'c':
-      return StartsWith(p, end, "cstype") || StartsWith(p, end, "curv") ? Line::kUnsupported
-                                                                         : Line::kOther;
+      return StartsWith(p, end, "cstype") || StartsWith(p, end, "curv")
+                 ? Line::kUnsupported
+                 : Line::kOther;
     case 's':
       return StartsWith(p, end, "surf") ? Line::kUnsupported : Line::kOther;
     default:
@@ -170,12 +174,15 @@ bool NoteIndices(const char* p, const char* end, RefRange& range) {
     } else if (c >= '0' && c <= '9') {
       uint64_t value = 0;
       while (p < end && *p >= '0' && *p <= '9') {
-        value = std::min<uint64_t>(value * 10 + static_cast<uint64_t>(*p - '0'), UINT32_MAX);
+        value = std::min<uint64_t>(value * 10 + static_cast<uint64_t>(*p - '0'),
+                                   UINT32_MAX);
         p++;
       }
       if (position <= 2 && value > 0) {
-        range.lo[position] = std::min(range.lo[position], static_cast<uint32_t>(value));
-        range.hi[position] = std::max(range.hi[position], static_cast<uint32_t>(value));
+        range.lo[position] =
+            std::min(range.lo[position], static_cast<uint32_t>(value));
+        range.hi[position] =
+            std::max(range.hi[position], static_cast<uint32_t>(value));
       }
     } else {
       p++;
@@ -197,7 +204,8 @@ struct Event {
 struct RangeScan {
   std::vector<Event> events;
   uint32_t counts[3] = {0, 0, 0};
-  bool faces_since_object = false;  // a face line after the last object (or the start)
+  bool faces_since_object =
+      false;  // a face line after the last object (or the start)
   bool has_object = false;
   RefRange head;  // what the face lines before the first object refer to
   bool unsupported = false;
@@ -207,7 +215,8 @@ void ScanRange(const char* base, size_t begin, size_t end, RangeScan& scan) {
   const char* p = base + begin;
   const char* stop = base + end;
   if (begin == 0 && end >= 3 && static_cast<uint8_t>(p[0]) == 0xEF &&
-      static_cast<uint8_t>(p[1]) == 0xBB && static_cast<uint8_t>(p[2]) == 0xBF) {
+      static_cast<uint8_t>(p[1]) == 0xBB &&
+      static_cast<uint8_t>(p[2]) == 0xBF) {
     p += 3;  // byte order mark
   }
   size_t last_object = 0;  // index in scan.events of the latest object line
@@ -216,19 +225,28 @@ void ScanRange(const char* base, size_t begin, size_t end, RangeScan& scan) {
     const char* after = p;
     const Line kind = Classify(p, line_end, after);
     switch (kind) {
-      case Line::kVertex: scan.counts[0]++; break;
-      case Line::kTexCoord: scan.counts[1]++; break;
-      case Line::kNormal: scan.counts[2]++; break;
+      case Line::kVertex:
+        scan.counts[0]++;
+        break;
+      case Line::kTexCoord:
+        scan.counts[1]++;
+        break;
+      case Line::kNormal:
+        scan.counts[2]++;
+        break;
       case Line::kIndexed: {
         scan.faces_since_object = true;
-        RefRange& refs = scan.has_object ? scan.events[last_object].refs : scan.head;
+        RefRange& refs =
+            scan.has_object ? scan.events[last_object].refs : scan.head;
         if (!NoteIndices(after, line_end, refs)) {
           scan.unsupported = true;
           return;
         }
         break;
       }
-      case Line::kUnsupported: scan.unsupported = true; return;
+      case Line::kUnsupported:
+        scan.unsupported = true;
+        return;
       case Line::kObject:
       case Line::kUseMaterial:
       case Line::kMaterialLib: {
@@ -236,7 +254,9 @@ void ScanRange(const char* base, size_t begin, size_t end, RangeScan& scan) {
                                                  : Trimmed(after, line_end);
         // Lines without a name change nothing in Assimp.
         if (text.empty()) break;
-        Event event{kind, static_cast<size_t>(p - base), std::move(text),
+        Event event{kind,
+                    static_cast<size_t>(p - base),
+                    std::move(text),
                     {scan.counts[0], scan.counts[1], scan.counts[2]}};
         if (kind == Line::kObject) {
           event.group = after[-1] == 'g';
@@ -248,7 +268,8 @@ void ScanRange(const char* base, size_t begin, size_t end, RangeScan& scan) {
         scan.events.push_back(std::move(event));
         break;
       }
-      case Line::kOther: break;
+      case Line::kOther:
+        break;
     }
     p = line_end + 1;
   }
@@ -257,7 +278,8 @@ void ScanRange(const char* base, size_t begin, size_t end, RangeScan& scan) {
 // A cut of the file: a run of whole objects that is imported as its own file.
 struct Piece {
   size_t begin = 0, end = 0;
-  uint32_t first[3] = {0, 0, 0};  // vertex, texture coordinate and normal lines before it
+  uint32_t first[3] = {
+      0, 0, 0};  // vertex, texture coordinate and normal lines before it
   uint32_t total[3] = {0, 0, 0};  // ...and in it
   std::string material;           // the one in use where it starts
   std::vector<std::string> libraries;
@@ -270,7 +292,8 @@ struct Piece {
 // moved.
 bool RewriteIndexLine(const char* p, const char* end, const Piece& piece,
                       const uint32_t seen[3], std::string& out) {
-  const bool global_quirk = piece.first[1] + seen[1] == 0 && piece.first[2] + seen[2] > 0;
+  const bool global_quirk =
+      piece.first[1] + seen[1] == 0 && piece.first[2] + seen[2] > 0;
   const bool local_quirk = seen[1] == 0 && seen[2] > 0;
   int position = 0;
   while (p < end) {
@@ -297,7 +320,8 @@ bool RewriteIndexLine(const char* p, const char* end, const Piece& piece,
         if (value > UINT32_MAX) return false;
       }
       int kind = position;
-      if (position == 1 && piece.first[1] + seen[1] == 0 && piece.first[2] + seen[2] > 0) {
+      if (position == 1 && piece.first[1] + seen[1] == 0 &&
+          piece.first[2] + seen[2] > 0) {
         // Assimp reads "v/n" as a normal when the file has no texture
         // coordinates; the piece must see the same.
         if (global_quirk != local_quirk) return false;
@@ -305,12 +329,14 @@ bool RewriteIndexLine(const char* p, const char* end, const Piece& piece,
         position = 2;
       }
       if (kind > 2 || value == 0) return false;
-      if (value <= piece.first[kind] || value - piece.first[kind] > piece.total[kind]) {
+      if (value <= piece.first[kind] ||
+          value - piece.first[kind] > piece.total[kind]) {
         return false;
       }
       char digits[16];
-      const auto result = std::to_chars(digits, digits + sizeof(digits),
-                                        static_cast<uint32_t>(value - piece.first[kind]));
+      const auto result =
+          std::to_chars(digits, digits + sizeof(digits),
+                        static_cast<uint32_t>(value - piece.first[kind]));
       out.append(digits, result.ptr - digits);
     } else {
       out.push_back(c);
@@ -321,7 +347,8 @@ bool RewriteIndexLine(const char* p, const char* end, const Piece& piece,
 }
 
 // The text of a piece as a file of its own. False if it cannot be one.
-bool BuildPiece(const char* base, const Piece& piece, bool first, std::string& out) {
+bool BuildPiece(const char* base, const Piece& piece, bool first,
+                std::string& out) {
   out.reserve(piece.end - piece.begin + 4096);
   for (const std::string& library : piece.libraries) {
     out += "mtllib " + library + "\n";
@@ -340,17 +367,25 @@ bool BuildPiece(const char* base, const Piece& piece, bool first, std::string& o
     const char* line_end = LineEnd(p, stop);
     const char* after = p;
     switch (Classify(p, line_end, after)) {
-      case Line::kVertex: seen[0]++; break;
-      case Line::kTexCoord: seen[1]++; break;
-      case Line::kNormal: seen[2]++; break;
+      case Line::kVertex:
+        seen[0]++;
+        break;
+      case Line::kTexCoord:
+        seen[1]++;
+        break;
+      case Line::kNormal:
+        seen[2]++;
+        break;
       case Line::kIndexed:
         out.append(p, after - p);
         if (!RewriteIndexLine(after, line_end, piece, seen, out)) return false;
         if (line_end < stop) out.push_back('\n');
         p = line_end + 1;
         continue;
-      case Line::kUnsupported: return false;
-      default: break;
+      case Line::kUnsupported:
+        return false;
+      default:
+        break;
     }
     out.append(p, std::min(line_end + 1, stop) - p);
     p = line_end + 1;
@@ -378,8 +413,9 @@ class PieceIOSystem : public Assimp::IOSystem {
   char getOsSeparator() const override { return base_->getOsSeparator(); }
   Assimp::IOStream* Open(const char* file, const char* mode) override {
     if (name_ == file) {
-      return new Assimp::MemoryIOStream(reinterpret_cast<const uint8_t*>(text_->data()),
-                                        text_->size(), false);
+      return new Assimp::MemoryIOStream(
+          reinterpret_cast<const uint8_t*>(text_->data()), text_->size(),
+          false);
     }
     return base_->Open(file, mode);
   }
@@ -401,13 +437,15 @@ class PieceIOSystem : public Assimp::IOSystem {
 
 std::string MaterialName(const aiMaterial* material) {
   aiString name;
-  if (material && material->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) return name.C_Str();
+  if (material && material->Get(AI_MATKEY_NAME, name) == AI_SUCCESS)
+    return name.C_Str();
   return std::string();
 }
 
 void OffsetMeshIndices(aiNode* node, unsigned offset) {
   for (unsigned i = 0; i < node->mNumMeshes; i++) node->mMeshes[i] += offset;
-  for (unsigned i = 0; i < node->mNumChildren; i++) OffsetMeshIndices(node->mChildren[i], offset);
+  for (unsigned i = 0; i < node->mNumChildren; i++)
+    OffsetMeshIndices(node->mChildren[i], offset);
 }
 
 // Gives `into` the meshes of `from`, after its own.
@@ -415,7 +453,8 @@ void AppendMeshes(aiNode& into, const aiNode& from) {
   if (from.mNumMeshes == 0) return;
   auto* meshes = new unsigned[into.mNumMeshes + from.mNumMeshes];
   std::copy(into.mMeshes, into.mMeshes + into.mNumMeshes, meshes);
-  std::copy(from.mMeshes, from.mMeshes + from.mNumMeshes, meshes + into.mNumMeshes);
+  std::copy(from.mMeshes, from.mMeshes + from.mNumMeshes,
+            meshes + into.mNumMeshes);
   delete[] into.mMeshes;
   into.mMeshes = meshes;
   into.mNumMeshes += from.mNumMeshes;
@@ -423,9 +462,10 @@ void AppendMeshes(aiNode& into, const aiNode& from) {
 
 // Joins the scenes of the pieces, in order, into the scene the whole file
 // would have made. Takes the nodes, meshes and materials out of them.
-std::unique_ptr<aiScene> JoinScenes(std::vector<std::unique_ptr<aiScene>>& scenes,
-                                    std::vector<std::unordered_set<std::string>>& named,
-                                    const std::string& file_name) {
+std::unique_ptr<aiScene> JoinScenes(
+    std::vector<std::unique_ptr<aiScene>>& scenes,
+    std::vector<std::unordered_set<std::string>>& named,
+    const std::string& file_name) {
   auto joined = std::make_unique<aiScene>();
   joined->mRootNode = new aiNode;
   joined->mRootNode->mName.Set(file_name);
@@ -435,7 +475,8 @@ std::unique_ptr<aiScene> JoinScenes(std::vector<std::unique_ptr<aiScene>>& scene
   std::vector<aiMesh*> meshes;
   std::vector<aiMaterial*> materials;
   std::unordered_map<std::string, unsigned> material_index;
-  std::unordered_map<std::string, aiNode*> node_by_name;  // the first of each name
+  std::unordered_map<std::string, aiNode*>
+      node_by_name;  // the first of each name
 
   for (size_t piece = 0; piece < scenes.size(); piece++) {
     auto& scene = scenes[piece];
@@ -466,9 +507,11 @@ std::unique_ptr<aiScene> JoinScenes(std::vector<std::unique_ptr<aiScene>>& scene
       OffsetMeshIndices(child, mesh_base);
       root->mChildren[i] = nullptr;
       // An "o" line naming an object that exists goes on with that object.
-      if (auto name = named[piece].find(child->mName.C_Str()); name != named[piece].end()) {
+      if (auto name = named[piece].find(child->mName.C_Str());
+          name != named[piece].end()) {
         named[piece].erase(name);  // only the piece's first node of the name
-        if (auto it = node_by_name.find(child->mName.C_Str()); it != node_by_name.end()) {
+        if (auto it = node_by_name.find(child->mName.C_Str());
+            it != node_by_name.end()) {
           AppendMeshes(*it->second, *child);
           delete child;
           continue;
@@ -518,25 +561,28 @@ std::unique_ptr<aiScene> JoinScenes(std::vector<std::unique_ptr<aiScene>>& scene
 
 }  // namespace
 
-std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
-                                             const ParallelObjOptions& options) {
+std::unique_ptr<aiScene> ImportObjInParallel(
+    const std::string& path, const ParallelObjOptions& options) {
   if (WorkerThreadCount() < 2) return nullptr;
   std::error_code ec;
   const auto disk_size = fs::file_size(path, ec);
   if (!ec && disk_size < options.min_bytes) return nullptr;
   auto file = os::ReadBytes(path);
-  if (!file || file->size() < std::max<size_t>(options.min_bytes, 1)) return nullptr;
+  if (!file || file->size() < std::max<size_t>(options.min_bytes, 1))
+    return nullptr;
   const char* base = reinterpret_cast<const char*>(file->data());
   const size_t size = file->size();
 
   // ---- Scan the file in ranges, on every core
-  const size_t range_count = std::clamp<size_t>(size / (1024 * 1024), 1, WorkerThreadCount() * 4);
+  const size_t range_count =
+      std::clamp<size_t>(size / (1024 * 1024), 1, WorkerThreadCount() * 4);
   std::vector<size_t> bounds{0};
   for (size_t i = 1; i < range_count; i++) {
     size_t at = std::max(bounds.back(), size * i / range_count);
     // Move to just after a real line break.
     while (at < size) {
-      const char* newline = static_cast<const char*>(std::memchr(base + at, '\n', size - at));
+      const char* newline =
+          static_cast<const char*>(std::memchr(base + at, '\n', size - at));
       if (!newline) {
         at = size;
         break;
@@ -550,7 +596,9 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
   }
   bounds.push_back(size);
   std::vector<RangeScan> scans(bounds.size() - 1);
-  ParallelFor(scans.size(), [&](size_t i) { ScanRange(base, bounds[i], bounds[i + 1], scans[i]); });
+  ParallelFor(scans.size(), [&](size_t i) {
+    ScanRange(base, bounds[i], bounds[i + 1], scans[i]);
+  });
 
   // Join the ranges' events, with counts that run from the start of the file.
   struct Object {
@@ -562,7 +610,7 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
     RefRange refs;
   };
   std::vector<Object> objects;
-  RefRange before_objects;  // faces before the first object
+  RefRange before_objects;    // faces before the first object
   std::vector<Event> others;  // usemtl and mtllib lines, in file order
   uint32_t running[3] = {0, 0, 0};
   bool faces_carried = false;
@@ -577,9 +625,13 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
         bool faces = event.faces_before;
         if (first_object) faces = faces || faces_carried;
         first_object = false;
-        objects.push_back({absolute.offset, absolute.text,
-                           {absolute.seen[0], absolute.seen[1], absolute.seen[2]}, faces,
-                           event.group, event.refs});
+        objects.push_back(
+            {absolute.offset,
+             absolute.text,
+             {absolute.seen[0], absolute.seen[1], absolute.seen[2]},
+             faces,
+             event.group,
+             event.refs});
       } else {
         others.push_back(std::move(absolute));
       }
@@ -596,8 +648,10 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
   // "g" with the name of the last "g" line is ignored, so a piece must not
   // start by repeating it. ("o" with a name an object already has goes on
   // with that object; the pieces' nodes are joined by name for that.)
-  std::vector<std::string> previous_group(objects.size());  // the last "g" before an object
-  std::vector<std::string> next_group(objects.size() + 1);  // the first "g" from an object on
+  std::vector<std::string> previous_group(
+      objects.size());  // the last "g" before an object
+  std::vector<std::string> next_group(objects.size() +
+                                      1);  // the first "g" from an object on
   {
     std::string last;
     for (size_t i = 0; i < objects.size(); i++) {
@@ -612,8 +666,10 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
   }
   // Faces must not reach across a cut: those before it only use vertices
   // before it, and those after it only vertices after it.
-  std::vector<RefRange> before_cut(objects.size() + 1);  // faces ahead of object i
-  std::vector<RefRange> after_cut(objects.size() + 1);   // faces from object i on
+  std::vector<RefRange> before_cut(objects.size() +
+                                   1);  // faces ahead of object i
+  std::vector<RefRange> after_cut(objects.size() +
+                                  1);  // faces from object i on
   before_cut[0] = before_objects;
   for (size_t i = 0; i < objects.size(); i++) {
     before_cut[i + 1] = before_cut[i];
@@ -626,22 +682,24 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
   auto faces_stay_apart = [&](size_t i) {
     for (int k = 0; k < 3; k++) {
       if (before_cut[i].hi[k] > objects[i].seen[k]) return false;
-      if (after_cut[i].lo[k] != UINT32_MAX && after_cut[i].lo[k] <= objects[i].seen[k]) {
+      if (after_cut[i].lo[k] != UINT32_MAX &&
+          after_cut[i].lo[k] <= objects[i].seen[k]) {
         return false;
       }
     }
     return true;
   };
-  const size_t pieces_wanted = options.max_pieces
-                                   ? options.max_pieces
-                                   : std::clamp<size_t>(size / kMinPieceBytes, 2,
-                                                        WorkerThreadCount() * 2);
+  const size_t pieces_wanted =
+      options.max_pieces ? options.max_pieces
+                         : std::clamp<size_t>(size / kMinPieceBytes, 2,
+                                              WorkerThreadCount() * 2);
   const size_t target = size / pieces_wanted;
   std::vector<size_t> cuts{0};  // object indices where a piece starts
   size_t piece_start = 0;
   for (size_t i = 1; i < objects.size(); i++) {
     if (!objects[i].faces_before) continue;
-    if (!previous_group[i].empty() && next_group[i] == previous_group[i]) continue;
+    if (!previous_group[i].empty() && next_group[i] == previous_group[i])
+      continue;
     if (!faces_stay_apart(i)) continue;
     if (objects[i].offset - piece_start >= target) {
       cuts.push_back(i);
@@ -660,7 +718,8 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
     piece.end = i + 1 < cuts.size() ? objects[cuts[i + 1]].offset : size;
     for (int k = 0; k < 3; k++) {
       piece.first[k] = i == 0 ? 0 : objects[cuts[i]].seen[k];
-      const uint32_t after = i + 1 < cuts.size() ? objects[cuts[i + 1]].seen[k] : totals[k];
+      const uint32_t after =
+          i + 1 < cuts.size() ? objects[cuts[i + 1]].seen[k] : totals[k];
       piece.total[k] = after - piece.first[k];
     }
     // The materials and libraries named before the piece.
@@ -706,8 +765,9 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
       failed = true;
       return;
     }
-    const std::string name =
-        (file_path.parent_path() / (stem + ".__piece" + std::to_string(i) + ".obj")).string();
+    const std::string name = (file_path.parent_path() /
+                              (stem + ".__piece" + std::to_string(i) + ".obj"))
+                                 .string();
     Assimp::Importer importer;
     importer.SetIOHandler(new PieceIOSystem(name, &text));
     if (options.configure) options.configure(importer);
@@ -718,7 +778,8 @@ std::unique_ptr<aiScene> ImportObjInParallel(const std::string& path,
     }
     scenes[i].reset(importer.GetOrphanedScene());
     if (options.progress) {
-      options.progress(static_cast<float>(++finished) / static_cast<float>(pieces.size()));
+      options.progress(static_cast<float>(++finished) /
+                       static_cast<float>(pieces.size()));
     }
   });
   if (failed) {

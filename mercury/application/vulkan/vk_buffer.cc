@@ -78,28 +78,30 @@ void Buffer::Flush(VkDeviceSize offset, VkDeviceSize bytes) {
 }
 
 void Buffer::Invalidate() {
-  if (allocation_) vmaInvalidateAllocation(allocator_, allocation_, 0, VK_WHOLE_SIZE);
+  if (allocation_)
+    vmaInvalidateAllocation(allocator_, allocation_, 0, VK_WHOLE_SIZE);
 }
 
 bool Image::Create(VmaAllocator allocator, VkDevice device, uint32_t width,
                    uint32_t height, VkFormat format, VkImageUsageFlags usage,
                    VkImageAspectFlags aspect, uint32_t mip_levels) {
-  return CreateImage(allocator, device, width, height, 1, format, usage, aspect, mip_levels,
-                     VK_IMAGE_VIEW_TYPE_2D);
+  return CreateImage(allocator, device, width, height, 1, format, usage, aspect,
+                     mip_levels, VK_IMAGE_VIEW_TYPE_2D);
 }
 
 bool Image::CreateArray(VmaAllocator allocator, VkDevice device, uint32_t width,
                         uint32_t height, uint32_t layers, VkFormat format,
                         VkImageUsageFlags usage, VkImageAspectFlags aspect) {
-  return CreateImage(allocator, device, width, height, std::max(1u, layers), format, usage,
-                     aspect, 1, VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+  return CreateImage(allocator, device, width, height, std::max(1u, layers),
+                     format, usage, aspect, 1, VK_IMAGE_VIEW_TYPE_2D_ARRAY);
 }
 
-bool Image::CreateCubeArray(VmaAllocator allocator, VkDevice device, uint32_t size,
-                            uint32_t cubes, VkFormat format, VkImageUsageFlags usage,
+bool Image::CreateCubeArray(VmaAllocator allocator, VkDevice device,
+                            uint32_t size, uint32_t cubes, VkFormat format,
+                            VkImageUsageFlags usage,
                             VkImageAspectFlags aspect) {
-  return CreateImage(allocator, device, size, size, std::max(1u, cubes) * 6, format, usage,
-                     aspect, 1, VK_IMAGE_VIEW_TYPE_CUBE_ARRAY,
+  return CreateImage(allocator, device, size, size, std::max(1u, cubes) * 6,
+                     format, usage, aspect, 1, VK_IMAGE_VIEW_TYPE_CUBE_ARRAY,
                      VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
 }
 
@@ -150,7 +152,8 @@ VkImageView Image::LayerView(uint32_t layer) {
   if (layer >= layers_ || image_ == VK_NULL_HANDLE) return VK_NULL_HANDLE;
   if (layer_views_.empty()) layer_views_.resize(layers_, VK_NULL_HANDLE);
   if (layer_views_[layer] == VK_NULL_HANDLE) {
-    VkImageViewCreateInfo view_info = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    VkImageViewCreateInfo view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view_info.image = image_;
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = format_;
@@ -164,7 +167,8 @@ VkImageView Image::MipView(uint32_t level) {
   if (level >= mip_levels_ || image_ == VK_NULL_HANDLE) return VK_NULL_HANDLE;
   if (mip_views_.empty()) mip_views_.resize(mip_levels_, VK_NULL_HANDLE);
   if (mip_views_[level] == VK_NULL_HANDLE) {
-    VkImageViewCreateInfo view_info = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    VkImageViewCreateInfo view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view_info.image = image_;
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = format_;
@@ -239,12 +243,16 @@ void TransitionImage(VkCommandBuffer cmd, VkImage image,
   vkCmdPipelineBarrier2(cmd, &dependency);
 }
 
-void TransitionImageMips(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags aspect,
-                         uint32_t base_mip, uint32_t mip_count,
-                         VkImageLayout old_layout, VkImageLayout new_layout,
-                         VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,
-                         VkPipelineStageFlags2 dst_stage, VkAccessFlags2 dst_access) {
-  VkImageMemoryBarrier2 barrier = {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+void TransitionImageMips(VkCommandBuffer cmd, VkImage image,
+                         VkImageAspectFlags aspect, uint32_t base_mip,
+                         uint32_t mip_count, VkImageLayout old_layout,
+                         VkImageLayout new_layout,
+                         VkPipelineStageFlags2 src_stage,
+                         VkAccessFlags2 src_access,
+                         VkPipelineStageFlags2 dst_stage,
+                         VkAccessFlags2 dst_access) {
+  VkImageMemoryBarrier2 barrier = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
   barrier.srcStageMask = src_stage;
   barrier.srcAccessMask = src_access;
   barrier.dstStageMask = dst_stage;
@@ -254,7 +262,8 @@ void TransitionImageMips(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags 
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = image;
-  barrier.subresourceRange = {aspect, base_mip, mip_count, 0, VK_REMAINING_ARRAY_LAYERS};
+  barrier.subresourceRange = {aspect, base_mip, mip_count, 0,
+                              VK_REMAINING_ARRAY_LAYERS};
   VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   dependency.imageMemoryBarrierCount = 1;
   dependency.pImageMemoryBarriers = &barrier;
