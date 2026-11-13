@@ -151,33 +151,6 @@ alias(
 )
 
 # --------------------------------------------------------------------------
-# imgui (no upstream CMakeLists; the backend sources are selected here, like
-# the old CMake build did)
-# --------------------------------------------------------------------------
-
-cc_library(
-    name = "imgui",
-    srcs = glob(["imgui/*.cpp"]) + [
-        "imgui/backends/imgui_impl_glfw.cpp",
-        "imgui/backends/imgui_impl_vulkan.cpp",
-        "imgui/misc/cpp/imgui_stdlib.cpp",
-    ],
-    hdrs = glob([
-        "imgui/*.h",
-        "imgui/backends/*.h",
-        "imgui/misc/cpp/*.h",
-    ]),
-    includes = [
-        ".",
-        "imgui",
-    ],
-    deps = [
-        ":glfw",
-        "@vulkan//:vulkan",
-    ],
-)
-
-# --------------------------------------------------------------------------
 # Dependencies built by their own CMakeLists through rules_foreign_cc
 # --------------------------------------------------------------------------
 

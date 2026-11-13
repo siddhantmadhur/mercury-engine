@@ -44,6 +44,10 @@ vulkan_repo = use_repo_rule("//third_party:repositories.bzl", "vulkan_repo")
 
 vulkan_repo(name = "vulkan")
 
+wxwidgets_repo = use_repo_rule("//third_party:repositories.bzl", "wxwidgets_repo")
+
+wxwidgets_repo(name = "wxwidgets")
+
 dxc_repo = use_repo_rule("//third_party:repositories.bzl", "dxc_repo")
 
 dxc_repo(name = "dxc")

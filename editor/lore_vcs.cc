@@ -2,11 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <format>
 #include <fstream>
-
-#include "imgui.h"
-#include "misc/cpp/imgui_stdlib.h"
 
 namespace Mercury {
 
@@ -23,8 +21,7 @@ constexpr const char* kDefaultIgnore =
     "build/\n"
     "cmake-build-*/\n"
     "bazel-*/\n"
-    "Builds/\n"
-    "imgui.ini\n";
+    "Builds/\n";
 
 std::string Trim(std::string_view text) {
   const auto first = text.find_first_not_of(" \t\r\n");
@@ -58,28 +55,6 @@ std::string FieldValue(const std::string& line) {
   return colon == std::string::npos ? "" : Trim(line.substr(colon + 1));
 }
 
-ImVec4 CodeColor(char code) {
-  switch (code) {
-    case 'A': return ImVec4(0.45f, 0.85f, 0.45f, 1.0f);
-    case 'D': return ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
-    case 'V': return ImVec4(0.75f, 0.6f, 1.0f, 1.0f);
-    default: return ImVec4(1.0f, 0.8f, 0.35f, 1.0f);
-  }
-}
-
-const char* CodeName(char code) {
-  switch (code) {
-    case 'A': return "Added";
-    case 'D': return "Deleted";
-    case 'V': return "Moved";
-    default: return "Modified";
-  }
-}
-
-std::string FirstLine(const std::string& text) {
-  return text.substr(0, text.find('\n'));
-}
-
 }  // namespace
 
 LoreVcs::LoreVcs(Console& console, EditorSettings& settings)
@@ -104,13 +79,11 @@ void LoreVcs::SetProject(std::shared_ptr<Project> project) {
   remote_branches_.clear();
   repository_name_.clear();
   last_error_.clear();
-  commit_message_.clear();
   selected_path_.clear();
   diff_lines_.clear();
   selected_revision_ = -1;
   revision_lines_.clear();
-  init_server_.clear();
-  init_name_.clear();
+  state_revision_++;
   // Load locks now so the Project panel can show them.
   if (project_ && IsRepository()) Refresh();
 }
@@ -162,7 +135,10 @@ void LoreVcs::StartNext() {
     output_.clear();
     process_ = std::make_unique<os::Process>();
     std::string error;
-    if (process_->Start(args, project_->GetRoot(), &error)) return;
+    if (process_->Start(args, project_->GetRoot(), &error)) {
+      state_revision_++;
+      return;
+    }
 
     // lore isn't installed (or the Options path is wrong).
     process_.reset();
@@ -174,6 +150,7 @@ void LoreVcs::StartNext() {
     last_error_ = result.error;
     Job job = std::move(current_);
     if (job.done) job.done(result);
+    state_revision_++;
   }
 }
 
@@ -212,6 +189,7 @@ void LoreVcs::Finish() {
   Job job = std::move(current_);
   current_ = {};
   if (job.done) job.done(result);
+  state_revision_++;
 }
 
 void LoreVcs::Refresh() {
@@ -234,10 +212,11 @@ void LoreVcs::Refresh() {
       true);
 }
 
-void LoreVcs::Initialize() {
-  std::string server = Trim(init_server_);
+void LoreVcs::Initialize(const std::string& server_url, const std::string& repo_name) {
+  if (!project_) return;
+  std::string server = Trim(server_url);
   while (server.ends_with('/')) server.pop_back();
-  const std::string name = Trim(init_name_);
+  const std::string name = Trim(repo_name);
   if (server.empty() || name.empty()) return;
 
   // Keep generated files out of the repository from the first commit.
@@ -264,6 +243,10 @@ void LoreVcs::Stage(const std::vector<std::string>& paths) {
   Run(std::move(args), [this](const Result&) { Refresh(); });
 }
 
+void LoreVcs::StageAll() {
+  Run({"stage", "--scan", "."}, [this](const Result&) { Refresh(); });
+}
+
 void LoreVcs::Unstage(const std::vector<std::string>& paths) {
   std::vector<std::string> args = {"unstage", "--"};
   args.insert(args.end(), paths.begin(), paths.end());
@@ -271,6 +254,7 @@ void LoreVcs::Unstage(const std::vector<std::string>& paths) {
 }
 
 void LoreVcs::Discard(const Change& change) {
+  if (!project_) return;
   if (change.section == Section::kUntracked) {
     // Never committed, so there is nothing for lore to restore.
     std::error_code ec;
@@ -281,19 +265,22 @@ void LoreVcs::Discard(const Change& change) {
       console_.Add(Console::Level::kInfo, Console::Source::kLore,
                    "Deleted " + change.path);
     }
-    if (selected_path_ == change.path) selected_path_.clear();
+    if (selected_path_ == change.path) {
+      selected_path_.clear();
+      diff_lines_.clear();
+    }
     Refresh();
+    state_revision_++;
     return;
   }
   Run({"reset", "--", change.path}, [this](const Result&) { Refresh(); });
 }
 
-void LoreVcs::Commit(bool then_push) {
-  const std::string message = Trim(commit_message_);
+void LoreVcs::Commit(const std::string& raw_message, bool then_push) {
+  const std::string message = Trim(raw_message);
   if (message.empty()) return;
   Run({"commit", "--", message}, [this, then_push](const Result& r) {
     if (r.ok()) {
-      commit_message_.clear();
       selected_path_.clear();
       diff_lines_.clear();
       if (then_push) {
@@ -333,6 +320,7 @@ void LoreVcs::AmendMessage(const std::string& message) {
 void LoreVcs::ShowDiff(const std::string& path) {
   selected_path_ = path;
   diff_lines_ = {"Loading..."};
+  state_revision_++;
   Run({"diff", "--", path},
       [this, path](const Result& r) {
         if (selected_path_ != path) return;
@@ -350,6 +338,7 @@ void LoreVcs::ShowDiff(const std::string& path) {
 void LoreVcs::ShowRevision(const Revision& revision) {
   selected_revision_ = revision.number;
   revision_lines_ = {"Loading..."};
+  state_revision_++;
   const int number = revision.number;
   Run({"revision", "info", "--delta", revision.signature},
       [this, number](const Result& r) {
@@ -378,15 +367,20 @@ std::string LoreVcs::RelativePath(const fs::path& path) const {
   return path.lexically_relative(project_->GetRoot()).generic_string();
 }
 
-bool LoreVcs::HasUnpushedCommit() const {
-  // Amending a pushed revision would make the branch diverge from the server.
-  if (local_revision_ <= 0 || history_.empty()) return false;
-  if (history_.front().number != local_revision_) return false;
+bool LoreVcs::IsAheadOfRemote() const {
   return sync_state_.find("ahead") != std::string::npos ||
          sync_state_.find("does not exist") != std::string::npos;
 }
 
+bool LoreVcs::HasUnpushedCommit() const {
+  // Amending a pushed revision would make the branch diverge from the server.
+  if (local_revision_ <= 0 || history_.empty()) return false;
+  if (history_.front().number != local_revision_) return false;
+  return IsAheadOfRemote();
+}
+
 std::string LoreVcs::ReadRemoteUrl() const {
+  if (!project_) return "";
   std::ifstream file(project_->GetRoot() / ".lore" / "config.toml");
   std::string line;
   while (std::getline(file, line)) {
@@ -401,6 +395,7 @@ std::string LoreVcs::ReadRemoteUrl() const {
 }
 
 bool LoreVcs::WriteRemoteUrl(const std::string& url) {
+  if (!project_) return false;
   const fs::path path = project_->GetRoot() / ".lore" / "config.toml";
   std::vector<std::string> lines;
   {
@@ -538,584 +533,6 @@ void LoreVcs::ParseInfo(const std::vector<std::string>& lines) {
   if (lines.empty()) return;
   const std::string& first = lines.front();
   repository_name_ = Trim(first.substr(0, first.rfind(" (")));
-}
-
-// ------------------------------------------------------------------- Panel ---
-
-void LoreVcs::Draw(bool* open) {
-  if (!ImGui::Begin(kWindowName, open)) {
-    was_focused_ = false;
-    ImGui::End();
-    return;
-  }
-  if (!project_) {
-    ImGui::TextDisabled("Open a project to use Lore");
-    ImGui::End();
-    return;
-  }
-  // Pick up changes made outside the panel whenever it is focused.
-  const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-  if (focused && !was_focused_) Refresh();
-  was_focused_ = focused;
-
-  if (!IsRepository()) {
-    DrawInit();
-  } else {
-    if (!loaded_) Refresh();
-    DrawToolbar();
-    if (!last_error_.empty()) {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.45f, 1.0f));
-      ImGui::TextWrapped("%s", last_error_.c_str());
-      ImGui::PopStyleColor();
-    }
-    if (ImGui::BeginTabBar("lore_tabs")) {
-      if (ImGui::BeginTabItem("Changes")) {
-        DrawChanges();
-        ImGui::EndTabItem();
-      }
-      if (ImGui::BeginTabItem("History")) {
-        DrawHistory();
-        ImGui::EndTabItem();
-      }
-      const std::string locks_label = std::format("Locks ({})###locks", locks_.size());
-      if (ImGui::BeginTabItem(locks_label.c_str())) {
-        DrawLocks();
-        ImGui::EndTabItem();
-      }
-      ImGui::EndTabBar();
-    }
-  }
-  DrawModals();
-  ImGui::End();
-}
-
-void LoreVcs::DrawInit() {
-  if (init_server_.empty()) init_server_ = settings_.lore_server;
-  if (init_name_.empty()) {
-    init_name_ = project_->GetName();
-    std::replace(init_name_.begin(), init_name_.end(), ' ', '-');
-  }
-  ImGui::TextWrapped("This project isn't under Lore version control yet.");
-  ImGui::Spacing();
-  ImGui::SetNextItemWidth(320);
-  ImGui::InputTextWithHint("Server", "lore://host:port", &init_server_);
-  ImGui::SetNextItemWidth(320);
-  ImGui::InputText("Repository name", &init_name_);
-
-  std::string server = Trim(init_server_);
-  while (server.ends_with('/')) server.pop_back();
-  const std::string name = Trim(init_name_);
-  ImGui::TextDisabled("Creates %s/%s in %s", server.c_str(), name.c_str(),
-                      project_->GetRoot().string().c_str());
-  ImGui::TextDisabled("Generated files (.mercury/, build folders, Builds/) are "
-                      "left out through %s.", kIgnoreFile);
-  ImGui::Spacing();
-  const bool busy = process_ || !queue_.empty();
-  ImGui::BeginDisabled(busy || server.empty() || name.empty());
-  if (ImGui::Button("Initialize Repository")) Initialize();
-  ImGui::EndDisabled();
-  if (busy) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("Working...");
-  }
-  if (!last_error_.empty()) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.45f, 1.0f));
-    ImGui::TextWrapped("%s", last_error_.c_str());
-    ImGui::PopStyleColor();
-  }
-}
-
-void LoreVcs::DrawToolbar() {
-  const bool busy = process_ != nullptr;
-
-  ImGui::SetNextItemWidth(150);
-  if (ImGui::BeginCombo("##branch", branch_.empty() ? "(branch)" : branch_.c_str())) {
-    for (const auto& branch : branches_) {
-      if (ImGui::Selectable(branch.c_str(), branch == branch_) && branch != branch_) {
-        SwitchBranch(branch);
-      }
-    }
-    for (const auto& branch : remote_branches_) {
-      if (std::find(branches_.begin(), branches_.end(), branch) != branches_.end()) {
-        continue;
-      }
-      const std::string label = branch + " (remote)";
-      if (ImGui::Selectable(label.c_str())) SwitchBranch(branch);
-    }
-    ImGui::Separator();
-    if (ImGui::Selectable("New Branch...")) {
-      new_branch_.clear();
-      modal_ = Modal::kNewBranch;
-      open_modal_ = true;
-    }
-    ImGui::EndCombo();
-  }
-  ImGui::SetItemTooltip("Switch branch");
-
-  ImGui::SameLine();
-  if (local_revision_ >= 0) {
-    ImGui::TextDisabled("r%d", local_revision_);
-    ImGui::SameLine();
-  }
-  ImVec4 color(0.5f, 0.85f, 0.5f, 1.0f);
-  const char* state = "up to date";
-  const bool ahead = sync_state_.find("ahead") != std::string::npos;
-  const bool behind = sync_state_.find("behind") != std::string::npos;
-  if (ahead) {
-    color = ImVec4(1.0f, 0.8f, 0.35f, 1.0f);
-    state = "ahead of server";
-  } else if (behind) {
-    color = ImVec4(1.0f, 0.6f, 0.3f, 1.0f);
-    state = "behind server";
-  } else if (sync_state_.find("does not exist") != std::string::npos) {
-    color = ImVec4(1.0f, 0.8f, 0.35f, 1.0f);
-    state = "not on server";
-  } else if (sync_state_.empty()) {
-    color = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-    state = loaded_ ? "server unreachable" : "loading...";
-  }
-  ImGui::TextColored(color, "%s", state);
-  if (!sync_state_.empty()) ImGui::SetItemTooltip("%s", sync_state_.c_str());
-
-  ImGui::SameLine();
-  ImGui::BeginDisabled(busy);
-  if (ImGui::Button("Sync")) Sync();
-  ImGui::SetItemTooltip("Get the latest revision of this branch from the server");
-  ImGui::SameLine();
-  if (ImGui::Button("Push")) Push();
-  ImGui::SetItemTooltip("Send your commits to the server");
-  ImGui::SameLine();
-  if (ImGui::Button("Refresh")) Refresh();
-  ImGui::EndDisabled();
-  ImGui::SameLine();
-  if (ImGui::Button("Options")) {
-    options_server_ = ReadRemoteUrl();
-    options_executable_ = settings_.lore_executable;
-    ImGui::OpenPopup("lore_options");
-  }
-  DrawOptions();
-
-  if (busy) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("lore %s...", current_.args.empty() ? "" : current_.args[0].c_str());
-  }
-}
-
-void LoreVcs::DrawOptions() {
-  if (!ImGui::BeginPopup("lore_options")) return;
-  ImGui::SeparatorText("Repository");
-  ImGui::Text("Name: %s", repository_name_.empty() ? "?" : repository_name_.c_str());
-  ImGui::SetNextItemWidth(320);
-  ImGui::InputTextWithHint("Server URL", "lore://host:port", &options_server_);
-  std::string server = Trim(options_server_);
-  while (server.ends_with('/')) server.pop_back();
-  ImGui::TextDisabled("Repository URL: %s/%s", server.c_str(), repository_name_.c_str());
-
-  ImGui::SeparatorText("Lore");
-  ImGui::SetNextItemWidth(320);
-  ImGui::InputTextWithHint("Executable", "lore (from PATH)", &options_executable_);
-
-  ImGui::Spacing();
-  ImGui::BeginDisabled(server.empty());
-  if (ImGui::Button("Apply")) {
-    if (server != ReadRemoteUrl()) {
-      if (WriteRemoteUrl(server)) {
-        console_.Add(Console::Level::kInfo, Console::Source::kLore,
-                     "Lore server set to " + server);
-      } else {
-        console_.Error("Could not write .lore/config.toml");
-      }
-    }
-    settings_.lore_executable = Trim(options_executable_);
-    settings_.Save();
-    last_error_.clear();
-    Refresh();
-    ImGui::CloseCurrentPopup();
-  }
-  ImGui::EndDisabled();
-  ImGui::SameLine();
-  if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
-  ImGui::EndPopup();
-}
-
-void LoreVcs::DrawChanges() {
-  // Files | diff | commit, side by side: the bottom dock is short.
-  const ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV;
-  if (!ImGui::BeginTable("changes", 3, flags, ImGui::GetContentRegionAvail())) return;
-  ImGui::TableSetupColumn("files", ImGuiTableColumnFlags_WidthStretch, 0.4f);
-  ImGui::TableSetupColumn("diff", ImGuiTableColumnFlags_WidthStretch, 0.4f);
-  ImGui::TableSetupColumn("commit", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-  ImGui::TableNextRow();
-
-  ImGui::TableNextColumn();
-  ImGui::BeginChild("files");
-  DrawChangeList(Section::kStaged, "staged");
-  ImGui::Spacing();
-  DrawChangeList(Section::kUnstaged, "unstaged");
-  ImGui::EndChild();
-
-  ImGui::TableNextColumn();
-  ImGui::BeginChild("diff", ImVec2(0, 0), ImGuiChildFlags_None,
-                    ImGuiWindowFlags_HorizontalScrollbar);
-  if (selected_path_.empty()) {
-    ImGui::TextDisabled("Select a file to see its changes");
-  } else {
-    ImGui::TextUnformatted(selected_path_.c_str());
-    ImGui::Separator();
-    DrawTextLines(diff_lines_, true);
-  }
-  ImGui::EndChild();
-
-  ImGui::TableNextColumn();
-  ImGui::BeginChild("commit");
-  DrawCommitBox();
-  ImGui::EndChild();
-  ImGui::EndTable();
-}
-
-void LoreVcs::DrawChangeList(Section section, const char* id) {
-  const bool staged = section == Section::kStaged;
-  auto in_list = [staged](const Change& change) {
-    return staged == (change.section == Section::kStaged);
-  };
-  const auto count = std::count_if(changes_.begin(), changes_.end(), in_list);
-  const bool busy = process_ != nullptr;
-
-  ImGui::PushID(id);
-  ImGui::Text("%s (%d)", staged ? "Staged" : "Changes", static_cast<int>(count));
-  ImGui::SameLine();
-  ImGui::BeginDisabled(busy || count == 0);
-  if (staged) {
-    if (ImGui::SmallButton("Unstage All")) Unstage({"."});
-  } else {
-    if (ImGui::SmallButton("Stage All")) {
-      Run({"stage", "--scan", "."}, [this](const Result&) { Refresh(); });
-    }
-  }
-  ImGui::EndDisabled();
-  ImGui::Separator();
-  if (count == 0) {
-    ImGui::TextDisabled(staged ? "Nothing staged" : "No changes");
-  }
-
-  for (size_t i = 0; i < changes_.size(); i++) {
-    const Change& change = changes_[i];
-    if (!in_list(change)) continue;
-    ImGui::PushID(static_cast<int>(i));
-
-    ImGui::BeginDisabled(busy);
-    if (ImGui::SmallButton(staged ? "-" : "+")) {
-      std::vector<std::string> paths = {change.path};
-      if (!change.from.empty()) paths.push_back(change.from);
-      staged ? Unstage(paths) : Stage(paths);
-    }
-    ImGui::EndDisabled();
-    ImGui::SetItemTooltip(staged ? "Unstage" : "Stage");
-    ImGui::SameLine();
-    ImGui::TextColored(CodeColor(change.code), "%c", change.code);
-    ImGui::SetItemTooltip("%s%s", CodeName(change.code),
-                          change.section == Section::kUntracked ? " (new file)" : "");
-    ImGui::SameLine();
-
-    std::string label = change.path;
-    if (!change.from.empty()) label += "  (from " + change.from + ")";
-    if (auto lock = locks_.find(change.path); lock != locks_.end()) {
-      label += "  [locked by " + lock->second.owner + "]";
-    }
-    if (ImGui::Selectable(label.c_str(), selected_path_ == change.path,
-                          ImGuiSelectableFlags_AllowDoubleClick)) {
-      if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !busy) {
-        staged ? Unstage({change.path}) : Stage({change.path});
-      } else if (selected_path_ != change.path) {
-        ShowDiff(change.path);
-      }
-    }
-    if (ImGui::BeginPopupContextItem()) {
-      DrawChangeMenu(change);
-      ImGui::EndPopup();
-    }
-    ImGui::PopID();
-  }
-  ImGui::PopID();
-}
-
-void LoreVcs::DrawChangeMenu(const Change& change) {
-  const bool staged = change.section == Section::kStaged;
-  const bool busy = process_ != nullptr;
-  if (staged) {
-    if (ImGui::MenuItem("Unstage", nullptr, false, !busy)) Unstage({change.path});
-  } else {
-    if (ImGui::MenuItem("Stage", nullptr, false, !busy)) Stage({change.path});
-  }
-  if (ImGui::MenuItem("Show Diff")) ShowDiff(change.path);
-  ImGui::Separator();
-  if (locks_.contains(change.path)) {
-    if (ImGui::MenuItem("Release Lock", nullptr, false, !busy)) {
-      LockPaths({change.path}, false);
-    }
-  } else {
-    if (ImGui::MenuItem("Lock", nullptr, false,
-                        !busy && change.section != Section::kUntracked)) {
-      LockPaths({change.path}, true);
-    }
-  }
-  ImGui::Separator();
-  const char* discard = change.section == Section::kUntracked ? "Delete File..."
-                                                              : "Discard Changes...";
-  if (ImGui::MenuItem(discard, nullptr, false, !busy && !staged)) {
-    discard_target_ = change;
-    modal_ = Modal::kDiscard;
-    open_modal_ = true;
-  }
-  if (staged) ImGui::SetItemTooltip("Unstage the file first");
-  if (ImGui::MenuItem("Copy Path")) ImGui::SetClipboardText(change.path.c_str());
-}
-
-void LoreVcs::DrawCommitBox() {
-  const auto staged = std::count_if(changes_.begin(), changes_.end(), [](const Change& c) {
-    return c.section == Section::kStaged;
-  });
-  const float buttons = ImGui::GetFrameHeightWithSpacing() +
-                        ImGui::GetTextLineHeightWithSpacing() * 2.0f;
-  const float height = std::max(ImGui::GetContentRegionAvail().y - buttons,
-                                ImGui::GetTextLineHeightWithSpacing() * 3.0f);
-  ImGui::InputTextMultiline("##message", &commit_message_, ImVec2(-1, height));
-  if (commit_message_.empty()) {
-    // Hint text; InputTextMultiline has none of its own.
-    const ImVec2 min = ImGui::GetItemRectMin();
-    const ImGuiStyle& style = ImGui::GetStyle();
-    ImGui::GetWindowDrawList()->AddText(
-        ImVec2(min.x + style.FramePadding.x, min.y + style.FramePadding.y),
-        ImGui::GetColorU32(ImGuiCol_TextDisabled), "Commit message");
-  }
-  const bool can_commit = staged > 0 && !Trim(commit_message_).empty() && !process_;
-  ImGui::BeginDisabled(!can_commit);
-  if (ImGui::Button("Commit")) Commit(false);
-  ImGui::SameLine();
-  if (ImGui::Button("Commit and Push")) Commit(true);
-  ImGui::EndDisabled();
-  if (staged == 0) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Stage changes to commit them");
-    ImGui::PopStyleColor();
-  }
-}
-
-void LoreVcs::DrawHistory() {
-  const bool busy = process_ != nullptr;
-  const bool can_amend = HasUnpushedCommit() && !busy;
-  ImGui::BeginDisabled(!can_amend);
-  if (ImGui::Button("Edit Latest Message...")) {
-    amend_message_ = history_.front().message;
-    modal_ = Modal::kAmend;
-    open_modal_ = true;
-  }
-  ImGui::EndDisabled();
-  ImGui::SetItemTooltip(
-      "Only the latest commit can be edited, and only until it is pushed");
-  ImGui::SameLine();
-  ImGui::TextDisabled("%d revisions", static_cast<int>(history_.size()));
-
-  ImGui::BeginChild("revisions", ImVec2(ImGui::GetContentRegionAvail().x * 0.55f, 0),
-                    ImGuiChildFlags_ResizeX);
-  if (history_.empty()) ImGui::TextDisabled("No commits yet");
-  const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                                ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY;
-  if (!history_.empty() && ImGui::BeginTable("history", 3, flags)) {
-    ImGui::TableSetupScrollFreeze(0, 1);
-    ImGui::TableSetupColumn("Rev", ImGuiTableColumnFlags_WidthFixed, 50);
-    ImGui::TableSetupColumn("Date", ImGuiTableColumnFlags_WidthFixed, 200);
-    ImGui::TableSetupColumn("Message", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableHeadersRow();
-    const bool ahead = sync_state_.find("ahead") != std::string::npos ||
-                       sync_state_.find("does not exist") != std::string::npos;
-    for (size_t i = 0; i < history_.size(); i++) {
-      const Revision& revision = history_[i];
-      ImGui::PushID(static_cast<int>(i));
-      ImGui::TableNextRow();
-      ImGui::TableNextColumn();
-      const std::string number = std::to_string(revision.number);
-      if (ImGui::Selectable(number.c_str(), selected_revision_ == revision.number,
-                            ImGuiSelectableFlags_SpanAllColumns)) {
-        ShowRevision(revision);
-      }
-      if (ImGui::BeginPopupContextItem()) {
-        if (ImGui::MenuItem("Edit Message...", nullptr, false, i == 0 && can_amend)) {
-          amend_message_ = revision.message;
-          modal_ = Modal::kAmend;
-          open_modal_ = true;
-        }
-        if (ImGui::MenuItem("Sync to This Revision", nullptr, false, !busy)) {
-          Sync(revision.signature);
-        }
-        if (ImGui::MenuItem("Copy Signature")) {
-          ImGui::SetClipboardText(revision.signature.c_str());
-        }
-        ImGui::EndPopup();
-      }
-      ImGui::TableNextColumn();
-      ImGui::TextDisabled("%s", revision.date.c_str());
-      ImGui::TableNextColumn();
-      ImGui::TextUnformatted(FirstLine(revision.message).c_str());
-      if (ahead && revision.number > remote_revision_) {
-        ImGui::SameLine();
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.35f, 1.0f), "(not pushed)");
-      }
-      ImGui::PopID();
-    }
-    ImGui::EndTable();
-  }
-  ImGui::EndChild();
-
-  ImGui::SameLine();
-  ImGui::BeginChild("revision", ImVec2(0, 0), ImGuiChildFlags_Borders,
-                    ImGuiWindowFlags_HorizontalScrollbar);
-  if (selected_revision_ < 0) {
-    ImGui::TextDisabled("Select a revision to see what it changed");
-  } else {
-    DrawTextLines(revision_lines_, false);
-  }
-  ImGui::EndChild();
-}
-
-void LoreVcs::DrawLocks() {
-  const bool busy = process_ != nullptr;
-  ImGui::TextWrapped("Lock binary files (maps, textures, assets) before editing "
-                     "them so nobody else changes them at the same time.");
-  ImGui::SetNextItemWidth(320);
-  ImGui::InputTextWithHint("##lock_path", "path/in/project", &lock_path_);
-  ImGui::SameLine();
-  ImGui::BeginDisabled(busy || Trim(lock_path_).empty());
-  if (ImGui::Button("Lock File")) {
-    LockPaths({Trim(lock_path_)}, true);
-    lock_path_.clear();
-  }
-  ImGui::EndDisabled();
-  ImGui::Separator();
-
-  if (locks_.empty()) {
-    ImGui::TextDisabled("No files are locked on this branch");
-    return;
-  }
-  const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                                ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY;
-  if (!ImGui::BeginTable("locks", 3, flags)) return;
-  ImGui::TableSetupScrollFreeze(0, 1);
-  ImGui::TableSetupColumn("File", ImGuiTableColumnFlags_WidthStretch);
-  ImGui::TableSetupColumn("Locked by", ImGuiTableColumnFlags_WidthFixed, 160);
-  ImGui::TableSetupColumn("##release", ImGuiTableColumnFlags_WidthFixed, 70);
-  ImGui::TableHeadersRow();
-  for (const auto& [path, lock] : locks_) {
-    ImGui::PushID(path.c_str());
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::TextUnformatted(path.c_str());
-    ImGui::TableNextColumn();
-    ImGui::TextDisabled("%s", lock.owner.c_str());
-    ImGui::TableNextColumn();
-    ImGui::BeginDisabled(busy);
-    if (ImGui::SmallButton("Release")) LockPaths({path}, false);
-    ImGui::EndDisabled();
-    ImGui::PopID();
-  }
-  ImGui::EndTable();
-}
-
-void LoreVcs::DrawModals() {
-  if (open_modal_) {
-    const char* names[] = {"", "Edit Commit Message", "New Branch", "Discard Changes"};
-    ImGui::OpenPopup(names[static_cast<int>(modal_)]);
-    open_modal_ = false;
-  }
-  const ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
-
-  if (ImGui::BeginPopupModal("Edit Commit Message", nullptr, flags)) {
-    ImGui::TextDisabled("Revision %d (not pushed yet)", local_revision_);
-    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-    ImGui::InputTextMultiline("##amend", &amend_message_,
-                              ImVec2(420, ImGui::GetTextLineHeightWithSpacing() * 5));
-    ImGui::BeginDisabled(Trim(amend_message_).empty());
-    if (ImGui::Button("Save")) {
-      AmendMessage(Trim(amend_message_));
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-
-  if (ImGui::BeginPopupModal("New Branch", nullptr, flags)) {
-    ImGui::TextDisabled("Branches from revision %d of %s", local_revision_,
-                        branch_.c_str());
-    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-    ImGui::SetNextItemWidth(260);
-    const bool entered = ImGui::InputText("Name", &new_branch_,
-                                          ImGuiInputTextFlags_EnterReturnsTrue);
-    const std::string name = Trim(new_branch_);
-    ImGui::BeginDisabled(name.empty());
-    if (ImGui::Button("Create") || (entered && !name.empty())) {
-      CreateBranch(name);
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-
-  if (ImGui::BeginPopupModal("Discard Changes", nullptr, flags)) {
-    if (discard_target_.section == Section::kUntracked) {
-      ImGui::Text("Delete %s?", discard_target_.path.c_str());
-      ImGui::TextDisabled("It was never committed, so it can't be restored.");
-    } else {
-      ImGui::Text("Discard your changes to %s?", discard_target_.path.c_str());
-      ImGui::TextDisabled("The file goes back to revision %d. This can't be undone.",
-                          local_revision_);
-    }
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
-    if (ImGui::Button(discard_target_.section == Section::kUntracked ? "Delete"
-                                                                     : "Discard")) {
-      Discard(discard_target_);
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-}
-
-void LoreVcs::DrawTextLines(const std::vector<std::string>& lines, bool diff) {
-  ImGuiListClipper clipper;
-  clipper.Begin(static_cast<int>(lines.size()));
-  while (clipper.Step()) {
-    for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
-      const std::string& line = lines[i];
-      ImVec4 color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-      if (diff) {
-        if (line.starts_with("+++") || line.starts_with("---")) {
-          color = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-        } else if (line.starts_with('+')) {
-          color = ImVec4(0.45f, 0.85f, 0.45f, 1.0f);
-        } else if (line.starts_with('-')) {
-          color = ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
-        } else if (line.starts_with("@@")) {
-          color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
-        }
-      } else if (line.size() > 2 && std::isupper(static_cast<unsigned char>(line[0])) &&
-                 line[1] == ' ') {
-        color = CodeColor(line[0]);  // the files a revision changed
-      }
-      ImGui::TextColored(color, "%s", line.c_str());
-    }
-  }
 }
 
 }  // namespace Mercury

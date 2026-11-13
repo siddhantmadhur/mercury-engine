@@ -4,11 +4,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <functional>
 
-#include "GLFW/glfw3.h"
-#include "imgui.h"
-#include "misc/cpp/imgui_stdlib.h"
 #include "input/input_actions_codegen.h"
 #include "os/filesystem.h"
 #include "templates.h"
@@ -20,44 +16,20 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr size_t kMaxUndoSteps = 200;
-constexpr const char* kPartNames[] = {"Up", "Down", "Left", "Right"};
 
-std::vector<std::string>& Part(InputActionDesc::Composite2D& composite, int part) {
+std::vector<std::string>* PartVector(InputActionDesc::Composite2D& composite, int part) {
   switch (part) {
     case 0:
-      return composite.up;
+      return &composite.up;
     case 1:
-      return composite.down;
+      return &composite.down;
     case 2:
-      return composite.left;
+      return &composite.left;
+    case 3:
+      return &composite.right;
     default:
-      return composite.right;
+      return nullptr;
   }
-}
-
-// A column title with a "+" button at its right edge; true when pressed.
-bool HeaderWithAddButton(const char* title, const char* id, const char* tooltip) {
-  const float right = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextUnformatted(title);
-  // SameLine(x) would measure from the table column; SetCursorPosX does not.
-  ImGui::SameLine();
-  ImGui::SetCursorPosX(right - ImGui::GetFrameHeight());
-  const bool pressed = ImGui::Button(id, ImVec2(ImGui::GetFrameHeight(), 0));
-  ImGui::SetItemTooltip("%s", tooltip);
-  ImGui::Separator();
-  return pressed;
-}
-
-std::string BindingLabel(const std::string& path) {
-  return path.empty() ? "<No Binding>" : path;
-}
-
-std::string PartLabel(const std::vector<std::string>& paths) {
-  if (paths.empty()) return "<No Binding>";
-  std::string label;
-  for (const auto& path : paths) label += (label.empty() ? "" : ", ") + path;
-  return label;
 }
 
 // Writes `text` unless the file already holds it, so a save that changes
@@ -106,9 +78,10 @@ bool InputActionsWindow::Open(const std::string& res_path) {
   selection_ = {};
   undo_.clear();
   redo_.clear();
+  edit_open_ = false;
+  last_committed_ = {desc_, map_, selection_};
   header_errors_.clear();
-  renaming_map_ = -1;
-  listen_id_ = 0;
+  state_revision_++;
   return true;
 }
 
@@ -116,15 +89,19 @@ void InputActionsWindow::Close() {
   path_.clear();
   desc_ = {};
   dirty_ = false;
+  map_ = 0;
   selection_ = {};
   undo_.clear();
   redo_.clear();
+  edit_open_ = false;
+  last_committed_ = {};
   header_errors_.clear();
-  listen_id_ = 0;
+  state_revision_++;
 }
 
 bool InputActionsWindow::Save() {
   if (!project_ || path_.empty()) return false;
+  CommitEdit();
   if (!SaveInputActions(project_->Resolve(path_), desc_)) {
     console_.Error("Input Actions: could not write " + path_);
     return false;
@@ -132,13 +109,16 @@ bool InputActionsWindow::Save() {
   dirty_ = false;
   if (!desc_.header.empty() && !WriteHeader()) return false;
   console_.Info("Saved " + path_);
+  state_revision_++;
   return true;
 }
 
 bool InputActionsWindow::WriteHeader() {
+  if (!project_ || desc_.header.empty()) return false;
   const std::string class_name = desc_.class_name.empty() ? "GameInput" : desc_.class_name;
   auto header = GenerateInputActionsAngelScript(desc_, class_name, path_);
   header_errors_ = std::move(header.errors);
+  state_revision_++;
   if (!header_errors_.empty()) {
     for (const auto& e : header_errors_) console_.Error("Input Actions: " + e);
     console_.Error("Input Actions: " + desc_.header + " was not written; rename the actions");
@@ -151,38 +131,97 @@ bool InputActionsWindow::WriteHeader() {
   return true;
 }
 
+bool InputActionsWindow::IsProjectActions() const {
+  return project_ && !path_.empty() && project_->GetInputActionsPath() == path_;
+}
+
+void InputActionsWindow::SetAsProjectActions() {
+  if (!project_ || path_.empty()) return;
+  project_->SetInputActionsPath(path_);
+  project_->Save();
+  console_.Info(path_ + " is now the project's input actions");
+  state_revision_++;
+}
+
 void InputActionsWindow::Checkpoint() {
+  CommitEdit();
   undo_.push_back({desc_, map_, selection_});
   if (undo_.size() > kMaxUndoSteps) undo_.erase(undo_.begin());
   redo_.clear();
+  last_committed_ = {desc_, map_, selection_};
 }
 
-void InputActionsWindow::MarkChanged() { dirty_ = true; }
+void InputActionsWindow::BeginEdit() {
+  if (!edit_open_) {
+    last_committed_ = {desc_, map_, selection_};
+    edit_open_ = true;
+  }
+}
+
+void InputActionsWindow::CommitEdit() {
+  if (!edit_open_) return;
+  if (desc_ != last_committed_.desc) {
+    undo_.push_back(std::move(last_committed_));
+    if (undo_.size() > kMaxUndoSteps) undo_.erase(undo_.begin());
+    redo_.clear();
+    last_committed_ = {desc_, map_, selection_};
+  }
+  edit_open_ = false;
+}
+
+void InputActionsWindow::MarkChanged(bool coalesced) {
+  if (coalesced && !edit_open_) BeginEdit();
+  dirty_ = true;
+  if (!coalesced) last_committed_ = {desc_, map_, selection_};
+  state_revision_++;
+}
 
 void InputActionsWindow::Undo() {
+  CommitEdit();
   if (undo_.empty()) return;
   redo_.push_back({desc_, map_, selection_});
   desc_ = std::move(undo_.back().desc);
   map_ = undo_.back().map;
   selection_ = undo_.back().selection;
   undo_.pop_back();
+  last_committed_ = {desc_, map_, selection_};
   dirty_ = true;
+  state_revision_++;
 }
 
 void InputActionsWindow::Redo() {
+  CommitEdit();
   if (redo_.empty()) return;
   undo_.push_back({desc_, map_, selection_});
   desc_ = std::move(redo_.back().desc);
   map_ = redo_.back().map;
   selection_ = redo_.back().selection;
   redo_.pop_back();
+  last_committed_ = {desc_, map_, selection_};
   dirty_ = true;
+  state_revision_++;
 }
 
 const std::string& InputActionsWindow::SelectedMap() const {
   static const std::string kNone;
   if (map_ < 0 || map_ >= static_cast<int>(desc_.maps.size())) return kNone;
   return desc_.maps[map_];
+}
+
+void InputActionsWindow::SelectMap(int index) {
+  if (index < 0 || index >= static_cast<int>(desc_.maps.size())) return;
+  if (map_ != index) {
+    map_ = index;
+    selection_ = {};
+    state_revision_++;
+  }
+}
+
+void InputActionsWindow::Select(Selection selection) {
+  if (selection_ != selection) {
+    selection_ = selection;
+    state_revision_++;
+  }
 }
 
 std::vector<int> InputActionsWindow::ActionsOf(const std::string& map) const {
@@ -214,21 +253,45 @@ std::string InputActionsWindow::UniqueMapName(std::string base) const {
   return name;
 }
 
-void InputActionsWindow::AddMap() {
-  Checkpoint();
-  desc_.maps.push_back(UniqueMapName("New action map"));
-  map_ = static_cast<int>(desc_.maps.size()) - 1;
-  selection_ = {};
-  renaming_map_ = map_;
-  rename_buffer_ = desc_.maps[map_];
-  focus_rename_ = true;
-  MarkChanged();
+bool InputActionsWindow::IsActionNameTaken(int action_idx, const std::string& name) const {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return false;
+  const auto& target = desc_.actions[action_idx];
+  for (int i = 0; i < static_cast<int>(desc_.actions.size()); i++) {
+    if (i != action_idx && desc_.actions[i].map == target.map && desc_.actions[i].name == name) {
+      return true;
+    }
+  }
+  return false;
 }
 
-void InputActionsWindow::RenameMap(const std::string& from, const std::string& to) {
+std::string InputActionsWindow::ActionUsageSnippet(int action_idx) const {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return "";
+  const auto& action = desc_.actions[action_idx];
+  const std::string class_name =
+      desc_.class_name.empty() ? "GameInput" : InputActionIdentifier(desc_.class_name);
+  const std::string member =
+      desc_.header.empty()
+          ? std::format("Input::FindAction(\"{}\")", action.FullName())
+          : std::format("Input::RequireAction({}::{}.{})", class_name,
+                        InputActionIdentifier(action.map), InputActionIdentifier(action.name));
+  if (action.type == InputAction::Type::kButton) return member + ".wasPressedThisFrame";
+  if (action.vector2) return member + ".ReadVector2()";
+  return member + ".ReadFloat()";
+}
+
+int InputActionsWindow::AddMap(std::string name) {
+  Checkpoint();
+  desc_.maps.push_back(name.empty() ? UniqueMapName("New action map") : UniqueMapName(std::move(name)));
+  map_ = static_cast<int>(desc_.maps.size()) - 1;
+  selection_ = {};
+  MarkChanged();
+  return map_;
+}
+
+bool InputActionsWindow::RenameMap(const std::string& from, const std::string& to) {
   if (to.empty() || to == from || to.find('/') != std::string::npos ||
       std::find(desc_.maps.begin(), desc_.maps.end(), to) != desc_.maps.end()) {
-    return;
+    return false;
   }
   Checkpoint();
   for (auto& map : desc_.maps) {
@@ -238,6 +301,7 @@ void InputActionsWindow::RenameMap(const std::string& from, const std::string& t
     if (action.map == from) action.map = to;
   }
   MarkChanged();
+  return true;
 }
 
 void InputActionsWindow::DeleteMap(const std::string& map) {
@@ -249,7 +313,8 @@ void InputActionsWindow::DeleteMap(const std::string& map) {
   MarkChanged();
 }
 
-void InputActionsWindow::AddAction(const std::string& map) {
+int InputActionsWindow::AddAction(const std::string& map) {
+  if (desc_.maps.empty()) return -1;
   Checkpoint();
   InputActionDesc action;
   action.map = map;
@@ -261,6 +326,31 @@ void InputActionsWindow::AddAction(const std::string& map) {
   desc_.actions.insert(desc_.actions.begin() + index, std::move(action));
   selection_ = {Selection::Kind::kAction, index};
   MarkChanged();
+  return index;
+}
+
+int InputActionsWindow::AddBinding(int action_idx) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return -1;
+  Checkpoint();
+  auto& action = desc_.actions[action_idx];
+  action.bindings.emplace_back();
+  const int binding_idx = static_cast<int>(action.bindings.size()) - 1;
+  selection_ = {Selection::Kind::kBinding, action_idx, binding_idx};
+  MarkChanged();
+  return binding_idx;
+}
+
+int InputActionsWindow::AddComposite(int action_idx) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return -1;
+  Checkpoint();
+  auto& action = desc_.actions[action_idx];
+  action.composites.emplace_back();
+  if (action.type == InputAction::Type::kButton) action.type = InputAction::Type::kValue;
+  action.vector2 = true;
+  const int comp_idx = static_cast<int>(action.composites.size()) - 1;
+  selection_ = {Selection::Kind::kComposite, action_idx, comp_idx};
+  MarkChanged();
+  return comp_idx;
 }
 
 void InputActionsWindow::DeleteSelected() {
@@ -275,11 +365,15 @@ void InputActionsWindow::DeleteSelected() {
       selection_ = {};
       break;
     case Selection::Kind::kBinding:
-      action.bindings.erase(action.bindings.begin() + selection_.index);
+      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.bindings.size())) {
+        action.bindings.erase(action.bindings.begin() + selection_.index);
+      }
       selection_ = {Selection::Kind::kAction, selection_.action};
       break;
     case Selection::Kind::kComposite:
-      action.composites.erase(action.composites.begin() + selection_.index);
+      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.composites.size())) {
+        action.composites.erase(action.composites.begin() + selection_.index);
+      }
       selection_ = {Selection::Kind::kAction, selection_.action};
       break;
     case Selection::Kind::kNone:
@@ -303,14 +397,18 @@ void InputActionsWindow::DuplicateSelected() {
       break;
     }
     case Selection::Kind::kBinding:
-      action.bindings.insert(action.bindings.begin() + selection_.index + 1,
-                             action.bindings[selection_.index]);
-      selection_.index++;
+      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.bindings.size())) {
+        action.bindings.insert(action.bindings.begin() + selection_.index + 1,
+                               action.bindings[selection_.index]);
+        selection_.index++;
+      }
       break;
     case Selection::Kind::kComposite:
-      action.composites.insert(action.composites.begin() + selection_.index + 1,
-                               action.composites[selection_.index]);
-      selection_.index++;
+      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.composites.size())) {
+        action.composites.insert(action.composites.begin() + selection_.index + 1,
+                                 action.composites[selection_.index]);
+        selection_.index++;
+      }
       break;
     case Selection::Kind::kNone:
       return;
@@ -318,523 +416,135 @@ void InputActionsWindow::DuplicateSelected() {
   MarkChanged();
 }
 
-// ------------------------------------------------------------------ Listen ---
-
-void InputActionsWindow::CaptureListen(const InputManager* input) {
-  if (!listen_id_ || !input) return;
-  for (const auto& event : input->GetFrameEvents()) {
-    if (event.type != InputEvent::Type::kKey || event.action != GLFW_PRESS) continue;
-    if (event.key == GLFW_KEY_ESCAPE) {
-      listen_id_ = 0;
-      return;
+std::string InputActionsWindow::SetActionName(int action_idx, std::string new_name,
+                                              bool finalize) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return "";
+  auto& action = desc_.actions[action_idx];
+  BeginEdit();
+  if (finalize) {
+    std::erase(new_name, '/');
+    if (new_name.empty()) {
+      new_name = last_committed_.desc.actions.size() > static_cast<size_t>(action_idx)
+                     ? last_committed_.desc.actions[action_idx].name
+                     : "Action";
     }
-    if (std::string control = ControlFromKey(event.key); !control.empty()) {
-      listened_ = "<Keyboard>/" + control;
-      return;
+    if (IsActionNameTaken(action_idx, new_name)) {
+      new_name = UniqueActionName(action.map, new_name);
     }
+    action.name = new_name;
+    dirty_ = true;
+    CommitEdit();
+    state_revision_++;
+  } else {
+    action.name = new_name;
+    dirty_ = true;
+    state_revision_++;
   }
+  return action.name;
+}
+
+void InputActionsWindow::SetActionType(int action_idx, InputAction::Type type) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  Checkpoint();
+  auto& action = desc_.actions[action_idx];
+  action.type = type;
+  if (action.type == InputAction::Type::kButton) action.vector2 = false;
+  MarkChanged();
+}
+
+void InputActionsWindow::SetActionVector2(int action_idx, bool vector2) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  Checkpoint();
+  desc_.actions[action_idx].vector2 = vector2;
+  MarkChanged();
+}
+
+void InputActionsWindow::SetBindingPath(int action_idx, int binding_idx, const std::string& path,
+                                        bool coalesced) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  auto& bindings = desc_.actions[action_idx].bindings;
+  if (binding_idx < 0 || binding_idx >= static_cast<int>(bindings.size())) return;
+  if (!coalesced) Checkpoint();
+  bindings[binding_idx] = path;
+  MarkChanged(coalesced);
+}
+
+void InputActionsWindow::SetCompositePartPath(int action_idx, int composite_idx, int part, int idx,
+                                              const std::string& path, bool coalesced) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  auto& composites = desc_.actions[action_idx].composites;
+  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size())) return;
+  auto* vec = PartVector(composites[composite_idx], part);
+  if (!vec || idx < 0 || idx >= static_cast<int>(vec->size())) return;
+  if (!coalesced) Checkpoint();
+  (*vec)[idx] = path;
+  MarkChanged(coalesced);
+}
+
+void InputActionsWindow::AddCompositePartPath(int action_idx, int composite_idx, int part) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  auto& composites = desc_.actions[action_idx].composites;
+  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size())) return;
+  auto* vec = PartVector(composites[composite_idx], part);
+  if (!vec) return;
+  Checkpoint();
+  vec->emplace_back();
+  MarkChanged();
+}
+
+void InputActionsWindow::RemoveCompositePartPath(int action_idx, int composite_idx, int part,
+                                                 int idx) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  auto& composites = desc_.actions[action_idx].composites;
+  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size())) return;
+  auto* vec = PartVector(composites[composite_idx], part);
+  if (!vec || idx < 0 || idx >= static_cast<int>(vec->size())) return;
+  Checkpoint();
+  vec->erase(vec->begin() + idx);
+  MarkChanged();
+}
+
+void InputActionsWindow::SetGenerateHeader(bool enabled) {
+  Checkpoint();
+  if (enabled) {
+    if (desc_.class_name.empty()) desc_.class_name = "GameInput";
+    desc_.header = "res://scripts/generated/" + Templates::ToSnakeCase(desc_.class_name) + ".as";
+  } else {
+    desc_.header.clear();
+  }
+  MarkChanged();
+}
+
+void InputActionsWindow::SetClassName(const std::string& class_name, bool coalesced) {
+  if (!coalesced) Checkpoint();
+  desc_.class_name = class_name;
+  MarkChanged(coalesced);
+}
+
+void InputActionsWindow::SetHeaderPath(const std::string& header, bool coalesced) {
+  if (!coalesced) Checkpoint();
+  desc_.header = header;
+  MarkChanged(coalesced);
+}
+
+std::optional<std::string> InputActionsWindow::PollGamepadListen(const InputManager* input,
+                                                                   bool prev_buttons[15]) {
+  if (!input) return std::nullopt;
   const GamepadState& pad = input->GetGamepad();
-  if (!pad.connected) return;
+  if (!pad.connected) return std::nullopt;
   for (int button = 0; button < 15; button++) {
-    // Only a press that starts while listening counts.
-    if (pad.buttons[button] && !listen_pad_[button]) {
+    const bool pressed = pad.buttons[button];
+    const bool was_pressed = prev_buttons[button];
+    prev_buttons[button] = pressed;
+    if (pressed && !was_pressed) {
       if (std::string control = ControlFromGamepadButton(button); !control.empty()) {
-        listened_ = "<Gamepad>/" + control;
-        return;
+        return "<Gamepad>/" + control;
       }
     }
-    listen_pad_[button] = pad.buttons[button];
   }
-  if (pad.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] > 0.5f) listened_ = "<Gamepad>/leftTrigger";
-  if (pad.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] > 0.5f) listened_ = "<Gamepad>/rightTrigger";
-}
-
-// -------------------------------------------------------------------- Draw ---
-
-void InputActionsWindow::Draw(const InputManager* input, bool* open) {
-  ImGui::SetNextWindowSize(ImVec2(900, 500), ImGuiCond_FirstUseEver);
-  // The title stays the window's id; the dot marks unsaved changes.
-  const ImGuiWindowFlags window_flags =
-      ImGuiWindowFlags_MenuBar | (dirty_ ? ImGuiWindowFlags_UnsavedDocument : 0);
-  if (!ImGui::Begin(kWindowName, open, window_flags)) {
-    has_focus_ = false;
-    listen_id_ = 0;
-    ImGui::End();
-    return;
-  }
-  has_focus_ = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-  CaptureListen(input);
-  DrawToolbar();
-
-  if (!project_) {
-    ImGui::TextDisabled("Open a project to edit its input actions.");
-    ImGui::End();
-    return;
-  }
-  if (path_.empty()) {
-    ImGui::Spacing();
-    ImGui::TextDisabled("Open a .minput file: double-click it in the Project panel,");
-    ImGui::TextDisabled("or create one with Project > + Create > Input Actions.");
-    ImGui::End();
-    return;
-  }
-
-  // Delete / Ctrl+D act on the selection, unless a text field has the keys.
-  if (has_focus_ && !ImGui::GetIO().WantTextInput && !listen_id_) {
-    if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) DeleteSelected();
-    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) DuplicateSelected();
-  }
-
-  const ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV;
-  if (ImGui::BeginTable("input_actions_columns", 3, flags)) {
-    ImGui::TableSetupColumn("Action Maps", ImGuiTableColumnFlags_WidthStretch, 0.22f);
-    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthStretch, 0.38f);
-    ImGui::TableSetupColumn("Properties", ImGuiTableColumnFlags_WidthStretch, 0.40f);
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    DrawMaps();
-    ImGui::TableSetColumnIndex(1);
-    DrawActions();
-    ImGui::TableSetColumnIndex(2);
-    DrawProperties();
-    ImGui::EndTable();
-  }
-  ImGui::End();
-}
-
-void InputActionsWindow::DrawToolbar() {
-  if (!ImGui::BeginMenuBar()) return;
-  const bool open = project_ && !path_.empty();
-  if (ImGui::MenuItem("Save", "Ctrl+S", false, open && dirty_)) Save();
-  if (ImGui::BeginMenu("Code", open)) {
-    bool generate = !desc_.header.empty();
-    if (ImGui::Checkbox("Generate AngelScript", &generate)) {
-      Checkpoint();
-      if (generate) {
-        if (desc_.class_name.empty()) desc_.class_name = "GameInput";
-        desc_.header = "res://scripts/generated/" + Templates::ToSnakeCase(desc_.class_name) + ".as";
-      } else {
-        desc_.header.clear();
-      }
-      MarkChanged();
-    }
-    ImGui::SetItemTooltip("Write an AngelScript namespace with a constant per action when saving,\n"
-                          "like Unity's Generate C# Class");
-    ImGui::BeginDisabled(!generate);
-    ImGui::SetNextItemWidth(260);
-    if (ImGui::InputText("Class Name", &desc_.class_name)) MarkChanged();
-    if (ImGui::IsItemActivated()) Checkpoint();
-    ImGui::SetNextItemWidth(260);
-    if (ImGui::InputText("File", &desc_.header)) MarkChanged();
-    if (ImGui::IsItemActivated()) Checkpoint();
-    if (ImGui::MenuItem("Generate Now")) WriteHeader();
-    ImGui::EndDisabled();
-    ImGui::EndMenu();
-  }
-  if (open) {
-    if (project_->GetInputActionsPath() == path_) {
-      ImGui::TextDisabled("Project Actions");
-      ImGui::SetItemTooltip("The game loads these actions ([input] in the .mproj)");
-    } else {
-      if (ImGui::MenuItem("Use as Project Actions")) {
-        project_->SetInputActionsPath(path_);
-        project_->Save();
-        console_.Info(path_ + " is now the project's input actions");
-      }
-      ImGui::SetItemTooltip("Load these actions in the game ([input] in the .mproj)");
-    }
-    ImGui::TextDisabled("%s", path_.c_str());
-  }
-  ImGui::EndMenuBar();
-}
-
-void InputActionsWindow::DrawMaps() {
-  if (HeaderWithAddButton("Action Maps", "+##map", "Add Action Map")) AddMap();
-
-  ImGui::BeginChild("maps");
-  std::optional<std::string> delete_map;
-  for (int i = 0; i < static_cast<int>(desc_.maps.size()); i++) {
-    const std::string map = desc_.maps[i];
-    ImGui::PushID(i);
-    if (renaming_map_ == i) {
-      if (focus_rename_) {
-        ImGui::SetKeyboardFocusHere();
-        focus_rename_ = false;
-      }
-      ImGui::SetNextItemWidth(-1);
-      const bool done = ImGui::InputText("##rename", &rename_buffer_,
-                                         ImGuiInputTextFlags_EnterReturnsTrue |
-                                             ImGuiInputTextFlags_AutoSelectAll);
-      if (done || ImGui::IsItemDeactivated()) {
-        RenameMap(map, rename_buffer_);
-        renaming_map_ = -1;
-      }
-    } else {
-      if (ImGui::Selectable(map.empty() ? "(no map)" : map.c_str(), map_ == i,
-                            ImGuiSelectableFlags_AllowDoubleClick)) {
-        if (map_ != i) selection_ = {};
-        map_ = i;
-        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-          renaming_map_ = i;
-          rename_buffer_ = map;
-          focus_rename_ = true;
-        }
-      }
-      if (ImGui::BeginPopupContextItem()) {
-        if (ImGui::MenuItem("Rename")) {
-          renaming_map_ = i;
-          rename_buffer_ = map;
-          focus_rename_ = true;
-        }
-        if (ImGui::MenuItem("Add Action")) {
-          map_ = i;
-          AddAction(map);
-        }
-        if (ImGui::MenuItem("Delete")) delete_map = map;
-        ImGui::EndPopup();
-      }
-    }
-    ImGui::PopID();
-  }
-  if (desc_.maps.empty()) ImGui::TextDisabled("No action maps. Press + to add one.");
-  ImGui::EndChild();
-  if (delete_map) DeleteMap(*delete_map);
-}
-
-void InputActionsWindow::DrawActions() {
-  const std::string& map = SelectedMap();
-  const bool has_map = !desc_.maps.empty();
-  ImGui::BeginDisabled(!has_map);
-  if (HeaderWithAddButton("Actions", "+##action", "Add Action")) AddAction(map);
-  ImGui::EndDisabled();
-
-  ImGui::BeginChild("actions");
-  if (!has_map) {
-    ImGui::TextDisabled("Add an action map first.");
-    ImGui::EndChild();
-    return;
-  }
-  // Context menus may change the list, so they run after it is drawn.
-  std::function<void()> pending;
-  for (int index : ActionsOf(map)) {
-    auto& action = desc_.actions[index];
-    ImGui::PushID(index);
-    const bool action_selected =
-        selection_.kind == Selection::Kind::kAction && selection_.action == index;
-    const bool open = ImGui::TreeNodeEx(
-        "##action",
-        ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth |
-            ImGuiTreeNodeFlags_OpenOnArrow | (action_selected ? ImGuiTreeNodeFlags_Selected : 0),
-        "%s", action.name.c_str());
-    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-      selection_ = {Selection::Kind::kAction, index};
-    }
-    if (ImGui::BeginPopupContextItem()) {
-      selection_ = {Selection::Kind::kAction, index};
-      DrawActionContextMenu(index);
-      ImGui::EndPopup();
-    }
-    if (open) {
-      for (int b = 0; b < static_cast<int>(action.bindings.size()); b++) {
-        ImGui::PushID(b);
-        const bool selected = selection_ == Selection{Selection::Kind::kBinding, index, b};
-        ImGui::TreeNodeEx("##binding",
-                          ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                              ImGuiTreeNodeFlags_SpanAvailWidth |
-                              (selected ? ImGuiTreeNodeFlags_Selected : 0),
-                          "%s", BindingLabel(action.bindings[b]).c_str());
-        if (ImGui::IsItemClicked()) selection_ = {Selection::Kind::kBinding, index, b};
-        if (ImGui::BeginPopupContextItem()) {
-          selection_ = {Selection::Kind::kBinding, index, b};
-          if (ImGui::MenuItem("Duplicate", "Ctrl+D")) pending = [this] { DuplicateSelected(); };
-          if (ImGui::MenuItem("Delete", "Del")) pending = [this] { DeleteSelected(); };
-          ImGui::EndPopup();
-        }
-        ImGui::PopID();
-      }
-      for (int c = 0; c < static_cast<int>(action.composites.size()); c++) {
-        ImGui::PushID(1000 + c);
-        const bool selected = selection_ == Selection{Selection::Kind::kComposite, index, c};
-        const bool composite_open = ImGui::TreeNodeEx(
-            "##composite",
-            ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth |
-                ImGuiTreeNodeFlags_OpenOnArrow | (selected ? ImGuiTreeNodeFlags_Selected : 0),
-            "2D Vector");
-        if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-          selection_ = {Selection::Kind::kComposite, index, c};
-        }
-        if (ImGui::BeginPopupContextItem()) {
-          selection_ = {Selection::Kind::kComposite, index, c};
-          if (ImGui::MenuItem("Duplicate", "Ctrl+D")) pending = [this] { DuplicateSelected(); };
-          if (ImGui::MenuItem("Delete", "Del")) pending = [this] { DeleteSelected(); };
-          ImGui::EndPopup();
-        }
-        if (composite_open) {
-          for (int part = 0; part < 4; part++) {
-            ImGui::TreeNodeEx(kPartNames[part],
-                              ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                  ImGuiTreeNodeFlags_SpanAvailWidth,
-                              "%s: %s", kPartNames[part],
-                              PartLabel(Part(action.composites[c], part)).c_str());
-            if (ImGui::IsItemClicked()) selection_ = {Selection::Kind::kComposite, index, c};
-          }
-          ImGui::TreePop();
-        }
-        ImGui::PopID();
-      }
-      ImGui::TreePop();
-    }
-    ImGui::PopID();
-  }
-  if (ActionsOf(map).empty()) ImGui::TextDisabled("No actions. Press + to add one.");
-  ImGui::EndChild();
-  if (pending) pending();
-}
-
-void InputActionsWindow::DrawActionContextMenu(int index) {
-  auto& action = desc_.actions[index];
-  if (ImGui::MenuItem("Add Binding")) {
-    Checkpoint();
-    action.bindings.emplace_back();
-    selection_ = {Selection::Kind::kBinding, index,
-                  static_cast<int>(action.bindings.size()) - 1};
-    MarkChanged();
-  }
-  if (ImGui::MenuItem("Add Up/Down/Left/Right Composite")) {
-    Checkpoint();
-    action.composites.emplace_back();
-    // A 2D composite reads a Vector2.
-    if (action.type == InputAction::Type::kButton) action.type = InputAction::Type::kValue;
-    action.vector2 = true;
-    selection_ = {Selection::Kind::kComposite, index,
-                  static_cast<int>(action.composites.size()) - 1};
-    MarkChanged();
-  }
-  ImGui::Separator();
-  if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateSelected();
-  if (ImGui::MenuItem("Delete", "Del")) DeleteSelected();
-}
-
-void InputActionsWindow::DrawProperties() {
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextUnformatted("Properties");
-  ImGui::Separator();
-  ImGui::BeginChild("properties");
-  if (selection_.action < 0 || selection_.action >= static_cast<int>(desc_.actions.size())) {
-    ImGui::TextDisabled("Select an action or binding.");
-    ImGui::EndChild();
-    return;
-  }
-  auto& action = desc_.actions[selection_.action];
-  switch (selection_.kind) {
-    case Selection::Kind::kAction:
-      DrawActionProperties(action);
-      break;
-    case Selection::Kind::kBinding: {
-      if (selection_.index >= static_cast<int>(action.bindings.size())) break;
-      ImGui::SeparatorText("Binding");
-      if (DrawControlPath("path", action.bindings[selection_.index])) MarkChanged();
-      break;
-    }
-    case Selection::Kind::kComposite: {
-      if (selection_.index >= static_cast<int>(action.composites.size())) break;
-      ImGui::SeparatorText("2D Vector Composite");
-      auto& composite = action.composites[selection_.index];
-      for (int part = 0; part < 4; part++) {
-        ImGui::PushID(part);
-        if (DrawPathList(kPartNames[part], Part(composite, part))) MarkChanged();
-        ImGui::PopID();
-      }
-      break;
-    }
-    case Selection::Kind::kNone:
-      ImGui::TextDisabled("Select an action or binding.");
-      break;
-  }
-  ImGui::EndChild();
-}
-
-void InputActionsWindow::DrawActionProperties(InputActionDesc& action) {
-  ImGui::SeparatorText("Action");
-  ImGui::SetNextItemWidth(-90);
-  if (ImGui::InputText("Name", &action.name)) MarkChanged();
-  if (ImGui::IsItemActivated()) {
-    Checkpoint();
-    name_before_edit_ = action.name;
-  }
-  auto taken = [&] {
-    return std::any_of(desc_.actions.begin(), desc_.actions.end(), [&](const auto& other) {
-      return &other != &action && other.map == action.map && other.name == action.name;
-    });
-  };
-  if (ImGui::IsItemDeactivated()) {
-    // '/' separates the map from the action in "Map/Action".
-    std::erase(action.name, '/');
-    if (action.name.empty()) action.name = name_before_edit_;
-    if (taken()) action.name = UniqueActionName(action.map, action.name);
-  } else if (taken()) {
-    ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "Another action has this name");
-  }
-
-  static constexpr const char* kTypes[] = {"Button", "Value", "Pass Through"};
-  int type = static_cast<int>(action.type);
-  ImGui::SetNextItemWidth(-90);
-  if (ImGui::Combo("Action Type", &type, kTypes, IM_ARRAYSIZE(kTypes))) {
-    Checkpoint();
-    action.type = static_cast<InputAction::Type>(type);
-    if (action.type == InputAction::Type::kButton) action.vector2 = false;
-    MarkChanged();
-  }
-  ImGui::SetItemTooltip(
-      "Button: pressed / released, fires once per press.\n"
-      "Value: a continuous value; started, performed while it changes, canceled at rest.\n"
-      "Pass Through: performed on every change, from whichever control moved.");
-  if (action.type != InputAction::Type::kButton) {
-    static constexpr const char* kControls[] = {"Axis", "Vector 2"};
-    int control = action.vector2 ? 1 : 0;
-    ImGui::SetNextItemWidth(-90);
-    if (ImGui::Combo("Control Type", &control, kControls, IM_ARRAYSIZE(kControls))) {
-      Checkpoint();
-      action.vector2 = control == 1;
-      MarkChanged();
-    }
-  }
-
-  // How a script reads it, through the generated header or by name.
-  ImGui::SeparatorText("In scripts");
-  const std::string class_name =
-      desc_.class_name.empty() ? "GameInput" : InputActionIdentifier(desc_.class_name);
-  const std::string member =
-      desc_.header.empty()
-          ? std::format("Input::FindAction(\"{}\")", action.FullName())
-          : std::format("Input::RequireAction({}::{}.{})", class_name,
-                        InputActionIdentifier(action.map), InputActionIdentifier(action.name));
-  std::string usage;
-  if (action.type == InputAction::Type::kButton) {
-    usage = member + ".wasPressedThisFrame";
-  } else if (action.vector2) {
-    usage = member + ".ReadVector2()";
-  } else {
-    usage = member + ".ReadFloat()";
-  }
-  ImGui::TextDisabled("%s", usage.c_str());
-  if (ImGui::IsItemClicked()) ImGui::SetClipboardText(usage.c_str());
-  ImGui::SetItemTooltip("Click to copy");
-  if (desc_.header.empty()) {
-    ImGui::TextDisabled("Code > Generate AngelScript for typed access.");
-  }
-  for (const auto& error : header_errors_) {
-    ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.4f, 1.0f), "%s", error.c_str());
-  }
-}
-
-bool InputActionsWindow::DrawPathList(const char* label, std::vector<std::string>& paths) {
-  bool changed = false;
-  ImGui::SeparatorText(label);
-  std::optional<int> remove;
-  for (int i = 0; i < static_cast<int>(paths.size()); i++) {
-    ImGui::PushID(i);
-    changed |= DrawControlPath("path", paths[i]);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("x")) remove = i;
-    ImGui::SetItemTooltip("Remove");
-    ImGui::PopID();
-  }
-  if (ImGui::SmallButton("+ Add")) {
-    Checkpoint();
-    paths.emplace_back();
-    changed = true;
-  }
-  if (remove) {
-    Checkpoint();
-    paths.erase(paths.begin() + *remove);
-    changed = true;
-  }
-  return changed;
-}
-
-bool InputActionsWindow::DrawControlPath(const char* id, std::string& path) {
-  ImGui::PushID(id);
-  const ImGuiID listen_id = ImGui::GetID("listen");
-  bool changed = false;
-  if (listen_id_ == listen_id && listened_) {
-    Checkpoint();
-    path = *listened_;
-    listened_.reset();
-    listen_id_ = 0;
-    changed = true;
-  }
-
-  const float buttons = ImGui::CalcTextSize("Listen").x + ImGui::CalcTextSize("v").x +
-                        ImGui::GetStyle().FramePadding.x * 4 +
-                        ImGui::GetStyle().ItemSpacing.x * 2;
-  ImGui::SetNextItemWidth(std::max(80.0f, ImGui::GetContentRegionAvail().x - buttons - 30.0f));
-  if (listen_id_ == listen_id) {
-    std::string waiting = "Press a key or gamepad button (Esc cancels)";
-    ImGui::BeginDisabled();
-    ImGui::InputText("##path", &waiting, ImGuiInputTextFlags_ReadOnly);
-    ImGui::EndDisabled();
-  } else {
-    if (ImGui::InputTextWithHint("##path", "<Keyboard>/space", &path)) changed = true;
-    if (ImGui::IsItemActivated()) Checkpoint();
-  }
-  if (!path.empty() && path.front() == '<' && path.find('>') == std::string::npos) {
-    ImGui::SetItemTooltip("Control paths look like <Device>/control");
-  }
-
-  ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x);
-  if (ImGui::ArrowButton("##pick", ImGuiDir_Down)) {
-    picker_filter_[0] = '\0';
-    ImGui::OpenPopup("pick");
-  }
-  ImGui::SetItemTooltip("Pick a control");
-  if (ImGui::BeginPopup("pick")) {
-    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-    ImGui::SetNextItemWidth(220);
-    ImGui::InputTextWithHint("##filter", "Search", picker_filter_, sizeof(picker_filter_));
-    const std::string filter = picker_filter_;
-    auto matches = [&](std::string_view candidate) {
-      if (filter.empty()) return true;
-      auto it = std::search(candidate.begin(), candidate.end(), filter.begin(), filter.end(),
-                            [](char a, char b) { return std::tolower(a) == std::tolower(b); });
-      return it != candidate.end();
-    };
-    for (const char* device : {"<Keyboard>/", "<Mouse>/", "<Gamepad>/"}) {
-      const std::string_view prefix = device;
-      bool header = false;
-      for (std::string_view candidate : KnownControlPaths()) {
-        if (!candidate.starts_with(prefix) || !matches(candidate)) continue;
-        if (!header) {
-          ImGui::SeparatorText(std::string(prefix.substr(1, prefix.size() - 3)).c_str());
-          header = true;
-        }
-        const std::string text(candidate);
-        if (ImGui::Selectable(text.c_str(), text == path)) {
-          Checkpoint();
-          path = text;
-          changed = true;
-        }
-      }
-    }
-    ImGui::EndPopup();
-  }
-
-  ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x);
-  const bool listening = listen_id_ == listen_id;
-  if (listening) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.35f, 0.2f, 1.0f));
-  if (ImGui::Button("Listen")) {
-    if (listening) {
-      listen_id_ = 0;
-    } else {
-      listen_id_ = listen_id;
-      listened_.reset();
-      std::fill(std::begin(listen_pad_), std::end(listen_pad_), true);
-    }
-  }
-  if (listening) ImGui::PopStyleColor();
-  ImGui::SetItemTooltip("Press the key or gamepad button to bind");
-  ImGui::PopID();
-  return changed;
+  if (pad.axes[4] > 0.5f) return "<Gamepad>/leftTrigger";
+  if (pad.axes[5] > 0.5f) return "<Gamepad>/rightTrigger";
+  return std::nullopt;
 }
 
 }  // namespace Mercury
