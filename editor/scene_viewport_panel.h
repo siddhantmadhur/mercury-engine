@@ -118,6 +118,7 @@ class SceneViewportPanel : public wxPanel {
   EditorScene::Tool last_tool_ = EditorScene::Tool::kMove;
   EditorScene::HandleSpace last_space_ = EditorScene::HandleSpace::kLocal;
   bool last_2d_ = true;
+  std::string last_status_label_;
 };
 
 }  // namespace Mercury::EditorUI

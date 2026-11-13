@@ -94,13 +94,18 @@ class VulkanApplication : public Application {
   };
 
   struct OffscreenTarget {
+    struct ReadbackSlot {
+      vk::Buffer buffer;
+      VkExtent2D extent = {0, 0};
+      uint64_t frame_id = 0;
+      bool has_pixels = false;
+      bool synced = true;
+    };
     vk::Image color;
     vk::Image depth;
-    vk::Buffer readback;
+    std::array<ReadbackSlot, kFramesInFlight> slots;
     VkExtent2D extent = {0, 0};
-    VkExtent2D readback_extent = {0, 0};
-    bool has_pixels = false;
-    uint64_t frame_id = 0;
+    int last_recorded_slot = -1;
   };
 
   VkFormat ColorFormat() const;
@@ -275,8 +280,6 @@ class VulkanApplication : public Application {
   bool ui_preview_target_dirty_ = false;
   VkExtent2D ui_preview_requested_ = {0, 0};
   OffscreenTarget ui_preview_target_;
-  VkFence last_submitted_fence_ = VK_NULL_HANDLE;
-  bool readback_synced_ = true;
 
   bool show_render_stats_ = true;
 

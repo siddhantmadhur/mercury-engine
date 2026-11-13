@@ -254,6 +254,9 @@ class EditorScene : public MapScene {
   float WorldPerPixel(glm::vec3 point) const;
   void DrawLine3D(OverlayCanvas& draw, glm::vec3 a, glm::vec3 b,
                   OverlayColor color, float thickness = 1.0f) const;
+  void DrawLine3D(OverlayCanvas& draw, const glm::mat4& view_projection,
+                  glm::vec3 a, glm::vec3 b, OverlayColor color,
+                  float thickness = 1.0f) const;
   void DrawCircle3D(OverlayCanvas& draw, glm::vec3 center, glm::vec3 axis,
                     float radius, OverlayColor color,
                     float thickness = 1.0f) const;

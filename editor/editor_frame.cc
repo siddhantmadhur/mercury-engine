@@ -1084,25 +1084,44 @@ void EditorFrame::RefreshToolbarAndStatus(float dt) {
     }
     toolbar_->Layout();
   }
-  if (pstate == PlaySession::State::kIdle) {
-    play_btn_->Enable(scene_.GetProject() != nullptr);
-  } else if (pstate == PlaySession::State::kBuilding) {
-    play_btn_->Enable(false);
-  } else {
-    play_btn_->Enable(true);
-  }
-
+  const bool play_enabled =
+      (pstate == PlaySession::State::kIdle)
+          ? (scene_.GetProject() != nullptr)
+          : (pstate != PlaySession::State::kBuilding);
   const bool busy = play.IsBusy() || scene_.ReleaseRef().IsBusy();
-  build_scripts_btn_->Enable(!busy && scene_.GetProject() != nullptr);
-  build_game_btn_->Enable(!busy && scene_.GetProject() != nullptr);
+  const bool build_enabled = !busy && scene_.GetProject() != nullptr;
+  const bool save_enabled = scene_.HasUnsavedChanges();
+  const bool undo_enabled = scene_.CanUndo();
+  const bool redo_enabled = scene_.CanRedo();
 
-  save_btn_->Enable(scene_.HasUnsavedChanges());
-  undo_btn_->Enable(scene_.CanUndo());
-  redo_btn_->Enable(scene_.CanRedo());
+  if (!status_synced_once_ || play_enabled != last_play_enabled_) {
+    play_btn_->Enable(play_enabled);
+    last_play_enabled_ = play_enabled;
+  }
+  if (!status_synced_once_ || build_enabled != last_build_enabled_) {
+    build_scripts_btn_->Enable(build_enabled);
+    build_game_btn_->Enable(build_enabled);
+    last_build_enabled_ = build_enabled;
+  }
+  if (!status_synced_once_ || save_enabled != last_save_enabled_) {
+    save_btn_->Enable(save_enabled);
+    last_save_enabled_ = save_enabled;
+  }
+  if (!status_synced_once_ || undo_enabled != last_undo_enabled_) {
+    undo_btn_->Enable(undo_enabled);
+    last_undo_enabled_ = undo_enabled;
+  }
+  if (!status_synced_once_ || redo_enabled != last_redo_enabled_) {
+    redo_btn_->Enable(redo_enabled);
+    last_redo_enabled_ = redo_enabled;
+  }
 
   std::string map_lbl = scene_.MapDisplayName();
   if (scene_.IsDirty()) map_lbl += " *";
-  map_status_lbl_->SetLabel(wxString::FromUTF8(map_lbl));
+  if (!status_synced_once_ || map_lbl != last_map_label_) {
+    map_status_lbl_->SetLabel(wxString::FromUTF8(map_lbl));
+    last_map_label_ = std::move(map_lbl);
+  }
 
   fps_accum_ += dt;
   fps_frames_++;
@@ -1114,11 +1133,20 @@ void EditorFrame::RefreshToolbarAndStatus(float dt) {
   }
 
   if (auto* sb = GetStatusBar()) {
-    sb->SetStatusText(wxString::FromUTF8(scene_.GetHintText()), 0);
-    std::string proj_name =
+    const char* hint = scene_.GetHintText();
+    const std::string hint_str = hint ? hint : "";
+    if (!status_synced_once_ || hint_str != last_status_hint_) {
+      sb->SetStatusText(wxString::FromUTF8(hint_str), 0);
+      last_status_hint_ = hint_str;
+    }
+    const std::string proj_name =
         scene_.GetProject() ? scene_.GetProject()->GetName() : "No Project";
-    sb->SetStatusText(wxString::FromUTF8(proj_name), 1);
+    if (!status_synced_once_ || proj_name != last_status_proj_) {
+      sb->SetStatusText(wxString::FromUTF8(proj_name), 1);
+      last_status_proj_ = proj_name;
+    }
   }
+  status_synced_once_ = true;
 }
 
 void EditorFrame::SyncFromController(float dt) {

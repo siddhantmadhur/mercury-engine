@@ -6,13 +6,28 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 namespace Mercury::EditorUI {
 
 namespace {
 wxColour ToWx(OverlayColor c) { return wxColour(c.r, c.g, c.b, c.a); }
+
+uint32_t PackRgba(const wxColour& c) {
+  return (static_cast<uint32_t>(c.Red()) << 24) |
+         (static_cast<uint32_t>(c.Green()) << 16) |
+         (static_cast<uint32_t>(c.Blue()) << 8) |
+         static_cast<uint32_t>(c.Alpha());
+}
+
+uint32_t PackRgba(OverlayColor c) {
+  return (static_cast<uint32_t>(c.r) << 24) |
+         (static_cast<uint32_t>(c.g) << 16) |
+         (static_cast<uint32_t>(c.b) << 8) |
+         static_cast<uint32_t>(c.a);
+}
 }  // namespace
 
 wxFont MonospaceFont(int point_delta) {
@@ -50,6 +65,32 @@ wxBitmap RgbaToWxBitmap(const uint8_t* rgba, int width, int height,
   return wxBitmap(img);
 }
 
+void UpdateBitmapFromRgba(wxBitmap& bitmap, const uint8_t* rgba, int width,
+                          int height, bool with_alpha) {
+  if (!rgba || width <= 0 || height <= 0) {
+    bitmap = wxNullBitmap;
+    return;
+  }
+
+  if (!with_alpha) {
+    static thread_local std::vector<unsigned char> rgb_scratch;
+    const size_t pixel_count =
+        static_cast<size_t>(width) * static_cast<size_t>(height);
+    rgb_scratch.resize(pixel_count * 3);
+    unsigned char* dst = rgb_scratch.data();
+    for (size_t i = 0; i < pixel_count; ++i) {
+      dst[i * 3 + 0] = rgba[i * 4 + 0];
+      dst[i * 3 + 1] = rgba[i * 4 + 1];
+      dst[i * 3 + 2] = rgba[i * 4 + 2];
+    }
+    wxImage img(width, height, dst, /*static_data=*/true);
+    bitmap = wxBitmap(img);
+    return;
+  }
+
+  bitmap = RgbaToWxBitmap(rgba, width, height, with_alpha);
+}
+
 void DrawCheckerboard(wxGraphicsContext* gc, double x, double y, double w,
                       double h, int tile) {
   if (!gc || w <= 0 || h <= 0 || tile <= 0) return;
@@ -69,23 +110,70 @@ void DrawCheckerboard(wxGraphicsContext* gc, double x, double y, double w,
   gc->PopState();
 }
 
+wxGraphicsFont CachedGraphicsFont(wxGraphicsContext* gc, const wxFont& font,
+                                    const wxColour& color) {
+  if (!gc) return wxNullGraphicsFont;
+  struct Entry {
+    const wxGraphicsRenderer* renderer = nullptr;
+    uint32_t rgba = 0;
+    wxFont wx_font;
+    wxGraphicsFont gfx_font;
+  };
+  static thread_local std::vector<Entry> cache;
+  const wxGraphicsRenderer* renderer = gc->GetRenderer();
+  const uint32_t rgba = PackRgba(color);
+  for (const Entry& e : cache) {
+    if (e.renderer == renderer && e.rgba == rgba && e.wx_font.IsSameAs(font)) {
+      return e.gfx_font;
+    }
+  }
+  wxGraphicsFont gfx = gc->CreateFont(font, color);
+  if (cache.size() >= 64) cache.clear();
+  cache.push_back(Entry{renderer, rgba, font, gfx});
+  return gfx;
+}
+
 // ------------------------------------------------------------ OverlayCanvas ---
 
 WxOverlayCanvas::WxOverlayCanvas(wxGraphicsContext* gc, const wxFont& font)
     : gc_(gc), font_(font) {}
 
+WxOverlayCanvas::~WxOverlayCanvas() { FlushLines(); }
+
+void WxOverlayCanvas::Flush() { FlushLines(); }
+
+void WxOverlayCanvas::FlushLines() {
+  if (!gc_ || !has_pending_lines_) return;
+  wxPen pen(ToWx(pending_line_color_), pending_line_width_);
+  if (pending_line_width_ > 1) pen.SetCap(wxCAP_ROUND);
+  gc_->SetPen(pen);
+  gc_->StrokePath(pending_line_path_);
+  has_pending_lines_ = false;
+  pending_line_path_ = wxGraphicsPath();
+}
+
 void WxOverlayCanvas::AddLine(glm::vec2 a, glm::vec2 b, OverlayColor color,
                               float thickness) {
   if (!gc_) return;
-  wxPen pen(ToWx(color), std::max(1, static_cast<int>(std::round(thickness))));
-  pen.SetCap(wxCAP_ROUND);
-  gc_->SetPen(pen);
-  gc_->StrokeLine(a.x, a.y, b.x, b.y);
+  const int width = std::max(1, static_cast<int>(std::round(thickness)));
+  if (has_pending_lines_ &&
+      (color != pending_line_color_ || width != pending_line_width_)) {
+    FlushLines();
+  }
+  if (!has_pending_lines_) {
+    pending_line_path_ = gc_->CreatePath();
+    pending_line_color_ = color;
+    pending_line_width_ = width;
+    has_pending_lines_ = true;
+  }
+  pending_line_path_.MoveToPoint(a.x, a.y);
+  pending_line_path_.AddLineToPoint(b.x, b.y);
 }
 
 void WxOverlayCanvas::AddCircle(glm::vec2 center, float radius,
                                 OverlayColor color, float thickness) {
   if (!gc_) return;
+  FlushLines();
   wxPen pen(ToWx(color), std::max(1, static_cast<int>(std::round(thickness))));
   gc_->SetPen(pen);
   gc_->SetBrush(*wxTRANSPARENT_BRUSH);
@@ -96,6 +184,7 @@ void WxOverlayCanvas::AddCircle(glm::vec2 center, float radius,
 void WxOverlayCanvas::AddCircleFilled(glm::vec2 center, float radius,
                                       OverlayColor color) {
   if (!gc_) return;
+  FlushLines();
   gc_->SetPen(*wxTRANSPARENT_PEN);
   gc_->SetBrush(wxBrush(ToWx(color)));
   gc_->DrawEllipse(center.x - radius, center.y - radius, radius * 2.0,
@@ -105,6 +194,7 @@ void WxOverlayCanvas::AddCircleFilled(glm::vec2 center, float radius,
 void WxOverlayCanvas::AddRect(glm::vec2 min, glm::vec2 max, OverlayColor color,
                               float rounding, float thickness) {
   if (!gc_) return;
+  FlushLines();
   wxPen pen(ToWx(color), std::max(1, static_cast<int>(std::round(thickness))));
   gc_->SetPen(pen);
   gc_->SetBrush(*wxTRANSPARENT_BRUSH);
@@ -119,6 +209,7 @@ void WxOverlayCanvas::AddRect(glm::vec2 min, glm::vec2 max, OverlayColor color,
 void WxOverlayCanvas::AddRectFilled(glm::vec2 min, glm::vec2 max,
                                     OverlayColor color, float rounding) {
   if (!gc_) return;
+  FlushLines();
   gc_->SetPen(*wxTRANSPARENT_PEN);
   gc_->SetBrush(wxBrush(ToWx(color)));
   if (rounding > 0.0f) {
@@ -133,6 +224,7 @@ void WxOverlayCanvas::AddQuad(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2,
                               glm::vec2 p3, OverlayColor color,
                               float thickness) {
   if (!gc_) return;
+  FlushLines();
   wxGraphicsPath path = gc_->CreatePath();
   path.MoveToPoint(p0.x, p0.y);
   path.AddLineToPoint(p1.x, p1.y);
@@ -147,6 +239,7 @@ void WxOverlayCanvas::AddQuad(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2,
 void WxOverlayCanvas::AddQuadFilled(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2,
                                     glm::vec2 p3, OverlayColor color) {
   if (!gc_) return;
+  FlushLines();
   wxGraphicsPath path = gc_->CreatePath();
   path.MoveToPoint(p0.x, p0.y);
   path.AddLineToPoint(p1.x, p1.y);
@@ -161,6 +254,7 @@ void WxOverlayCanvas::AddQuadFilled(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2,
 void WxOverlayCanvas::AddTriangleFilled(glm::vec2 p0, glm::vec2 p1,
                                         glm::vec2 p2, OverlayColor color) {
   if (!gc_) return;
+  FlushLines();
   wxGraphicsPath path = gc_->CreatePath();
   path.MoveToPoint(p0.x, p0.y);
   path.AddLineToPoint(p1.x, p1.y);
@@ -174,17 +268,38 @@ void WxOverlayCanvas::AddTriangleFilled(glm::vec2 p0, glm::vec2 p1,
 void WxOverlayCanvas::AddText(glm::vec2 pos, OverlayColor color,
                               const std::string& text) {
   if (!gc_ || text.empty()) return;
-  gc_->SetFont(font_, ToWx(color));
+  FlushLines();
+  if (!has_active_font_ || PackRgba(color) != PackRgba(active_font_color_)) {
+    gc_->SetFont(CachedGraphicsFont(gc_, font_, ToWx(color)));
+    active_font_color_ = color;
+    has_active_font_ = true;
+  }
   gc_->DrawText(wxString::FromUTF8(text), pos.x, pos.y);
 }
 
 glm::vec2 WxOverlayCanvas::MeasureText(const std::string& text) const {
   if (!gc_ || text.empty()) return glm::vec2(0.0f);
-  gc_->SetFont(font_, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+  struct MeasureEntry {
+    wxFont wx_font;
+    std::string text;
+    glm::vec2 extent;
+  };
+  static thread_local std::vector<MeasureEntry> cache;
+  for (const MeasureEntry& e : cache) {
+    if (e.text == text && e.wx_font.IsSameAs(font_)) {
+      return e.extent;
+    }
+  }
+  const wxColour text_col = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+  gc_->SetFont(CachedGraphicsFont(gc_, font_, text_col));
+  has_active_font_ = false;
   double w = 0.0;
   double h = 0.0;
   gc_->GetTextExtent(wxString::FromUTF8(text), &w, &h);
-  return glm::vec2(static_cast<float>(w), static_cast<float>(h));
+  const glm::vec2 extent(static_cast<float>(w), static_cast<float>(h));
+  if (cache.size() >= 256) cache.clear();
+  cache.push_back(MeasureEntry{font_, text, extent});
+  return extent;
 }
 
 // --------------------------------------------------------- CollapsibleSection

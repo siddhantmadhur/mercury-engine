@@ -42,6 +42,7 @@ class HierarchyPanel : public wxPanel {
   std::unordered_set<uint64_t> expanded_uids_;
   uint64_t last_map_rev_ = 0;
   uint64_t last_sel_rev_ = 0;
+  std::string last_map_label_;
   bool syncing_selection_ = false;
   bool filter_dirty_ = true;
 };

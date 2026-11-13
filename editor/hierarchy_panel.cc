@@ -208,7 +208,11 @@ HierarchyPanel::HierarchyPanel(wxWindow* parent, EditorScene& scene)
 }
 
 void HierarchyPanel::SyncFromController() {
-  map_label_->SetLabel(wxString::FromUTF8(scene_.MapDisplayName()));
+  const std::string map_name = scene_.MapDisplayName();
+  if (map_name != last_map_label_) {
+    map_label_->SetLabel(wxString::FromUTF8(map_name));
+    last_map_label_ = map_name;
+  }
   if (scene_.MapRevision() != last_map_rev_ || filter_dirty_) {
     RebuildTree();
   } else if (scene_.SelectionRevision() != last_sel_rev_) {
