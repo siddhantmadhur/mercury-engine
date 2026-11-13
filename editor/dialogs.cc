@@ -81,9 +81,10 @@ std::optional<std::string> ShowNewScriptDialog(wxWindow* parent) {
                                wxDefaultSize, wxTE_PROCESS_ENTER);
   root->Add(input, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
 
-  auto* preview =
-      new wxStaticText(&dlg, wxID_ANY, "Enter a valid C++/AngelScript class name");
-  preview->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  auto* preview = new wxStaticText(&dlg, wxID_ANY,
+                                   "Enter a valid C++/AngelScript class name");
+  preview->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   root->Add(preview, 0, wxLEFT | wxRIGHT | wxTOP, 8);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
@@ -111,7 +112,9 @@ std::optional<std::string> ShowNewScriptDialog(wxWindow* parent) {
       preview->SetForegroundColour(wxNullColour);
       preview->SetFont(dlg.GetFont());
     } else {
-      preview->SetLabel("Invalid identifier (letters, digits, underscores; cannot start with digit)");
+      preview->SetLabel(
+          "Invalid identifier (letters, digits, underscores; cannot start with "
+          "digit)");
       preview->SetForegroundColour(wxNullColour);
       preview->SetFont(dlg.GetFont().Bold());
     }
@@ -151,11 +154,11 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
 
   auto* out_lbl = new wxStaticText(&dlg, wxID_ANY, "Output Folder:");
   auto* out_row = new wxBoxSizer(wxHORIZONTAL);
-  const std::string default_out =
-      project->GetBuildOutput().empty()
-          ? ReleaseBuild::DefaultOutput(*project)
-          : project->GetBuildOutput();
-  auto* out_ctrl = new wxTextCtrl(&dlg, wxID_ANY, wxString::FromUTF8(default_out));
+  const std::string default_out = project->GetBuildOutput().empty()
+                                      ? ReleaseBuild::DefaultOutput(*project)
+                                      : project->GetBuildOutput();
+  auto* out_ctrl =
+      new wxTextCtrl(&dlg, wxID_ANY, wxString::FromUTF8(default_out));
   auto* browse = new wxButton(&dlg, wxID_ANY, "Browse...");
   out_row->Add(out_ctrl, 1, wxEXPAND | wxRIGHT, 6);
   out_row->Add(browse, 0);
@@ -186,8 +189,8 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
                         wxString::FromUTF8(initial.string()),
                         wxDD_DEFAULT_STYLE);
     if (dir_dlg.ShowModal() == wxID_OK) {
-      out_ctrl->SetValue(
-          wxString::FromUTF8(project->ToResPath(dir_dlg.GetPath().ToStdString())));
+      out_ctrl->SetValue(wxString::FromUTF8(
+          project->ToResPath(dir_dlg.GetPath().ToStdString())));
     }
   });
 
@@ -233,9 +236,8 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   auto add_preset = [&](const char* name, const char* cmd) {
     auto* btn = new wxButton(&dlg, wxID_ANY, name);
     ApplyButtonPadding(btn, 8);
-    btn->Bind(wxEVT_BUTTON, [ed_ctrl, cmd](wxCommandEvent&) {
-      ed_ctrl->SetValue(cmd);
-    });
+    btn->Bind(wxEVT_BUTTON,
+              [ed_ctrl, cmd](wxCommandEvent&) { ed_ctrl->SetValue(cmd); });
     preset_row->Add(btn, 0, wxRIGHT, 6);
   };
   add_preset("System Default", "");
@@ -298,8 +300,10 @@ UnsavedChoice ShowUnsavedChangesDialog(wxWindow* parent,
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
   save->SetDefault();
   save->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { dlg.EndModal(wxID_YES); });
-  dont_save->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { dlg.EndModal(wxID_NO); });
-  cancel->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { dlg.EndModal(wxID_CANCEL); });
+  dont_save->Bind(wxEVT_BUTTON,
+                  [&](wxCommandEvent&) { dlg.EndModal(wxID_NO); });
+  cancel->Bind(wxEVT_BUTTON,
+               [&](wxCommandEvent&) { dlg.EndModal(wxID_CANCEL); });
 
   btns->Add(dont_save, 0);
   btns->AddStretchSpacer();
@@ -350,19 +354,21 @@ std::optional<std::string> ShowAddComponentDialog(wxWindow* parent,
                wxSize(360, 460), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
   auto* root = new wxBoxSizer(wxVERTICAL);
 
-  auto* search = new wxTextCtrl(&dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                                wxDefaultSize, wxTE_PROCESS_ENTER);
+  auto* search =
+      new wxTextCtrl(&dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                     wxDefaultSize, wxTE_PROCESS_ENTER);
   search->SetHint("Search components...");
   root->Add(search, 0, wxEXPAND | wxALL, 10);
 
-  auto* list = new wxListCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                              wxLC_REPORT | wxLC_NO_HEADER | wxLC_SINGLE_SEL |
-                                  wxBORDER_SIMPLE);
+  auto* list = new wxListCtrl(
+      &dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+      wxLC_REPORT | wxLC_NO_HEADER | wxLC_SINGLE_SEL | wxBORDER_SIMPLE);
   list->InsertColumn(0, "Component", wxLIST_FORMAT_LEFT, 320);
   root->Add(list, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
 
   auto* info_lbl = new wxStaticText(&dlg, wxID_ANY, wxEmptyString);
-  info_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  info_lbl->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   root->Add(info_lbl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 10);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
@@ -393,7 +399,8 @@ std::optional<std::string> ShowAddComponentDialog(wxWindow* parent,
     bool any_scripts = false;
     for (const ComponentInfo* info : TypeRegistry::Instance().Components()) {
       if (node.FindComponent(info->name)) continue;
-      if (!needle.empty() && Lower(info->name).find(needle) == std::string::npos) {
+      if (!needle.empty() &&
+          Lower(info->name).find(needle) == std::string::npos) {
         continue;
       }
       if (info->category != category) {
@@ -408,8 +415,8 @@ std::optional<std::string> ShowAddComponentDialog(wxWindow* parent,
           {true, "Scripts: Build the project to list scripts", "Scripts", ""});
     }
     for (size_t i = 0; i < rows.size(); ++i) {
-      const long idx =
-          list->InsertItem(static_cast<long>(i), wxString::FromUTF8(rows[i].name));
+      const long idx = list->InsertItem(static_cast<long>(i),
+                                        wxString::FromUTF8(rows[i].name));
       if (rows[i].is_header) {
         list->SetItemTextColour(
             idx, wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));

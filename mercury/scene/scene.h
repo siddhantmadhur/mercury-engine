@@ -30,7 +30,8 @@ struct UIDrawData;
  * @brief What a scene may ask of the application that renders it
  *
  * The editor uses this to draw the scene into offscreen render targets and
- * copy RGBA pixels into native editor viewports instead of straight to a window.
+ * copy RGBA pixels into native editor viewports instead of straight to a
+ * window.
  */
 class RenderHost {
  public:
@@ -40,7 +41,8 @@ class RenderHost {
   virtual void EnableSceneTexture(bool enabled) {}
   // Size of the offscreen target; takes effect on the rendered frame.
   virtual void SetSceneViewportSize(int width, int height) {}
-  // Copy the latest rendered offscreen scene as RGBA8 pixels (width * height * 4).
+  // Copy the latest rendered offscreen scene as RGBA8 pixels (width * height *
+  // 4).
   virtual bool CopyScenePixels(int& width, int& height,
                                std::vector<uint8_t>& rgba_out,
                                uint64_t* frame_id = nullptr) {
@@ -59,8 +61,8 @@ class RenderHost {
   // Also render a UI draw list into a separate width x height target over
   // `background` (the editor's UI Builder canvas). Call every frame it is
   // shown; the draw data must stay alive until the frame is rendered.
-  virtual void SetUIPreview(const UI::UIDrawData* draw_data, int width, int height,
-                            glm::vec4 background) {}
+  virtual void SetUIPreview(const UI::UIDrawData* draw_data, int width,
+                            int height, glm::vec4 background) {}
   // Copy the latest rendered UI Builder canvas as RGBA8 pixels.
   virtual bool CopyUIPreviewPixels(int& width, int& height,
                                    std::vector<uint8_t>& rgba_out,
@@ -89,10 +91,10 @@ struct PointLightData {
  * @brief A rectangular light as the renderer sees it (world space)
  */
 struct AreaLightData {
-  glm::vec3 position = glm::vec3(0.0f);  // center
+  glm::vec3 position = glm::vec3(0.0f);           // center
   glm::vec3 right = glm::vec3(0.5f, 0.0f, 0.0f);  // half the width
   glm::vec3 up = glm::vec3(0.0f, 0.5f, 0.0f);     // half the height
-  glm::vec3 color = glm::vec3(1.0f);  // linear radiance
+  glm::vec3 color = glm::vec3(1.0f);              // linear radiance
   float range = 10.0f;
   bool two_sided = false;
   int shadows = 2;
@@ -124,8 +126,8 @@ struct ProbeVolumeData {
  */
 struct SceneLighting {
   glm::vec3 direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f));
-  glm::vec3 color = glm::vec3(1.0f);  // color * intensity
-  glm::vec3 ambient = glm::vec3(0.2f);         // from above
+  glm::vec3 color = glm::vec3(1.0f);            // color * intensity
+  glm::vec3 ambient = glm::vec3(0.2f);          // from above
   glm::vec3 ambient_ground = glm::vec3(0.07f);  // from below
   bool cast_shadows = true;
   float shadow_bias = 0.0015f;
@@ -244,7 +246,8 @@ class GameScene {
   // Every camera to draw this frame at the given output size, in order:
   // RenderTexture cameras, then the main camera, then overlays. Empty means
   // only the current camera (GetCameraProj).
-  virtual std::vector<RenderCamera> GetRenderCameras(float width, float height) {
+  virtual std::vector<RenderCamera> GetRenderCameras(float width,
+                                                     float height) {
     return {};
   }
 
@@ -259,7 +262,9 @@ class GameScene {
   void SetHeight(float);
 
   entt::registry& GetRegistry() { return object_manager_->GetRegistry(); }
-  const entt::registry& GetRegistry() const { return object_manager_->GetRegistry(); }
+  const entt::registry& GetRegistry() const {
+    return object_manager_->GetRegistry();
+  }
 
   void SetInputManager(InputManager*);
   void SetRenderHost(RenderHost* host) { render_host_ = host; }

@@ -19,7 +19,8 @@ glm::vec2 Apply(const glm::mat3& m, glm::vec2 p) {
 
 uint32_t WithAlpha(uint32_t color, float alpha_scale) {
   const uint32_t a = color >> 24;
-  const uint32_t scaled = static_cast<uint32_t>(std::clamp(a * alpha_scale, 0.0f, 255.0f) + 0.5f);
+  const uint32_t scaled =
+      static_cast<uint32_t>(std::clamp(a * alpha_scale, 0.0f, 255.0f) + 0.5f);
   return (color & 0x00FFFFFF) | (scaled << 24);
 }
 
@@ -36,7 +37,8 @@ float SignedArea(const std::vector<glm::vec2>& p) {
 }
 
 // Outward vertex normals, scaled for a constant-width fringe (miter).
-std::vector<glm::vec2> VertexNormals(const std::vector<glm::vec2>& p, bool closed) {
+std::vector<glm::vec2> VertexNormals(const std::vector<glm::vec2>& p,
+                                     bool closed) {
   const size_t n = p.size();
   // In y-down space, (d.y, -d.x) points out of a clockwise contour.
   const float orientation = SignedArea(p) >= 0.0f ? 1.0f : -1.0f;
@@ -44,7 +46,8 @@ std::vector<glm::vec2> VertexNormals(const std::vector<glm::vec2>& p, bool close
   auto edge_normal = [&](glm::vec2 from, glm::vec2 to) {
     const glm::vec2 d = to - from;
     const float len = glm::length(d);
-    return len > kSame ? glm::vec2(d.y, -d.x) / len * orientation : glm::vec2(0.0f);
+    return len > kSame ? glm::vec2(d.y, -d.x) / len * orientation
+                       : glm::vec2(0.0f);
   };
   std::vector<glm::vec2> normals(n);
   for (size_t i = 0; i < n; i++) {
@@ -122,12 +125,13 @@ void MeshBuilder::AddTriangles(const UIVertex* vertices, size_t vertex_count,
   UIDrawCommand& command = CommandFor(texture_id);
   const uint32_t base = static_cast<uint32_t>(out_.vertices.size());
   out_.vertices.insert(out_.vertices.end(), vertices, vertices + vertex_count);
-  for (size_t i = 0; i < index_count; i++) out_.indices.push_back(base + indices[i]);
+  for (size_t i = 0; i < index_count; i++)
+    out_.indices.push_back(base + indices[i]);
   command.index_count += static_cast<uint32_t>(index_count);
 }
 
-void MeshBuilder::FillConvex(const std::vector<glm::vec2>& points, uint32_t color,
-                             bool anti_alias) {
+void MeshBuilder::FillConvex(const std::vector<glm::vec2>& points,
+                             uint32_t color, bool anti_alias) {
   const size_t n = points.size();
   if (n < 3 || (color >> 24) == 0) return;
   std::vector<UIVertex> v;
@@ -140,13 +144,20 @@ void MeshBuilder::FillConvex(const std::vector<glm::vec2>& points, uint32_t colo
     const auto normals = VertexNormals(points, true);
     const uint32_t transparent = color & 0x00FFFFFF;
     for (size_t i = 0; i < n; i++) {
-      v.push_back({points[i] - normals[i] * (kAA * 0.5f), {0, 0}, color, 0, solid});
-      v.push_back({points[i] + normals[i] * (kAA * 0.5f), {0, 0}, transparent, 0, solid});
+      v.push_back(
+          {points[i] - normals[i] * (kAA * 0.5f), {0, 0}, color, 0, solid});
+      v.push_back({points[i] + normals[i] * (kAA * 0.5f),
+                   {0, 0},
+                   transparent,
+                   0,
+                   solid});
     }
-    for (uint32_t i = 1; i + 1 < n; i++) idx.insert(idx.end(), {0, i * 2, (i + 1) * 2});
+    for (uint32_t i = 1; i + 1 < n; i++)
+      idx.insert(idx.end(), {0, i * 2, (i + 1) * 2});
     for (uint32_t i = 0; i < n; i++) {
       const uint32_t j = static_cast<uint32_t>((i + 1) % n);
-      idx.insert(idx.end(), {i * 2, j * 2, j * 2 + 1, i * 2, j * 2 + 1, i * 2 + 1});
+      idx.insert(idx.end(),
+                 {i * 2, j * 2, j * 2 + 1, i * 2, j * 2 + 1, i * 2 + 1});
     }
   }
   AddTriangles(v.data(), v.size(), idx.data(), idx.size(), 0);
@@ -154,7 +165,8 @@ void MeshBuilder::FillConvex(const std::vector<glm::vec2>& points, uint32_t colo
 
 void MeshBuilder::FillRing(const std::vector<glm::vec2>& outer,
                            const std::vector<glm::vec2>& inner,
-                           const std::vector<uint32_t>& colors, bool anti_alias) {
+                           const std::vector<uint32_t>& colors,
+                           bool anti_alias) {
   const size_t n = outer.size();
   if (n < 3 || inner.size() != n || colors.size() != n) return;
   std::vector<UIVertex> v;
@@ -214,14 +226,17 @@ void MeshBuilder::Stroke(const std::vector<glm::vec2>& points, float width,
   for (size_t i = 0; i < n; i++) {
     glm::vec2 nrm = normals[i];
     if (!closed && (i == 0 || i == n - 1)) {
-      const glm::vec2 d = i == 0 ? points[1] - points[0] : points[n - 1] - points[n - 2];
+      const glm::vec2 d =
+          i == 0 ? points[1] - points[0] : points[n - 1] - points[n - 2];
       const float len = glm::length(d);
       nrm = len > 0 ? glm::vec2(d.y, -d.x) / len : glm::vec2(0, 1);
     }
-    v.push_back({points[i] + nrm * (core_half + kAA), {0, 0}, transparent, 0, solid});
+    v.push_back(
+        {points[i] + nrm * (core_half + kAA), {0, 0}, transparent, 0, solid});
     v.push_back({points[i] + nrm * core_half, {0, 0}, core, 0, solid});
     v.push_back({points[i] - nrm * core_half, {0, 0}, core, 0, solid});
-    v.push_back({points[i] - nrm * (core_half + kAA), {0, 0}, transparent, 0, solid});
+    v.push_back(
+        {points[i] - nrm * (core_half + kAA), {0, 0}, transparent, 0, solid});
   }
   const size_t segments = closed ? n : n - 1;
   for (uint32_t i = 0; i < segments; i++) {
@@ -235,7 +250,8 @@ void MeshBuilder::Stroke(const std::vector<glm::vec2>& points, float width,
   AddTriangles(v.data(), v.size(), idx.data(), idx.size(), 0);
 }
 
-void MeshBuilder::FillPolygon(const std::vector<glm::vec2>& points, uint32_t color) {
+void MeshBuilder::FillPolygon(const std::vector<glm::vec2>& points,
+                              uint32_t color) {
   const size_t n = points.size();
   if (n < 3 || (color >> 24) == 0) return;
   const glm::vec4 solid(static_cast<float>(VertexMode::kSolid), 0, 0, 0);
@@ -250,7 +266,8 @@ void MeshBuilder::FillPolygon(const std::vector<glm::vec2>& points, uint32_t col
   while (remaining.size() > 3 && guard++ < n * n) {
     bool clipped = false;
     for (size_t i = 0; i < remaining.size(); i++) {
-      const uint32_t a = remaining[(i + remaining.size() - 1) % remaining.size()];
+      const uint32_t a =
+          remaining[(i + remaining.size() - 1) % remaining.size()];
       const uint32_t b = remaining[i];
       const uint32_t c = remaining[(i + 1) % remaining.size()];
       const glm::vec2 pa = points[a], pb = points[b], pc = points[c];
@@ -275,7 +292,8 @@ void MeshBuilder::FillPolygon(const std::vector<glm::vec2>& points, uint32_t col
     }
     if (!clipped) break;  // degenerate polygon
   }
-  if (remaining.size() == 3) idx.insert(idx.end(), {remaining[0], remaining[1], remaining[2]});
+  if (remaining.size() == 3)
+    idx.insert(idx.end(), {remaining[0], remaining[1], remaining[2]});
   AddTriangles(v.data(), v.size(), idx.data(), idx.size(), 0);
 }
 
@@ -300,11 +318,13 @@ void Painter2D::Arc(glm::vec2 center, float radius, float start, float end,
   float sweep = end - start;
   if (counter_clockwise && sweep > 0) sweep -= 360.0f;
   if (!counter_clockwise && sweep < 0) sweep += 360.0f;
-  const int steps = std::max(2, static_cast<int>(std::ceil(std::abs(sweep) / 6.0f)));
+  const int steps =
+      std::max(2, static_cast<int>(std::ceil(std::abs(sweep) / 6.0f)));
   auto& path = Current();
   for (int i = 0; i <= steps; i++) {
     const float a = glm::radians(start + sweep * i / steps);
-    path.points.push_back(center + radius * glm::vec2(std::cos(a), std::sin(a)));
+    path.points.push_back(center +
+                          radius * glm::vec2(std::cos(a), std::sin(a)));
   }
 }
 
@@ -313,8 +333,8 @@ void Painter2D::QuadraticCurveTo(glm::vec2 control, glm::vec2 p) {
   const glm::vec2 start = path.points.empty() ? control : path.points.back();
   for (int i = 1; i <= 16; i++) {
     const float t = i / 16.0f;
-    path.points.push_back((1 - t) * (1 - t) * start + 2 * (1 - t) * t * control +
-                          t * t * p);
+    path.points.push_back((1 - t) * (1 - t) * start +
+                          2 * (1 - t) * t * control + t * t * p);
   }
 }
 
@@ -351,7 +371,8 @@ void Painter2D::Stroke() {
       glm::vec2 q = Apply(transform_, p);
       if (px.empty() || glm::distance(px.back(), q) > 0.01f) px.push_back(q);
     }
-    builder_->Stroke(px, lineWidth * scale, Pack(strokeColor, opacity_), path.closed);
+    builder_->Stroke(px, lineWidth * scale, Pack(strokeColor, opacity_),
+                     path.closed);
   }
 }
 
@@ -361,7 +382,10 @@ MeshGenerationContext::MeshGenerationContext(MeshBuilder& builder,
                                              VisualElement* element,
                                              const glm::mat3& to_pixels,
                                              float opacity)
-    : builder_(builder), element_(element), to_pixels_(to_pixels), opacity_(opacity) {
+    : builder_(builder),
+      element_(element),
+      to_pixels_(to_pixels),
+      opacity_(opacity) {
   painter_.builder_ = &builder;
   painter_.transform_ = to_pixels;
   painter_.opacity_ = opacity;
@@ -372,9 +396,10 @@ glm::vec2 MeshGenerationContext::ToPixels(glm::vec2 local) const {
 }
 
 void MeshGenerationContext::DrawRect(const Rect& r, Color color) {
-  builder_.FillConvex({ToPixels({r.x, r.y}), ToPixels({r.xMax(), r.y}),
-                       ToPixels({r.xMax(), r.yMax()}), ToPixels({r.x, r.yMax()})},
-                      Pack(color, opacity_));
+  builder_.FillConvex(
+      {ToPixels({r.x, r.y}), ToPixels({r.xMax(), r.y}),
+       ToPixels({r.xMax(), r.yMax()}), ToPixels({r.x, r.yMax()})},
+      Pack(color, opacity_));
 }
 
 void MeshGenerationContext::DrawRoundedRect(const Rect& r,
@@ -401,27 +426,32 @@ void MeshGenerationContext::DrawImage(const Rect& r, uint32_t texture_id,
 }
 
 void MeshGenerationContext::DrawText(const TextLayout& layout, const Font& font,
-                                     glm::vec2 origin, const ComputedStyle& style) {
+                                     glm::vec2 origin,
+                                     const ComputedStyle& style) {
   const float pixel_scale = glm::length(glm::vec2(to_pixels_[0]));
   const float outline = style.unityTextOutlineWidth;
   const uint32_t outline_color = Pack(style.unityTextOutlineColor, opacity_);
   const uint32_t texture = font.atlasId();
 
   auto emit = [&](const PositionedGlyph& g, glm::vec2 offset, uint32_t color,
-                  float softness, uint32_t outline_packed, float outline_width) {
+                  float softness, uint32_t outline_packed,
+                  float outline_width) {
     const glm::vec2 p = origin + g.position + offset;
     const float skew = g.italic ? g.size.y * 0.2f : 0.0f;
     // SDF units per pixel of this glyph: the full padding is 0.5 units.
-    const float glyph_scale = g.size.y > 0 ? g.size.y / std::max(1.0f, (g.uv.w - g.uv.y) *
-                                                                         font.atlas().height)
-                                           : 1.0f;
+    const float glyph_scale =
+        g.size.y > 0
+            ? g.size.y / std::max(1.0f, (g.uv.w - g.uv.y) * font.atlas().height)
+            : 1.0f;
     const float units_per_px = 0.5f / (kSdfPadding * glyph_scale);
     const float edge = (g.bold ? 0.43f : 0.5f);
-    glm::vec4 params(0.0f, edge, outline_width * units_per_px, softness * units_per_px);
-    builder_.AddQuad({ToPixels({p.x + skew, p.y}), ToPixels({p.x + g.size.x + skew, p.y}),
-                      ToPixels({p.x + g.size.x, p.y + g.size.y}),
-                      ToPixels({p.x, p.y + g.size.y})},
-                     g.uv, color, texture, VertexMode::kText, params, outline_packed);
+    glm::vec4 params(0.0f, edge, outline_width * units_per_px,
+                     softness * units_per_px);
+    builder_.AddQuad(
+        {ToPixels({p.x + skew, p.y}), ToPixels({p.x + g.size.x + skew, p.y}),
+         ToPixels({p.x + g.size.x, p.y + g.size.y}),
+         ToPixels({p.x, p.y + g.size.y})},
+        g.uv, color, texture, VertexMode::kText, params, outline_packed);
   };
   (void)pixel_scale;
 
@@ -444,7 +474,8 @@ void MeshGenerationContext::DrawText(const TextLayout& layout, const Font& font,
 
 void BuildRoundedContour(const Rect& r, const std::array<glm::vec2, 4>& radii,
                          const std::array<int, 4>& segments,
-                         std::vector<glm::vec2>& points, std::vector<int>* sides) {
+                         std::vector<glm::vec2>& points,
+                         std::vector<int>* sides) {
   points.clear();
   if (sides) sides->clear();
   const glm::vec2 centers[4] = {
@@ -461,7 +492,8 @@ void BuildRoundedContour(const Rect& r, const std::array<glm::vec2, 4>& radii,
   for (int c = 0; c < 4; c++) {
     const int n = segments[c];
     for (int k = 0; k <= n; k++) {
-      const float a = glm::radians(start_angles[c] + 90.0f * (n == 0 ? 0.5f : float(k) / n));
+      const float a = glm::radians(start_angles[c] +
+                                   90.0f * (n == 0 ? 0.5f : float(k) / n));
       const glm::vec2 p = centers[c] + glm::vec2(std::cos(a) * radii[c].x,
                                                  std::sin(a) * radii[c].y);
       const int mid = n / 2;
@@ -489,9 +521,10 @@ namespace {
 
 // Corner radii clamped so adjacent corners never overlap (CSS rules).
 std::array<float, 4> ClampedRadii(const ComputedStyle& s, float w, float h) {
-  std::array<float, 4> r = {
-      s.borderTopLeftRadius.Resolve(w), s.borderTopRightRadius.Resolve(w),
-      s.borderBottomRightRadius.Resolve(w), s.borderBottomLeftRadius.Resolve(w)};
+  std::array<float, 4> r = {s.borderTopLeftRadius.Resolve(w),
+                            s.borderTopRightRadius.Resolve(w),
+                            s.borderBottomRightRadius.Resolve(w),
+                            s.borderBottomLeftRadius.Resolve(w)};
   float f = 1.0f;
   auto fit = [&](float a, float b, float side) {
     if (a + b > side && a + b > 0) f = std::min(f, side / (a + b));
@@ -531,13 +564,16 @@ void DrawBackgroundImage(MeshGenerationContext& ctx, const VisualElement& e,
                    box.yMax() - s.unitySliceBottom * k, box.yMax()};
     if (xs[1] > xs[2]) xs[1] = xs[2] = (xs[1] + xs[2]) / 2;
     if (ys[1] > ys[2]) ys[1] = ys[2] = (ys[1] + ys[2]) / 2;
-    const float us[4] = {0, s.unitySliceLeft / tw, 1 - s.unitySliceRight / tw, 1};
-    const float vs[4] = {0, s.unitySliceTop / th, 1 - s.unitySliceBottom / th, 1};
+    const float us[4] = {0, s.unitySliceLeft / tw, 1 - s.unitySliceRight / tw,
+                         1};
+    const float vs[4] = {0, s.unitySliceTop / th, 1 - s.unitySliceBottom / th,
+                         1};
     for (int y = 0; y < 3; y++) {
       for (int x = 0; x < 3; x++) {
         const Rect cell{xs[x], ys[y], xs[x + 1] - xs[x], ys[y + 1] - ys[y]};
         if (cell.width <= 0 || cell.height <= 0) continue;
-        ctx.DrawImage(cell, texture->id, {us[x], vs[y], us[x + 1], vs[y + 1]}, tint);
+        ctx.DrawImage(cell, texture->id, {us[x], vs[y], us[x + 1], vs[y + 1]},
+                      tint);
       }
     }
     return;
@@ -548,7 +584,8 @@ void DrawBackgroundImage(MeshGenerationContext& ctx, const VisualElement& e,
   const float box_aspect = box.height > 0 ? box.width / box.height : 1.0f;
   const float tex_aspect = tw / th;
   switch (s.unityBackgroundScaleMode) {
-    case ScaleMode::kStretchToFill: break;
+    case ScaleMode::kStretchToFill:
+      break;
     case ScaleMode::kScaleToFit:
       if (tex_aspect > box_aspect) {
         rect.height = box.width / tex_aspect;
@@ -585,10 +622,12 @@ void DrawElementBox(MeshGenerationContext& ctx, const VisualElement& e) {
   const float pixel_scale = glm::length(glm::vec2(ctx.transform()[0]));
   const float bl = s.borderLeftWidth, bt = s.borderTopWidth;
   const float br = s.borderRightWidth, bb = s.borderBottomWidth;
-  const bool has_border =
-      (bl > 0 && s.borderLeftColor.rgba.a > 0) || (bt > 0 && s.borderTopColor.rgba.a > 0) ||
-      (br > 0 && s.borderRightColor.rgba.a > 0) || (bb > 0 && s.borderBottomColor.rgba.a > 0);
-  const bool rounded = radii[0] > 0 || radii[1] > 0 || radii[2] > 0 || radii[3] > 0;
+  const bool has_border = (bl > 0 && s.borderLeftColor.rgba.a > 0) ||
+                          (bt > 0 && s.borderTopColor.rgba.a > 0) ||
+                          (br > 0 && s.borderRightColor.rgba.a > 0) ||
+                          (bb > 0 && s.borderBottomColor.rgba.a > 0);
+  const bool rounded =
+      radii[0] > 0 || radii[1] > 0 || radii[2] > 0 || radii[3] > 0;
 
   std::array<int, 4> segments;
   std::array<glm::vec2, 4> outer_radii;
@@ -604,14 +643,16 @@ void DrawElementBox(MeshGenerationContext& ctx, const VisualElement& e) {
     ctx.builder().FillConvex(contour, Pack(s.backgroundColor, ctx.opacity()));
   }
 
-  DrawBackgroundImage(ctx, e, Rect{bl, bt, std::max(0.0f, w - bl - br),
-                                   std::max(0.0f, h - bt - bb)});
+  DrawBackgroundImage(
+      ctx, e,
+      Rect{bl, bt, std::max(0.0f, w - bl - br), std::max(0.0f, h - bt - bb)});
 
   if (has_border) {
     std::vector<glm::vec2> outer, inner;
     std::vector<int> sides;
     BuildRoundedContour(box, outer_radii, segments, outer, &sides);
-    const Rect inner_box{bl, bt, std::max(0.0f, w - bl - br), std::max(0.0f, h - bt - bb)};
+    const Rect inner_box{bl, bt, std::max(0.0f, w - bl - br),
+                         std::max(0.0f, h - bt - bb)};
     const std::array<glm::vec2, 4> inner_radii = {
         glm::max(glm::vec2(radii[0] - bl, radii[0] - bt), glm::vec2(0.0f)),
         glm::max(glm::vec2(radii[1] - br, radii[1] - bt), glm::vec2(0.0f)),

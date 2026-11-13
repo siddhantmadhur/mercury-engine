@@ -1,5 +1,6 @@
-// Tests of the editor's AngelScript pieces: Create Script, new projects and the Console's
-// clickable script positions. Links the editor library, so it is a separate executable.
+// Tests of the editor's AngelScript pieces: Create Script, new projects and the
+// Console's clickable script positions. Links the editor library, so it is a
+// separate executable.
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -35,7 +36,8 @@ std::string Read(const fs::path& path) {
 TEST(EditorTemplates, NewProjectHasScriptsAndNoCMake) {
   const fs::path parent = WorkDir("editor_new_project");
   std::string error;
-  const fs::path mproj = Templates::CreateProject(parent, "My Game", false, &error);
+  const fs::path mproj =
+      Templates::CreateProject(parent, "My Game", false, &error);
   ASSERT_FALSE(mproj.empty()) << error;
   const fs::path root = mproj.parent_path();
   EXPECT_TRUE(fs::is_directory(root / "scripts"));

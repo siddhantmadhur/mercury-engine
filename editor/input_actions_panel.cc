@@ -195,8 +195,7 @@ void InputActionsPanel::BuildLayout() {
     RefreshAll(true);
   });
 
-  project_actions_btn_ =
-      new wxButton(bar1, wxID_ANY, "Use as Project Actions");
+  project_actions_btn_ = new wxButton(bar1, wxID_ANY, "Use as Project Actions");
   ApplyButtonPadding(project_actions_btn_, 10);
   project_actions_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     scene_.InputActionsRef().SetAsProjectActions();
@@ -302,7 +301,8 @@ void InputActionsPanel::BuildLayout() {
       empty_banner_, wxID_ANY,
       "Open a .minput file from Project Browser or the File selector above, "
       "or click + New .minput.");
-  eb_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  eb_lbl->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   eb_s->AddStretchSpacer();
   eb_s->Add(eb_lbl, 0, wxALIGN_CENTER_HORIZONTAL);
   eb_s->AddStretchSpacer();
@@ -310,9 +310,9 @@ void InputActionsPanel::BuildLayout() {
   root->Add(empty_banner_, 1, wxEXPAND);
 
   // 3-pane splitter: Maps | (Actions | Properties)
-  left_split_ = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition,
-                                     wxDefaultSize,
-                                     wxSP_LIVE_UPDATE | wxSP_3DSASH);
+  left_split_ =
+      new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                           wxSP_LIVE_UPDATE | wxSP_3DSASH);
   left_split_->SetMinimumPaneSize(170);
 
   // Left: Action Maps
@@ -322,12 +322,12 @@ void InputActionsPanel::BuildLayout() {
   maps_hdr->Add(MakeSectionHeader(maps_pane, "Action Maps"), 0,
                 wxALIGN_CENTER_VERTICAL);
   maps_hdr->AddStretchSpacer();
-  add_map_btn_ = new wxButton(maps_pane, wxID_ANY, "+", wxDefaultPosition,
-                              wxSize(26, 22));
+  add_map_btn_ =
+      new wxButton(maps_pane, wxID_ANY, "+", wxDefaultPosition, wxSize(26, 22));
   rename_map_btn_ = new wxButton(maps_pane, wxID_ANY, "Ren");
   ApplyButtonPadding(rename_map_btn_, 8);
-  del_map_btn_ = new wxButton(maps_pane, wxID_ANY, "-", wxDefaultPosition,
-                              wxSize(26, 22));
+  del_map_btn_ =
+      new wxButton(maps_pane, wxID_ANY, "-", wxDefaultPosition, wxSize(26, 22));
   maps_hdr->Add(add_map_btn_, 0, wxRIGHT, 2);
   maps_hdr->Add(rename_map_btn_, 0, wxRIGHT, 2);
   maps_hdr->Add(del_map_btn_, 0);
@@ -344,7 +344,8 @@ void InputActionsPanel::BuildLayout() {
   rename_map_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     const std::string cur = scene_.InputActionsRef().SelectedMap();
     if (cur.empty()) return;
-    auto renamed = PromptTextDialog(this, "Rename Action Map", "Map name:", cur);
+    auto renamed =
+        PromptTextDialog(this, "Rename Action Map", "Map name:", cur);
     if (renamed.has_value() && !renamed->empty()) {
       scene_.InputActionsRef().RenameMap(cur, *renamed);
       RefreshAll(true);
@@ -368,7 +369,8 @@ void InputActionsPanel::BuildLayout() {
   maps_list_->Bind(wxEVT_LISTBOX_DCLICK, [this](wxCommandEvent&) {
     const std::string cur = scene_.InputActionsRef().SelectedMap();
     if (cur.empty()) return;
-    auto renamed = PromptTextDialog(this, "Rename Action Map", "Map name:", cur);
+    auto renamed =
+        PromptTextDialog(this, "Rename Action Map", "Map name:", cur);
     if (renamed.has_value() && !renamed->empty()) {
       scene_.InputActionsRef().RenameMap(cur, *renamed);
       RefreshAll(true);
@@ -376,9 +378,9 @@ void InputActionsPanel::BuildLayout() {
   });
 
   // Right splitter: Actions Tree | Properties
-  right_split_ = new wxSplitterWindow(left_split_, wxID_ANY, wxDefaultPosition,
-                                      wxDefaultSize,
-                                      wxSP_LIVE_UPDATE | wxSP_3DSASH);
+  right_split_ =
+      new wxSplitterWindow(left_split_, wxID_ANY, wxDefaultPosition,
+                           wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
   right_split_->SetMinimumPaneSize(220);
 
   // Middle: Actions & Bindings
@@ -443,8 +445,8 @@ void InputActionsPanel::BuildLayout() {
   });
   actions_tree_->Bind(wxEVT_TREE_SEL_CHANGED, [this](wxTreeEvent& evt) {
     if (syncing_) return;
-    auto* data =
-        static_cast<SelectionItemData*>(actions_tree_->GetItemData(evt.GetItem()));
+    auto* data = static_cast<SelectionItemData*>(
+        actions_tree_->GetItemData(evt.GetItem()));
     if (data) {
       scene_.InputActionsRef().Select(data->sel);
       SchedulePropsRefresh();
@@ -455,7 +457,8 @@ void InputActionsPanel::BuildLayout() {
   auto* prop_pane = new wxPanel(right_split_);
   auto* prop_root = new wxBoxSizer(wxVERTICAL);
   prop_root->Add(MakeSectionHeader(prop_pane, "Properties"), 0, wxALL, 6);
-  prop_root->Add(new wxStaticLine(prop_pane), 0, wxEXPAND | wxLEFT | wxRIGHT, 6);
+  prop_root->Add(new wxStaticLine(prop_pane), 0, wxEXPAND | wxLEFT | wxRIGHT,
+                 6);
 
   props_scroll_ = new wxScrolledWindow(prop_pane, wxID_ANY);
   props_scroll_->SetScrollRate(0, 14);
@@ -559,9 +562,9 @@ void InputActionsPanel::RefreshActionsTree() {
     const auto& act = desc.actions[action_idx];
     InputActionsWindow::Selection a_sel{
         InputActionsWindow::Selection::Kind::kAction, action_idx, -1};
-    wxTreeItemId act_id = actions_tree_->AppendItem(
-        root, wxString::FromUTF8(ActionSummary(act)), -1, -1,
-        new SelectionItemData(a_sel));
+    wxTreeItemId act_id =
+        actions_tree_->AppendItem(root, wxString::FromUTF8(ActionSummary(act)),
+                                  -1, -1, new SelectionItemData(a_sel));
     actions_tree_->SetItemFont(act_id, actions_tree_->GetFont().Bold());
     if (cur_sel == a_sel) to_select = act_id;
 
@@ -571,10 +574,10 @@ void InputActionsPanel::RefreshActionsTree() {
           static_cast<int>(b)};
       const std::string label =
           "[B] " + (act.bindings[b].empty() ? std::string("(unbound)")
-                                           : act.bindings[b]);
-      wxTreeItemId b_id = actions_tree_->AppendItem(
-          act_id, wxString::FromUTF8(label), -1, -1,
-          new SelectionItemData(b_sel));
+                                            : act.bindings[b]);
+      wxTreeItemId b_id =
+          actions_tree_->AppendItem(act_id, wxString::FromUTF8(label), -1, -1,
+                                    new SelectionItemData(b_sel));
       if (cur_sel == b_sel) to_select = b_id;
     }
 
@@ -583,8 +586,9 @@ void InputActionsPanel::RefreshActionsTree() {
           InputActionsWindow::Selection::Kind::kComposite, action_idx,
           static_cast<int>(c)};
       wxTreeItemId c_id = actions_tree_->AppendItem(
-          act_id, wxString::FromUTF8("[2D] " + CompositeSummary(act.composites[c])),
-          -1, -1, new SelectionItemData(c_sel));
+          act_id,
+          wxString::FromUTF8("[2D] " + CompositeSummary(act.composites[c])), -1,
+          -1, new SelectionItemData(c_sel));
       if (cur_sel == c_sel) to_select = c_id;
     }
     actions_tree_->Expand(act_id);
@@ -740,7 +744,8 @@ void InputActionsPanel::RefreshProperties() {
     auto* hint = new wxStaticText(
         props_scroll_, wxID_ANY,
         "Select an action, binding, or 2D vector composite to inspect.");
-    hint->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+    hint->SetForegroundColour(
+        wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     props_sizer_->Add(hint, 0, wxALL, 4);
     props_scroll_->Thaw();
     props_scroll_->Layout();
@@ -752,12 +757,11 @@ void InputActionsPanel::RefreshProperties() {
 
   if (sel.kind == InputActionsWindow::Selection::Kind::kAction) {
     auto* name_row = new wxBoxSizer(wxHORIZONTAL);
-    auto* nl = new wxStaticText(props_scroll_, wxID_ANY, "Name:",
-                                wxDefaultPosition, wxSize(95, -1));
-    auto* name_ctrl = new wxTextCtrl(props_scroll_, wxID_ANY,
-                                     wxString::FromUTF8(act.name),
-                                     wxDefaultPosition, wxDefaultSize,
-                                     wxTE_PROCESS_ENTER);
+    auto* nl = new wxStaticText(props_scroll_, wxID_ANY,
+                                "Name:", wxDefaultPosition, wxSize(95, -1));
+    auto* name_ctrl =
+        new wxTextCtrl(props_scroll_, wxID_ANY, wxString::FromUTF8(act.name),
+                       wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
     name_row->Add(nl, 0, wxALIGN_CENTER_VERTICAL);
     name_row->Add(name_ctrl, 1, wxEXPAND);
     props_sizer_->Add(name_row, 0, wxEXPAND | wxBOTTOM, 4);
@@ -791,9 +795,8 @@ void InputActionsPanel::RefreshProperties() {
       scene_.InputActionsRef().CommitEdit();
       RefreshAll(true);
     };
-    name_ctrl->Bind(wxEVT_TEXT_ENTER, [finish_name](wxCommandEvent&) {
-      finish_name();
-    });
+    name_ctrl->Bind(wxEVT_TEXT_ENTER,
+                    [finish_name](wxCommandEvent&) { finish_name(); });
     name_ctrl->Bind(wxEVT_KILL_FOCUS, [finish_name](wxFocusEvent& evt) {
       finish_name();
       evt.Skip();
@@ -801,8 +804,9 @@ void InputActionsPanel::RefreshProperties() {
 
     // Action Type
     auto* type_row = new wxBoxSizer(wxHORIZONTAL);
-    auto* tl = new wxStaticText(props_scroll_, wxID_ANY, "Action Type:",
-                                wxDefaultPosition, wxSize(95, -1));
+    auto* tl =
+        new wxStaticText(props_scroll_, wxID_ANY,
+                         "Action Type:", wxDefaultPosition, wxSize(95, -1));
     auto* type_choice = new wxChoice(props_scroll_, wxID_ANY);
     type_choice->Append("Button");
     type_choice->Append("Value");
@@ -819,8 +823,9 @@ void InputActionsPanel::RefreshProperties() {
 
     // Control Type
     auto* ctrl_row = new wxBoxSizer(wxHORIZONTAL);
-    auto* cl = new wxStaticText(props_scroll_, wxID_ANY, "Control Type:",
-                                wxDefaultPosition, wxSize(95, -1));
+    auto* cl =
+        new wxStaticText(props_scroll_, wxID_ANY,
+                         "Control Type:", wxDefaultPosition, wxSize(95, -1));
     auto* ctrl_choice = new wxChoice(props_scroll_, wxID_ANY);
     ctrl_choice->Append("Axis / Button");
     ctrl_choice->Append("Vector2");
@@ -852,14 +857,14 @@ void InputActionsPanel::RefreshProperties() {
     // AngelScript Usage Snippet
     const std::string snippet = ia.ActionUsageSnippet(aidx);
     if (!snippet.empty()) {
-      auto* ul = new wxStaticText(props_scroll_, wxID_ANY,
-                                  "AngelScript Usage:");
+      auto* ul =
+          new wxStaticText(props_scroll_, wxID_ANY, "AngelScript Usage:");
       props_sizer_->Add(ul, 0, wxBOTTOM, 4);
 
-      auto* code = new wxTextCtrl(
-          props_scroll_, wxID_ANY, wxString::FromUTF8(snippet),
-          wxDefaultPosition, wxSize(-1, 68),
-          wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+      auto* code =
+          new wxTextCtrl(props_scroll_, wxID_ANY, wxString::FromUTF8(snippet),
+                         wxDefaultPosition, wxSize(-1, 68),
+                         wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
       code->SetFont(MonospaceFont(9));
       props_sizer_->Add(code, 0, wxEXPAND | wxBOTTOM, 4);
 
@@ -881,15 +886,15 @@ void InputActionsPanel::RefreshProperties() {
       const int bidx = sel.index;
       const std::string& path = act.bindings[bidx];
 
-      auto* title = new wxStaticText(
-          props_scroll_, wxID_ANY,
-          wxString::FromUTF8("Binding on " + act.FullName()));
+      auto* title =
+          new wxStaticText(props_scroll_, wxID_ANY,
+                           wxString::FromUTF8("Binding on " + act.FullName()));
       props_sizer_->Add(title, 0, wxBOTTOM, 8);
 
       auto* row = new wxBoxSizer(wxHORIZONTAL);
-      auto* edit = new wxTextCtrl(props_scroll_, wxID_ANY,
-                                  wxString::FromUTF8(path), wxDefaultPosition,
-                                  wxDefaultSize, wxTE_PROCESS_ENTER);
+      auto* edit =
+          new wxTextCtrl(props_scroll_, wxID_ANY, wxString::FromUTF8(path),
+                         wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
       edit->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& evt) {
         editing_prop_text_ = true;
         scene_.InputActionsRef().BeginEdit();
@@ -915,26 +920,28 @@ void InputActionsPanel::RefreshProperties() {
 
       auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...");
       ApplyButtonPadding(pick_btn, 8);
-      pick_btn->Bind(wxEVT_BUTTON, [this, pick_btn, aidx, bidx](wxCommandEvent&) {
-        ShowControlPickerMenu(pick_btn, [this, aidx, bidx](const std::string& p) {
-          scene_.InputActionsRef().SetBindingPath(aidx, bidx, p, false);
-          RefreshAll(true);
-        });
-      });
+      pick_btn->Bind(
+          wxEVT_BUTTON, [this, pick_btn, aidx, bidx](wxCommandEvent&) {
+            ShowControlPickerMenu(
+                pick_btn, [this, aidx, bidx](const std::string& p) {
+                  scene_.InputActionsRef().SetBindingPath(aidx, bidx, p, false);
+                  RefreshAll(true);
+                });
+          });
 
-      const bool listening =
-          listen_.kind == ListenTarget::Kind::kBinding &&
-          listen_.action == aidx && listen_.index == bidx;
-      auto* listen_btn = new wxButton(
-          props_scroll_, wxID_ANY, listening ? "Listening..." : "Listen");
+      const bool listening = listen_.kind == ListenTarget::Kind::kBinding &&
+                             listen_.action == aidx && listen_.index == bidx;
+      auto* listen_btn = new wxButton(props_scroll_, wxID_ANY,
+                                      listening ? "Listening..." : "Listen");
       ApplyButtonPadding(listen_btn, 8);
-      listen_btn->Bind(wxEVT_BUTTON, [this, listening, aidx, bidx](wxCommandEvent&) {
-        if (listening) {
-          StopListen();
-        } else {
-          StartListen({ListenTarget::Kind::kBinding, aidx, bidx, -1, -1});
-        }
-      });
+      listen_btn->Bind(
+          wxEVT_BUTTON, [this, listening, aidx, bidx](wxCommandEvent&) {
+            if (listening) {
+              StopListen();
+            } else {
+              StartListen({ListenTarget::Kind::kBinding, aidx, bidx, -1, -1});
+            }
+          });
 
       row->Add(edit, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
       row->Add(pick_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -942,9 +949,9 @@ void InputActionsPanel::RefreshProperties() {
       props_sizer_->Add(row, 0, wxEXPAND | wxBOTTOM, 8);
 
       if (listening) {
-        auto* lhint = new wxStaticText(
-            props_scroll_, wxID_ANY,
-            "Press a keyboard key or gamepad button/trigger (Esc to cancel)...");
+        auto* lhint = new wxStaticText(props_scroll_, wxID_ANY,
+                                       "Press a keyboard key or gamepad "
+                                       "button/trigger (Esc to cancel)...");
         lhint->SetFont(props_scroll_->GetFont().Bold());
         props_sizer_->Add(lhint, 0);
       }
@@ -983,20 +990,20 @@ void InputActionsPanel::RefreshProperties() {
         const auto& vec = *parts[p];
         for (int idx = 0; idx < static_cast<int>(vec.size()); ++idx) {
           auto* row = new wxBoxSizer(wxHORIZONTAL);
-          auto* edit = new wxTextCtrl(props_scroll_, wxID_ANY,
-                                      wxString::FromUTF8(vec[idx]),
-                                      wxDefaultPosition, wxDefaultSize,
-                                      wxTE_PROCESS_ENTER);
+          auto* edit = new wxTextCtrl(
+              props_scroll_, wxID_ANY, wxString::FromUTF8(vec[idx]),
+              wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
           edit->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& evt) {
             editing_prop_text_ = true;
             scene_.InputActionsRef().BeginEdit();
             evt.Skip();
           });
-          edit->Bind(wxEVT_TEXT, [this, edit, aidx, cidx, p, idx](wxCommandEvent&) {
-            scene_.InputActionsRef().SetCompositePartPath(
-                aidx, cidx, p, idx, edit->GetValue().ToStdString(), true);
-            RefreshActionsTree();
-          });
+          edit->Bind(
+              wxEVT_TEXT, [this, edit, aidx, cidx, p, idx](wxCommandEvent&) {
+                scene_.InputActionsRef().SetCompositePartPath(
+                    aidx, cidx, p, idx, edit->GetValue().ToStdString(), true);
+                RefreshActionsTree();
+              });
           edit->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& evt) {
             editing_prop_text_ = false;
             scene_.InputActionsRef().CommitEdit();
@@ -1005,40 +1012,41 @@ void InputActionsPanel::RefreshProperties() {
 
           auto* pick_btn = new wxButton(props_scroll_, wxID_ANY, "Pick...");
           ApplyButtonPadding(pick_btn, 8);
-          pick_btn->Bind(wxEVT_BUTTON,
-                         [this, pick_btn, aidx, cidx, p, idx](wxCommandEvent&) {
-                           ShowControlPickerMenu(
-                               pick_btn, [this, aidx, cidx, p, idx](
-                                             const std::string& path) {
-                                 scene_.InputActionsRef().SetCompositePartPath(
-                                     aidx, cidx, p, idx, path, false);
-                                 RefreshAll(true);
-                               });
-                         });
+          pick_btn->Bind(wxEVT_BUTTON, [this, pick_btn, aidx, cidx, p,
+                                        idx](wxCommandEvent&) {
+            ShowControlPickerMenu(
+                pick_btn, [this, aidx, cidx, p, idx](const std::string& path) {
+                  scene_.InputActionsRef().SetCompositePartPath(
+                      aidx, cidx, p, idx, path, false);
+                  RefreshAll(true);
+                });
+          });
 
           const bool listening =
               listen_.kind == ListenTarget::Kind::kCompositePart &&
               listen_.action == aidx && listen_.index == cidx &&
               listen_.part == p && listen_.part_idx == idx;
-          auto* listen_btn = new wxButton(
-              props_scroll_, wxID_ANY, listening ? "..." : "Listen");
+          auto* listen_btn = new wxButton(props_scroll_, wxID_ANY,
+                                          listening ? "..." : "Listen");
           ApplyButtonPadding(listen_btn, 8);
-          listen_btn->Bind(wxEVT_BUTTON,
-                           [this, listening, aidx, cidx, p, idx](wxCommandEvent&) {
-                             if (listening) {
-                               StopListen();
-                             } else {
-                               StartListen({ListenTarget::Kind::kCompositePart,
-                                            aidx, cidx, p, idx});
-                             }
-                           });
+          listen_btn->Bind(wxEVT_BUTTON, [this, listening, aidx, cidx, p,
+                                          idx](wxCommandEvent&) {
+            if (listening) {
+              StopListen();
+            } else {
+              StartListen(
+                  {ListenTarget::Kind::kCompositePart, aidx, cidx, p, idx});
+            }
+          });
 
           auto* rem_btn = new wxButton(props_scroll_, wxID_ANY, "-",
                                        wxDefaultPosition, wxSize(26, 22));
-          rem_btn->Bind(wxEVT_BUTTON, [this, aidx, cidx, p, idx](wxCommandEvent&) {
-            scene_.InputActionsRef().RemoveCompositePartPath(aidx, cidx, p, idx);
-            RefreshAll(true);
-          });
+          rem_btn->Bind(wxEVT_BUTTON,
+                        [this, aidx, cidx, p, idx](wxCommandEvent&) {
+                          scene_.InputActionsRef().RemoveCompositePartPath(
+                              aidx, cidx, p, idx);
+                          RefreshAll(true);
+                        });
 
           row->Add(edit, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 3);
           row->Add(pick_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 3);

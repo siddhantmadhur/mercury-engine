@@ -61,11 +61,12 @@ std::shared_ptr<ImageData> ImageData::Load(const std::string& path) {
   return FromPixels(width, height, std::move(pixels), path);
 }
 
-std::shared_ptr<ImageData> ImageData::FromMemory(const uint8_t* bytes, size_t size,
+std::shared_ptr<ImageData> ImageData::FromMemory(const uint8_t* bytes,
+                                                 size_t size,
                                                  std::string source) {
   int width = 0, height = 0, channels = 0;
-  stbi_uc* data = stbi_load_from_memory(bytes, static_cast<int>(size), &width, &height,
-                                        &channels, 4);
+  stbi_uc* data = stbi_load_from_memory(bytes, static_cast<int>(size), &width,
+                                        &height, &channels, 4);
   if (!data) return nullptr;
   std::vector<uint8_t> pixels(data, data + size_t(width) * height * 4);
   stbi_image_free(data);
@@ -93,7 +94,8 @@ void MeshGeometry::ComputeTangents() {
   std::vector<glm::vec3> up(vertices.size(), glm::vec3(0.0f));
   for (size_t i = 0; i + 2 < indices.size(); i += 3) {
     const uint32_t a = indices[i], b = indices[i + 1], c = indices[i + 2];
-    if (a >= vertices.size() || b >= vertices.size() || c >= vertices.size()) continue;
+    if (a >= vertices.size() || b >= vertices.size() || c >= vertices.size())
+      continue;
     const glm::vec3 e1 = vertices[b].position - vertices[a].position;
     const glm::vec3 e2 = vertices[c].position - vertices[a].position;
     const glm::vec2 d1 = vertices[b].uv - vertices[a].uv;
@@ -132,7 +134,8 @@ void MeshGeometry::BuildClusters() {
   if (skinned || triangles < 2 * kClusterTriangles) return;
   std::vector<uint32_t> sorted(indices.size());
   meshopt_spatialSortTriangles(sorted.data(), indices.data(), indices.size(),
-                               &vertices[0].position.x, vertices.size(), sizeof(ModelVertex));
+                               &vertices[0].position.x, vertices.size(),
+                               sizeof(ModelVertex));
   for (size_t first = 0; first < triangles; first += kClusterTriangles) {
     const size_t count = std::min(kClusterTriangles, triangles - first);
     uint32_t* run = sorted.data() + first * 3;
@@ -143,16 +146,18 @@ void MeshGeometry::BuildClusters() {
     cluster.index_count = static_cast<uint32_t>(count * 3);
     cluster.bounds_min = cluster.bounds_max = vertices[run[0]].position;
     for (size_t i = 0; i < count * 3; i++) {
-      cluster.bounds_min = glm::min(cluster.bounds_min, vertices[run[i]].position);
-      cluster.bounds_max = glm::max(cluster.bounds_max, vertices[run[i]].position);
+      cluster.bounds_min =
+          glm::min(cluster.bounds_min, vertices[run[i]].position);
+      cluster.bounds_max =
+          glm::max(cluster.bounds_max, vertices[run[i]].position);
     }
     clusters.push_back(cluster);
   }
   indices = std::move(sorted);
 }
 
-std::shared_ptr<MeshGeometry> MeshGeometry::Create(std::vector<ModelVertex> vertices,
-                                                   std::vector<uint32_t> indices) {
+std::shared_ptr<MeshGeometry> MeshGeometry::Create(
+    std::vector<ModelVertex> vertices, std::vector<uint32_t> indices) {
   auto geometry = std::make_shared<MeshGeometry>();
   geometry->vertices = std::move(vertices);
   geometry->indices = std::move(indices);
@@ -173,8 +178,8 @@ glm::mat4 ModelNode::LocalMatrix() const {
 namespace {
 
 template <typename T, typename Lerp>
-T SampleKeys(const std::vector<float>& times, const std::vector<T>& values, float t,
-             Lerp lerp) {
+T SampleKeys(const std::vector<float>& times, const std::vector<T>& values,
+             float t, Lerp lerp) {
   if (values.size() == 1 || t <= times.front()) return values.front();
   if (t >= times.back()) return values.back();
   auto it = std::upper_bound(times.begin(), times.end(), t);
@@ -187,8 +192,9 @@ T SampleKeys(const std::vector<float>& times, const std::vector<T>& values, floa
 
 }  // namespace
 
-void AnimationClip::Sample(const AnimationChannel& channel, float t, glm::vec3& position,
-                           glm::quat& rotation, glm::vec3& scale) const {
+void AnimationClip::Sample(const AnimationChannel& channel, float t,
+                           glm::vec3& position, glm::quat& rotation,
+                           glm::vec3& scale) const {
   auto lerp3 = [](const glm::vec3& a, const glm::vec3& b, float f) {
     return glm::mix(a, b, f);
   };
@@ -208,8 +214,8 @@ void AnimationClip::Sample(const AnimationChannel& channel, float t, glm::vec3& 
 
 // --------------------------------------------------- ModelImportSettings ---
 
-ModelImportSettings ModelImportSettings::ForFile(const std::string& model_path,
-                                                 const ModelImportSettings& defaults) {
+ModelImportSettings ModelImportSettings::ForFile(
+    const std::string& model_path, const ModelImportSettings& defaults) {
   ModelImportSettings settings = defaults;
   const std::string sidecar = model_path + ".mimport";
   auto text = os::ReadText(sidecar);
@@ -220,16 +226,17 @@ ModelImportSettings ModelImportSettings::ForFile(const std::string& model_path,
     return settings;
   }
   if (auto section = document.Find("mimport")) {
-    const std::string convention =
-        section->properties.GetString("convention", settings.convention == ModelConvention::kUnity
-                                                        ? "unity" : "native");
-    settings.convention =
-        convention == "unity" ? ModelConvention::kUnity : ModelConvention::kNative;
-    settings.scale = static_cast<float>(section->properties.GetFloat("scale", settings.scale));
+    const std::string convention = section->properties.GetString(
+        "convention",
+        settings.convention == ModelConvention::kUnity ? "unity" : "native");
+    settings.convention = convention == "unity" ? ModelConvention::kUnity
+                                                : ModelConvention::kNative;
+    settings.scale = static_cast<float>(
+        section->properties.GetFloat("scale", settings.scale));
     settings.use_file_scale =
         section->properties.GetBool("use_file_scale", settings.use_file_scale);
-    settings.max_texture_size = static_cast<int>(
-        section->properties.GetInt("max_texture_size", settings.max_texture_size));
+    settings.max_texture_size = static_cast<int>(section->properties.GetInt(
+        "max_texture_size", settings.max_texture_size));
   }
   for (const mtext::Section* section : document.FindAll("material")) {
     ModelMaterialOverride entry;
@@ -245,8 +252,10 @@ ModelImportSettings ModelImportSettings::ForFile(const std::string& model_path,
     if (auto v = p.Get("emission"); v && v->Get<mtext::Color>()) {
       entry.emission = glm::vec3(v->Get<mtext::Color>()->rgba);
     }
-    if (p.Has("metallic")) entry.metallic = static_cast<float>(p.GetFloat("metallic"));
-    if (p.Has("smoothness")) entry.smoothness = static_cast<float>(p.GetFloat("smoothness"));
+    if (p.Has("metallic"))
+      entry.metallic = static_cast<float>(p.GetFloat("metallic"));
+    if (p.Has("smoothness"))
+      entry.smoothness = static_cast<float>(p.GetFloat("smoothness"));
     if (p.Has("transmission")) {
       entry.transmission = static_cast<float>(p.GetFloat("transmission"));
     }
@@ -254,7 +263,8 @@ ModelImportSettings ModelImportSettings::ForFile(const std::string& model_path,
     if (auto v = p.Get("transmission_color"); v && v->Get<mtext::Color>()) {
       entry.transmission_color = glm::vec3(v->Get<mtext::Color>()->rgba);
     }
-    if (p.Has("thickness")) entry.thickness = static_cast<float>(p.GetFloat("thickness"));
+    if (p.Has("thickness"))
+      entry.thickness = static_cast<float>(p.GetFloat("thickness"));
     settings.materials.push_back(std::move(entry));
   }
   return settings;
@@ -267,7 +277,8 @@ namespace {
 // Linear to sRGB, for colors stored the way ModelMaterial::color expects.
 float LinearToSrgb(float c) {
   c = std::clamp(c, 0.0f, 1.0f);
-  return c <= 0.0031308f ? c * 12.92f : 1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f;
+  return c <= 0.0031308f ? c * 12.92f
+                         : 1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f;
 }
 
 glm::mat4 ToGlm(const aiMatrix4x4& m) {
@@ -288,12 +299,14 @@ void Decompose(const glm::mat4& m, glm::vec3& position, glm::quat& rotation,
 glm::vec3 FlipPosition(glm::vec3 p) { return {-p.x, p.y, -p.z}; }
 glm::quat FlipRotation(glm::quat q) { return glm::quat(q.w, -q.x, q.y, -q.z); }
 glm::mat4 FlipMatrix(const glm::mat4& m) {
-  const glm::mat4 r = glm::scale(glm::mat4(1.0f), glm::vec3(-1.0f, 1.0f, -1.0f));
+  const glm::mat4 r =
+      glm::scale(glm::mat4(1.0f), glm::vec3(-1.0f, 1.0f, -1.0f));
   return r * m * r;
 }
 
 std::string Lower(std::string text) {
-  for (char& c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  for (char& c : text)
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   return text;
 }
 
@@ -312,7 +325,8 @@ fs::path FindInDirectory(const fs::path& dir, const fs::path& file) {
 
 // Finds a texture a model refers to, the way Unity's importer searches:
 // next to the model, in a "Textures" folder, then in the folders above.
-std::string FindTexture(const fs::path& model_dir, const std::string& reference) {
+std::string FindTexture(const fs::path& model_dir,
+                        const std::string& reference) {
   std::string name = reference;
   std::replace(name.begin(), name.end(), '\\', '/');
   const fs::path file = fs::path(name).filename();
@@ -320,7 +334,8 @@ std::string FindTexture(const fs::path& model_dir, const std::string& reference)
   // A relative path as written in the file.
   if (!fs::path(name).is_absolute()) {
     const fs::path direct = model_dir / name;
-    if (auto found = FindInDirectory(direct.parent_path(), file); !found.empty()) {
+    if (auto found = FindInDirectory(direct.parent_path(), file);
+        !found.empty()) {
       return found.string();
     }
   }
@@ -338,24 +353,28 @@ std::string FindTexture(const fs::path& model_dir, const std::string& reference)
 }
 
 // Scales `image` down (keeping its aspect) so neither side exceeds `max_size`.
-std::shared_ptr<ImageData> FitTexture(std::shared_ptr<ImageData> image, int max_size) {
-  if (!image || max_size <= 0 || std::max(image->width, image->height) <= max_size) {
+std::shared_ptr<ImageData> FitTexture(std::shared_ptr<ImageData> image,
+                                      int max_size) {
+  if (!image || max_size <= 0 ||
+      std::max(image->width, image->height) <= max_size) {
     return image;
   }
-  const float factor = static_cast<float>(max_size) / std::max(image->width, image->height);
+  const float factor =
+      static_cast<float>(max_size) / std::max(image->width, image->height);
   const int width = std::max(1, static_cast<int>(image->width * factor));
   const int height = std::max(1, static_cast<int>(image->height * factor));
   std::vector<uint8_t> pixels(size_t(width) * height * 4);
   if (image->srgb) {
-    stbir_resize_uint8_srgb(image->pixels.data(), image->width, image->height, 0,
-                            pixels.data(), width, height, 0, STBIR_RGBA);
+    stbir_resize_uint8_srgb(image->pixels.data(), image->width, image->height,
+                            0, pixels.data(), width, height, 0, STBIR_RGBA);
   } else {
-    stbir_resize_uint8_linear(image->pixels.data(), image->width, image->height, 0,
-                              pixels.data(), width, height, 0, STBIR_RGBA);
+    stbir_resize_uint8_linear(image->pixels.data(), image->width, image->height,
+                              0, pixels.data(), width, height, 0, STBIR_RGBA);
   }
-  PDebug::log("{}: scaled {}x{} down to {}x{}", image->source, image->width, image->height,
-              width, height);
-  auto result = ImageData::FromPixels(width, height, std::move(pixels), image->source);
+  PDebug::log("{}: scaled {}x{} down to {}x{}", image->source, image->width,
+              image->height, width, height);
+  auto result =
+      ImageData::FromPixels(width, height, std::move(pixels), image->source);
   result->srgb = image->srgb;
   return result;
 }
@@ -381,24 +400,32 @@ bool LooksLikeNormalMap(const ImageData& image) {
 
 // Turns a height (bump) map, light = raised, into a tangent-space normal map
 // with x along +u and y toward the top of the image.
-std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height, float strength) {
+std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height,
+                                             float strength) {
   const int w = height.width, h = height.height;
   std::vector<float> lum(size_t(w) * h);
   for (size_t i = 0; i < lum.size(); i++) {
-    lum[i] = (0.299f * height.pixels[i * 4 + 0] + 0.587f * height.pixels[i * 4 + 1] +
-              0.114f * height.pixels[i * 4 + 2]) / 255.0f;
+    lum[i] =
+        (0.299f * height.pixels[i * 4 + 0] + 0.587f * height.pixels[i * 4 + 1] +
+         0.114f * height.pixels[i * 4 + 2]) /
+        255.0f;
   }
   // Textures repeat, so the filter wraps around the edges.
-  auto at = [&](int x, int y) { return lum[size_t((y + h) % h) * w + (x + w) % w]; };
+  auto at = [&](int x, int y) {
+    return lum[size_t((y + h) % h) * w + (x + w) % w];
+  };
   std::vector<uint8_t> pixels(size_t(w) * h * 4);
   for (int y = 0; y < h; y++) {
     for (int x = 0; x < w; x++) {
       // Sobel; rows grow downward, so "up" is y - 1.
-      const float dx = (at(x + 1, y - 1) + 2.0f * at(x + 1, y) + at(x + 1, y + 1)) -
-                       (at(x - 1, y - 1) + 2.0f * at(x - 1, y) + at(x - 1, y + 1));
-      const float dy = (at(x - 1, y - 1) + 2.0f * at(x, y - 1) + at(x + 1, y - 1)) -
-                       (at(x - 1, y + 1) + 2.0f * at(x, y + 1) + at(x + 1, y + 1));
-      const glm::vec3 n = glm::normalize(glm::vec3(-dx * strength, -dy * strength, 1.0f));
+      const float dx =
+          (at(x + 1, y - 1) + 2.0f * at(x + 1, y) + at(x + 1, y + 1)) -
+          (at(x - 1, y - 1) + 2.0f * at(x - 1, y) + at(x - 1, y + 1));
+      const float dy =
+          (at(x - 1, y - 1) + 2.0f * at(x, y - 1) + at(x + 1, y - 1)) -
+          (at(x - 1, y + 1) + 2.0f * at(x, y + 1) + at(x + 1, y + 1));
+      const glm::vec3 n =
+          glm::normalize(glm::vec3(-dx * strength, -dy * strength, 1.0f));
       uint8_t* out = &pixels[(size_t(y) * w + x) * 4];
       out[0] = static_cast<uint8_t>(std::lround((n.x * 0.5f + 0.5f) * 255.0f));
       out[1] = static_cast<uint8_t>(std::lround((n.y * 0.5f + 0.5f) * 255.0f));
@@ -406,7 +433,8 @@ std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height, float stre
       out[3] = 255;
     }
   }
-  auto image = ImageData::FromPixels(w, h, std::move(pixels), height.source + " (normals)");
+  auto image = ImageData::FromPixels(w, h, std::move(pixels),
+                                     height.source + " (normals)");
   image->srgb = false;
   return image;
 }
@@ -415,18 +443,21 @@ std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height, float stre
 
 std::shared_ptr<Model> Model::Load(const std::string& path,
                                    const ModelImportSettings& settings,
-                                   std::string* error, std::atomic<float>* progress) {
+                                   std::string* error,
+                                   std::atomic<float>* progress) {
   if (auto cached = ModelCache::Read(path, settings, progress)) return cached;
   auto model = Import(path, settings, error, progress);
   if (model) ModelCache::Write(*model, path, settings);
   return model;
 }
 
-std::shared_ptr<ImageData> Model::DecodeTexture(const std::string& model_path,
-                                                const TextureSource& source,
-                                                const ModelImportSettings& settings) {
-  const std::string file = FindTexture(fs::path(model_path).parent_path(), source.reference);
-  std::shared_ptr<ImageData> image = file.empty() ? nullptr : ImageData::Load(file);
+std::shared_ptr<ImageData> Model::DecodeTexture(
+    const std::string& model_path, const TextureSource& source,
+    const ModelImportSettings& settings) {
+  const std::string file =
+      FindTexture(fs::path(model_path).parent_path(), source.reference);
+  std::shared_ptr<ImageData> image =
+      file.empty() ? nullptr : ImageData::Load(file);
   if (!image) {
     PDebug::warn("{}: texture {} not found", model_path, source.reference);
     return nullptr;
@@ -440,11 +471,14 @@ std::shared_ptr<ImageData> Model::DecodeTexture(const std::string& model_path,
 }
 
 std::shared_ptr<Model> Model::Import(const std::string& path,
-                                     const ModelImportSettings& settings, std::string* error,
+                                     const ModelImportSettings& settings,
+                                     std::string* error,
                                      std::atomic<float>* progress) {
   const auto start_time = std::chrono::steady_clock::now();
   auto seconds_since = [](std::chrono::steady_clock::time_point from) {
-    return std::chrono::duration<double>(std::chrono::steady_clock::now() - from).count();
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                         from)
+        .count();
   };
   // The load is reported as three stages of the progress bar: the file,
   // its textures, its meshes.
@@ -452,8 +486,9 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
     if (progress) progress->store(done);
   };
   constexpr unsigned kImportFlags =
-      aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices |
-      aiProcess_FlipUVs | aiProcess_LimitBoneWeights | aiProcess_SortByPType |
+      aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+      aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs |
+      aiProcess_LimitBoneWeights | aiProcess_SortByPType |
       aiProcess_ValidateDataStructure;
   auto configure = [](Assimp::Importer& importer) {
     importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
@@ -520,39 +555,42 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
     const float sign = up_sign < 0 ? -1.0f : 1.0f;
     axis = glm::mat4(1.0f);
     if (up == 2) {
-      axis = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f * sign), glm::vec3(1, 0, 0));
+      axis = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f * sign),
+                         glm::vec3(1, 0, 0));
     } else if (up == 0) {
-      axis = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f * sign), glm::vec3(0, 0, 1));
+      axis = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f * sign),
+                         glm::vec3(0, 0, 1));
     } else if (sign < 0.0f) {
-      axis = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1, 0, 0));
+      axis = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f),
+                         glm::vec3(1, 0, 0));
     }
   }
 
   // ---- Nodes
   std::map<const aiNode*, int> node_index;
   std::vector<std::pair<const aiNode*, int>> node_order;  // creation order
-  std::function<void(const aiNode*, int, bool)> add_node = [&](const aiNode* source,
-                                                               int parent, bool top) {
-    ModelNode node;
-    node.name = source->mName.C_Str();
-    node.parent = parent;
-    glm::mat4 local = ToGlm(source->mTransformation);
-    if (unity && top) local = axis * local;  // Unity's axis conversion
-    Decompose(local, node.position, node.rotation, node.scale);
-    node.position *= scale;
-    if (unity) {
-      node.position = FlipPosition(node.position);
-      node.rotation = FlipRotation(node.rotation);
-    }
-    const int index = static_cast<int>(model->nodes_.size());
-    node_index[source] = index;
-    node_order.emplace_back(source, index);
-    model->nodes_.push_back(node);
-    if (parent >= 0) model->nodes_[parent].children.push_back(index);
-    for (unsigned i = 0; i < source->mNumChildren; i++) {
-      add_node(source->mChildren[i], index, false);
-    }
-  };
+  std::function<void(const aiNode*, int, bool)> add_node =
+      [&](const aiNode* source, int parent, bool top) {
+        ModelNode node;
+        node.name = source->mName.C_Str();
+        node.parent = parent;
+        glm::mat4 local = ToGlm(source->mTransformation);
+        if (unity && top) local = axis * local;  // Unity's axis conversion
+        Decompose(local, node.position, node.rotation, node.scale);
+        node.position *= scale;
+        if (unity) {
+          node.position = FlipPosition(node.position);
+          node.rotation = FlipRotation(node.rotation);
+        }
+        const int index = static_cast<int>(model->nodes_.size());
+        node_index[source] = index;
+        node_order.emplace_back(source, index);
+        model->nodes_.push_back(node);
+        if (parent >= 0) model->nodes_[parent].children.push_back(index);
+        for (unsigned i = 0; i < source->mNumChildren; i++) {
+          add_node(source->mChildren[i], index, false);
+        }
+      };
 
   const aiNode* root = scene->mRootNode;
   if (unity) {
@@ -578,7 +616,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   const bool is_obj = extension == ".obj";
   // MTL's Kd and glTF's base color factor are linear reflectance, as the
   // renderers these files come from use them; ModelMaterial::color is sRGB.
-  const bool linear_colors = is_obj || extension == ".gltf" || extension == ".glb";
+  const bool linear_colors =
+      is_obj || extension == ".gltf" || extension == ".glb";
   using TextureUse = ModelTextureUse;
   struct TextureRequest {
     std::string reference;
@@ -592,26 +631,33 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   std::atomic<bool> embedded_any{false};
   // Decodes a texture the file refers to, embedded or next to it. Height
   // maps come back as normal maps. Runs on several threads at once.
-  auto decode_texture = [&](const TextureRequest& request) -> std::shared_ptr<ImageData> {
+  auto decode_texture =
+      [&](const TextureRequest& request) -> std::shared_ptr<ImageData> {
     std::shared_ptr<ImageData> image;
-    if (const aiTexture* embedded = scene->GetEmbeddedTexture(request.reference.c_str())) {
+    if (const aiTexture* embedded =
+            scene->GetEmbeddedTexture(request.reference.c_str())) {
       embedded_any = true;
       if (embedded->mHeight == 0) {
-        image = ImageData::FromMemory(reinterpret_cast<const uint8_t*>(embedded->pcData),
-                                      embedded->mWidth, path + ":" + request.reference);
+        image = ImageData::FromMemory(
+            reinterpret_cast<const uint8_t*>(embedded->pcData),
+            embedded->mWidth, path + ":" + request.reference);
       } else {
-        std::vector<uint8_t> pixels(size_t(embedded->mWidth) * embedded->mHeight * 4);
-        for (size_t i = 0; i < size_t(embedded->mWidth) * embedded->mHeight; i++) {
+        std::vector<uint8_t> pixels(size_t(embedded->mWidth) *
+                                    embedded->mHeight * 4);
+        for (size_t i = 0; i < size_t(embedded->mWidth) * embedded->mHeight;
+             i++) {
           pixels[i * 4 + 0] = embedded->pcData[i].r;
           pixels[i * 4 + 1] = embedded->pcData[i].g;
           pixels[i * 4 + 2] = embedded->pcData[i].b;
           pixels[i * 4 + 3] = embedded->pcData[i].a;
         }
         image = ImageData::FromPixels(embedded->mWidth, embedded->mHeight,
-                                      std::move(pixels), path + ":" + request.reference);
+                                      std::move(pixels),
+                                      path + ":" + request.reference);
       }
     } else {
-      return DecodeTexture(path, {request.reference, request.use, request.bump_scale}, settings);
+      return DecodeTexture(
+          path, {request.reference, request.use, request.bump_scale}, settings);
     }
     if (!image) {
       PDebug::warn("{}: texture {} not found", path, request.reference);
@@ -643,7 +689,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   };
   auto texture_of = [](const aiMaterial* material, aiTextureType type) {
     aiString texture_path;
-    if (material->GetTexture(type, 0, &texture_path) != AI_SUCCESS) return std::string();
+    if (material->GetTexture(type, 0, &texture_path) != AI_SUCCESS)
+      return std::string();
     return std::string(texture_path.C_Str());
   };
   auto build_materials = [&] {
@@ -652,7 +699,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
       ModelMaterial material;
       MaterialSources sources;
       aiString name;
-      if (source->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) material.name = name.C_Str();
+      if (source->Get(AI_MATKEY_NAME, name) == AI_SUCCESS)
+        material.name = name.C_Str();
       aiColor4D color(1, 1, 1, 1);
       if (source->Get(AI_MATKEY_BASE_COLOR, color) != AI_SUCCESS) {
         source->Get(AI_MATKEY_COLOR_DIFFUSE, color);
@@ -676,8 +724,10 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
         aiColor3D specular(0, 0, 0);
         source->Get(AI_MATKEY_COLOR_SPECULAR, specular);
         const float ks = std::max({specular.r, specular.g, specular.b});
-        const float smooth = 1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
-        material.smoothness = std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
+        const float smooth =
+            1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
+        material.smoothness =
+            std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
         // Illumination models 4, 6 and 7 refract: glass when the file gives
         // it a transmission filter (Tf), or when it has no diffuse but a
         // strong specular. Without them, that look is a mirror.
@@ -695,65 +745,80 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
           // Glass is smooth whatever its exponent says.
           material.smoothness = std::max(material.smoothness, 0.9f);
         } else if (bare) {
-          material.color = glm::vec4(specular.r, specular.g, specular.b, material.color.a);
+          material.color =
+              glm::vec4(specular.r, specular.g, specular.b, material.color.a);
           material.metallic = 1.0f;
         }
       }
       // glTF's KHR_materials_transmission and _volume: the base color tints
       // what passes through, and so does the volume over its distance.
       float transmission = 0.0f;
-      if (source->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmission) == AI_SUCCESS &&
+      if (source->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmission) ==
+              AI_SUCCESS &&
           transmission > 0.0f) {
         material.transmission = std::clamp(transmission, 0.0f, 1.0f);
         material.transmission_color = glm::vec3(color.r, color.g, color.b);
         aiColor3D attenuation(1, 1, 1);
         float distance = 0.0f;
-        if (source->Get(AI_MATKEY_VOLUME_ATTENUATION_COLOR, attenuation) == AI_SUCCESS &&
-            source->Get(AI_MATKEY_VOLUME_ATTENUATION_DISTANCE, distance) == AI_SUCCESS &&
+        if (source->Get(AI_MATKEY_VOLUME_ATTENUATION_COLOR, attenuation) ==
+                AI_SUCCESS &&
+            source->Get(AI_MATKEY_VOLUME_ATTENUATION_DISTANCE, distance) ==
+                AI_SUCCESS &&
             std::isfinite(distance) && distance > 0.0f) {
-          material.transmission_color *= glm::vec3(attenuation.r, attenuation.g, attenuation.b);
+          material.transmission_color *=
+              glm::vec3(attenuation.r, attenuation.g, attenuation.b);
           material.thickness = distance;
         }
       }
       if (material.transmission > 0.0f) {
         float ior = 0.0f;
         // OBJ's Ni defaults to 1, which means nothing was said.
-        if (source->Get(AI_MATKEY_REFRACTI, ior) == AI_SUCCESS && ior > 1.0f) material.ior = ior;
+        if (source->Get(AI_MATKEY_REFRACTI, ior) == AI_SUCCESS && ior > 1.0f)
+          material.ior = ior;
       }
       if (linear_colors) {
-        material.color = glm::vec4(LinearToSrgb(material.color.r), LinearToSrgb(material.color.g),
-                                   LinearToSrgb(material.color.b), material.color.a);
+        material.color = glm::vec4(
+            LinearToSrgb(material.color.r), LinearToSrgb(material.color.g),
+            LinearToSrgb(material.color.b), material.color.a);
       }
       aiColor3D emissive(0, 0, 0);
       source->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
       material.emission = glm::vec3(emissive.r, emissive.g, emissive.b);
 
       std::string reference = texture_of(source, aiTextureType_BASE_COLOR);
-      if (reference.empty()) reference = texture_of(source, aiTextureType_DIFFUSE);
+      if (reference.empty())
+        reference = texture_of(source, aiTextureType_DIFFUSE);
       material.texture = load_texture(reference, TextureUse::kColor, 1.0f);
       sources.texture = {reference, TextureUse::kColor, 1.0f};
       // OBJ exporters often write Kd 0 next to map_Kd, meaning "the texture
       // alone" rather than black.
-      if (is_obj && material.texture && glm::vec3(material.color) == glm::vec3(0.0f)) {
+      if (is_obj && material.texture &&
+          glm::vec3(material.color) == glm::vec3(0.0f)) {
         material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
       }
 
-      sources.emission = {texture_of(source, aiTextureType_EMISSIVE), TextureUse::kColor, 1.0f};
-      material.emission_texture = load_texture(sources.emission.reference, TextureUse::kColor, 1.0f);
+      sources.emission = {texture_of(source, aiTextureType_EMISSIVE),
+                          TextureUse::kColor, 1.0f};
+      material.emission_texture =
+          load_texture(sources.emission.reference, TextureUse::kColor, 1.0f);
       if (material.emission_texture && material.emission == glm::vec3(0.0f)) {
         material.emission = glm::vec3(1.0f);
       }
 
-      if (auto normals = texture_of(source, aiTextureType_NORMALS); !normals.empty()) {
-        material.normal_texture = load_texture(normals, TextureUse::kData, 1.0f);
+      if (auto normals = texture_of(source, aiTextureType_NORMALS);
+          !normals.empty()) {
+        material.normal_texture =
+            load_texture(normals, TextureUse::kData, 1.0f);
         sources.normal = {normals, TextureUse::kData, 1.0f};
         source->Get(AI_MATKEY_OBJ_BUMPMULT_NORMALS(0), material.normal_scale);
       } else {
         std::string height = texture_of(source, aiTextureType_HEIGHT);
-        if (height.empty()) height = texture_of(source, aiTextureType_DISPLACEMENT);
+        if (height.empty())
+          height = texture_of(source, aiTextureType_DISPLACEMENT);
         float bump = 1.0f;
         source->Get(AI_MATKEY_OBJ_BUMPMULT_HEIGHT(0), bump);
-        material.normal_texture = load_texture(height, TextureUse::kHeight, bump);
+        material.normal_texture =
+            load_texture(height, TextureUse::kHeight, bump);
         sources.normal = {height, TextureUse::kHeight, bump};
       }
       for (const ModelMaterialOverride& entry : settings.materials) {
@@ -762,13 +827,18 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
           material.color = *entry.color;
           material.transparent = material.color.a < 0.999f;
         }
-        if (entry.metallic) material.metallic = std::clamp(*entry.metallic, 0.0f, 1.0f);
-        if (entry.smoothness) material.smoothness = std::clamp(*entry.smoothness, 0.0f, 1.0f);
+        if (entry.metallic)
+          material.metallic = std::clamp(*entry.metallic, 0.0f, 1.0f);
+        if (entry.smoothness)
+          material.smoothness = std::clamp(*entry.smoothness, 0.0f, 1.0f);
         if (entry.emission) material.emission = *entry.emission;
-        if (entry.transmission) material.transmission = std::clamp(*entry.transmission, 0.0f, 1.0f);
+        if (entry.transmission)
+          material.transmission = std::clamp(*entry.transmission, 0.0f, 1.0f);
         if (entry.ior) material.ior = std::max(*entry.ior, 1.0f);
-        if (entry.transmission_color) material.transmission_color = *entry.transmission_color;
-        if (entry.thickness) material.thickness = std::max(*entry.thickness, 0.0f);
+        if (entry.transmission_color)
+          material.transmission_color = *entry.transmission_color;
+        if (entry.thickness)
+          material.thickness = std::max(*entry.thickness, 0.0f);
       }
       model->materials_.push_back(std::move(material));
       if (!collecting) model->material_sources_.push_back(std::move(sources));
@@ -785,7 +855,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
                       static_cast<float>(requests.size()));
   });
   for (size_t i = 0; i < requests.size(); i++) {
-    loaded_textures[TextureKey(requests[i].reference, requests[i].use)] = std::move(decoded[i]);
+    loaded_textures[TextureKey(requests[i].reference, requests[i].use)] =
+        std::move(decoded[i]);
   }
   model->materials_.clear();
   build_materials();
@@ -807,7 +878,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   for (const auto& [source_node, index] : node_order) {
     for (unsigned i = 0; i < source_node->mNumMeshes; i++) {
       const aiMesh* source = scene->mMeshes[source_node->mMeshes[i]];
-      if (source->mPrimitiveTypes & aiPrimitiveType_TRIANGLE) mesh_jobs.push_back({source, index});
+      if (source->mPrimitiveTypes & aiPrimitiveType_TRIANGLE)
+        mesh_jobs.push_back({source, index});
     }
   }
   std::vector<ModelMesh> built_meshes(mesh_jobs.size());
@@ -846,9 +918,9 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
     ModelMesh mesh;
     mesh.name = source->mName.C_Str();
     mesh.node = index;
-    mesh.material = static_cast<int>(
-        std::min<unsigned>(source->mMaterialIndex,
-                           static_cast<unsigned>(model->materials_.size() - 1)));
+    mesh.material = static_cast<int>(std::min<unsigned>(
+        source->mMaterialIndex,
+        static_cast<unsigned>(model->materials_.size() - 1)));
     if (source->HasBones()) {
       std::vector<int> counts(vertices.size(), 0);
       for (unsigned b = 0; b < source->mNumBones; b++) {
@@ -874,14 +946,16 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
         }
       }
       for (auto& vertex : vertices) {
-        const float total = vertex.weights.x + vertex.weights.y + vertex.weights.z +
-                            vertex.weights.w;
+        const float total = vertex.weights.x + vertex.weights.y +
+                            vertex.weights.z + vertex.weights.w;
         if (total > 0.0f) vertex.weights /= total;
       }
     }
-    mesh.geometry = MeshGeometry::Create(std::move(vertices), std::move(indices));
+    mesh.geometry =
+        MeshGeometry::Create(std::move(vertices), std::move(indices));
     mesh.geometry->skinned = !mesh.bones.empty();
-    if (model->materials_[mesh.material].normal_texture) mesh.geometry->ComputeTangents();
+    if (model->materials_[mesh.material].normal_texture)
+      mesh.geometry->ComputeTangents();
     mesh.geometry->BuildClusters();
     built_meshes[job_index] = std::move(mesh);
     report(0.8f + 0.2f * static_cast<float>(++converted) /
@@ -904,7 +978,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   std::set<int> top_nodes;
   if (unity) {
     for (unsigned i = 0; i < root->mNumChildren; i++) {
-      if (auto it = node_index.find(root->mChildren[i]); it != node_index.end()) {
+      if (auto it = node_index.find(root->mChildren[i]);
+          it != node_index.end()) {
         top_nodes.insert(it->second);
       }
     }
@@ -913,7 +988,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
     const aiAnimation* source = scene->mAnimations[a];
     AnimationClip clip;
     clip.name = source->mName.C_Str();
-    const double ticks = source->mTicksPerSecond > 0.0 ? source->mTicksPerSecond : 25.0;
+    const double ticks =
+        source->mTicksPerSecond > 0.0 ? source->mTicksPerSecond : 25.0;
     clip.duration = static_cast<float>(source->mDuration / ticks);
     for (unsigned c = 0; c < source->mNumChannels; c++) {
       const aiNodeAnim* channel_source = source->mChannels[c];
@@ -948,7 +1024,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
       for (unsigned k = 0; k < channel_source->mNumScalingKeys; k++) {
         const auto& key = channel_source->mScalingKeys[k];
         channel.scale_times.push_back(static_cast<float>(key.mTime / ticks));
-        channel.scales.push_back(glm::vec3(key.mValue.x, key.mValue.y, key.mValue.z));
+        channel.scales.push_back(
+            glm::vec3(key.mValue.x, key.mValue.y, key.mValue.z));
       }
       (void)rest;
       clip.channels.push_back(std::move(channel));
@@ -962,12 +1039,14 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
 
 void Model::Finish() {
   std::vector<glm::mat4> locals(nodes_.size());
-  for (size_t i = 0; i < nodes_.size(); i++) locals[i] = nodes_[i].LocalMatrix();
+  for (size_t i = 0; i < nodes_.size(); i++)
+    locals[i] = nodes_[i].LocalMatrix();
   ComputeGlobals(locals, bind_globals_);
   bool first = true;
   for (const auto& mesh : meshes_) {
     const glm::mat4& m = bind_globals_[mesh.node];
-    const glm::vec3 lo = mesh.geometry->bounds_min, hi = mesh.geometry->bounds_max;
+    const glm::vec3 lo = mesh.geometry->bounds_min,
+                    hi = mesh.geometry->bounds_max;
     for (int corner = 0; corner < 8; corner++) {
       const glm::vec3 p((corner & 1) ? hi.x : lo.x, (corner & 2) ? hi.y : lo.y,
                         (corner & 4) ? hi.z : lo.z);
@@ -1021,7 +1100,8 @@ const AnimationClip* Model::FindClip(std::string_view name) const {
   }
   for (const auto& clip : clips_) {
     const auto bar = clip.name.rfind('|');
-    if (bar != std::string::npos && std::string_view(clip.name).substr(bar + 1) == name) {
+    if (bar != std::string::npos &&
+        std::string_view(clip.name).substr(bar + 1) == name) {
       return &clip;
     }
   }

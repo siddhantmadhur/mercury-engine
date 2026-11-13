@@ -36,8 +36,8 @@ class Builder {
   // it faces away from its vertices' normals.
   void Triangle(UINT a, UINT b, UINT c) {
     const glm::vec3 pa = vertices_[a].position;
-    const glm::vec3 face = glm::cross(vertices_[b].position - pa,
-                                      vertices_[c].position - pa);
+    const glm::vec3 face =
+        glm::cross(vertices_[b].position - pa, vertices_[c].position - pa);
     if (glm::dot(face, face) < 1e-12f) return;  // degenerate (sphere poles)
     const glm::vec3 normal =
         vertices_[a].normal + vertices_[b].normal + vertices_[c].normal;
@@ -104,9 +104,9 @@ Mesh Cube(glm::vec4 color) {
   Builder builder(color);
   // For each face: its normal and two axes spanning it.
   const glm::vec3 faces[6][3] = {
-      {{0, 0, 1}, {1, 0, 0}, {0, 1, 0}},   {{0, 0, -1}, {-1, 0, 0}, {0, 1, 0}},
-      {{1, 0, 0}, {0, 0, -1}, {0, 1, 0}},  {{-1, 0, 0}, {0, 0, 1}, {0, 1, 0}},
-      {{0, 1, 0}, {1, 0, 0}, {0, 0, -1}},  {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}},
+      {{0, 0, 1}, {1, 0, 0}, {0, 1, 0}},  {{0, 0, -1}, {-1, 0, 0}, {0, 1, 0}},
+      {{1, 0, 0}, {0, 0, -1}, {0, 1, 0}}, {{-1, 0, 0}, {0, 0, 1}, {0, 1, 0}},
+      {{0, 1, 0}, {1, 0, 0}, {0, 0, -1}}, {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}},
   };
   for (const auto& face : faces) {
     const glm::vec3 n = face[0], u = face[1], v = face[2];

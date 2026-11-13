@@ -24,7 +24,7 @@ namespace {
 const std::vector<std::string> kImageExtensions = {".png", ".jpg", ".jpeg",
                                                    ".bmp", ".tga"};
 const std::vector<std::string> kModelExtensions = {".obj", ".gltf", ".glb",
-                                                   ".fbx", ".dae", ".ply"};
+                                                   ".fbx", ".dae",  ".ply"};
 const std::vector<std::string> kFontExtensions = {".ttf", ".otf"};
 
 std::string AssetLabel(const std::string& res_path) {
@@ -38,8 +38,8 @@ InspectorPanel::InspectorPanel(wxWindow* parent, EditorScene& scene)
     : wxPanel(parent, wxID_ANY), scene_(scene) {
   auto* root = new wxBoxSizer(wxVERTICAL);
 
-  scroll_ = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                 wxVSCROLL | wxBORDER_NONE);
+  scroll_ = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition,
+                                 wxDefaultSize, wxVSCROLL | wxBORDER_NONE);
   scroll_->SetScrollRate(0, 14);
 
   content_sizer_ = new wxBoxSizer(wxVERTICAL);
@@ -128,9 +128,10 @@ void InspectorPanel::RebuildNow() {
   } else if (MapNode* node = scene_.GetSelectedNode()) {
     BuildNodeInspector(*node);
   } else {
-    auto* empty = new wxStaticText(scroll_, wxID_ANY,
-                                   "Select a node or an asset");
-    empty->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+    auto* empty =
+        new wxStaticText(scroll_, wxID_ANY, "Select a node or an asset");
+    empty->SetForegroundColour(
+        wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     content_sizer_->Add(empty, 0, wxALL, 12);
   }
 
@@ -182,9 +183,10 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
   }
   asset->path = res_path;
 
-  auto* type_lbl = new wxStaticText(
-      scroll_, wxID_ANY, wxString::FromUTF8("Type: " + asset->type));
-  type_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  auto* type_lbl = new wxStaticText(scroll_, wxID_ANY,
+                                    wxString::FromUTF8("Type: " + asset->type));
+  type_lbl->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   content_sizer_->Add(type_lbl, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
   const AssetTypeInfo* info =
@@ -200,7 +202,8 @@ void InspectorPanel::BuildAssetInspector(const std::string& res_path) {
     }
   } else {
     auto* unk = new wxStaticText(scroll_, wxID_ANY, "Unknown asset type");
-    unk->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+    unk->SetForegroundColour(
+        wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     content_sizer_->Add(unk, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
   }
 
@@ -234,10 +237,9 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
   auto* header = new wxPanel(scroll_, wxID_ANY);
   auto* hs = new wxBoxSizer(wxVERTICAL);
 
-  auto* name_ctrl = new wxTextCtrl(header, wxID_ANY,
-                                   wxString::FromUTF8(node.name),
-                                   wxDefaultPosition, wxDefaultSize,
-                                   wxTE_PROCESS_ENTER);
+  auto* name_ctrl =
+      new wxTextCtrl(header, wxID_ANY, wxString::FromUTF8(node.name),
+                     wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
   name_ctrl->SetFont(HeaderFont(1));
   auto commit_name = [this, node_uid, name_ctrl]() {
     MapNode* target = scene_.GetMap().FindByUid(node_uid);
@@ -250,7 +252,8 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
       name_ctrl->ChangeValue(wxString::FromUTF8(target->name));
     }
   };
-  name_ctrl->Bind(wxEVT_TEXT_ENTER, [commit_name](wxCommandEvent&) { commit_name(); });
+  name_ctrl->Bind(wxEVT_TEXT_ENTER,
+                  [commit_name](wxCommandEvent&) { commit_name(); });
   name_ctrl->Bind(wxEVT_KILL_FOCUS, [commit_name](wxFocusEvent& e) {
     commit_name();
     e.Skip();
@@ -260,7 +263,8 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
   auto* path_lbl = new wxStaticText(
       header, wxID_ANY, wxString::FromUTF8("Path: " + node.GetPath()),
       wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
-  path_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  path_lbl->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   hs->Add(path_lbl, 0, wxEXPAND);
 
   auto* hwrap = new wxBoxSizer(wxVERTICAL);
@@ -280,8 +284,7 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
       badge = "script";
     }
 
-    const std::string section_key =
-        component.type + "#" + std::to_string(i);
+    const std::string section_key = component.type + "#" + std::to_string(i);
     const bool expanded =
         collapsed_sections_.find(section_key) == collapsed_sections_.end();
 
@@ -346,12 +349,14 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
           body, wxID_ANY,
           "This component type is not known. If it is a script, press Build. "
           "Its values are kept as they are.");
-      msg->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+      msg->SetForegroundColour(
+          wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
       msg->Wrap(260);
       bs->Add(msg, 0, wxEXPAND | wxBOTTOM, 6);
     }
 
-    auto on_comp_changed = [this, node_uid, comp_type = component.type](bool coalesced) {
+    auto on_comp_changed = [this, node_uid,
+                            comp_type = component.type](bool coalesced) {
       if (comp_type == "Transform") {
         scene_.NotifyTransformEdited(node_uid, coalesced);
       } else {
@@ -391,8 +396,7 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
 
     if (component.type == "UIDocument") {
       const auto* source = component.properties.Get("source_asset");
-      const auto* resource =
-          source ? source->Get<mtext::Resource>() : nullptr;
+      const auto* resource = source ? source->Get<mtext::Resource>() : nullptr;
       std::string ui_path = resource ? resource->path : "";
       uidoc_btn = new wxButton(body, wxID_ANY, "Edit in UI Builder");
       ApplyButtonIconAndPadding(uidoc_btn, EditorIcon::kPopOut);
@@ -484,10 +488,9 @@ void InspectorPanel::AddFieldRow(
 
   auto* row = new wxBoxSizer(wxHORIZONTAL);
 
-  auto* label = new wxStaticText(parent, wxID_ANY,
-                                 wxString::FromUTF8(field.name),
-                                 wxDefaultPosition, wxSize(118, -1),
-                                 wxST_ELLIPSIZE_END);
+  auto* label =
+      new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(field.name),
+                       wxDefaultPosition, wxSize(118, -1), wxST_ELLIPSIZE_END);
   if (overridden) label->SetFont(parent->GetFont().Bold());
   if (!field.tooltip.empty()) {
     label->SetToolTip(wxString::FromUTF8(field.tooltip));
@@ -506,7 +509,8 @@ void InspectorPanel::AddFieldRow(
                 label->PopupMenu(&menu);
               });
 
-  // For lists and events, put the label above or on the left; left aligns cleanly.
+  // For lists and events, put the label above or on the left; left aligns
+  // cleanly.
   row->Add(label, 0, wxALIGN_TOP | wxTOP | wxRIGHT, 3);
 
   auto write_fn = [this, label, parent, &props, field, on_prop_changed,
@@ -522,9 +526,11 @@ void InspectorPanel::AddFieldRow(
     label->Refresh();
     on_prop_changed(coalesced);
 
-    // Structural UI changes (UIDocument source_asset updates "Edit in UI Builder"
-    // button state; Lists/Events rebuild their child rows inside their own editor).
-    if (comp_type == "UIDocument" && field.name == "source_asset" && !coalesced) {
+    // Structural UI changes (UIDocument source_asset updates "Edit in UI
+    // Builder" button state; Lists/Events rebuild their child rows inside their
+    // own editor).
+    if (comp_type == "UIDocument" && field.name == "source_asset" &&
+        !coalesced) {
       ScheduleRebuild();
     }
   };
@@ -576,8 +582,8 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
     }
     case FieldType::kFloat: {
       const double v = current.ToFloat().value_or(0.0);
-      auto* ctrl = new DragNumberCtrl(parent, wxEmptyString, wxNullColour,
-                                      v, 0.05, false, 4);
+      auto* ctrl = new DragNumberCtrl(parent, wxEmptyString, wxNullColour, v,
+                                      0.05, false, 4);
       ctrl->SetCallbacks(
           [this]() {
             dragging_ = true;
@@ -593,9 +599,9 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
     }
     case FieldType::kString: {
       const std::string s = current.ToString().value_or("");
-      auto* ctrl = new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(s),
-                                  wxDefaultPosition, wxDefaultSize,
-                                  wxTE_PROCESS_ENTER);
+      auto* ctrl =
+          new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(s),
+                         wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
       auto commit = [ctrl, write_fn]() {
         write_fn(mtext::Variant(ctrl->GetValue().ToStdString()), false);
       };
@@ -607,8 +613,8 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
       return ctrl;
     }
     case FieldType::kVector2: {
-      glm::vec2 v =
-          current.Get<glm::vec2>() ? *current.Get<glm::vec2>() : glm::vec2(0.0f);
+      glm::vec2 v = current.Get<glm::vec2>() ? *current.Get<glm::vec2>()
+                                             : glm::vec2(0.0f);
       auto* ctrl = new Vec2Field(parent, v, 0.05);
       ctrl->SetCallbacks(
           [this]() {
@@ -624,8 +630,8 @@ wxWindow* InspectorPanel::CreateValueEditor(wxWindow* parent,
       return ctrl;
     }
     case FieldType::kVector3: {
-      glm::vec3 v =
-          current.Get<glm::vec3>() ? *current.Get<glm::vec3>() : glm::vec3(0.0f);
+      glm::vec3 v = current.Get<glm::vec3>() ? *current.Get<glm::vec3>()
+                                             : glm::vec3(0.0f);
       auto* ctrl = new Vec3Field(parent, v, 0.05);
       ctrl->SetCallbacks(
           [this]() {
@@ -716,8 +722,8 @@ wxWindow* InspectorPanel::CreateNodePicker(
     labels.Add(wxString::FromUTF8(current_path + " (missing)"));
   }
 
-  auto* choice = new wxChoice(parent, wxID_ANY, wxDefaultPosition,
-                              wxDefaultSize, labels);
+  auto* choice =
+      new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, labels);
   if (sel != wxNOT_FOUND) choice->SetSelection(sel);
   if (!current_path.empty()) {
     choice->SetToolTip(wxString::FromUTF8(current_path));
@@ -731,8 +737,7 @@ wxWindow* InspectorPanel::CreateNodePicker(
   });
 
   choice->SetDropTarget(new CompositeDropTarget(
-      nullptr,
-      [this, on_pick](wxCoord, wxCoord, const wxString& text) -> bool {
+      nullptr, [this, on_pick](wxCoord, wxCoord, const wxString& text) -> bool {
         if (auto uid = ExtractNodeUidPayload(text)) {
           if (const MapNode* n = scene_.GetMap().FindByUid(*uid)) {
             on_pick(n->GetPath());
@@ -772,7 +777,8 @@ wxWindow* InspectorPanel::CreateAssetPicker(
 
   int sel = current_path.empty() ? 0 : wxNOT_FOUND;
   for (const auto& f : found) {
-    if (!plain && !asset_type.empty() && scene_.Assets().TypeOf(f) != asset_type) {
+    if (!plain && !asset_type.empty() &&
+        scene_.Assets().TypeOf(f) != asset_type) {
       continue;
     }
     if (f == current_path) sel = static_cast<int>(files->size());
@@ -785,8 +791,8 @@ wxWindow* InspectorPanel::CreateAssetPicker(
     labels.Add(wxString::FromUTF8(AssetLabel(current_path)));
   }
 
-  auto* choice = new wxChoice(parent, wxID_ANY, wxDefaultPosition,
-                              wxDefaultSize, labels);
+  auto* choice =
+      new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, labels);
   if (sel != wxNOT_FOUND) choice->SetSelection(sel);
   if (!current_path.empty()) {
     choice->SetToolTip(wxString::FromUTF8(current_path));
@@ -800,8 +806,7 @@ wxWindow* InspectorPanel::CreateAssetPicker(
   });
 
   choice->SetDropTarget(new CompositeDropTarget(
-      nullptr,
-      [this, on_pick](wxCoord, wxCoord, const wxString& text) -> bool {
+      nullptr, [this, on_pick](wxCoord, wxCoord, const wxString& text) -> bool {
         if (auto res = ExtractResPathPayload(text)) {
           on_pick(*res);
           ScheduleRebuild();
@@ -824,11 +829,12 @@ wxPanel* InspectorPanel::CreateListEditor(wxWindow* parent,
   auto* sizer = new wxBoxSizer(wxVERTICAL);
 
   auto* top = new wxBoxSizer(wxHORIZONTAL);
-  auto* count_lbl = new wxStaticText(
-      panel, wxID_ANY,
-      wxString::Format("%zu item%s", items->size(),
-                       items->size() == 1 ? "" : "s"));
-  count_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  auto* count_lbl =
+      new wxStaticText(panel, wxID_ANY,
+                       wxString::Format("%zu item%s", items->size(),
+                                        items->size() == 1 ? "" : "s"));
+  count_lbl->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   top->Add(count_lbl, 1, wxALIGN_CENTER_VERTICAL);
 
   auto* add_btn = new wxButton(panel, wxID_ANY, "+", wxDefaultPosition,
@@ -898,11 +904,12 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
   auto* sizer = new wxBoxSizer(wxVERTICAL);
 
   auto* top = new wxBoxSizer(wxHORIZONTAL);
-  auto* count_lbl = new wxStaticText(
-      panel, wxID_ANY,
-      wxString::Format("%zu call%s", calls->size(),
-                       calls->size() == 1 ? "" : "s"));
-  count_lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  auto* count_lbl =
+      new wxStaticText(panel, wxID_ANY,
+                       wxString::Format("%zu call%s", calls->size(),
+                                        calls->size() == 1 ? "" : "s"));
+  count_lbl->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   top->Add(count_lbl, 1, wxALIGN_CENTER_VERTICAL);
 
   auto* add_btn = new wxButton(panel, wxID_ANY, "+", wxDefaultPosition,
@@ -934,19 +941,20 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
     });
     line1->Add(rem_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
 
-    wxWindow* node_picker = CreateNodePicker(
-        box, (*calls)[i].target.path,
-        [this, calls, i, write_fn](const std::string& p) {
-          if (i < calls->size()) {
-            (*calls)[i].target.path = p;
-            write_fn(Event::ToVariant(*calls), false);
-            ScheduleRebuild();
-          }
-        });
+    wxWindow* node_picker =
+        CreateNodePicker(box, (*calls)[i].target.path,
+                         [this, calls, i, write_fn](const std::string& p) {
+                           if (i < calls->size()) {
+                             (*calls)[i].target.path = p;
+                             write_fn(Event::ToVariant(*calls), false);
+                             ScheduleRebuild();
+                           }
+                         });
     line1->Add(node_picker, 1, wxEXPAND);
     bs->Add(line1, 0, wxEXPAND | wxBOTTOM, 3);
 
-    // Build method choices: GameObject.SetActive(bool) + target node's script methods
+    // Build method choices: GameObject.SetActive(bool) + target node's script
+    // methods
     struct MethodOption {
       std::string component;
       MethodDesc method;
@@ -963,9 +971,9 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
         if (!cinfo || cinfo->methods.empty()) continue;
         for (const auto& m : cinfo->methods) {
           options->push_back({cinfo->name, m});
-          method_labels.Add(wxString::FromUTF8(
-              cinfo->name + "." + m.name +
-              (m.arg.empty() ? "" : " (" + m.arg + ")")));
+          method_labels.Add(
+              wxString::FromUTF8(cinfo->name + "." + m.name +
+                                 (m.arg.empty() ? "" : " (" + m.arg + ")")));
         }
       }
     }
@@ -981,39 +989,44 @@ wxPanel* InspectorPanel::CreateEventCallsEditor(wxWindow* parent,
     if (m_sel == wxNOT_FOUND && !(*calls)[i].component.empty()) {
       m_sel = static_cast<int>(options->size());
       options->push_back({(*calls)[i].component, {(*calls)[i].method, ""}});
-      method_labels.Add(wxString::FromUTF8((*calls)[i].component + "." +
-                                           (*calls)[i].method));
+      method_labels.Add(
+          wxString::FromUTF8((*calls)[i].component + "." + (*calls)[i].method));
     }
 
     auto* method_choice = new wxChoice(box, wxID_ANY, wxDefaultPosition,
-                                         wxDefaultSize, method_labels);
+                                       wxDefaultSize, method_labels);
     if (m_sel != wxNOT_FOUND) method_choice->SetSelection(m_sel);
-    method_choice->Bind(
-        wxEVT_CHOICE, [this, method_choice, options, calls, i,
-                       write_fn](wxCommandEvent&) {
-          const int idx = method_choice->GetSelection();
-          if (i >= calls->size() || idx < 0 ||
-              idx >= static_cast<int>(options->size())) {
-            return;
-          }
-          auto& call = (*calls)[i];
-          const auto& opt = (*options)[idx];
-          call.component = opt.component;
-          call.method = opt.method.name;
-          if (opt.method.arg == "bool") call.argument = false;
-          else if (opt.method.arg == "int") call.argument = 0;
-          else if (opt.method.arg == "float") call.argument = 0.0;
-          else if (opt.method.arg == "string") call.argument = std::string();
-          else call.argument = mtext::Variant();
-          write_fn(Event::ToVariant(*calls), false);
-          ScheduleRebuild();
-        });
+    method_choice->Bind(wxEVT_CHOICE, [this, method_choice, options, calls, i,
+                                       write_fn](wxCommandEvent&) {
+      const int idx = method_choice->GetSelection();
+      if (i >= calls->size() || idx < 0 ||
+          idx >= static_cast<int>(options->size())) {
+        return;
+      }
+      auto& call = (*calls)[i];
+      const auto& opt = (*options)[idx];
+      call.component = opt.component;
+      call.method = opt.method.name;
+      if (opt.method.arg == "bool")
+        call.argument = false;
+      else if (opt.method.arg == "int")
+        call.argument = 0;
+      else if (opt.method.arg == "float")
+        call.argument = 0.0;
+      else if (opt.method.arg == "string")
+        call.argument = std::string();
+      else
+        call.argument = mtext::Variant();
+      write_fn(Event::ToVariant(*calls), false);
+      ScheduleRebuild();
+    });
     bs->Add(method_choice, 0, wxEXPAND | wxBOTTOM, 3);
 
     using T = mtext::Variant::Type;
     FieldInfo arg_field;
     wxWindow* arg_editor = nullptr;
-    auto arg_write = [calls, i, write_fn](const mtext::Variant& v, bool coalesced) {
+    auto arg_write = [calls, i, write_fn](const mtext::Variant& v,
+                                          bool coalesced) {
       if (i < calls->size()) {
         (*calls)[i].argument = v;
         write_fn(Event::ToVariant(*calls), coalesced);
@@ -1063,20 +1076,29 @@ void InspectorPanel::AddLockGroupRow(
   bool y = false;
   bool z = false;
   if (!props.Get(key_x) && !props.Get(key_y) && !props.Get(key_z)) {
-    if (const auto* val = props.Get("lock_transform_x")) x = val->ToBool().value_or(false);
-    if (const auto* val = props.Get("lock_transform_y")) y = val->ToBool().value_or(false);
-    if (const auto* val = props.Get("lock_transform_z")) z = val->ToBool().value_or(false);
-    if (const auto* val = props.Get("lock_position_x")) x = val->ToBool().value_or(false);
-    if (const auto* val = props.Get("lock_position_y")) y = val->ToBool().value_or(false);
-    if (const auto* val = props.Get("lock_position_z")) z = val->ToBool().value_or(false);
+    if (const auto* val = props.Get("lock_transform_x"))
+      x = val->ToBool().value_or(false);
+    if (const auto* val = props.Get("lock_transform_y"))
+      y = val->ToBool().value_or(false);
+    if (const auto* val = props.Get("lock_transform_z"))
+      z = val->ToBool().value_or(false);
+    if (const auto* val = props.Get("lock_position_x"))
+      x = val->ToBool().value_or(false);
+    if (const auto* val = props.Get("lock_position_y"))
+      y = val->ToBool().value_or(false);
+    if (const auto* val = props.Get("lock_position_z"))
+      z = val->ToBool().value_or(false);
 
     if (!x && !y && !z) {
       if (const auto* dofs = props.Get("allowed_dofs")) {
         std::string mode = dofs->ToString().value_or("");
         if (prefix == "lock_translation") {
-          if (mode == "translation_x") y = z = true;
-          else if (mode == "translation_y") x = z = true;
-          else if (mode == "translation_xy" || mode == "plane_2d") z = true;
+          if (mode == "translation_x")
+            y = z = true;
+          else if (mode == "translation_y")
+            x = z = true;
+          else if (mode == "translation_xy" || mode == "plane_2d")
+            z = true;
         } else if (prefix == "lock_rotation") {
           if (mode == "translation_xyz" || mode == "translation_xy" ||
               mode == "translation_x" || mode == "translation_y") {
@@ -1093,9 +1115,9 @@ void InspectorPanel::AddLockGroupRow(
   if (const auto* val = props.Get(key_z)) z = val->ToBool().value_or(false);
 
   auto* row = new wxBoxSizer(wxHORIZONTAL);
-  auto* label = new wxStaticText(parent, wxID_ANY, label_text,
-                                 wxDefaultPosition, wxSize(118, -1),
-                                 wxST_ELLIPSIZE_END);
+  auto* label =
+      new wxStaticText(parent, wxID_ANY, label_text, wxDefaultPosition,
+                       wxSize(118, -1), wxST_ELLIPSIZE_END);
   const bool is_rotation =
       std::string(label_text).find("Rotation") != std::string::npos;
   label->SetToolTip(is_rotation
@@ -1114,8 +1136,7 @@ void InspectorPanel::AddLockGroupRow(
   cb_z->SetForegroundColour(Colors::kAxisZ);
 
   auto update_label = [label, parent, cb_x, cb_y, cb_z]() {
-    const bool any =
-        cb_x->GetValue() || cb_y->GetValue() || cb_z->GetValue();
+    const bool any = cb_x->GetValue() || cb_y->GetValue() || cb_z->GetValue();
     label->SetFont(any ? parent->GetFont().Bold() : parent->GetFont());
     label->Refresh();
   };
@@ -1124,8 +1145,10 @@ void InspectorPanel::AddLockGroupRow(
   auto sync = [this, &props, key_x, key_y, key_z, cb_x, cb_y, cb_z,
                update_label, on_prop_changed]() {
     auto apply_one = [&](const std::string& key, bool v) {
-      if (v) props.Set(key, true);
-      else props.Remove(key);
+      if (v)
+        props.Set(key, true);
+      else
+        props.Remove(key);
     };
     apply_one(key_x, cb_x->GetValue());
     apply_one(key_y, cb_y->GetValue());
@@ -1139,27 +1162,26 @@ void InspectorPanel::AddLockGroupRow(
   cb_y->Bind(wxEVT_CHECKBOX, [sync](wxCommandEvent&) { sync(); });
   cb_z->Bind(wxEVT_CHECKBOX, [sync](wxCommandEvent&) { sync(); });
 
-  label->Bind(wxEVT_RIGHT_DOWN,
-              [this, label, &props, key_x, key_y, key_z, cb_x, cb_y, cb_z,
-               update_label, on_prop_changed](wxMouseEvent&) {
-                wxMenu menu;
-                constexpr int kIdReset = 1;
-                const bool any =
-                    cb_x->GetValue() || cb_y->GetValue() || cb_z->GetValue();
-                menu.Append(kIdReset, "Reset to Default")->Enable(any);
-                menu.Bind(wxEVT_MENU, [&](wxCommandEvent&) {
-                  props.Remove(key_x);
-                  props.Remove(key_y);
-                  props.Remove(key_z);
-                  props.Remove("allowed_dofs");
-                  cb_x->SetValue(false);
-                  cb_y->SetValue(false);
-                  cb_z->SetValue(false);
-                  update_label();
-                  on_prop_changed(false);
-                });
-                label->PopupMenu(&menu);
-              });
+  label->Bind(wxEVT_RIGHT_DOWN, [this, label, &props, key_x, key_y, key_z, cb_x,
+                                 cb_y, cb_z, update_label,
+                                 on_prop_changed](wxMouseEvent&) {
+    wxMenu menu;
+    constexpr int kIdReset = 1;
+    const bool any = cb_x->GetValue() || cb_y->GetValue() || cb_z->GetValue();
+    menu.Append(kIdReset, "Reset to Default")->Enable(any);
+    menu.Bind(wxEVT_MENU, [&](wxCommandEvent&) {
+      props.Remove(key_x);
+      props.Remove(key_y);
+      props.Remove(key_z);
+      props.Remove("allowed_dofs");
+      cb_x->SetValue(false);
+      cb_y->SetValue(false);
+      cb_z->SetValue(false);
+      update_label();
+      on_prop_changed(false);
+    });
+    label->PopupMenu(&menu);
+  });
 
   row->Add(cb_x, 0, wxRIGHT, 8);
   row->Add(cb_y, 0, wxRIGHT, 8);
@@ -1172,9 +1194,9 @@ void InspectorPanel::AddRawPropertyRow(
     std::function<void(const std::string& new_val_text)> on_commit,
     std::function<void()> on_remove) {
   auto* row = new wxBoxSizer(wxHORIZONTAL);
-  auto* label = new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(prop.key),
-                                 wxDefaultPosition, wxSize(118, -1),
-                                 wxST_ELLIPSIZE_END);
+  auto* label =
+      new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(prop.key),
+                       wxDefaultPosition, wxSize(118, -1), wxST_ELLIPSIZE_END);
   label->SetFont(label->GetFont().Italic());
   label->SetToolTip(
       "Not a field of this component. Edit the raw value or right-click to "

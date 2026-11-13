@@ -17,7 +17,8 @@ namespace {
 
 constexpr size_t kMaxUndoSteps = 200;
 
-std::vector<std::string>* PartVector(InputActionDesc::Composite2D& composite, int part) {
+std::vector<std::string>* PartVector(InputActionDesc::Composite2D& composite,
+                                     int part) {
   switch (part) {
     case 0:
       return &composite.up;
@@ -35,7 +36,8 @@ std::vector<std::string>* PartVector(InputActionDesc::Composite2D& composite, in
 // Writes `text` unless the file already holds it, so a save that changes
 // nothing in the generated file does not rebuild every script that imports it.
 bool WriteIfChanged(const fs::path& file, const std::string& text) {
-  if (auto current = os::ReadText(file); current && *current == text) return true;
+  if (auto current = os::ReadText(file); current && *current == text)
+    return true;
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
   const fs::path temp = file.string() + ".tmp";
@@ -115,13 +117,15 @@ bool InputActionsWindow::Save() {
 
 bool InputActionsWindow::WriteHeader() {
   if (!project_ || desc_.header.empty()) return false;
-  const std::string class_name = desc_.class_name.empty() ? "GameInput" : desc_.class_name;
+  const std::string class_name =
+      desc_.class_name.empty() ? "GameInput" : desc_.class_name;
   auto header = GenerateInputActionsAngelScript(desc_, class_name, path_);
   header_errors_ = std::move(header.errors);
   state_revision_++;
   if (!header_errors_.empty()) {
     for (const auto& e : header_errors_) console_.Error("Input Actions: " + e);
-    console_.Error("Input Actions: " + desc_.header + " was not written; rename the actions");
+    console_.Error("Input Actions: " + desc_.header +
+                   " was not written; rename the actions");
     return false;
   }
   if (!WriteIfChanged(project_->Resolve(desc_.header), header.source)) {
@@ -235,9 +239,9 @@ std::vector<int> InputActionsWindow::ActionsOf(const std::string& map) const {
 std::string InputActionsWindow::UniqueActionName(const std::string& map,
                                                  std::string base) const {
   auto taken = [&](const std::string& name) {
-    return std::any_of(desc_.actions.begin(), desc_.actions.end(), [&](const auto& a) {
-      return a.map == map && a.name == name;
-    });
+    return std::any_of(
+        desc_.actions.begin(), desc_.actions.end(),
+        [&](const auto& a) { return a.map == map && a.name == name; });
   };
   std::string name = base;
   for (int i = 1; taken(name); i++) name = base + std::to_string(i);
@@ -246,18 +250,22 @@ std::string InputActionsWindow::UniqueActionName(const std::string& map,
 
 std::string InputActionsWindow::UniqueMapName(std::string base) const {
   std::string name = base;
-  for (int i = 1; std::find(desc_.maps.begin(), desc_.maps.end(), name) != desc_.maps.end();
+  for (int i = 1; std::find(desc_.maps.begin(), desc_.maps.end(), name) !=
+                  desc_.maps.end();
        i++) {
     name = base + std::to_string(i);
   }
   return name;
 }
 
-bool InputActionsWindow::IsActionNameTaken(int action_idx, const std::string& name) const {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return false;
+bool InputActionsWindow::IsActionNameTaken(int action_idx,
+                                           const std::string& name) const {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return false;
   const auto& target = desc_.actions[action_idx];
   for (int i = 0; i < static_cast<int>(desc_.actions.size()); i++) {
-    if (i != action_idx && desc_.actions[i].map == target.map && desc_.actions[i].name == name) {
+    if (i != action_idx && desc_.actions[i].map == target.map &&
+        desc_.actions[i].name == name) {
       return true;
     }
   }
@@ -265,30 +273,36 @@ bool InputActionsWindow::IsActionNameTaken(int action_idx, const std::string& na
 }
 
 std::string InputActionsWindow::ActionUsageSnippet(int action_idx) const {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return "";
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return "";
   const auto& action = desc_.actions[action_idx];
-  const std::string class_name =
-      desc_.class_name.empty() ? "GameInput" : InputActionIdentifier(desc_.class_name);
+  const std::string class_name = desc_.class_name.empty()
+                                     ? "GameInput"
+                                     : InputActionIdentifier(desc_.class_name);
   const std::string member =
       desc_.header.empty()
           ? std::format("Input::FindAction(\"{}\")", action.FullName())
           : std::format("Input::RequireAction({}::{}.{})", class_name,
-                        InputActionIdentifier(action.map), InputActionIdentifier(action.name));
-  if (action.type == InputAction::Type::kButton) return member + ".wasPressedThisFrame";
+                        InputActionIdentifier(action.map),
+                        InputActionIdentifier(action.name));
+  if (action.type == InputAction::Type::kButton)
+    return member + ".wasPressedThisFrame";
   if (action.vector2) return member + ".ReadVector2()";
   return member + ".ReadFloat()";
 }
 
 int InputActionsWindow::AddMap(std::string name) {
   Checkpoint();
-  desc_.maps.push_back(name.empty() ? UniqueMapName("New action map") : UniqueMapName(std::move(name)));
+  desc_.maps.push_back(name.empty() ? UniqueMapName("New action map")
+                                    : UniqueMapName(std::move(name)));
   map_ = static_cast<int>(desc_.maps.size()) - 1;
   selection_ = {};
   MarkChanged();
   return map_;
 }
 
-bool InputActionsWindow::RenameMap(const std::string& from, const std::string& to) {
+bool InputActionsWindow::RenameMap(const std::string& from,
+                                   const std::string& to) {
   if (to.empty() || to == from || to.find('/') != std::string::npos ||
       std::find(desc_.maps.begin(), desc_.maps.end(), to) != desc_.maps.end()) {
     return false;
@@ -308,7 +322,8 @@ void InputActionsWindow::DeleteMap(const std::string& map) {
   Checkpoint();
   std::erase(desc_.maps, map);
   std::erase_if(desc_.actions, [&](const auto& a) { return a.map == map; });
-  map_ = std::clamp(map_, 0, std::max(0, static_cast<int>(desc_.maps.size()) - 1));
+  map_ =
+      std::clamp(map_, 0, std::max(0, static_cast<int>(desc_.maps.size()) - 1));
   selection_ = {};
   MarkChanged();
 }
@@ -322,7 +337,8 @@ int InputActionsWindow::AddAction(const std::string& map) {
   action.bindings.emplace_back();
   // Keep the map's actions together, so the file reads in window order.
   const auto actions = ActionsOf(map);
-  const int index = actions.empty() ? static_cast<int>(desc_.actions.size()) : actions.back() + 1;
+  const int index = actions.empty() ? static_cast<int>(desc_.actions.size())
+                                    : actions.back() + 1;
   desc_.actions.insert(desc_.actions.begin() + index, std::move(action));
   selection_ = {Selection::Kind::kAction, index};
   MarkChanged();
@@ -330,7 +346,8 @@ int InputActionsWindow::AddAction(const std::string& map) {
 }
 
 int InputActionsWindow::AddBinding(int action_idx) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return -1;
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return -1;
   Checkpoint();
   auto& action = desc_.actions[action_idx];
   action.bindings.emplace_back();
@@ -341,11 +358,13 @@ int InputActionsWindow::AddBinding(int action_idx) {
 }
 
 int InputActionsWindow::AddComposite(int action_idx) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return -1;
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return -1;
   Checkpoint();
   auto& action = desc_.actions[action_idx];
   action.composites.emplace_back();
-  if (action.type == InputAction::Type::kButton) action.type = InputAction::Type::kValue;
+  if (action.type == InputAction::Type::kButton)
+    action.type = InputAction::Type::kValue;
   action.vector2 = true;
   const int comp_idx = static_cast<int>(action.composites.size()) - 1;
   selection_ = {Selection::Kind::kComposite, action_idx, comp_idx};
@@ -354,7 +373,8 @@ int InputActionsWindow::AddComposite(int action_idx) {
 }
 
 void InputActionsWindow::DeleteSelected() {
-  if (selection_.action < 0 || selection_.action >= static_cast<int>(desc_.actions.size())) {
+  if (selection_.action < 0 ||
+      selection_.action >= static_cast<int>(desc_.actions.size())) {
     return;
   }
   auto& action = desc_.actions[selection_.action];
@@ -365,13 +385,15 @@ void InputActionsWindow::DeleteSelected() {
       selection_ = {};
       break;
     case Selection::Kind::kBinding:
-      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.bindings.size())) {
+      if (selection_.index >= 0 &&
+          selection_.index < static_cast<int>(action.bindings.size())) {
         action.bindings.erase(action.bindings.begin() + selection_.index);
       }
       selection_ = {Selection::Kind::kAction, selection_.action};
       break;
     case Selection::Kind::kComposite:
-      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.composites.size())) {
+      if (selection_.index >= 0 &&
+          selection_.index < static_cast<int>(action.composites.size())) {
         action.composites.erase(action.composites.begin() + selection_.index);
       }
       selection_ = {Selection::Kind::kAction, selection_.action};
@@ -383,7 +405,8 @@ void InputActionsWindow::DeleteSelected() {
 }
 
 void InputActionsWindow::DuplicateSelected() {
-  if (selection_.action < 0 || selection_.action >= static_cast<int>(desc_.actions.size())) {
+  if (selection_.action < 0 ||
+      selection_.action >= static_cast<int>(desc_.actions.size())) {
     return;
   }
   Checkpoint();
@@ -392,21 +415,25 @@ void InputActionsWindow::DuplicateSelected() {
     case Selection::Kind::kAction: {
       InputActionDesc copy = action;
       copy.name = UniqueActionName(copy.map, copy.name);
-      desc_.actions.insert(desc_.actions.begin() + selection_.action + 1, std::move(copy));
+      desc_.actions.insert(desc_.actions.begin() + selection_.action + 1,
+                           std::move(copy));
       selection_.action++;
       break;
     }
     case Selection::Kind::kBinding:
-      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.bindings.size())) {
+      if (selection_.index >= 0 &&
+          selection_.index < static_cast<int>(action.bindings.size())) {
         action.bindings.insert(action.bindings.begin() + selection_.index + 1,
                                action.bindings[selection_.index]);
         selection_.index++;
       }
       break;
     case Selection::Kind::kComposite:
-      if (selection_.index >= 0 && selection_.index < static_cast<int>(action.composites.size())) {
-        action.composites.insert(action.composites.begin() + selection_.index + 1,
-                                 action.composites[selection_.index]);
+      if (selection_.index >= 0 &&
+          selection_.index < static_cast<int>(action.composites.size())) {
+        action.composites.insert(
+            action.composites.begin() + selection_.index + 1,
+            action.composites[selection_.index]);
         selection_.index++;
       }
       break;
@@ -416,17 +443,20 @@ void InputActionsWindow::DuplicateSelected() {
   MarkChanged();
 }
 
-std::string InputActionsWindow::SetActionName(int action_idx, std::string new_name,
+std::string InputActionsWindow::SetActionName(int action_idx,
+                                              std::string new_name,
                                               bool finalize) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return "";
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return "";
   auto& action = desc_.actions[action_idx];
   BeginEdit();
   if (finalize) {
     std::erase(new_name, '/');
     if (new_name.empty()) {
-      new_name = last_committed_.desc.actions.size() > static_cast<size_t>(action_idx)
-                     ? last_committed_.desc.actions[action_idx].name
-                     : "Action";
+      new_name =
+          last_committed_.desc.actions.size() > static_cast<size_t>(action_idx)
+              ? last_committed_.desc.actions[action_idx].name
+              : "Action";
     }
     if (IsActionNameTaken(action_idx, new_name)) {
       new_name = UniqueActionName(action.map, new_name);
@@ -444,7 +474,8 @@ std::string InputActionsWindow::SetActionName(int action_idx, std::string new_na
 }
 
 void InputActionsWindow::SetActionType(int action_idx, InputAction::Type type) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return;
   Checkpoint();
   auto& action = desc_.actions[action_idx];
   action.type = type;
@@ -453,27 +484,35 @@ void InputActionsWindow::SetActionType(int action_idx, InputAction::Type type) {
 }
 
 void InputActionsWindow::SetActionVector2(int action_idx, bool vector2) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return;
   Checkpoint();
   desc_.actions[action_idx].vector2 = vector2;
   MarkChanged();
 }
 
-void InputActionsWindow::SetBindingPath(int action_idx, int binding_idx, const std::string& path,
+void InputActionsWindow::SetBindingPath(int action_idx, int binding_idx,
+                                        const std::string& path,
                                         bool coalesced) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return;
   auto& bindings = desc_.actions[action_idx].bindings;
-  if (binding_idx < 0 || binding_idx >= static_cast<int>(bindings.size())) return;
+  if (binding_idx < 0 || binding_idx >= static_cast<int>(bindings.size()))
+    return;
   if (!coalesced) Checkpoint();
   bindings[binding_idx] = path;
   MarkChanged(coalesced);
 }
 
-void InputActionsWindow::SetCompositePartPath(int action_idx, int composite_idx, int part, int idx,
-                                              const std::string& path, bool coalesced) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+void InputActionsWindow::SetCompositePartPath(int action_idx, int composite_idx,
+                                              int part, int idx,
+                                              const std::string& path,
+                                              bool coalesced) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return;
   auto& composites = desc_.actions[action_idx].composites;
-  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size())) return;
+  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size()))
+    return;
   auto* vec = PartVector(composites[composite_idx], part);
   if (!vec || idx < 0 || idx >= static_cast<int>(vec->size())) return;
   if (!coalesced) Checkpoint();
@@ -481,10 +520,13 @@ void InputActionsWindow::SetCompositePartPath(int action_idx, int composite_idx,
   MarkChanged(coalesced);
 }
 
-void InputActionsWindow::AddCompositePartPath(int action_idx, int composite_idx, int part) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+void InputActionsWindow::AddCompositePartPath(int action_idx, int composite_idx,
+                                              int part) {
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return;
   auto& composites = desc_.actions[action_idx].composites;
-  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size())) return;
+  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size()))
+    return;
   auto* vec = PartVector(composites[composite_idx], part);
   if (!vec) return;
   Checkpoint();
@@ -492,11 +534,14 @@ void InputActionsWindow::AddCompositePartPath(int action_idx, int composite_idx,
   MarkChanged();
 }
 
-void InputActionsWindow::RemoveCompositePartPath(int action_idx, int composite_idx, int part,
+void InputActionsWindow::RemoveCompositePartPath(int action_idx,
+                                                 int composite_idx, int part,
                                                  int idx) {
-  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size())) return;
+  if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
+    return;
   auto& composites = desc_.actions[action_idx].composites;
-  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size())) return;
+  if (composite_idx < 0 || composite_idx >= static_cast<int>(composites.size()))
+    return;
   auto* vec = PartVector(composites[composite_idx], part);
   if (!vec || idx < 0 || idx >= static_cast<int>(vec->size())) return;
   Checkpoint();
@@ -508,27 +553,30 @@ void InputActionsWindow::SetGenerateHeader(bool enabled) {
   Checkpoint();
   if (enabled) {
     if (desc_.class_name.empty()) desc_.class_name = "GameInput";
-    desc_.header = "res://scripts/generated/" + Templates::ToSnakeCase(desc_.class_name) + ".as";
+    desc_.header = "res://scripts/generated/" +
+                   Templates::ToSnakeCase(desc_.class_name) + ".as";
   } else {
     desc_.header.clear();
   }
   MarkChanged();
 }
 
-void InputActionsWindow::SetClassName(const std::string& class_name, bool coalesced) {
+void InputActionsWindow::SetClassName(const std::string& class_name,
+                                      bool coalesced) {
   if (!coalesced) Checkpoint();
   desc_.class_name = class_name;
   MarkChanged(coalesced);
 }
 
-void InputActionsWindow::SetHeaderPath(const std::string& header, bool coalesced) {
+void InputActionsWindow::SetHeaderPath(const std::string& header,
+                                       bool coalesced) {
   if (!coalesced) Checkpoint();
   desc_.header = header;
   MarkChanged(coalesced);
 }
 
-std::optional<std::string> InputActionsWindow::PollGamepadListen(const InputManager* input,
-                                                                   bool prev_buttons[15]) {
+std::optional<std::string> InputActionsWindow::PollGamepadListen(
+    const InputManager* input, bool prev_buttons[15]) {
   if (!input) return std::nullopt;
   const GamepadState& pad = input->GetGamepad();
   if (!pad.connected) return std::nullopt;
@@ -537,7 +585,8 @@ std::optional<std::string> InputActionsWindow::PollGamepadListen(const InputMana
     const bool was_pressed = prev_buttons[button];
     prev_buttons[button] = pressed;
     if (pressed && !was_pressed) {
-      if (std::string control = ControlFromGamepadButton(button); !control.empty()) {
+      if (std::string control = ControlFromGamepadButton(button);
+          !control.empty()) {
         return "<Gamepad>/" + control;
       }
     }

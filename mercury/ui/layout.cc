@@ -10,71 +10,103 @@ namespace Mercury::UI {
 
 namespace {
 
-YGSize MeasureCallback(YGNodeConstRef node, float width, YGMeasureMode width_mode,
-                       float height, YGMeasureMode height_mode) {
+YGSize MeasureCallback(YGNodeConstRef node, float width,
+                       YGMeasureMode width_mode, float height,
+                       YGMeasureMode height_mode) {
   auto* element = static_cast<VisualElement*>(YGNodeGetContext(node));
   auto mode = [](YGMeasureMode m) {
     switch (m) {
-      case YGMeasureModeExactly: return MeasureMode::kExactly;
-      case YGMeasureModeAtMost: return MeasureMode::kAtMost;
-      default: return MeasureMode::kUndefined;
+      case YGMeasureModeExactly:
+        return MeasureMode::kExactly;
+      case YGMeasureModeAtMost:
+        return MeasureMode::kAtMost;
+      default:
+        return MeasureMode::kUndefined;
     }
   };
-  glm::vec2 size = element->Measure(width, mode(width_mode), height, mode(height_mode));
+  glm::vec2 size =
+      element->Measure(width, mode(width_mode), height, mode(height_mode));
   return {size.x, size.y};
 }
 
 YGAlign ToYoga(Align a) {
   switch (a) {
-    case Align::kAuto: return YGAlignAuto;
-    case Align::kFlexStart: return YGAlignFlexStart;
-    case Align::kCenter: return YGAlignCenter;
-    case Align::kFlexEnd: return YGAlignFlexEnd;
-    case Align::kStretch: return YGAlignStretch;
-    case Align::kSpaceBetween: return YGAlignSpaceBetween;
-    case Align::kSpaceAround: return YGAlignSpaceAround;
+    case Align::kAuto:
+      return YGAlignAuto;
+    case Align::kFlexStart:
+      return YGAlignFlexStart;
+    case Align::kCenter:
+      return YGAlignCenter;
+    case Align::kFlexEnd:
+      return YGAlignFlexEnd;
+    case Align::kStretch:
+      return YGAlignStretch;
+    case Align::kSpaceBetween:
+      return YGAlignSpaceBetween;
+    case Align::kSpaceAround:
+      return YGAlignSpaceAround;
   }
   return YGAlignAuto;
 }
 
 YGJustify ToYoga(Justify j) {
   switch (j) {
-    case Justify::kFlexStart: return YGJustifyFlexStart;
-    case Justify::kCenter: return YGJustifyCenter;
-    case Justify::kFlexEnd: return YGJustifyFlexEnd;
-    case Justify::kSpaceBetween: return YGJustifySpaceBetween;
-    case Justify::kSpaceAround: return YGJustifySpaceAround;
-    case Justify::kSpaceEvenly: return YGJustifySpaceEvenly;
+    case Justify::kFlexStart:
+      return YGJustifyFlexStart;
+    case Justify::kCenter:
+      return YGJustifyCenter;
+    case Justify::kFlexEnd:
+      return YGJustifyFlexEnd;
+    case Justify::kSpaceBetween:
+      return YGJustifySpaceBetween;
+    case Justify::kSpaceAround:
+      return YGJustifySpaceAround;
+    case Justify::kSpaceEvenly:
+      return YGJustifySpaceEvenly;
   }
   return YGJustifyFlexStart;
 }
 
 YGFlexDirection ToYoga(FlexDirection d) {
   switch (d) {
-    case FlexDirection::kColumn: return YGFlexDirectionColumn;
-    case FlexDirection::kColumnReverse: return YGFlexDirectionColumnReverse;
-    case FlexDirection::kRow: return YGFlexDirectionRow;
-    case FlexDirection::kRowReverse: return YGFlexDirectionRowReverse;
+    case FlexDirection::kColumn:
+      return YGFlexDirectionColumn;
+    case FlexDirection::kColumnReverse:
+      return YGFlexDirectionColumnReverse;
+    case FlexDirection::kRow:
+      return YGFlexDirectionRow;
+    case FlexDirection::kRowReverse:
+      return YGFlexDirectionRowReverse;
   }
   return YGFlexDirectionColumn;
 }
 
 YGWrap ToYoga(Wrap w) {
   switch (w) {
-    case Wrap::kNoWrap: return YGWrapNoWrap;
-    case Wrap::kWrap: return YGWrapWrap;
-    case Wrap::kWrapReverse: return YGWrapWrapReverse;
+    case Wrap::kNoWrap:
+      return YGWrapNoWrap;
+    case Wrap::kWrap:
+      return YGWrapWrap;
+    case Wrap::kWrapReverse:
+      return YGWrapWrapReverse;
   }
   return YGWrapNoWrap;
 }
 
 template <typename SetPx, typename SetPercent, typename SetAuto>
-void SetLength(const Length& l, SetPx px, SetPercent percent, SetAuto automatic) {
+void SetLength(const Length& l, SetPx px, SetPercent percent,
+               SetAuto automatic) {
   switch (l.unit) {
-    case Length::Unit::kPixel: px(l.value); break;
-    case Length::Unit::kPercent: percent(l.value); break;
+    case Length::Unit::kPixel:
+      px(l.value);
+      break;
+    case Length::Unit::kPercent:
+      percent(l.value);
+      break;
     case Length::Unit::kAuto:
-    case Length::Unit::kNone: automatic(); break;
+    case Length::Unit::kNone:
+      automatic();
+      break;
   }
 }
 
@@ -83,8 +115,12 @@ void SetEdge(YGNodeRef n, YGEdge edge, const Length& l,
              void (*percent)(YGNodeRef, YGEdge, float),
              void (*automatic)(YGNodeRef, YGEdge)) {
   switch (l.unit) {
-    case Length::Unit::kPixel: px(n, edge, l.value); break;
-    case Length::Unit::kPercent: percent(n, edge, l.value); break;
+    case Length::Unit::kPixel:
+      px(n, edge, l.value);
+      break;
+    case Length::Unit::kPercent:
+      percent(n, edge, l.value);
+      break;
     case Length::Unit::kAuto:
     case Length::Unit::kNone:
       if (automatic) {
@@ -125,32 +161,39 @@ void VisualElement::ApplyStyleToYoga() {
   YGNodeRef n = yoga_node_;
   const ComputedStyle& s = resolved_;
 
-  SetLength(s.width, [&](float v) { YGNodeStyleSetWidth(n, v); },
-            [&](float v) { YGNodeStyleSetWidthPercent(n, v); },
-            [&] { YGNodeStyleSetWidthAuto(n); });
-  SetLength(s.height, [&](float v) { YGNodeStyleSetHeight(n, v); },
-            [&](float v) { YGNodeStyleSetHeightPercent(n, v); },
-            [&] { YGNodeStyleSetHeightAuto(n); });
-  SetLength(s.minWidth, [&](float v) { YGNodeStyleSetMinWidth(n, v); },
-            [&](float v) { YGNodeStyleSetMinWidthPercent(n, v); },
-            [&] { YGNodeStyleSetMinWidth(n, YGUndefined); });
-  SetLength(s.minHeight, [&](float v) { YGNodeStyleSetMinHeight(n, v); },
-            [&](float v) { YGNodeStyleSetMinHeightPercent(n, v); },
-            [&] { YGNodeStyleSetMinHeight(n, YGUndefined); });
-  SetLength(s.maxWidth, [&](float v) { YGNodeStyleSetMaxWidth(n, v); },
-            [&](float v) { YGNodeStyleSetMaxWidthPercent(n, v); },
-            [&] { YGNodeStyleSetMaxWidth(n, YGUndefined); });
-  SetLength(s.maxHeight, [&](float v) { YGNodeStyleSetMaxHeight(n, v); },
-            [&](float v) { YGNodeStyleSetMaxHeightPercent(n, v); },
-            [&] { YGNodeStyleSetMaxHeight(n, YGUndefined); });
+  SetLength(
+      s.width, [&](float v) { YGNodeStyleSetWidth(n, v); },
+      [&](float v) { YGNodeStyleSetWidthPercent(n, v); },
+      [&] { YGNodeStyleSetWidthAuto(n); });
+  SetLength(
+      s.height, [&](float v) { YGNodeStyleSetHeight(n, v); },
+      [&](float v) { YGNodeStyleSetHeightPercent(n, v); },
+      [&] { YGNodeStyleSetHeightAuto(n); });
+  SetLength(
+      s.minWidth, [&](float v) { YGNodeStyleSetMinWidth(n, v); },
+      [&](float v) { YGNodeStyleSetMinWidthPercent(n, v); },
+      [&] { YGNodeStyleSetMinWidth(n, YGUndefined); });
+  SetLength(
+      s.minHeight, [&](float v) { YGNodeStyleSetMinHeight(n, v); },
+      [&](float v) { YGNodeStyleSetMinHeightPercent(n, v); },
+      [&] { YGNodeStyleSetMinHeight(n, YGUndefined); });
+  SetLength(
+      s.maxWidth, [&](float v) { YGNodeStyleSetMaxWidth(n, v); },
+      [&](float v) { YGNodeStyleSetMaxWidthPercent(n, v); },
+      [&] { YGNodeStyleSetMaxWidth(n, YGUndefined); });
+  SetLength(
+      s.maxHeight, [&](float v) { YGNodeStyleSetMaxHeight(n, v); },
+      [&](float v) { YGNodeStyleSetMaxHeightPercent(n, v); },
+      [&] { YGNodeStyleSetMaxHeight(n, YGUndefined); });
 
   YGNodeStyleSetFlexDirection(n, ToYoga(s.flexDirection));
   YGNodeStyleSetFlexWrap(n, ToYoga(s.flexWrap));
   YGNodeStyleSetFlexGrow(n, s.flexGrow);
   YGNodeStyleSetFlexShrink(n, s.flexShrink);
-  SetLength(s.flexBasis, [&](float v) { YGNodeStyleSetFlexBasis(n, v); },
-            [&](float v) { YGNodeStyleSetFlexBasisPercent(n, v); },
-            [&] { YGNodeStyleSetFlexBasisAuto(n); });
+  SetLength(
+      s.flexBasis, [&](float v) { YGNodeStyleSetFlexBasis(n, v); },
+      [&](float v) { YGNodeStyleSetFlexBasisPercent(n, v); },
+      [&] { YGNodeStyleSetFlexBasisAuto(n); });
   YGNodeStyleSetAlignItems(n, ToYoga(s.alignItems));
   YGNodeStyleSetAlignContent(n, ToYoga(s.alignContent));
   YGNodeStyleSetAlignSelf(n, ToYoga(s.alignSelf));
@@ -158,10 +201,11 @@ void VisualElement::ApplyStyleToYoga() {
   YGNodeStyleSetPositionType(n, s.position == Position::kAbsolute
                                     ? YGPositionTypeAbsolute
                                     : YGPositionTypeRelative);
-  YGNodeStyleSetDisplay(n, s.display == DisplayStyle::kNone ? YGDisplayNone
-                                                            : YGDisplayFlex);
-  YGNodeStyleSetOverflow(n, s.overflow == Overflow::kHidden ? YGOverflowHidden
-                                                            : YGOverflowVisible);
+  YGNodeStyleSetDisplay(
+      n, s.display == DisplayStyle::kNone ? YGDisplayNone : YGDisplayFlex);
+  YGNodeStyleSetOverflow(n, s.overflow == Overflow::kHidden
+                                ? YGOverflowHidden
+                                : YGOverflowVisible);
 
   SetEdge(n, YGEdgeLeft, s.left, YGNodeStyleSetPosition,
           YGNodeStyleSetPositionPercent, YGNodeStyleSetPositionAuto);
@@ -203,7 +247,9 @@ void VisualElement::UpdateMeasureFunc() {
   has_measure_func_ = want;
 }
 
-bool IsLayoutDirty(VisualElement* root) { return YGNodeIsDirty(root->yogaNode()); }
+bool IsLayoutDirty(VisualElement* root) {
+  return YGNodeIsDirty(root->yogaNode());
+}
 
 void CalculateLayout(VisualElement* root, float width, float height,
                      std::vector<GeometryChange>& changes) {

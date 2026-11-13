@@ -28,7 +28,12 @@ using EventTypeId = uint32_t;
 
 EventTypeId NextEventTypeId();
 
-enum class PropagationPhase : uint8_t { kNone, kTrickleDown, kAtTarget, kBubbleUp };
+enum class PropagationPhase : uint8_t {
+  kNone,
+  kTrickleDown,
+  kAtTarget,
+  kBubbleUp
+};
 enum class TrickleDown : uint8_t { kNoTrickleDown, kTrickleDown };
 
 class EventBase {
@@ -95,9 +100,9 @@ class Event : public EventBase {
 template <typename T>
 class PointerEventBase : public Event<T> {
  public:
-  int pointerId = 0;     // 0 is the mouse
-  int button = -1;       // 0 left, 1 right, 2 middle; -1 for moves
-  int pressedButtons = 0;  // bit per button
+  int pointerId = 0;              // 0 is the mouse
+  int button = -1;                // 0 left, 1 right, 2 middle; -1 for moves
+  int pressedButtons = 0;         // bit per button
   glm::vec2 position{0.0f};       // panel coordinates
   glm::vec2 localPosition{0.0f};  // relative to the current target
   glm::vec2 deltaPosition{0.0f};
@@ -172,7 +177,15 @@ class KeyUpEvent : public KeyboardEventBase<KeyUpEvent> {};
 
 // --------------------------------------------------------- Navigation -----
 
-enum class NavigationDirection : uint8_t { kNone, kLeft, kUp, kRight, kDown, kNext, kPrevious };
+enum class NavigationDirection : uint8_t {
+  kNone,
+  kLeft,
+  kUp,
+  kRight,
+  kDown,
+  kNext,
+  kPrevious
+};
 
 class NavigationMoveEvent : public Event<NavigationMoveEvent> {
  public:

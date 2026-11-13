@@ -42,7 +42,8 @@ bool ShowDeleteConfirmDialog(wxWindow* parent,
                              const std::filesystem::path& target);
 
 // Searchable grouped component picker. Returns chosen component name, or
-// "__NEW_SCRIPT__" if user clicks "New Script...", or std::nullopt if cancelled.
+// "__NEW_SCRIPT__" if user clicks "New Script...", or std::nullopt if
+// cancelled.
 std::optional<std::string> ShowAddComponentDialog(wxWindow* parent,
                                                   const MapNode& node);
 

@@ -36,10 +36,13 @@ class PreloadProject {
       std::ofstream(dir / ("models/m" + id + ".obj")) << kTriangle;
       map += "[node name=\"N" + id + "\" parent=\".\"]\n";
       map += "[component type=\"MeshRenderer\" node=\"N" + id + "\"]\n";
-      map += "mesh = \"model\"\nmodel = Resource(\"res://models/m" + id + ".obj\")\n";
+      map += "mesh = \"model\"\nmodel = Resource(\"res://models/m" + id +
+             ".obj\")\n";
     }
     // Shapes and a model on the same node are not model loads.
-    map += "[node name=\"Cube\" parent=\".\"]\n[component type=\"MeshRenderer\" node=\"Cube\"]\n";
+    map +=
+        "[node name=\"Cube\" parent=\".\"]\n[component type=\"MeshRenderer\" "
+        "node=\"Cube\"]\n";
     map += "model = Resource(\"res://models/m0.obj\")\n";
     std::ofstream(dir / "maps/a.mmap") << map;
     std::string error;
@@ -55,7 +58,8 @@ class PreloadProject {
 };
 
 bool WaitFor(const std::function<bool()>& done) {
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(20);
   while (!done()) {
     if (std::chrono::steady_clock::now() > deadline) return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -71,9 +75,11 @@ TEST(ModelPreloader, LoadsEveryJobAndReportsFailures) {
   for (int i = 0; i < 4; i++) {
     const std::string id = std::to_string(i);
     jobs.push_back({"res://models/m" + id + ".obj",
-                    (files.dir / ("models/m" + id + ".obj")).string(), {}});
+                    (files.dir / ("models/m" + id + ".obj")).string(),
+                    {}});
   }
-  jobs.push_back({"res://missing.obj", (files.dir / "missing.obj").string(), {}});
+  jobs.push_back(
+      {"res://missing.obj", (files.dir / "missing.obj").string(), {}});
 
   ModelPreloader loader;
   EXPECT_FALSE(loader.IsBusy());
@@ -87,7 +93,8 @@ TEST(ModelPreloader, LoadsEveryJobAndReportsFailures) {
   EXPECT_FALSE(loader.IsBusy());
   ASSERT_EQ(results.size(), 5u);
   for (int i = 0; i < 4; i++) {
-    EXPECT_EQ(results[i].res_path, "res://models/m" + std::to_string(i) + ".obj");
+    EXPECT_EQ(results[i].res_path,
+              "res://models/m" + std::to_string(i) + ".obj");
     EXPECT_TRUE(results[i].model);
   }
   EXPECT_EQ(results[4].res_path, "res://missing.obj");
@@ -98,7 +105,10 @@ TEST(ModelPreloader, CancelStopsAndDropsResults) {
   PreloadProject files("mercury_preloader_cancel_test", 3);
   std::vector<ModelPreloader::Job> jobs;
   for (int i = 0; i < 3; i++) {
-    jobs.push_back({"m", (files.dir / ("models/m" + std::to_string(i) + ".obj")).string(), {}});
+    jobs.push_back(
+        {"m",
+         (files.dir / ("models/m" + std::to_string(i) + ".obj")).string(),
+         {}});
   }
   ModelPreloader loader;
   loader.Start(std::move(jobs));
@@ -139,7 +149,8 @@ TEST(ModelPreloader, BeginInstantiateWaitsForModels) {
   }));
   for (const char* name : {"N0", "N1", "N2"}) {
     ASSERT_TRUE(scene.Find(name).IsValid()) << name;
-    auto* mesh = scene.Objects().GetProperty<RenderMesh>(scene.Find(name).GetEntity());
+    auto* mesh =
+        scene.Objects().GetProperty<RenderMesh>(scene.Find(name).GetEntity());
     ASSERT_TRUE(mesh) << name;
     EXPECT_TRUE(mesh->model) << name;
   }

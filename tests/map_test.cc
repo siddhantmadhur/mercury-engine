@@ -90,14 +90,16 @@ TEST(Map, RejectsBrokenFiles) {
   Map map;
   std::string error;
   EXPECT_FALSE(map.LoadFromString("[node name=\"A\"]\n", &error));
-  EXPECT_FALSE(map.LoadFromString(
-      "[mmap format=1]\n\n[node name=\"A\"]\n\n[node name=\"B\" parent=\"X\"]\n",
-      &error));
+  EXPECT_FALSE(
+      map.LoadFromString("[mmap format=1]\n\n[node name=\"A\"]\n\n[node "
+                         "name=\"B\" parent=\"X\"]\n",
+                         &error));
   EXPECT_NE(error.find("parent"), std::string::npos);
-  EXPECT_FALSE(map.LoadFromString(
-      "[mmap format=1]\n\n[node name=\"A\"]\n\n[component type=\"T\" node=\".\"]\n"
-      "m = ExtResource(\"9\")\n",
-      &error));
+  EXPECT_FALSE(
+      map.LoadFromString("[mmap format=1]\n\n[node name=\"A\"]\n\n[component "
+                         "type=\"T\" node=\".\"]\n"
+                         "m = ExtResource(\"9\")\n",
+                         &error));
 }
 
 TEST(Map, EditingKeepsNamesUniqueAndUpdatesNodePaths) {
@@ -113,15 +115,18 @@ TEST(Map, EditingKeepsNamesUniqueAndUpdatesNodePaths) {
   game->components[0].properties.Set("group", mtext::NodePath{"Walls"});
 
   map.RenameNode(walls, "Edges");
-  EXPECT_EQ(game->components[0].properties.Get("wall")->Get<mtext::NodePath>()->path,
-            "Edges/Left");
-  EXPECT_EQ(game->components[0].properties.Get("group")->Get<mtext::NodePath>()->path,
-            "Edges");
+  EXPECT_EQ(
+      game->components[0].properties.Get("wall")->Get<mtext::NodePath>()->path,
+      "Edges/Left");
+  EXPECT_EQ(
+      game->components[0].properties.Get("group")->Get<mtext::NodePath>()->path,
+      "Edges");
 
   ASSERT_TRUE(map.ReparentNode(left, map.GetRoot()));
   EXPECT_EQ(left->GetPath(), "Left");
-  EXPECT_EQ(game->components[0].properties.Get("wall")->Get<mtext::NodePath>()->path,
-            "Left");
+  EXPECT_EQ(
+      game->components[0].properties.Get("wall")->Get<mtext::NodePath>()->path,
+      "Left");
   EXPECT_FALSE(map.ReparentNode(walls, walls));
 
   auto copy = map.DuplicateNode(game);

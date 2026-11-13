@@ -16,10 +16,12 @@
  *
  *   build a Release mercury_player with Bazel, in the engine checkout
  *     -> bazel build -c opt //mercury:mercury_player
- *     -> on a worker thread: compile the scripts, pack the files, copy the player
+ *     -> on a worker thread: compile the scripts, pack the files, copy the
+ * player
  *
- * The .as scripts are packed as sources; the executable finds game.mpack next to itself and
- * runs from it (see RunPlayer). Build and Play are unchanged and keep using loose files.
+ * The .as scripts are packed as sources; the executable finds game.mpack next
+ * to itself and runs from it (see RunPlayer). Build and Play are unchanged and
+ * keep using loose files.
  */
 #ifndef MERCURY_EDITOR_RELEASE_BUILD_H
 #define MERCURY_EDITOR_RELEASE_BUILD_H
@@ -63,8 +65,8 @@ class ReleaseBuild {
 
  private:
   struct Config {
-    std::string executable;  // the Release mercury_player
-    std::string source_dir;  // the engine checkout
+    std::string executable;   // the Release mercury_player
+    std::string source_dir;   // the engine checkout
     std::string target_name;  // what the shipped executable is called
     std::string spirv_dir;
     std::string ui_resources;
@@ -75,7 +77,8 @@ class ReleaseBuild {
     std::string error;
   };
 
-  // Where the Release player will be, from the engine checkout this editor was built from.
+  // Where the Release player will be, from the engine checkout this editor was
+  // built from.
   Config MakeConfig() const;
   // Finds the built player.
   void LocateExecutable();

@@ -46,7 +46,8 @@ const Asset* AssetDatabase::Load(std::string_view res_path) {
   // Packed files never change, so they keep the default time.
   std::error_code ec;
   std::filesystem::file_time_type modified;
-  if (!os::IsPacked(file)) modified = std::filesystem::last_write_time(file, ec);
+  if (!os::IsPacked(file))
+    modified = std::filesystem::last_write_time(file, ec);
   if (ec) {
     PDebug::error("Asset not found: {}", res_path);
     cache_.erase(std::string(res_path));
@@ -88,17 +89,28 @@ std::string AssetDatabase::TypeFromExtension(std::string_view res_path) {
   std::transform(ext.begin(), ext.end(), ext.begin(),
                  [](unsigned char c) { return std::tolower(c); });
   static const std::map<std::string, std::string, std::less<>> kTypes = {
-      {std::string(kMapExtension), "Map"},   {std::string(kUxmlExtension), "UXML"},
-      {std::string(kUssExtension), "StyleSheet"}, {".ttf", "Font"},
-      {".otf", "Font"},                {".mprefab", "Prefab"},
-      {".manim", "AnimatorController"}, {".minput", "InputActions"},
-      {".wav", "AudioClip"},           {".ogg", "AudioClip"},
-      {".mp3", "AudioClip"},           {".flac", "AudioClip"},
-      {".fbx", "Model"},               {".obj", "Model"},
-      {".gltf", "Model"},              {".glb", "Model"},
-      {".dae", "Model"},               {".png", "Texture"},
-      {".jpg", "Texture"},             {".jpeg", "Texture"},
-      {".bmp", "Texture"},             {".tga", "Texture"},
+      {std::string(kMapExtension), "Map"},
+      {std::string(kUxmlExtension), "UXML"},
+      {std::string(kUssExtension), "StyleSheet"},
+      {".ttf", "Font"},
+      {".otf", "Font"},
+      {".mprefab", "Prefab"},
+      {".manim", "AnimatorController"},
+      {".minput", "InputActions"},
+      {".wav", "AudioClip"},
+      {".ogg", "AudioClip"},
+      {".mp3", "AudioClip"},
+      {".flac", "AudioClip"},
+      {".fbx", "Model"},
+      {".obj", "Model"},
+      {".gltf", "Model"},
+      {".glb", "Model"},
+      {".dae", "Model"},
+      {".png", "Texture"},
+      {".jpg", "Texture"},
+      {".jpeg", "Texture"},
+      {".bmp", "Texture"},
+      {".tga", "Texture"},
       {".svg", "Texture"},
   };
   auto it = kTypes.find(ext);

@@ -102,14 +102,16 @@ bool Swapchain::Create(Context& context, uint32_t framebuffer_width,
   // FIFO is the only mode every implementation must support (vsync).
   // MERCURY_VSYNC=0 asks for an unthrottled mode, for benchmarks.
   create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-  if (const char* vsync = std::getenv("MERCURY_VSYNC"); vsync && std::string(vsync) == "0") {
+  if (const char* vsync = std::getenv("MERCURY_VSYNC");
+      vsync && std::string(vsync) == "0") {
     uint32_t mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface,
-                                              &mode_count, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(
+        context.physical_device, context.surface, &mode_count, nullptr);
     std::vector<VkPresentModeKHR> modes(mode_count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface,
-                                              &mode_count, modes.data());
-    for (VkPresentModeKHR wanted : {VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR}) {
+    vkGetPhysicalDeviceSurfacePresentModesKHR(
+        context.physical_device, context.surface, &mode_count, modes.data());
+    for (VkPresentModeKHR wanted :
+         {VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR}) {
       if (std::find(modes.begin(), modes.end(), wanted) != modes.end()) {
         create_info.presentMode = wanted;
         break;
@@ -144,8 +146,8 @@ bool Swapchain::Create(Context& context, uint32_t framebuffer_width,
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = color_format_;
     view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    if (!VK_CHECK(
-            vkCreateImageView(device_, &view_info, nullptr, &image_views_[i]))) {
+    if (!VK_CHECK(vkCreateImageView(device_, &view_info, nullptr,
+                                    &image_views_[i]))) {
       return false;
     }
 
@@ -157,10 +159,9 @@ bool Swapchain::Create(Context& context, uint32_t framebuffer_width,
     }
   }
 
-  return depth_.Create(context.allocator, device_, extent_.width,
-                       extent_.height, kDepthFormat,
-                       VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                       VK_IMAGE_ASPECT_DEPTH_BIT);
+  return depth_.Create(
+      context.allocator, device_, extent_.width, extent_.height, kDepthFormat,
+      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 void Swapchain::DestroyImageResources() {

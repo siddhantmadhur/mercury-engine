@@ -70,9 +70,9 @@ struct FieldInfo {
   std::string asset_type;  // kAsset: "Material", "PhysicsMaterial", "Texture"
   std::string tooltip;
   FieldType element_type = FieldType::kString;  // kList: type of each item
-  // A script may change this at run time. False unless the component's system reads the value
-  // every frame; otherwise the write would silently do nothing, so the script API makes the
-  // field readonly.
+  // A script may change this at run time. False unless the component's system
+  // reads the value every frame; otherwise the write would silently do nothing,
+  // so the script API makes the field readonly.
   bool runtime_writable = false;
 };
 
@@ -97,7 +97,8 @@ class Reflector {
 
   static Reflector Describe() { return Reflector(Mode::kDescribe, nullptr); }
   static Reflector Read(const mtext::PropertyList& properties) {
-    return Reflector(Mode::kRead, const_cast<mtext::PropertyList*>(&properties));
+    return Reflector(Mode::kRead,
+                     const_cast<mtext::PropertyList*>(&properties));
   }
   static Reflector Write(mtext::PropertyList& properties) {
     return Reflector(Mode::kWrite, &properties);
@@ -160,7 +161,8 @@ class Reflector {
     return *this;
   }
   // The same with names known only at run time (script fields).
-  Reflector& Enum(const char* name, int& index, const std::vector<std::string>& names) {
+  Reflector& Enum(const char* name, int& index,
+                  const std::vector<std::string>& names) {
     EnumImpl(name, index, names);
     return *this;
   }
@@ -172,8 +174,9 @@ class Reflector {
    * @brief A computed value that UI bindings can read (and optionally write),
    * like Unity's [CreateProperty]. Not saved or shown in the Inspector.
    */
-  Reflector& Property(const char* name, const std::function<mtext::Variant()>& get,
-                      const std::function<void(const mtext::Variant&)>& set = {});
+  Reflector& Property(
+      const char* name, const std::function<mtext::Variant()>& get,
+      const std::function<void(const mtext::Variant&)>& set = {});
 
   const std::vector<FieldInfo>& GetFields() const { return fields_; }
   // Problems found while reading, e.g. a property with the wrong type.
@@ -189,10 +192,12 @@ class Reflector {
   Reflector& Visit(const char* name, FieldType type, T& member,
                    ToVariant to_variant, FromVariant from_variant);
   template <typename T, typename ToVariant, typename FromVariant>
-  Reflector& VisitList(const char* name, FieldType element, std::vector<T>& member,
-                       ToVariant to_variant, FromVariant from_variant);
+  Reflector& VisitList(const char* name, FieldType element,
+                       std::vector<T>& member, ToVariant to_variant,
+                       FromVariant from_variant);
 
-  void EnumImpl(const char* name, int& index, const std::vector<std::string>& names);
+  void EnumImpl(const char* name, int& index,
+                const std::vector<std::string>& names);
 
   Mode mode_;
   mtext::PropertyList* properties_;

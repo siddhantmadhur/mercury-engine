@@ -237,8 +237,8 @@ class EditorScene : public MapScene {
   void FrameSelected();
   void FrameMap();
 
-  void RenderOverlays(OverlayCanvas& canvas, glm::vec2 local_mouse, bool hovered,
-                      bool alt_down, bool right_down);
+  void RenderOverlays(OverlayCanvas& canvas, glm::vec2 local_mouse,
+                      bool hovered, bool alt_down, bool right_down);
   CameraPreviewInfo UpdatePreviewCamera(int override_width = 0,
                                         int override_height = 0);
 

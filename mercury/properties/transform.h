@@ -36,7 +36,9 @@ class Transform {
   void SetLocalPosition(glm::vec3);
   glm::vec3 GetLocalRotate() const { return local_rotation_; }
   void SetLocalRotate(glm::vec3);
-  glm::quat GetLocalRotationQuat() const { return EulerToQuat(local_rotation_); }
+  glm::quat GetLocalRotationQuat() const {
+    return EulerToQuat(local_rotation_);
+  }
   glm::vec3 GetLocalScale() const { return local_scale_; }
   void SetLocalScale(glm::vec3);
 
@@ -53,7 +55,8 @@ class Transform {
   void SetWorldPositionInternal(glm::vec3 pos);
   void SetWorldRotationInternal(glm::vec3 rot);
   void SetWorldScaleInternal(glm::vec3 scale);
-  void SetInterpolatedTransformInternal(glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
+  void SetInterpolatedTransformInternal(glm::vec3 pos, glm::vec3 rot,
+                                        glm::vec3 scale);
 
   glm::vec3 GetVelocity() const;
   void SetVelocity(glm::vec3);
@@ -97,11 +100,13 @@ class Transform {
 
   // The parent's interpolated values the interpolated state was last
   // derived from (MapScene's hierarchy); changing a local value forgets them.
-  bool MatchesParentInputs(glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) const {
+  bool MatchesParentInputs(glm::vec3 position, glm::vec3 rotation,
+                           glm::vec3 scale) const {
     return parent_inputs_valid_ && position == parent_position_ &&
            rotation == parent_rotation_ && scale == parent_scale_;
   }
-  void SetParentInputs(glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) {
+  void SetParentInputs(glm::vec3 position, glm::vec3 rotation,
+                       glm::vec3 scale) {
     parent_position_ = position;
     parent_rotation_ = rotation;
     parent_scale_ = scale;

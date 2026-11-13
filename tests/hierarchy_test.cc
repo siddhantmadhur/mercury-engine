@@ -51,16 +51,20 @@ position = Vector3(2, 3, 4)
   // Initially: Player at (10, 0, 0), Weapon at (12, 3, 4)
   EXPECT_EQ(player.GetTransform()->GetPosition(), glm::vec3(10.0f, 0.0f, 0.0f));
   EXPECT_EQ(weapon.GetTransform()->GetPosition(), glm::vec3(12.0f, 3.0f, 4.0f));
-  EXPECT_EQ(weapon.GetTransform()->GetLocalPosition(), glm::vec3(2.0f, 3.0f, 4.0f));
+  EXPECT_EQ(weapon.GetTransform()->GetLocalPosition(),
+            glm::vec3(2.0f, 3.0f, 4.0f));
 
   // Move player by (5, 10, -2)
   player.GetTransform()->Move(glm::vec3(5.0f, 10.0f, -2.0f));
 
-  EXPECT_EQ(player.GetTransform()->GetPosition(), glm::vec3(15.0f, 10.0f, -2.0f));
+  EXPECT_EQ(player.GetTransform()->GetPosition(),
+            glm::vec3(15.0f, 10.0f, -2.0f));
   // Weapon world position should have moved with player
-  EXPECT_EQ(weapon.GetTransform()->GetPosition(), glm::vec3(17.0f, 13.0f, 2.0f));
+  EXPECT_EQ(weapon.GetTransform()->GetPosition(),
+            glm::vec3(17.0f, 13.0f, 2.0f));
   // Weapon local position should still be (2, 3, 4)
-  EXPECT_EQ(weapon.GetTransform()->GetLocalPosition(), glm::vec3(2.0f, 3.0f, 4.0f));
+  EXPECT_EQ(weapon.GetTransform()->GetLocalPosition(),
+            glm::vec3(2.0f, 3.0f, 4.0f));
 }
 
 TEST(Hierarchy, SubchildRecursion) {
@@ -101,14 +105,18 @@ position = Vector3(0, 5, 0)
 
   EXPECT_EQ(parent.GetTransform()->GetPosition(), glm::vec3(0.0f, 0.0f, 0.0f));
   EXPECT_EQ(child.GetTransform()->GetPosition(), glm::vec3(1.0f, 0.0f, 0.0f));
-  EXPECT_EQ(grandchild.GetTransform()->GetPosition(), glm::vec3(1.0f, 5.0f, 0.0f));
+  EXPECT_EQ(grandchild.GetTransform()->GetPosition(),
+            glm::vec3(1.0f, 5.0f, 0.0f));
 
   // Move root-level Parent to (100, 200, 300)
   parent.GetTransform()->SetPosition(glm::vec3(100.0f, 200.0f, 300.0f));
 
-  EXPECT_EQ(parent.GetTransform()->GetPosition(), glm::vec3(100.0f, 200.0f, 300.0f));
-  EXPECT_EQ(child.GetTransform()->GetPosition(), glm::vec3(101.0f, 200.0f, 300.0f));
-  EXPECT_EQ(grandchild.GetTransform()->GetPosition(), glm::vec3(101.0f, 205.0f, 300.0f));
+  EXPECT_EQ(parent.GetTransform()->GetPosition(),
+            glm::vec3(100.0f, 200.0f, 300.0f));
+  EXPECT_EQ(child.GetTransform()->GetPosition(),
+            glm::vec3(101.0f, 200.0f, 300.0f));
+  EXPECT_EQ(grandchild.GetTransform()->GetPosition(),
+            glm::vec3(101.0f, 205.0f, 300.0f));
 }
 
 TEST(Hierarchy, ChildOrbitsOnParentRotation) {
@@ -369,7 +377,8 @@ position = Vector3(0, 10, 0)
   auto parent = scene.Find("Parent");
   auto child = scene.Find("Parent/Child");
 
-  // Tick begins: snapshot captured at (0, 0, 0) for parent and (0, 10, 0) for child
+  // Tick begins: snapshot captured at (0, 0, 0) for parent and (0, 10, 0) for
+  // child
   scene.OnTickBegin();
 
   // During tick, parent moves to (10, 0, 0)
@@ -382,9 +391,11 @@ position = Vector3(0, 10, 0)
   scene.ProcessOnFrame(0.5f);
 
   // Parent interpolated position: (5, 0, 0)
-  EXPECT_EQ(parent.GetTransform()->GetInterpolatedPosition(), glm::vec3(5.0f, 0.0f, 0.0f));
+  EXPECT_EQ(parent.GetTransform()->GetInterpolatedPosition(),
+            glm::vec3(5.0f, 0.0f, 0.0f));
   // Child interpolated position must be (5, 10, 0)
-  EXPECT_EQ(child.GetTransform()->GetInterpolatedPosition(), glm::vec3(5.0f, 10.0f, 0.0f));
+  EXPECT_EQ(child.GetTransform()->GetInterpolatedPosition(),
+            glm::vec3(5.0f, 10.0f, 0.0f));
 }
 
 // The editor moves one node this way while a handle is dragged, instead of
@@ -421,11 +432,14 @@ position = Vector3(2, 3, 4)
   transform->properties.Set("rotation", glm::vec3(0.0f, 90.0f, 0.0f));
   ASSERT_TRUE(scene.SyncNodeTransform(*player));
 
-  const glm::vec3 synced = scene.Find("Player/Weapon").GetTransform()->GetPosition();
-  EXPECT_EQ(scene.Find("Player").GetTransform()->GetPosition(), glm::vec3(1, 2, 3));
+  const glm::vec3 synced =
+      scene.Find("Player/Weapon").GetTransform()->GetPosition();
+  EXPECT_EQ(scene.Find("Player").GetTransform()->GetPosition(),
+            glm::vec3(1, 2, 3));
 
   MapScene rebuilt(project, MapScene::Mode::kEdit);
   rebuilt.Instantiate(map);
-  const glm::vec3 expected = rebuilt.Find("Player/Weapon").GetTransform()->GetPosition();
+  const glm::vec3 expected =
+      rebuilt.Find("Player/Weapon").GetTransform()->GetPosition();
   EXPECT_TRUE(glm::all(glm::epsilonEqual(synced, expected, 1e-2f)));
 }

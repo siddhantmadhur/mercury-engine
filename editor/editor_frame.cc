@@ -303,16 +303,14 @@ void EditorFrame::BuildMenuBar() {
   mi_hierarchy_ = window_menu_->AppendCheckItem(kIdWinHierarchy, "Hierarchy");
   mi_scene_ = window_menu_->AppendCheckItem(kIdWinScene, "Scene Viewport");
   mi_inspector_ = window_menu_->AppendCheckItem(kIdWinInspector, "Inspector");
-  mi_project_ =
-      window_menu_->AppendCheckItem(kIdWinProject, "Project Browser");
+  mi_project_ = window_menu_->AppendCheckItem(kIdWinProject, "Project Browser");
   mi_console_ = window_menu_->AppendCheckItem(kIdWinConsole, "Console");
   mi_lore_ = window_menu_->AppendCheckItem(kIdWinLore, "Lore VCS");
   window_menu_->AppendSeparator();
   mi_uibuilder_ = window_menu_->AppendCheckItem(kIdWinUIBuilder, "UI Builder");
   mi_input_actions_ =
       window_menu_->AppendCheckItem(kIdWinInputActions, "Input Actions");
-  window_menu_->Append(kIdWinPopoutUIBuilder,
-                       "Pop Out UI Builder Window...");
+  window_menu_->Append(kIdWinPopoutUIBuilder, "Pop Out UI Builder Window...");
   window_menu_->Append(kIdWinPopoutInputActions,
                        "Pop Out Input Actions Window...");
   mi_cam_preview_ = window_menu_->AppendCheckItem(
@@ -330,7 +328,8 @@ void EditorFrame::BuildToolbar() {
   auto* s = new wxBoxSizer(wxHORIZONTAL);
 
   play_btn_ = new wxButton(toolbar_, wxID_ANY, "Play (F5)");
-  play_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { HandleTogglePlay(); });
+  play_btn_->Bind(wxEVT_BUTTON,
+                  [this](wxCommandEvent&) { HandleTogglePlay(); });
 
   build_scripts_btn_ = new wxButton(toolbar_, wxID_ANY, "Build Scripts");
   build_scripts_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
@@ -363,7 +362,8 @@ void EditorFrame::BuildToolbar() {
   map_status_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "");
 
   fps_lbl_ = new wxStaticText(toolbar_, wxID_ANY, "0 fps");
-  fps_lbl_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  fps_lbl_->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   fps_lbl_->SetToolTip("Game renderer frames per second");
 
   s->AddSpacer(6);
@@ -411,10 +411,9 @@ void EditorFrame::BuildAuiPanes() {
                              .MinSize(wxSize(-1, 38))
                              .BestSize(wxSize(-1, 38)));
 
-  aui_.AddPane(scene_panel_, wxAuiPaneInfo()
-                                 .Name("scene")
-                                 .Caption("Scene Viewport")
-                                 .CenterPane());
+  aui_.AddPane(
+      scene_panel_,
+      wxAuiPaneInfo().Name("scene").Caption("Scene Viewport").CenterPane());
 
   aui_.AddPane(hierarchy_panel_, wxAuiPaneInfo()
                                      .Name("hierarchy")
@@ -481,18 +480,17 @@ void EditorFrame::BuildAuiPanes() {
                                       .PinButton(true)
                                       .CloseButton(true));
 
-  aui_.AddPane(
-      input_actions_panel_,
-      wxAuiPaneInfo()
-          .Name("input_actions")
-          .Caption("Input Actions")
-          .Bottom()
-          .Layer(2)
-          .BestSize(wxSize(880, 360))
-          .MinSize(wxSize(440, 260))
-          .Show(scene_.Settings().show_input_actions)
-          .PinButton(true)
-          .CloseButton(true));
+  aui_.AddPane(input_actions_panel_,
+               wxAuiPaneInfo()
+                   .Name("input_actions")
+                   .Caption("Input Actions")
+                   .Bottom()
+                   .Layer(2)
+                   .BestSize(wxSize(880, 360))
+                   .MinSize(wxSize(440, 260))
+                   .Show(scene_.Settings().show_input_actions)
+                   .PinButton(true)
+                   .CloseButton(true));
 
   aui_.Update();
   default_perspective_ = aui_.SavePerspective();
@@ -529,13 +527,14 @@ void EditorFrame::BuildAuiPanes() {
 
 void EditorFrame::SetupMenuBindings() {
   Bind(wxEVT_MENU, [this](wxCommandEvent&) { HandleNewMap(); }, kIdFileNewMap);
-  Bind(wxEVT_MENU, [this](wxCommandEvent&) { HandleOpenMap(); },
-       kIdFileOpenMap);
+  Bind(
+      wxEVT_MENU, [this](wxCommandEvent&) { HandleOpenMap(); }, kIdFileOpenMap);
   Bind(
       wxEVT_MENU, [this](wxCommandEvent&) { scene_.SaveAllDirty(); },
       kIdFileSave);
-  Bind(wxEVT_MENU, [this](wxCommandEvent&) { HandleSaveMapAs(); },
-       kIdFileSaveAs);
+  Bind(
+      wxEVT_MENU, [this](wxCommandEvent&) { HandleSaveMapAs(); },
+      kIdFileSaveAs);
   Bind(
       wxEVT_MENU, [this](wxCommandEvent&) { scene_.SetMainMap(); },
       kIdFileSetMainMap);
@@ -587,8 +586,9 @@ void EditorFrame::SetupMenuBindings() {
         if (auto p = scene_.GetProject()) scene_.PlayRef().Build(*p);
       },
       kIdProjectBuildScripts);
-  Bind(wxEVT_MENU, [this](wxCommandEvent&) { HandleTogglePlay(); },
-       kIdProjectTogglePlay);
+  Bind(
+      wxEVT_MENU, [this](wxCommandEvent&) { HandleTogglePlay(); },
+      kIdProjectTogglePlay);
 
   Bind(
       wxEVT_MENU,
@@ -656,9 +656,7 @@ void EditorFrame::SetupMenuBindings() {
       kIdWinPopoutInputActions);
   Bind(
       wxEVT_MENU,
-      [this](wxCommandEvent& evt) {
-        ShowCameraPreviewPopout(evt.IsChecked());
-      },
+      [this](wxCommandEvent& evt) { ShowCameraPreviewPopout(evt.IsChecked()); },
       kIdWinCameraPreview);
   Bind(
       wxEVT_MENU, [this](wxCommandEvent&) { DockAllFloatingPanels(); },
@@ -749,14 +747,13 @@ void EditorFrame::DockAllFloatingPanels() {
 void EditorFrame::ShowCameraPreviewPopout(bool show) {
   if (show) {
     if (!camera_preview_frame_) {
-      camera_preview_frame_ = new CameraPreviewFrame(
-          this, scene_, [this]() {
-            camera_preview_frame_ = nullptr;
-            if (!closing_ && scene_panel_) {
-              scene_panel_->SetPreviewPoppedOut(false);
-              SyncWindowMenuChecks();
-            }
-          });
+      camera_preview_frame_ = new CameraPreviewFrame(this, scene_, [this]() {
+        camera_preview_frame_ = nullptr;
+        if (!closing_ && scene_panel_) {
+          scene_panel_->SetPreviewPoppedOut(false);
+          SyncWindowMenuChecks();
+        }
+      });
     }
     camera_preview_frame_->Show();
     camera_preview_frame_->Raise();
@@ -881,9 +878,9 @@ void EditorFrame::HandleTogglePlay() {
 }
 
 void EditorFrame::HandleNewMap() {
-  auto name = PromptTextDialog(this, "New Map",
-                               "Map resource path (e.g. res://maps/level2.mmap):",
-                               "res://maps/new_map.mmap");
+  auto name = PromptTextDialog(
+      this, "New Map", "Map resource path (e.g. res://maps/level2.mmap):",
+      "res://maps/new_map.mmap");
   if (name.has_value() && !name->empty()) {
     scene_.NewMap(*name);
   }
@@ -910,10 +907,11 @@ void EditorFrame::HandleOpenMap() {
 void EditorFrame::HandleSaveMapAs() {
   auto proj = scene_.GetProject();
   if (!proj) return;
-  std::string initial =
-      scene_.GetMapPath().empty() ? "res://maps/main.mmap" : scene_.GetMapPath();
-  auto res = PromptTextDialog(this, "Save Map As", "Resource path:",
-                              wxString::FromUTF8(initial), "Save");
+  std::string initial = scene_.GetMapPath().empty() ? "res://maps/main.mmap"
+                                                    : scene_.GetMapPath();
+  auto res =
+      PromptTextDialog(this, "Save Map As",
+                       "Resource path:", wxString::FromUTF8(initial), "Save");
   if (res.has_value() && !res->empty()) {
     scene_.SaveNewMapAs(*res);
   }
@@ -1029,8 +1027,7 @@ void EditorFrame::OnCharHook(wxKeyEvent& evt) {
 
   if (scene_panel_ && scene_panel_->IsShownOnScreen()) {
     const bool allow_viewport_keys =
-        scene_panel_->IsCanvasFocused() ||
-        scene_panel_->IsRightMouseDown() ||
+        scene_panel_->IsCanvasFocused() || scene_panel_->IsRightMouseDown() ||
         (scene_panel_->IsHovered() && !IsListOrTreeFocused()) ||
         !IsListOrTreeFocused();
     if (allow_viewport_keys && scene_panel_->HandleKeyDown(evt)) {
@@ -1039,8 +1036,10 @@ void EditorFrame::OnCharHook(wxKeyEvent& evt) {
   }
 
   if (!ctrl && (kc == 'F' || kc == 'f')) {
-    if (scene_.GetSelectedNode()) scene_.FrameSelected();
-    else scene_.FrameMap();
+    if (scene_.GetSelectedNode())
+      scene_.FrameSelected();
+    else
+      scene_.FrameMap();
     return;
   }
   if (!ctrl && (kc == 'G' || kc == 'g')) {
@@ -1085,10 +1084,9 @@ void EditorFrame::RefreshToolbarAndStatus() {
     }
     toolbar_->Layout();
   }
-  const bool play_enabled =
-      (pstate == PlaySession::State::kIdle)
-          ? (scene_.GetProject() != nullptr)
-          : (pstate != PlaySession::State::kBuilding);
+  const bool play_enabled = (pstate == PlaySession::State::kIdle)
+                                ? (scene_.GetProject() != nullptr)
+                                : (pstate != PlaySession::State::kBuilding);
   const bool busy = play.IsBusy() || scene_.ReleaseRef().IsBusy();
   const bool build_enabled = !busy && scene_.GetProject() != nullptr;
   const bool save_enabled = scene_.HasUnsavedChanges();

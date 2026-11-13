@@ -105,27 +105,35 @@ TEST(Uss, ParsesValueTypes) {
   EXPECT_EQ(std::get<Length>(*parse(P::kWidth, "25%")), Length::Percent(25));
   EXPECT_EQ(std::get<Length>(*parse(P::kWidth, "auto")), Length::Auto());
   EXPECT_EQ(std::get<Color>(*parse(P::kColor, "#f00")), Color(1, 0, 0, 1));
-  EXPECT_EQ(std::get<Color>(*parse(P::kColor, "rgba(0, 0, 255, 0.5)")), Color(0, 0, 1, 0.5f));
+  EXPECT_EQ(std::get<Color>(*parse(P::kColor, "rgba(0, 0, 255, 0.5)")),
+            Color(0, 0, 1, 0.5f));
   EXPECT_EQ(std::get<Color>(*parse(P::kColor, "white")), Color(1, 1, 1, 1));
   EXPECT_EQ(std::get<int>(*parse(P::kFlexDirection, "row")),
             static_cast<int>(FlexDirection::kRow));
   EXPECT_EQ(std::get<float>(*parse(P::kBorderLeftWidth, "2px")), 2.0f);
-  EXPECT_EQ(std::get<Background>(*parse(P::kBackgroundImage, "url(\"../img/a.png\")")).path,
-            "res://img/a.png");
-  EXPECT_FLOAT_EQ(std::get<Rotate>(*parse(P::kRotate, "0.5turn")).degrees, 180.0f);
-  EXPECT_EQ(std::get<TimeList>(*parse(P::kTransitionDuration, "200ms, 1s")).seconds,
-            (std::vector<float>{0.2f, 1.0f}));
+  EXPECT_EQ(
+      std::get<Background>(*parse(P::kBackgroundImage, "url(\"../img/a.png\")"))
+          .path,
+      "res://img/a.png");
+  EXPECT_FLOAT_EQ(std::get<Rotate>(*parse(P::kRotate, "0.5turn")).degrees,
+                  180.0f);
+  EXPECT_EQ(
+      std::get<TimeList>(*parse(P::kTransitionDuration, "200ms, 1s")).seconds,
+      (std::vector<float>{0.2f, 1.0f}));
   EXPECT_FALSE(parse(P::kWidth, "red"));
 
-  auto expanded = ExpandDeclaration("border-radius", TokenizeStyleValue("1px 2px 3px 4px"));
+  auto expanded =
+      ExpandDeclaration("border-radius", TokenizeStyleValue("1px 2px 3px 4px"));
   ASSERT_EQ(expanded.size(), 4u);
   EXPECT_EQ(expanded[3].id, P::kBorderBottomLeftRadius);
-  auto transition = ExpandDeclaration("transition", TokenizeStyleValue("scale 0.3s ease-out"));
+  auto transition = ExpandDeclaration(
+      "transition", TokenizeStyleValue("scale 0.3s ease-out"));
   ASSERT_EQ(transition.size(), 4u);
 }
 
 TEST(Uss, WriteRoundTrips) {
-  auto sheet = StyleSheet::Parse(".a { width: 10px; color: red; }\n#b > .c:hover { flex-grow: 1; }");
+  auto sheet = StyleSheet::Parse(
+      ".a { width: 10px; color: red; }\n#b > .c:hover { flex-grow: 1; }");
   auto again = StyleSheet::Parse(sheet->Write());
   ASSERT_EQ(again->rules.size(), 2u);
   EXPECT_EQ(again->rules[1].SelectorText(), "#b > .c:hover");
@@ -152,9 +160,10 @@ Label { color: blue; font-size: var(--size); }
   label->AddToClassList("big");
   t.Update();
 
-  EXPECT_NEAR(child->resolvedStyle().color.rgba.g, 128 / 255.0f, 1e-5);  // inherited
+  EXPECT_NEAR(child->resolvedStyle().color.rgba.g, 128 / 255.0f,
+              1e-5);                                           // inherited
   EXPECT_EQ(label->resolvedStyle().color, Color(1, 0, 0, 1));  // #id wins
-  EXPECT_EQ(label->resolvedStyle().fontSize, 30.0f);           // class beats type
+  EXPECT_EQ(label->resolvedStyle().fontSize, 30.0f);   // class beats type
   EXPECT_TRUE(label->resolvedStyle().width.IsAuto());  // .box doesn't match
 
   parent->AddToClassList("box");
@@ -170,8 +179,9 @@ Label { color: blue; font-size: var(--size); }
 
 TEST(Cascade, PseudoStates) {
   TestPanel t;
-  t.root()->AddStyleSheet(StyleSheet::Parse(
-      ".b { width: 10px; } .b:hover { width: 20px; } .b:disabled { width: 5px; }"));
+  t.root()->AddStyleSheet(
+      StyleSheet::Parse(".b { width: 10px; } .b:hover { width: 20px; } "
+                        ".b:disabled { width: 5px; }"));
   auto* b = t.root()->Emplace<VisualElement>();
   b->AddToClassList("b");
   t.Update();
@@ -186,8 +196,9 @@ TEST(Cascade, PseudoStates) {
 
 TEST(Cascade, Transitions) {
   TestPanel t;
-  t.root()->AddStyleSheet(StyleSheet::Parse(
-      ".b { width: 0px; transition: width 1s linear; } .b.wide { width: 100px; }"));
+  t.root()->AddStyleSheet(
+      StyleSheet::Parse(".b { width: 0px; transition: width 1s linear; } "
+                        ".b.wide { width: 100px; }"));
   auto* b = t.root()->Emplace<VisualElement>();
   b->AddToClassList("b");
   t.Update();
@@ -332,17 +343,22 @@ TEST(Events, TrickleDownTargetBubbleUpAndStop) {
 
   std::vector<std::string> order;
   outer->RegisterCallback<PointerDownEvent>(
-      [&](PointerDownEvent&) { order.push_back("outer-trickle"); }, TrickleDown::kTrickleDown);
-  outer->RegisterCallback<PointerDownEvent>([&](PointerDownEvent&) { order.push_back("outer"); });
-  inner->RegisterCallback<PointerDownEvent>([&](PointerDownEvent&) { order.push_back("inner"); });
+      [&](PointerDownEvent&) { order.push_back("outer-trickle"); },
+      TrickleDown::kTrickleDown);
+  outer->RegisterCallback<PointerDownEvent>(
+      [&](PointerDownEvent&) { order.push_back("outer"); });
+  inner->RegisterCallback<PointerDownEvent>(
+      [&](PointerDownEvent&) { order.push_back("inner"); });
 
   UIInputFrame frame = PointerAt({10, 10});
   frame.events.push_back({UIInputEvent::Type::kPointerDown, 0});
   t.panel.DispatchInput(frame);
-  EXPECT_EQ(order, (std::vector<std::string>{"outer-trickle", "inner", "outer"}));
+  EXPECT_EQ(order,
+            (std::vector<std::string>{"outer-trickle", "inner", "outer"}));
 
   order.clear();
-  inner->RegisterCallback<PointerDownEvent>([](PointerDownEvent& e) { e.StopPropagation(); });
+  inner->RegisterCallback<PointerDownEvent>(
+      [](PointerDownEvent& e) { e.StopPropagation(); });
   t.panel.DispatchInput(frame);
   EXPECT_EQ(order, (std::vector<std::string>{"outer-trickle", "inner"}));
 
@@ -401,9 +417,8 @@ TEST(Events, ToggleSliderAndTabFocus) {
   t.Update({200, 100});
 
   bool changed = false;
-  toggle->RegisterValueChangedCallback<bool>([&](ChangeEvent<bool>& e) {
-    changed = e.newValue && !e.previousValue;
-  });
+  toggle->RegisterValueChangedCallback<bool>(
+      [&](ChangeEvent<bool>& e) { changed = e.newValue && !e.previousValue; });
   Click(t, {5, 5});
   EXPECT_TRUE(toggle->value());
   EXPECT_TRUE(changed);
@@ -435,16 +450,20 @@ TEST(Events, TextFieldEditing) {
   for (char32_t c : std::u32string(U"héllo")) {
     typing.events.push_back({UIInputEvent::Type::kChar, 0, KeyCode::kNone, c});
   }
-  typing.events.push_back({UIInputEvent::Type::kKeyDown, 0, KeyCode::kBackspace});
+  typing.events.push_back(
+      {UIInputEvent::Type::kKeyDown, 0, KeyCode::kBackspace});
   typing.events.push_back({UIInputEvent::Type::kKeyDown, 0, KeyCode::kHome});
-  typing.events.push_back({UIInputEvent::Type::kKeyDown, 0, KeyCode::kV, 0, {}, kModControl});
+  typing.events.push_back(
+      {UIInputEvent::Type::kKeyDown, 0, KeyCode::kV, 0, {}, kModControl});
   t.panel.DispatchInput(typing);
   EXPECT_EQ(field->value(), "pastedhéll");
   EXPECT_EQ(last, "pastedhéll");
 
   UIInputFrame select_all;
-  select_all.events.push_back({UIInputEvent::Type::kKeyDown, 0, KeyCode::kA, 0, {}, kModControl});
-  select_all.events.push_back({UIInputEvent::Type::kChar, 0, KeyCode::kNone, U'x'});
+  select_all.events.push_back(
+      {UIInputEvent::Type::kKeyDown, 0, KeyCode::kA, 0, {}, kModControl});
+  select_all.events.push_back(
+      {UIInputEvent::Type::kChar, 0, KeyCode::kNone, U'x'});
   t.panel.DispatchInput(select_all);
   EXPECT_EQ(field->value(), "x");
 
@@ -553,7 +572,8 @@ TEST(Mesh, DefaultThemeLoads) {
 // ------------------------------------------------------------ UIDocument --
 
 TEST(UIDocument, ShowsTheMonkeyBallHudInPlayMode) {
-  const auto root = std::filesystem::path(MERCURY_SOURCE_DIR) / "examples/monkey_ball";
+  const auto root =
+      std::filesystem::path(MERCURY_SOURCE_DIR) / "examples/monkey_ball";
   std::string error;
   auto project = Project::Load(root / "monkey_ball.mproj", &error);
   ASSERT_TRUE(project) << error;
@@ -579,12 +599,14 @@ TEST(UIDocument, ShowsTheMonkeyBallHudInPlayMode) {
   // Destroying the node removes its document from the panel.
   scene.Destroy(scene.Find("GameManager"));
   scene.OnFrame(16.0);
-  EXPECT_EQ(document = scene.Find("GameManager").GetComponent<UIDocument>(), nullptr);
+  EXPECT_EQ(document = scene.Find("GameManager").GetComponent<UIDocument>(),
+            nullptr);
   EXPECT_EQ(scene.GetUI().panels().front()->visualTree()->childCount(), 0);
 }
 
 TEST(UIDocument, EditModeDoesNotBuildUI) {
-  const auto root = std::filesystem::path(MERCURY_SOURCE_DIR) / "examples/monkey_ball";
+  const auto root =
+      std::filesystem::path(MERCURY_SOURCE_DIR) / "examples/monkey_ball";
   std::string error;
   auto project = Project::Load(root / "monkey_ball.mproj", &error);
   ASSERT_TRUE(project) << error;
@@ -607,7 +629,9 @@ TEST(Controls, ListViewSelectsAndScrollViewScrolls) {
   auto* list = t.root()->Emplace<ListView>();
   list->style().height = Length::Px(200);
   list->makeItem = [] { return std::make_unique<Label>(); };
-  list->bindItem = [&](VisualElement* e, int i) { static_cast<Label*>(e)->SetText(items[i]); };
+  list->bindItem = [&](VisualElement* e, int i) {
+    static_cast<Label*>(e)->SetText(items[i]);
+  };
   list->SetFixedItemHeight(20);
   list->SetItemCount(static_cast<int>(items.size()));
   std::vector<int> selected;
@@ -615,8 +639,9 @@ TEST(Controls, ListViewSelectsAndScrollViewScrolls) {
   t.Update();
   t.Update();
   EXPECT_EQ(list->scrollView()->contentContainer()->childCount(), 50);
-  EXPECT_FALSE(list->scrollView()->verticalScroller()->resolvedStyle().display ==
-               DisplayStyle::kNone);
+  EXPECT_FALSE(
+      list->scrollView()->verticalScroller()->resolvedStyle().display ==
+      DisplayStyle::kNone);
 
   Click(t, {50, 50});  // the third item
   EXPECT_EQ(list->selectedIndex(), 2);
@@ -662,7 +687,9 @@ TEST(Controls, Painter2DAndScheduler) {
   EXPECT_GT(t.panel.drawData().vertices.size(), 100u);
 
   int ticks = 0;
-  canvas->Schedule([&] { ticks++; }).Every(0.0).Until([&] { return ticks >= 3; });
+  canvas->Schedule([&] { ticks++; }).Every(0.0).Until([&] {
+    return ticks >= 3;
+  });
   for (int i = 0; i < 5; i++) t.Update();
   EXPECT_EQ(ticks, 3);
 }

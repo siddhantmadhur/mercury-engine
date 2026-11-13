@@ -68,7 +68,8 @@ class UQueryBuilder {
 
  private:
   bool MatchesElement(VisualElement* element) const;
-  bool Visit(VisualElement* element, std::vector<T*>& out, bool first_only) const;
+  bool Visit(VisualElement* element, std::vector<T*>& out,
+             bool first_only) const;
 
   VisualElement* root_;
   std::vector<std::string> names_;

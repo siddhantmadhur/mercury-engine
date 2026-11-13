@@ -51,7 +51,8 @@ double FixedDeltaMs();
 // The benchmark measured its frames: time to quit.
 bool BenchFinished();
 
-// Latest timings formatted for display, or empty if MERCURY_PROFILER is not set.
+// Latest timings formatted for display, or empty if MERCURY_PROFILER is not
+// set.
 std::string SummaryText();
 
 class Scope {
@@ -60,7 +61,8 @@ class Scope {
       : name_(name), start_(std::chrono::steady_clock::now()) {}
   ~Scope() {
     const auto end = std::chrono::steady_clock::now();
-    AddCpu(name_, std::chrono::duration<double, std::milli>(end - start_).count());
+    AddCpu(name_,
+           std::chrono::duration<double, std::milli>(end - start_).count());
   }
   Scope(const Scope&) = delete;
   Scope& operator=(const Scope&) = delete;
@@ -74,7 +76,8 @@ class Scope {
 
 #define MERCURY_PROFILE_CONCAT_(a, b) a##b
 #define MERCURY_PROFILE_CONCAT(a, b) MERCURY_PROFILE_CONCAT_(a, b)
-#define MERCURY_PROFILE_SCOPE(name) \
-  ::Mercury::Profiler::Scope MERCURY_PROFILE_CONCAT(mercury_profile_scope_, __LINE__)(name)
+#define MERCURY_PROFILE_SCOPE(name)                                         \
+  ::Mercury::Profiler::Scope MERCURY_PROFILE_CONCAT(mercury_profile_scope_, \
+                                                    __LINE__)(name)
 
 #endif  // MERCURY_DEBUGGER_PROFILER_H

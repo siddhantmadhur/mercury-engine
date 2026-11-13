@@ -15,7 +15,8 @@ fs::path PlaySession::SchemaPath(const Project& project) {
   return project.GetCacheDir() / "scripts.mschema";
 }
 
-void PlaySession::Play(const Project& project, const std::string& map_res_path) {
+void PlaySession::Play(const Project& project,
+                       const std::string& map_res_path) {
   map_ = map_res_path;
   Begin(project, true);
 }
@@ -46,9 +47,10 @@ void PlaySession::Begin(const Project& project, bool run) {
   schema_path_ = SchemaPath(project);
   run_after_build_ = run;
   if (!fs::exists(PlayerPath())) {
-    Finish("mercury_player was not found next to the editor or in ../mercury (" +
-               PlayerPath().string() + "); build the mercury_player target",
-           true);
+    Finish(
+        "mercury_player was not found next to the editor or in ../mercury (" +
+            PlayerPath().string() + "); build the mercury_player target",
+        true);
     return;
   }
   StartBuild();
@@ -72,7 +74,8 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
 }
 
 bool PlaySession::StartBuild() {
-  std::vector<std::string> args = {PlayerPath().string(), project_file_.string(), "--build-scripts"};
+  std::vector<std::string> args = {PlayerPath().string(),
+                                   project_file_.string(), "--build-scripts"};
   if (!Launch(args, Console::Source::kBuild)) return false;
   state_ = State::kBuilding;
   return true;
@@ -81,7 +84,8 @@ bool PlaySession::StartBuild() {
 bool PlaySession::DumpSchema() {
   os::Process dump;
   std::string error;
-  if (!dump.Start({PlayerPath().string(), project_file_.string(), "--dump-schema", schema_path_.string()},
+  if (!dump.Start({PlayerPath().string(), project_file_.string(),
+                   "--dump-schema", schema_path_.string()},
                   project_root_, &error)) {
     console_.Error("Could not read the game's scripts: " + error);
     return false;
@@ -103,7 +107,8 @@ bool PlaySession::DumpSchema() {
 }
 
 bool PlaySession::StartGame() {
-  std::vector<std::string> args = {PlayerPath().string(), project_file_.string()};
+  std::vector<std::string> args = {PlayerPath().string(),
+                                   project_file_.string()};
   if (!map_.empty()) {
     args.push_back("--map");
     args.push_back(map_);

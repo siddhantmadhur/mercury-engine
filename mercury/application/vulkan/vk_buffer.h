@@ -71,13 +71,14 @@ class Image {
               uint32_t height, VkFormat format, VkImageUsageFlags usage,
               VkImageAspectFlags aspect, uint32_t mip_levels = 1);
   // An array of `layers` images; View() sees them all (a 2D array view).
-  bool CreateArray(VmaAllocator allocator, VkDevice device, uint32_t width, uint32_t height,
-                   uint32_t layers, VkFormat format, VkImageUsageFlags usage,
-                   VkImageAspectFlags aspect);
+  bool CreateArray(VmaAllocator allocator, VkDevice device, uint32_t width,
+                   uint32_t height, uint32_t layers, VkFormat format,
+                   VkImageUsageFlags usage, VkImageAspectFlags aspect);
   // `cubes` cube maps of `size` square faces (6 layers each, in the order
   // +X, -X, +Y, -Y, +Z, -Z); View() is a cube array view, LayerView() a face.
-  bool CreateCubeArray(VmaAllocator allocator, VkDevice device, uint32_t size, uint32_t cubes,
-                       VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect);
+  bool CreateCubeArray(VmaAllocator allocator, VkDevice device, uint32_t size,
+                       uint32_t cubes, VkFormat format, VkImageUsageFlags usage,
+                       VkImageAspectFlags aspect);
   void Reset();
 
   VkImage Get() const { return image_; }
@@ -92,9 +93,10 @@ class Image {
   VkImageView LayerView(uint32_t layer);
 
  private:
-  bool CreateImage(VmaAllocator allocator, VkDevice device, uint32_t width, uint32_t height,
-                   uint32_t layers, VkFormat format, VkImageUsageFlags usage,
-                   VkImageAspectFlags aspect, uint32_t mip_levels, VkImageViewType view_type,
+  bool CreateImage(VmaAllocator allocator, VkDevice device, uint32_t width,
+                   uint32_t height, uint32_t layers, VkFormat format,
+                   VkImageUsageFlags usage, VkImageAspectFlags aspect,
+                   uint32_t mip_levels, VkImageViewType view_type,
                    VkImageCreateFlags flags = 0);
   std::vector<VkImageView> mip_views_;
   std::vector<VkImageView> layer_views_;
@@ -115,18 +117,19 @@ class Image {
  */
 void TransitionImage(VkCommandBuffer cmd, VkImage image,
                      VkImageAspectFlags aspect, VkImageLayout old_layout,
-                     VkImageLayout new_layout,
-                     VkPipelineStageFlags2 src_stage,
-                     VkAccessFlags2 src_access,
-                     VkPipelineStageFlags2 dst_stage,
+                     VkImageLayout new_layout, VkPipelineStageFlags2 src_stage,
+                     VkAccessFlags2 src_access, VkPipelineStageFlags2 dst_stage,
                      VkAccessFlags2 dst_access);
 
 // The same for a range of mip levels.
-void TransitionImageMips(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags aspect,
-                         uint32_t base_mip, uint32_t mip_count,
-                         VkImageLayout old_layout, VkImageLayout new_layout,
-                         VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,
-                         VkPipelineStageFlags2 dst_stage, VkAccessFlags2 dst_access);
+void TransitionImageMips(VkCommandBuffer cmd, VkImage image,
+                         VkImageAspectFlags aspect, uint32_t base_mip,
+                         uint32_t mip_count, VkImageLayout old_layout,
+                         VkImageLayout new_layout,
+                         VkPipelineStageFlags2 src_stage,
+                         VkAccessFlags2 src_access,
+                         VkPipelineStageFlags2 dst_stage,
+                         VkAccessFlags2 dst_access);
 
 /**
  * @brief Records a global memory barrier (sync2)

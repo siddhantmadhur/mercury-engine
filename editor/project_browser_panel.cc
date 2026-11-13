@@ -41,7 +41,8 @@ bool ShouldSkipDirName(const std::string& name) {
 uint64_t NowMs() {
   using namespace std::chrono;
   return static_cast<uint64_t>(
-      duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+      duration_cast<milliseconds>(steady_clock::now().time_since_epoch())
+          .count());
 }
 
 std::string ComputeDirSignature(const fs::path& root) {
@@ -82,9 +83,11 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
   ApplyButtonIconAndPadding(create_btn, EditorIcon::kCreate);
   bar_sizer->Add(create_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
-  path_label_ = new wxStaticText(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                                 wxDefaultSize, wxST_ELLIPSIZE_START);
-  path_label_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  path_label_ =
+      new wxStaticText(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                       wxDefaultSize, wxST_ELLIPSIZE_START);
+  path_label_->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   bar_sizer->Add(path_label_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
 
   search_ = new wxTextCtrl(bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
@@ -97,16 +100,18 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
   bar->SetSizer(bar_wrap);
   root->Add(bar, 0, wxEXPAND);
 
-  splitter_ = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition,
-                                   wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
+  splitter_ =
+      new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                           wxSP_LIVE_UPDATE | wxSP_3DSASH);
   splitter_->SetMinimumPaneSize(110);
 
-  dir_tree_ = new wxTreeCtrl(splitter_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                             wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT |
-                                 wxTR_SINGLE | wxBORDER_NONE);
+  dir_tree_ = new wxTreeCtrl(
+      splitter_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+      wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_SINGLE | wxBORDER_NONE);
 
-  file_list_ = new wxListCtrl(splitter_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                              wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
+  file_list_ =
+      new wxListCtrl(splitter_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                     wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
   file_list_->InsertColumn(0, "Name", wxLIST_FORMAT_LEFT, 220);
   file_list_->InsertColumn(1, "Location / Status", wxLIST_FORMAT_LEFT, 160);
 
@@ -127,7 +132,8 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
   dir_tree_->Bind(wxEVT_TREE_SEL_CHANGED, [this](wxTreeEvent& evt) {
     if (syncing_tree_) return;
     if (!evt.GetItem().IsOk()) return;
-    auto* data = static_cast<DirItemData*>(dir_tree_->GetItemData(evt.GetItem()));
+    auto* data =
+        static_cast<DirItemData*>(dir_tree_->GetItemData(evt.GetItem()));
     if (data) {
       current_dir_ = data->path;
       RebuildFileList();
@@ -136,12 +142,14 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
 
   dir_tree_->Bind(wxEVT_TREE_ITEM_MENU, [this](wxTreeEvent& evt) {
     if (!evt.GetItem().IsOk()) return;
-    auto* data = static_cast<DirItemData*>(dir_tree_->GetItemData(evt.GetItem()));
+    auto* data =
+        static_cast<DirItemData*>(dir_tree_->GetItemData(evt.GetItem()));
     if (data) {
       dir_tree_->SelectItem(evt.GetItem());
       current_dir_ = data->path;
       RebuildFileList();
-      ShowFolderContextMenu(data->path, dir_tree_->ClientToScreen(evt.GetPoint()));
+      ShowFolderContextMenu(data->path,
+                            dir_tree_->ClientToScreen(evt.GetPoint()));
     }
   });
 
@@ -229,11 +237,13 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
       [this](wxCoord x, wxCoord y, const wxArrayString& files) {
         auto project = scene_.GetProject();
         if (!project) return false;
-        fs::path dest = current_dir_.empty() ? project->GetRoot() : current_dir_;
+        fs::path dest =
+            current_dir_.empty() ? project->GetRoot() : current_dir_;
         int flags = 0;
         const wxTreeItemId hit = dir_tree_->HitTest(wxPoint(x, y), flags);
         if (hit.IsOk()) {
-          if (auto* data = static_cast<DirItemData*>(dir_tree_->GetItemData(hit))) {
+          if (auto* data =
+                  static_cast<DirItemData*>(dir_tree_->GetItemData(hit))) {
             dest = data->path;
           }
         }
@@ -245,7 +255,8 @@ ProjectBrowserPanel::ProjectBrowserPanel(wxWindow* parent, EditorScene& scene)
       [this](wxCoord, wxCoord, const wxArrayString& files) {
         auto project = scene_.GetProject();
         if (!project) return false;
-        fs::path dest = current_dir_.empty() ? project->GetRoot() : current_dir_;
+        fs::path dest =
+            current_dir_.empty() ? project->GetRoot() : current_dir_;
         return CopyExternalFilesInto(dest, files);
       },
       nullptr));
@@ -315,9 +326,9 @@ void ProjectBrowserPanel::RebuildFolderTree() {
   path_to_tree_.clear();
 
   const fs::path root_path = project->GetRoot();
-  wxTreeItemId root_item = dir_tree_->AddRoot(
-      wxString::FromUTF8(project->GetName() + "/"), -1, -1,
-      new DirItemData(root_path));
+  wxTreeItemId root_item =
+      dir_tree_->AddRoot(wxString::FromUTF8(project->GetName() + "/"), -1, -1,
+                         new DirItemData(root_path));
   path_to_tree_[root_path.string()] = root_item;
   PopulateFolderChildren(root_item, root_path);
   dir_tree_->Expand(root_item);
@@ -333,8 +344,8 @@ void ProjectBrowserPanel::RebuildFolderTree() {
   syncing_tree_ = false;
 }
 
-void ProjectBrowserPanel::PopulateFolderChildren(const wxTreeItemId& parent_item,
-                                                 const fs::path& dir) {
+void ProjectBrowserPanel::PopulateFolderChildren(
+    const wxTreeItemId& parent_item, const fs::path& dir) {
   std::vector<fs::path> folders;
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator(dir, ec)) {
@@ -343,9 +354,10 @@ void ProjectBrowserPanel::PopulateFolderChildren(const wxTreeItemId& parent_item
       folders.push_back(entry.path());
     }
   }
-  std::sort(folders.begin(), folders.end(), [](const fs::path& a, const fs::path& b) {
-    return ToLower(a.filename().string()) < ToLower(b.filename().string());
-  });
+  std::sort(
+      folders.begin(), folders.end(), [](const fs::path& a, const fs::path& b) {
+        return ToLower(a.filename().string()) < ToLower(b.filename().string());
+      });
   for (const fs::path& f : folders) {
     wxTreeItemId item = dir_tree_->AppendItem(
         parent_item, wxString::FromUTF8(f.filename().string() + "/"), -1, -1,
@@ -386,9 +398,10 @@ void ProjectBrowserPanel::RebuildFileList() {
     }
   }
 
-  std::sort(found.begin(), found.end(), [](const fs::path& a, const fs::path& b) {
-    return ToLower(a.filename().string()) < ToLower(b.filename().string());
-  });
+  std::sort(
+      found.begin(), found.end(), [](const fs::path& a, const fs::path& b) {
+        return ToLower(a.filename().string()) < ToLower(b.filename().string());
+      });
 
   visible_files_ = std::move(found);
   const bool lore_repo = scene_.LoreRef().IsRepository();
@@ -413,7 +426,8 @@ void ProjectBrowserPanel::RebuildFileList() {
     if (locked) meta += " (locked)";
     file_list_->SetItem(row, 1, wxString::FromUTF8(meta));
     if (selected) {
-      file_list_->SetItemState(row, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+      file_list_->SetItemState(row, wxLIST_STATE_SELECTED,
+                               wxLIST_STATE_SELECTED);
     }
   }
   file_list_->Thaw();
@@ -461,19 +475,21 @@ void ProjectBrowserPanel::ShowCreateMenu(const fs::path& target_dir,
   auto project = scene_.GetProject();
   if (!project) return;
   wxMenu menu;
-  const fs::path asset_dir =
-      target_dir == project->GetRoot() ? project->GetRoot() / "assets" : target_dir;
+  const fs::path asset_dir = target_dir == project->GetRoot()
+                                 ? project->GetRoot() / "assets"
+                                 : target_dir;
   const fs::path ui_dir =
       target_dir == project->GetRoot() ? project->GetRoot() / "ui" : target_dir;
-  const fs::path map_dir =
-      target_dir == project->GetRoot() ? project->GetRoot() / "maps" : target_dir;
-  const fs::path input_dir =
-      target_dir == project->GetRoot() ? project->GetRoot() / "input" : target_dir;
+  const fs::path map_dir = target_dir == project->GetRoot()
+                               ? project->GetRoot() / "maps"
+                               : target_dir;
+  const fs::path input_dir = target_dir == project->GetRoot()
+                                 ? project->GetRoot() / "input"
+                                 : target_dir;
 
   auto bind = [&](const char* label, std::function<void()> fn) {
     wxMenuItem* it = menu.Append(wxID_ANY, label);
-    menu.Bind(
-        wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
+    menu.Bind(wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
   };
 
   bind("Script...", [this]() { HandleCreateScript(); });
@@ -496,8 +512,7 @@ void ProjectBrowserPanel::ShowCreateMenu(const fs::path& target_dir,
   auto* ui_sub = new wxMenu();
   auto bind_sub = [&](const char* label, std::function<void()> fn) {
     wxMenuItem* it = ui_sub->Append(wxID_ANY, label);
-    menu.Bind(
-        wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
+    menu.Bind(wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
   };
   bind_sub("UI Document (.uxml)", [this, ui_dir]() {
     std::error_code ec;
@@ -529,8 +544,7 @@ void ProjectBrowserPanel::ShowFolderContextMenu(const fs::path& dir,
   wxMenu menu;
   auto bind = [&](const char* label, std::function<void()> fn) {
     wxMenuItem* it = menu.Append(wxID_ANY, label);
-    menu.Bind(
-        wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
+    menu.Bind(wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
   };
   bind("New Folder...", [this, dir]() { HandleCreateFolder(dir); });
   bind("New Material", [this, dir]() {
@@ -580,8 +594,7 @@ void ProjectBrowserPanel::ShowFileContextMenu(const fs::path& file,
                   bool enabled = true) {
     wxMenuItem* it = menu.Append(wxID_ANY, label);
     it->Enable(enabled);
-    menu.Bind(
-        wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
+    menu.Bind(wxEVT_MENU, [fn](wxCommandEvent&) { fn(); }, it->GetId());
   };
 
   if (ext == kMapExtension) {
@@ -591,35 +604,33 @@ void ProjectBrowserPanel::ShowFileContextMenu(const fs::path& file,
     });
   }
   if (ext == kUxmlExtension) {
-    bind("Open in UI Builder", [this, res_path]() {
-      scene_.OpenInUIBuilder(res_path);
-    });
+    bind("Open in UI Builder",
+         [this, res_path]() { scene_.OpenInUIBuilder(res_path); });
   }
   if (ext == kInputActionsExtension) {
-    bind("Open in Input Actions", [this, res_path]() {
-      scene_.OpenInInputActions(res_path);
-    });
+    bind("Open in Input Actions",
+         [this, res_path]() { scene_.OpenInInputActions(res_path); });
   }
   if (ext == ".obj") {
     bind(
-        "Import into Scene", [this, res_path]() { scene_.ImportModel(res_path); },
+        "Import into Scene",
+        [this, res_path]() { scene_.ImportModel(res_path); },
         !scene_.IsModelPreloading());
   }
-  bind("Open in External Editor", [this, file]() {
-    scene_.OpenInExternalEditor(file);
-  });
+  bind("Open in External Editor",
+       [this, file]() { scene_.OpenInExternalEditor(file); });
   bind("Copy res:// Path", [res_path]() {
     if (wxTheClipboard->Open()) {
-      wxTheClipboard->SetData(new wxTextDataObject(wxString::FromUTF8(res_path)));
+      wxTheClipboard->SetData(
+          new wxTextDataObject(wxString::FromUTF8(res_path)));
       wxTheClipboard->Close();
     }
   });
   if (scene_.LoreRef().IsRepository()) {
     menu.AppendSeparator();
     if (locked) {
-      bind("Release Lore Lock", [this, file]() {
-        scene_.LoreRef().Unlock(file);
-      });
+      bind("Release Lore Lock",
+           [this, file]() { scene_.LoreRef().Unlock(file); });
     } else {
       bind("Lock with Lore", [this, file]() { scene_.LoreRef().Lock(file); });
     }

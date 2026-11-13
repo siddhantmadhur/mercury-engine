@@ -267,15 +267,18 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
     FocusCanvas();
   });
   frame_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    if (scene_.GetSelectedNode()) scene_.FrameSelected();
-    else scene_.FrameMap();
+    if (scene_.GetSelectedNode())
+      scene_.FrameSelected();
+    else
+      scene_.FrameMap();
     FocusCanvas();
   });
 
   canvas_->Bind(wxEVT_PAINT, &SceneViewportPanel::OnPaintCanvas, this);
   canvas_->Bind(wxEVT_LEFT_DOWN, &SceneViewportPanel::OnCanvasMouseDown, this);
   canvas_->Bind(wxEVT_RIGHT_DOWN, &SceneViewportPanel::OnCanvasMouseDown, this);
-  canvas_->Bind(wxEVT_MIDDLE_DOWN, &SceneViewportPanel::OnCanvasMouseDown, this);
+  canvas_->Bind(wxEVT_MIDDLE_DOWN, &SceneViewportPanel::OnCanvasMouseDown,
+                this);
   canvas_->Bind(wxEVT_LEFT_UP, &SceneViewportPanel::OnCanvasMouseUp, this);
   canvas_->Bind(wxEVT_RIGHT_UP, &SceneViewportPanel::OnCanvasMouseUp, this);
   canvas_->Bind(wxEVT_MIDDLE_UP, &SceneViewportPanel::OnCanvasMouseUp, this);
@@ -323,8 +326,7 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
             fs::path dest = dest_dir / src.filename();
             fs::copy_file(src, dest, fs::copy_options::overwrite_existing, ec);
             if (!ec) {
-              res_path =
-                  dest.lexically_relative(root).generic_string();
+              res_path = dest.lexically_relative(root).generic_string();
             }
           }
           if (!res_path.empty() && HandleDroppedResPath(res_path)) return true;
@@ -405,8 +407,8 @@ void SceneViewportPanel::SyncToolbarState() {
   if (!toolbar_synced_once_ || view_2d != last_2d_) {
     mode_2d_btn_->SetLabel(view_2d ? "2D" : "3D");
     ApplyButtonIconAndPadding(
-        mode_2d_btn_, view_2d ? EditorIcon::kView2D : EditorIcon::kView3D,
-        10, 14);
+        mode_2d_btn_, view_2d ? EditorIcon::kView2D : EditorIcon::kView3D, 10,
+        14);
   }
 
   toolbar_synced_once_ = true;
@@ -423,8 +425,8 @@ void SceneViewportPanel::SyncFromController(float dt) {
         {static_cast<float>(sz.x), static_cast<float>(sz.y)});
   }
 
-  if (scene_.GetTool() != last_tool_ || scene_.GetHandleSpace() != last_space_ ||
-      scene_.IsView2D() != last_2d_) {
+  if (scene_.GetTool() != last_tool_ ||
+      scene_.GetHandleSpace() != last_space_ || scene_.IsView2D() != last_2d_) {
     SyncToolbarState();
   }
 
@@ -493,8 +495,7 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
     }
   }
 
-  const bool exact_fit = scene_bmp_.IsOk() &&
-                         scene_bmp_.GetWidth() == sz.x &&
+  const bool exact_fit = scene_bmp_.IsOk() && scene_bmp_.GetWidth() == sz.x &&
                          scene_bmp_.GetHeight() == sz.y;
   if (exact_fit) {
     dc.DrawBitmap(scene_bmp_, 0, 0, false);
@@ -512,7 +513,8 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
   }
 
   WxOverlayCanvas overlay(gc.get(), overlay_font_);
-  scene_.RenderOverlays(overlay, local_mouse_, hovered_, alt_down_, right_down_);
+  scene_.RenderOverlays(overlay, local_mouse_, hovered_, alt_down_,
+                        right_down_);
 
   // Bottom-left navigation hint pill
   if (const char* hint = scene_.GetHintText(); hint && *hint) {
@@ -547,7 +549,8 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
 
     const int margin = 12;
     const int header_h = 22;
-    const int pip_w = std::min(last_preview_info_.width, std::max(120, sz.x - 40));
+    const int pip_w =
+        std::min(last_preview_info_.width, std::max(120, sz.x - 40));
     const int pip_h = std::max(60, pip_w * last_preview_info_.height /
                                        std::max(1, last_preview_info_.width));
     const int x = sz.x - pip_w - margin;
@@ -728,8 +731,10 @@ bool SceneViewportPanel::HandleKeyDown(wxKeyEvent& evt) {
       return true;
     case 'F':
     case 'f':
-      if (scene_.GetSelectedNode()) scene_.FrameSelected();
-      else scene_.FrameMap();
+      if (scene_.GetSelectedNode())
+        scene_.FrameSelected();
+      else
+        scene_.FrameMap();
       return true;
     default:
       return false;

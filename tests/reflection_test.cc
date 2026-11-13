@@ -109,7 +109,8 @@ TEST(TypeRegistry, BuiltinsAndSchemaRoundTrip) {
   script.fields = DescribeFields<Everything>();
   script.attach = [](MapScene&, kEntityId, const mtext::PropertyList&) {};
   registry.RegisterComponent(script);
-  const auto file = std::filesystem::temp_directory_path() / "mercury_test.mschema";
+  const auto file =
+      std::filesystem::temp_directory_path() / "mercury_test.mschema";
   ASSERT_TRUE(registry.SaveSchema(file));
 
   // Pretend to be the editor: drop the compiled script, load the schema.

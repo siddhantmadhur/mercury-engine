@@ -69,7 +69,7 @@ void Transform::SetLocalScale(glm::vec3 scale) {
 }
 
 void Transform::SetWorldTransformInternal(glm::vec3 pos, glm::vec3 rot,
-                                         glm::vec3 scale) {
+                                          glm::vec3 scale) {
   at_rest_ = false;
   this->position_ = pos;
   this->rotation_ = rot;
@@ -100,7 +100,7 @@ void Transform::SetWorldScaleInternal(glm::vec3 scale) {
 }
 
 void Transform::SetInterpolatedTransformInternal(glm::vec3 pos, glm::vec3 rot,
-                                                glm::vec3 scale) {
+                                                 glm::vec3 scale) {
   at_rest_ = false;
   interpolated_position_ = pos;
   interpolated_rotation_ = rot;
@@ -178,15 +178,14 @@ void Transform::Interpolate(float alpha) {
     matrix_previous_ = previous_rotation_;
     matrix_current_ = rotation_;
     matrix_alpha_ = matrix_alpha;
-    if (previous_rotation_ == glm::vec3(0.0f) &&
-        rotation_ == glm::vec3(0.0f)) {
+    if (previous_rotation_ == glm::vec3(0.0f) && rotation_ == glm::vec3(0.0f)) {
       rotation_matrix_ = glm::mat4(1.0f);  // most entities never rotate
     } else {
       // Slerp rather than mixing angles, so a body whose angle wraps from
       // 179 to -179 degrees turns 2 degrees instead of spinning back.
-      rotation_matrix_ = glm::mat4_cast(
-          glm::slerp(EulerToQuat(previous_rotation_), EulerToQuat(rotation_),
-                     matrix_alpha));
+      rotation_matrix_ =
+          glm::mat4_cast(glm::slerp(EulerToQuat(previous_rotation_),
+                                    EulerToQuat(rotation_), matrix_alpha));
     }
   }
   if (interpolated_position_ != last_built_position_ ||
@@ -194,8 +193,9 @@ void Transform::Interpolate(float alpha) {
       interpolated_scale_ != last_built_scale_) {
     dirty_ = true;
   }
-  at_rest_ = previous_position_ == position_ && previous_rotation_ == rotation_ &&
-             previous_scale_ == scale_ && matrix_alpha_ == 1.0f;
+  at_rest_ = previous_position_ == position_ &&
+             previous_rotation_ == rotation_ && previous_scale_ == scale_ &&
+             matrix_alpha_ == 1.0f;
 }
 
 glm::quat Transform::EulerToQuat(glm::vec3 degrees) {

@@ -19,7 +19,8 @@
 
 namespace Mercury {
 
-// An AngelScript identifier for a map or action name: "move left" -> "MoveLeft".
+// An AngelScript identifier for a map or action name: "move left" ->
+// "MoveLeft".
 std::string InputActionIdentifier(std::string_view name);
 
 struct InputActionsSource {
@@ -28,9 +29,9 @@ struct InputActionsSource {
   std::vector<std::string> errors;
 };
 
-InputActionsSource GenerateInputActionsAngelScript(const InputActionsDesc& desc,
-                                                   std::string_view class_name,
-                                                   std::string_view source_path);
+InputActionsSource GenerateInputActionsAngelScript(
+    const InputActionsDesc& desc, std::string_view class_name,
+    std::string_view source_path);
 
 }  // namespace Mercury
 

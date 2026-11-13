@@ -72,13 +72,14 @@ TEST(Primitives, ColorGoesToVerticesAndOpacity) {
 
 TEST(Primitives, MissingModelFileFails) {
   std::string error;
-  EXPECT_FALSE(Primitives::LoadModel("/no/such/model.obj", glm::vec4(1), &error));
+  EXPECT_FALSE(
+      Primitives::LoadModel("/no/such/model.obj", glm::vec4(1), &error));
   EXPECT_FALSE(error.empty());
 }
 
 TEST(Transform, EulerAnglesRoundTripThroughQuaternions) {
-  const glm::vec3 cases[] = {{0, 0, 0},     {45, 0, 45},  {-50, -30, 0},
-                             {10, 20, 30},  {0, 170, 0},  {-89, 0, 0}};
+  const glm::vec3 cases[] = {{0, 0, 0},    {45, 0, 45}, {-50, -30, 0},
+                             {10, 20, 30}, {0, 170, 0}, {-89, 0, 0}};
   for (const glm::vec3& degrees : cases) {
     const glm::quat q = Transform::EulerToQuat(degrees);
     const glm::quat back = Transform::EulerToQuat(Transform::QuatToEuler(q));

@@ -87,7 +87,8 @@ void TypeRegistry::ClearGameTypes() {
   std::erase_if(components_, [](const ComponentInfo& info) {
     return info.is_script && info.attach;
   });
-  std::erase_if(asset_types_, [](const AssetTypeInfo& info) { return info.from_game; });
+  std::erase_if(asset_types_,
+                [](const AssetTypeInfo& info) { return info.from_game; });
 }
 
 bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {
@@ -196,13 +197,15 @@ bool TypeRegistry::LoadSchema(const std::filesystem::path& path,
     }
     field->asset_type = section.properties.GetString("asset_type");
     field->tooltip = section.properties.GetString("tooltip");
-    if (section.properties.GetBool("event", false)) field->type = FieldType::kEvent;
+    if (section.properties.GetBool("event", false))
+      field->type = FieldType::kEvent;
     if (auto element = section.properties.Get("element")) {
       field->type = FieldType::kList;
       const std::string name = element->ToString().value_or("");
-      for (FieldType t : {FieldType::kBool, FieldType::kInt, FieldType::kFloat,
-                          FieldType::kString, FieldType::kVector2, FieldType::kVector3,
-                          FieldType::kColor, FieldType::kNodeRef, FieldType::kAsset}) {
+      for (FieldType t :
+           {FieldType::kBool, FieldType::kInt, FieldType::kFloat,
+            FieldType::kString, FieldType::kVector2, FieldType::kVector3,
+            FieldType::kColor, FieldType::kNodeRef, FieldType::kAsset}) {
         if (name == FieldTypeName(t)) field->element_type = t;
       }
     }
@@ -217,7 +220,8 @@ bool TypeRegistry::LoadSchema(const std::filesystem::path& path,
                              section.attributes.GetString("arg")});
     } else if (section.tag == "asset") {
       auto name = section.attributes.GetString("name");
-      if (auto existing = FindAssetType(name); existing && !existing->from_game) continue;
+      if (auto existing = FindAssetType(name); existing && !existing->from_game)
+        continue;
       AssetTypeInfo info;
       info.name = name;
       info.description = section.attributes.GetString("description");

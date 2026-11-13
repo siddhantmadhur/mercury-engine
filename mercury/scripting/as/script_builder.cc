@@ -16,7 +16,8 @@ namespace fs = std::filesystem;
 
 namespace {
 
-void Emit(const BuildOptions& options, std::string* log, const std::string& line) {
+void Emit(const BuildOptions& options, std::string* log,
+          const std::string& line) {
   if (log) *log += line + "\n";
   if (options.on_line) options.on_line(line);
 }
@@ -43,8 +44,8 @@ fs::path ScriptBuilder::StampPath(const fs::path& project_dir) {
   return project_dir / ".mercury" / "scripts" / ".as.stamp";
 }
 
-bool ScriptBuilder::Build(const fs::path& project_dir, const BuildOptions& options,
-                          std::string* log) {
+bool ScriptBuilder::Build(const fs::path& project_dir,
+                          const BuildOptions& options, std::string* log) {
   auto& runtime = ScriptRuntime::Instance();
   if (!runtime.IsInitialized() && !runtime.Initialize()) {
     Emit(options, log, "Could not start the script engine");
@@ -52,9 +53,11 @@ bool ScriptBuilder::Build(const fs::path& project_dir, const BuildOptions& optio
   }
   const auto files = ScriptFiles(project_dir);
   if (files.empty()) {
-    Emit(options, log, "No .as scripts in " + (project_dir / "scripts").string());
+    Emit(options, log,
+         "No .as scripts in " + (project_dir / "scripts").string());
   }
-  Emit(options, log, "Compiling " + std::to_string(files.size()) + " AngelScript file(s)");
+  Emit(options, log,
+       "Compiling " + std::to_string(files.size()) + " AngelScript file(s)");
   if (!runtime.LoadScripts(project_dir)) {
     Emit(options, log, "Script compilation failed");
     return false;

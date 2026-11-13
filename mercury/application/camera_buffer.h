@@ -6,8 +6,8 @@
 
 namespace Mercury {
 
-// Matches VS_CAMERA_BUFFER / CameraUniforms in shaders (std140-style: every float4
-// starts on a 16-byte boundary).
+// Matches VS_CAMERA_BUFFER / CameraUniforms in shaders (std140-style: every
+// float4 starts on a 16-byte boundary).
 struct CameraCBuffer {
   PQ_MATRIX mWorldViewProj;
   PQ_MATRIX mLightViewProj;
@@ -16,7 +16,7 @@ struct CameraCBuffer {
   PQ_FLOAT4 mAmbientColor;
   PQ_FLOAT4 mCameraPosition;
   PQ_FLOAT2 mResolution;
-  PQ_FLOAT2 mShadowParams;    // x: shadow map resolution, y: normal bias
+  PQ_FLOAT2 mShadowParams;  // x: shadow map resolution, y: normal bias
 };
 static_assert(offsetof(CameraCBuffer, mLightDirection) == 128);
 static_assert(sizeof(CameraCBuffer) == 208);

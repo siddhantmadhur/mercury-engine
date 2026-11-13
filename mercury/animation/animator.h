@@ -28,7 +28,8 @@ class AnimatorRuntime {
   void SetFloat(std::string_view name, float value);
   // Moves towards `value` over about `damp_time` seconds (Unity's damped
   // SetFloat).
-  void SetFloat(std::string_view name, float value, float damp_time, float delta_time);
+  void SetFloat(std::string_view name, float value, float damp_time,
+                float delta_time);
   void SetInteger(std::string_view name, int value);
   void SetBool(std::string_view name, bool value);
   void SetTrigger(std::string_view name);
@@ -39,7 +40,8 @@ class AnimatorRuntime {
   bool HasParameter(std::string_view name) const;
 
   // Jumps a layer straight to a state (Animator.Play).
-  void Play(std::string_view state, int layer = -1, float normalized_time = 0.0f);
+  void Play(std::string_view state, int layer = -1,
+            float normalized_time = 0.0f);
   // Name of the layer's current state.
   std::string GetCurrentState(int layer) const;
   float GetNormalizedTime(int layer) const;
@@ -68,7 +70,7 @@ class AnimatorRuntime {
     float time = 0.0f;  // normalized, keeps counting past 1
     int next = -1;
     float next_time = 0.0f;
-    float blend = 0.0f;  // 0..1 through the transition
+    float blend = 0.0f;           // 0..1 through the transition
     float blend_duration = 0.0f;  // seconds
   };
   struct ParameterValue {
@@ -79,11 +81,13 @@ class AnimatorRuntime {
 
   const AnimationClip* Clip(std::string_view name) const;
   // Weighted motions of a state for the current parameters.
-  void StateWeights(const AnimatorState& state, std::vector<float>& weights) const;
+  void StateWeights(const AnimatorState& state,
+                    std::vector<float>& weights) const;
   float StateLength(const AnimatorState& state) const;  // seconds
-  void SampleState(const AnimatorState& state, float normalized_time, float weight,
-                   Pose& pose) const;
-  void SampleClip(const AnimationClip& clip, float seconds, float weight, Pose& pose) const;
+  void SampleState(const AnimatorState& state, float normalized_time,
+                   float weight, Pose& pose) const;
+  void SampleClip(const AnimationClip& clip, float seconds, float weight,
+                  Pose& pose) const;
   bool ConditionsMet(const AnimatorTransition& transition) const;
   void ConsumeTriggers(const AnimatorTransition& transition);
   float Speed(const AnimatorState& state) const;

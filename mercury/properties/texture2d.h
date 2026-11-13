@@ -14,17 +14,17 @@ namespace Mercury {
 
 // stbi_load() through os::ReadBytes, so images can come from a mounted .mpack.
 // Free the result with stbi_image_free().
-stbi_uc *LoadImageFile(const std::string &path, int *width, int *height,
-                       int *channels, int desired_channels);
+stbi_uc* LoadImageFile(const std::string& path, int* width, int* height,
+                       int* channels, int desired_channels);
 
 class Texture2D {
  public:
   Texture2D();  // Creates a blank white texture
-  Texture2D(const std::string &file_path, int depth = 4);
+  Texture2D(const std::string& file_path, int depth = 4);
 
   ~Texture2D();
 
-  const stbi_uc *GetData() const { return raw_data; }
+  const stbi_uc* GetData() const { return raw_data; }
   int GetWidth() const { return x; }
   int GetHeight() const { return y; }
 
@@ -38,7 +38,7 @@ class Texture2D {
   void ClearDirty() { dirty_ = false; }
 
  private:
-  stbi_uc *raw_data = nullptr;
+  stbi_uc* raw_data = nullptr;
   int x, y, channels;
   std::string path_;
 

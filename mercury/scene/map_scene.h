@@ -97,7 +97,14 @@ class GameObject {
   kEntityId entity_ = entt::null;
 };
 
-enum class CollisionEvent { kEnter, kStay, kLeave, kTriggerEnter, kTriggerStay, kTriggerExit };
+enum class CollisionEvent {
+  kEnter,
+  kStay,
+  kLeave,
+  kTriggerEnter,
+  kTriggerStay,
+  kTriggerExit
+};
 
 /**
  * @brief Every collider on a node, unscaled; MapScene builds the node's
@@ -146,10 +153,13 @@ class MapScene : public GameScene {
    * model with `all`). StartModelPreload loads them; call PollModelPreload
    * each frame, which caches the models once they are done and returns true.
    */
-  std::vector<ModelPreloader::Job> MissingModels(const Map& map, bool all = false);
+  std::vector<ModelPreloader::Job> MissingModels(const Map& map,
+                                                 bool all = false);
   // The job that loads one model; its res:// path is where it is cached.
   ModelPreloader::Job MakeModelJob(const std::string& res_path) const;
-  bool HasModelAsset(const std::string& res_path) const { return model_assets_.contains(res_path); }
+  bool HasModelAsset(const std::string& res_path) const {
+    return model_assets_.contains(res_path);
+  }
   void StartModelPreload(std::vector<ModelPreloader::Job> jobs);
   bool IsModelPreloading() const { return preloader_.IsBusy(); }
   bool PollModelPreload();
@@ -196,7 +206,8 @@ class MapScene : public GameScene {
   void OnWorldTransformChanged(kEntityId entity);
   void OnLocalTransformChanged(kEntityId entity);
   bool HasParent(kEntityId entity) const;
-  void SetEntityParent(kEntityId entity, kEntityId new_parent, bool keep_world_transform = true);
+  void SetEntityParent(kEntityId entity, kEntityId new_parent,
+                       bool keep_world_transform = true);
 
   // Scripts refer to a scene by this number, never by pointer.
   uint32_t GetSerial() const { return serial_; }
@@ -251,7 +262,9 @@ class MapScene : public GameScene {
   void RemoveComponent(GameObject object, std::string_view type);
 
   // Loads (once) a prefab; nullptr if it cannot be read.
-  const Map* GetPrefab(std::string_view res_path) { return prefabs_.Get(res_path); }
+  const Map* GetPrefab(std::string_view res_path) {
+    return prefabs_.Get(res_path);
+  }
   // Pass to Map::Load so the map's prefab instances are expanded.
   PrefabCache& GetPrefabCache() { return prefabs_; }
 
@@ -289,10 +302,11 @@ class MapScene : public GameScene {
   // Loads (once) a model with its hierarchy, materials and clips.
   std::shared_ptr<const Model> GetModelAsset(std::string_view res_path);
   // Loads (once) an image for the model renderer; null if unreadable.
-  std::shared_ptr<ImageData> GetImage(std::string_view res_path, bool srgb = true);
+  std::shared_ptr<ImageData> GetImage(std::string_view res_path,
+                                      bool srgb = true);
   // Shared geometry of a built-in shape, scaled by mesh_scale.
-  std::shared_ptr<const MeshGeometry> GetPrimitive(MeshShape shape,
-                                                   glm::vec3 mesh_scale = glm::vec3(1.0f));
+  std::shared_ptr<const MeshGeometry> GetPrimitive(
+      MeshShape shape, glm::vec3 mesh_scale = glm::vec3(1.0f));
   // Triangles of a model (or one of its nodes, with children) for a
   // MeshCollider. False if the model cannot be loaded.
   bool GetModelTriangles(std::string_view res_path, std::string_view node,
@@ -301,7 +315,8 @@ class MapScene : public GameScene {
   // (Re)builds the RenderMesh of a TextMesh.
   void BuildTextMesh(kEntityId entity);
   // A RenderMaterial from a Material asset, tinted by `color`.
-  RenderMaterial MakeRenderMaterial(const MaterialAsset& material, glm::vec4 color);
+  RenderMaterial MakeRenderMaterial(const MaterialAsset& material,
+                                    glm::vec4 color);
   // Rebuilds the entity's physics bodies from its ColliderSet, Rigidbody and
   // CharacterController (after AddComponent, or a scale change).
   void CreatePhysicsBody(kEntityId entity);
@@ -321,14 +336,17 @@ class MapScene : public GameScene {
   RenderSettings GetRenderSettings() const override;
   // Picks the current camera (the enabled one with the highest depth) and
   // lists it with RenderTexture and overlay cameras.
-  std::vector<RenderCamera> GetRenderCameras(float width, float height) override;
+  std::vector<RenderCamera> GetRenderCameras(float width,
+                                             float height) override;
   // Size of a RenderTexture asset (1024x1024 when it cannot be read).
   void GetRenderTextureSize(std::string_view res_path, int& width, int& height);
 
   // The project's input actions, or null if it has none.
   InputActionAsset* GetInputActions() { return input_actions_.get(); }
   // Sound (play mode only, and when a device is available).
-  AudioSystem* GetAudio() { return audio_ && audio_->IsAvailable() ? audio_.get() : nullptr; }
+  AudioSystem* GetAudio() {
+    return audio_ && audio_->IsAvailable() ? audio_.get() : nullptr;
+  }
 
   // Every UIDocument's panels (play mode only).
   UI::UISystem& GetUI() { return ui_; }
@@ -353,7 +371,8 @@ class MapScene : public GameScene {
   void UpdateFrameSystems(float dt);
   // Builds `node`'s subtree under `parent` at `path` (entities only; no
   // physics or Awake).
-  kEntityId BuildSubtree(const MapNode& node, kEntityId parent, const std::string& path,
+  kEntityId BuildSubtree(const MapNode& node, kEntityId parent,
+                         const std::string& path,
                          std::vector<kEntityId>& created);
   void FinishCreated(const std::vector<kEntityId>& created);
   std::string UniqueChildPath(kEntityId parent, std::string_view name) const;
@@ -398,11 +417,13 @@ class MapScene : public GameScene {
   void FinishLoadingMap();
   void PlayAudioOnAwake();
   ModelImportSettings ModelSettings(const std::string& file) const;
-  std::map<std::string, std::shared_ptr<const Model>, std::less<>> model_assets_;
+  std::map<std::string, std::shared_ptr<const Model>, std::less<>>
+      model_assets_;
   std::map<std::string, std::shared_ptr<ImageData>, std::less<>> images_;
   std::map<std::string, std::shared_ptr<const MeshGeometry>> primitives_;
   // Font atlas snapshots for TextMesh, by atlas id and version.
-  std::map<std::pair<uint32_t, uint64_t>, std::shared_ptr<ImageData>> text_atlases_;
+  std::map<std::pair<uint32_t, uint64_t>, std::shared_ptr<ImageData>>
+      text_atlases_;
   std::vector<kEntityId> pending_destroy_;
 
   std::mutex collision_mutex_;
@@ -416,7 +437,8 @@ class MapScene : public GameScene {
   void OnAudioSourceDestroyed(entt::registry& registry, kEntityId entity);
   // Connects an Animator to the model it animates.
   void SetupAnimator(kEntityId entity);
-  std::map<std::string, std::shared_ptr<const AnimatorController>, std::less<>> controllers_;
+  std::map<std::string, std::shared_ptr<const AnimatorController>, std::less<>>
+      controllers_;
 };
 
 template <typename T>

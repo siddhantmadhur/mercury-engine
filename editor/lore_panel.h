@@ -32,7 +32,8 @@ class LorePanel : public wxPanel {
   void RebuildUi();
   void PopulateRepoUi();
   void ShowLoreOptionsDialog();
-  void PopulateDiffText(wxTextCtrl* ctrl, const std::vector<std::string>& lines);
+  void PopulateDiffText(wxTextCtrl* ctrl,
+                        const std::vector<std::string>& lines);
 
   LoreVcs& lore_;
   uint64_t last_rev_ = 0;

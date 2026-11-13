@@ -42,15 +42,24 @@ Key InputManager::KeyFromName(std::string_view name) {
     if (n >= 1 && n <= 25) return GLFW_KEY_F1 + (n - 1);
   }
   static const std::map<std::string, Key> kNamed = {
-      {"SPACE", GLFW_KEY_SPACE},          {"ESCAPE", GLFW_KEY_ESCAPE},
-      {"ESC", GLFW_KEY_ESCAPE},           {"ENTER", GLFW_KEY_ENTER},
-      {"RETURN", GLFW_KEY_ENTER},         {"TAB", GLFW_KEY_TAB},
-      {"BACKSPACE", GLFW_KEY_BACKSPACE},  {"UP", GLFW_KEY_UP},
-      {"DOWN", GLFW_KEY_DOWN},            {"LEFT", GLFW_KEY_LEFT},
-      {"RIGHT", GLFW_KEY_RIGHT},          {"SHIFT", GLFW_KEY_LEFT_SHIFT},
-      {"LEFT_SHIFT", GLFW_KEY_LEFT_SHIFT}, {"RIGHT_SHIFT", GLFW_KEY_RIGHT_SHIFT},
-      {"CTRL", GLFW_KEY_LEFT_CONTROL},    {"LEFT_CTRL", GLFW_KEY_LEFT_CONTROL},
-      {"RIGHT_CTRL", GLFW_KEY_RIGHT_CONTROL}, {"ALT", GLFW_KEY_LEFT_ALT},
+      {"SPACE", GLFW_KEY_SPACE},
+      {"ESCAPE", GLFW_KEY_ESCAPE},
+      {"ESC", GLFW_KEY_ESCAPE},
+      {"ENTER", GLFW_KEY_ENTER},
+      {"RETURN", GLFW_KEY_ENTER},
+      {"TAB", GLFW_KEY_TAB},
+      {"BACKSPACE", GLFW_KEY_BACKSPACE},
+      {"UP", GLFW_KEY_UP},
+      {"DOWN", GLFW_KEY_DOWN},
+      {"LEFT", GLFW_KEY_LEFT},
+      {"RIGHT", GLFW_KEY_RIGHT},
+      {"SHIFT", GLFW_KEY_LEFT_SHIFT},
+      {"LEFT_SHIFT", GLFW_KEY_LEFT_SHIFT},
+      {"RIGHT_SHIFT", GLFW_KEY_RIGHT_SHIFT},
+      {"CTRL", GLFW_KEY_LEFT_CONTROL},
+      {"LEFT_CTRL", GLFW_KEY_LEFT_CONTROL},
+      {"RIGHT_CTRL", GLFW_KEY_RIGHT_CONTROL},
+      {"ALT", GLFW_KEY_LEFT_ALT},
   };
   auto it = kNamed.find(key);
   return it == kNamed.end() ? GLFW_KEY_UNKNOWN : it->second;
@@ -171,7 +180,8 @@ void InputManager::PollGamepads() {
     GLFWgamepadstate state;
     if (!glfwGetGamepadState(jid, &state)) continue;
     gamepad_.connected = true;
-    for (int i = 0; i < 15; i++) gamepad_.buttons[i] = state.buttons[i] == GLFW_PRESS;
+    for (int i = 0; i < 15; i++)
+      gamepad_.buttons[i] = state.buttons[i] == GLFW_PRESS;
     for (int i = 0; i < 6; i++) gamepad_.axes[i] = state.axes[i];
     // Triggers report -1..1; Unity reports 0..1.
     gamepad_.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] =
@@ -191,7 +201,8 @@ void InputManager::HandleScrollCallback(GLFWwindow* window, double xoffset,
   frame_events_.push_back(event);
 }
 
-void InputManager::HandleCharCallback(GLFWwindow* window, unsigned int codepoint) {
+void InputManager::HandleCharCallback(GLFWwindow* window,
+                                      unsigned int codepoint) {
   InputEvent event;
   event.type = InputEvent::Type::kChar;
   event.codepoint = static_cast<char32_t>(codepoint);

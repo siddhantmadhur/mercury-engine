@@ -70,15 +70,17 @@ void LauncherFrame::BuildLayout() {
   auto* title = new wxStaticText(hdr, wxID_ANY, "MERCURY ENGINE");
   title->SetFont(HeaderFont(14));
   auto* sub = new wxStaticText(
-      hdr, wxID_ANY, "Select a recent project, browse for a .mproj, or create one");
+      hdr, wxID_ANY,
+      "Select a recent project, browse for a .mproj, or create one");
   sub->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   title_box->Add(title, 0);
   title_box->Add(sub, 0, wxTOP, 2);
 
   auto* prefs_btn = new wxButton(hdr, wxID_ANY, "Preferences...");
   ApplyButtonIconAndPadding(prefs_btn, EditorIcon::kPreferences);
-  prefs_btn->Bind(wxEVT_BUTTON,
-                  [this](wxCommandEvent&) { ShowPreferencesDialog(this, scene_); });
+  prefs_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    ShowPreferencesDialog(this, scene_);
+  });
 
   hdr_s->Add(title_box, 1, wxALIGN_CENTER_VERTICAL | wxALL, 12);
   hdr_s->Add(prefs_btn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
@@ -107,8 +109,8 @@ void LauncherFrame::BuildLayout() {
   rec_hdr->Add(open_dir_btn, 0);
   left_s->Add(rec_hdr, 0, wxEXPAND | wxALL, 8);
 
-  recent_list_ = new wxListCtrl(left, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                wxLC_REPORT | wxLC_SINGLE_SEL);
+  recent_list_ = new wxListCtrl(left, wxID_ANY, wxDefaultPosition,
+                                wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
   recent_list_->InsertColumn(0, "Project", wxLIST_FORMAT_LEFT, 150);
   recent_list_->InsertColumn(1, "Location", wxLIST_FORMAT_LEFT, 310);
   left_s->Add(recent_list_, 1, wxEXPAND | wxLEFT | wxRIGHT, 8);
@@ -142,8 +144,8 @@ void LauncherFrame::BuildLayout() {
   });
 
   recent_list_->Bind(wxEVT_LIST_ITEM_SELECTED, [this](wxListEvent&) {
-    long idx = recent_list_->GetNextItem(-1, wxLIST_NEXT_ALL,
-                                         wxLIST_STATE_SELECTED);
+    long idx =
+        recent_list_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     const bool valid = idx >= 0;
     open_recent_btn_->Enable(valid);
     remove_recent_btn_->Enable(valid);
@@ -181,16 +183,16 @@ void LauncherFrame::BuildLayout() {
   });
 
   open_recent_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    long idx = recent_list_->GetNextItem(-1, wxLIST_NEXT_ALL,
-                                         wxLIST_STATE_SELECTED);
+    long idx =
+        recent_list_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     const auto& rec = scene_.Settings().recent_projects;
     if (idx >= 0 && static_cast<size_t>(idx) < rec.size()) {
       TryOpenPath(rec[idx]);
     }
   });
   remove_recent_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    long idx = recent_list_->GetNextItem(-1, wxLIST_NEXT_ALL,
-                                         wxLIST_STATE_SELECTED);
+    long idx =
+        recent_list_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     auto& rec = scene_.Settings().recent_projects;
     if (idx >= 0 && static_cast<size_t>(idx) < rec.size()) {
       rec.erase(rec.begin() + idx);
@@ -217,9 +219,8 @@ void LauncherFrame::BuildLayout() {
   right_s->Add(dim_lbl, 0, wxLEFT | wxRIGHT | wxTOP, 10);
 
   auto* dim_row = new wxBoxSizer(wxHORIZONTAL);
-  radio_3d_ =
-      new wxRadioButton(right, wxID_ANY, "3D", wxDefaultPosition, wxDefaultSize,
-                        wxRB_GROUP);
+  radio_3d_ = new wxRadioButton(right, wxID_ANY, "3D", wxDefaultPosition,
+                                wxDefaultSize, wxRB_GROUP);
   radio_2d_ = new wxRadioButton(right, wxID_ANY, "2D");
   radio_3d_->SetValue(true);
   dim_row->Add(radio_3d_, 0, wxRIGHT, 16);
@@ -235,8 +236,7 @@ void LauncherFrame::BuildLayout() {
   auto* browse_btn = new wxButton(right, wxID_ANY, "Browse...");
   ApplyButtonPadding(browse_btn, 10);
   browse_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    wxDirDialog dlg(this, "Choose Parent Folder",
-                    new_folder_ctrl_->GetValue());
+    wxDirDialog dlg(this, "Choose Parent Folder", new_folder_ctrl_->GetValue());
     if (dlg.ShowModal() == wxID_OK) {
       new_folder_ctrl_->SetValue(dlg.GetPath());
     }
@@ -275,8 +275,10 @@ void LauncherFrame::BuildLayout() {
   auto* foot = new wxPanel(this);
   auto* foot_s = new wxBoxSizer(wxHORIZONTAL);
   error_lbl_ = new wxStaticText(
-      foot, wxID_ANY, "Tip: Drag and drop a .mproj file or project folder here.");
-  error_lbl_->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+      foot, wxID_ANY,
+      "Tip: Drag and drop a .mproj file or project folder here.");
+  error_lbl_->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
   foot_s->Add(error_lbl_, 1, wxALIGN_CENTER_VERTICAL | wxALL, 8);
   foot->SetSizer(foot_s);
   root->Add(foot, 0, wxEXPAND);

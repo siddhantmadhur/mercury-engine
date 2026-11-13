@@ -18,16 +18,18 @@ Panel* UISystem::GetPanel(const std::string& settings_path,
   auto panel = std::make_unique<Panel>(&resources_);
   panel->SetSettings(settings);
   panel->clipboard.get = [] { return InputManager::GetClipboard(); };
-  panel->clipboard.set = [](const std::string& text) { InputManager::SetClipboard(text); };
+  panel->clipboard.set = [](const std::string& text) {
+    InputManager::SetClipboard(text);
+  };
   Panel* raw = panel.get();
   panel_list_.push_back(std::move(panel));
   panels_.push_back({settings_path, raw});
   return raw;
 }
 
-VisualElement* UISystem::AddDocument(Panel* panel,
-                                     const std::shared_ptr<VisualTreeAsset>& tree,
-                                     float sort_order) {
+VisualElement* UISystem::AddDocument(
+    Panel* panel, const std::shared_ptr<VisualTreeAsset>& tree,
+    float sort_order) {
   auto root = std::make_unique<TemplateContainer>();
   root->AddToClassList("unity-ui-document__root");
   root->SetPickingMode(PickingMode::kIgnore);
@@ -50,8 +52,9 @@ VisualElement* UISystem::AddDocument(Panel* panel,
 }
 
 void UISystem::RemoveDocument(VisualElement* root) {
-  auto it = std::find_if(documents_.begin(), documents_.end(),
-                         [root](const DocumentEntry& d) { return d.root == root; });
+  auto it =
+      std::find_if(documents_.begin(), documents_.end(),
+                   [root](const DocumentEntry& d) { return d.root == root; });
   if (it == documents_.end()) return;
   root->RemoveFromHierarchy();
   documents_.erase(it);
@@ -78,7 +81,8 @@ void UISystem::ProcessInput(const InputManager& input) {
   if (panel_list_.empty()) return;
   UIInputFrame frame;
   // The cursor is in window coordinates; panels work in framebuffer pixels.
-  frame.pointer = const_cast<InputManager&>(input).GetCursorPos() * input.GetFramebufferScale();
+  frame.pointer = const_cast<InputManager&>(input).GetCursorPos() *
+                  input.GetFramebufferScale();
   frame.pointer_inside = input.IsCursorInWindow();
   frame.mouse_available = !input.ExternalUIWantsMouse();
   frame.keyboard_available = !input.ExternalUIWantsKeyboard();
@@ -148,24 +152,28 @@ void UISystem::ProcessInput(const InputManager& input) {
     panel_frame.keyboard_available = frame.keyboard_available;
     // Panels below the one under the pointer see it leave.
     panel_frame.pointer_inside =
-        frame.pointer_inside && (pointer_panel == nullptr || panel == pointer_panel);
+        frame.pointer_inside &&
+        (pointer_panel == nullptr || panel == pointer_panel);
     if (panel == pointer_panel || (!pointer_panel && panel == panels.front())) {
       panel_frame.events = pointer_events.events;
     } else {
       // Releases still reach every panel so drags always end.
       for (const auto& e : pointer_events.events) {
-        if (e.type == UIInputEvent::Type::kPointerUp) panel_frame.events.push_back(e);
+        if (e.type == UIInputEvent::Type::kPointerUp)
+          panel_frame.events.push_back(e);
       }
     }
     if (panel == keyboard_panel_) {
-      panel_frame.events.insert(panel_frame.events.end(), key_events.events.begin(),
+      panel_frame.events.insert(panel_frame.events.end(),
+                                key_events.events.begin(),
                                 key_events.events.end());
     }
     panel->DispatchInput(panel_frame);
   }
 }
 
-void UISystem::Update(double dt_seconds, glm::vec2 screen_size, float dpi_scale) {
+void UISystem::Update(double dt_seconds, glm::vec2 screen_size,
+                      float dpi_scale) {
   draw_data_.Clear();
   if (panel_list_.empty()) return;
   auto panels = PanelsTopFirst();

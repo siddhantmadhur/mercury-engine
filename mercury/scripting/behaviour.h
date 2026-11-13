@@ -1,13 +1,15 @@
 /*
  * behaviour.h
  *
- * The engine's internal base class for scripts. MapScene runs Behaviours: it calls Awake, OnStart,
- * OnFrame, OnTick and the collision callbacks, and a Behaviour's Reflect() describes the fields the
- * Inspector shows and the map saves.
+ * The engine's internal base class for scripts. MapScene runs Behaviours: it
+ * calls Awake, OnStart, OnFrame, OnTick and the collision callbacks, and a
+ * Behaviour's Reflect() describes the fields the Inspector shows and the map
+ * saves.
  *
- * Game scripts are not written against this class. They are AngelScript classes (mercury/scripting/as); each one is run by a ScriptBehaviour,
- * which forwards every callback to the script object. Tests of the engine may derive from Behaviour directly
- * (see tests/test_scripts.h).
+ * Game scripts are not written against this class. They are AngelScript classes
+ * (mercury/scripting/as); each one is run by a ScriptBehaviour, which forwards
+ * every callback to the script object. Tests of the engine may derive from
+ * Behaviour directly (see tests/test_scripts.h).
  */
 #ifndef MERCURY_SCRIPTING_BEHAVIOUR_H
 #define MERCURY_SCRIPTING_BEHAVIOUR_H
@@ -93,7 +95,9 @@ class Behaviour {
 
   // Find another object by its path from the map root, e.g. "Walls/Left".
   GameObject Find(std::string_view path) const { return scene_->Find(path); }
-  GameObject FindWithTag(std::string_view tag) const { return scene_->FindWithTag(tag); }
+  GameObject FindWithTag(std::string_view tag) const {
+    return scene_->FindWithTag(tag);
+  }
   GameObject Get(const NodeRef& ref) const;
   // Removes an object (and its children) at the end of this tick or frame.
   void Destroy(GameObject object) const { scene_->Destroy(object); }
@@ -104,7 +108,9 @@ class Behaviour {
   }
 
   GameObject GetParent() const { return GetGameObject().GetParent(); }
-  std::vector<GameObject> GetChildren() const { return GetGameObject().GetChildren(); }
+  std::vector<GameObject> GetChildren() const {
+    return GetGameObject().GetChildren();
+  }
 
   void AddForce(glm::vec3 force, ForceMode mode = ForceMode::kForce) const {
     GetGameObject().AddForce(force, mode);
@@ -139,7 +145,9 @@ class Behaviour {
   void Quit() const { scene_->QuitScene(); }
   // Replaces the scene with another map at the start of the next frame,
   // e.g. LoadMap("res://maps/level2.mmap").
-  void LoadMap(std::string res_path) const { scene_->LoadMap(std::move(res_path)); }
+  void LoadMap(std::string res_path) const {
+    scene_->LoadMap(std::move(res_path));
+  }
 
  private:
   friend class MapScene;

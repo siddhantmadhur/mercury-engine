@@ -44,19 +44,23 @@ T& Assign(T* self, const T& other) {
 // destructor would be returned through a hidden pointer instead (the engine's
 // COMPLEX_RETURN_MASK), which the C++ ABI does not match for small structs.
 template <typename T>
-void RegisterValueType(asIScriptEngine* engine, const char* name, asQWORD extra_flags = 0) {
-  engine->RegisterObjectType(name, sizeof(T),
-                             asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS | extra_flags);
+void RegisterValueType(asIScriptEngine* engine, const char* name,
+                       asQWORD extra_flags = 0) {
+  engine->RegisterObjectType(
+      name, sizeof(T), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS | extra_flags);
   const std::string decl(name);
   engine->RegisterObjectBehaviour(name, asBEHAVE_CONSTRUCT, "void f()",
-                                  asFUNCTION(ConstructDefault<T>), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectBehaviour(name, asBEHAVE_CONSTRUCT,
-                                  ("void f(const " + decl + " &in)").c_str(),
-                                  asFUNCTION(ConstructCopy<T>), asCALL_CDECL_OBJFIRST);
+                                  asFUNCTION(ConstructDefault<T>),
+                                  asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectBehaviour(
+      name, asBEHAVE_CONSTRUCT, ("void f(const " + decl + " &in)").c_str(),
+      asFUNCTION(ConstructCopy<T>), asCALL_CDECL_OBJFIRST);
   engine->RegisterObjectBehaviour(name, asBEHAVE_DESTRUCT, "void f()",
-                                  asFUNCTION(Destroy<T>), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod(name, (decl + " &opAssign(const " + decl + " &in)").c_str(),
-                               asFUNCTION(Assign<T>), asCALL_CDECL_OBJFIRST);
+                                  asFUNCTION(Destroy<T>),
+                                  asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod(
+      name, (decl + " &opAssign(const " + decl + " &in)").c_str(),
+      asFUNCTION(Assign<T>), asCALL_CDECL_OBJFIRST);
 }
 
 // A value type with a non-trivial constructor/destructor (e.g. a std::string
@@ -64,17 +68,21 @@ void RegisterValueType(asIScriptEngine* engine, const char* name, asQWORD extra_
 // for objects larger than two registers.
 template <typename T>
 void RegisterComplexValueType(asIScriptEngine* engine, const char* name) {
-  engine->RegisterObjectType(name, sizeof(T), asOBJ_VALUE | asOBJ_APP_CLASS_CDAK);
+  engine->RegisterObjectType(name, sizeof(T),
+                             asOBJ_VALUE | asOBJ_APP_CLASS_CDAK);
   const std::string decl(name);
   engine->RegisterObjectBehaviour(name, asBEHAVE_CONSTRUCT, "void f()",
-                                  asFUNCTION(ConstructDefault<T>), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectBehaviour(name, asBEHAVE_CONSTRUCT,
-                                  ("void f(const " + decl + " &in)").c_str(),
-                                  asFUNCTION(ConstructCopy<T>), asCALL_CDECL_OBJFIRST);
+                                  asFUNCTION(ConstructDefault<T>),
+                                  asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectBehaviour(
+      name, asBEHAVE_CONSTRUCT, ("void f(const " + decl + " &in)").c_str(),
+      asFUNCTION(ConstructCopy<T>), asCALL_CDECL_OBJFIRST);
   engine->RegisterObjectBehaviour(name, asBEHAVE_DESTRUCT, "void f()",
-                                  asFUNCTION(Destroy<T>), asCALL_CDECL_OBJFIRST);
-  engine->RegisterObjectMethod(name, (decl + " &opAssign(const " + decl + " &in)").c_str(),
-                               asFUNCTION(Assign<T>), asCALL_CDECL_OBJFIRST);
+                                  asFUNCTION(Destroy<T>),
+                                  asCALL_CDECL_OBJFIRST);
+  engine->RegisterObjectMethod(
+      name, (decl + " &opAssign(const " + decl + " &in)").c_str(),
+      asFUNCTION(Assign<T>), asCALL_CDECL_OBJFIRST);
 }
 
 inline ScriptRuntime& Runtime() { return ScriptRuntime::Instance(); }

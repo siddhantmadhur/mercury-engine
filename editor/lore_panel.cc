@@ -30,8 +30,8 @@ bool ShowLoreOptionsModal(wxWindow* parent, LoreVcs& lore) {
   auto* remote_lbl = new wxStaticText(&dlg, wxID_ANY, "Repository Server URL");
   root->Add(remote_lbl, 0, wxLEFT | wxRIGHT | wxTOP, 12);
 
-  auto* remote_ctrl = new wxTextCtrl(
-      &dlg, wxID_ANY, wxString::FromUTF8(lore.ReadRemoteUrl()));
+  auto* remote_ctrl =
+      new wxTextCtrl(&dlg, wxID_ANY, wxString::FromUTF8(lore.ReadRemoteUrl()));
   remote_ctrl->SetHint("lore://host:port/repo");
   root->Add(remote_ctrl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 6);
 
@@ -39,8 +39,7 @@ bool ShowLoreOptionsModal(wxWindow* parent, LoreVcs& lore) {
   root->Add(exe_lbl, 0, wxLEFT | wxRIGHT | wxTOP, 12);
 
   auto* exe_ctrl = new wxTextCtrl(
-      &dlg, wxID_ANY,
-      wxString::FromUTF8(lore.Settings().lore_executable));
+      &dlg, wxID_ANY, wxString::FromUTF8(lore.Settings().lore_executable));
   exe_ctrl->SetHint("lore");
   root->Add(exe_ctrl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 6);
 
@@ -109,7 +108,8 @@ void LorePanel::RebuildUi() {
   if (!last_has_project_) {
     auto* lbl =
         new wxStaticText(this, wxID_ANY, "Open a project to use Lore VCS.");
-    lbl->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+    lbl->SetForegroundColour(
+        wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     root_sizer_->Add(lbl, 0, wxALL, 14);
     Layout();
     Thaw();
@@ -120,29 +120,29 @@ void LorePanel::RebuildUi() {
     init_panel_ = new wxPanel(this, wxID_ANY);
     auto* s = new wxBoxSizer(wxVERTICAL);
 
-    auto* h = new wxStaticText(init_panel_, wxID_ANY,
-                               "Initialize Lore Repository");
+    auto* h =
+        new wxStaticText(init_panel_, wxID_ANY, "Initialize Lore Repository");
     h->SetFont(HeaderFont(1));
     s->Add(h, 0, wxBOTTOM, 6);
 
     auto* desc = new wxStaticText(
         init_panel_, wxID_ANY,
         "No .lore repository was found in this project folder.");
-    desc->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+    desc->SetForegroundColour(
+        wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
     s->Add(desc, 0, wxBOTTOM, 12);
 
     auto* srv_lbl = new wxStaticText(init_panel_, wxID_ANY, "Server URL");
     s->Add(srv_lbl, 0, wxBOTTOM, 3);
-    init_server_ = new wxTextCtrl(init_panel_, wxID_ANY, "http://127.0.0.1:4242");
+    init_server_ =
+        new wxTextCtrl(init_panel_, wxID_ANY, "http://127.0.0.1:4242");
     s->Add(init_server_, 0, wxEXPAND | wxBOTTOM, 8);
 
-    auto* name_lbl =
-        new wxStaticText(init_panel_, wxID_ANY, "Repository Name");
+    auto* name_lbl = new wxStaticText(init_panel_, wxID_ANY, "Repository Name");
     s->Add(name_lbl, 0, wxBOTTOM, 3);
     std::string def_name =
-        lore_.GetProject()
-            ? lore_.GetProject()->GetRoot().filename().string()
-            : "project";
+        lore_.GetProject() ? lore_.GetProject()->GetRoot().filename().string()
+                           : "project";
     init_repo_ =
         new wxTextCtrl(init_panel_, wxID_ANY, wxString::FromUTF8(def_name));
     s->Add(init_repo_, 0, wxEXPAND | wxBOTTOM, 10);
@@ -152,8 +152,7 @@ void LorePanel::RebuildUi() {
     s->Add(init_err_, 0, wxBOTTOM, 8);
 
     auto* btn_row = new wxBoxSizer(wxHORIZONTAL);
-    auto* create_btn =
-        new wxButton(init_panel_, wxID_ANY, "Create Repository");
+    auto* create_btn = new wxButton(init_panel_, wxID_ANY, "Create Repository");
     create_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
       lore_.Initialize(init_server_->GetValue().ToStdString(),
                        init_repo_->GetValue().ToStdString());
@@ -222,8 +221,9 @@ void LorePanel::RebuildUi() {
   auto* es = new wxBoxSizer(wxHORIZONTAL);
   err_text_ = new wxStaticText(err_banner_, wxID_ANY, wxEmptyString);
   err_text_->SetFont(err_text_->GetFont().Bold());
-  auto* dismiss_btn = new wxButton(err_banner_, wxID_ANY, "x", wxDefaultPosition,
-                                   wxSize(22, 20), wxBU_EXACTFIT);
+  auto* dismiss_btn =
+      new wxButton(err_banner_, wxID_ANY, "x", wxDefaultPosition,
+                   wxSize(22, 20), wxBU_EXACTFIT);
   es->Add(err_text_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
   es->Add(dismiss_btn, 0, wxALIGN_CENTER_VERTICAL);
   auto* ewrap = new wxBoxSizer(wxVERTICAL);
@@ -284,9 +284,9 @@ void LorePanel::RebuildUi() {
   diff_view_->SetFont(MonospaceFont());
   rhs->Add(diff_view_, 1, wxEXPAND | wxALL, 4);
 
-  commit_msg_ = new wxTextCtrl(right_pane, wxID_ANY, wxEmptyString,
-                               wxDefaultPosition, wxSize(-1, 56),
-                               wxTE_MULTILINE);
+  commit_msg_ =
+      new wxTextCtrl(right_pane, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                     wxSize(-1, 56), wxTE_MULTILINE);
   commit_msg_->SetHint("Commit message...");
   rhs->Add(commit_msg_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
 
@@ -313,9 +313,9 @@ void LorePanel::RebuildUi() {
 
   auto* htop = new wxPanel(hsplit, wxID_ANY);
   auto* hts = new wxBoxSizer(wxVERTICAL);
-  history_list_ = new wxListCtrl(
-      htop, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
+  history_list_ =
+      new wxListCtrl(htop, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                     wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
   history_list_->InsertColumn(0, "Rev", wxLIST_FORMAT_LEFT, 56);
   history_list_->InsertColumn(1, "Author", wxLIST_FORMAT_LEFT, 110);
   history_list_->InsertColumn(2, "Date", wxLIST_FORMAT_LEFT, 120);
@@ -365,9 +365,9 @@ void LorePanel::RebuildUi() {
   lbar->Add(unlock_btn, 0, wxALIGN_CENTER_VERTICAL);
   lks->Add(lbar, 0, wxEXPAND | wxALL, 6);
 
-  locks_list_ = new wxListCtrl(
-      locks_tab, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
+  locks_list_ =
+      new wxListCtrl(locks_tab, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                     wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_NONE);
   locks_list_->InsertColumn(0, "Path", wxLIST_FORMAT_LEFT, 260);
   locks_list_->InsertColumn(1, "Owner", wxLIST_FORMAT_LEFT, 120);
   locks_list_->InsertColumn(2, "Branch", wxLIST_FORMAT_LEFT, 110);
@@ -400,16 +400,13 @@ void LorePanel::RebuildUi() {
   sync_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { lore_.Sync(); });
   push_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { lore_.Push(); });
   refresh_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { lore_.Refresh(); });
-  opt_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    ShowLoreOptionsModal(this, lore_);
-  });
-  dismiss_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    lore_.ClearError();
-  });
+  opt_btn->Bind(wxEVT_BUTTON,
+                [this](wxCommandEvent&) { ShowLoreOptionsModal(this, lore_); });
+  dismiss_btn->Bind(wxEVT_BUTTON,
+                    [this](wxCommandEvent&) { lore_.ClearError(); });
 
-  stage_all_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    lore_.StageAll();
-  });
+  stage_all_btn->Bind(wxEVT_BUTTON,
+                      [this](wxCommandEvent&) { lore_.StageAll(); });
   unstage_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     const long idx =
         staged_list_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
@@ -440,9 +437,12 @@ void LorePanel::RebuildUi() {
     const bool locked = lore_.Locks().count(ch.path) > 0;
     menu.Append(3, locked ? "Unlock" : "Lock");
     menu.Bind(wxEVT_MENU, [this, ch, locked](wxCommandEvent& evt) {
-      if (evt.GetId() == 1) lore_.Unstage({ch.path});
-      else if (evt.GetId() == 2) lore_.Discard(ch);
-      else if (evt.GetId() == 3) lore_.LockPaths({ch.path}, !locked);
+      if (evt.GetId() == 1)
+        lore_.Unstage({ch.path});
+      else if (evt.GetId() == 2)
+        lore_.Discard(ch);
+      else if (evt.GetId() == 3)
+        lore_.LockPaths({ch.path}, !locked);
     });
     staged_list_->PopupMenu(&menu);
   });
@@ -469,9 +469,12 @@ void LorePanel::RebuildUi() {
     const bool locked = lore_.Locks().count(ch.path) > 0;
     menu.Append(3, locked ? "Unlock" : "Lock");
     menu.Bind(wxEVT_MENU, [this, ch, locked](wxCommandEvent& evt) {
-      if (evt.GetId() == 1) lore_.Stage({ch.path});
-      else if (evt.GetId() == 2) lore_.Discard(ch);
-      else if (evt.GetId() == 3) lore_.LockPaths({ch.path}, !locked);
+      if (evt.GetId() == 1)
+        lore_.Stage({ch.path});
+      else if (evt.GetId() == 2)
+        lore_.Discard(ch);
+      else if (evt.GetId() == 3)
+        lore_.LockPaths({ch.path}, !locked);
     });
     unstaged_list_->PopupMenu(&menu);
   });
@@ -538,9 +541,8 @@ void LorePanel::PopulateDiffText(wxTextCtrl* ctrl,
   ctrl->Freeze();
   ctrl->Clear();
   const wxColour win_bg = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
-  const bool dark_theme =
-      (win_bg.Red() * 299 + win_bg.Green() * 587 + win_bg.Blue() * 114) <
-      128000;
+  const bool dark_theme = (win_bg.Red() * 299 + win_bg.Green() * 587 +
+                           win_bg.Blue() * 114) < 128000;
   for (const auto& line : lines) {
     wxColour col = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
     if (line.rfind("+++", 0) == 0 || line.rfind("---", 0) == 0 ||
@@ -603,7 +605,8 @@ void LorePanel::PopulateRepoUi() {
 
   // Status text
   if (sync_lbl_) {
-    std::string status = "r" + std::to_string(std::max(0, lore_.LocalRevision()));
+    std::string status =
+        "r" + std::to_string(std::max(0, lore_.LocalRevision()));
     if (!lore_.SyncState().empty()) status += " — " + lore_.SyncState();
     sync_lbl_->SetLabel(wxString::FromUTF8(status));
     sync_lbl_->SetFont(lore_.IsAheadOfRemote() ? GetFont().Bold() : GetFont());
@@ -631,8 +634,10 @@ void LorePanel::PopulateRepoUi() {
   staged_items_.clear();
   unstaged_items_.clear();
   for (const auto& c : lore_.Changes()) {
-    if (c.section == LoreVcs::Section::kStaged) staged_items_.push_back(c);
-    else unstaged_items_.push_back(c);
+    if (c.section == LoreVcs::Section::kStaged)
+      staged_items_.push_back(c);
+    else
+      unstaged_items_.push_back(c);
   }
   if (staged_list_) {
     staged_list_->Freeze();

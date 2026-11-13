@@ -166,8 +166,10 @@ int IndexAmongType(const MapNode& node, const ComponentData* component) {
 
 void ReadNodeAttributes(const mtext::PropertyList& attributes, MapNode& node) {
   if (attributes.Has("tag")) node.tag = attributes.GetString("tag");
-  if (attributes.Has("layer")) node.layer = static_cast<int>(attributes.GetInt("layer"));
-  if (attributes.Has("active")) node.active = attributes.GetBool("active", true);
+  if (attributes.Has("layer"))
+    node.layer = static_cast<int>(attributes.GetInt("layer"));
+  if (attributes.Has("active"))
+    node.active = attributes.GetBool("active", true);
 }
 
 // Marks a node (and its subtree) as created by a prefab.
@@ -245,7 +247,8 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
       // Without the prefab the node stays empty but keeps its link, so the
       // file still saves back unchanged.
       if (prefabs) {
-        if (error) *error = std::format("{}: could not load prefab {}", line, path);
+        if (error)
+          *error = std::format("{}: could not load prefab {}", line, path);
       }
       return !prefabs;
     }
@@ -279,7 +282,9 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
         if (auto ext = value->Get<mtext::ExtResource>()) {
           auto it = ext_paths.find(ext->id);
           if (it == ext_paths.end()) {
-            return fail(section.line, std::format("ExtResource(\"{}\") is not declared", ext->id));
+            return fail(
+                section.line,
+                std::format("ExtResource(\"{}\") is not declared", ext->id));
           }
           instance = it->second;
         } else if (auto res = value->Get<mtext::Resource>()) {
@@ -292,7 +297,8 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
         if (root) return fail(section.line, "only one node may omit parent");
         root = std::make_unique<MapNode>();
         root->name = name;
-        if (!instance.empty() && !expand_prefab(*root, instance, section.line)) {
+        if (!instance.empty() &&
+            !expand_prefab(*root, instance, section.line)) {
           return false;
         }
         ReadNodeAttributes(section.attributes, *root);
@@ -342,13 +348,15 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
       }
       ComponentData component{type, section.properties};
       if (auto missing = resolve_ext(component.properties); !missing.empty()) {
-        return fail(section.line,
-                    std::format("ExtResource(\"{}\") is not declared", missing));
+        return fail(
+            section.line,
+            std::format("ExtResource(\"{}\") is not declared", missing));
       }
       // Inside a prefab instance a component section overrides the prefab's
       // component of that type (the index-th one) instead of adding one.
       if (HasPrefabBase(*node)) {
-        const int index = static_cast<int>(section.attributes.GetInt("index", 0));
+        const int index =
+            static_cast<int>(section.attributes.GetInt("index", 0));
         if (ComponentData* target = node->FindComponent(type, index)) {
           if (section.attributes.GetBool("removed", false)) {
             std::erase_if(node->components,
@@ -399,7 +407,8 @@ std::string Map::SaveToString(const ResourceTypeFn& resource_type) const {
   };
   std::vector<PendingSection> pending;
 
-  auto write_node_attributes = [](const MapNode& node, mtext::PropertyList& attributes,
+  auto write_node_attributes = [](const MapNode& node,
+                                  mtext::PropertyList& attributes,
                                   bool only_changes) {
     const bool has_base = only_changes && HasPrefabBase(node);
     const std::string base_tag = has_base ? node.prefab_base_tag : "";
@@ -498,7 +507,8 @@ std::string Map::SaveToString(const ResourceTypeFn& resource_type) const {
     resource_order.push_back(resource->path);
   };
   for (const auto& section : pending) {
-    if (auto instance = section.attributes.Get("instance")) note_resource(*instance);
+    if (auto instance = section.attributes.Get("instance"))
+      note_resource(*instance);
     ForEachValue(section.properties, note_resource);
   }
   for (const auto& path : resource_order) {
@@ -597,7 +607,8 @@ std::string Map::UniqueChildName(const MapNode* parent, std::string_view base,
   if (!taken(clean)) return clean;
   // Strip an existing numeric suffix so "Wall2" duplicates to "Wall3".
   std::string stem = clean;
-  while (!stem.empty() && std::isdigit(static_cast<unsigned char>(stem.back()))) {
+  while (!stem.empty() &&
+         std::isdigit(static_cast<unsigned char>(stem.back()))) {
     stem.pop_back();
   }
   if (stem.empty()) stem = clean;
@@ -625,8 +636,9 @@ MapNode* Map::AddNode(MapNode* parent, std::string_view name, int index) {
 bool Map::RemoveNode(MapNode* node) {
   if (!node || !node->parent) return false;
   auto& siblings = node->parent->children;
-  auto it = std::find_if(siblings.begin(), siblings.end(),
-                         [&](const auto& child) { return child.get() == node; });
+  auto it =
+      std::find_if(siblings.begin(), siblings.end(),
+                   [&](const auto& child) { return child.get() == node; });
   if (it == siblings.end()) return false;
   siblings.erase(it);
   return true;
@@ -639,7 +651,8 @@ MapNode* Map::DuplicateNode(MapNode* node) {
   copy->name = UniqueChildName(node->parent, node->name);
   MapNode* raw = copy.get();
   auto& siblings = node->parent->children;
-  siblings.insert(siblings.begin() + node->IndexInParent() + 1, std::move(copy));
+  siblings.insert(siblings.begin() + node->IndexInParent() + 1,
+                  std::move(copy));
   return raw;
 }
 
@@ -649,8 +662,9 @@ bool Map::ReparentNode(MapNode* node, MapNode* new_parent, int index) {
 
   const std::string old_path = node->GetPath();
   auto& old_siblings = node->parent->children;
-  auto it = std::find_if(old_siblings.begin(), old_siblings.end(),
-                         [&](const auto& child) { return child.get() == node; });
+  auto it =
+      std::find_if(old_siblings.begin(), old_siblings.end(),
+                   [&](const auto& child) { return child.get() == node; });
   if (it == old_siblings.end()) return false;
   const bool same_parent = node->parent == new_parent;
   const int old_index = static_cast<int>(it - old_siblings.begin());
@@ -718,7 +732,8 @@ void Map::RebaseNodePaths(MapNode& node, const std::string& instance_path) {
     }
   };
   std::function<void(MapNode&)> walk = [&](MapNode& n) {
-    for (auto& component : n.components) ForEachValue(component.properties, rebase);
+    for (auto& component : n.components)
+      ForEachValue(component.properties, rebase);
     for (auto& child : n.children) walk(*child);
   };
   walk(node);

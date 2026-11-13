@@ -81,7 +81,8 @@ struct MapNode {
 
   // `index` picks among several components of the same type.
   ComponentData* FindComponent(std::string_view type, int index = 0);
-  const ComponentData* FindComponent(std::string_view type, int index = 0) const;
+  const ComponentData* FindComponent(std::string_view type,
+                                     int index = 0) const;
   // The nearest ancestor (or this node) that is a prefab instance.
   const MapNode* GetPrefabInstanceRoot() const;
   bool IsRoot() const { return parent == nullptr; }

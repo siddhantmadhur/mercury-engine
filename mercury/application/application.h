@@ -77,7 +77,6 @@ class Application : public RenderHost {
     title_callback_ = std::move(cb);
   }
 
-
   virtual bool IsDeviceReady() const { return true; }
 
   /**
@@ -149,7 +148,6 @@ class Application : public RenderHost {
   void SetWindowTitle(const std::string& title) override;
 
  protected:
-
  protected:
   std::unique_ptr<GameScene> game_scene_ = nullptr;
   int average_fps_ = 0;

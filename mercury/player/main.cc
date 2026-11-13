@@ -5,4 +5,6 @@
  */
 #include "player/player.h"
 
-int main(int argc, char** argv) { return Mercury::RunPlayer(argc, argv, nullptr); }
+int main(int argc, char** argv) {
+  return Mercury::RunPlayer(argc, argv, nullptr);
+}

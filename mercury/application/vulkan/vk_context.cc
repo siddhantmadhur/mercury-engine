@@ -84,7 +84,8 @@ bool Context::Init(GLFWwindow* window) {
   if (!CreateInstance(window != nullptr)) return false;
 
   if (window != nullptr) {
-    if (!VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface))) {
+    if (!VK_CHECK(
+            glfwCreateWindowSurface(instance, window, nullptr, &surface))) {
       PDebug::error("Vulkan: could not create window surface");
       return false;
     }
@@ -129,7 +130,8 @@ bool Context::CreateInstance(bool need_surface) {
     const char** glfw_extensions =
         glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     if (glfw_extensions == nullptr) {
-      PDebug::error("Vulkan: GLFW found no surface extensions for this platform");
+      PDebug::error(
+          "Vulkan: GLFW found no surface extensions for this platform");
       return false;
     }
     extensions.assign(glfw_extensions, glfw_extensions + glfw_extension_count);
@@ -148,9 +150,8 @@ bool Context::CreateInstance(bool need_surface) {
       layers.push_back(kValidationLayer);
       extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     } else {
-      PDebug::warn(
-          "Vulkan: {} is not installed; running without validation",
-          kValidationLayer);
+      PDebug::warn("Vulkan: {} is not installed; running without validation",
+                   kValidationLayer);
     }
   }
 
@@ -261,8 +262,7 @@ bool Context::PickPhysicalDevice() {
     }
 
     uint32_t family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(candidate, &family_count,
-                                             nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(candidate, &family_count, nullptr);
     std::vector<VkQueueFamilyProperties> families(family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(candidate, &family_count,
                                              families.data());
@@ -347,10 +347,12 @@ bool Context::CreateDevice() {
   {
     VkPhysicalDeviceVulkan12Features supported12 = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-    VkPhysicalDeviceFeatures2 query = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    VkPhysicalDeviceFeatures2 query = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
     query.pNext = &supported12;
     vkGetPhysicalDeviceFeatures2(physical_device, &query);
-    gpu_driven = supported.multiDrawIndirect && supported.drawIndirectFirstInstance &&
+    gpu_driven = supported.multiDrawIndirect &&
+                 supported.drawIndirectFirstInstance &&
                  supported12.drawIndirectCount;
     if (gpu_driven) {
       features.features.multiDrawIndirect = VK_TRUE;
@@ -369,9 +371,11 @@ bool Context::CreateDevice() {
   sampler_anisotropy = supported.samplerAnisotropy == VK_TRUE;
 
   VkPhysicalDeviceDynamicRenderingFeaturesKHR dyn_rendering = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
   VkPhysicalDeviceSynchronization2FeaturesKHR sync2 = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
   VkPhysicalDeviceShaderDemoteToHelperInvocationFeaturesEXT demote = {
       .sType =
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT};
@@ -385,7 +389,8 @@ bool Context::CreateDevice() {
   } else {
     extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-    extensions.push_back(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME);
+    extensions.push_back(
+        VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME);
     dyn_rendering.dynamicRendering = VK_TRUE;
     sync2.synchronization2 = VK_TRUE;
     demote.shaderDemoteToHelperInvocation = VK_TRUE;
@@ -394,8 +399,8 @@ bool Context::CreateDevice() {
     features12.pNext = &sync2;
   }
 
-  VkDeviceCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+  VkDeviceCreateInfo create_info = {.sType =
+                                        VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
   create_info.pNext = &features;
   create_info.queueCreateInfoCount = 1;
   create_info.pQueueCreateInfos = &queue_info;

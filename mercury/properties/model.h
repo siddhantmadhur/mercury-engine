@@ -106,7 +106,7 @@ struct ModelMaterial {
   std::shared_ptr<ImageData> texture;
   float metallic = 0.0f;
   float smoothness = 0.5f;
-  glm::vec3 emission = glm::vec3(0.0f);  // linear
+  glm::vec3 emission = glm::vec3(0.0f);         // linear
   std::shared_ptr<ImageData> emission_texture;  // multiplies emission
   std::shared_ptr<ImageData> normal_texture;    // tangent space
   float normal_scale = 1.0f;
@@ -122,7 +122,7 @@ struct ModelMaterial {
 };
 
 struct ModelBone {
-  int node = -1;                  // node the bone follows
+  int node = -1;                       // node the bone follows
   glm::mat4 offset = glm::mat4(1.0f);  // mesh space -> bone space (bind)
 };
 
@@ -160,7 +160,7 @@ struct AnimationChannel {
 };
 
 struct AnimationClip {
-  std::string name;   // e.g. "Armature|Jog_Fwd_Loop"
+  std::string name;       // e.g. "Armature|Jog_Fwd_Loop"
   float duration = 0.0f;  // seconds
   std::vector<AnimationChannel> channels;
 
@@ -200,7 +200,8 @@ struct ModelImportSettings {
   // .obj files at least this big are read in pieces on several threads; not
   // part of the .mimport file.
   size_t parallel_obj_min_bytes = 32 * 1024 * 1024;
-  size_t parallel_obj_pieces = 0;  // the most pieces; 0 picks from the core count
+  size_t parallel_obj_pieces =
+      0;  // the most pieces; 0 picks from the core count
 
   // Reads "<model path>.mimport" if it exists; otherwise `defaults`.
   static ModelImportSettings ForFile(const std::string& model_path,
@@ -262,13 +263,14 @@ class Model {
 
   // The import itself, with assimp.
   static std::shared_ptr<Model> Import(const std::string& path,
-                                       const ModelImportSettings& settings, std::string* error,
+                                       const ModelImportSettings& settings,
+                                       std::string* error,
                                        std::atomic<float>* progress);
   // A texture file the model refers to, found, decoded and prepared as the
   // import does it (null if missing).
-  static std::shared_ptr<ImageData> DecodeTexture(const std::string& model_path,
-                                                  const TextureSource& source,
-                                                  const ModelImportSettings& settings);
+  static std::shared_ptr<ImageData> DecodeTexture(
+      const std::string& model_path, const TextureSource& source,
+      const ModelImportSettings& settings);
   // The bind pose and bounds, from the nodes and meshes.
   void Finish();
 

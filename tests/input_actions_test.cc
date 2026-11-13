@@ -45,7 +45,8 @@ TEST(InputActions, SerializeThenParseGivesTheSameActions) {
   const InputActionsDesc desc = SampleActions();
   InputActionsDesc parsed;
   std::string error;
-  ASSERT_TRUE(ParseInputActions(SerializeInputActions(desc), &parsed, &error)) << error;
+  ASSERT_TRUE(ParseInputActions(SerializeInputActions(desc), &parsed, &error))
+      << error;
   EXPECT_EQ(parsed, desc);
 }
 
@@ -65,7 +66,8 @@ bindings = "<Mouse>/delta"
   EXPECT_EQ(desc.actions[1].FullName(), "Look");
   EXPECT_EQ(desc.actions[1].type, InputAction::Type::kPassThrough);
   EXPECT_TRUE(desc.actions[1].vector2);
-  EXPECT_EQ(desc.actions[1].bindings, std::vector<std::string>{"<Mouse>/delta"});
+  EXPECT_EQ(desc.actions[1].bindings,
+            std::vector<std::string>{"<Mouse>/delta"});
 }
 
 TEST(InputActions, AssetLoadsFromSerializedActions) {
@@ -78,8 +80,9 @@ TEST(InputActions, AssetLoadsFromSerializedActions) {
 }
 
 TEST(InputActions, ControlNamesAndKeysAreInverse) {
-  for (int key : {GLFW_KEY_A, GLFW_KEY_Z, GLFW_KEY_0, GLFW_KEY_F5, GLFW_KEY_KP_3,
-                  GLFW_KEY_SPACE, GLFW_KEY_LEFT_SHIFT, GLFW_KEY_UP, GLFW_KEY_PAGE_DOWN}) {
+  for (int key :
+       {GLFW_KEY_A, GLFW_KEY_Z, GLFW_KEY_0, GLFW_KEY_F5, GLFW_KEY_KP_3,
+        GLFW_KEY_SPACE, GLFW_KEY_LEFT_SHIFT, GLFW_KEY_UP, GLFW_KEY_PAGE_DOWN}) {
     const std::string control = ControlFromKey(key);
     ASSERT_FALSE(control.empty()) << key;
     EXPECT_EQ(KeyFromControl(control), key) << control;
@@ -110,8 +113,8 @@ TEST(InputActionsCodegen, MakesIdentifiers) {
 }
 
 TEST(InputActionsCodegen, GeneratesOneClassPerMap) {
-  const auto generated = GenerateInputActionsAngelScript(SampleActions(), "GameInput",
-                                                        "res://input/actions.minput");
+  const auto generated = GenerateInputActionsAngelScript(
+      SampleActions(), "GameInput", "res://input/actions.minput");
   EXPECT_TRUE(generated.errors.empty());
   const std::string& s = generated.source;
   EXPECT_NE(s.find("namespace GameInput"), std::string::npos);
@@ -135,8 +138,9 @@ TEST(InputActionsCodegen, ReportsNameCollisions) {
   EXPECT_EQ(header.errors.size(), 2u);
 }
 
-// The generated file checked in with roll_a_ball must be what the editor would write today, or
-// the next save in the Input Actions window rewrites it (and a hand edit is silently lost).
+// The generated file checked in with roll_a_ball must be what the editor would
+// write today, or the next save in the Input Actions window rewrites it (and a
+// hand edit is silently lost).
 TEST(InputActionsCodegen, RollABallHeaderIsUpToDate) {
   const std::filesystem::path root =
       std::filesystem::path(MERCURY_SOURCE_DIR) / "examples/roll_a_ball";
@@ -151,12 +155,15 @@ TEST(InputActionsCodegen, RollABallHeaderIsUpToDate) {
   InputActionsDesc desc;
   std::string error;
   ASSERT_TRUE(ParseInputActions(minput, &desc, &error)) << error;
-  const std::string class_name = desc.class_name.empty() ? "GameInput" : desc.class_name;
-  const auto generated = GenerateInputActionsAngelScript(desc, class_name, "res://input/actions.minput");
+  const std::string class_name =
+      desc.class_name.empty() ? "GameInput" : desc.class_name;
+  const auto generated = GenerateInputActionsAngelScript(
+      desc, class_name, "res://input/actions.minput");
   EXPECT_TRUE(generated.errors.empty());
   EXPECT_EQ(generated.source, read(root / "scripts/generated/game_input.as"));
   // And the .minput survives a save/parse round trip.
   InputActionsDesc again;
-  ASSERT_TRUE(ParseInputActions(SerializeInputActions(desc), &again, &error)) << error;
+  ASSERT_TRUE(ParseInputActions(SerializeInputActions(desc), &again, &error))
+      << error;
   EXPECT_EQ(SerializeInputActions(again), SerializeInputActions(desc));
 }

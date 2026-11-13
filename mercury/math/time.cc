@@ -5,8 +5,8 @@ namespace Mercury {
 namespace {
 
 struct TimeState {
-  double time = 0.0;           // scaled frame time
-  double fixed_time = 0.0;     // scaled time of the last tick
+  double time = 0.0;        // scaled frame time
+  double fixed_time = 0.0;  // scaled time of the last tick
   double realtime = 0.0;
   float delta_time = 0.0f;
   float fixed_delta_time = 1.0f / 60.0f;
@@ -40,7 +40,9 @@ uint64_t Time::GetFrameCount() { return State().frame_count; }
 
 float Time::GetTimeScale() { return State().time_scale; }
 
-void Time::SetTimeScale(float scale) { State().time_scale = scale < 0 ? 0 : scale; }
+void Time::SetTimeScale(float scale) {
+  State().time_scale = scale < 0 ? 0 : scale;
+}
 
 void Time::Reset(float fixed_delta_time) {
   State() = TimeState{};

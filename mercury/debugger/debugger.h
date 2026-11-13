@@ -37,8 +37,8 @@ inline void Emit(Level level, std::ostream& stream, const char* tag,
   std::lock_guard lock(mutex);
   std::tm time_struct = *std::localtime(&now_c);
 
-  stream << tag << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ")
-         << message << std::endl;
+  stream << tag << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ") << message
+         << std::endl;
   if (auto& sink = GetSink()) sink(level, message);
 }
 

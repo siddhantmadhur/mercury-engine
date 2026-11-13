@@ -33,7 +33,8 @@ std::string ToTargetName(const std::string& name) {
   std::string out;
   for (char c : name) {
     if (std::isalnum(static_cast<unsigned char>(c))) {
-      out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+      out.push_back(
+          static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
     } else if (!out.empty() && out.back() != '_') {
       out.push_back('_');
     }
@@ -91,8 +92,10 @@ std::string NewMapText(const std::string& root_name, bool is_3d) {
                       glm::vec3 scale = glm::vec3(1.0f)) {
     MapNode* node = map.AddNode(map.GetRoot(), name);
     ComponentData transform{"Transform", {}};
-    if (position != glm::vec3(0.0f)) transform.properties.Set("position", position);
-    if (rotation != glm::vec3(0.0f)) transform.properties.Set("rotation", rotation);
+    if (position != glm::vec3(0.0f))
+      transform.properties.Set("position", position);
+    if (rotation != glm::vec3(0.0f))
+      transform.properties.Set("rotation", rotation);
     if (scale != glm::vec3(1.0f)) transform.properties.Set("scale", scale);
     node->components.push_back(std::move(transform));
     return node;
@@ -106,15 +109,17 @@ std::string NewMapText(const std::string& root_name, bool is_3d) {
     return map.SaveToString();
   }
 
-  add_node("Camera", {0, 3, 8}, {-15, 0, 0})->components.push_back({"Camera", {}});
+  add_node("Camera", {0, 3, 8}, {-15, 0, 0})
+      ->components.push_back({"Camera", {}});
   add_node("Sun", {0, 6, 0}, {-50, -30, 0})
       ->components.push_back({"DirectionalLight", {}});
 
-  MapNode* ground = add_node("Ground", glm::vec3(0.0f), glm::vec3(0.0f),
-                             {20, 1, 20});
+  MapNode* ground =
+      add_node("Ground", glm::vec3(0.0f), glm::vec3(0.0f), {20, 1, 20});
   ComponentData plane{"MeshRenderer", {}};
   plane.properties.Set("mesh", std::string("plane"));
-  plane.properties.Set("color", mtext::Color{glm::vec4(0.55f, 0.58f, 0.62f, 1.0f)});
+  plane.properties.Set("color",
+                       mtext::Color{glm::vec4(0.55f, 0.58f, 0.62f, 1.0f)});
   ground->components.push_back(std::move(plane));
   ComponentData ground_collider{"BoxCollider", {}};
   ground_collider.properties.Set("size", glm::vec3(1.0f, 0.01f, 1.0f));
@@ -146,7 +151,8 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
     return {};
   }
 
-  const fs::path mproj = root / (ToTargetName(name) + std::string(kProjectExtension));
+  const fs::path mproj =
+      root / (ToTargetName(name) + std::string(kProjectExtension));
   auto project = Project::Create(mproj, name);
   if (!project->Save()) {
     if (error) *error = "could not write " + mproj.string();
@@ -155,8 +161,7 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
 
   // Build output and editor caches are generated, so keep them out of git.
   if (!WriteText(root / ".gitignore",
-                 "# Build output and editor caches\n.mercury/\n",
-                 error)) {
+                 "# Build output and editor caches\n.mercury/\n", error)) {
     return {};
   }
   if (!WriteText(root / "maps" / "main.mmap", NewMapText(name, is_3d), error)) {
@@ -172,10 +177,12 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
 fs::path CreateScript(const fs::path& project_root,
                       const std::string& class_name, std::string* error) {
   if (!IsValidIdentifier(class_name)) {
-    if (error) *error = "\"" + class_name + "\" is not a valid AngelScript class name";
+    if (error)
+      *error = "\"" + class_name + "\" is not a valid AngelScript class name";
     return {};
   }
-  const fs::path source = project_root / "scripts" / (ToSnakeCase(class_name) + ".as");
+  const fs::path source =
+      project_root / "scripts" / (ToSnakeCase(class_name) + ".as");
   if (fs::exists(source)) {
     if (error) *error = source.filename().string() + " already exists";
     return {};

@@ -25,8 +25,8 @@
 
 namespace Mercury {
 
-void PObjectManager::UpdateAtlas(entt::registry &reg, entt::entity entity) {
-  auto &tex = reg.get<Texture2D>(entity);
+void PObjectManager::UpdateAtlas(entt::registry& reg, entt::entity entity) {
+  auto& tex = reg.get<Texture2D>(entity);
   atlas_.AddTexture(&tex);
   atlas_.UpdateAtlas();
   RefreshStaticAtlasUVs();
@@ -108,12 +108,12 @@ kEntityId PObjectManager::NewPlane2D(glm::vec3 position, glm::vec2 size,
   return id;
 }
 
-kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
+kEntityId PObjectManager::NewObjectFromFile(const std::string& file_path,
                                             float scale, glm::vec4 color) {
   Assimp::Importer importer;
   UseVfs(importer);
 
-  const aiScene *scene = importer.ReadFile(
+  const aiScene* scene = importer.ReadFile(
       file_path, aiProcess_Triangulate | aiProcess_FlipUVs |
                      aiProcess_ConvertToLeftHanded | aiProcess_GenNormals |
                      aiProcess_PreTransformVertices |
@@ -130,7 +130,7 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
   std::vector<Vertex> vertices = {};
   std::vector<UINT> indices = {};
 
-  std::vector<aiNode *> nodes = {};
+  std::vector<aiNode*> nodes = {};
   nodes.push_back(scene->mRootNode);
 
   int vertex_offset = 0;
@@ -139,7 +139,7 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
   glm::vec3 mesh_max(0.0);
 
   while (nodes.size()) {
-    aiNode *cur = nodes.back();
+    aiNode* cur = nodes.back();
     nodes.pop_back();
 
     for (int i = 0; i < cur->mNumChildren; i++) {
@@ -148,8 +148,8 @@ kEntityId PObjectManager::NewObjectFromFile(const std::string &file_path,
 
     for (int x = 0; x < cur->mNumMeshes; x++) {
       auto idx = cur->mMeshes[x];
-      auto *aiMesh = scene->mMeshes[idx];
-      aiAABB &aabb = aiMesh->mAABB;
+      auto* aiMesh = scene->mMeshes[idx];
+      aiAABB& aabb = aiMesh->mAABB;
       aiVector3D center = (aabb.mMin + aabb.mMax) / 2.0f;
 
       if (mesh_min.x > aabb.mMin.x) mesh_min.x = aabb.mMin.x;
@@ -270,14 +270,14 @@ kEntityId PObjectManager::NewCube3D(glm::vec3 position, glm::vec3 size,
 }
 void PObjectManager::ProcessOnFrame(float delta) {
   auto view = registry_.view<Transform>();
-  view.each([delta](auto entity, Transform &transform) {
+  view.each([delta](auto entity, Transform& transform) {
     transform.Interpolate(delta);
   });
 }
 
 void PObjectManager::CaptureTickSnapshots() {
   auto view = registry_.view<Transform>();
-  view.each([](auto entity, Transform &transform) {
+  view.each([](auto entity, Transform& transform) {
     transform.CaptureTickSnapshot();
   });
 }
@@ -341,7 +341,7 @@ void PObjectManager::MakeStatic(kEntityId id) {
 
 void PObjectManager::RefreshStaticAtlasUVs() {
   const glm::vec4 white_uv = atlas_.GetWhitePixelUV();
-  for (const auto &range : static_ranges_) {
+  for (const auto& range : static_ranges_) {
     glm::vec4 uv = range.tex ? range.tex->GetAtlasUV() : white_uv;
     const PQ_FLOAT4 packed{uv.x, uv.y, uv.z, uv.w};
     const size_t end = range.vertex_start + range.vertex_count;

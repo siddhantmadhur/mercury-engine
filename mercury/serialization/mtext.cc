@@ -39,18 +39,30 @@ std::optional<std::string> Variant::ToString() const {
 
 const char* TypeName(Variant::Type type) {
   switch (type) {
-    case Variant::Type::kNil: return "null";
-    case Variant::Type::kBool: return "bool";
-    case Variant::Type::kInt: return "int";
-    case Variant::Type::kFloat: return "float";
-    case Variant::Type::kString: return "string";
-    case Variant::Type::kVector2: return "Vector2";
-    case Variant::Type::kVector3: return "Vector3";
-    case Variant::Type::kColor: return "Color";
-    case Variant::Type::kNodePath: return "NodePath";
-    case Variant::Type::kExtResource: return "ExtResource";
-    case Variant::Type::kResource: return "Resource";
-    case Variant::Type::kArray: return "Array";
+    case Variant::Type::kNil:
+      return "null";
+    case Variant::Type::kBool:
+      return "bool";
+    case Variant::Type::kInt:
+      return "int";
+    case Variant::Type::kFloat:
+      return "float";
+    case Variant::Type::kString:
+      return "string";
+    case Variant::Type::kVector2:
+      return "Vector2";
+    case Variant::Type::kVector3:
+      return "Vector3";
+    case Variant::Type::kColor:
+      return "Color";
+    case Variant::Type::kNodePath:
+      return "NodePath";
+    case Variant::Type::kExtResource:
+      return "ExtResource";
+    case Variant::Type::kResource:
+      return "Resource";
+    case Variant::Type::kArray:
+      return "Array";
   }
   return "unknown";
 }
@@ -240,9 +252,9 @@ class Parser {
 
   bool Expect(char c) {
     if (Peek() != c) {
-      return Fail(AtEnd() ? std::format("expected '{}' but reached the end", c)
-                          : std::format("expected '{}' but found '{}'", c,
-                                        Peek()));
+      return Fail(AtEnd()
+                      ? std::format("expected '{}' but reached the end", c)
+                      : std::format("expected '{}' but found '{}'", c, Peek()));
     }
     Advance();
     return true;
@@ -324,12 +336,23 @@ class Parser {
         if (AtEnd()) return Fail("unterminated string");
         char e = Advance();
         switch (e) {
-          case 'n': out.push_back('\n'); break;
-          case 't': out.push_back('\t'); break;
-          case 'r': out.push_back('\r'); break;
-          case '"': out.push_back('"'); break;
-          case '\\': out.push_back('\\'); break;
-          default: return Fail(std::format("unknown escape '\\{}'", e));
+          case 'n':
+            out.push_back('\n');
+            break;
+          case 't':
+            out.push_back('\t');
+            break;
+          case 'r':
+            out.push_back('\r');
+            break;
+          case '"':
+            out.push_back('"');
+            break;
+          case '\\':
+            out.push_back('\\');
+            break;
+          default:
+            return Fail(std::format("unknown escape '\\{}'", e));
         }
       } else {
         out.push_back(c);
@@ -521,12 +544,23 @@ std::string Quote(std::string_view s) {
   std::string out = "\"";
   for (char c : s) {
     switch (c) {
-      case '"': out += "\\\""; break;
-      case '\\': out += "\\\\"; break;
-      case '\n': out += "\\n"; break;
-      case '\t': out += "\\t"; break;
-      case '\r': out += "\\r"; break;
-      default: out.push_back(c);
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      default:
+        out.push_back(c);
     }
   }
   out += "\"";

@@ -27,8 +27,8 @@ class ScriptBehaviour : public Behaviour {
    * @brief Constructs the script instance (field initializers run here)
    * @return null if the constructor threw
    */
-  static std::unique_ptr<ScriptBehaviour> Create(const ScriptClass& script_class, MapScene* scene,
-                                                 kEntityId entity);
+  static std::unique_ptr<ScriptBehaviour> Create(
+      const ScriptClass& script_class, MapScene* scene, kEntityId entity);
   ~ScriptBehaviour() override;
 
   void Reflect(Reflector& r) override;
@@ -40,7 +40,9 @@ class ScriptBehaviour : public Behaviour {
   void OnDisable() override { Forward(kCbOnDisable, "onDisable"); }
   void OnStart() override { Forward(kCbOnStart, "onStart"); }
   void OnFrame(double dt) override { Forward(kCbOnFrame, "onFrame", dt); }
-  void OnLateFrame(double dt) override { Forward(kCbOnLateFrame, "onLateFrame", dt); }
+  void OnLateFrame(double dt) override {
+    Forward(kCbOnLateFrame, "onLateFrame", dt);
+  }
   void OnTick(double dt) override { Forward(kCbOnTick, "onTick", dt); }
   void OnCollisionEnter(GameObject other) override {
     ForwardObject(kCbOnCollisionEnter, "onCollisionEnter", other);
@@ -70,10 +72,12 @@ class ScriptBehaviour : public Behaviour {
   Event* FindEvent(const std::string& field);
 
  private:
-  explicit ScriptBehaviour(const ScriptClass& script_class) : class_(&script_class) {}
+  explicit ScriptBehaviour(const ScriptClass& script_class)
+      : class_(&script_class) {}
   void Forward(ScriptCallback callback, const char* method);
   void Forward(ScriptCallback callback, const char* method, double dt);
-  void ForwardObject(ScriptCallback callback, const char* method, GameObject other);
+  void ForwardObject(ScriptCallback callback, const char* method,
+                     GameObject other);
   void CallMethod(const std::string& name, const ScriptArg* argument);
   void ReflectFields(Reflector& r);
 

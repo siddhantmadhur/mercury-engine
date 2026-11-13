@@ -60,7 +60,8 @@ extern PFN_vkCmdEndRenderingKHR pfn_vkCmdEndRendering;
 extern PFN_vkCmdPipelineBarrier2KHR pfn_vkCmdPipelineBarrier2;
 extern PFN_vkQueueSubmit2KHR pfn_vkQueueSubmit2;
 
-inline void CmdBeginRendering(VkCommandBuffer cmd, const VkRenderingInfo* rendering_info) {
+inline void CmdBeginRendering(VkCommandBuffer cmd,
+                              const VkRenderingInfo* rendering_info) {
   if (pfn_vkCmdBeginRendering) {
     pfn_vkCmdBeginRendering(cmd, rendering_info);
   } else {
@@ -76,7 +77,8 @@ inline void CmdEndRendering(VkCommandBuffer cmd) {
   }
 }
 
-inline void CmdPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo* dependency_info) {
+inline void CmdPipelineBarrier2(VkCommandBuffer cmd,
+                                const VkDependencyInfo* dependency_info) {
   if (pfn_vkCmdPipelineBarrier2) {
     pfn_vkCmdPipelineBarrier2(cmd, dependency_info);
   } else {
@@ -85,7 +87,7 @@ inline void CmdPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo* dep
 }
 
 inline VkResult QueueSubmit2(VkQueue queue, uint32_t submit_count,
-                            const VkSubmitInfo2* submits, VkFence fence) {
+                             const VkSubmitInfo2* submits, VkFence fence) {
   if (pfn_vkQueueSubmit2) {
     return pfn_vkQueueSubmit2(queue, submit_count, submits, fence);
   } else {

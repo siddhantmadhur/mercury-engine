@@ -101,10 +101,12 @@ class AnimatorController {
  public:
   static std::shared_ptr<AnimatorController> Load(const std::string& file,
                                                   std::string* error = nullptr);
-  static std::shared_ptr<AnimatorController> FromString(std::string_view text,
-                                                        std::string* error = nullptr);
+  static std::shared_ptr<AnimatorController> FromString(
+      std::string_view text, std::string* error = nullptr);
 
-  const std::vector<AnimatorParameter>& Parameters() const { return parameters_; }
+  const std::vector<AnimatorParameter>& Parameters() const {
+    return parameters_;
+  }
   const std::vector<AnimatorLayer>& Layers() const { return layers_; }
   // The model whose clips the states name (res:// path), may be empty.
   const std::string& GetModel() const { return model_; }

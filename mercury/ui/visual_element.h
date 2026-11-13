@@ -298,7 +298,9 @@ class VisualElement {
   // ---------------------------------------------------------- data binding --
   // Inherited by children that have none.
   void SetDataSource(std::shared_ptr<IDataSource> source);
-  const std::shared_ptr<IDataSource>& dataSource() const { return data_source_; }
+  const std::shared_ptr<IDataSource>& dataSource() const {
+    return data_source_;
+  }
   // The source in use: this element's, else the nearest ancestor's.
   std::shared_ptr<IDataSource> ResolveDataSource() const;
   // Prefix for the binding paths of this element and its children.
@@ -318,7 +320,8 @@ class VisualElement {
   // Named properties, used by bindings and UXML attributes ("text",
   // "value", "name", ...). Subclasses add theirs and call the base.
   virtual bool SetProperty(std::string_view name, const mtext::Variant& value);
-  virtual std::optional<mtext::Variant> GetProperty(std::string_view name) const;
+  virtual std::optional<mtext::Variant> GetProperty(
+      std::string_view name) const;
 
   // ------------------------------------------------------------- drawing --
   // Custom drawing after the background and border (Unity's
@@ -389,7 +392,8 @@ class VisualElement {
   CallbackId AddCallback(EventTypeId type, std::function<void(EventBase&)> fn,
                          TrickleDown phase);
   void RemoveCallbacksOfType(EventTypeId type);
-  VisualElement* HierarchyInsert(int index, std::unique_ptr<VisualElement> child);
+  VisualElement* HierarchyInsert(int index,
+                                 std::unique_ptr<VisualElement> child);
   std::unique_ptr<VisualElement> HierarchyRemove(VisualElement* child);
   void MarkSubtreeStyleDirty();
 
@@ -457,8 +461,8 @@ class Manipulator {
  */
 class Clickable : public Manipulator {
  public:
-  explicit Clickable(std::function<void()> handler = {},
-                     double delay_ms = 0.0, double interval_ms = 0.0);
+  explicit Clickable(std::function<void()> handler = {}, double delay_ms = 0.0,
+                     double interval_ms = 0.0);
 
   std::function<void()> clicked;
   // Same as clicked, with the triggering event.
