@@ -2,13 +2,19 @@
 #
 # package_macos.pl - builds a self-contained, publishable Mercury .app bundle.
 #
-# The bundle contains everything the game needs: the player, the MoltenVK
-# driver and the Vulkan loader it links against, and the project packed into
-# .mpack archives (the same format the editor's Build Game writes). Nothing in
-# the app points back at the engine checkout.
+# The player bundle contains everything the game needs: the player, the
+# MoltenVK driver and the Vulkan loader it links against, and the project
+# packed into .mpack archives (the same format the editor's Build Game writes).
+# Nothing in the app points back at the engine checkout.
 #
 #   ./scripts/package_macos.pl --project examples/pong/pong.mproj
 #   open Builds/Pong.app
+#
+# The editor bundle additionally carries mercury_player, the loose UI theme,
+# fonts and compiled shaders, the Vulkan driver, the static libraries for
+# native builds, and the list of runtime libraries a game made by Build Game
+# needs. It therefore needs no engine checkout, compiler or Bazel on the
+# machine it runs on.
 #
 # Typical flags:
 #   --identity "Developer ID Application: Your Name (TEAMID)"   sign for
@@ -53,6 +59,7 @@ my $want_zip = 0;
 my $no_sign = 0;
 my $skip_build = 0;
 my $verbose = 0;
+my $engine_libs = 1;
 
 GetOptions(
     'project=s'      => \$opt{project},
@@ -69,6 +76,7 @@ GetOptions(
     'packs=s'        => \$opt{packs},
     'pack-size-mb=i' => \$opt{pack_size_mb},
     'skip-build'     => \$skip_build,
+    'no-engine-libs' => sub { $engine_libs = 0 },
     'zip'            => \$want_zip,
     'verbose|v'      => \$verbose,
     'help|h'         => sub { usage(0) },
@@ -109,6 +117,7 @@ usage: $name --project PATH/TO/game.mproj [options]
   --packs DIR           reuse an editor "Build Game" output instead of packing
   --pack-size-mb N      split game.mpack past N MB; 0 keeps one file (256)
   --skip-build          do not run Bazel first
+  --no-engine-libs      editor only: leave the static libraries out of the bundle
   --zip                 also write a .zip for distribution
   --verbose             show every command
   -h, --help            this help
@@ -229,12 +238,16 @@ unless ($skip_build) {
     my $bazel = which('bazelisk') // which('bazel');
     fail("Bazelisk was not found; install it with ./scripts/setup_project.pl")
         unless $bazel;
-    log_line("Building $bazel_target (Release)");
+    # The editor bundle also carries the player, so Play and Build Game work
+    # on a machine that has no engine checkout or compiler.
+    my @targets = ($bazel_target);
+    push @targets, '//mercury:mercury_player' if $opt{target} eq 'editor';
+    log_line("Building " . join(' ', @targets) . " (Release)");
     # The deployment target must match LSMinimumSystemVersion below. Bazel
     # otherwise stamps the installed SDK version (e.g. 27.0) into the binary
     # and macOS refuses to launch it on older systems.
     run_or_die($bazel, 'build', '-c', 'opt',
-        "--macos_minimum_os=$opt{min_macos}", $bazel_target);
+        "--macos_minimum_os=$opt{min_macos}", @targets);
 }
 
 my $source_exe =
@@ -246,6 +259,14 @@ my $source_exe =
 # in the output tree rather than failing on the link.
 my $real_exe = abs_path($source_exe);
 fail("the build did not produce $source_exe") unless defined $real_exe && -f $real_exe;
+
+my $real_player;
+if ($opt{target} eq 'editor') {
+    my $source_player = File::Spec->catfile($bazel_bin, 'mercury', 'mercury_player');
+    $real_player = abs_path($source_player);
+    fail("the build did not produce $source_player")
+        unless defined $real_player && -f $real_player;
+}
 
 # --------------------------------------------------------------------------
 # Bundle skeleton
@@ -261,6 +282,15 @@ make_path($macos, $res, $fw);
 my $exe = File::Spec->catfile($macos, $slug);
 copy($real_exe, $exe) or fail("cannot copy $real_exe: $!");
 chmod 0755, $exe or fail("cannot chmod $exe: $!");
+
+# The editor runs games and packages them through mercury_player, so a released
+# editor has to carry it (PlaySession looks next to the editor).
+my $player;
+if ($opt{target} eq 'editor') {
+    $player = File::Spec->catfile($macos, 'mercury_player');
+    copy($real_player, $player) or fail("cannot copy $real_player: $!");
+    chmod 0755, $player or fail("cannot chmod $player: $!");
+}
 
 my $icon_file;
 if ($opt{icon}) {
@@ -292,11 +322,18 @@ if ($opt{target} eq 'player') {
 }
 
 # --------------------------------------------------------------------------
+# The engine runtime a released editor carries for Play and Build Game
+# --------------------------------------------------------------------------
+
+bundle_engine_resources() if $opt{target} eq 'editor';
+
+# --------------------------------------------------------------------------
 # Dependencies, signature, output
 # --------------------------------------------------------------------------
 
 write_vulkan_icd();
 bundle_dependencies();
+write_player_manifest() if $opt{target} eq 'editor';
 
 unless ($no_sign) {
     sign_bundle();
@@ -689,6 +726,107 @@ sub copy_packs {
 }
 
 # --------------------------------------------------------------------------
+# The engine runtime inside the editor bundle
+# --------------------------------------------------------------------------
+
+# Copies every file below $src into $dst, preserving the layout. Returns the
+# number of files copied.
+sub copy_tree {
+    my ($src, $dst) = @_;
+    opendir(my $dh, $src) or fail("cannot read $src: $!");
+    my @names = sort grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+    closedir $dh;
+    make_path($dst);
+    my $count = 0;
+    for my $name (@names) {
+        my $from = File::Spec->catfile($src, $name);
+        my $to = File::Spec->catfile($dst, $name);
+        if (-d $from) {
+            $count += copy_tree($from, $to);
+        } elsif (-f $from) {
+            copy($from, $to) or fail("cannot copy $from: $!");
+            $count++;
+        }
+    }
+    return $count;
+}
+
+# The player and the editor read shaders and the default UI theme from disk
+# unless a game mounts engine.mpack. Ship both so Play and the editor's own
+# renderer work on a machine without the checkout.
+sub bundle_engine_resources {
+    my $ui = File::Spec->catdir($REPO, 'mercury', 'ui', 'resources');
+    fail("the engine's UI resources are missing ($ui)") unless -d $ui;
+    my $ui_files = copy_tree($ui, File::Spec->catdir($res, 'ui'));
+
+    my $spirv = File::Spec->catdir($bazel_bin, 'mercury', 'shaders');
+    opendir(my $dh, $spirv) or fail("no compiled shaders in $spirv");
+    my @spv = sort grep { /\.spv$/ && -f File::Spec->catfile($spirv, $_) }
+        readdir $dh;
+    closedir $dh;
+    fail("no compiled shaders in $spirv") unless @spv;
+    my $shaders = File::Spec->catdir($res, 'shaders');
+    make_path($shaders);
+    for my $file (@spv) {
+        copy(File::Spec->catfile($spirv, $file),
+            File::Spec->catfile($shaders, $file))
+            or fail("cannot copy shader $file: $!");
+    }
+    log_line("Bundled the engine's UI resources ($ui_files files) and "
+        . scalar(@spv) . " shaders");
+
+    bundle_static_libraries() if $engine_libs;
+}
+
+# Static archives for the engine and the components it links that have their
+# own build system (Jolt, Assimp, ...). A game that needs to link a custom
+# player can take them from the editor instead of rebuilding the components.
+sub bundle_static_libraries {
+    my @libraries = (
+        ['mercury',                             'libmercury.a'],
+        ['mercury',                             'libmercury_rust.a'],
+        ['mercury',                             'libinput_actions_codegen_rs_bridge.a'],
+        ['mercury/rust',                        'libbridge.a'],
+        ['mercury/rust',                        'libffi_bridge.a'],
+        ['third_party',                         'libangelscript.a'],
+        ['third_party/jolt_build/lib',          'libJolt.a'],
+        ['third_party/assimp_build/lib',        'libassimp.a'],
+        ['third_party/assimp_build/lib',        'libzlibstatic.a'],
+        ['third_party/glfw_build/lib',          'libglfw3.a'],
+        ['third_party/yoga_build/lib',          'libyogacore.a'],
+        ['third_party/tinyxml2_build/lib',      'libtinyxml2.a'],
+        ['third_party/meshoptimizer_build/lib', 'libmeshoptimizer.a'],
+        ['third_party/miniaudio_build/lib',     'libminiaudio.a'],
+    );
+    my $dest = File::Spec->catdir($res, 'engine', 'lib');
+    make_path($dest);
+    my $count = 0;
+    my $bytes = 0;
+    for my $entry (@libraries) {
+        my ($dir, $file) = @$entry;
+        my $source = File::Spec->catfile($bazel_bin, split(m{/}, $dir), $file);
+        if (!-f $source) {
+            log_line("  warning: $file was not built; leaving it out of the bundle");
+            next;
+        }
+        copy($source, File::Spec->catfile($dest, $file))
+            or fail("cannot copy $source: $!");
+        $bytes += -s $source;
+        $count++;
+    }
+    log_line("Bundled $count static libraries for native builds (" . bytes($bytes) . ")");
+
+    my $readme = File::Spec->catfile($res, 'engine', 'lib', 'README.txt');
+    open(my $fh, '>', $readme) or fail("cannot write $readme: $!");
+    print $fh <<"README";
+Static libraries for building a native Mercury player or game module without
+rebuilding the engine's third-party dependencies. Headers are not included;
+pair these with the engine's source or development install.
+README
+    close $fh;
+}
+
+# --------------------------------------------------------------------------
 # MoltenVK: the Vulkan loader needs an ICD manifest, so ship one
 # --------------------------------------------------------------------------
 
@@ -699,6 +837,8 @@ sub find_file {
     }
     return undef;
 }
+
+our $moltenvk_name;   # the bundled MoltenVK dylib, for the game-folder manifest
 
 sub write_vulkan_icd {
     my $icd_json = find_file(
@@ -721,7 +861,8 @@ sub write_vulkan_icd {
     fail("MoltenVK was not found next to $icd_json") unless defined $moltenvk && -f $moltenvk;
 
     my $bundled = copy_dependency($moltenvk);
-    my $relative = '../../../Frameworks/' . basename($bundled);
+    $moltenvk_name = basename($bundled);
+    my $relative = '../../../Frameworks/' . $moltenvk_name;
     $manifest->{ICD}{library_path} = $relative;
 
     my $icd_dir = File::Spec->catdir($res, 'vulkan', 'icd.d');
@@ -731,6 +872,20 @@ sub write_vulkan_icd {
     print $out JSON::PP->new->pretty->canonical->encode($manifest);
     close $out;
     log_line("Bundled MoltenVK and its ICD manifest");
+
+    if ($opt{target} eq 'editor') {
+        # Build Game writes a plain folder with the dylibs next to the game, so
+        # its manifest needs a different relative path.
+        my $game = JSON::PP->new->decode(JSON::PP->new->encode($manifest));
+        $game->{ICD}{library_path} = '../../' . $moltenvk_name;
+        my $game_dir = File::Spec->catdir($res, 'engine', 'icd.d');
+        make_path($game_dir);
+        my $game_path = File::Spec->catfile($game_dir, 'MoltenVK_icd.json');
+        open(my $game_out, '>', $game_path)
+            or fail("cannot write $game_path: $!");
+        print $game_out JSON::PP->new->pretty->canonical->encode($game);
+        close $game_out;
+    }
 }
 
 sub verify_path {
@@ -834,23 +989,32 @@ sub resolve_dependency {
 
 sub bundle_dependencies {
     log_line("Bundling dynamic libraries");
+    my @binaries = ($exe);
+    push @binaries, $player if defined $player;
     my $found = 0;
-    for my $dep (otool_dependencies($exe)) {
-        next if is_system_library($dep);
-        next if $dep =~ m{^\@executable_path};
+    for my $binary (@binaries) {
+        for my $dep (otool_dependencies($binary)) {
+            next if is_system_library($dep);
+            next if $dep =~ m{^\@executable_path};
 
-        my $resolved = resolve_dependency($dep, $exe);
-        if (!defined $resolved) {
-            fail("cannot find $dep needed by the executable; install it "
-                . "(see ./scripts/setup_project.pl)");
+            my $resolved = resolve_dependency($dep, $binary);
+            if (!defined $resolved) {
+                fail("cannot find $dep needed by " . basename($binary)
+                    . "; install it (see ./scripts/setup_project.pl)");
+            }
+            my $dest = copy_dependency($resolved);
+            my $base = basename($dest);
+            run_or_die('install_name_tool', '-change', $dep, "\@rpath/$base",
+                $binary)
+                unless $dep eq "\@rpath/$base";
+            $found++;
         }
-        my $dest = copy_dependency($resolved);
-        my $base = basename($dest);
-        run_or_die('install_name_tool', '-change', $dep, "\@rpath/$base", $exe)
-            unless $dep eq "\@rpath/$base";
-        $found++;
+        add_rpath($binary, '@executable_path/../Frameworks');
+        # Build Game copies the player into a plain folder with the dylibs
+        # next to it, not into another .app.
+        add_rpath($binary, '@executable_path')
+            if defined $player && $binary eq $player;
     }
-    add_rpath($exe, '@executable_path/../Frameworks');
 
     while (my $file = shift @to_process) {
         for my $dep (otool_dependencies($file)) {
@@ -875,6 +1039,42 @@ sub bundle_dependencies {
         . " libraries in Contents/Frameworks");
 }
 
+# Every dylib in Contents/Frameworks the player loads, following its @rpath
+# references. Build Game copies exactly these next to the shipped game.
+sub dependency_closure {
+    my ($file) = @_;
+    my %seen;
+    my @queue = ($file);
+    while (my $current = shift @queue) {
+        for my $dep (otool_dependencies($current)) {
+            next unless $dep =~ m{^\@rpath/(.+)$};
+            my $name = $1;
+            next if $seen{$name}++;
+            my $path = File::Spec->catfile($fw, $name);
+            push @queue, $path if -f $path;
+        }
+    }
+    return sort keys %seen;
+}
+
+# Tells the editor's Build Game which libraries a shipped game folder needs.
+sub write_player_manifest {
+    return unless defined $player;
+    my %names = map { $_ => 1 } dependency_closure($player);
+    # MoltenVK is loaded through the Vulkan loader, not linked, so it is not in
+    # the player's otool dependencies.
+    $names{$moltenvk_name} = 1 if defined $moltenvk_name;
+
+    my $dir = File::Spec->catdir($res, 'engine');
+    make_path($dir);
+    my $path = File::Spec->catfile($dir, 'player-libs.txt');
+    open(my $fh, '>', $path) or fail("cannot write $path: $!");
+    print $fh "# Libraries copied next to a game made by Build Game.\n";
+    print $fh "$_\n" for sort keys %names;
+    close $fh;
+    log_line("Bundled " . scalar(keys %names) . " runtime libraries for the player");
+}
+
 # --------------------------------------------------------------------------
 # Signing and verification
 # --------------------------------------------------------------------------
@@ -896,6 +1096,7 @@ sub sign_bundle {
     for my $path (@machos) {
         sign_file($path, $identity, $hardened);
     }
+    sign_file($player, $identity, $hardened) if defined $player;
     sign_file($exe, $identity, $hardened);
     sign_file($app_dir, $identity, $hardened);
 }
@@ -917,12 +1118,15 @@ sub verify_bundle {
 
     # macOS shows "You can't open this version of this software on this version
     # of this Mac" when a binary's deployment target is newer than the machine,
-    # so the executable must not advertise more than LSMinimumSystemVersion.
-    my $exe_min = minimum_os($exe);
-    if (defined $exe_min && version_cmp($exe_min, $opt{min_macos}) > 0) {
-        fail("$exe was built for macOS $exe_min but the bundle advertises "
-            . "$opt{min_macos}; rebuild with --macos_minimum_os=$opt{min_macos} "
-            . "or raise --min-macos to $exe_min");
+    # so the executables must not advertise more than LSMinimumSystemVersion.
+    for my $binary ($exe, defined $player ? $player : ()) {
+        my $exe_min = minimum_os($binary);
+        next unless defined $exe_min;
+        if (version_cmp($exe_min, $opt{min_macos}) > 0) {
+            fail("$binary was built for macOS $exe_min but the bundle advertises "
+                . "$opt{min_macos}; rebuild with --macos_minimum_os=$opt{min_macos} "
+                . "or raise --min-macos to $exe_min");
+        }
     }
 
     # Bundled third-party libraries (MoltenVK, Vulkan loader, wxWidgets) come
@@ -943,7 +1147,9 @@ sub verify_bundle {
 
     # Nothing in the app may point at the checkout or Homebrew.
     my @leaks;
-    for my $file ($exe, glob(File::Spec->catfile($fw, '*'))) {
+    my @binaries = ($exe);
+    push @binaries, $player if defined $player;
+    for my $file (@binaries, glob(File::Spec->catfile($fw, '*'))) {
         next unless -f $file;
         for my $dep (otool_dependencies($file)) {
             next if is_system_library($dep);
@@ -959,6 +1165,19 @@ sub verify_bundle {
             fail("missing Contents/Resources/$required")
                 unless -f File::Spec->catfile($res, $required);
         }
+    } else {
+        # The editor is only complete when Play and Build Game can find the
+        # player and the engine's loose resources.
+        fail("missing Contents/MacOS/mercury_player")
+            unless defined $player && -f $player;
+        for my $required (qw(ui shaders)) {
+            my $dir = File::Spec->catdir($res, $required);
+            fail("missing Contents/Resources/$required") unless -d $dir;
+        }
+        my $shaders = glob(File::Spec->catfile($res, 'shaders', '*.spv'));
+        fail("Contents/Resources/shaders has no .spv files") unless $shaders;
+        fail("missing Contents/Resources/engine/player-libs.txt")
+            unless -f File::Spec->catfile($res, 'engine', 'player-libs.txt');
     }
 
     # The ICD manifest must point at the MoltenVK that was copied in.

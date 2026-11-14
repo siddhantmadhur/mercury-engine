@@ -14,10 +14,13 @@
  *
  * Steps, each started from Update():
  *
- *   build a Release mercury_player with Bazel, in the engine checkout
+ *   development editor (an engine checkout is present)
  *     -> bazel build -c opt //mercury:mercury_player
- *     -> on a worker thread: compile the scripts, pack the files, copy the
- * player
+ *   released editor (no checkout: the player and engine resources ship in the
+ *   .app)
+ *     -> use Contents/MacOS/mercury_player and Contents/Resources/{ui,shaders}
+ *   then, on a worker thread: compile the scripts, pack the files, copy the
+ *   player and the runtime libraries it needs
  *
  * The .as scripts are packed as sources; the executable finds game.mpack next
  * to itself and runs from it (see RunPlayer). Build and Play are unchanged and
@@ -63,6 +66,15 @@ class ReleaseBuild {
   // "Builds/<project name>", relative to the project root.
   static std::string DefaultOutput(const Project& project);
 
+  // The runtime support a packaged editor carries for its player: the list of
+  // dylibs it needs and the Vulkan ICD manifest for a plain game folder.
+  struct Runtime {
+    std::string
+        library_list;  // one dylib file name per line, relative to Frameworks
+    std::string frameworks_dir;  // the editor bundle's Contents/Frameworks
+    std::string icd_manifest;    // MoltenVK_icd.json written for a game folder
+  };
+
  private:
   struct Config {
     std::string executable;   // the Release mercury_player
@@ -70,6 +82,7 @@ class ReleaseBuild {
     std::string target_name;  // what the shipped executable is called
     std::string spirv_dir;
     std::string ui_resources;
+    Runtime runtime;
   };
   struct PackResult {
     bool ok = false;

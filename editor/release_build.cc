@@ -7,7 +7,9 @@
 #include <fstream>
 #include <sstream>
 
+#include "os/filesystem.h"
 #include "pack/mpack.h"
+#include "play_session.h"
 #include "scripting/as/script_builder.h"
 
 namespace Mercury {
@@ -65,6 +67,66 @@ std::pair<uintmax_t, int> ArchiveSizes(const fs::path& dir,
   return {total, count};
 }
 
+std::string Trim(std::string text) {
+  auto not_space = [](unsigned char c) { return !std::isspace(c); };
+  text.erase(text.begin(), std::find_if(text.begin(), text.end(), not_space));
+  text.erase(std::find_if(text.rbegin(), text.rend(), not_space).base(),
+             text.end());
+  return text;
+}
+
+// The runtime libraries and the MoltenVK manifest that the editor bundle
+// carries for its player. A game folder written by Build Game needs its own
+// copies: the player it ships is the same binary, with @rpath install names.
+bool CopyBundledRuntime(const ReleaseBuild::Runtime& runtime,
+                        const fs::path& output, std::vector<std::string>& log,
+                        std::string& error) {
+  std::error_code ec;
+  if (!runtime.library_list.empty()) {
+    std::ifstream list(runtime.library_list);
+    if (list) {
+      int copied = 0;
+      for (std::string line; std::getline(list, line);) {
+        const std::string name = Trim(line);
+        if (name.empty() || name.starts_with('#')) continue;
+        const fs::path source = fs::path(runtime.frameworks_dir) / name;
+        if (!fs::exists(source, ec)) {
+          error = "the editor is missing its bundled runtime library " + name +
+                  " (" + source.string() + ")";
+          return false;
+        }
+        fs::copy_file(source, output / name,
+                      fs::copy_options::overwrite_existing, ec);
+        if (ec) {
+          error = "could not copy " + source.string() + ": " + ec.message();
+          return false;
+        }
+        copied++;
+      }
+      if (copied > 0) {
+        log.push_back(std::format(
+            "Copied {} runtime libraries next to the game", copied));
+      }
+    }
+  }
+  if (!runtime.icd_manifest.empty() && fs::exists(runtime.icd_manifest, ec)) {
+    const fs::path dir = output / "vulkan" / "icd.d";
+    fs::create_directories(dir, ec);
+    if (ec) {
+      error = "could not create " + dir.string() + ": " + ec.message();
+      return false;
+    }
+    fs::copy_file(runtime.icd_manifest, dir / "MoltenVK_icd.json",
+                  fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+      error = "could not copy the Vulkan driver manifest: " + ec.message();
+      return false;
+    }
+    log.push_back("Copied the bundled MoltenVK driver manifest");
+  }
+  return true;
+}
+
 }  // namespace
 
 ReleaseBuild::~ReleaseBuild() {
@@ -88,23 +150,51 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
       "Build Game: building a Release executable for " + output_dir_.string());
 
   config_ = MakeConfig();
-  if (!fs::exists(fs::path(config_->source_dir) / "MODULE.bazel")) {
-    Finish("The engine checkout this editor was built from is missing (" +
-               config_->source_dir + ")",
-           true);
+  const bool from_bundle = !os::BundleResourcesDir().empty();
+  const bool has_checkout =
+      fs::exists(fs::path(config_->source_dir) / "MODULE.bazel");
+  // A development editor builds a fresh Release player with Bazel. A released
+  // editor (running from its .app) always uses the player and engine resources
+  // bundled with it, so packaging a game needs no compiler or third-party
+  // rebuild and behaves the same on every machine.
+  if (!from_bundle && has_checkout) {
+    StartBuild();
     return;
   }
-  StartBuild();
+  LocateExecutable();
+  if (config_->executable.empty()) {
+    if (has_checkout) {
+      StartBuild();
+      return;
+    }
+    Finish(
+        "mercury_player was not found next to the editor, and there is no "
+        "engine checkout to build it from. Install the complete editor "
+        "release.",
+        true);
+    return;
+  }
+  console_.Add(Console::Level::kInfo, Console::Source::kBuild,
+               "Using the Release player bundled with the editor");
+  StartPacking();
 }
 
 ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
   Config config;
   config.source_dir = fs::path(MERCURY_ENGINE_DIR).string();
-  config.ui_resources =
-      (fs::path(config.source_dir) / "mercury" / "ui" / "resources").string();
-  config.spirv_dir =
-      (fs::path(config.source_dir) / "bazel-bin" / "mercury" / "shaders")
-          .string();
+  // Prefer the copies that ship with the editor; in a development build these
+  // resolve to the checkout's UI resources and bazel-bin shaders.
+  config.ui_resources = os::EngineUiResourceDir().string();
+  config.spirv_dir = os::EngineShaderDir().string();
+  const fs::path bundle = os::BundleResourcesDir();
+  if (!bundle.empty()) {
+    const fs::path engine = bundle / "engine";
+    config.runtime.library_list = (engine / "player-libs.txt").string();
+    config.runtime.frameworks_dir =
+        (fs::path(os::ExecutableDir()).parent_path() / "Frameworks").string();
+    config.runtime.icd_manifest =
+        (engine / "icd.d" / "MoltenVK_icd.json").string();
+  }
   std::string name;
   for (char c : project_name_) {
     if (std::isalnum(static_cast<unsigned char>(c))) {
@@ -120,12 +210,19 @@ ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
 }
 
 void ReleaseBuild::LocateExecutable() {
+  std::error_code ec;
+  // A packaged editor ships a Release player next to itself, so Build Game can
+  // package games without a Bazel checkout or a compiler.
+  const fs::path bundled = PlaySession::PlayerPath();
+  if (!bundled.empty() && fs::is_regular_file(bundled, ec)) {
+    config_->executable = bundled.string();
+    return;
+  }
 #if defined(_WIN32)
   const char* file = "mercury_player.exe";
 #else
   const char* file = "mercury_player";
 #endif
-  std::error_code ec;
   for (const fs::path& dir :
        {fs::path(config_->source_dir) / "bazel-bin" / "mercury",
         fs::path(config_->source_dir) / "bazel-bin"}) {
@@ -278,6 +375,9 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
   fs::copy_file(exe, shipped, fs::copy_options::overwrite_existing, ec);
   if (ec) return fail("could not copy " + exe.string() + ": " + ec.message());
   result.log.push_back("Copied the player as " + shipped.filename().string());
+  if (!CopyBundledRuntime(config.runtime, output, result.log, error)) {
+    return fail(error);
+  }
   result.ok = true;
   return result;
 }

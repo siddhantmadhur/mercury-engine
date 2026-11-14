@@ -46,6 +46,10 @@ class PlaySession {
 
   static std::filesystem::path SchemaPath(const Project& project);
 
+  // The player executable that ships with the editor, or the one Bazel built
+  // next to it. Empty if there is none.
+  static std::filesystem::path PlayerPath();
+
  private:
   void Begin(const Project& project, bool run);
   bool StartBuild();
@@ -53,8 +57,6 @@ class PlaySession {
   bool DumpSchema();
   bool Launch(const std::vector<std::string>& args, Console::Source source);
   void Finish(const std::string& message, bool error);
-  // The player executable next to the editor.
-  static std::filesystem::path PlayerPath();
 
   Console& console_;
   std::unique_ptr<os::Process> process_;

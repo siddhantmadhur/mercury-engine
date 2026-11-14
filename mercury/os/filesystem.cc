@@ -246,13 +246,68 @@ fs::path BundleResourcesDir() {
 #endif
 }
 
+namespace {
+
+// The first candidate that exists; the last one is returned even when it does
+// not, so a development build keeps using its compile-time path.
+fs::path FirstExistingDir(const std::vector<fs::path>& candidates) {
+  std::error_code ec;
+  for (const fs::path& path : candidates) {
+    if (!path.empty() && fs::is_directory(path, ec)) return path;
+  }
+  return candidates.empty() ? fs::path() : candidates.back();
+}
+
+// Candidates in preference order: a packaged editor keeps its own copy of the
+// engine resources so it works without the checkout, so prefer them to a
+// compile-time path that may not exist on the player's machine.
+std::vector<fs::path> ResourceCandidates(const char* folder,
+                                         const fs::path& compiled) {
+  std::vector<fs::path> candidates;
+  const fs::path resources = BundleResourcesDir();
+  if (!resources.empty()) candidates.push_back(resources / folder);
+  const fs::path exe_dir = ExecutableDir();
+  if (!exe_dir.empty()) {
+    candidates.push_back(exe_dir / folder);
+    candidates.push_back(exe_dir / "Resources" / folder);
+  }
+  candidates.push_back(compiled);
+  return candidates;
+}
+
+}  // namespace
+
+fs::path EngineUiResourceDir() {
+#ifdef MERCURY_UI_RESOURCE_PATH
+  const fs::path compiled(MERCURY_UI_RESOURCE_PATH);
+#else
+  const fs::path compiled("mercury/ui/resources");
+#endif
+  return FirstExistingDir(ResourceCandidates("ui", compiled));
+}
+
+fs::path EngineShaderDir() {
+#ifdef MERCURY_SPIRV_PATH
+  const fs::path compiled(MERCURY_SPIRV_PATH);
+#else
+  const fs::path compiled("shaders");
+#endif
+  return FirstExistingDir(ResourceCandidates("shaders", compiled));
+}
+
 void UseBundledVulkanDriver() {
 #if defined(__APPLE__)
   if (std::getenv("VK_DRIVER_FILES") || std::getenv("VK_ICD_FILENAMES")) return;
   const fs::path resources = BundleResourcesDir();
-  if (resources.empty()) return;
-  const fs::path icd = resources / "vulkan" / "icd.d" / "MoltenVK_icd.json";
   std::error_code ec;
+  // Inside a .app the manifest is in Resources; a game folder written by the
+  // editor's Build Game has one next to the executable.
+  fs::path icd = resources.empty()
+                     ? fs::path()
+                     : resources / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+  if (icd.empty() || !fs::exists(icd, ec)) {
+    icd = ExecutableDir() / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+  }
   if (!fs::exists(icd, ec)) return;
   // Both are read by the loader: newer versions prefer VK_DRIVER_FILES,
   // older ones only know VK_ICD_FILENAMES.

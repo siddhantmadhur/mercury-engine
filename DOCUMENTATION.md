@@ -326,7 +326,7 @@ Controls: Label, Button, Toggle, RadioButton, Slider, SliderInt, ProgressBar, Te
 
 ## Shipping a game
 
-**Project > Build Game...** makes a folder you can ship, like Source 2's release builds with `.vpk` files. It builds a Release `mercury_player` from this engine checkout under `.mercury/build-release`, minifies the scripts and packs the assets into a few archives instead of thousands of loose files:
+**Project > Build Game...** makes a folder you can ship, like Source 2's release builds with `.vpk` files. In a development editor it builds a Release `mercury_player` from the engine checkout; a released editor reuses the Release player bundled with it. It minifies the scripts and packs the assets into a few archives instead of thousands of loose files:
 
 ```
 Builds/Pong/pong          the game: a copy of mercury_player (pong.exe on Windows)
@@ -353,7 +353,15 @@ On macOS, `scripts/package_macos.pl` wraps that output in a self-contained `.app
 open Builds/Pong.app
 ```
 
-It builds the Release player with Bazel, writes `game.mpack`/`engine.mpack` (the same format, with the same split, compression and CRC rules as Build Game) and puts them in `Contents/Resources`. The player, the Vulkan loader (`libvulkan`) and MoltenVK are copied into the bundle, their install names are rewritten to `@rpath`, and a relative `vulkan/icd.d/MoltenVK_icd.json` tells the loader to use the bundled driver, so nothing points at the checkout or Homebrew. The bundle is ad-hoc signed by default; pass `--identity "Developer ID Application: ..."` for a distributable, hardened-runtime signature and `--zip` to also produce a zip for `ditto`/notarization. `--target editor` packages the editor instead.
+It builds the Release player with Bazel, writes `game.mpack`/`engine.mpack` (the same format, with the same split, compression and CRC rules as Build Game) and puts them in `Contents/Resources`. The player, the Vulkan loader (`libvulkan`) and MoltenVK are copied into the bundle, their install names are rewritten to `@rpath`, and a relative `vulkan/icd.d/MoltenVK_icd.json` tells the loader to use the bundled driver, so nothing points at the checkout or Homebrew. The bundle is ad-hoc signed by default; pass `--identity "Developer ID Application: ..."` for a distributable, hardened-runtime signature and `--zip` to also produce a zip for `ditto`/notarization.
+
+`--target editor` packages the editor instead, as a complete development and packaging install:
+
+```sh
+./scripts/package_macos.pl --target editor --name "Mercury Editor" --zip
+```
+
+Its bundle contains the editor and `mercury_player` in `Contents/MacOS`, the loose UI theme/fonts and compiled shaders in `Contents/Resources/ui` and `Contents/Resources/shaders`, the Vulkan loader and MoltenVK, and the engine's static libraries in `Contents/Resources/engine/lib`. Play therefore runs the bundled player, and Build Game packages a game without a compiler, Bazel or the engine checkout: it reuses the bundled Release player and engine resources, then copies the player's runtime libraries (`Contents/Resources/engine/player-libs.txt`) and a `vulkan/icd.d` manifest next to the game so the output folder is self-contained. Pass `--no-engine-libs` to leave the static libraries out of an editor bundle.
 
 ## Importing a Unity project
 

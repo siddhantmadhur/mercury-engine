@@ -249,7 +249,7 @@ void VulkanApplication::OnNewTick() {
 
 VkShaderModule VulkanApplication::LoadShaderModule(
     const std::string& file_name) const {
-  const fs::path path = fs::path(MERCURY_SPIRV_PATH) / file_name;
+  const fs::path path = os::EngineShaderDir() / file_name;
   const auto bytes = os::ReadBytes(path);
   if (!bytes) {
     PDebug::error("Vulkan: could not open shader {}", path.string());

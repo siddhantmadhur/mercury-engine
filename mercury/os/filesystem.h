@@ -59,8 +59,19 @@ fs::path ExecutableDir();
 // executable, or an empty path when the program is not in a bundle.
 fs::path BundleResourcesDir();
 
-// Points the Vulkan loader at the MoltenVK ICD shipped inside the .app bundle.
-// Does nothing outside a bundle or when the caller already chose driver files.
+// Where the engine's loose UI theme, fonts and icons live: the checkout's
+// mercury/ui/resources in a development build, or Contents/Resources/ui in a
+// packaged editor. A shipped game mounts engine.mpack at this path instead.
+fs::path EngineUiResourceDir();
+
+// Where the compiled SPIR-V shaders live: bazel-bin/mercury/shaders in a
+// development build, or Contents/Resources/shaders in a packaged editor.
+// A shipped game mounts engine.mpack at this path instead.
+fs::path EngineShaderDir();
+
+// Points the Vulkan loader at the MoltenVK ICD shipped next to the program (in
+// a .app bundle's Resources, or in the game folder that Build Game wrote).
+// Does nothing when the caller already chose driver files.
 void UseBundledVulkanDriver();
 
 // A path the user typed on the command line. `bazel run` starts programs inside

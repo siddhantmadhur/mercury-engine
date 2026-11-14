@@ -4,10 +4,6 @@
 #include "os/filesystem.h"
 #include "ui/uxml.h"
 
-#ifndef MERCURY_UI_RESOURCE_PATH
-#define MERCURY_UI_RESOURCE_PATH "mercury/ui/resources"
-#endif
-
 namespace Mercury::UI {
 
 namespace {
@@ -27,7 +23,7 @@ UIResources::UIResources() = default;
 UIResources::~UIResources() = default;
 
 std::filesystem::path UIResources::EngineResourceDir() {
-  return std::filesystem::path(MERCURY_UI_RESOURCE_PATH);
+  return os::EngineUiResourceDir();
 }
 
 void UIResources::Error(const std::string& message) {

@@ -110,6 +110,12 @@ The bundle carries the player, MoltenVK, the Vulkan loader and the project's `.m
 archives; it does not read anything from this checkout. See
 [Shipping a game](DOCUMENTATION.md#shipping-a-game).
 
+To publish the editor itself (Play and Build Game work without this checkout):
+
+```sh
+./scripts/package_macos.pl --target editor --name "Mercury Editor" --zip
+```
+
 ### Linux (X11 and Wayland)
 
 ```sh

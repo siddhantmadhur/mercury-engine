@@ -73,10 +73,8 @@ bool MountShippedPacks(std::string& project_path) {
   os::Mount(dir, game);
   os::Mount(UI::UIResources::EngineResourceDir(), engine,
             std::string(mpack::kEngineUiFolder));
-#ifdef MERCURY_SPIRV_PATH
-  os::Mount(MERCURY_SPIRV_PATH, engine,
+  os::Mount(os::EngineShaderDir(), engine,
             std::string(mpack::kEngineShaderFolder));
-#endif
   project_path = (dir / mproj).string();
   PDebug::info("Running from {}", game_file.string());
   return true;
