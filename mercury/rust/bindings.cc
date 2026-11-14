@@ -32,11 +32,15 @@ void LogInfo(::rust::Str message) { PDebug::info("{}", ToStringView(message)); }
 
 void LogWarn(::rust::Str message) { PDebug::warn("{}", ToStringView(message)); }
 
-void LogError(::rust::Str message) { PDebug::error("{}", ToStringView(message)); }
+void LogError(::rust::Str message) {
+  PDebug::error("{}", ToStringView(message));
+}
 
 bool OsExists(::rust::Str path) { return Mercury::os::Exists(ToPath(path)); }
 
-bool OsIsPacked(::rust::Str path) { return Mercury::os::IsPacked(ToPath(path)); }
+bool OsIsPacked(::rust::Str path) {
+  return Mercury::os::IsPacked(ToPath(path));
+}
 
 bool OsHasMounts() { return Mercury::os::HasMounts(); }
 
