@@ -5,7 +5,7 @@
 #include <format>
 #include <fstream>
 
-#include "input/input_actions_codegen.h"
+#include "input/input_actions_codegen.rs.h"
 #include "os/filesystem.h"
 #include "templates.h"
 
@@ -120,7 +120,11 @@ bool InputActionsWindow::WriteHeader() {
   const std::string class_name =
       desc_.class_name.empty() ? "GameInput" : desc_.class_name;
   auto header = GenerateInputActionsAngelScript(desc_, class_name, path_);
-  header_errors_ = std::move(header.errors);
+  header_errors_.clear();
+  header_errors_.reserve(header.errors.size());
+  for (const auto& e : header.errors) {
+    header_errors_.push_back(std::string(e));
+  }
   state_revision_++;
   if (!header_errors_.empty()) {
     for (const auto& e : header_errors_) console_.Error("Input Actions: " + e);
@@ -128,7 +132,8 @@ bool InputActionsWindow::WriteHeader() {
                    " was not written; rename the actions");
     return false;
   }
-  if (!WriteIfChanged(project_->Resolve(desc_.header), header.source)) {
+  if (!WriteIfChanged(project_->Resolve(desc_.header),
+                      std::string(header.source))) {
     console_.Error("Input Actions: could not write " + desc_.header);
     return false;
   }
@@ -276,15 +281,16 @@ std::string InputActionsWindow::ActionUsageSnippet(int action_idx) const {
   if (action_idx < 0 || action_idx >= static_cast<int>(desc_.actions.size()))
     return "";
   const auto& action = desc_.actions[action_idx];
-  const std::string class_name = desc_.class_name.empty()
-                                     ? "GameInput"
-                                     : InputActionIdentifier(desc_.class_name);
+  const std::string class_name =
+      desc_.class_name.empty()
+          ? "GameInput"
+          : std::string(InputActionIdentifier(desc_.class_name));
   const std::string member =
       desc_.header.empty()
           ? std::format("Input::FindAction(\"{}\")", action.FullName())
           : std::format("Input::RequireAction({}::{}.{})", class_name,
-                        InputActionIdentifier(action.map),
-                        InputActionIdentifier(action.name));
+                        std::string(InputActionIdentifier(action.map)),
+                        std::string(InputActionIdentifier(action.name)));
   if (action.type == InputAction::Type::kButton)
     return member + ".wasPressedThisFrame";
   if (action.vector2) return member + ".ReadVector2()";

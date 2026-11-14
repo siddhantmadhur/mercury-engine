@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "debugger/debugger.h"
+#include "input/input_actions_codegen.rs.h"
 #include "os/filesystem.h"
-#include "os/filesystem.rs.h"
 #include "rust/bridge.h"
 #include "test_paths.h"
 

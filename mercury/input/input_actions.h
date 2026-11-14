@@ -28,7 +28,7 @@
  *
  * [map] sections are optional; they keep empty maps and the map order the
  * editor's Input Actions window shows. `class` and `header` are where that
- * window writes the generated AngelScript namespace (input_actions_codegen.h).
+ * window writes the generated AngelScript namespace (input_actions_codegen.rs).
  */
 #ifndef MERCURY_INPUT_INPUT_ACTIONS_H
 #define MERCURY_INPUT_INPUT_ACTIONS_H
@@ -185,6 +185,8 @@ struct InputActionDesc {
   std::vector<std::string> bindings;
   std::vector<Composite2D> composites;
 
+  const std::string& GetMap() const { return map; }
+  const std::string& GetName() const { return name; }
   std::string FullName() const { return map.empty() ? name : map + "/" + name; }
   bool operator==(const InputActionDesc&) const = default;
 };
@@ -197,6 +199,9 @@ struct InputActionsDesc {
   // name.
   std::string header;
   std::string class_name;
+
+  const std::vector<std::string>& GetMaps() const { return maps; }
+  const std::vector<InputActionDesc>& GetActions() const { return actions; }
 
   bool operator==(const InputActionsDesc&) const = default;
 };

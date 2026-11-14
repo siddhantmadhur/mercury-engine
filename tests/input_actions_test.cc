@@ -6,7 +6,7 @@
 
 #include "GLFW/glfw3.h"
 #include "input/input_actions.h"
-#include "input/input_actions_codegen.h"
+#include "input/input_actions_codegen.rs.h"
 
 using namespace Mercury;
 
@@ -106,17 +106,17 @@ TEST(InputActions, KnownControlPathsAreReadable) {
 }
 
 TEST(InputActionsCodegen, MakesIdentifiers) {
-  EXPECT_EQ(InputActionIdentifier("move left"), "MoveLeft");
-  EXPECT_EQ(InputActionIdentifier("fire-2"), "Fire2");
-  EXPECT_EQ(InputActionIdentifier("2d look"), "_2dLook");
-  EXPECT_EQ(InputActionIdentifier(""), "Default");
+  EXPECT_EQ(std::string(InputActionIdentifier("move left")), "MoveLeft");
+  EXPECT_EQ(std::string(InputActionIdentifier("fire-2")), "Fire2");
+  EXPECT_EQ(std::string(InputActionIdentifier("2d look")), "_2dLook");
+  EXPECT_EQ(std::string(InputActionIdentifier("")), "Default");
 }
 
 TEST(InputActionsCodegen, GeneratesOneClassPerMap) {
   const auto generated = GenerateInputActionsAngelScript(
       SampleActions(), "GameInput", "res://input/actions.minput");
   EXPECT_TRUE(generated.errors.empty());
-  const std::string& s = generated.source;
+  const std::string s(generated.source);
   EXPECT_NE(s.find("namespace GameInput"), std::string::npos);
   EXPECT_NE(s.find("namespace Player"), std::string::npos);
   EXPECT_NE(s.find("const string Jump = \"Player/Jump\";"), std::string::npos);
@@ -160,7 +160,8 @@ TEST(InputActionsCodegen, RollABallHeaderIsUpToDate) {
   const auto generated = GenerateInputActionsAngelScript(
       desc, class_name, "res://input/actions.minput");
   EXPECT_TRUE(generated.errors.empty());
-  EXPECT_EQ(generated.source, read(root / "scripts/generated/game_input.as"));
+  EXPECT_EQ(std::string(generated.source),
+            read(root / "scripts/generated/game_input.as"));
   // And the .minput survives a save/parse round trip.
   InputActionsDesc again;
   ASSERT_TRUE(ParseInputActions(SerializeInputActions(desc), &again, &error))

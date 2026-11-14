@@ -14,10 +14,19 @@ cc_library(
     includes = ["."],
 )
 
+cc_library(
+    name = "input_headers",
+    hdrs = [
+        "input/input_actions.h",
+    ],
+    includes = ["."],
+    deps = ["//third_party:glm"],
+)
+
 mercury_rust_feature(
-    name = "os_filesystem_rs",
-    src = "os/filesystem.rs",
-    cc_deps = [":core_headers"],
+    name = "input_actions_codegen_rs",
+    src = "input/input_actions_codegen.rs",
+    cc_deps = [":input_headers"],
 )
 
 rust_static_library(
@@ -26,7 +35,7 @@ rust_static_library(
     crate_root = "rust_modules.rs",
     edition = "2024",
     deps = [
-        ":os_filesystem_rs",
+        ":input_actions_codegen_rs",
         "//mercury/rust:mercury_kernel",
     ],
 )
@@ -49,8 +58,8 @@ cc_library(
         "//conditions:default": [],
     }),
     deps = [
+        ":input_actions_codegen_rs_bridge",
         ":mercury_rust",
-        ":os_filesystem_rs_bridge",
         "//mercury/rust:bridge",
         "@vulkan//:vulkan",
         "//third_party:assimp",
