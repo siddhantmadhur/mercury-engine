@@ -164,4 +164,4 @@ rendering and lighting, scripting, UI Toolkit, shipping and testing) is in
 
 ## License
 
-[GNU GPLv3](/LICENSE)
+[MPL 2.0](/LICENSE)
