@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "parallel_obj.h"
 
 #include <assimp/DefaultIOSystem.h>
@@ -30,10 +34,11 @@ namespace fs = std::filesystem;
 
 constexpr size_t kMinPieceBytes = 4 * 1024 * 1024;
 
-bool IsBlank(char c) { return c == ' ' || c == '\t'; }
+bool IsBlank(char c) { return c == ' ' || c == '	'; }
 bool IsSpace(char c) {
-  return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' ||
-         c == '\f';
+  return c == ' ' || c == '	' || c == '' || c == '
+' || c == '' ||
+         c == '';
 }
 
 // What a line of the file is, as far as cutting it up is concerned.
@@ -49,17 +54,19 @@ enum class Line {
   kUnsupported,  // freeform curves and surfaces refer to vertices too
 };
 
-// The end of the line starting at `start`: its '\n', or `end`. A backslash
+// The end of the line starting at `start`: its '
+', or `end`. A backslash
 // before the line break continues the line, as Assimp reads it.
 const char* LineEnd(const char* start, const char* end) {
   const char* p = start;
   while (p < end) {
     const char* newline =
-        static_cast<const char*>(std::memchr(p, '\n', end - p));
+        static_cast<const char*>(std::memchr(p, '
+', end - p));
     if (!newline) return end;
     const char* last = newline;
-    if (last > start && last[-1] == '\r') last--;
-    if (last > start && last[-1] == '\\') {
+    if (last > start && last[-1] == '') last--;
+    if (last > start && last[-1] == '\') {
       p = newline + 1;
       continue;
     }
@@ -351,7 +358,8 @@ bool BuildPiece(const char* base, const Piece& piece, bool first,
                 std::string& out) {
   out.reserve(piece.end - piece.begin + 4096);
   for (const std::string& library : piece.libraries) {
-    out += "mtllib " + library + "\n";
+    out += "mtllib " + library + "
+";
   }
   const char* p = base + piece.begin;
   const char* stop = base + piece.end;
@@ -360,7 +368,8 @@ bool BuildPiece(const char* base, const Piece& piece, bool first,
     // The object's own line, then the material it would have inherited.
     const char* line_end = LineEnd(p, stop);
     out.append(p, std::min(line_end + 1, stop) - p);
-    if (!piece.material.empty()) out += "usemtl " + piece.material + "\n";
+    if (!piece.material.empty()) out += "usemtl " + piece.material + "
+";
     p = std::min(line_end + 1, stop);
   }
   while (p < stop) {
@@ -379,7 +388,8 @@ bool BuildPiece(const char* base, const Piece& piece, bool first,
       case Line::kIndexed:
         out.append(p, after - p);
         if (!RewriteIndexLine(after, line_end, piece, seen, out)) return false;
-        if (line_end < stop) out.push_back('\n');
+        if (line_end < stop) out.push_back('
+');
         p = line_end + 1;
         continue;
       case Line::kUnsupported:
@@ -582,15 +592,16 @@ std::unique_ptr<aiScene> ImportObjInParallel(
     // Move to just after a real line break.
     while (at < size) {
       const char* newline =
-          static_cast<const char*>(std::memchr(base + at, '\n', size - at));
+          static_cast<const char*>(std::memchr(base + at, '
+', size - at));
       if (!newline) {
         at = size;
         break;
       }
       const char* last = newline;
-      if (last > base && last[-1] == '\r') last--;
+      if (last > base && last[-1] == '') last--;
       at = newline - base + 1;
-      if (!(last > base && last[-1] == '\\')) break;
+      if (!(last > base && last[-1] == '\')) break;
     }
     if (at > bounds.back() && at < size) bounds.push_back(at);
   }

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "map.h"
 
 #include <algorithm>
@@ -55,7 +59,8 @@ std::string GuessResourceType(const std::string& path) {
 std::string SanitizeNodeName(std::string_view name) {
   std::string out;
   for (char c : name) {
-    if (c == '/' || c == '"' || c == '\\' || c == '\n' || c == '\r') continue;
+    if (c == '/' || c == '"' || c == '\' || c == '
+' || c == '') continue;
     out.push_back(c);
   }
   // "." and ".." would read as path components.

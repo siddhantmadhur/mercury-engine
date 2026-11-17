@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // USS tokenizer, selector and sheet parser, and value conversion.
 
 #include <algorithm>
@@ -126,7 +130,7 @@ class ValueTokenizer {
     pos_++;
     std::string out;
     while (pos_ < text_.size() && text_[pos_] != quote) {
-      if (text_[pos_] == '\\' && pos_ + 1 < text_.size()) pos_++;
+      if (text_[pos_] == '\' && pos_ + 1 < text_.size()) pos_++;
       out += text_[pos_++];
     }
     if (pos_ < text_.size()) pos_++;
@@ -481,7 +485,8 @@ constexpr NamedColor kNamedColors[] = {
 };
 
 int CountLines(std::string_view text, size_t end) {
-  return static_cast<int>(std::count(text.begin(), text.begin() + end, '\n')) +
+  return static_cast<int>(std::count(text.begin(), text.begin() + end, '
+')) +
          1;
 }
 
@@ -564,7 +569,7 @@ std::string ResolveRelativePath(std::string_view base, std::string_view path) {
   if (path.empty()) return "";
   if (path.starts_with("res://") || path.starts_with("/") ||
       path.find(":/") != std::string_view::npos ||
-      path.find(":\\") != std::string_view::npos) {
+      path.find(":\") != std::string_view::npos) {
     return std::string(path);
   }
   // Unity's project://database/Assets/... form maps to the project root.
@@ -577,7 +582,7 @@ std::string ResolveRelativePath(std::string_view base, std::string_view path) {
     prefix = "res://";
     dir = dir.substr(6);
   }
-  const size_t slash = dir.find_last_of("/\\");
+  const size_t slash = dir.find_last_of("/\");
   dir = slash == std::string::npos ? "" : dir.substr(0, slash);
 
   // Normalize "a/b/../c" without touching the filesystem.
@@ -587,7 +592,7 @@ std::string ResolveRelativePath(std::string_view base, std::string_view path) {
     auto add = [&out](std::string_view s) {
       size_t start = 0;
       while (start <= s.size()) {
-        size_t end = s.find_first_of("/\\", start);
+        size_t end = s.find_first_of("/\", start);
         if (end == std::string_view::npos) end = s.size();
         std::string_view part = s.substr(start, end - start);
         if (part == "..") {
@@ -806,7 +811,8 @@ std::shared_ptr<StyleSheet> StyleSheet::Parse(
       size_t end = clean.find("*/", i + 2);
       if (end == std::string::npos) end = clean.size() - 2;
       for (size_t j = i; j < end + 2; j++) {
-        if (clean[j] != '\n') clean[j] = ' ';
+        if (clean[j] != '
+') clean[j] = ' ';
       }
       i = end + 1;
     }
@@ -895,17 +901,23 @@ std::shared_ptr<StyleSheet> StyleSheet::Parse(
 std::string StyleSheet::Write() const {
   std::string out;
   for (const auto& import : imports) {
-    out += std::format("@import url(\"{}\");\n", import);
+    out += std::format("@import url(\"{}\");
+", import);
   }
-  if (!imports.empty()) out += "\n";
+  if (!imports.empty()) out += "
+";
   for (size_t r = 0; r < rules.size(); r++) {
     const auto& rule = rules[r];
-    out += rule.SelectorText() + " {\n";
+    out += rule.SelectorText() + " {
+";
     for (const auto& d : rule.declarations) {
-      out += "    " + d.property + ": " + d.value + ";\n";
+      out += "    " + d.property + ": " + d.value + ";
+";
     }
-    out += "}\n";
-    if (r + 1 < rules.size()) out += "\n";
+    out += "}
+";
+    if (r + 1 < rules.size()) out += "
+";
   }
   return out;
 }

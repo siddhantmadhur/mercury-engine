@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "font.h"
 
 #include <algorithm>
@@ -259,7 +263,8 @@ std::vector<StyledChar> ApplyRichText(std::u32string_view text,
           italic = std::max(0, italic - 1);
         else if (lower == "br" || lower == "br/") {
           out.push_back(
-              {'\n', colors.back(), sizes.back(), bold > 0, italic > 0});
+              {'
+', colors.back(), sizes.back(), bold > 0, italic > 0});
         } else if (lower.starts_with("color=")) {
           auto c = ParseColor(value());
           colors.push_back(c ? *c : colors.back());
@@ -298,7 +303,7 @@ std::vector<StyledChar> ApplyRichText(std::u32string_view text,
   return out;
 }
 
-bool IsSpace(char32_t c) { return c == ' ' || c == '\t'; }
+bool IsSpace(char32_t c) { return c == ' ' || c == '	'; }
 
 }  // namespace
 
@@ -350,7 +355,8 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
   for (size_t i = 0; i < chars.size(); i++) {
     const StyledChar& sc = chars[i];
     const float scale = sc.size / kSdfBaseSize;
-    if (sc.c == '\n') {
+    if (sc.c == '
+') {
       placed.push_back({i, pen, 0.0f, lines.size() - 1});
       lines.back().width = pen;
       lines.emplace_back();
@@ -360,7 +366,7 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
       prev_space = false;
       continue;
     }
-    char32_t c = sc.c == '\t' ? char32_t(' ') : sc.c;
+    char32_t c = sc.c == '	' ? char32_t(' ') : sc.c;
     if (collapse && IsSpace(c)) {
       if (prev_space || placed.empty() || pen == 0.0f) {
         // Collapsed: keep a caret entry with no width.
@@ -486,7 +492,8 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
   for (size_t k = 0; k < visible_count; k++) {
     const auto& p = placed[k];
     const StyledChar& sc = chars[p.char_index];
-    if (sc.c == '\n' || IsSpace(sc.c)) continue;
+    if (sc.c == '
+' || IsSpace(sc.c)) continue;
     emit(sc.c, sc, p.x, p.line);
   }
   if (ellipsis && !chars.empty()) emit(U'…', chars[0], ellipsis_x, 0);
@@ -500,7 +507,8 @@ TextLayout LayoutText(std::string_view utf8, const TextSettings& settings,
     const size_t last_line = lines.size() - 1;
     float end_x =
         placed.empty() ? 0.0f : placed.back().x + placed.back().advance;
-    if (!placed.empty() && chars[placed.back().char_index].c == '\n')
+    if (!placed.empty() && chars[placed.back().char_index].c == '
+')
       end_x = 0.0f;
     layout.carets.push_back({line_x[last_line] + end_x, line_y[last_line]});
     layout.caret_lines.push_back(static_cast<int>(last_line));

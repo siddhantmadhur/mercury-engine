@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * script_editor_tab.cc
  */
@@ -100,9 +104,10 @@ bool ScriptEditorTab::Load(std::string* error) {
     if (error) *error = "Could not decode " + file_.string();
     return false;
   }
-  eol_ = content.find("\r\n") != std::string::npos
+  eol_ = content.find("
+") != std::string::npos
              ? "crlf"
-             : (content.find('\r') != std::string::npos ? "cr" : "lf");
+             : (content.find('') != std::string::npos ? "cr" : "lf");
   editor_->SetEOLMode(eol_ == "crlf"
                           ? wxSTC_EOL_CRLF
                           : (eol_ == "cr" ? wxSTC_EOL_CR : wxSTC_EOL_LF));
@@ -497,7 +502,8 @@ void ScriptEditorTab::BindEvents() {
 void ScriptEditorTab::OnCharAdded(wxStyledTextEvent& evt) {
   const int key = evt.GetKey();
   const int pos = editor_->GetCurrentPos();
-  if (key == '\n') {
+  if (key == '
+') {
     AutoIndent(pos);
   } else if (key == '}' && panel_ && !vim_enabled_) {
     const int line = editor_->GetCurrentLine();

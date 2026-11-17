@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "templates.h"
 
 #include <cctype>
@@ -161,7 +165,9 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
 
   // Build output and editor caches are generated, so keep them out of git.
   if (!WriteText(root / ".gitignore",
-                 "# Build output and editor caches\n.mercury/\n", error)) {
+                 "# Build output and editor caches
+.mercury/
+", error)) {
     return {};
   }
   if (!WriteText(root / "maps" / "main.mmap", NewMapText(name, is_3d), error)) {
@@ -212,7 +218,8 @@ bool CreateUxml(const fs::path& file) {
 }
 
 bool CreateUss(const fs::path& file) {
-  return WriteText(file, "/* Style sheet for UI Toolkit (USS). */\n", nullptr);
+  return WriteText(file, "/* Style sheet for UI Toolkit (USS). */
+", nullptr);
 }
 
 bool CreateInputActions(const fs::path& file) {

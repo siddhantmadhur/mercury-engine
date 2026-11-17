@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "model.h"
 
 #include <assimp/ObjMaterial.h>
@@ -328,7 +332,7 @@ fs::path FindInDirectory(const fs::path& dir, const fs::path& file) {
 std::string FindTexture(const fs::path& model_dir,
                         const std::string& reference) {
   std::string name = reference;
-  std::replace(name.begin(), name.end(), '\\', '/');
+  std::replace(name.begin(), name.end(), '\', '/');
   const fs::path file = fs::path(name).filename();
   if (file.empty()) return "";
   // A relative path as written in the file.

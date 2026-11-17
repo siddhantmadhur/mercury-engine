@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "lore_panel.h"
 
 #include <wx/menu.h>
@@ -556,7 +560,8 @@ void LorePanel::PopulateDiffText(wxTextCtrl* ctrl,
       col = dark_theme ? wxColour(95, 165, 245) : wxColour(35, 95, 190);
     }
     ctrl->SetDefaultStyle(wxTextAttr(col));
-    ctrl->AppendText(wxString::FromUTF8(line + "\n"));
+    ctrl->AppendText(wxString::FromUTF8(line + "
+"));
   }
   ctrl->ShowPosition(0);
   ctrl->Thaw();

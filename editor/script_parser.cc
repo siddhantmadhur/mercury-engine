@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * script_parser.cc
  */
@@ -51,7 +55,8 @@ std::vector<ScriptToken> Tokenize(const std::string& text) {
   int line = 1;
   int column = 1;
   auto advance = [&](char c) {
-    if (c == '\n') {
+    if (c == '
+') {
       ++line;
       column = 1;
     } else {
@@ -60,14 +65,16 @@ std::vector<ScriptToken> Tokenize(const std::string& text) {
   };
   while (i < text.size()) {
     const char c = text[i];
-    if (c == '\n' || c == '\r' || c == ' ' || c == '\t' || c == '\v' ||
-        c == '\f') {
+    if (c == '
+' || c == '' || c == ' ' || c == '	' || c == '' ||
+        c == '') {
       advance(c);
       ++i;
       continue;
     }
     if (c == '/' && i + 1 < text.size() && text[i + 1] == '/') {
-      while (i < text.size() && text[i] != '\n') {
+      while (i < text.size() && text[i] != '
+') {
         advance(text[i]);
         ++i;
       }
@@ -119,7 +126,7 @@ std::vector<ScriptToken> Tokenize(const std::string& text) {
         const char n = text[i];
         token.text.push_back(n);
         advance(text[i++]);
-        if (n == '\\' && i < text.size()) {
+        if (n == '\' && i < text.size()) {
           token.text.push_back(text[i]);
           advance(text[i++]);
         } else if (n == quote) {

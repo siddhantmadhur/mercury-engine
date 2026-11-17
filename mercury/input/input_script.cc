@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "input_script.h"
 
 #include <GLFW/glfw3.h>
@@ -34,7 +38,7 @@ bool InputScript::LoadFromString(const std::string& text, std::string* error) {
   int number = 0;
   while (std::getline(lines, line)) {
     number++;
-    const auto first = line.find_first_not_of(" \t\r");
+    const auto first = line.find_first_not_of(" 	");
     if (first == std::string::npos || line[first] == '#') continue;
     std::istringstream words(line);
     Step step;
@@ -44,9 +48,9 @@ bool InputScript::LoadFromString(const std::string& text, std::string* error) {
       return false;
     }
     std::getline(words, step.rest);
-    step.rest.erase(0, step.rest.find_first_not_of(" \t"));
+    step.rest.erase(0, step.rest.find_first_not_of(" 	"));
     while (!step.rest.empty() &&
-           (step.rest.back() == '\r' || step.rest.back() == ' ')) {
+           (step.rest.back() == '' || step.rest.back() == ' ')) {
       step.rest.pop_back();
     }
     std::istringstream args(step.rest);

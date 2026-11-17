@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * script_builder.cc
  */
@@ -19,7 +23,8 @@ namespace {
 
 void Emit(const BuildOptions& options, std::string* log,
           const std::string& line) {
-  if (log) *log += line + "\n";
+  if (log) *log += line + "
+";
   if (options.on_line) options.on_line(line);
 }
 
@@ -66,7 +71,8 @@ bool ScriptBuilder::Build(const fs::path& project_dir,
     std::error_code ec;
     fs::create_directories(StampPath(project_dir).parent_path(), ec);
     std::ofstream stamp(StampPath(project_dir), std::ios::trunc);
-    stamp << "1\n";
+    stamp << "1
+";
   }
   Emit(options, log, "Scripts compiled");
   return true;

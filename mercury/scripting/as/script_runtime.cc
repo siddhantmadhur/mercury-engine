@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * script_runtime.cc
  */
@@ -82,7 +86,7 @@ std::string MetaValue(const std::vector<std::string>& metadata,
       const char quote = entry[at++];
       std::string value;
       while (at < entry.size() && entry[at] != quote) {
-        if (entry[at] == '\\' && at + 1 < entry.size()) at++;
+        if (entry[at] == '\' && at + 1 < entry.size()) at++;
         value += entry[at++];
       }
       return value;
@@ -104,7 +108,7 @@ std::vector<std::string> MetaQuoted(const std::vector<std::string>& metadata,
         const char quote = entry[at++];
         std::string value;
         while (at < entry.size() && entry[at] != quote) {
-          if (entry[at] == '\\' && at + 1 < entry.size()) at++;
+          if (entry[at] == '\' && at + 1 < entry.size()) at++;
           value += entry[at++];
         }
         values.push_back(std::move(value));

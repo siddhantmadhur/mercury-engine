@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "profiler.h"
 
 #include <algorithm>
@@ -106,25 +110,30 @@ void ReportBench(State& s) {
   const double n = static_cast<double>(frames.size());
   const double average = total / std::max(n, 1.0);
   std::ostringstream out;
-  out << std::format("load {:.0f} ms\n", s.last_load_ms);
+  out << std::format("load {:.0f} ms
+", s.last_load_ms);
   out << std::format(
       "frames {}  avg {:.3f} ms ({:.1f} fps)  p50 {:.3f}  p95 {:.3f}  p99 "
-      "{:.3f}  max {:.3f}\n",
+      "{:.3f}  max {:.3f}
+",
       frames.size(), average, 1000.0 / std::max(average, 1e-6),
       Percentile(frames, 0.5), Percentile(frames, 0.95),
       Percentile(frames, 0.99), Percentile(frames, 1.0));
   for (int pass = 0; pass < 2; pass++) {
     for (const auto& [name, stat] : s.stats) {
       if (stat.gpu != (pass == 1)) continue;
-      out << std::format("{} {:<28} avg {:8.3f} ms  max {:8.3f} ms\n",
+      out << std::format("{} {:<28} avg {:8.3f} ms  max {:8.3f} ms
+",
                          stat.gpu ? "gpu" : "cpu", name,
                          stat.bench_sum / std::max(n, 1.0), stat.bench_max);
     }
   }
   for (const auto& [name, value] : s.counters) {
-    out << std::format("count {:<26} {:.0f}\n", name, value);
+    out << std::format("count {:<26} {:.0f}
+", name, value);
   }
-  PDebug::info("Benchmark:\n{}", out.str());
+  PDebug::info("Benchmark:
+{}", out.str());
   if (!config.bench_out.empty()) {
     std::ofstream file(config.bench_out);
     file << out.str();
@@ -219,17 +228,22 @@ std::string SummaryText() {
   State& s = GetState();
   std::lock_guard lock(s.mutex);
   std::ostringstream out;
-  out << std::format("frame {:.2f} ms ({:.0f} fps)\n", s.smooth_frame_ms,
+  out << std::format("frame {:.2f} ms ({:.0f} fps)
+", s.smooth_frame_ms,
                      1000.0 / std::max(s.smooth_frame_ms, 1e-6));
   for (int pass = 0; pass < 2; pass++) {
-    out << (pass == 0 ? "CPU:\n" : "GPU:\n");
+    out << (pass == 0 ? "CPU:
+" : "GPU:
+");
     for (const auto& [name, stat] : s.stats) {
       if (stat.gpu != (pass == 1)) continue;
-      out << std::format("  {:<26} {:7.3f} ms\n", name, stat.smooth);
+      out << std::format("  {:<26} {:7.3f} ms
+", name, stat.smooth);
     }
   }
   for (const auto& [name, value] : s.counters) {
-    out << std::format("  {:<26} {:.0f}\n", name, value);
+    out << std::format("  {:<26} {:.0f}
+", name, value);
   }
   return out.str();
 }

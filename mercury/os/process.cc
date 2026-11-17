@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "process.h"
 
 #if defined(_WIN32)
@@ -34,8 +38,9 @@ void Process::Append(const char* data, size_t size) {
   std::lock_guard lock(mutex_);
   for (size_t i = 0; i < size; i++) {
     char c = data[i];
-    if (c == '\n') {
-      if (!partial_line_.empty() && partial_line_.back() == '\r') {
+    if (c == '
+') {
+      if (!partial_line_.empty() && partial_line_.back() == '') {
         partial_line_.pop_back();
       }
       lines_.push_back(std::move(partial_line_));
@@ -50,7 +55,8 @@ std::vector<std::string> Process::TakeOutput() {
   std::lock_guard lock(mutex_);
   std::vector<std::string> out;
   out.swap(lines_);
-  // Once the child is gone, a last line without '\n' is complete too.
+  // Once the child is gone, a last line without '
+' is complete too.
   if (!running_ && !partial_line_.empty() && !reader_.joinable()) {
     out.push_back(std::move(partial_line_));
     partial_line_.clear();
@@ -67,23 +73,23 @@ std::optional<int> Process::GetExitCode() {
 
 namespace {
 std::string QuoteArgument(const std::string& arg) {
-  if (!arg.empty() && arg.find_first_of(" \t\"") == std::string::npos) {
+  if (!arg.empty() && arg.find_first_of(" 	\"") == std::string::npos) {
     return arg;
   }
   std::string out = "\"";
   size_t backslashes = 0;
   for (char c : arg) {
-    if (c == '\\') {
+    if (c == '\') {
       backslashes++;
     } else if (c == '"') {
-      out.append(backslashes * 2 + 1, '\\');
+      out.append(backslashes * 2 + 1, '\');
       backslashes = 0;
     } else {
       backslashes = 0;
     }
     out.push_back(c);
   }
-  out.append(backslashes, '\\');
+  out.append(backslashes, '\');
   return out + "\"";
 }
 }  // namespace

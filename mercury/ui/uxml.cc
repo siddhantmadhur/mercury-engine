@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "uxml.h"
 
 #include <tinyxml2.h>
@@ -43,7 +47,8 @@ std::string Escape(std::string_view s) {
       case '"':
         out += "&quot;";
         break;
-      case '\n':
+      case '
+':
         out += "&#10;";
         break;
       default:
@@ -116,12 +121,15 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
   const bool empty = node.children.empty() && node.style_sheets.empty() &&
                      node.bindings.empty() && node.overrides.empty();
   if (empty) {
-    out += " />\n";
+    out += " />
+";
     return;
   }
-  out += ">\n";
+  out += ">
+";
   for (const auto& sheet : node.style_sheets) {
-    out += std::format("{}    <Style src=\"{}\" />\n", indent, Escape(sheet));
+    out += std::format("{}    <Style src=\"{}\" />
+", indent, Escape(sheet));
   }
   for (const auto& o : node.overrides) {
     out += std::format("{}    <ui:AttributeOverrides element-name=\"{}\"",
@@ -129,10 +137,12 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
     for (const auto& a : o.attributes) {
       out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
     }
-    out += " />\n";
+    out += " />
+";
   }
   if (!node.bindings.empty()) {
-    out += indent + "    <Bindings>\n";
+    out += indent + "    <Bindings>
+";
     for (const auto& b : node.bindings) {
       out += std::format(
           "{}        <ui:DataBinding property=\"{}\" data-source-path=\"{}\"",
@@ -140,12 +150,15 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
       if (b.mode != BindingMode::kToTarget) {
         out += std::format(" binding-mode=\"{}\"", BindingModeName(b.mode));
       }
-      out += " />\n";
+      out += " />
+";
     }
-    out += indent + "    </Bindings>\n";
+    out += indent + "    </Bindings>
+";
   }
   for (const auto& child : node.children) WriteNode(child, depth + 1, out);
-  out += indent + "</" + tag + ">\n";
+  out += indent + "</" + tag + ">
+";
 }
 
 mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
@@ -324,16 +337,20 @@ std::string VisualTreeAsset::Write() const {
   for (const auto& a : root.attributes) {
     out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
   }
-  out += ">\n";
+  out += ">
+";
   for (const auto& sheet : root.style_sheets) {
-    out += std::format("    <Style src=\"{}\" />\n", Escape(sheet));
+    out += std::format("    <Style src=\"{}\" />
+", Escape(sheet));
   }
   for (const auto& t : templates) {
-    out += std::format("    <ui:Template name=\"{}\" src=\"{}\" />\n",
+    out += std::format("    <ui:Template name=\"{}\" src=\"{}\" />
+",
                        Escape(t.name), Escape(t.src));
   }
   for (const auto& child : root.children) WriteNode(child, 1, out);
-  out += "</ui:UXML>\n";
+  out += "</ui:UXML>
+";
   return out;
 }
 

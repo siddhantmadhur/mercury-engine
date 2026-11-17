@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "hierarchy_panel.h"
 
 #include <algorithm>
@@ -332,7 +336,7 @@ void HierarchyPanel::ShowContextMenu(const wxPoint& screen_pos, MapNode* node) {
   menu.AppendSubMenu(sub, "Create Child");
   menu.AppendSeparator();
 
-  wxMenuItem* rename_item = menu.Append(wxID_ANY, "Rename\tF2");
+  wxMenuItem* rename_item = menu.Append(wxID_ANY, "Rename	F2");
   menu.Bind(
       wxEVT_MENU,
       [this, uid = node->uid](wxCommandEvent&) {
@@ -344,7 +348,7 @@ void HierarchyPanel::ShowContextMenu(const wxPoint& screen_pos, MapNode* node) {
       rename_item->GetId());
 
   if (!node->IsRoot()) {
-    wxMenuItem* dup_item = menu.Append(wxID_ANY, "Duplicate\tCtrl+D");
+    wxMenuItem* dup_item = menu.Append(wxID_ANY, "Duplicate	Ctrl+D");
     menu.Bind(
         wxEVT_MENU,
         [this, node](wxCommandEvent&) {
@@ -375,7 +379,7 @@ void HierarchyPanel::ShowContextMenu(const wxPoint& screen_pos, MapNode* node) {
         down_item->GetId());
 
     menu.AppendSeparator();
-    wxMenuItem* del_item = menu.Append(wxID_ANY, "Delete\tDel");
+    wxMenuItem* del_item = menu.Append(wxID_ANY, "Delete	Del");
     menu.Bind(
         wxEVT_MENU,
         [this, node](wxCommandEvent&) {
