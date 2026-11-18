@@ -51,6 +51,8 @@ class FilamentUiRenderer {
   struct TextureEntry {
     filament::Texture* texture = nullptr;
     uint64_t version = 0;
+    int width = 0;
+    int height = 0;
   };
 
   filament::Texture* SyncTexture(filament::Engine* engine, uint32_t id);

@@ -174,29 +174,21 @@ filament::Material* FilamentRenderer::LoadMaterial(const char* name) {
 }
 
 void FilamentRenderer::Shutdown(filament::Engine* engine) {
-  if (!engine) return;
-  std::vector<entt::entity> entities;
-  for (auto& [entity, record] : proxies_) entities.push_back(entity);
-  for (entt::entity entity : entities) DestroyProxy(engine, entity);
+  // Engine::destroy() frees everything the Engine created, in the right
+  // order, so this only drops the bookkeeping: destroying renderables and
+  // their buffers individually races with frames still in flight and
+  // Filament panics on resources freed after being handed to a frame.
   proxies_.clear();
-  DestroyLights(engine);
-  for (auto& [id, entry] : meshes_) {
-    engine->destroy(entry.vertices);
-    engine->destroy(entry.indices);
-  }
   meshes_.clear();
-  for (auto& [id, entry] : textures_) engine->destroy(entry.texture);
   textures_.clear();
-  if (white_) engine->destroy(white_);
-  white_ = nullptr;
-  if (scene_) engine->destroy(scene_);
+  sun_ = {};
+  points_.clear();
+  point_values_.clear();
+  ambient_ = nullptr;
   scene_ = nullptr;
-  for (filament::Material* material :
-       {unlit_, sdf_, lit_[0][0], lit_[0][1], lit_[1][0], lit_[1][1]}) {
-    if (material) engine->destroy(material);
-  }
   std::fill(&lit_[0][0], &lit_[1][2], nullptr);
   unlit_ = sdf_ = nullptr;
+  white_ = nullptr;
   engine_ = nullptr;
 }
 

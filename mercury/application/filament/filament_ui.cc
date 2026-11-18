@@ -61,22 +61,15 @@ bool FilamentUiRenderer::Init(filament::Engine* engine) {
 }
 
 void FilamentUiRenderer::Shutdown(filament::Engine* engine) {
-  if (!engine) return;
-  DestroyRenderables(engine);
-  engine->destroy(vertices_);
-  engine->destroy(indices_);
+  // Engine::destroy() frees these (see FilamentRenderer::Shutdown).
+  renderables_.clear();
+  textures_.clear();
+  garbage_.clear();
+  scene_ = nullptr;
+  material_ = nullptr;
+  white_ = nullptr;
   vertices_ = nullptr;
   indices_ = nullptr;
-  for (auto& [id, entry] : textures_) engine->destroy(entry.texture);
-  textures_.clear();
-  for (const Garbage& garbage : garbage_) engine->destroy(garbage.texture);
-  garbage_.clear();
-  if (white_) engine->destroy(white_);
-  white_ = nullptr;
-  if (material_) engine->destroy(material_);
-  material_ = nullptr;
-  if (scene_) engine->destroy(scene_);
-  scene_ = nullptr;
 }
 
 filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
@@ -117,8 +110,25 @@ filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
   }
 
   auto it = textures_.find(id);
-  if (it != textures_.end() && it->second.version == texture->version)
+  // The glyph atlas is rebuilt while text is laid out, so the same texture
+  // is re-uploaded rather than recreated: a fresh Filament texture would be
+  // sampled before its contents are usable (and destroying the old one races
+  // with frames in flight).
+  if (it != textures_.end() &&
+      it->second.width == texture->width &&
+      it->second.height == texture->height) {
+    if (it->second.version != texture->version) {
+      it->second.texture->setImage(
+          *engine, 0,
+          filament::Texture::PixelBufferDescriptor(
+              CopyToHeap(texture->rgba.data(), texture->rgba.size()),
+              texture->rgba.size(), filament::backend::PixelDataFormat::RGBA,
+              filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
+              DeleteUpload));
+      it->second.version = texture->version;
+    }
     return it->second.texture;
+  }
   if (it != textures_.end()) {
     garbage_.push_back({frame_, it->second.texture});
     textures_.erase(it);
@@ -128,18 +138,24 @@ filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
       filament::Texture::Builder()
           .width(static_cast<uint32_t>(texture->width))
           .height(static_cast<uint32_t>(texture->height))
-          .levels(1)
-          .format(filament::Texture::InternalFormat::RGBA8)
+          .levels(0xFF)
+          .usage(filament::Texture::Usage::SAMPLEABLE |
+                 filament::Texture::Usage::UPLOADABLE |
+                 filament::Texture::Usage::GEN_MIPMAPPABLE)
+          .format(filament::Texture::InternalFormat::SRGB8_A8)
           .sampler(filament::Texture::Sampler::SAMPLER_2D)
           .build(*engine);
   if (!gpu) return nullptr;
-  const size_t bytes = texture->rgba.size();
   gpu->setImage(*engine, 0,
                 filament::Texture::PixelBufferDescriptor(
-                    texture->rgba.data(), bytes,
+                    CopyToHeap(texture->rgba.data(), texture->rgba.size()),
+                    texture->rgba.size(),
                     filament::backend::PixelDataFormat::RGBA,
-                    filament::backend::PixelDataType::UBYTE));
-  textures_.emplace(id, TextureEntry{gpu, texture->version});
+                    filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
+                    DeleteUpload));
+  gpu->generateMipmaps(*engine);
+  textures_.emplace(id, TextureEntry{gpu, texture->version,
+                                     texture->width, texture->height});
   return gpu;
 }
 

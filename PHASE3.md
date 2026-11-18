@@ -37,16 +37,21 @@ pre-existing: those asset folders are not in the repository).
 
 ## Known gaps (fix these first)
 
-1. **UI SDF text renders as solid blocks.** The atlas is correct on the CPU
-   (dump `UITexture::rgba` to check), the shader's `variable_uiParams` arrives
-   correctly (`params.x` is 2 for text), the UVs are correct, but
-   `texture(materialParams_uiTexture, getUV0()).a` samples as a constant
-   (1.0 with `RGBA8`, 0.0 with `SRGB8_A8`). Prime suspects, in order:
-   `Texture::setImage` upload (compare against `libs/filagui/src/ImGuiHelper.cpp`,
-   which is known-good), the sampler (`TextureSampler`), and the texture
-   `Usage` flags. A working reference implementation is Filament's own ImGui
-   helper. If the upload cannot be fixed quickly, fall back to drawing text as
-   regular textured quads from a pre-baked colour atlas.
+1. **UI SDF text does not render (some builds: solid blocks).** Established so
+   far: the CPU atlas is correct (dumping `UITexture::rgba` shows the glyph
+   SDF), `variable_uiParams` reaches the fragment correctly (`params.x == 2`
+   for text), the UVs are correct (verified by outputting them as colour), and
+   the atlas texture — not the 1x1 white fallback — is bound. What fails is the
+   sampled alpha: it comes back constant (1.0 with `RGBA8`, 0.0 with
+   `SRGB8_A8`), so the glyph shape never reaches the shader. The *scene*
+   texture path (`FilamentRenderer::UploadTexture`) with the same
+   `setImage`/`CopyToHeap` recipe works, including sRGB textures and mipmaps,
+   so compare the two: `FilamentUiRenderer::SyncTexture` is the only
+   difference (dimensions 1024x512, re-uploads when the atlas version bumps).
+   Filament's `libs/filagui/src/ImGuiHelper.cpp` is the closest known-good
+   reference (it uploads ImGui's font atlas and samples it the same way).
+   If this cannot be fixed quickly, draw text with the plain textured path
+   from a colour atlas instead of the SDF channel.
 2. **Skybox panoramas are ignored** (`GetSkyboxPath()`): the camera background
    colour is used instead. Needed for `examples/monkey_ball`.
 3. **`RenderCamera::target_texture` cameras** (RenderTexture assets) are
@@ -59,7 +64,13 @@ pre-existing: those asset folders are not in the repository).
 6. **Black shadow blobs** appear on some surfaces (visible in the monkey ball
    track): tune `LightManager::ShadowOptions` (map size, cascades, bias) and
    the sun's shadow range for Mercury's scene scales.
-7. **Editor readback stalls.** `Render()` calls `engine->flushAndWait()` every
+7. **Engine teardown is skipped.** `~FilamentApplication` no longer calls
+   `filament::Engine::destroy()`: on MoltenVK it panics (`texture used after it
+   has been freed`) while retiring the last frame's descriptor sets, even after
+   `flushAndWait()`. Everything is left to the OS at process exit. Find the
+   dangling reference (likely the swapchain or a skybox destroyed just before)
+   and restore the teardown.
+8. **Editor readback stalls.** `Render()` calls `engine->flushAndWait()` every
    frame because readback callbacks must have fired. Ring-buffer the readback
    (or only flush when the editor asks for pixels) to get the frame rate back.
 
