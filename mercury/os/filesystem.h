@@ -69,9 +69,8 @@ fs::path BundleResourcesDir();
 fs::path EngineUiResourceDir();
 
 // Where the compiled Filament materials (.filamat) live:
-// bazel-bin/mercury/materials in a development build, or
-// Contents/Resources/materials in a packaged editor. A shipped game mounts
-// engine.mpack at this path instead.
+// <build>/materials in a development build, or Contents/Resources/materials in
+// a packaged editor. A shipped game mounts engine.mpack at this path instead.
 fs::path EngineMaterialDir();
 
 // Points the Vulkan loader at the MoltenVK ICD shipped next to the program (in
@@ -79,10 +78,10 @@ fs::path EngineMaterialDir();
 // Does nothing when the caller already chose driver files.
 void UseBundledVulkanDriver();
 
-// A path the user typed on the command line. `bazel run` starts programs inside
-// the runfiles tree and puts the folder the user ran it from in
-// BUILD_WORKING_DIRECTORY, so a relative path that does not exist from the
-// current folder is tried from there. Other paths come back as given.
+// A path the user typed on the command line. Relative paths are resolved by
+// the program's working directory, which is the folder the user ran it from;
+// paths are otherwise returned unchanged so error messages can name exactly
+// what was typed.
 fs::path UserPath(const fs::path& path);
 
 // A folder for files the engine can rebuild (imported models, settled light

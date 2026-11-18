@@ -50,6 +50,9 @@ void EditorSettings::Load() {
     open_scripts_in_editor =
         editor->properties.GetBool("open_scripts_in_editor", true);
     vim_mode = editor->properties.GetBool("vim_mode", false);
+#if defined(__APPLE__)
+    show_metal_hud = editor->properties.GetBool("show_metal_hud", false);
+#endif
     pack_size_mb = static_cast<int>(
         std::max<int64_t>(0, editor->properties.GetInt("pack_size_mb", 256)));
   }
@@ -80,6 +83,9 @@ void EditorSettings::Save() const {
   editor.Set("external_editor", external_editor);
   editor.Set("open_scripts_in_editor", open_scripts_in_editor);
   editor.Set("vim_mode", vim_mode);
+#if defined(__APPLE__)
+  editor.Set("show_metal_hud", show_metal_hud);
+#endif
   editor.Set("pack_size_mb", static_cast<int64_t>(pack_size_mb));
   mtext::Array projects;
   for (const auto& path : recent_projects) projects.emplace_back(path);

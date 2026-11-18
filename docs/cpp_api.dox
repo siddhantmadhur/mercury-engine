@@ -9,7 +9,7 @@
 
 Most Mercury games are projects: their maps, assets and UI are data, and their
 gameplay is AngelScript, C++, or both. AngelScript projects run on the shared
-player; C++ projects build their own executable with `mercury_game`. This page
+player; C++ projects build their own executable with `mercury_add_game`. This page
 explains the C++ interface for writing C++ scripts, extending the engine,
 writing tools and tests, or embedding the player in another executable.
 
@@ -40,14 +40,10 @@ int main(int argc, char** argv) {
 }
 @endcode
 
-Add it to a `BUILD.bazel` with the engine library:
+Add it with `mercury_add_game` in the game's `CMakeLists.txt`:
 
-@code{.py}
-cc_binary(
-    name = "my_game",
-    srcs = ["main.cc"],
-    deps = ["//mercury:mercury"],
-)
+@code{.cmake}
+mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
 @endcode
 
 @section cpp_api_layers The layers
@@ -154,19 +150,17 @@ MERCURY_SCRIPT(Spinner);
 Events; `ReflectMethods` makes methods callable from Events. `MERCURY_DATA_ASSET`
 registers a reflected struct as a `.masset` asset type.
 
-A game executable needs the script sources linked in. The `mercury_game` Bazel
-macro does that and generates the `main()`; `[build] target` in the project
-tells the editor which target to build:
+A game executable needs the script sources linked in. The `mercury_add_game`
+CMake function does that and generates the `main()`; `[build] target` in the
+project tells the editor which target to build:
 
-@code{.py}
-load("//tools:mercury_game.bzl", "mercury_game")
-
-mercury_game(name = "my_game", project = "my_game.mproj")
+@code{.cmake}
+mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
 @endcode
 
 @code{.ini}
 [build]
-target = "//my_game:my_game"
+target = "my_game"
 @endcode
 
 Projects with only `.as` scripts keep using `mercury_player`; both languages
@@ -182,8 +176,8 @@ between @ref Mercury::EditorUI::LauncherFrame and
 under `editor/`. The editor is built separately:
 
 @code{.sh}
-bazelisk build //editor:mercury_editor
-bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
+cmake --build --preset release --target mercury_editor
+./build/release/bin/mercury_editor examples/pong/pong.mproj
 @endcode
 
 @section cpp_api_paths Include paths

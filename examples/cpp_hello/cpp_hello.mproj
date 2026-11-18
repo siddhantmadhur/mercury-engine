@@ -9,4 +9,4 @@ width = 1280
 height = 720
 
 [build]
-target = "//examples/cpp_hello:cpp_hello"
+target = "cpp_hello"

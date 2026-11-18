@@ -384,17 +384,17 @@ The class can be used from a map exactly like an AngelScript `[script]` class:
 speed = 45.0
 @endcode
 
-C++ code is linked into the executable, so a C++ project names its own Bazel
+C++ code is linked into the executable, so a C++ project names its own CMake
 target in the `.mproj`:
 
 @code{.ini}
 [build]
-target = "//my_game:my_game"
+target = "my_game"
 @endcode
 
-The target is built with the `mercury_game` macro in `tools/mercury_game.bzl`.
-The editor's Build/Play uses `bazel build` and runs that executable, so its
-native scripts provide the schema. Both languages can be used in one project;
+The target is built with the `mercury_add_game` function in
+`cmake/MercuryGame.cmake`. The editor's Build/Play uses `cmake --build` and
+runs that executable, so its native scripts provide the schema. Both languages can be used in one project;
 `MERCURY_DATA_ASSET(Type)` registers a reflected struct as a `.masset` type.
 See @ref getting_started_cpp and `examples/cpp_hello`.
 

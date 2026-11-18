@@ -2,12 +2,13 @@
 #
 # Unified setup script for Mercury Engine.
 #
-#   Linux  (Vulkan backend): compilers/build tools, the Vulkan loader + headers
-#          + validation layers, GLFW's X11/Wayland dependencies, and DXC
-#          (HLSL -> SPIR-V).
-#   macOS  (MoltenVK backend): build tools (Bazelisk, cmake, ninja), Vulkan
-#          loader + headers, MoltenVK, submodules and DXC.
+#   Linux  (Vulkan backend): compilers/build tools (CMake, Ninja, ccache, the
+#          Rust toolchain), the Vulkan loader + headers + validation layers,
+#          GLFW's X11/Wayland dependencies, and DXC (HLSL -> SPIR-V).
+#   macOS  (MoltenVK backend): build tools (CMake, Ninja, ccache, the Rust
+#          toolchain), Vulkan loader + headers, MoltenVK, and DXC.
 #
+# The build itself is plain CMake + Ninja: see README.md and CMakePresets.json.
 # Windows is not supported yet: this script prints "OS not supported".
 #
 # Run from anywhere in the repository.
@@ -48,19 +49,24 @@ sub setup_linux {
     }
 
     install_dxc_linux();
-    install_bazelisk();
+    install_rust();
+    install_cxxbridge();
+    fetch_rust_deps();
 
     print "\nDone. Next:\n";
     print "  git submodule update --init --recursive\n";
-    print "  bazelisk build //mercury:mercury_player\n";
-    print "  bazelisk test //tests/...\n";
-    print "  bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj\n";
+    print "  cmake --preset release\n";
+    print "  cmake --build --preset release\n";
+    print "  cmake --build --preset check     # build and run the tests\n";
+    print "  ./build/release/bin/mercury_player examples/pong/pong.mproj\n";
+    print "  ./build/release/bin/cpp_hello\n";
 }
 
 sub install_apt {
     run('sudo', 'apt-get', 'update');
     run('sudo', 'apt-get', 'install', '-y',
-        'build-essential', 'cmake', 'ninja-build', 'git', 'curl', 'pkg-config', 'python3',
+        'build-essential', 'cmake', 'ninja-build', 'ccache', 'git', 'curl',
+        'pkg-config', 'python3',
         'libvulkan-dev', 'vulkan-validationlayers', 'vulkan-tools', 'spirv-tools',
         'libx11-dev', 'libxrandr-dev', 'libxinerama-dev', 'libxcursor-dev', 'libxi-dev',
         'libwayland-dev', 'libxkbcommon-dev', 'wayland-protocols',
@@ -69,41 +75,79 @@ sub install_apt {
 
 sub install_pacman {
     run('sudo', 'pacman', '-S', '--needed', '--noconfirm',
-        'base-devel', 'cmake', 'ninja', 'git', 'curl', 'pkgconf', 'python',
-        'vulkan-icd-loader', 'vulkan-headers', 'vulkan-validation-layers', 'vulkan-tools',
-        'spirv-tools', 'directx-shader-compiler',
+        'base-devel', 'cmake', 'ninja', 'ccache', 'git', 'curl', 'pkgconf',
+        'python', 'rustup',
+        'vulkan-icd-loader', 'vulkan-headers', 'vulkan-validation-layers',
+        'vulkan-tools', 'spirv-tools', 'directx-shader-compiler',
         'libx11', 'libxrandr', 'libxinerama', 'libxcursor', 'libxi',
         'wayland', 'libxkbcommon', 'wayland-protocols',
         'wxwidgets-gtk3');
 }
 
-sub install_bazelisk {
-    if (command_exists('bazelisk')) {
-        return;
+sub install_rust {
+    my $cargo = command_exists('cargo');
+    if ($cargo) {
+        # rustup installs shims even before a toolchain is selected, so ask
+        # cargo whether it can actually run.
+        if (system($cargo, '--version') == 0) {
+            print "cargo found: $cargo\n";
+            return;
+        }
+        if (command_exists('rustup')) {
+            print "==> Installing the stable Rust toolchain...\n";
+            run('rustup', 'toolchain', 'install', 'stable', '--profile', 'minimal');
+            run('rustup', 'default', 'stable');
+            return;
+        }
     }
 
-    my $machine = `uname -m`;
-    chomp $machine;
-    my %arch = (
-        x86_64         => 'amd64',
-        aarch64        => 'arm64',
-        arm64          => 'arm64',
-    );
-    if (!exists $arch{$machine}) {
-        print STDERR "No Bazelisk build for $machine\n";
-        exit 1;
+    print "==> Installing the Rust toolchain with rustup...\n";
+    run('sh', '-c',
+        'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | '
+            . 'sh -s -- -y --profile minimal --default-toolchain stable');
+    my $cargo_bin = File::Spec->catdir($ENV{HOME}, '.cargo', 'bin');
+    $ENV{PATH} = $cargo_bin . ':' . ($ENV{PATH} // '');
+    for my $tool ('cargo', 'rustc') {
+        my $path = File::Spec->catfile($cargo_bin, $tool);
+        die "rustup did not install $tool\n" unless -x $path;
+    }
+}
+
+sub install_cxxbridge {
+    my $found = command_exists('cxxbridge');
+    if ($found) {
+        my $version = `$found --version`;
+        chomp $version if defined $version;
+        if (defined $version && $version =~ /1\.0\.205\s*$/) {
+            print "cxxbridge found: $found\n";
+            return;
+        }
+        print "Replacing " . ($version // 'an older cxxbridge') . "...\n";
     }
 
-    print "==> Installing Bazelisk into bin/ ...\n";
-    my $bin = File::Spec->catdir($PROJECT_ROOT, 'bin');
-    make_path($bin);
-    my $target = File::Spec->catfile($bin, 'bazelisk');
-    run('curl', '-fL',
-        'https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-'
-            . $arch{$machine},
-        '-o', $target);
-    chmod 0755, $target or die "cannot make $target executable: $!\n";
-    print "Add $bin to PATH to use 'bazelisk'.\n";
+    my $cargo = command_exists('cargo');
+    if (!$cargo) {
+        my $cargo_bin = File::Spec->catfile($ENV{HOME}, '.cargo', 'bin', 'cargo');
+        $cargo = $cargo_bin if -x $cargo_bin;
+    }
+    die "cargo was not found; install the Rust toolchain first\n" unless $cargo;
+
+    print "==> Installing cxxbridge-cmd (the C++ side of Mercury's Rust modules)...\n";
+    run($cargo, 'install', 'cxxbridge-cmd', '--version', '1.0.205', '--locked');
+}
+
+sub fetch_rust_deps {
+    my $cargo = command_exists('cargo');
+    if (!$cargo) {
+        my $cargo_bin = File::Spec->catfile($ENV{HOME}, '.cargo', 'bin', 'cargo');
+        $cargo = $cargo_bin if -x $cargo_bin;
+    }
+    return unless $cargo;
+    my $manifest = File::Spec->catfile($PROJECT_ROOT, 'Cargo.toml');
+    return unless -f $manifest;
+
+    print "==> Fetching Rust dependencies...\n";
+    run($cargo, 'fetch', '--manifest-path', $manifest);
 }
 
 sub install_dxc_linux {
@@ -156,18 +200,23 @@ sub setup_macos {
     }
 
     print "==> Installing build tools and Vulkan dependencies via Homebrew...\n";
-    run('brew', 'install', 'bazelisk', 'cmake', 'ninja', 'pkg-config',
+    run('brew', 'install', 'cmake', 'ninja', 'ccache', 'pkg-config',
         'molten-vk', 'vulkan-loader', 'vulkan-headers', 'wxwidgets');
 
     print "==> Updating git submodules...\n";
     run('git', '-C', $PROJECT_ROOT, 'submodule', 'update', '--init', '--recursive');
 
+    install_rust();
+    install_cxxbridge();
+    fetch_rust_deps();
     install_dxc_macos();
 
     print "\n==> Setup complete! Next steps:\n";
-    print "  bazelisk build //mercury:mercury_player\n";
-    print "  bazelisk test //tests/...\n";
-    print "  bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj\n";
+    print "  cmake --preset release\n";
+    print "  cmake --build --preset release\n";
+    print "  cmake --build --preset check     # build and run the tests\n";
+    print "  ./build/release/bin/mercury_player examples/pong/pong.mproj\n";
+    print "  ./build/release/bin/cpp_hello\n";
 }
 
 sub install_dxc_macos {

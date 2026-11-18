@@ -17,6 +17,7 @@
 extern char** environ;
 #endif
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -94,7 +95,8 @@ std::string QuoteArgument(const std::string& arg) {
 
 bool Process::Start(const std::vector<std::string>& args,
                     const std::filesystem::path& working_dir,
-                    std::string* error) {
+                    std::string* error,
+                    const std::vector<std::string>& environment) {
   if (running_ || args.empty()) return false;
   SECURITY_ATTRIBUTES security = {sizeof(security), nullptr, TRUE};
   HANDLE read_pipe = nullptr;
@@ -111,6 +113,36 @@ bool Process::Start(const std::vector<std::string>& args,
     command_line += QuoteArgument(arg);
   }
 
+  std::string environment_block;
+  void* environment_pointer = nullptr;
+  if (!environment.empty()) {
+    std::vector<std::string> keys;
+    for (const auto& entry : environment) {
+      const auto equal = entry.find('=');
+      if (equal != std::string::npos) keys.push_back(entry.substr(0, equal));
+    }
+    std::vector<std::string> entries;
+    if (LPCH current = GetEnvironmentStringsA()) {
+      for (LPCH item = current; *item; item += std::strlen(item) + 1) {
+        const std::string entry(item);
+        const std::string key = entry.substr(0, entry.find('='));
+        if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
+          entries.push_back(entry);
+        }
+      }
+      FreeEnvironmentStringsA(current);
+    }
+    for (const auto& entry : environment) {
+      if (entry.find('=') != std::string::npos) entries.push_back(entry);
+    }
+    for (const auto& entry : entries) {
+      environment_block.append(entry);
+      environment_block.push_back('\0');
+    }
+    environment_block.push_back('\0');
+    environment_pointer = environment_block.data();
+  }
+
   STARTUPINFOA startup = {sizeof(startup)};
   startup.dwFlags = STARTF_USESTDHANDLES;
   startup.hStdOutput = write_pipe;
@@ -118,9 +150,10 @@ bool Process::Start(const std::vector<std::string>& args,
   startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
   PROCESS_INFORMATION info = {};
   const std::string dir = working_dir.string();
-  const BOOL ok = CreateProcessA(
-      nullptr, command_line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
-      nullptr, dir.empty() ? nullptr : dir.c_str(), &startup, &info);
+  const BOOL ok =
+      CreateProcessA(nullptr, command_line.data(), nullptr, nullptr, TRUE,
+                     CREATE_NO_WINDOW, environment_pointer,
+                     dir.empty() ? nullptr : dir.c_str(), &startup, &info);
   CloseHandle(write_pipe);
   if (!ok) {
     CloseHandle(read_pipe);
@@ -197,7 +230,8 @@ bool OpenWithDefaultApp(const std::filesystem::path& path) {
 
 bool Process::Start(const std::vector<std::string>& args,
                     const std::filesystem::path& working_dir,
-                    std::string* error) {
+                    std::string* error,
+                    const std::vector<std::string>& environment) {
   if (running_ || args.empty()) return false;
   int fds[2];
   if (pipe(fds) != 0) {
@@ -230,9 +264,38 @@ bool Process::Start(const std::vector<std::string>& args,
   for (const auto& arg : args) argv.push_back(const_cast<char*>(arg.c_str()));
   argv.push_back(nullptr);
 
+  // Merge the inherited environment with the caller's overrides. Nothing in
+  // the parent process is modified, so only this child sees them.
+  std::vector<std::string> environment_storage;
+  std::vector<char*> environment_pointers;
+  char** child_environment = environ;
+  if (!environment.empty()) {
+    std::vector<std::string> keys;
+    for (const auto& entry : environment) {
+      const auto equal = entry.find('=');
+      if (equal != std::string::npos) keys.push_back(entry.substr(0, equal));
+    }
+    for (char** item = environ; *item; ++item) {
+      const std::string entry(*item);
+      const std::string key = entry.substr(0, entry.find('='));
+      if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
+        environment_storage.push_back(entry);
+      }
+    }
+    for (const auto& entry : environment) {
+      if (entry.find('=') != std::string::npos)
+        environment_storage.push_back(entry);
+    }
+    for (auto& entry : environment_storage) {
+      environment_pointers.push_back(entry.data());
+    }
+    environment_pointers.push_back(nullptr);
+    child_environment = environment_pointers.data();
+  }
+
   pid_t pid = -1;
-  const int result =
-      posix_spawnp(&pid, argv[0], &actions, &attributes, argv.data(), environ);
+  const int result = posix_spawnp(&pid, argv[0], &actions, &attributes,
+                                  argv.data(), child_environment);
   posix_spawn_file_actions_destroy(&actions);
   posix_spawnattr_destroy(&attributes);
   close(fds[1]);

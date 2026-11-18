@@ -17,13 +17,13 @@ is documented at the C++ level starting at
 
 @code{.sh}
 # open a project at its main map
-bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
+./build/release/bin/mercury_editor examples/pong/pong.mproj
 
 # open a project at a specific map
-bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj --map res://maps/main.mmap
+./build/release/bin/mercury_editor examples/pong/pong.mproj --map res://maps/main.mmap
 
 # open the project launcher
-bazelisk run //editor:mercury_editor
+./build/release/bin/mercury_editor
 @endcode
 
 The launcher shows recent projects, an **Open** button for a `.mproj` or a
@@ -126,6 +126,11 @@ To use another editor, open **File > Preferences...** and set an external
 editor command. `{project}` and `{file}` in the command are replaced with the
 project root and the selected file.
 
+On macOS Debug builds, **File > Preferences...** also has **Debug Play FPS**.
+When enabled, **Play** launches the game with `MTL_HUD_ENABLED=1` so Metal's
+frame-rate and GPU statistics overlay is visible over the game window. Release
+builds and other platforms do not offer or apply this option.
+
 @subsection editor_console Console
 
 The **Console** collects engine messages, script output and errors. Each line
@@ -163,7 +168,7 @@ with any version control system.
 **Project > Play / Stop** (F5) saves the map, compiles the scripts and starts
 the game as a separate process. AngelScript projects run
 `mercury_player <project> --map <map>`; a C++ project runs its
-`[build] target` through `bazel run <target> -- <project> --map <map>`. The
+`[build] target` by building it with `cmake --build` and running the result. The
 game's output goes to the **Console**. There is no hot reload: stopping and
 playing again starts a new process and a new game state.
 

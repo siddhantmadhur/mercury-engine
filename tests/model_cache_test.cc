@@ -76,6 +76,7 @@ ModelImportSettings Settings() {
 }  // namespace
 
 TEST_F(ModelCacheTest, ReadBackIsTheImportedModel) {
+  if (!fs::exists(kModel)) GTEST_SKIP() << "missing fixture " << kModel;
   std::string error;
   auto imported = Model::Load(kModel.string(), Settings(), &error);
   ASSERT_TRUE(imported) << error;
@@ -134,6 +135,7 @@ TEST_F(ModelCacheTest, ReadBackIsTheImportedModel) {
 }
 
 TEST_F(ModelCacheTest, OtherSettingsImportAgain) {
+  if (!fs::exists(kModel)) GTEST_SKIP() << "missing fixture " << kModel;
   std::string error;
   auto first = Model::Load(kModel.string(), Settings(), &error);
   ASSERT_TRUE(first) << error;
@@ -150,6 +152,7 @@ TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
   const fs::path model =
       fs::path(MERCURY_SOURCE_DIR) /
       "examples/model_viewer/models/cornell_box/CornellBox-Sphere.obj";
+  if (!fs::exists(model)) GTEST_SKIP() << "missing fixture " << model;
   for (int pass = 0; pass < 2; pass++) {  // imported, then from the cache
     std::string error;
     auto loaded = Model::Load(model.string(), Settings(), &error);

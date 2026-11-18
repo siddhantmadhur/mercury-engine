@@ -27,7 +27,7 @@ Source layout under `mercury/`: `application` (Filament renderer), `materials` (
 
 ## Projects and the editor
 
-Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples; `examples/breakout` and `examples/space_invaders` are the classic arcade games built the same way. `examples/model_viewer` loads scenes from the McGuire Computer Graphics Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through benchmark cameras that report per-lap frame rates. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu. `examples/cpp_hello` is the same idea as the smallest AngelScript example, but its gameplay component is C++. Every example has a replay in `tests/`.
+Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples; `examples/breakout` and `examples/space_invaders` are the classic arcade games built the same way. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu. `examples/cpp_hello` is the same idea as the smallest AngelScript example, but its gameplay component is C++. Every example has a replay in `tests/`.
 
 ```
 pong.mproj              project settings (name, main map, window size)
@@ -43,12 +43,11 @@ There is no per-game build file: every project runs with the same executable, `m
 Open a project with the editor:
 
 ```sh
-bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
-# or: ./bazel-bin/editor/mercury_editor examples/pong/pong.mproj
+./build/release/bin/mercury_editor examples/pong/pong.mproj
 # or no argument for the project launcher
 ```
 
-The editor has a Hierarchy, Inspector, Scene view, Project browser, Console and a built-in code editor. Double-click a `.as` file (or use **Open** in the Project Browser) to edit it in the built-in editor, which has line numbers, folding, AngelScript completion across the whole project and the native API, compiler-backed diagnostics, an outline for jumping to methods, and optional Vim keybindings. **File > Preferences** switches between the built-in editor and an external editor command; the external command supports `{project}` and `{file}` placeholders. Lines in the Console that name a script (`scripts/ball.as:42:5`, from a script error) open that file when clicked.
+The editor has a Hierarchy, Inspector, Scene view, Project browser, Console and a built-in code editor. Double-click a `.as` file (or use **Open** in the Project Browser) to edit it in the built-in editor, which has line numbers, folding, AngelScript completion across the whole project and the native API, compiler-backed diagnostics, an outline for jumping to methods, and optional Vim keybindings. **File > Preferences** switches between the built-in editor and an external editor command; the external command supports `{project}` and `{file}` placeholders. On macOS Debug builds, Preferences also has **Debug Play FPS**, which launches Play with `MTL_HUD_ENABLED=1` so Metal's frame-rate and GPU statistics overlay is visible over the game. Lines in the Console that name a script (`scripts/ball.as:42:5`, from a script error) open that file when clicked.
 
 - **Creating nodes:** GameObject menu, **+ Create** in the Hierarchy, or right-click a node for a child. You can add empty nodes, 3D objects (cube, sphere, capsule, cylinder, plane, quad, each with a matching collider), 2D sprites, directional lights and cameras. New projects from the launcher start from a 2D or 3D template.
 - **Scene view:** opens in 2D or 3D to suit the map (the **2D** button switches). Click to select, drag to move (along the ground in 3D), **Move / Rotate / Scale** handles on W / E / R, Ctrl to snap. F frames the selection.
@@ -56,7 +55,7 @@ The editor has a Hierarchy, Inspector, Scene view, Project browser, Console and 
   - 3D: right drag looks around (W/A/S/D/Q/E to fly, Shift for speed), Alt + left drag orbits, middle drag pans, wheel zooms.
 - **Play** saves the map, builds the scripts and runs the game as its own process (`mercury_player <project> --map <map>`), with output in the Console. **Build** only builds the scripts, which refreshes the script list the Inspector uses. There is no hot reload: Play restarts the game.
 
-Run a project without the editor with `bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj [--map res://maps/x.mmap]` (or `./bazel-bin/mercury/mercury_player ...`). It compiles the scripts first if they changed. `--build-scripts` only compiles and `--dump-schema file` writes the scripts' fields.
+Run a project without the editor with `./build/release/bin/mercury_player examples/pong/pong.mproj [--map res://maps/x.mmap]`. It compiles the scripts first if they changed. `--build-scripts` only compiles and `--dump-schema file` writes the scripts' fields.
 
 ## File formats
 
@@ -357,30 +356,28 @@ with `Assets().LoadAs<T>(path)`.
 
 C++ scripts and AngelScript classes use the same map component name and field names, so a node can
 mix them. Unlike AngelScript, C++ code is linked into the executable: the shared `mercury_player`
-cannot load it. Build a game executable with the `mercury_game` Bazel macro:
+cannot load it. Build a game executable with the `mercury_add_game` CMake function:
 
-```python
-# my_game/BUILD.bazel
-load("//tools:mercury_game.bzl", "mercury_game")
-
-mercury_game(
-    name = "my_game",
-    project = "my_game.mproj",
-)
+```cmake
+# my_game/CMakeLists.txt
+mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
 ```
 
-`mercury_game` compiles every `.cc`/`.cpp` under `scripts/` and generates a `main()` that calls
+`mercury_add_game` compiles every `.cc`/`.cpp` under `scripts/` and generates a `main()` that calls
 `Mercury::RunPlayer`. Name the target in the project file:
 
 ```ini
 [build]
-target = "//my_game:my_game"
+target = "my_game"
 ```
 
-The editor's **Build Scripts** and **Play** then run `bazel build` on that target, ask the executable
-for its script list with `--dump-schema`, and launch it. Projects without `[build] target` keep using
-the shared player and its AngelScript runtime. `examples/cpp_hello` is a complete C++ project; build
-and run it with `bazelisk run //examples/cpp_hello:cpp_hello`.
+Projects in the engine checkout add their directory from the top-level `CMakeLists.txt` (as
+`examples/cpp_hello` does); an external project can `add_subdirectory` the engine checkout and call
+the function from its own `CMakeLists.txt`. The editor's **Build Scripts** and **Play** then run
+`cmake --build <build-dir> --target <target>`, ask the executable for its script list with
+`--dump-schema`, and launch it. Projects without `[build] target` keep using the shared player and
+its AngelScript runtime. `examples/cpp_hello` is a complete C++ project; build and run it with
+`cmake --build --preset release` and `./build/release/bin/cpp_hello`.
 
 ## UI Toolkit
 
@@ -430,7 +427,7 @@ Controls: Label, Button, Toggle, RadioButton, Slider, SliderInt, ProgressBar, Te
 
 ```
 Builds/Pong/pong          the game: a copy of mercury_player (pong.exe on Windows)
-Builds/Pong/engine.mpack  compiled shaders, the default UI theme and fonts
+Builds/Pong/engine.mpack  compiled materials, the default UI theme and fonts
 Builds/Pong/engine.mindex index: hash table of path -> archive, offset and size
 Builds/Pong/game.mpack    the project: .mproj, maps, assets, UI, textures, models and
                           the minified .mercury/scripts/game.js (+ game.js.map)
@@ -453,7 +450,7 @@ On macOS, `scripts/package_macos.pl` wraps that output in a self-contained `.app
 open Builds/Pong.app
 ```
 
-It builds the Release player with Bazel, writes `game.mpack`/`engine.mpack` (the same format, with the same split, compression and CRC rules as Build Game) and puts them in `Contents/Resources`. The player, the Vulkan loader (`libvulkan`) and MoltenVK are copied into the bundle, their install names are rewritten to `@rpath`, and a relative `vulkan/icd.d/MoltenVK_icd.json` tells the loader to use the bundled driver, so nothing points at the checkout or Homebrew. The bundle is ad-hoc signed by default; pass `--identity "Developer ID Application: ..."` for a distributable, hardened-runtime signature and `--zip` to also produce a zip for `ditto`/notarization.
+It builds the Release player with CMake, writes `game.mpack`/`engine.mpack` (the same format, with the same split, compression and CRC rules as Build Game) and puts them in `Contents/Resources`. The player, the Vulkan loader (`libvulkan`) and MoltenVK are copied into the bundle, their install names are rewritten to `@rpath`, and a relative `vulkan/icd.d/MoltenVK_icd.json` tells the loader to use the bundled driver, so nothing points at the checkout or Homebrew. The bundle is ad-hoc signed by default; pass `--identity "Developer ID Application: ..."` for a distributable, hardened-runtime signature and `--zip` to also produce a zip for `ditto`/notarization.
 
 `--target editor` packages the editor instead, as a complete development and packaging install:
 
@@ -461,7 +458,7 @@ It builds the Release player with Bazel, writes `game.mpack`/`engine.mpack` (the
 ./scripts/package_macos.pl --target editor --name "Mercury Editor" --zip
 ```
 
-Its bundle contains the editor and `mercury_player` in `Contents/MacOS`, the loose UI theme/fonts and compiled shaders in `Contents/Resources/ui` and `Contents/Resources/shaders`, the Vulkan loader and MoltenVK, and the engine's static libraries in `Contents/Resources/engine/lib`. Play therefore runs the bundled player, and Build Game packages a game without a compiler, Bazel or the engine checkout: it reuses the bundled Release player and engine resources, then copies the player's runtime libraries (`Contents/Resources/engine/player-libs.txt`) and a `vulkan/icd.d` manifest next to the game so the output folder is self-contained. Pass `--no-engine-libs` to leave the static libraries out of an editor bundle.
+Its bundle contains the editor and `mercury_player` in `Contents/MacOS`, the loose UI theme/fonts and compiled materials in `Contents/Resources/ui` and `Contents/Resources/materials`, the Vulkan loader and MoltenVK, and the engine's static libraries in `Contents/Resources/engine/lib`. Play therefore runs the bundled player, and Build Game packages a game without a compiler or the engine checkout: it reuses the bundled Release player and engine resources, then copies the player's runtime libraries (`Contents/Resources/engine/player-libs.txt`) and a `vulkan/icd.d` manifest next to the game so the output folder is self-contained. Pass `--no-engine-libs` to leave the static libraries out of an editor bundle.
 
 ## Importing a Unity project
 
@@ -469,7 +466,7 @@ Its bundle contains the editor and `mercury_player` in `Contents/MacOS`, the loo
 
 ## Testing
 
-- `bazelisk test //tests/...` runs unit tests for the formats, maps, reflection, primitive meshes, rotations, `.mpack` archives, the UI Toolkit (USS, UXML, cascade, layout, events, bindings, drawing) gameplay (events, triggers, raycasts, CharacterController, prefabs, models, animator controllers, input scripts), the AngelScript runtime (evaluation, errors, value types, the timeout) and scripts as behaviours (`tests/script_behaviour_test.cc`, with fixtures in `tests/scripts/`). `tests/example_projects_test.cc` compiles each example, loads its scripts and checks that every map component, property and resource exists. Each example has an input script in `examples/<name>/tests/` that plays it: `MERCURY_INPUT_SCRIPT=examples/pong/tests/play.input ./bazel-bin/mercury/mercury_player examples/pong/pong.mproj`.
-- `./bazel-bin/tests/editor_smoke <project> <script>` replays scripted input into the editor.
+- `cmake --build --preset check` builds and runs the unit tests for the formats, maps, reflection, primitive meshes, rotations, `.mpack` archives, the UI Toolkit (USS, UXML, cascade, layout, events, bindings, drawing) gameplay (events, triggers, raycasts, CharacterController, prefabs, models, animator controllers, input scripts), the AngelScript runtime (evaluation, errors, value types, the timeout) and scripts as behaviours (`tests/script_behaviour_test.cc`, with fixtures in `tests/scripts/`). `tests/example_projects_test.cc` compiles each example, loads its scripts and checks that every map component, property and resource exists. Each example has an input script in `examples/<name>/tests/` that plays it: `MERCURY_INPUT_SCRIPT=examples/pong/tests/play.input ./build/release/bin/mercury_player examples/pong/pong.mproj`.
+- `./build/release/bin/editor_smoke <project> <script>` replays scripted input into the editor.
 - `MERCURY_INPUT_SCRIPT=walk.txt` does the same for a game (`120 press w`, `200 look 30 0`, `240 tap f`, `260 capture shot.png`, `300 quit`; a missing folder in a capture path is created; see `mercury/input/input_script.h`), stepping exactly 1/60 s per frame so runs repeat.
 - `MERCURY_CAPTURE=frame.png` (plus `MERCURY_CAPTURE_FRAME=n` and `MERCURY_CAPTURE_QUIT=1`) on any Mercury program saves a screenshot of a frame.

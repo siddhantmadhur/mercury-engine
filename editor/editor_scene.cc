@@ -31,7 +31,7 @@ EditorScene::EditorScene(fs::path initial_project, std::string initial_map)
     : MapScene(nullptr, Mode::kEdit),
       initial_project_(std::move(initial_project)),
       initial_map_(std::move(initial_map)),
-      play_(console_) {
+      play_(console_, settings_) {
   settings_.Load();
   PDebug::SetSink([this](PDebug::Level level, const std::string& message) {
     Console::Level console_level = Console::Level::kInfo;

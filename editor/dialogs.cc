@@ -13,6 +13,7 @@
 #include <cctype>
 #include <vector>
 
+#include "cmake_build.h"
 #include "editor_icons.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
@@ -260,6 +261,20 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
       new wxCheckBox(&dlg, wxID_ANY, "Enable Vim mode in the built-in editor");
   vim_check->SetValue(scene.Settings().vim_mode);
 
+#if defined(__APPLE__)
+  wxStaticText* hud_lbl = nullptr;
+  wxCheckBox* hud_check = nullptr;
+  if (cmake_build::IsDebugBuild()) {
+    hud_lbl = new wxStaticText(&dlg, wxID_ANY, "Debug Play FPS:");
+    hud_check = new wxCheckBox(&dlg, wxID_ANY,
+                               "Show the Metal performance HUD in the game");
+    hud_check->SetValue(scene.Settings().show_metal_hud);
+    hud_check->SetToolTip(
+        "Sets MTL_HUD_ENABLED=1 for the game process, which draws Metal's "
+        "frame-rate and GPU statistics overlay. Debug builds only.");
+  }
+#endif
+
   auto* lore_exe_lbl = new wxStaticText(&dlg, wxID_ANY, "Lore Executable:");
   auto* lore_exe_ctrl = new wxTextCtrl(
       &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_executable));
@@ -276,6 +291,12 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   grid->Add(preset_row, 1, wxEXPAND);
   grid->Add(vim_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(vim_check, 0);
+#if defined(__APPLE__)
+  if (hud_check) {
+    grid->Add(hud_lbl, 0, wxALIGN_CENTER_VERTICAL);
+    grid->Add(hud_check, 0);
+  }
+#endif
   grid->Add(lore_exe_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(lore_exe_ctrl, 1, wxEXPAND);
   grid->Add(lore_srv_lbl, 0, wxALIGN_CENTER_VERTICAL);
@@ -307,6 +328,9 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
 
   scene.Settings().open_scripts_in_editor = open_choice->GetSelection() == 0;
   scene.Settings().vim_mode = vim_check->GetValue();
+#if defined(__APPLE__)
+  if (hud_check) scene.Settings().show_metal_hud = hud_check->GetValue();
+#endif
   scene.Settings().external_editor = ed_ctrl->GetValue().ToStdString();
   scene.Settings().lore_executable = lore_exe_ctrl->GetValue().ToStdString();
   scene.Settings().lore_server = lore_srv_ctrl->GetValue().ToStdString();

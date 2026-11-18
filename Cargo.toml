@@ -1,0 +1,19 @@
+[package]
+name = "mercury_rust"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "mercury_rust"
+path = "mercury/rust_modules.rs"
+crate-type = ["staticlib"]
+
+[dependencies]
+cxx = "=1.0.205"
+mercury_kernel = { path = "mercury/rust" }
+input_actions_codegen_rs = { path = "mercury/input" }
+
+[workspace]
+members = ["mercury/rust", "mercury/input"]
+resolver = "2"
