@@ -79,13 +79,11 @@ class VulkanApplication : public Application {
     VkSemaphore image_available = VK_NULL_HANDLE;
     VkFence in_flight = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
-    VkDescriptorSet shadow_descriptor_set = VK_NULL_HANDLE;
     // Same layout as descriptor_set, but bound to preview_camera_ubo.
     VkDescriptorSet preview_descriptor_set = VK_NULL_HANDLE;
 
     vk::Buffer camera_ubo;
     vk::Buffer preview_camera_ubo;
-    vk::Buffer shadow_ubo;
     vk::Buffer vertices;
     vk::Buffer indices;
     vk::Buffer static_vertices;
@@ -116,8 +114,6 @@ class VulkanApplication : public Application {
   bool CreateFrameResources();
   bool CreateDescriptors();
   bool CreatePipelines();
-  bool CreateShadowResources();
-  bool CreateSkyboxResources();
   // Loads the scene's skybox panorama when its path changed. Waits for the
   // device to go idle, so it only runs between frames.
   void UpdateSkyboxImage();
@@ -125,8 +121,6 @@ class VulkanApplication : public Application {
   void WriteDescriptorSets();
   void RecreateSwapchain();
   VkShaderModule LoadShaderModule(const std::string& file_name) const;
-
-  void RecordShadowDraws(VkCommandBuffer cmd, FrameData& frame);
 
   // Records a one-off command buffer and waits for it to finish.
   template <typename F>
@@ -211,21 +205,10 @@ class VulkanApplication : public Application {
   VkPipeline static_pipeline_ = VK_NULL_HANDLE;
   VkSampler texture_sampler_ = VK_NULL_HANDLE;
 
-  static constexpr uint32_t kShadowMapResolution = 2048;
-  vk::Image shadow_image_;
-  VkSampler shadow_sampler_ = VK_NULL_HANDLE;
-  VkPipeline shadow_pipeline_ = VK_NULL_HANDLE;
-  VkPipelineLayout shadow_pipeline_layout_ = VK_NULL_HANDLE;
-  VkDescriptorSetLayout shadow_descriptor_set_layout_ = VK_NULL_HANDLE;
-
   // Equirectangular panorama drawn behind the scene; no image = clear color.
   vk::Image skybox_image_;
   std::string skybox_loaded_path_;
   VkSampler skybox_sampler_ = VK_NULL_HANDLE;
-  VkDescriptorSetLayout skybox_set_layout_ = VK_NULL_HANDLE;
-  VkDescriptorSet skybox_set_ = VK_NULL_HANDLE;
-  VkPipelineLayout skybox_pipeline_layout_ = VK_NULL_HANDLE;
-  VkPipeline skybox_pipeline_ = VK_NULL_HANDLE;
 
   vk::Buffer instance_buffer_;  // device-local, kMaxInstances records
   std::vector<VkBufferCopy> instance_copies_;  // staged this frame

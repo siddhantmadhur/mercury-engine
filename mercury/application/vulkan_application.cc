@@ -32,12 +32,10 @@ namespace Mercury {
 namespace {
 
 // Descriptor bindings; must match the register shifts in tools/shader.bzl and
-// the mapping documented at the top of each shader.
-constexpr uint32_t kCameraBinding = 0;          // b0
-constexpr uint32_t kAtlasBinding = 10;          // t0
-constexpr uint32_t kShadowMapBinding = 11;      // t1
-constexpr uint32_t kSamplerBinding = 20;        // s0
-constexpr uint32_t kShadowSamplerBinding = 21;  // s1
+// the mapping documented at the top of main.vs.hlsl / textured.ps.hlsl.
+constexpr uint32_t kCameraBinding = 0;   // b0
+constexpr uint32_t kAtlasBinding = 10;   // t0
+constexpr uint32_t kSamplerBinding = 20; // s0
 
 constexpr VkClearColorValue kClearColor = {{0.1f, 0.1f, 0.1f, 1.0f}};
 
@@ -68,7 +66,6 @@ VulkanApplication::~VulkanApplication() {
     for (FrameData& frame : frames_) {
       frame.camera_ubo.Reset();
       frame.preview_camera_ubo.Reset();
-      frame.shadow_ubo.Reset();
       frame.vertices.Reset();
       frame.indices.Reset();
       frame.static_vertices.Reset();
@@ -81,28 +78,10 @@ VulkanApplication::~VulkanApplication() {
     }
     instance_buffer_.Reset();
     atlas_image_.Reset();
-    shadow_image_.Reset();
     skybox_image_.Reset();
     capture_buffer_.Reset();
 
-    if (shadow_sampler_ != VK_NULL_HANDLE) {
-      vkDestroySampler(device, shadow_sampler_, nullptr);
-    }
-    if (shadow_pipeline_ != VK_NULL_HANDLE) {
-      vkDestroyPipeline(device, shadow_pipeline_, nullptr);
-    }
-    if (shadow_pipeline_layout_ != VK_NULL_HANDLE) {
-      vkDestroyPipelineLayout(device, shadow_pipeline_layout_, nullptr);
-    }
-    if (shadow_descriptor_set_layout_ != VK_NULL_HANDLE) {
-      vkDestroyDescriptorSetLayout(device, shadow_descriptor_set_layout_,
-                                   nullptr);
-    }
-
     vkDestroySampler(device, skybox_sampler_, nullptr);
-    vkDestroyPipeline(device, skybox_pipeline_, nullptr);
-    vkDestroyPipelineLayout(device, skybox_pipeline_layout_, nullptr);
-    vkDestroyDescriptorSetLayout(device, skybox_set_layout_, nullptr);
 
     vkDestroySampler(device, texture_sampler_, nullptr);
     vkDestroyPipeline(device, instanced_pipeline_, nullptr);
@@ -192,9 +171,6 @@ bool VulkanApplication::CreateFrameResources() {
         frame.preview_camera_ubo.Create(allocator, sizeof(CameraCBuffer),
                                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                         Memory::kHostVisible) &&
-        frame.shadow_ubo.Create(allocator, sizeof(PQ_MATRIX),
-                                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                Memory::kHostVisible) &&
         frame.vertices.Create(allocator, sizeof(Vertex) * kMaxVertices,
                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                               Memory::kHostVisible) &&
@@ -317,14 +293,10 @@ bool VulkanApplication::CreateDescriptors() {
 
   const VkDescriptorSetLayoutBinding bindings[] = {
       {kCameraBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+       VK_SHADER_STAGE_VERTEX_BIT, nullptr},
       {kAtlasBinding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
        VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-      {kShadowMapBinding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
-       VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
       {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
-       VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-      {kShadowSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
        VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
   };
   VkDescriptorSetLayoutCreateInfo layout_info = {
@@ -336,30 +308,14 @@ bool VulkanApplication::CreateDescriptors() {
     return false;
   }
 
-  // Shadow descriptor set layout: binding 0 = shadow UBO
-  const VkDescriptorSetLayoutBinding shadow_binding = {
-      0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
-      nullptr};
-  VkDescriptorSetLayoutCreateInfo shadow_layout_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  shadow_layout_info.bindingCount = 1;
-  shadow_layout_info.pBindings = &shadow_binding;
-  if (!VK_CHECK(vkCreateDescriptorSetLayout(device, &shadow_layout_info,
-                                            nullptr,
-                                            &shadow_descriptor_set_layout_))) {
-    return false;
-  }
-
-  // Per frame: the main set (1 buffer, 2 images, 2 samplers), the preview
-  // set (the same) and the shadow set (1 buffer). Plus the skybox set.
   const VkDescriptorPoolSize pool_sizes[] = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight * 3},
-      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kFramesInFlight * 4 + 1},
-      {VK_DESCRIPTOR_TYPE_SAMPLER, kFramesInFlight * 4 + 1},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight * 2},
+      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kFramesInFlight * 2},
+      {VK_DESCRIPTOR_TYPE_SAMPLER, kFramesInFlight * 2},
   };
   VkDescriptorPoolCreateInfo pool_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  pool_info.maxSets = kFramesInFlight * 3 + 1;
+  pool_info.maxSets = kFramesInFlight * 2;
   pool_info.poolSizeCount = static_cast<uint32_t>(std::size(pool_sizes));
   pool_info.pPoolSizes = pool_sizes;
   if (!VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr,
@@ -388,33 +344,12 @@ bool VulkanApplication::CreateDescriptors() {
     frames_[i].preview_descriptor_set = sets[i];
   }
 
-  std::array<VkDescriptorSetLayout, kFramesInFlight> shadow_layouts;
-  shadow_layouts.fill(shadow_descriptor_set_layout_);
-  std::array<VkDescriptorSet, kFramesInFlight> shadow_sets = {};
-  alloc_info.pSetLayouts = shadow_layouts.data();
-  if (!VK_CHECK(
-          vkAllocateDescriptorSets(device, &alloc_info, shadow_sets.data()))) {
-    return false;
-  }
-  for (uint32_t i = 0; i < kFramesInFlight; ++i) {
-    frames_[i].shadow_descriptor_set = shadow_sets[i];
-  }
-
   VkPipelineLayoutCreateInfo pipeline_layout_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   pipeline_layout_info.setLayoutCount = 1;
   pipeline_layout_info.pSetLayouts = &descriptor_set_layout_;
-  if (!VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr,
-                                       &pipeline_layout_))) {
-    return false;
-  }
-
-  VkPipelineLayoutCreateInfo shadow_pipeline_layout_info = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-  shadow_pipeline_layout_info.setLayoutCount = 1;
-  shadow_pipeline_layout_info.pSetLayouts = &shadow_descriptor_set_layout_;
-  return VK_CHECK(vkCreatePipelineLayout(device, &shadow_pipeline_layout_info,
-                                         nullptr, &shadow_pipeline_layout_));
+  return VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr,
+                                         &pipeline_layout_));
 }
 
 void VulkanApplication::WriteDescriptorSets() {
@@ -426,15 +361,10 @@ void VulkanApplication::WriteDescriptorSets() {
       VkDescriptorImageInfo atlas_info = {
           VK_NULL_HANDLE, atlas_image_.View(),
           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-      VkDescriptorImageInfo shadow_info = {
-          VK_NULL_HANDLE, shadow_image_.View(),
-          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
       VkDescriptorImageInfo sampler_info = {texture_sampler_, VK_NULL_HANDLE,
                                             VK_IMAGE_LAYOUT_UNDEFINED};
-      VkDescriptorImageInfo shadow_sampler_info = {
-          shadow_sampler_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
 
-      VkWriteDescriptorSet writes[5] = {};
+      VkWriteDescriptorSet writes[3] = {};
       for (auto& write : writes) {
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet =
@@ -449,33 +379,12 @@ void VulkanApplication::WriteDescriptorSets() {
       writes[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
       writes[1].pImageInfo = &atlas_info;
 
-      writes[2].dstBinding = kShadowMapBinding;
-      writes[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-      writes[2].pImageInfo = &shadow_info;
+      writes[2].dstBinding = kSamplerBinding;
+      writes[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+      writes[2].pImageInfo = &sampler_info;
 
-      writes[3].dstBinding = kSamplerBinding;
-      writes[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-      writes[3].pImageInfo = &sampler_info;
-
-      writes[4].dstBinding = kShadowSamplerBinding;
-      writes[4].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-      writes[4].pImageInfo = &shadow_sampler_info;
-
-      vkUpdateDescriptorSets(context_.device, 5, writes, 0, nullptr);
+      vkUpdateDescriptorSets(context_.device, 3, writes, 0, nullptr);
     }
-
-    // Update shadow descriptor set
-    VkDescriptorBufferInfo shadow_ubo_info = {frame.shadow_ubo.Get(), 0,
-                                              sizeof(PQ_MATRIX)};
-    VkWriteDescriptorSet shadow_write = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = frame.shadow_descriptor_set,
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo = &shadow_ubo_info,
-    };
-    vkUpdateDescriptorSets(context_.device, 1, &shadow_write, 0, nullptr);
   }
 }
 
@@ -537,14 +446,10 @@ bool VulkanApplication::CreatePipelines() {
       VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
       VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
-  // These draw inside the model renderer's main pass, which also writes a
-  // normal target; leave that one alone.
-  VkPipelineColorBlendAttachmentState blend_attachments[2] = {blend_attachment,
-                                                              {}};
   VkPipelineColorBlendStateCreateInfo color_blend = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-  color_blend.attachmentCount = 2;
-  color_blend.pAttachments = blend_attachments;
+  color_blend.attachmentCount = 1;
+  color_blend.pAttachments = &blend_attachment;
 
   const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
                                            VK_DYNAMIC_STATE_SCISSOR};
@@ -553,13 +458,12 @@ bool VulkanApplication::CreatePipelines() {
   dynamic_state.dynamicStateCount = 2;
   dynamic_state.pDynamicStates = dynamic_states;
 
-  VkFormat color_formats[2];
-  VkFormat depth_format;
-  vk::SceneRenderer::MainPassFormats(color_formats, depth_format);
+  const VkFormat color_format = ColorFormat();
+  const VkFormat depth_format = vk::SceneRenderer::kDepthFormat;
   VkPipelineRenderingCreateInfo rendering_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-  rendering_info.colorAttachmentCount = 2;
-  rendering_info.pColorAttachmentFormats = color_formats;
+  rendering_info.colorAttachmentCount = 1;
+  rendering_info.pColorAttachmentFormats = &color_format;
   rendering_info.depthAttachmentFormat = depth_format;
 
   auto build = [&](VkShaderModule vs,
@@ -721,13 +625,20 @@ bool VulkanApplication::OnLoad() {
     return false;
   }
 
-  if (!CreateShadowResources()) {
-    PDebug::error("Vulkan: failed to create shadow resources");
-    return false;
-  }
-  if (!CreateSkyboxResources()) {
-    PDebug::error("Vulkan: failed to create skybox resources");
-    return false;
+  {
+    VkSamplerCreateInfo sky_sampler_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sky_sampler_info.magFilter = VK_FILTER_LINEAR;
+    sky_sampler_info.minFilter = VK_FILTER_LINEAR;
+    sky_sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    sky_sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sky_sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sky_sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    if (!VK_CHECK(vkCreateSampler(context_.device, &sky_sampler_info, nullptr,
+                                  &skybox_sampler_))) {
+      PDebug::error("Vulkan: failed to create skybox sampler");
+      return false;
+    }
   }
   {
     VkShaderModule ui_vs = LoadShaderModule("ui.vs.spv");
@@ -755,285 +666,6 @@ bool VulkanApplication::OnLoad() {
 
   WriteDescriptorSets();
   return true;
-}
-
-bool VulkanApplication::CreateShadowResources() {
-  VkDevice device = context_.device;
-  VmaAllocator allocator = context_.allocator;
-
-  if (!shadow_image_.Create(allocator, device, kShadowMapResolution,
-                            kShadowMapResolution, VK_FORMAT_D32_SFLOAT,
-                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                VK_IMAGE_USAGE_SAMPLED_BIT,
-                            VK_IMAGE_ASPECT_DEPTH_BIT)) {
-    PDebug::error("Vulkan: failed to create shadow depth image");
-    return false;
-  }
-
-  VkImage img = shadow_image_.Get();
-  SubmitImmediate([&](VkCommandBuffer cmd) {
-    vk::TransitionImage(
-        cmd, img, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
-        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-  });
-
-  VkSamplerCreateInfo sampler_info = {
-      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-  sampler_info.magFilter = VK_FILTER_LINEAR;
-  sampler_info.minFilter = VK_FILTER_LINEAR;
-  sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-  sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-  sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-  sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-  sampler_info.compareEnable = VK_TRUE;
-  sampler_info.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-  sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-  if (!VK_CHECK(
-          vkCreateSampler(device, &sampler_info, nullptr, &shadow_sampler_))) {
-    PDebug::error("Vulkan: failed to create shadow sampler");
-    return false;
-  }
-
-  VkShaderModule shadow_vs = LoadShaderModule("shadow.vs.spv");
-  if (!shadow_vs) {
-    PDebug::error("Vulkan: failed to load shadow.vs.spv");
-    return false;
-  }
-
-  VkPipelineInputAssemblyStateCreateInfo input_assembly = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-  input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-  VkPipelineViewportStateCreateInfo viewport_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
-  viewport_state.viewportCount = 1;
-  viewport_state.scissorCount = 1;
-
-  VkPipelineRasterizationStateCreateInfo rasterizer = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
-  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-  rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-  rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-  rasterizer.lineWidth = 1.0f;
-  rasterizer.depthBiasEnable = VK_TRUE;
-  rasterizer.depthBiasConstantFactor = 1.25f;
-  rasterizer.depthBiasSlopeFactor = 1.75f;
-
-  VkPipelineMultisampleStateCreateInfo multisample = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-  multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-  VkPipelineDepthStencilStateCreateInfo depth_stencil = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-  depth_stencil.depthTestEnable = VK_TRUE;
-  depth_stencil.depthWriteEnable = VK_TRUE;
-  depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-
-  const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                           VK_DYNAMIC_STATE_SCISSOR};
-  VkPipelineDynamicStateCreateInfo dynamic_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-  dynamic_state.dynamicStateCount = 2;
-  dynamic_state.pDynamicStates = dynamic_states;
-
-  VkPipelineRenderingCreateInfo rendering_info = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-  rendering_info.colorAttachmentCount = 0;
-  rendering_info.pColorAttachmentFormats = nullptr;
-  rendering_info.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
-
-  VkPipelineShaderStageCreateInfo stage = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-  stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-  stage.module = shadow_vs;
-  stage.pName = "Main";
-
-  const VkVertexInputBindingDescription instanced_bindings[] = {
-      {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX},
-      {1, sizeof(VsModelBuffer), VK_VERTEX_INPUT_RATE_INSTANCE},
-  };
-  const VkVertexInputAttributeDescription shadow_attributes[] = {
-      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
-      {3, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VsModelBuffer, scale)},
-      {5, 1, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(VsModelBuffer, world_)},
-      {6, 1, VK_FORMAT_R32G32B32A32_SFLOAT,
-       offsetof(VsModelBuffer, world_) + 16},
-      {7, 1, VK_FORMAT_R32G32B32A32_SFLOAT,
-       offsetof(VsModelBuffer, world_) + 32},
-      {8, 1, VK_FORMAT_R32G32B32A32_SFLOAT,
-       offsetof(VsModelBuffer, world_) + 48},
-  };
-  VkPipelineVertexInputStateCreateInfo instanced_input = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-  instanced_input.vertexBindingDescriptionCount =
-      static_cast<uint32_t>(std::size(instanced_bindings));
-  instanced_input.pVertexBindingDescriptions = instanced_bindings;
-  instanced_input.vertexAttributeDescriptionCount =
-      static_cast<uint32_t>(std::size(shadow_attributes));
-  instanced_input.pVertexAttributeDescriptions = shadow_attributes;
-
-  VkGraphicsPipelineCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-  create_info.pNext = &rendering_info;
-  create_info.stageCount = 1;
-  create_info.pStages = &stage;
-  create_info.pVertexInputState = &instanced_input;
-  create_info.pInputAssemblyState = &input_assembly;
-  create_info.pViewportState = &viewport_state;
-  create_info.pRasterizationState = &rasterizer;
-  create_info.pMultisampleState = &multisample;
-  create_info.pDepthStencilState = &depth_stencil;
-  create_info.pColorBlendState = nullptr;
-  create_info.pDynamicState = &dynamic_state;
-  create_info.layout = shadow_pipeline_layout_;
-
-  bool ok = VK_CHECK(vkCreateGraphicsPipelines(
-      device, VK_NULL_HANDLE, 1, &create_info, nullptr, &shadow_pipeline_));
-  vkDestroyShaderModule(device, shadow_vs, nullptr);
-  return ok;
-}
-
-bool VulkanApplication::CreateSkyboxResources() {
-  VkDevice device = context_.device;
-
-  // Wrap around horizontally so the panorama's seam is invisible.
-  VkSamplerCreateInfo sampler_info = {
-      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-  sampler_info.magFilter = VK_FILTER_LINEAR;
-  sampler_info.minFilter = VK_FILTER_LINEAR;
-  sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-  sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-  sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  if (!VK_CHECK(
-          vkCreateSampler(device, &sampler_info, nullptr, &skybox_sampler_))) {
-    return false;
-  }
-
-  // Same binding numbers as the main set; see skybox.ps.hlsl.
-  const VkDescriptorSetLayoutBinding bindings[] = {
-      {kAtlasBinding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
-       VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-      {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
-       VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-  };
-  VkDescriptorSetLayoutCreateInfo layout_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  layout_info.bindingCount = static_cast<uint32_t>(std::size(bindings));
-  layout_info.pBindings = bindings;
-  if (!VK_CHECK(vkCreateDescriptorSetLayout(device, &layout_info, nullptr,
-                                            &skybox_set_layout_))) {
-    return false;
-  }
-
-  VkDescriptorSetAllocateInfo alloc_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-  alloc_info.descriptorPool = descriptor_pool_;
-  alloc_info.descriptorSetCount = 1;
-  alloc_info.pSetLayouts = &skybox_set_layout_;
-  if (!VK_CHECK(vkAllocateDescriptorSets(device, &alloc_info, &skybox_set_))) {
-    return false;
-  }
-
-  const VkPushConstantRange push_range = {VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                                          sizeof(glm::mat4x4)};
-  VkPipelineLayoutCreateInfo pipeline_layout_info = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-  pipeline_layout_info.setLayoutCount = 1;
-  pipeline_layout_info.pSetLayouts = &skybox_set_layout_;
-  pipeline_layout_info.pushConstantRangeCount = 1;
-  pipeline_layout_info.pPushConstantRanges = &push_range;
-  if (!VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr,
-                                       &skybox_pipeline_layout_))) {
-    return false;
-  }
-
-  VkShaderModule skybox_vs = LoadShaderModule("skybox.vs.spv");
-  VkShaderModule skybox_ps = LoadShaderModule("skybox.ps.spv");
-  if (!skybox_vs || !skybox_ps) {
-    vkDestroyShaderModule(device, skybox_vs, nullptr);
-    vkDestroyShaderModule(device, skybox_ps, nullptr);
-    return false;
-  }
-
-  // The triangle is generated from the vertex index, drawn first, and never
-  // touches depth, so the scene simply draws over it.
-  VkPipelineVertexInputStateCreateInfo vertex_input = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-  VkPipelineInputAssemblyStateCreateInfo input_assembly = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-  input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  VkPipelineViewportStateCreateInfo viewport_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
-  viewport_state.viewportCount = 1;
-  viewport_state.scissorCount = 1;
-  VkPipelineRasterizationStateCreateInfo rasterizer = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
-  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-  rasterizer.cullMode = VK_CULL_MODE_NONE;
-  rasterizer.lineWidth = 1.0f;
-  VkPipelineMultisampleStateCreateInfo multisample = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-  multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-  VkPipelineDepthStencilStateCreateInfo depth_stencil = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-  VkPipelineColorBlendAttachmentState blend_attachment = {};
-  blend_attachment.colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-  VkPipelineColorBlendAttachmentState blend_attachments[2] = {blend_attachment,
-                                                              {}};
-  VkPipelineColorBlendStateCreateInfo color_blend = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-  color_blend.attachmentCount = 2;
-  color_blend.pAttachments = blend_attachments;
-  const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                           VK_DYNAMIC_STATE_SCISSOR};
-  VkPipelineDynamicStateCreateInfo dynamic_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-  dynamic_state.dynamicStateCount = 2;
-  dynamic_state.pDynamicStates = dynamic_states;
-
-  VkFormat color_formats[2];
-  VkFormat depth_format;
-  vk::SceneRenderer::MainPassFormats(color_formats, depth_format);
-  VkPipelineRenderingCreateInfo rendering_info = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-  rendering_info.colorAttachmentCount = 2;
-  rendering_info.pColorAttachmentFormats = color_formats;
-  rendering_info.depthAttachmentFormat = depth_format;
-
-  VkPipelineShaderStageCreateInfo stages[2] = {};
-  stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  stages[0].module = skybox_vs;
-  stages[0].pName = "Main";
-  stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  stages[1].module = skybox_ps;
-  stages[1].pName = "Main";
-
-  VkGraphicsPipelineCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-  create_info.pNext = &rendering_info;
-  create_info.stageCount = 2;
-  create_info.pStages = stages;
-  create_info.pVertexInputState = &vertex_input;
-  create_info.pInputAssemblyState = &input_assembly;
-  create_info.pViewportState = &viewport_state;
-  create_info.pRasterizationState = &rasterizer;
-  create_info.pMultisampleState = &multisample;
-  create_info.pDepthStencilState = &depth_stencil;
-  create_info.pColorBlendState = &color_blend;
-  create_info.pDynamicState = &dynamic_state;
-  create_info.layout = skybox_pipeline_layout_;
-  const bool ok = VK_CHECK(vkCreateGraphicsPipelines(
-      device, VK_NULL_HANDLE, 1, &create_info, nullptr, &skybox_pipeline_));
-  vkDestroyShaderModule(device, skybox_vs, nullptr);
-  vkDestroyShaderModule(device, skybox_ps, nullptr);
-  return ok;
 }
 
 void VulkanApplication::UpdateSkyboxImage() {
@@ -1099,61 +731,7 @@ void VulkanApplication::UpdateSkyboxImage() {
     return;
   }
 
-  VkDescriptorImageInfo image_info = {VK_NULL_HANDLE, skybox_image_.View(),
-                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-  VkDescriptorImageInfo sampler_info = {skybox_sampler_, VK_NULL_HANDLE,
-                                        VK_IMAGE_LAYOUT_UNDEFINED};
-  VkWriteDescriptorSet writes[2] = {};
-  for (auto& write : writes) {
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = skybox_set_;
-    write.descriptorCount = 1;
-  }
-  writes[0].dstBinding = kAtlasBinding;
-  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-  writes[0].pImageInfo = &image_info;
-  writes[1].dstBinding = kSamplerBinding;
-  writes[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-  writes[1].pImageInfo = &sampler_info;
-  vkUpdateDescriptorSets(context_.device, 2, writes, 0, nullptr);
   PDebug::log("Loaded skybox: {} [{}x{}]", path, width, height);
-}
-
-void VulkanApplication::RecordShadowDraws(VkCommandBuffer cmd,
-                                          FrameData& frame) {
-  VkViewport viewport = {};
-  viewport.x = 0.0f;
-  viewport.y = static_cast<float>(kShadowMapResolution);
-  viewport.width = static_cast<float>(kShadowMapResolution);
-  viewport.height = -static_cast<float>(kShadowMapResolution);
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(cmd, 0, 1, &viewport);
-  const VkRect2D scissor = {{0, 0},
-                            {kShadowMapResolution, kShadowMapResolution}};
-  vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-  if (!mesh_order_.empty()) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_pipeline_);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            shadow_pipeline_layout_, 0, 1,
-                            &frame.shadow_descriptor_set, 0, nullptr);
-    const VkBuffer vertex_buffers[2] = {frame.vertices.Get(),
-                                        instance_buffer_.Get()};
-    const VkDeviceSize offsets[2] = {0, 0};
-    vkCmdBindVertexBuffers(cmd, 0, 2, vertex_buffers, offsets);
-    vkCmdBindIndexBuffer(cmd, frame.indices.Get(), 0, VK_INDEX_TYPE_UINT32);
-
-    for (auto entity : mesh_order_) {
-      const auto& entry = mesh_layout_[entity];
-      if (entry.instance_count == 0) continue;
-      if (entry.start_instance >= kMaxInstances) continue;
-      UINT count =
-          std::min(entry.instance_count, kMaxInstances - entry.start_instance);
-      vkCmdDrawIndexed(cmd, entry.index_count, count, entry.start_index, 0,
-                       entry.start_instance);
-    }
-  }
 }
 
 VsModelBuffer VulkanApplication::BuildInstanceRecord(
@@ -1484,83 +1062,18 @@ void VulkanApplication::Render() {
   if (game_scene_ && view_extent.width > 0 && view_extent.height > 0) {
     cameras = FrameCameras(view_extent);
   }
-  RenderCamera main_camera;
-  for (const auto& camera : cameras) {
-    if (camera.target_texture.empty() && !camera.overlay) {
-      main_camera = camera;
-      break;
-    }
-  }
 
-  glm::mat4 light_view_proj(1.0f);
-  bool cast_shadows = false;
   if (game_scene_) {
     glm::mat4x4 camera_proj_view = {};
     if (game_scene_->GetCameraProj(camera_proj_view)) {
       camera_.mWorldViewProj = camera_proj_view;
-      camera_.mResolution =
-          PQ_FLOAT2{game_scene_->GetWidth(), game_scene_->GetHeight()};
-    }
-    const SceneLighting& lighting = game_scene_->GetLighting();
-    camera_.mLightDirection = PQ_FLOAT4(lighting.direction, 0.0f);
-    camera_.mLightColor = PQ_FLOAT4(lighting.color, 1.0f);
-    camera_.mAmbientColor = PQ_FLOAT4(lighting.ambient, 1.0f);
-    glm::vec3 camera_position(0.0f);
-    game_scene_->GetCameraPosition(camera_position);
-    camera_.mCameraPosition = PQ_FLOAT4(camera_position, 1.0f);
-
-    if (lighting.cast_shadows && shadow_image_.Get() != VK_NULL_HANDLE) {
-      glm::vec3 light_dir = glm::normalize(lighting.direction);
-      if (glm::length(light_dir) < 0.001f) {
-        light_dir = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
-      }
-      float shadow_dist =
-          lighting.shadow_distance > 0.0f ? lighting.shadow_distance : 60.0f;
-      glm::vec3 light_target = main_camera.entity != entt::null
-                                   ? main_camera.position
-                                   : camera_position;
-      glm::vec3 light_pos = light_target - light_dir * shadow_dist;
-      glm::vec3 up = std::abs(light_dir.y) > 0.99f
-                         ? glm::vec3(0.0f, 0.0f, 1.0f)
-                         : glm::vec3(0.0f, 1.0f, 0.0f);
-      glm::mat4 light_view = glm::lookAt(light_pos, light_target, up);
-
-      float half_box = shadow_dist * 0.6f;
-      // Vulkan's 0..1 depth: glm::ortho's -1..1 loses the near half.
-      glm::mat4 light_proj = glm::orthoRH_ZO(
-          -half_box, half_box, -half_box, half_box, 1.0f, shadow_dist * 2.0f);
-
-      // Texel snapping in light space to eliminate shadow edge shimmering
-      glm::vec4 shadow_origin = light_view * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-      float texel_size =
-          (2.0f * half_box) / static_cast<float>(kShadowMapResolution);
-      float snap_x = std::fmod(shadow_origin.x, texel_size);
-      float snap_y = std::fmod(shadow_origin.y, texel_size);
-      light_view[3][0] -= snap_x;
-      light_view[3][1] -= snap_y;
-
-      light_view_proj = light_proj * light_view;
-      cast_shadows = true;
-      camera_.mLightViewProj = light_view_proj;
-      camera_.mShadowParams =
-          PQ_FLOAT2{static_cast<float>(kShadowMapResolution),
-                    lighting.shadow_normal_bias};
-      frame.shadow_ubo.Write(&light_view_proj, sizeof(glm::mat4x4));
-    } else {
-      camera_.mLightViewProj = glm::mat4(1.0f);
-      camera_.mShadowParams = PQ_FLOAT2{-1.0f, 0.0f};
-      glm::mat4 identity(1.0f);
-      frame.shadow_ubo.Write(&identity, sizeof(glm::mat4x4));
     }
   } else {
-    camera_.mLightViewProj = glm::mat4(1.0f);
-    camera_.mShadowParams = PQ_FLOAT2{-1.0f, 0.0f};
-    glm::mat4 identity(1.0f);
-    frame.shadow_ubo.Write(&identity, sizeof(glm::mat4x4));
+    camera_.mWorldViewProj = glm::mat4(1.0f);
   }
   frame.camera_ubo.Write(&camera_, sizeof(camera_));
 
-  // Editor camera preview: same lighting and shadows, other camera.
+  // Editor camera preview.
   bool draw_preview = false;
   RenderCamera preview_view;
   if (game_scene_ && preview_camera_ != entt::null &&
@@ -1575,9 +1088,6 @@ void VulkanApplication::Render() {
                                        static_cast<float>(size.height),
                                        view_proj, preview_sky, position)) {
       preview.mWorldViewProj = view_proj;
-      preview.mCameraPosition = PQ_FLOAT4(position, 1.0f);
-      preview.mResolution = PQ_FLOAT2{static_cast<float>(size.width),
-                                      static_cast<float>(size.height)};
       frame.preview_camera_ubo.Write(&preview, sizeof(preview));
       draw_preview = true;
       auto& registry = game_scene_->GetRegistry();
@@ -1667,53 +1177,6 @@ void VulkanApplication::Render() {
     RecordInstanceUploads(frame);
     MERCURY_PROFILE_SCOPE("prepare");
     scene_renderer_.Prepare(cmd, *game_scene_);
-  }
-
-  // Shadow depth pre-pass (directional light shadow map) for the older
-  // draws, and the model renderer's own.
-  if (game_scene_ && shadow_image_.Get() != VK_NULL_HANDLE &&
-      game_scene_->GetLighting().cast_shadows) {
-    vk::TransitionImage(cmd, shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
-                        VK_IMAGE_LAYOUT_UNDEFINED,
-                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, kDepthStages,
-                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-
-    VkRenderingAttachmentInfo shadow_depth = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
-    shadow_depth.imageView = shadow_image_.View();
-    shadow_depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    shadow_depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    shadow_depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    shadow_depth.clearValue.depthStencil = {1.0f, 0};
-
-    VkRenderingInfo shadow_rendering = {.sType =
-                                            VK_STRUCTURE_TYPE_RENDERING_INFO};
-    shadow_rendering.renderArea = {
-        {0, 0}, {kShadowMapResolution, kShadowMapResolution}};
-    shadow_rendering.layerCount = 1;
-    shadow_rendering.colorAttachmentCount = 0;
-    shadow_rendering.pColorAttachments = nullptr;
-    shadow_rendering.pDepthAttachment = &shadow_depth;
-
-    vkCmdBeginRendering(cmd, &shadow_rendering);
-    if (draw_instanced) {
-      RecordShadowDraws(cmd, frame);
-    }
-    vkCmdEndRendering(cmd);
-
-    vk::TransitionImage(cmd, shadow_image_.Get(), VK_IMAGE_ASPECT_DEPTH_BIT,
-                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, kDepthStages,
-                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-  }
-  if (game_scene_) {
-    MERCURY_PROFILE_SCOPE("render_shadows");
-    scene_renderer_.RenderShadows(cmd, light_view_proj, main_camera,
-                                  cast_shadows);
   }
 
   // UI Toolkit draw lists: upload them (and their textures) before any pass.
@@ -2056,17 +1519,6 @@ void VulkanApplication::RecordSceneDraws(VkCommandBuffer cmd, FrameData& frame,
   vkCmdSetViewport(cmd, 0, 1, &viewport);
   const VkRect2D scissor = {{0, 0}, extent};
   vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-  if (sky_matrix) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline_);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            skybox_pipeline_layout_, 0, 1, &skybox_set_, 0,
-                            nullptr);
-    vkCmdPushConstants(cmd, skybox_pipeline_layout_,
-                       VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(*sky_matrix),
-                       sky_matrix);
-    vkCmdDraw(cmd, 3, 1, 0, 0);
-  }
 
   if (draw_static) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, static_pipeline_);
