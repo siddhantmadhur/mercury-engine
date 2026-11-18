@@ -83,6 +83,8 @@ class FilamentApplication : public Application {
     std::vector<uint8_t> pixels;  // RGBA, top row first
     bool has_pixels = false;
     uint64_t frame_id = 0;
+    bool readback_pending = false;
+    uint64_t pending_frame_id = 0;
   };
 
   // (Re)creates the offscreen target at `width` x `height` when it changed.

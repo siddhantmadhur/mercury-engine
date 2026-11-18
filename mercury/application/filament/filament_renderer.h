@@ -90,7 +90,7 @@ class FilamentRenderer {
                                          const MeshGeometry& geometry,
                                          filament::Box* bounds);
   filament::Texture* UploadTexture(filament::Engine* engine,
-                                   const ImageData& image);
+                                   const std::shared_ptr<ImageData>& image);
   // Destroys this entity's renderables (and their material instances).
   void DestroyProxy(filament::Engine* engine, entt::entity entity);
   // (Re)builds every draw of the entity from its RenderMesh.
@@ -109,6 +109,7 @@ class FilamentRenderer {
   // [0=opaque, 1=transparent, 2=transmissive][double_sided]
   filament::Material* lit_[3][2] = {};
   filament::Material* unlit_ = nullptr;
+  filament::Material* unlit_transparent_ = nullptr;
   filament::Material* sdf_ = nullptr;
   filament::Texture* white_ = nullptr;        // 1x1 white fallback
   filament::Texture* flat_normal_ = nullptr;  // 1x1 (0,0,1) normal fallback

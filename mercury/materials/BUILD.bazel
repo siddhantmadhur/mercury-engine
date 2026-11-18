@@ -21,6 +21,11 @@ filament_material(
 )
 
 filament_material(
+    name = "unlit_transparent",
+    src = "unlit_transparent.mat",
+)
+
+filament_material(
     name = "text_sdf",
     src = "text_sdf.mat",
 )
@@ -40,6 +45,7 @@ filegroup(
         ":lit_transmissive",
         ":lit_transmissive_double_sided",
         ":unlit",
+        ":unlit_transparent",
         ":text_sdf",
         ":ui",
     ],

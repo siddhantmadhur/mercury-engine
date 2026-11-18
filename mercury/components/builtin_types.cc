@@ -97,6 +97,7 @@ void AttachSprite(MapScene& scene, kEntityId entity,
   mesh.cast_shadows = false;  // sprites never cast shadows
   RenderMaterial surface;
   surface.unlit = true;  // sprites are never lit
+  surface.transparent = true;
   surface.color = sprite.color * material.color;
   surface.tiling = material.tiling;
   if (material.texture.IsSet()) {

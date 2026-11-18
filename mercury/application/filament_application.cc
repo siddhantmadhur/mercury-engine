@@ -335,6 +335,9 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
 
 void FilamentApplication::DestroyOffscreen(Offscreen& target) {
   if (!target.target) return;
+  if (target.readback_pending && engine_) {
+    engine_->flushAndWait();
+  }
   if (target.view) target.view->setColorGrading(nullptr);
   engine_->destroy(target.view);
   engine_->destroyCameraComponent(target.camera_entity);
@@ -347,13 +350,17 @@ void FilamentApplication::DestroyOffscreen(Offscreen& target) {
   target.camera = nullptr;
   target.camera_entity = {};
   target.has_pixels = false;
+  target.readback_pending = false;
+  target.pending_frame_id = 0;
 }
 
 void FilamentApplication::ReadOffscreen(Offscreen& target) {
-  if (!target.target) return;
+  if (!target.target || target.readback_pending) return;
   const size_t bytes = size_t{target.width} * target.height * 4;
   if (target.pixels.size() != bytes) target.pixels.resize(bytes);
 
+  target.readback_pending = true;
+  target.pending_frame_id = frame_counter_;
   auto* row = new uint8_t[bytes];
   renderer_->readPixels(
       target.target, 0, 0, target.width, target.height,
@@ -362,12 +369,15 @@ void FilamentApplication::ReadOffscreen(Offscreen& target) {
           filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
           [](void* buffer, size_t size, void* user) {
             auto* target = static_cast<Offscreen*>(user);
-            std::memcpy(target->pixels.data(), buffer, size);
+            if (target->pixels.size() == size) {
+              std::memcpy(target->pixels.data(), buffer, size);
+              target->has_pixels = true;
+              target->frame_id = target->pending_frame_id;
+            }
+            target->readback_pending = false;
             delete[] static_cast<uint8_t*>(buffer);
           },
           &target));
-  target.has_pixels = true;
-  target.frame_id = frame_counter_;
 }
 
 bool FilamentApplication::CopyOffscreen(Offscreen& target, int& width,
@@ -383,7 +393,9 @@ bool FilamentApplication::CopyOffscreen(Offscreen& target, int& width,
 }
 
 void FilamentApplication::Render() {
-  if (!engine_ || !game_scene_) return;
+  if (!engine_ || !renderer_ || !game_scene_) return;
+  filament::SwapChain* frame_swap = IsHeadless() ? headless_swap_ : swapchain_;
+  if (!frame_swap || !renderer_->shouldRenderFrame()) return;
   frame_counter_++;
 
   const uint32_t window_width = static_cast<uint32_t>(GetWidth());
@@ -436,8 +448,7 @@ void FilamentApplication::Render() {
   }
   ui_renderer_.Prepare(engine_, game_ui ? *game_ui : UI::UIDrawData{});
 
-  filament::SwapChain* frame_swap = IsHeadless() ? headless_swap_ : swapchain_;
-  if (!frame_swap || !renderer_->beginFrame(frame_swap)) return;
+  if (!renderer_->beginFrame(frame_swap)) return;
 
   for (const RenderCamera& camera : cameras) {
     if (camera.target_texture.empty()) continue;
@@ -568,10 +579,12 @@ void FilamentApplication::Render() {
   }
 
   renderer_->endFrame();
-  engine_->flushAndWait();
 
-  if (capturing && capture_ready_) {
-    WriteCapture(capture_pixels_, capture_width_, capture_height_);
+  if (capturing) {
+    engine_->flushAndWait();
+    if (capture_ready_) {
+      WriteCapture(capture_pixels_, capture_width_, capture_height_);
+    }
   }
 
   preview_camera_ = entt::null;

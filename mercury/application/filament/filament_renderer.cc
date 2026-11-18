@@ -129,13 +129,14 @@ bool FilamentRenderer::Init(filament::Engine* engine) {
   lit_[2][0] = LoadMaterial("lit_transmissive");
   lit_[2][1] = LoadMaterial("lit_transmissive_double_sided");
   unlit_ = LoadMaterial("unlit");
+  unlit_transparent_ = LoadMaterial("unlit_transparent");
   sdf_ = LoadMaterial("text_sdf");
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 2; j++) {
       if (!lit_[i][j]) return false;
     }
   }
-  if (!unlit_ || !sdf_) return false;
+  if (!unlit_ || !unlit_transparent_ || !sdf_) return false;
   scene_ = engine_->createScene();
 
   // The texture shown when a material has no image: 1x1 white, plus a 1x1
@@ -276,6 +277,10 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
     engine->destroy(unlit_);
     unlit_ = nullptr;
   }
+  if (unlit_transparent_) {
+    engine->destroy(unlit_transparent_);
+    unlit_transparent_ = nullptr;
+  }
   if (sdf_) {
     engine->destroy(sdf_);
     sdf_ = nullptr;
@@ -291,36 +296,40 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
 }
 
 filament::Texture* FilamentRenderer::UploadTexture(
-    filament::Engine* engine, const ImageData& image) {
-  if (auto it = textures_.find(image.id); it != textures_.end())
+    filament::Engine* engine, const std::shared_ptr<ImageData>& image) {
+  if (!image) return nullptr;
+  if (auto it = textures_.find(image->id); it != textures_.end()) {
+    it->second.source = image;
     return it->second.texture;
-  if (image.pixels.empty()) return nullptr;
+  }
+  if (image->pixels.empty()) return nullptr;
 
   filament::Texture* texture =
       filament::Texture::Builder()
-          .width(static_cast<uint32_t>(image.width))
-          .height(static_cast<uint32_t>(image.height))
+          .width(static_cast<uint32_t>(image->width))
+          .height(static_cast<uint32_t>(image->height))
           .levels(0xFF)
           .usage(filament::Texture::Usage::SAMPLEABLE |
                  filament::Texture::Usage::UPLOADABLE |
                  filament::Texture::Usage::GEN_MIPMAPPABLE)
-          .format(image.srgb ? filament::Texture::InternalFormat::SRGB8_A8
-                             : filament::Texture::InternalFormat::RGBA8)
+          .format(image->srgb ? filament::Texture::InternalFormat::SRGB8_A8
+                              : filament::Texture::InternalFormat::RGBA8)
           .sampler(filament::Texture::Sampler::SAMPLER_2D)
           .build(*engine);
   if (!texture) return nullptr;
-  const size_t bytes = image.pixels.size();
+  const size_t bytes = image->pixels.size();
   texture->setImage(
       *engine, 0,
       filament::Texture::PixelBufferDescriptor(
-          CopyToHeap(image.pixels.data(), bytes), bytes,
+          CopyToHeap(image->pixels.data(), bytes), bytes,
           filament::backend::PixelDataFormat::RGBA,
           filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0, DeleteUpload));
   texture->generateMipmaps(*engine);
 
   TextureEntry entry;
   entry.texture = texture;
-  textures_.emplace(image.id, entry);
+  entry.source = image;
+  textures_.emplace(image->id, entry);
   return texture;
 }
 
@@ -502,7 +511,10 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     const bool is_unlit = material.sdf_text || material.unlit;
     const bool is_transmissive = !is_unlit && material.transmission > 0.0f;
     const int surface = is_transmissive ? 2 : (material.transparent ? 1 : 0);
-    filament::Material* base = material.sdf_text ? sdf_ : unlit_;
+    filament::Material* base =
+        material.sdf_text
+            ? sdf_
+            : (material.transparent ? unlit_transparent_ : unlit_);
     if (!is_unlit) base = lit_[surface][material.double_sided ? 1 : 0];
 
     const filament::TextureSampler sampler(
@@ -528,7 +540,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       filament::Texture* emissive_tex = white_;
       if (material.emission_texture) {
         if (filament::Texture* uploaded =
-                UploadTexture(engine, *material.emission_texture)) {
+                UploadTexture(engine, material.emission_texture)) {
           emissive_tex = uploaded;
         }
       }
@@ -538,7 +550,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       bool has_normal = false;
       if (material.normal_texture) {
         if (filament::Texture* uploaded =
-                UploadTexture(engine, *material.normal_texture)) {
+                UploadTexture(engine, material.normal_texture)) {
           normal_tex = uploaded;
           has_normal = true;
         }
@@ -578,7 +590,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
           filament::TextureSampler::MagFilter::LINEAR,
           filament::TextureSampler::WrapMode::CLAMP_TO_EDGE);
     } else if (material.texture) {
-      if (filament::Texture* uploaded = UploadTexture(engine, *material.texture))
+      if (filament::Texture* uploaded = UploadTexture(engine, material.texture))
         texture = uploaded;
     }
     instance->setParameter("baseColorMap", texture, base_sampler);
