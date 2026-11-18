@@ -32,4 +32,5 @@ verify-license-job:   # This job also runs in the test stage.
   stage: format    # It can run at the same time as unit-test-job (in parallel).
   script:
     - echo "Checking for files not including LICENSE header..."
-    - git ls-tree --name-only --full-name -r HEAD | grep -rL --include=\*.{c,cc,h,py,pl,sh,ts,js,as,rs} "mozilla.org/MPL/2.0" * | wc -l
+    - perl scripts/addlicenses.pl
+    - git diff --exit-code
