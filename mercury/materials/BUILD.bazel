@@ -4,7 +4,8 @@ package(default_visibility = ["//visibility:public"])
 
 # Lit PBR material set: culling and blending are material properties, so the
 # combinations Mercury's RenderMaterial needs each get their own compile.
-# matc runs as an exec tool built by //third_party:filament_build.
+# matc is the one Filament's build already produced for the target
+# configuration (see tools/matc.bzl).
 
 [
     filament_material(

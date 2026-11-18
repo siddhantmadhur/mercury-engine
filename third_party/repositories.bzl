@@ -15,6 +15,22 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 # Local dependency checkouts
 # --------------------------------------------------------------------------
 
+# CPython writes __pycache__ next to the modules it imports. Dependency builds
+# run Python helper scripts straight from their source tree (Filament's
+# spirv-tools grammar generator, for example), and rules_foreign_cc hands that
+# tree to the sandbox through symlinks, so the bytecode lands back in the
+# source repository. When the repository is a filegroup input of the CMake
+# action, that mutates the action's own inputs: Bazel then considers the
+# dependency dirty on the next invocation and repeats the whole configure,
+# compile and install. Excluding bytecode keeps repository trees stable (and
+# leaves the git submodules untouched). The foreign_cc environment additionally
+# sets PYTHONDONTWRITEBYTECODE=1 so no new files are created in the first place.
+_PYTHON_BYTE_CODE_EXCLUDES = [
+    "src/**/__pycache__",
+    "src/**/__pycache__/**",
+    "src/**/*.pyc",
+]
+
 def _local_source_repo_impl(ctx):
     # Stage the checkout under src/ rather than symlinking it to the repository
     # root: repository_ctx files written at the root would otherwise land inside
@@ -27,9 +43,12 @@ def _local_source_repo_impl(ctx):
 
 filegroup(
     name = "all",
-    srcs = glob(["src/**"]),
+    srcs = glob(
+        ["src/**"],
+        exclude = {excludes},
+    ),
 )
-""",
+""".format(excludes = repr(_PYTHON_BYTE_CODE_EXCLUDES)),
     )
 
 local_source_repo = repository_rule(
@@ -57,7 +76,7 @@ filegroup(
         exclude = {excludes},
     ),
 )
-""".format(excludes = ctx.attr.excludes),
+""".format(excludes = repr(ctx.attr.excludes + _PYTHON_BYTE_CODE_EXCLUDES)),
     )
 
 exclude_source_repo = repository_rule(
@@ -116,6 +135,7 @@ def _filament_repo_impl(ctx):
         [
             "bash",
             "-c",
+            "find src -type d -name __pycache__ -prune -exec rm -rf {} + ; " +
             "find src -type f -name build -exec mv {} {}.script \\; ; " +
             "find src -name BUILD -delete -o -name BUILD.bazel -delete " +
             "-o -name MODULE.bazel -delete -o -name WORKSPACE -delete " +
@@ -132,9 +152,12 @@ def _filament_repo_impl(ctx):
 
 filegroup(
     name = "all",
-    srcs = glob(["src/**"]),
+    srcs = glob(
+        ["src/**"],
+        exclude = {excludes},
+    ),
 )
-""",
+""".format(excludes = repr(_PYTHON_BYTE_CODE_EXCLUDES)),
     )
 
 filament_repo = repository_rule(
@@ -339,45 +362,6 @@ cc_library(
 
 wxwidgets_repo = repository_rule(
     implementation = _wxwidgets_repo_impl,
-    local = True,
-)
-
-
-def _yoga_wrapper_repo_impl(ctx):
-    ctx.symlink(ctx.workspace_root.get_child("third_party/yoga"), "yoga_src")
-    ctx.file("REPO.bazel", "")
-    ctx.file(
-        "CMakeLists.txt",
-        """cmake_minimum_required(VERSION 3.20)
-project(mercury_yoga LANGUAGES CXX)
-
-set(YOGA_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/yoga_src)
-add_subdirectory(${YOGA_SOURCE}/yoga yoga_build)
-
-install(TARGETS yogacore ARCHIVE DESTINATION lib)
-install(
-    DIRECTORY ${YOGA_SOURCE}/yoga/
-    DESTINATION include/yoga
-    FILES_MATCHING PATTERN "*.h"
-)
-""",
-    )
-    ctx.file(
-        "BUILD.bazel",
-        """package(default_visibility = ["//visibility:public"])
-
-filegroup(
-    name = "all",
-    srcs = glob([
-        "CMakeLists.txt",
-        "yoga_src/**",
-    ]),
-)
-""",
-    )
-
-yoga_wrapper_repo = repository_rule(
-    implementation = _yoga_wrapper_repo_impl,
     local = True,
 )
 

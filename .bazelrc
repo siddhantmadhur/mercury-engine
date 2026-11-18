@@ -1,5 +1,27 @@
 common --enable_bzlmod
 
+# ---------------------------------------------------------------------------
+# Caching
+# ---------------------------------------------------------------------------
+# The rules_foreign_cc dependencies are built by their own CMake projects, and
+# each one (Filament in particular, ~10 minutes) is a single Bazel action with
+# no incremental cache of its own. Bazel's disk cache keys those actions on
+# their inputs, so the compiled archives can be reused after `bazel clean`, a
+# server restart, or switching configurations (for example -c dbg -> -c opt)
+# instead of recompiling the dependencies from scratch. The cache lives outside
+# the workspace, so it survives deleting the output base (which `bazel clean`
+# alone does not).
+build --disk_cache=~/.cache/bazel/mercury-engine/disk
+
+# Keep the action cache bounded. Bazel runs the garbage collection in the
+# background while the server is idle.
+build --experimental_disk_cache_gc_max_size=20G
+
+# Downloaded archives (Bazel modules, toolchains, language toolchains) are
+# cached here, outside the output base, so `bazel clean` and deleting the
+# output base do not force them to be fetched again.
+build --repository_cache=~/.cache/bazel/mercury-engine/repository
+
 # Optimized by default so a plain `bazelisk build`/`bazelisk test` is the
 # configuration games are shipped with. Use -c dbg when debugging the engine.
 build --compilation_mode=opt

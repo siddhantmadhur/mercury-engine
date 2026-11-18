@@ -22,7 +22,12 @@ filament_material = rule(
     attrs = {
         "src": attr.label(mandatory = True, allow_single_file = [".mat"]),
         "_matc": attr.label(
-            cfg = "exec",
+            # Deliberately the target configuration: filament_build already
+            # produces matc as part of the build, and using it here avoids a
+            # second full Filament build in the exec configuration just to get
+            # the tool. This assumes native builds (the tool must run on the
+            # machine doing the build), which is the only supported mode.
+            cfg = "target",
             default = Label("//tools:matc"),
             executable = True,
         ),

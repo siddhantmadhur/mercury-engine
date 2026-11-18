@@ -11,14 +11,40 @@ CMAKE_RANLIB_ARGS = select({
     "//conditions:default": [],
 })
 
-# rules_foreign_cc does not forward Bazel's --macos_minimum_os to CMake, so
-# dependency archives would otherwise be compiled for the host's macOS version
-# (the linker then warns "built for newer 'macOS' version"). CMake initialises
-# CMAKE_OSX_DEPLOYMENT_TARGET from this environment variable. Keep the value in
-# sync with --macos_minimum_os in .bazelrc.
-CMAKE_DEPLOYMENT_ENV = select({
-    "@platforms//os:macos": {"MACOSX_DEPLOYMENT_TARGET": "26.0"},
-    "//conditions:default": {},
+# Dependency builds are compiled through ccache when it is installed. The
+# launcher is //tools:ccache_wrapper: .bazelrc exports CCACHE_DISABLE=1 to
+# every Bazel action (the autoconf probes need it), and the wrapper clears that
+# before handing over to ccache. Without ccache the wrapper just execs the
+# compiler, so it is always safe to use. The disk cache still caches the
+# resulting CMake actions.
+CCACHE_LAUNCHER = "$$EXT_BUILD_ROOT$$/$(execpath //tools:ccache_wrapper)"
+CCACHE_DATA = ["//tools:ccache_wrapper"]
+
+# Environment shared by every rules_foreign_cc build.
+#
+# PYTHONDONTWRITEBYTECODE is required, not cosmetic: dependency builds execute
+# Python helper scripts from their source tree (Filament generates
+# spirv-tools' grammar tables that way). rules_foreign_cc exposes those sources
+# to the sandbox through symlinks, so CPython would write __pycache__/*.pyc
+# next to them - back into the external repository, and potentially into the
+# git submodule itself. Because the sources are inputs of the CMake action, the
+# new bytecode makes Bazel treat the dependency as dirty on the next build and
+# repeat the whole configure/compile/install. Keeping it out of the tree stops
+# that loop and leaves submodules untouched for `git submodule update`.
+FOREIGN_CC_ENV = select({
+    "@platforms//os:macos": {
+        # rules_foreign_cc does not forward Bazel's --macos_minimum_os to CMake,
+        # so dependency archives would otherwise be compiled for the host's
+        # macOS version (the linker then warns "built for newer 'macOS'
+        # version"). CMake initialises CMAKE_OSX_DEPLOYMENT_TARGET from this
+        # environment variable. Keep the value in sync with --macos_minimum_os
+        # in .bazelrc.
+        "MACOSX_DEPLOYMENT_TARGET": "26.0",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    },
+    "//conditions:default": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+    },
 })
 
 
@@ -131,30 +157,6 @@ cc_library(
 )
 
 cc_library(
-    name = "yoga_headers",
-    hdrs = glob(["yoga/yoga/**/*.h"]),
-    includes = ["yoga"],
-)
-
-cc_library(
-    name = "tinyxml2_headers",
-    hdrs = glob(["tinyxml2/*.h"]),
-    includes = ["tinyxml2"],
-)
-
-cc_library(
-    name = "meshoptimizer_headers",
-    hdrs = glob(["meshoptimizer/src/*.h"]),
-    includes = ["."],
-)
-
-cc_library(
-    name = "miniaudio_headers",
-    hdrs = glob(["miniaudio/*.h"]),
-    includes = ["."],
-)
-
-cc_library(
     name = "glfw_headers",
     hdrs = glob(["glfw/include/**/*.h"]),
     includes = ["glfw/include"],
@@ -168,13 +170,63 @@ alias(
 )
 
 # --------------------------------------------------------------------------
+# Small dependencies built natively
+#
+# These are plain C/C++ libraries with no code generation, so Bazel compiles
+# them directly instead of running a CMake configure + build + install action.
+# That makes them incremental like the rest of the engine (a rules_foreign_cc
+# action always restarts from zero) and avoids a subprocess-heavy configure
+# step. Filament and assimp keep their CMake builds. The include layouts match
+# the previous CMake install trees.
+# --------------------------------------------------------------------------
+
+cc_library(
+    name = "tinyxml2_lib",
+    srcs = ["tinyxml2/tinyxml2.cpp"],
+    hdrs = ["tinyxml2/tinyxml2.h"],
+    # tinyxml2's CMake target exports this publicly (large-file support).
+    defines = ["_FILE_OFFSET_BITS=64"],
+    # Consumers use <tinyxml2.h>; the same layout the install tree provided.
+    includes = ["tinyxml2"],
+)
+
+cc_library(
+    name = "meshoptimizer_lib",
+    srcs = glob(["meshoptimizer/src/*.cpp"]),
+    hdrs = glob(["meshoptimizer/src/*.h"]),
+    # Consumers use "meshoptimizer/src/meshoptimizer.h".
+    includes = ["."],
+)
+
+cc_library(
+    name = "miniaudio_lib",
+    srcs = ["miniaudio/miniaudio.c"],
+    hdrs = glob(["miniaudio/*.h"]),
+    # Match the options the CMake build passed.
+    defines = [
+        "MA_NO_ENCODING",
+        "MA_NO_GENERATION",
+    ],
+    # Consumers use "miniaudio/miniaudio.h".
+    includes = ["."],
+)
+
+cc_library(
+    name = "yoga_lib",
+    srcs = glob(["yoga/yoga/**/*.cpp"]),
+    hdrs = glob(["yoga/yoga/**/*.h"]),
+    # Consumers (and Yoga's own sources) use <yoga/...>.
+    includes = ["yoga"],
+)
+
+# --------------------------------------------------------------------------
 # Dependencies built by their own CMakeLists through rules_foreign_cc
 # --------------------------------------------------------------------------
 
 cmake(
     name = "glfw_build",
     build_args = ["-j4"],
-    generate_args = CMAKE_RANLIB_ARGS,
+    generate_args = ["-G Ninja"] + CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
         "GLFW_BUILD_DOCS": "OFF",
@@ -183,15 +235,22 @@ cmake(
         "GLFW_INSTALL": "ON",
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "CMAKE_C_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
+        "CMAKE_CXX_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
     },
+    data = CCACHE_DATA,
     # rules_foreign_cc gives pkg-config only its own dependency prefix; on
     # Linux the X11/Wayland .pc files live in the system directories.
     env = select({
         "@platforms//os:linux": {
             "PKG_CONFIG_PATH": "/usr/lib64/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig:/usr/share/pkgconfig",
+            "PYTHONDONTWRITEBYTECODE": "1",
         },
-        "@platforms//os:macos": {"MACOSX_DEPLOYMENT_TARGET": "26.0"},
-        "//conditions:default": {},
+        "@platforms//os:macos": {
+            "MACOSX_DEPLOYMENT_TARGET": "26.0",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
+        "//conditions:default": {"PYTHONDONTWRITEBYTECODE": "1"},
     }),
     lib_source = "@glfw_src//:all",
     out_static_libs = ["libglfw3.a"],
@@ -228,6 +287,9 @@ cc_library(
 
 cmake(
     name = "assimp_build",
+    # Cap the per-action job count: Bazel can run several foreign_cc actions at
+    # once (a full rebuild runs glfw/assimp/jolt/Filament together), and each
+    # one spawning one compiler per core oversubscribes the machine badly.
     build_args = ["-j4"],
     cache_entries = {
         "ASSIMP_BUILD_ASSIMP_TOOLS": "OFF",
@@ -238,18 +300,27 @@ cmake(
         "BUILD_SHARED_LIBS": "OFF",
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "CMAKE_C_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
+        "CMAKE_CXX_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
     },
+    data = CCACHE_DATA,
     generate_args = select({
         # assimp's bundled zlib defines fdopen() NULL on macOS, which breaks
         # the SDK's declaration. The old CMake build applied this to zlibstatic.
         "@platforms//os:macos": [
+            "-G Ninja",
             "-DCMAKE_RANLIB=/usr/bin/ranlib",
             "-DCMAKE_C_FLAGS:STRING=-Dfdopen=fdopen",
         ],
-        "@platforms//os:linux": ["-DCMAKE_RANLIB=/usr/bin/ranlib"],
-        "//conditions:default": [],
+        "@platforms//os:linux": [
+            "-G Ninja",
+            "-DCMAKE_RANLIB=/usr/bin/ranlib",
+        ],
+        "//conditions:default": [
+            "-G Ninja",
+        ],
     }),
-    env = CMAKE_DEPLOYMENT_ENV,
+    env = FOREIGN_CC_ENV,
     lib_source = "@assimp_src//:all",
     out_static_libs = [
         "libassimp.a",
@@ -272,7 +343,7 @@ cc_library(
 cmake(
     name = "jolt_build",
     build_args = ["-j4"],
-    generate_args = CMAKE_RANLIB_ARGS,
+    generate_args = ["-G Ninja"] + CMAKE_RANLIB_ARGS,
     cache_entries = {
         "BUILD_SHARED_LIBS": "OFF",
         "CPP_EXCEPTIONS_ENABLED": "OFF",
@@ -295,8 +366,11 @@ cmake(
         "USE_ASSERTS": "OFF",
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "CMAKE_C_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
+        "CMAKE_CXX_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
     },
-    env = CMAKE_DEPLOYMENT_ENV,
+    data = CCACHE_DATA,
+    env = FOREIGN_CC_ENV,
     lib_source = "@jolt_src//:all",
     out_static_libs = ["libJolt.a"],
     working_directory = "Build",
@@ -319,76 +393,19 @@ cc_library(
     ],
 )
 
-cmake(
-    name = "yoga_build",
-    build_args = ["-j4"],
-    generate_args = CMAKE_RANLIB_ARGS,
-    cache_entries = {
-        "BUILD_SHARED_LIBS": "OFF",
-        "CMAKE_INSTALL_LIBDIR": "lib",
-        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
-    },
-    env = CMAKE_DEPLOYMENT_ENV,
-    lib_source = "@yoga_wrapper//:all",
-    out_static_libs = ["libyogacore.a"],
-)
-
 cc_library(
     name = "yoga",
-    deps = [
-        ":yoga_build",
-        ":yoga_headers",
-    ],
-)
-
-cmake(
-    name = "tinyxml2_build",
-    build_args = ["-j4"],
-    generate_args = CMAKE_RANLIB_ARGS,
-    cache_entries = {
-        "BUILD_SHARED_LIBS": "OFF",
-        "CMAKE_INSTALL_LIBDIR": "lib",
-        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
-        "tinyxml2_BUILD_TESTING": "OFF",
-    },
-    env = CMAKE_DEPLOYMENT_ENV,
-    lib_source = "@tinyxml2_src//:all",
-    out_static_libs = ["libtinyxml2.a"],
+    deps = [":yoga_lib"],
 )
 
 cc_library(
     name = "tinyxml2",
-    deps = [
-        ":tinyxml2_build",
-        ":tinyxml2_headers",
-    ],
-)
-
-cmake(
-    name = "meshoptimizer_build",
-    build_args = ["-j4"],
-    generate_args = CMAKE_RANLIB_ARGS,
-    cache_entries = {
-        "BUILD_SHARED_LIBS": "OFF",
-        "CMAKE_INSTALL_LIBDIR": "lib",
-        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
-        "MESHOPT_BUILD_DEMO": "OFF",
-        "MESHOPT_BUILD_GLTFPACK": "OFF",
-        "MESHOPT_BUILD_SHARED_LIBS": "OFF",
-        "MESHOPT_INSTALL": "ON",
-        "MESHOPT_WERROR": "OFF",
-    },
-    env = CMAKE_DEPLOYMENT_ENV,
-    lib_source = "@meshoptimizer_src//:all",
-    out_static_libs = ["libmeshoptimizer.a"],
+    deps = [":tinyxml2_lib"],
 )
 
 cc_library(
     name = "meshoptimizer",
-    deps = [
-        ":meshoptimizer_build",
-        ":meshoptimizer_headers",
-    ],
+    deps = [":meshoptimizer_lib"],
 )
 
 cmake(
@@ -399,7 +416,7 @@ cmake(
         "@platforms//os:linux": "lib/x86_64",
         "//conditions:default": "lib",
     }),
-    generate_args = ["-G", "Ninja"] + CMAKE_RANLIB_ARGS + [
+    generate_args = ["-G Ninja"] + CMAKE_RANLIB_ARGS + [
         # Filament's CMakeLists overrides CMAKE_*_ARCHIVE_CREATE with
         # "<CMAKE_AR> qc -S", which the Bazel toolchain's libtool wrapper
         # rejects; pin the plain Apple archiver instead.
@@ -416,8 +433,11 @@ cmake(
         "FILAMENT_SUPPORTS_METAL": "OFF",
         "FILAMENT_SUPPORTS_OPENGL": "OFF",
         "FILAMENT_SUPPORTS_VULKAN": "ON",
+        "CMAKE_C_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
+        "CMAKE_CXX_COMPILER_LAUNCHER": CCACHE_LAUNCHER,
     },
-    env = CMAKE_DEPLOYMENT_ENV,
+    data = CCACHE_DATA,
+    env = FOREIGN_CC_ENV,
     lib_source = "@filament_src//:all",
     out_binaries = ["matc"],
     out_include_dir = "include",
@@ -455,27 +475,6 @@ cc_library(
     }),
 )
 
-cmake(
-    name = "miniaudio_build",
-    build_args = ["-j4"],
-    generate_args = CMAKE_RANLIB_ARGS,
-    cache_entries = {
-        "BUILD_SHARED_LIBS": "OFF",
-        "CMAKE_INSTALL_LIBDIR": "lib",
-        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
-        "MINIAUDIO_BUILD_EXAMPLES": "OFF",
-        "MINIAUDIO_BUILD_TESTS": "OFF",
-        "MINIAUDIO_BUILD_TOOLS": "OFF",
-        "MINIAUDIO_NO_ENCODING": "ON",
-        "MINIAUDIO_NO_GENERATION": "ON",
-        "MINIAUDIO_NO_LIBOPUS": "ON",
-        "MINIAUDIO_NO_LIBVORBIS": "ON",
-    },
-    env = CMAKE_DEPLOYMENT_ENV,
-    lib_source = "@miniaudio_src//:all",
-    out_static_libs = ["libminiaudio.a"],
-)
-
 cc_library(
     name = "miniaudio",
     linkopts = select({
@@ -487,8 +486,5 @@ cc_library(
         ],
         "//conditions:default": [],
     }),
-    deps = [
-        ":miniaudio_build",
-        ":miniaudio_headers",
-    ],
+    deps = [":miniaudio_lib"],
 )
