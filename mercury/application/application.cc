@@ -215,12 +215,6 @@ void Application::StepFrame() {
     MERCURY_PROFILE_SCOPE("process_on_frame");
     game_scene_->ProcessOnFrame(alpha);
   }
-  // Rebuild the per-frame vertex/index buffers to match the primitives_ we
-  // are about to render.
-  {
-    MERCURY_PROFILE_SCOPE("new_tick");
-    OnNewTick();
-  }
 
   // A minimized window has a 0x0 framebuffer, which most backends cannot create
   // swapchains or targets for.

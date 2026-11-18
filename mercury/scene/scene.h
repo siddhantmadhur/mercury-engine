@@ -284,11 +284,6 @@ class GameScene {
     return {};
   }
 
-  std::vector<StaticVertex> GetStaticVertices();
-  std::vector<UINT> GetStaticIndices();
-
-  TextureAtlas& GetAtlas();
-
   float GetWidth() const;
   float GetHeight() const;
   void SetWidth(float);

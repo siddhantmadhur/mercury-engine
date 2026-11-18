@@ -338,10 +338,6 @@ class MapScene : public GameScene {
   // scene may change on its own every frame.
   bool HasActiveBehaviours() const;
 
-  // Loads (once) a texture owned by the scene; nullptr if it can't be read.
-  Texture2D* GetTexture(std::string_view res_path);
-  // Loads (once) a model file; nullptr if it can't be read.
-  const Mesh* GetModel(std::string_view res_path);
   // Loads (once) a model with its hierarchy, materials and clips.
   std::shared_ptr<const Model> GetModelAsset(std::string_view res_path);
   // Loads (once) an image for the model renderer; null if unreadable.
@@ -450,8 +446,6 @@ class MapScene : public GameScene {
   bool running_ = false;
   PrefabCache prefabs_;
 
-  std::map<std::string, std::unique_ptr<Texture2D>, std::less<>> textures_;
-  std::map<std::string, std::unique_ptr<Mesh>, std::less<>> models_;
   std::string pending_map_;  // LoadMap
   void LoadPendingMap();
   ModelPreloader preloader_;

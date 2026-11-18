@@ -26,7 +26,6 @@
 #endif
 #include "GLFW/glfw3.h"
 #include "input/input_script.h"
-#include "pobject/texture_atlas.h"
 #include "scene/scene.h"
 
 constexpr int kTicksPerSec = 60;
@@ -51,9 +50,9 @@ namespace Mercury {
  *
  * - @ref Mercury::GameScene::OnFrame runs once per rendered frame, for camera
  *   movement, animation and UI;
- * - @ref Mercury::Application::OnNewTick and @ref Mercury::GameScene::OnTick
- *   run at the scene's fixed rate (@ref kTicksPerSec by default), before
- *   physics, so simulation is stable regardless of the frame rate.
+ * - @ref Mercury::GameScene::OnTick runs at the scene's fixed rate
+ *   (@ref kTicksPerSec by default), before physics, so simulation is stable
+ *   regardless of the frame rate.
  *
  * The usual entry point for a game is @ref Mercury::RunPlayer, which loads a
  * project and creates a @ref Mercury::MapScene. Derive from this class only
@@ -151,8 +150,6 @@ class Application : public RenderHost {
    * rendered by the backend. Runs once every frame
    */
   virtual void Render() = 0;  // Renders objects
-
-  virtual void OnNewTick() = 0;
 
   /**
    * @brief Callback that runs when an application is resized

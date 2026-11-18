@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <unordered_set>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb/stb_image_write.h>
 
 #include "components/components.h"

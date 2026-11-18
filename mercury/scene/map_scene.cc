@@ -296,8 +296,6 @@ void MapScene::SetProject(std::shared_ptr<Project> project) {
   ClearMap();
   model_assets_.clear();
   images_.clear();
-  textures_.clear();
-  models_.clear();
   project_ = std::move(project);
   assets_ = std::make_unique<AssetDatabase>(project_);
   prefabs_.SetProject(project_);
@@ -2117,45 +2115,6 @@ RenderMaterial MapScene::MakeRenderMaterial(const MaterialAsset& material,
   result.double_sided = material.cull == CullMode::kOff;
   result.unlit = material.unlit;
   return result;
-}
-
-const Mesh* MapScene::GetModel(std::string_view res_path) {
-  if (res_path.empty() || !project_) return nullptr;
-  auto it = models_.find(res_path);
-  if (it != models_.end()) return it->second.get();
-
-  std::string error;
-  std::unique_ptr<Mesh> model;
-  if (auto mesh = Primitives::LoadModel(project_->Resolve(res_path).string(),
-                                        glm::vec4(1.0f), &error)) {
-    model = std::make_unique<Mesh>(std::move(*mesh));
-  } else {
-    // Remember the failure so it is only logged once.
-    PDebug::warn("Could not load model {}: {}", res_path, error);
-  }
-  const Mesh* raw = model.get();
-  models_.emplace(std::string(res_path), std::move(model));
-  return raw;
-}
-
-Texture2D* MapScene::GetTexture(std::string_view res_path) {
-  if (res_path.empty() || !project_) return nullptr;
-  auto it = textures_.find(res_path);
-  if (it != textures_.end()) return it->second.get();
-
-  auto texture =
-      std::make_unique<Texture2D>(project_->Resolve(res_path).string());
-  Texture2D* raw = nullptr;
-  if (texture->GetData()) {
-    raw = texture.get();
-    auto& atlas = object_manager_->GetAtlas();
-    atlas.AddTexture(raw);
-    atlas.UpdateAtlas();
-  } else {
-    texture.reset();  // remember the failure so it is only logged once
-  }
-  textures_.emplace(std::string(res_path), std::move(texture));
-  return raw;
 }
 
 }  // namespace Mercury

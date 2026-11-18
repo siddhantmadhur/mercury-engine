@@ -64,7 +64,6 @@ class FilamentApplication : public Application {
   bool OnLoad() override;
   void Render() override;
   bool Initialize() override;
-  void OnNewTick() override {}
   void OnResize(int32_t width, int32_t height) override;
   void RequestCapture(const std::string& file) override;
 
