@@ -4,6 +4,7 @@
 
 #include "filament_renderer.h"
 
+#include <filament/Color.h>
 #include <filament/IndexBuffer.h>
 #include <filament/LightManager.h>
 #include <filament/RenderableManager.h>
@@ -125,36 +126,47 @@ bool FilamentRenderer::Init(filament::Engine* engine) {
   lit_[0][1] = LoadMaterial("lit_opaque_double_sided");
   lit_[1][0] = LoadMaterial("lit_transparent");
   lit_[1][1] = LoadMaterial("lit_transparent_double_sided");
+  lit_[2][0] = LoadMaterial("lit_transmissive");
+  lit_[2][1] = LoadMaterial("lit_transmissive_double_sided");
   unlit_ = LoadMaterial("unlit");
   sdf_ = LoadMaterial("text_sdf");
-  if (!lit_[0][0] || !lit_[0][1] || !lit_[1][0] || !lit_[1][1] || !unlit_ ||
-      !sdf_) {
-    return false;
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 2; j++) {
+      if (!lit_[i][j]) return false;
+    }
   }
+  if (!unlit_ || !sdf_) return false;
   scene_ = engine_->createScene();
 
-  // The texture shown when a material has no image: 1x1 white. Filament
-  // panics at draw time on unbound samplers, so every material's
-  // baseColorMap is always bound to something.
-  white_ = filament::Texture::Builder()
-              .width(1)
-              .height(1)
-              .levels(1)
-              .usage(filament::Texture::Usage::SAMPLEABLE |
-                     filament::Texture::Usage::UPLOADABLE)
-              .format(filament::Texture::InternalFormat::SRGB8_A8)
-              .sampler(filament::Texture::Sampler::SAMPLER_2D)
-              .build(*engine_);
-  if (white_) {
-    const uint8_t pixel[4] = {0xff, 0xff, 0xff, 0xff};
-    white_->setImage(
-        *engine_, 0,
-        filament::Texture::PixelBufferDescriptor(
-            CopyToHeap(pixel, sizeof(pixel)), sizeof(pixel),
-            filament::backend::PixelDataFormat::RGBA,
-            filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0, DeleteUpload));
-  }
-  return scene_ != nullptr && white_ != nullptr;
+  // The texture shown when a material has no image: 1x1 white, plus a 1x1
+  // flat tangent-space normal. Filament panics at draw time on unbound
+  // samplers, so every material sampler is always bound to something.
+  auto make_1x1 = [&](filament::Texture::InternalFormat format,
+                      const uint8_t pixel[4]) {
+    filament::Texture* tex = filament::Texture::Builder()
+                                 .width(1)
+                                 .height(1)
+                                 .levels(1)
+                                 .usage(filament::Texture::Usage::SAMPLEABLE |
+                                        filament::Texture::Usage::UPLOADABLE)
+                                 .format(format)
+                                 .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                                 .build(*engine_);
+    if (tex) {
+      tex->setImage(
+          *engine_, 0,
+          filament::Texture::PixelBufferDescriptor(
+              CopyToHeap(pixel, 4), 4, filament::backend::PixelDataFormat::RGBA,
+              filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
+              DeleteUpload));
+    }
+    return tex;
+  };
+  const uint8_t white_px[4] = {0xff, 0xff, 0xff, 0xff};
+  const uint8_t normal_px[4] = {0x80, 0x80, 0xff, 0xff};
+  white_ = make_1x1(filament::Texture::InternalFormat::SRGB8_A8, white_px);
+  flat_normal_ = make_1x1(filament::Texture::InternalFormat::RGBA8, normal_px);
+  return scene_ != nullptr && white_ != nullptr && flat_normal_ != nullptr;
 }
 
 filament::Material* FilamentRenderer::LoadMaterial(const char* name) {
@@ -229,7 +241,11 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
     engine->destroy(white_);
     white_ = nullptr;
   }
-  for (int i = 0; i < 2; i++) {
+  if (flat_normal_) {
+    engine->destroy(flat_normal_);
+    flat_normal_ = nullptr;
+  }
+  for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 2; j++) {
       if (lit_[i][j]) {
         engine->destroy(lit_[i][j]);
@@ -464,9 +480,16 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
             : mesh.materials[std::min<size_t>(draw.material,
                                              mesh.materials.size() - 1)];
 
+    const bool is_unlit = material.sdf_text || material.unlit;
+    const bool is_transmissive = !is_unlit && material.transmission > 0.0f;
+    const int surface = is_transmissive ? 2 : (material.transparent ? 1 : 0);
     filament::Material* base = material.sdf_text ? sdf_ : unlit_;
-    if (!material.sdf_text && !material.unlit)
-      base = lit_[material.transparent ? 1 : 0][material.double_sided ? 1 : 0];
+    if (!is_unlit) base = lit_[surface][material.double_sided ? 1 : 0];
+
+    const filament::TextureSampler sampler(
+        filament::TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
+        filament::TextureSampler::MagFilter::LINEAR,
+        filament::TextureSampler::WrapMode::REPEAT);
 
     filament::MaterialInstance* instance = base->createInstance();
     instance->setParameter("baseColor",
@@ -475,7 +498,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
                                           material.color.a)));
     instance->setParameter("tiling", ToFilament(material.tiling));
     instance->setParameter("offset", ToFilament(material.offset));
-    if (base != sdf_ && base != unlit_) {
+    if (!is_unlit) {
       instance->setParameter("metallic",
                              std::clamp(material.metallic, 0.0f, 1.0f));
       instance->setParameter("roughness",
@@ -483,6 +506,45 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
                                         1.0f));
       instance->setParameter("emissive",
                              ToFilament(glm::vec4(material.emission, 1.0f)));
+      filament::Texture* emissive_tex = white_;
+      if (material.emission_texture) {
+        if (filament::Texture* uploaded =
+                UploadTexture(engine, *material.emission_texture)) {
+          emissive_tex = uploaded;
+        }
+      }
+      instance->setParameter("emissiveMap", emissive_tex, sampler);
+
+      filament::Texture* normal_tex = flat_normal_;
+      bool has_normal = false;
+      if (material.normal_texture) {
+        if (filament::Texture* uploaded =
+                UploadTexture(engine, *material.normal_texture)) {
+          normal_tex = uploaded;
+          has_normal = true;
+        }
+      }
+      instance->setParameter("normalMap", normal_tex, sampler);
+      instance->setParameter("normalScale",
+                             has_normal ? material.normal_scale : 0.0f);
+
+      if (is_transmissive) {
+        const glm::vec3 trans_color =
+            glm::clamp(material.transmission_color, 1e-4f, 1.0f);
+        const bool tinted = trans_color != glm::vec3(1.0f);
+        const float thickness = material.thickness > 0.0f
+                                    ? material.thickness
+                                    : (tinted ? 0.01f : 0.0f);
+        const filament::math::float3 absorption =
+            tinted ? filament::Color::absorptionAtDistance(
+                         ToFilament(trans_color), thickness)
+                   : filament::math::float3{0.0f, 0.0f, 0.0f};
+        instance->setParameter("transmission",
+                               std::clamp(material.transmission, 0.0f, 1.0f));
+        instance->setParameter("ior", std::max(material.ior, 1.0f));
+        instance->setParameter("thickness", thickness);
+        instance->setParameter("absorption", absorption);
+      }
     }
     // The sampler must always be bound (Filament panics on unbound
     // samplers at draw time), so textures without an image show white.
@@ -491,9 +553,6 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       if (filament::Texture* uploaded = UploadTexture(engine, *material.texture))
         texture = uploaded;
     }
-    const filament::TextureSampler sampler(
-        filament::TextureSampler::MagFilter::LINEAR,
-        filament::TextureSampler::WrapMode::REPEAT);
     instance->setParameter("baseColorMap", texture, sampler);
 
     glm::mat4 draw_world = world;
@@ -621,10 +680,17 @@ void FilamentRenderer::SyncScene(GameScene& game) {
   // Expired uploads (a map change, freed textures) go away once no frame in
   // flight can still be using them.
   if (frame_ % kSweepEvery == 0) {
-    std::erase_if(textures_,
-                 [](auto& entry) { return entry.second.source.expired(); });
-    std::erase_if(meshes_,
-                  [](auto& entry) { return entry.second.source.expired(); });
+    std::erase_if(textures_, [&](auto& entry) {
+      if (!entry.second.source.expired()) return false;
+      garbage_textures_.emplace_back(frame_, entry.second.texture);
+      return true;
+    });
+    std::erase_if(meshes_, [&](auto& entry) {
+      if (!entry.second.source.expired()) return false;
+      engine->destroy(entry.second.vertices);
+      engine->destroy(entry.second.indices);
+      return true;
+    });
   }
 
   SyncLights(engine, game);

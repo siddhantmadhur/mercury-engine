@@ -102,10 +102,12 @@ class FilamentRenderer {
   filament::Engine* engine_ = nullptr;
   filament::Scene* scene_ = nullptr;
 
-  filament::Material* lit_[2][2] = {};  // [transparent][double_sided]
+  // [0=opaque, 1=transparent, 2=transmissive][double_sided]
+  filament::Material* lit_[3][2] = {};
   filament::Material* unlit_ = nullptr;
   filament::Material* sdf_ = nullptr;
-  filament::Texture* white_ = nullptr;  // the "no texture" 1x1 white
+  filament::Texture* white_ = nullptr;        // 1x1 white fallback
+  filament::Texture* flat_normal_ = nullptr;  // 1x1 (0,0,1) normal fallback
 
   std::unordered_map<uint64_t, MeshEntry> meshes_;
   std::unordered_map<uint64_t, TextureEntry> textures_;

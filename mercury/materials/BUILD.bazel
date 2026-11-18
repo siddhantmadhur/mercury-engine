@@ -11,7 +11,7 @@ package(default_visibility = ["//visibility:public"])
         name = "lit_%s%s" % (blend, side),
         src = "lit_%s%s.mat" % (blend, side),
     )
-    for blend in ["opaque", "transparent"]
+    for blend in ["opaque", "transparent", "transmissive"]
     for side in ["_double_sided", ""]
 ]
 
@@ -37,6 +37,8 @@ filegroup(
         ":lit_opaque_double_sided",
         ":lit_transparent",
         ":lit_transparent_double_sided",
+        ":lit_transmissive",
+        ":lit_transmissive_double_sided",
         ":unlit",
         ":text_sdf",
         ":ui",
