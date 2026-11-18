@@ -9,6 +9,7 @@ material {
     shadingModel: unlit,
     blending: opaque,
     culling: none,
+    flipUV: false,
     requires: [
         position,
         uv0

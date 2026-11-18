@@ -11,6 +11,7 @@ material {
     shadingModel: unlit,
     blending: transparent,
     culling: none,
+    flipUV: false,
     requires: [
         position,
         uv0
@@ -30,7 +31,7 @@ fragment {
         float distance = texture(materialParams_baseColorMap, uv).a;
         float width = max(fwidth(distance) * 0.75, 1e-4);
         float fill = smoothstep(0.5 - width, 0.5 + width, distance);
-        material.baseColor = vec4(materialParams.baseColor.rgb,
-                                   materialParams.baseColor.a * fill);
+        float a = materialParams.baseColor.a * fill;
+        material.baseColor = vec4(materialParams.baseColor.rgb * a, a);
     }
 }

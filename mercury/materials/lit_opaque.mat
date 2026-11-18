@@ -12,6 +12,7 @@ material {
     shadingModel: lit,
     blending: opaque,
     culling: back,
+    flipUV: false,
     requires: [
         position,
         tangents,

@@ -65,6 +65,7 @@ void FilamentUiRenderer::Shutdown(filament::Engine* engine) {
   renderables_.clear();
   textures_.clear();
   garbage_.clear();
+  garbage_materials_.clear();
   scene_ = nullptr;
   material_ = nullptr;
   white_ = nullptr;
@@ -138,11 +139,10 @@ filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
       filament::Texture::Builder()
           .width(static_cast<uint32_t>(texture->width))
           .height(static_cast<uint32_t>(texture->height))
-          .levels(0xFF)
+          .levels(1)
           .usage(filament::Texture::Usage::SAMPLEABLE |
-                 filament::Texture::Usage::UPLOADABLE |
-                 filament::Texture::Usage::GEN_MIPMAPPABLE)
-          .format(filament::Texture::InternalFormat::SRGB8_A8)
+                 filament::Texture::Usage::UPLOADABLE)
+          .format(filament::Texture::InternalFormat::RGBA8)
           .sampler(filament::Texture::Sampler::SAMPLER_2D)
           .build(*engine);
   if (!gpu) return nullptr;
@@ -153,16 +153,16 @@ filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
                     filament::backend::PixelDataFormat::RGBA,
                     filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
                     DeleteUpload));
-  gpu->generateMipmaps(*engine);
   textures_.emplace(id, TextureEntry{gpu, texture->version,
                                      texture->width, texture->height});
   return gpu;
 }
 
 void FilamentUiRenderer::DestroyRenderables(filament::Engine* engine) {
-  for (utils::Entity renderable : renderables_) {
-    if (scene_) scene_->remove(renderable);
-    engine->destroy(renderable);
+  for (const RenderableRecord& record : renderables_) {
+    if (scene_) scene_->remove(record.renderable);
+    engine->destroy(record.renderable);
+    if (record.material) garbage_materials_.push_back({frame_, record.material});
   }
   renderables_.clear();
 }
@@ -171,11 +171,16 @@ void FilamentUiRenderer::Prepare(filament::Engine* engine,
                                  const UI::UIDrawData& data) {
   frame_++;
   DestroyRenderables(engine);
-  // A texture replaced this frame may still be sampled by a frame in
+  // Resources replaced this frame may still be referenced by a frame in
   // flight; three frames later it is safe to free.
-  std::erase_if(garbage_, [&](const Garbage& garbage) {
+  std::erase_if(garbage_, [&](const GarbageTexture& garbage) {
     if (garbage.frame + 3 > frame_) return false;
     engine->destroy(garbage.texture);
+    return true;
+  });
+  std::erase_if(garbage_materials_, [&](const GarbageMaterial& garbage) {
+    if (garbage.frame + 3 > frame_) return false;
+    engine->destroy(garbage.material);
     return true;
   });
 
@@ -247,12 +252,13 @@ void FilamentUiRenderer::Prepare(filament::Engine* engine,
                       {CopyToHeap(data.indices.data(), index_bytes),
                        index_bytes, DeleteUpload});
 
-  auto& renderables = engine->getRenderableManager();
-  for (const UI::UIDrawCommand& command : data.commands) {
+  for (size_t cmd_index = 0; cmd_index < data.commands.size(); cmd_index++) {
+    const UI::UIDrawCommand& command = data.commands[cmd_index];
     if (command.index_count == 0) continue;
     filament::MaterialInstance* instance = material_->createInstance();
     filament::Texture* texture = SyncTexture(engine, command.texture_id);
     const filament::TextureSampler sampler(
+        filament::TextureSampler::MinFilter::LINEAR,
         filament::TextureSampler::MagFilter::LINEAR,
         filament::TextureSampler::WrapMode::CLAMP_TO_EDGE);
     instance->setParameter("uiTexture", texture, sampler);
@@ -265,6 +271,8 @@ void FilamentUiRenderer::Prepare(filament::Engine* engine,
                    vertices_, indices_, command.index_offset,
                    command.index_count)
          .material(0, instance)
+         .blendOrder(0, static_cast<uint16_t>(std::min<size_t>(cmd_index, 0x7fffu)))
+         .globalBlendOrderEnabled(0, true)
          .culling(false);
     if (build.build(*engine, renderable) !=
         filament::RenderableManager::Builder::Success) {
@@ -273,7 +281,7 @@ void FilamentUiRenderer::Prepare(filament::Engine* engine,
       continue;
     }
     scene_->addEntity(renderable);
-    renderables_.push_back(renderable);
+    renderables_.push_back({renderable, instance});
   }
 }
 

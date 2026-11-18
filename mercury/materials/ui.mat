@@ -14,6 +14,7 @@ material {
     depthWrite: false,
     depthCulling: false,
     culling: none,
+    flipUV: false,
     vertexDomain: device,
     requires: [
         position,
@@ -46,11 +47,11 @@ fragment {
         vec4 color = getColor();
         if (mode == 1u) {
             color *= texture(materialParams_uiTexture, getUV0());
-            material.baseColor = color;
+            material.baseColor = vec4(color.rgb * color.a, color.a);
             return;
         }
         if (mode != 2u) {
-            material.baseColor = color;
+            material.baseColor = vec4(color.rgb * color.a, color.a);
             return;
         }
         // Signed distance field glyph: alpha is the distance, 0.5 the edge.
@@ -59,12 +60,14 @@ fragment {
         float edge = variable_uiParams.y;
         float fill = smoothstep(edge - width, edge + width, distance);
         if (variable_uiParams.z <= 0.0) {
-            material.baseColor = vec4(color.rgb, color.a * fill);
+            float a = color.a * fill;
+            material.baseColor = vec4(color.rgb * a, a);
             return;
         }
         float outer = edge - variable_uiParams.z;
         float coverage = smoothstep(outer - width, outer + width, distance);
         vec4 mixed = mix(variable_uiOutline, color, fill);
-        material.baseColor = vec4(mixed.rgb, mixed.a * coverage);
+        float a = mixed.a * coverage;
+        material.baseColor = vec4(mixed.rgb * a, a);
     }
 }

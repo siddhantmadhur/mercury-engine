@@ -35,9 +35,6 @@ glm::vec3 SrgbToLinear(const glm::vec3& c) {
   return {SrgbToLinear(c.r), SrgbToLinear(c.g), SrgbToLinear(c.b)};
 }
 
-filament::math::float3 ToFilament(const glm::vec3& v) {
-  return {v.x, v.y, v.z};
-}
 filament::math::float4 ToFilament(const glm::vec4& v) {
   return {v.x, v.y, v.z, v.w};
 }
@@ -49,16 +46,6 @@ filament::math::mat4 ToFilament(const glm::mat4& m) {
   return filament::math::mat4(
       m[0][0], m[0][1], m[0][2], m[0][3], m[1][0], m[1][1], m[1][2], m[1][3],
       m[2][0], m[2][1], m[2][2], m[2][3], m[3][0], m[3][1], m[3][2], m[3][3]);
-}
-
-// Readbacks hand back bottom-up rows; flip them into `out` (top-down).
-void FlipRows(const uint8_t* bottom_up, uint8_t* out, uint32_t width,
-              uint32_t height) {
-  const size_t stride = size_t{width} * 4;
-  for (uint32_t y = 0; y < height; y++) {
-    std::memcpy(out + y * stride, bottom_up + size_t{height - 1 - y} * stride,
-                stride);
-  }
 }
 
 }  // namespace
@@ -160,6 +147,8 @@ bool FilamentApplication::OnLoad() {
   ui_view_->setScene(ui_renderer_.scene());
   ui_view_->setCamera(ui_camera_);
   ui_view_->setBlendMode(filament::View::BlendMode::TRANSLUCENT);
+  ui_view_->setPostProcessingEnabled(false);
+  ui_view_->setShadowingEnabled(false);
   // The UI Builder canvas renders the same scene on its own, opaque, with
   // the canvas' background color behind it.
   ui_preview_sky_ = filament::Skybox::Builder().build(*engine_);
@@ -256,6 +245,8 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
   target.view->setAntiAliasing(filament::View::AntiAliasing::FXAA);
   if (is_ui) {
     target.view->setBlendMode(filament::View::BlendMode::OPAQUE);
+    target.view->setPostProcessingEnabled(false);
+    target.view->setShadowingEnabled(false);
   }
 }
 
@@ -291,9 +282,6 @@ void FilamentApplication::ReadOffscreen(Offscreen& target) {
             delete[] static_cast<uint8_t*>(buffer);
           },
           &target));
-  // The callback has fired by the time flushAndWait() below returns; the
-  // bottom-up rows are flipped then.
-  pending_flips_.push_back(&target);
   target.has_pixels = true;
   target.frame_id = frame_counter_;
 }
@@ -464,24 +452,8 @@ void FilamentApplication::Render() {
   renderer_->endFrame();
   engine_->flushAndWait();
 
-  // The readback callbacks have all fired by now; turn the bottom-up
-  // buffers into the top-down rows everyone else expects.
-  for (Offscreen* target : pending_flips_) {
-    const size_t bytes = size_t{target->width} * target->height * 4;
-    auto* flipped = new uint8_t[bytes];
-    FlipRows(target->pixels.data(), flipped, target->width, target->height);
-    std::memcpy(target->pixels.data(), flipped, bytes);
-    delete[] flipped;
-  }
-  pending_flips_.clear();
-
   if (capturing && capture_ready_) {
-    auto* flipped = new uint8_t[capture_pixels_.size()];
-    FlipRows(capture_pixels_.data(), flipped, capture_width_,
-             capture_height_);
-    std::vector<uint8_t> top_down(flipped, flipped + capture_pixels_.size());
-    delete[] flipped;
-    WriteCapture(top_down, capture_width_, capture_height_);
+    WriteCapture(capture_pixels_, capture_width_, capture_height_);
   }
 
   preview_camera_ = entt::null;

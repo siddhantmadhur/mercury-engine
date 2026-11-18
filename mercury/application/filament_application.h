@@ -92,7 +92,7 @@ class FilamentApplication : public Application {
   void SetupCamera(filament::Camera* camera, const RenderCamera& render);
   // The cameras this frame, like the Vulkan backend's FrameCameras.
   std::vector<RenderCamera> FrameCameras(float width, float height);
-  // Reads `target`'s pixels into its CPU buffer (bottom-up -> top-down).
+  // Reads `target`'s pixels into its CPU buffer (top-down RGBA).
   void ReadOffscreen(Offscreen& target);
   void ReadCaptureSettings();
   void WriteCapture(const std::vector<uint8_t>& pixels, uint32_t width,
@@ -129,9 +129,6 @@ class FilamentApplication : public Application {
   bool render_textures_logged_ = false;
   bool skybox_logged_ = false;
 
-  // The readbacks waiting for their bottom-up rows to be flipped.
-  std::vector<Offscreen*> pending_flips_;
-
   bool show_stats_ = true;
   uint64_t frame_counter_ = 0;
 
@@ -140,7 +137,7 @@ class FilamentApplication : public Application {
   uint64_t capture_frame_ = 90;
   bool capture_quit_ = false;
   bool capture_ready_ = false;
-  std::vector<uint8_t> capture_pixels_;  // bottom-up until flipped
+  std::vector<uint8_t> capture_pixels_;
   uint32_t capture_width_ = 0;
   uint32_t capture_height_ = 0;
 };

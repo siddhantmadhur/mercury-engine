@@ -17,6 +17,7 @@
 #include <filament/Engine.h>
 #include <filament/IndexBuffer.h>
 #include <filament/Material.h>
+#include <filament/MaterialInstance.h>
 #include <filament/Scene.h>
 #include <filament/Texture.h>
 #include <filament/VertexBuffer.h>
@@ -60,9 +61,17 @@ class FilamentUiRenderer {
 
   // Textures retired because a new version replaced them; freed once the
   // frames still sampling them are done.
-  struct Garbage {
+  struct RenderableRecord {
+    utils::Entity renderable;
+    filament::MaterialInstance* material = nullptr;
+  };
+  struct GarbageTexture {
     uint64_t frame = 0;
     filament::Texture* texture = nullptr;
+  };
+  struct GarbageMaterial {
+    uint64_t frame = 0;
+    filament::MaterialInstance* material = nullptr;
   };
 
   filament::Scene* scene_ = nullptr;
@@ -74,9 +83,10 @@ class FilamentUiRenderer {
   uint32_t vertex_capacity_ = 0;
   uint32_t index_capacity_ = 0;
 
-  std::vector<utils::Entity> renderables_;
+  std::vector<RenderableRecord> renderables_;
   std::unordered_map<uint32_t, TextureEntry> textures_;
-  std::vector<Garbage> garbage_;
+  std::vector<GarbageTexture> garbage_;
+  std::vector<GarbageMaterial> garbage_materials_;
   uint64_t frame_ = 0;
 };
 
