@@ -1,0 +1,12 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+load("//tools:mercury_game.bzl", "mercury_game")
+
+# A project whose scripts are C++. Run it with:
+#   bazelisk run //examples/cpp_hello:cpp_hello
+mercury_game(
+    name = "cpp_hello",
+    project = "cpp_hello.mproj",
+)

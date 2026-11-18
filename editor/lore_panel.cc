@@ -560,8 +560,7 @@ void LorePanel::PopulateDiffText(wxTextCtrl* ctrl,
       col = dark_theme ? wxColour(95, 165, 245) : wxColour(35, 95, 190);
     }
     ctrl->SetDefaultStyle(wxTextAttr(col));
-    ctrl->AppendText(wxString::FromUTF8(line + "
-"));
+    ctrl->AppendText(wxString::FromUTF8(line + "\n"));
   }
   ctrl->ShowPosition(0);
   ctrl->Thaw();

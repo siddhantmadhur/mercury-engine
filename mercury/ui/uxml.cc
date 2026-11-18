@@ -47,8 +47,7 @@ std::string Escape(std::string_view s) {
       case '"':
         out += "&quot;";
         break;
-      case '
-':
+      case '\n':
         out += "&#10;";
         break;
       default:
@@ -121,15 +120,12 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
   const bool empty = node.children.empty() && node.style_sheets.empty() &&
                      node.bindings.empty() && node.overrides.empty();
   if (empty) {
-    out += " />
-";
+    out += " />\n";
     return;
   }
-  out += ">
-";
+  out += ">\n";
   for (const auto& sheet : node.style_sheets) {
-    out += std::format("{}    <Style src=\"{}\" />
-", indent, Escape(sheet));
+    out += std::format("{}    <Style src=\"{}\" />\n", indent, Escape(sheet));
   }
   for (const auto& o : node.overrides) {
     out += std::format("{}    <ui:AttributeOverrides element-name=\"{}\"",
@@ -137,12 +133,10 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
     for (const auto& a : o.attributes) {
       out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
     }
-    out += " />
-";
+    out += " />\n";
   }
   if (!node.bindings.empty()) {
-    out += indent + "    <Bindings>
-";
+    out += indent + "    <Bindings>\n";
     for (const auto& b : node.bindings) {
       out += std::format(
           "{}        <ui:DataBinding property=\"{}\" data-source-path=\"{}\"",
@@ -150,15 +144,12 @@ void WriteNode(const UxmlNode& node, int depth, std::string& out) {
       if (b.mode != BindingMode::kToTarget) {
         out += std::format(" binding-mode=\"{}\"", BindingModeName(b.mode));
       }
-      out += " />
-";
+      out += " />\n";
     }
-    out += indent + "    </Bindings>
-";
+    out += indent + "    </Bindings>\n";
   }
   for (const auto& child : node.children) WriteNode(child, depth + 1, out);
-  out += indent + "</" + tag + ">
-";
+  out += indent + "</" + tag + ">\n";
 }
 
 mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
@@ -337,20 +328,16 @@ std::string VisualTreeAsset::Write() const {
   for (const auto& a : root.attributes) {
     out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
   }
-  out += ">
-";
+  out += ">\n";
   for (const auto& sheet : root.style_sheets) {
-    out += std::format("    <Style src=\"{}\" />
-", Escape(sheet));
+    out += std::format("    <Style src=\"{}\" />\n", Escape(sheet));
   }
   for (const auto& t : templates) {
-    out += std::format("    <ui:Template name=\"{}\" src=\"{}\" />
-",
+    out += std::format("    <ui:Template name=\"{}\" src=\"{}\" />\n",
                        Escape(t.name), Escape(t.src));
   }
   for (const auto& child : root.children) WriteNode(child, 1, out);
-  out += "</ui:UXML>
-";
+  out += "</ui:UXML>\n";
   return out;
 }
 

@@ -105,6 +105,15 @@ void Project::SetBuildOutput(std::string path) {
   GetOrAddSection("build").properties.Set("output", std::move(path));
 }
 
+std::string Project::GetBuildTarget() const {
+  auto section = document_.Find("build");
+  return section ? section->properties.GetString("target") : "";
+}
+
+void Project::SetBuildTarget(std::string target) {
+  GetOrAddSection("build").properties.Set("target", std::move(target));
+}
+
 glm::vec3 Project::GetGravity() const {
   constexpr glm::vec3 kDefault(0.0f, -9.81f, 0.0f);
   auto section = document_.Find("physics");

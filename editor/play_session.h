@@ -5,14 +5,18 @@
 /*
  * play_session.h
  *
- * Drives Build and Play from the editor, with the mercury_player build from the
- * same checkout (next to the editor, or in bazel-bin/mercury):
+ * Drives Build and Play from the editor. AngelScript projects use the
+ * mercury_player build from the same checkout (next to the editor, or in
+ * bazel-bin/mercury):
  *
  *   mercury_player <project.mproj> --build-scripts     (AngelScript compile)
  *     -> mercury_player <project.mproj> --dump-schema .mercury/scripts.mschema
  *     -> mercury_player <project.mproj> --map <current map>      (Play only)
  *
- * The build's output (compiler messages) streams to the Console.
+ * A project with C++ scripts names a Bazel executable in `[build] target`.
+ * Its build and the commands above go through `bazel run <target> -- ...`, so
+ * the native scripts linked into that executable provide the schema and run
+ * the game. The build's output (compiler messages) streams to the Console.
  */
 #ifndef MERCURY_EDITOR_PLAY_SESSION_H
 #define MERCURY_EDITOR_PLAY_SESSION_H
@@ -72,7 +76,10 @@ class PlaySession {
   std::filesystem::path project_root_;
   std::filesystem::path project_file_;
   std::filesystem::path schema_path_;
+  std::filesystem::path working_dir_;
   std::string map_;
+  std::string build_target_;
+  bool native_ = false;
 };
 
 }  // namespace Mercury

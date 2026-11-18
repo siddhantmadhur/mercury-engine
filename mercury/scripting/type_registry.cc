@@ -88,11 +88,14 @@ void TypeRegistry::ClearSchemaScripts() {
 }
 
 void TypeRegistry::ClearGameTypes() {
+  // AngelScript classes are rebuilt by the next LoadScripts. Native scripts
+  // (MERCURY_SCRIPT) are linked into the executable and must stay.
   std::erase_if(components_, [](const ComponentInfo& info) {
-    return info.is_script && info.attach;
+    return info.is_script && info.attach && !info.native_script;
   });
-  std::erase_if(asset_types_,
-                [](const AssetTypeInfo& info) { return info.from_game; });
+  std::erase_if(asset_types_, [](const AssetTypeInfo& info) {
+    return info.from_game && !info.native_asset;
+  });
 }
 
 bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {

@@ -76,6 +76,13 @@ class TestMapSwitcher : public Behaviour {
 };
 MERCURY_TEST_BEHAVIOUR(TestMapSwitcher);
 
+// A C++ data asset, the ScriptableObject equivalent.
+struct TestSettings {
+  float amount = 1.0f;
+  void Reflect(Reflector& r) { r.Field("amount", amount); }
+};
+MERCURY_DATA_ASSET(TestSettings);
+
 std::shared_ptr<Project> LoadProject() {
   std::string error;
   auto project = Project::Load(kRollABall / "roll_a_ball.mproj", &error);
@@ -623,6 +630,34 @@ TEST(Gameplay, ListViewFollowsItemsSource) {
   EXPECT_EQ(list.itemCount(), 4);
   list.SetItemsSource<int>(nullptr);
   EXPECT_EQ(list.itemsSource(), nullptr);
+}
+
+TEST(Gameplay, NativeScriptsSurviveScriptRuntimeCleanup) {
+  const ComponentInfo* script =
+      TypeRegistry::Instance().FindComponent("TestCounter");
+  ASSERT_TRUE(script);
+  EXPECT_TRUE(script->is_script);
+  EXPECT_TRUE(script->native_script);
+  const AssetTypeInfo* asset =
+      TypeRegistry::Instance().FindAssetType("TestSettings");
+  ASSERT_TRUE(asset);
+  EXPECT_TRUE(asset->native_asset);
+  ASSERT_TRUE(asset->FindField("amount"));
+
+  // ScriptRuntime::Shutdown removes AngelScript classes, not C++ code linked
+  // into the executable.
+  TypeRegistry::Instance().ClearGameTypes();
+  EXPECT_TRUE(TypeRegistry::Instance().FindComponent("TestCounter"));
+  EXPECT_TRUE(TypeRegistry::Instance().FindAssetType("TestSettings"));
+}
+
+TEST(Gameplay, NativeScriptFieldsAreReflected) {
+  const ComponentInfo* script =
+      TypeRegistry::Instance().FindComponent("TestEmitter");
+  ASSERT_TRUE(script);
+  const FieldInfo* fired = script->FindField("fired");
+  ASSERT_TRUE(fired);
+  EXPECT_EQ(fired->type, FieldType::kEvent);
 }
 
 TEST(Gameplay, MathfMatchesUnity) {

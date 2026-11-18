@@ -119,7 +119,8 @@ The editor compiles the project's scripts in **Build Scripts** and **Play**.
 A compile error is shown in the **Console** and the build fails, so the game
 is not started with broken scripts. The editor does not run game code itself;
 it runs `mercury_player --dump-schema` to learn the scripts' fields for the
-Inspector.
+Inspector. A project with C++ scripts names its own executable in
+`[build] target`; the editor builds and runs that target instead.
 
 To use another editor, open **File > Preferences...** and set an external
 editor command. `{project}` and `{file}` in the command are replaced with the
@@ -160,20 +161,23 @@ with any version control system.
 @section editor_play Play, build and ship
 
 **Project > Play / Stop** (F5) saves the map, compiles the scripts and starts
-`mercury_player <project> --map <map>` as a separate process. The game's
-output goes to the **Console**. There is no hot reload: stopping and playing
-again starts a new process and a new game state.
+the game as a separate process. AngelScript projects run
+`mercury_player <project> --map <map>`; a C++ project runs its
+`[build] target` through `bazel run <target> -- <project> --map <map>`. The
+game's output goes to the **Console**. There is no hot reload: stopping and
+playing again starts a new process and a new game state.
 
 **Project > Build Scripts** (F7) only compiles. Do this after changing a script
 to refresh the script list in the Inspector.
 
-**File > Build Game...** (Ctrl+B) writes a shippable folder. It reuses the
-Release player (building one from source in a development editor), minifies
-and compiles the scripts, and packs assets into compressed `.mpack` archives
-instead of thousands of loose files:
+**File > Build Game...** (Ctrl+B) writes a shippable folder. It builds or
+reuses the Release executable (the shared player for AngelScript projects, or
+the project's `[build] target` for C++ scripts), minifies and compiles the
+`.as` scripts, and packs assets into compressed `.mpack` archives instead of
+thousands of loose files:
 
 @code{.text}
-Builds/MyGame/MyGame          the game executable (mercury_player copy)
+Builds/MyGame/MyGame          the game executable (player copy or C++ game)
 Builds/MyGame/engine.mpack    shaders, the default theme and fonts
 Builds/MyGame/game.mpack      the project: map, assets, UI, scripts
 Builds/MyGame/*.mindex        indexes that map a path to an archive and offset

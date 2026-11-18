@@ -53,17 +53,17 @@ SteamDeck or the controllers. Along with support for controller layouts, battery
 
 ## Architecture
 
-A game is a project (`.mproj`) of maps (`.mmap`), assets, UI documents and AngelScript scripts. The
-player (or the editor's Play button) loads a map into an EnTT scene and runs a fixed-step tick plus a
-per-frame render. Scripts are compiled by an embedded [AngelScript](https://www.angelcode.com/angelscript/)
-engine; everything native (physics, audio, rendering) sits behind the engine, and scripts reach it
-only through a small checked native API.
+A game is a project (`.mproj`) of maps (`.mmap`), assets, UI documents and scripts. Gameplay can be
+written in [AngelScript](https://www.angelcode.com/angelscript/) (`.as`, compiled in-process) or C++
+(linked into a per-project executable). The player (or the editor's Play button) loads a map into an
+EnTT scene and runs a fixed-step tick plus a per-frame render. Everything native (physics, audio,
+rendering) sits behind the engine, and scripts reach it only through a small checked native API.
 
 <img width="735" height="1328" alt="Architecture diagram for Mercury Engine showing how its constructed." src="assets/architecture_graph.png">
 
 | Layer | Dependency | Used for |
 |---|---|---|
-| Scripting | [AngelScript](https://www.angelcode.com/angelscript/) | Compile and run `.as` game scripts |
+| Scripting | [AngelScript](https://www.angelcode.com/angelscript/), C++ | Compile and run `.as` scripts, or link C++ `MERCURY_SCRIPT` components |
 | Scene | [EnTT](https://github.com/skypjack/entt), [GLM](https://github.com/g-truc/glm) | Entity-component storage, math |
 | Physics | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Rigid bodies, colliders, character controller |
 | Rendering | Vulkan 1.3, [VMA](https://github.com/GPUOpen-LibrariesAndPlugins/VulkanMemoryAllocator), [DXC](https://github.com/microsoft/DirectXShaderCompiler), [GLFW](https://www.glfw.org) | Drawing, GPU memory, HLSL to SPIR-V, window and input |
@@ -75,7 +75,8 @@ only through a small checked native API.
 
 ## Building
 
-Game scripts are AngelScript (`.as`). AngelScript is a C++ library built directly by Bazel from
+Game scripts are AngelScript (`.as`) or C++ (`scripts/*.cc` linked into the game executable).
+AngelScript is a C++ library built directly by Bazel from
 the pinned `third_party/angelscript` submodule; there is no external code generation or bundler.
 
 The build requires [Bazelisk](https://github.com/bazelbuild/bazelisk); the repository pins Bazel
@@ -97,6 +98,8 @@ target so the packaged `.app` runs on any macOS 26 release. See the
 bazelisk build //mercury:mercury_player
 bazelisk test //tests/...
 bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+# C++ gameplay example (its own executable)
+bazelisk run //examples/cpp_hello:cpp_hello
 ```
 
 To ship a game as a self-contained `.app` bundle:
@@ -123,6 +126,8 @@ To publish the editor itself (Play and Build Game work without this checkout):
 bazelisk build //mercury:mercury_player
 bazelisk test //tests/...
 bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+# C++ gameplay example (its own executable)
+bazelisk run //examples/cpp_hello:cpp_hello
 ```
 
 Debian/Ubuntu don't package DXC, so the setup script downloads the official release into

@@ -7,10 +7,11 @@
 
 @tableofcontents
 
-Most Mercury games are projects run by the shared player: game logic lives in
-AngelScript, and C++ is only the engine. This page explains the C++ interface
-for extending the engine, writing tools and tests, or embedding the player in
-another executable.
+Most Mercury games are projects: their maps, assets and UI are data, and their
+gameplay is AngelScript, C++, or both. AngelScript projects run on the shared
+player; C++ projects build their own executable with `mercury_game`. This page
+explains the C++ interface for writing C++ scripts, extending the engine,
+writing tools and tests, or embedding the player in another executable.
 
 @section cpp_api_entry The player entry point
 
@@ -25,9 +26,11 @@ int main(int argc, char** argv) {
 }
 @endcode
 
-@ref Mercury::RunPlayer loads a `.mproj`, compiles and runs its scripts, and
-creates a @ref Mercury::MapScene. Passing a default project makes a dedicated
-executable that runs your game when it is started without arguments:
+@ref Mercury::RunPlayer loads a `.mproj`, compiles and runs its AngelScript
+scripts, and creates a @ref Mercury::MapScene. C++ scripts are already
+registered by the time `main()` runs; the player leaves those types in place.
+Passing a default project makes a dedicated executable that runs your game
+when it is started without arguments:
 
 @code{.cpp}
 #include "player/player.h"
@@ -125,6 +128,49 @@ if (map.Load(project->Resolve(project->GetMainMap()), &error)) {
   scene->Instantiate(map);
 }
 @endcode
+
+@section cpp_api_scripts C++ scripts
+
+The same @ref Mercury::Behaviour a custom scene runs can be used as game
+scripting: register a subclass with `MERCURY_SCRIPT` and put it on a map node
+by name. This is the C++ counterpart of an AngelScript `[script]` class:
+
+@code{.cpp}
+class Spinner : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed).Tooltip("Degrees per second");
+  }
+  void OnFrame(double dt) override {
+    GetTransform().ChangeRotate(
+        {0.0f, speed * static_cast<float>(dt), 0.0f});
+  }
+  float speed = 45.0f;
+};
+MERCURY_SCRIPT(Spinner);
+@endcode
+
+`Reflect` and `ReflectData` feed the Inspector, map files, UI bindings and
+Events; `ReflectMethods` makes methods callable from Events. `MERCURY_DATA_ASSET`
+registers a reflected struct as a `.masset` asset type.
+
+A game executable needs the script sources linked in. The `mercury_game` Bazel
+macro does that and generates the `main()`; `[build] target` in the project
+tells the editor which target to build:
+
+@code{.py}
+load("//tools:mercury_game.bzl", "mercury_game")
+
+mercury_game(name = "my_game", project = "my_game.mproj")
+@endcode
+
+@code{.ini}
+[build]
+target = "//my_game:my_game"
+@endcode
+
+Projects with only `.as` scripts keep using `mercury_player`; both languages
+can coexist in one project. `examples/cpp_hello` is a complete native example.
 
 @section cpp_api_editor The editor
 

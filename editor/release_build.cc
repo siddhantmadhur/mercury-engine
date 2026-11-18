@@ -10,6 +10,7 @@
 #include <format>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 #include "os/filesystem.h"
 #include "pack/mpack.h"
@@ -28,17 +29,17 @@ bool IsSourceFile(const fs::path& path) {
   std::transform(ext.begin(), ext.end(), ext.begin(),
                  [](unsigned char c) { return std::tolower(c); });
   for (const char* skip :
-       {".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp", ".tmp"}) {
+       {".cc", ".cpp", ".cxx", ".c", ".h", ".hh", ".hpp", ".tmp", ".bzl"}) {
     if (ext == skip) return true;
   }
   return false;
 }
 
 bool IsSkippedAtRoot(const std::string& name) {
-  return name == "CMakeLists.txt" || name == "MODULE.bazel" ||
-         name == "MODULE.bazel.lock" || name == "WORKSPACE" ||
-         name == "WORKSPACE.bazel" || name.starts_with("bazel-") ||
-         name == "Builds";
+  return name == "CMakeLists.txt" || name == "BUILD.bazel" ||
+         name == "MODULE.bazel" || name == "MODULE.bazel.lock" ||
+         name == "WORKSPACE" || name == "WORKSPACE.bazel" ||
+         name.starts_with("bazel-") || name == "Builds";
 }
 
 std::string FormatBytes(uintmax_t bytes) {
@@ -54,6 +55,23 @@ std::string FormatBytes(uintmax_t bytes) {
 std::string FindBazel() {
   if (os::IsOnPath("bazelisk")) return "bazelisk";
   return "bazel";
+}
+
+// The directory with MODULE.bazel or WORKSPACE above `start`, or empty.
+fs::path FindWorkspaceRoot(const fs::path& start) {
+  std::error_code ec;
+  fs::path dir = fs::weakly_canonical(start, ec);
+  if (ec) dir = start;
+  while (!dir.empty()) {
+    for (const char* marker :
+         {"MODULE.bazel", "WORKSPACE.bazel", "WORKSPACE"}) {
+      if (fs::exists(dir / marker, ec)) return dir;
+    }
+    const fs::path parent = dir.parent_path();
+    if (parent == dir) break;
+    dir = parent;
+  }
+  return {};
 }
 
 // Total size of <dir>/<base>.mpack and its _NNN archives, and how many there
@@ -147,6 +165,18 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
   max_archive_bytes_ = max_archive_bytes;
   project_root_ = project.GetRoot();
   project_name_ = project.GetName();
+  build_target_ = project.GetBuildTarget();
+  workspace_dir_.clear();
+  if (!build_target_.empty()) {
+    workspace_dir_ = FindWorkspaceRoot(project_root_);
+    if (workspace_dir_.empty()) {
+      Finish(
+          "This project names a C++ build target, but no Bazel workspace "
+          "(MODULE.bazel or WORKSPACE) was found above it.",
+          true);
+      return;
+    }
+  }
   output_dir_ = output_dir;
   cancelled_ = false;
   console_.Add(
@@ -157,11 +187,11 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
   const bool from_bundle = !os::BundleResourcesDir().empty();
   const bool has_checkout =
       fs::exists(fs::path(config_->source_dir) / "MODULE.bazel");
-  // A development editor builds a fresh Release player with Bazel. A released
-  // editor (running from its .app) always uses the player and engine resources
-  // bundled with it, so packaging a game needs no compiler or third-party
-  // rebuild and behaves the same on every machine.
-  if (!from_bundle && has_checkout) {
+  // A development editor builds a fresh Release executable with Bazel. A
+  // released editor (running from its .app) always uses the player and engine
+  // resources bundled with it, so packaging a game needs no compiler or
+  // third-party rebuild and behaves the same on every machine.
+  if (!from_bundle && (has_checkout || config_->native)) {
     StartBuild();
     return;
   }
@@ -186,6 +216,9 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
 ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
   Config config;
   config.source_dir = fs::path(MERCURY_ENGINE_DIR).string();
+  config.build_target = build_target_;
+  config.workspace_dir = workspace_dir_.string();
+  config.native = !build_target_.empty();
   // Prefer the copies that ship with the editor; in a development build these
   // resolve to the checkout's UI resources and bazel-bin shaders.
   config.ui_resources = os::EngineUiResourceDir().string();
@@ -215,6 +248,42 @@ ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
 
 void ReleaseBuild::LocateExecutable() {
   std::error_code ec;
+  if (config_->native) {
+    // Ask Bazel where it put the C++ game executable. The build above used
+    // the same opt configuration, so cquery returns that path.
+    os::Process query;
+    std::string error;
+    if (!query.Start({FindBazel(), "cquery", "-c", "opt", "--output=files",
+                      config_->build_target},
+                     config_->workspace_dir, &error)) {
+      console_.Error("Could not ask Bazel for the game executable: " + error);
+      return;
+    }
+    for (int i = 0; i < 3000 && query.IsRunning(); i++) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (query.IsRunning()) query.Kill();
+    const auto lines = query.TakeOutput();
+    if (query.GetExitCode().value_or(1) != 0) {
+      for (const auto& line : lines) {
+        console_.Add(Console::Level::kInfo, Console::Source::kBuild, line);
+      }
+      console_.Error("Bazel could not locate " + config_->build_target);
+      return;
+    }
+    for (const std::string& line : lines) {
+      fs::path candidate(line);
+      if (candidate.is_relative())
+        candidate = config_->workspace_dir / candidate;
+      if (fs::is_regular_file(candidate, ec)) {
+        config_->executable = candidate.string();
+        return;
+      }
+    }
+    console_.Error("Bazel did not report an executable for " +
+                   config_->build_target);
+    return;
+  }
   // A packaged editor ships a Release player next to itself, so Build Game can
   // package games without a Bazel checkout or a compiler.
   const fs::path bundled = PlaySession::PlayerPath();
@@ -244,8 +313,11 @@ bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
 
   process_ = std::make_unique<os::Process>();
   std::string error;
-  const fs::path working_dir =
+  fs::path working_dir =
       config_ ? fs::path(config_->source_dir) : project_root_;
+  if (config_ && config_->native && !config_->workspace_dir.empty()) {
+    working_dir = config_->workspace_dir;
+  }
   if (!process_->Start(args, working_dir, &error)) {
     process_.reset();
     Finish(error, true);
@@ -255,13 +327,19 @@ bool ReleaseBuild::Launch(const std::vector<std::string>& args) {
 }
 
 bool ReleaseBuild::StartBuild() {
-  console_.Add(Console::Level::kInfo, Console::Source::kBuild,
-               "Building a Release mercury_player with Bazel; the first one "
+  const bool native = config_ && config_->native;
+  console_.Add(
+      Console::Level::kInfo, Console::Source::kBuild,
+      native ? "Building the C++ game executable with Bazel; the first one "
+               "takes a while."
+             : "Building a Release mercury_player with Bazel; the first one "
                "takes a while.");
-  if (!Launch(
-          {FindBazel(), "build", "-c", "opt", "//mercury:mercury_player"})) {
-    return false;
-  }
+  const std::vector<std::string> args =
+      native ? std::vector<std::string>{FindBazel(), "build", "-c", "opt",
+                                        config_->build_target}
+             : std::vector<std::string>{FindBazel(), "build", "-c", "opt",
+                                        "//mercury:mercury_player"};
+  if (!Launch(args)) return false;
   state_ = State::kBuilding;
   return true;
 }
@@ -446,7 +524,11 @@ void ReleaseBuild::Update() {
       if (code != 0) return Finish("Release build failed", true);
       LocateExecutable();
       if (config_->executable.empty()) {
-        return Finish("The Release build did not produce mercury_player", true);
+        return Finish(config_->native
+                          ? "The Release build did not produce the C++ game "
+                            "executable"
+                          : "The Release build did not produce mercury_player",
+                      true);
       }
       StartPacking();
       break;

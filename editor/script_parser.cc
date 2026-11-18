@@ -55,8 +55,7 @@ std::vector<ScriptToken> Tokenize(const std::string& text) {
   int line = 1;
   int column = 1;
   auto advance = [&](char c) {
-    if (c == '
-') {
+    if (c == '\n') {
       ++line;
       column = 1;
     } else {
@@ -65,16 +64,14 @@ std::vector<ScriptToken> Tokenize(const std::string& text) {
   };
   while (i < text.size()) {
     const char c = text[i];
-    if (c == '
-' || c == '' || c == ' ' || c == '	' || c == '' ||
-        c == '') {
+    if (c == '\n' || c == '\r' || c == ' ' || c == '\t' || c == '\v' ||
+        c == '\f') {
       advance(c);
       ++i;
       continue;
     }
     if (c == '/' && i + 1 < text.size() && text[i + 1] == '/') {
-      while (i < text.size() && text[i] != '
-') {
+      while (i < text.size() && text[i] != '\n') {
         advance(text[i]);
         ++i;
       }
@@ -126,7 +123,7 @@ std::vector<ScriptToken> Tokenize(const std::string& text) {
         const char n = text[i];
         token.text.push_back(n);
         advance(text[i++]);
-        if (n == '\' && i < text.size()) {
+        if (n == '\\' && i < text.size()) {
           token.text.push_back(text[i]);
           advance(text[i++]);
         } else if (n == quote) {

@@ -13,8 +13,10 @@ you build or play a project. There is no separate bundler, source map or
 language server: a compile error fails **Build Scripts** / **Play** and is
 printed in the Console.
 
-The C++ side of this system is @ref Mercury::Behaviour (the base class the
-engine calls) and @ref Mercury::MapScene (the scene that owns the objects).
+Gameplay can also be written in C++ with the same callbacks, fields, Events
+and map format. The C++ side of both systems is @ref Mercury::Behaviour (the
+base class the engine calls) and @ref Mercury::MapScene (the scene that owns
+the objects). See @ref getting_started_cpp for a complete C++ example.
 
 @section scripting_file A script file
 
@@ -354,6 +356,48 @@ The editor never runs game code. After **Build Scripts** it runs
 `mercury_player --dump-schema .mercury/scripts.mschema` to learn the fields
 of every script. That generated folder is not committed.
 
+@section scripting_cpp C++ scripts
+
+A C++ script derives from @ref Mercury::Behaviour, describes its fields in
+`Reflect`, and registers itself with `MERCURY_SCRIPT`:
+
+@code{.cpp}
+class Spinner : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed).Tooltip("Degrees per second");
+  }
+  void OnFrame(double dt) override {
+    GetTransform().ChangeRotate(
+        {0.0f, speed * static_cast<float>(dt), 0.0f});
+  }
+  float speed = 45.0f;
+};
+
+MERCURY_SCRIPT(Spinner);
+@endcode
+
+The class can be used from a map exactly like an AngelScript `[script]` class:
+
+@code{.ini}
+[component type="Spinner" node="Cube"]
+speed = 45.0
+@endcode
+
+C++ code is linked into the executable, so a C++ project names its own Bazel
+target in the `.mproj`:
+
+@code{.ini}
+[build]
+target = "//my_game:my_game"
+@endcode
+
+The target is built with the `mercury_game` macro in `tools/mercury_game.bzl`.
+The editor's Build/Play uses `bazel build` and runs that executable, so its
+native scripts provide the schema. Both languages can be used in one project;
+`MERCURY_DATA_ASSET(Type)` registers a reflected struct as a `.masset` type.
+See @ref getting_started_cpp and `examples/cpp_hello`.
+
 @section scripting_examples Learn from the examples
 
 The `examples/` folder is the best reference. In particular:
@@ -365,5 +409,7 @@ The `examples/` folder is the best reference. In particular:
 - `examples/monkey_ball/` shows a 3D game with a HUD and a pause menu.
 - `examples/breakout/` and `examples/space_invaders/` show 2D collisions and
   spawning.
+- `examples/cpp_hello/` is the same spinning-cube idea as this page, written
+  as a C++ `MERCURY_SCRIPT` component.
 
 */

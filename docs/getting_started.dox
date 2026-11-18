@@ -24,13 +24,14 @@ Tycoon), not a general-purpose 3D engine. It provides:
 - a fixed-step game loop, input, physics (Jolt), audio (miniaudio), animation
   and asset loading;
 - **the Mercury Editor**, a wxWidgets application for making projects; and
-- **AngelScript** as the gameplay language. Game code never touches engine
-  internals, so a script mistake cannot corrupt the engine.
+- **AngelScript and C++** as gameplay languages. AngelScript scripts are
+  compiled by an embedded engine; C++ components are linked into a per-project
+  executable. Both use the same component model, reflection and map format.
 
-The important consequence for a beginner is that **you normally do not write
-C++ to make a game**. You make a project (`.mproj`), a map (`.mmap`) and
-AngelScript files, then run the shared `mercury_player` executable. The C++
-classes documented here are the engine and editor themselves.
+For a beginner, the quickest path is AngelScript: a project (`.mproj`), a map
+(`.mmap`) and `.as` files, run by the shared `mercury_player`. C++ scripts use
+the same `Behaviour` callbacks but need a small Bazel target; see
+@ref getting_started_cpp "Writing gameplay in C++".
 
 @section getting_started_requirements Requirements
 
@@ -124,7 +125,8 @@ relative to that folder and written as `res://...`:
 my_game/
   my_game.mproj          project settings: name, main map, window size, ...
   maps/main.mmap         the main map: nodes and their components
-  scripts/spinner.as     AngelScript gameplay code
+  scripts/spinner.as     AngelScript gameplay code (optional)
+  scripts/spinner.cc     C++ gameplay code (optional, needs a build target)
   assets/white.masset    materials, physics materials and other assets
   ui/hud.uxml            optional UI Toolkit documents
   .mercury/              generated (scripts schema and build caches)
@@ -146,7 +148,7 @@ width = 1280
 height = 720
 @endcode
 
-@section getting_started_first_script Your first script
+@section getting_started_first_script Your first AngelScript script
 
 Scripts are AngelScript files in `scripts/`. A class marked `[script]` becomes
 a component that you can add to a node. The class name is the name the map
@@ -248,6 +250,75 @@ When a script throws, the game keeps running: the error and its
 `scripts/file.as:line:column` location appear in the Console (or terminal). A
 call that runs longer than `MERCURY_SCRIPT_TIMEOUT` seconds (10 by default) is
 aborted as an infinite loop.
+
+@section getting_started_cpp Writing gameplay in C++
+
+AngelScript is optional. A project can link C++ gameplay into its own
+executable, and a project may mix C++ and AngelScript components. A C++ script
+is a class deriving from @ref Mercury::Behaviour, registered with
+`MERCURY_SCRIPT`:
+
+@code{.cpp}
+// scripts/spinner.h
+#include "scripting/behaviour.h"
+
+class Spinner : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed).Tooltip("Degrees per second");
+  }
+  void OnFrame(double dt) override {
+    auto& transform = GetTransform();
+    transform.SetRotate(transform.GetRotate() +
+                        glm::vec3(0.0f, speed * static_cast<float>(dt), 0.0f));
+  }
+  float speed = 45.0f;
+};
+@endcode
+
+@code{.cpp}
+// scripts/spinner.cc
+#include "spinner.h"
+
+MERCURY_SCRIPT(Spinner);
+@endcode
+
+`Reflect` works exactly like `[field]` in AngelScript: it describes the
+Inspector fields and the values saved in the map. The callbacks are the C++
+names (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
+`OnCollisionEnter`, ...). A reflected struct registered with
+`MERCURY_DATA_ASSET(Type)` is the C++ equivalent of `[dataAsset]`.
+
+A C++ project builds its own player with the `mercury_game` Bazel macro:
+
+@code{.py}
+# my_game/BUILD.bazel
+load("//tools:mercury_game.bzl", "mercury_game")
+
+mercury_game(
+    name = "my_game",
+    project = "my_game.mproj",
+)
+@endcode
+
+The macro compiles every `.cc`/`.cpp` under the package's `scripts/` folder,
+links the engine, and generates a `main()` that calls
+@ref Mercury::RunPlayer. Name the executable in the project file so the editor
+knows how to build and run it:
+
+@code{.ini}
+[build]
+target = "//my_game:my_game"
+@endcode
+
+The editor's **Build Scripts** and **Play** then run `bazel build` on the
+target, ask the executable for its script list (`--dump-schema`), and launch
+it. Without `[build] target`, the shared `mercury_player` compiles `.as`
+scripts at run time as before. To run the C++ example:
+
+@code{.sh}
+bazelisk run //examples/cpp_hello:cpp_hello
+@endcode
 
 @section getting_started_next Where to go next
 

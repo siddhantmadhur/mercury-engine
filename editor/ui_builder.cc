@@ -935,8 +935,7 @@ std::vector<UIBuilder::MatchingRuleInfo> UIBuilder::MatchingSelectors(
     }
     info.rule_order = it->rule_order;
     for (const auto& d : it->rule->declarations) {
-      info.tooltip += d.property + ": " + d.value + ";
-";
+      info.tooltip += d.property + ": " + d.value + ";\n";
     }
     result.push_back(std::move(info));
   }

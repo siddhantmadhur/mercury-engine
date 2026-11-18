@@ -253,17 +253,17 @@ void EditorFrame::BuildMenuBar() {
   auto* mb = new wxMenuBar();
 
   auto* file_menu = new wxMenu();
-  file_menu->Append(kIdFileNewMap, "New Map...	Ctrl+N");
-  file_menu->Append(kIdFileOpenMap, "Open Map...	Ctrl+O");
-  file_menu->Append(kIdFileSave, "Save	Ctrl+S");
-  file_menu->Append(kIdFileSaveAs, "Save Map As...	Ctrl+Shift+S");
+  file_menu->Append(kIdFileNewMap, "New Map...\tCtrl+N");
+  file_menu->Append(kIdFileOpenMap, "Open Map...\tCtrl+O");
+  file_menu->Append(kIdFileSave, "Save\tCtrl+S");
+  file_menu->Append(kIdFileSaveAs, "Save Map As...\tCtrl+Shift+S");
   file_menu->Append(kIdFileSetMainMap, "Set Current Map as Main Map");
   file_menu->AppendSeparator();
-  file_menu->Append(kIdFileBuildGame, "Build Game...	Ctrl+B");
+  file_menu->Append(kIdFileBuildGame, "Build Game...\tCtrl+B");
   file_menu->Append(kIdFilePreferences, "Preferences...");
   file_menu->AppendSeparator();
   file_menu->Append(kIdFileCloseProject, "Close Project");
-  file_menu->Append(kIdFileExit, "Exit	Ctrl+Q");
+  file_menu->Append(kIdFileExit, "Exit\tCtrl+Q");
   mb->Append(file_menu, "&File");
 
   // Note: Omit accelerator tabs on Undo/Redo/Duplicate/Delete so wxTextCtrl
@@ -308,8 +308,8 @@ void EditorFrame::BuildMenuBar() {
   mb->Append(go_menu, "&GameObject");
 
   auto* proj_menu = new wxMenu();
-  proj_menu->Append(kIdProjectBuildScripts, "Build Scripts	F7");
-  proj_menu->Append(kIdProjectTogglePlay, "Play / Stop	F5");
+  proj_menu->Append(kIdProjectBuildScripts, "Build Scripts\tF7");
+  proj_menu->Append(kIdProjectTogglePlay, "Play / Stop\tF5");
   mb->Append(proj_menu, "&Project");
 
   auto* script_menu = new wxMenu();
@@ -1037,8 +1037,7 @@ bool EditorFrame::ConfirmDiscardOrSave(const wxString& action_prompt,
                              script_editor_panel_->HasDirty();
   if (!scene_dirty && !scripts_dirty) return true;
   UnsavedChoice choice = ShowUnsavedChangesDialog(
-      this, action_prompt + "
-You have unsaved changes.");
+      this, action_prompt + "\nYou have unsaved changes.");
   if (choice == UnsavedChoice::kCancel) return false;
   if (choice == UnsavedChoice::kSave) {
     if (scene_dirty && !scene_.SaveAllDirty()) return false;

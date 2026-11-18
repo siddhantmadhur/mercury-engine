@@ -779,8 +779,7 @@ void TextField::SetPlaceholder(std::string text) {
 }
 
 std::string TextField::Coerce(std::string value) const {
-  if (!multiline_) std::erase(value, '
-');
+  if (!multiline_) std::erase(value, '\n');
   if (max_length_ >= 0) {
     std::u32string text = DecodeUtf8(value);
     if (static_cast<int>(text.size()) > max_length_) {
@@ -848,11 +847,9 @@ void TextField::Insert(std::u32string_view insert) {
   if (read_only_) return;
   std::u32string filtered;
   for (char32_t c : insert) {
-    if (c == '') continue;
-    if (c == '
-' && !multiline_) continue;
-    if (c != '
-' && !AcceptsCharacter(c)) continue;
+    if (c == '\r') continue;
+    if (c == '\n' && !multiline_) continue;
+    if (c != '\n' && !AcceptsCharacter(c)) continue;
     filtered.push_back(c);
   }
   const int a = std::min(anchor_, cursor_), b = std::max(anchor_, cursor_);
@@ -1088,8 +1085,7 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
         if (e.actionKey()) {
           i = 0;
         } else {
-          while (i > 0 && editing_[i - 1] != '
-') i--;
+          while (i > 0 && editing_[i - 1] != '\n') i--;
         }
         move_to(i);
         break;
@@ -1099,8 +1095,7 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
         if (e.actionKey()) {
           i = n;
         } else {
-          while (i < n && editing_[i] != '
-') i++;
+          while (i < n && editing_[i] != '\n') i++;
         }
         move_to(i);
         break;
@@ -1113,8 +1108,7 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
         }
         // Same column on the previous/next line.
         int start = cursor_;
-        while (start > 0 && editing_[start - 1] != '
-') start--;
+        while (start > 0 && editing_[start - 1] != '\n') start--;
         const int column = cursor_ - start;
         if (e.keyCode == KeyCode::kUp) {
           if (start == 0) {
@@ -1122,21 +1116,18 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
             break;
           }
           int prev = start - 1;
-          while (prev > 0 && editing_[prev - 1] != '
-') prev--;
+          while (prev > 0 && editing_[prev - 1] != '\n') prev--;
           move_to(std::min(prev + column, start - 1));
         } else {
           int next = cursor_;
-          while (next < n && editing_[next] != '
-') next++;
+          while (next < n && editing_[next] != '\n') next++;
           if (next >= n) {
             move_to(n);
             break;
           }
           next++;
           int end = next;
-          while (end < n && editing_[end] != '
-') end++;
+          while (end < n && editing_[end] != '\n') end++;
           move_to(std::min(next + column, end));
         }
         break;
@@ -1158,8 +1149,7 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
       case KeyCode::kEnter:
       case KeyCode::kKeypadEnter:
         if (multiline_ && !e.actionKey()) {
-          Insert(U"
-");
+          Insert(U"\n");
         } else if (pending_commit_) {
           pending_commit_ = false;
           CommitText(EncodeUtf8(editing_));

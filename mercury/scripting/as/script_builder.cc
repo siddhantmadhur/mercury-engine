@@ -23,8 +23,7 @@ namespace {
 
 void Emit(const BuildOptions& options, std::string* log,
           const std::string& line) {
-  if (log) *log += line + "
-";
+  if (log) *log += line + "\n";
   if (options.on_line) options.on_line(line);
 }
 
@@ -71,8 +70,7 @@ bool ScriptBuilder::Build(const fs::path& project_dir,
     std::error_code ec;
     fs::create_directories(StampPath(project_dir).parent_path(), ec);
     std::ofstream stamp(StampPath(project_dir), std::ios::trunc);
-    stamp << "1
-";
+    stamp << "1\n";
   }
   Emit(options, log, "Scripts compiled");
   return true;

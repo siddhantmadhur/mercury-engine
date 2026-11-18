@@ -629,8 +629,7 @@ bool ScriptEditorPanel::ConfirmCloseTab(ScriptEditorTab* tab) {
 bool ScriptEditorPanel::ConfirmCloseAll(const wxString& prompt) {
   if (!HasDirty()) return true;
   const UnsavedChoice choice = ShowUnsavedChangesDialog(
-      this, prompt + "
-You have unsaved script changes.");
+      this, prompt + "\nYou have unsaved script changes.");
   if (choice == UnsavedChoice::kCancel) return false;
   if (choice == UnsavedChoice::kSave) return SaveAllDirty();
   return true;
@@ -931,8 +930,7 @@ void ScriptEditorPanel::ShowFindBar(bool replace) {
     // Keep the last search.
   } else if (active_tab_) {
     const wxString selected = active_tab_->Editor()->GetSelectedText();
-    if (!selected.empty() && selected.Find('
-') == wxNOT_FOUND)
+    if (!selected.empty() && selected.Find('\n') == wxNOT_FOUND)
       find_text_->SetValue(selected);
   }
   find_bar_->Layout();

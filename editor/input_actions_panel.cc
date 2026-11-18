@@ -53,7 +53,7 @@ int WxKeyToGlfwKey(int key) {
       return 61;
     case '[':
       return 91;
-    case '\':
+    case '\\':
       return 92;
     case ']':
       return 93;

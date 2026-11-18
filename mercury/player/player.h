@@ -27,9 +27,9 @@ namespace Mercury {
  * @details
  * This is the implementation behind `mercury_player` and the editor's Play
  * button. It loads the `.mproj`, initialises the AngelScript runtime, compiles
- * every `scripts/*.as` file, creates the @ref Mercury::MapScene and runs it
- * with a `Mercury::DefaultApplication`. When the project path is empty it
- * looks for `game.mpack` next to the executable, so a shipped build is
+ * every `.as` file under `scripts/`, creates the @ref Mercury::MapScene and
+ * runs it with a `Mercury::DefaultApplication`. When the project path is empty
+ * it looks for `game.mpack` next to the executable, so a shipped build is
  * self-contained.
  *
  * The command line is:

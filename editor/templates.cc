@@ -165,9 +165,7 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
 
   // Build output and editor caches are generated, so keep them out of git.
   if (!WriteText(root / ".gitignore",
-                 "# Build output and editor caches
-.mercury/
-", error)) {
+                 "# Build output and editor caches\n.mercury/\n", error)) {
     return {};
   }
   if (!WriteText(root / "maps" / "main.mmap", NewMapText(name, is_3d), error)) {
@@ -218,8 +216,7 @@ bool CreateUxml(const fs::path& file) {
 }
 
 bool CreateUss(const fs::path& file) {
-  return WriteText(file, "/* Style sheet for UI Toolkit (USS). */
-", nullptr);
+  return WriteText(file, "/* Style sheet for UI Toolkit (USS). */\n", nullptr);
 }
 
 bool CreateInputActions(const fs::path& file) {

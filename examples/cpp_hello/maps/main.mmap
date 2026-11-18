@@ -1,0 +1,31 @@
+[mmap format=1]
+
+[node name="CppHello"]
+
+[component type="Transform" node="."]
+
+[node name="Camera" parent="."]
+
+[component type="Transform" node="Camera"]
+position = Vector3(0, 3, 8)
+rotation = Vector3(-15, 0, 0)
+
+[component type="Camera" node="Camera"]
+
+[node name="Sun" parent="."]
+
+[component type="Transform" node="Sun"]
+position = Vector3(0, 6, 0)
+rotation = Vector3(-50, -30, 0)
+
+[component type="DirectionalLight" node="Sun"]
+
+[node name="Cube" parent="."]
+
+[component type="Transform" node="Cube"]
+position = Vector3(0, 0.5, 0)
+
+[component type="MeshRenderer" node="Cube"]
+
+[component type="Spinner" node="Cube"]
+speed = 45.0

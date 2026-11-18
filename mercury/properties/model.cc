@@ -332,7 +332,7 @@ fs::path FindInDirectory(const fs::path& dir, const fs::path& file) {
 std::string FindTexture(const fs::path& model_dir,
                         const std::string& reference) {
   std::string name = reference;
-  std::replace(name.begin(), name.end(), '\', '/');
+  std::replace(name.begin(), name.end(), '\\', '/');
   const fs::path file = fs::path(name).filename();
   if (file.empty()) return "";
   // A relative path as written in the file.

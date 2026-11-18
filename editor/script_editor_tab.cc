@@ -104,10 +104,9 @@ bool ScriptEditorTab::Load(std::string* error) {
     if (error) *error = "Could not decode " + file_.string();
     return false;
   }
-  eol_ = content.find("
-") != std::string::npos
+  eol_ = content.find("\r\n") != std::string::npos
              ? "crlf"
-             : (content.find('') != std::string::npos ? "cr" : "lf");
+             : (content.find('\r') != std::string::npos ? "cr" : "lf");
   editor_->SetEOLMode(eol_ == "crlf"
                           ? wxSTC_EOL_CRLF
                           : (eol_ == "cr" ? wxSTC_EOL_CR : wxSTC_EOL_LF));
@@ -502,8 +501,7 @@ void ScriptEditorTab::BindEvents() {
 void ScriptEditorTab::OnCharAdded(wxStyledTextEvent& evt) {
   const int key = evt.GetKey();
   const int pos = editor_->GetCurrentPos();
-  if (key == '
-') {
+  if (key == '\n') {
     AutoIndent(pos);
   } else if (key == '}' && panel_ && !vim_enabled_) {
     const int line = editor_->GetCurrentLine();

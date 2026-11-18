@@ -164,7 +164,7 @@ std::size_t ScriptVim::FirstNonBlank(std::size_t pos) const {
   size_t at = LineStart(pos);
   const size_t end = LineEnd(pos);
   const std::string text = Text();
-  while (at < end && (text[at] == ' ' || text[at] == '	')) ++at;
+  while (at < end && (text[at] == ' ' || text[at] == '\t')) ++at;
   return at;
 }
 
@@ -823,8 +823,7 @@ void ScriptVim::ReplaceChar(int count, int character) {
   size_t pos = Pos();
   editor_->BeginUndoAction();
   for (int i = 0; i < count && pos < text.size(); ++i) {
-    if (text[pos] == '
-' || text[pos] == '') break;
+    if (text[pos] == '\n' || text[pos] == '\r') break;
     editor_->SetTargetStart(static_cast<int>(pos));
     editor_->SetTargetEnd(static_cast<int>(pos + 1));
     editor_->ReplaceTarget(
@@ -866,7 +865,7 @@ void ScriptVim::JoinLines(int count) {
         LineEnd(static_cast<size_t>(editor_->PositionFromLine(line)));
     size_t next = end + 1;
     const std::string text = Text();
-    while (next < text.size() && (text[next] == ' ' || text[next] == '	'))
+    while (next < text.size() && (text[next] == ' ' || text[next] == '\t'))
       ++next;
     editor_->SetTargetStart(static_cast<int>(end));
     editor_->SetTargetEnd(static_cast<int>(next));
@@ -887,14 +886,12 @@ void ScriptVim::OpenLine(bool below) {
   editor_->BeginUndoAction();
   if (below) {
     const size_t at = LineEnd(Pos());
-    editor_->InsertText(static_cast<int>(at), wxString::FromUTF8("
-" + pad));
+    editor_->InsertText(static_cast<int>(at), wxString::FromUTF8("\n" + pad));
     editor_->EndUndoAction();
     EnterInsert(at + 1 + pad.size());
   } else {
     const size_t at = LineStart(Pos());
-    editor_->InsertText(static_cast<int>(at), wxString::FromUTF8("
-" + pad));
+    editor_->InsertText(static_cast<int>(at), wxString::FromUTF8("\n" + pad));
     editor_->EndUndoAction();
     EnterInsert(at + 1 + pad.size());
   }
@@ -944,10 +941,10 @@ void ScriptVim::Search(const std::string& pattern, bool backward, int count) {
   if (pattern.empty()) return;
   std::string needle = pattern;
   bool case_insensitive = false;
-  if (needle.starts_with("\c")) {
+  if (needle.starts_with("\\c")) {
     case_insensitive = true;
     needle.erase(0, 2);
-  } else if (needle.starts_with("\C")) {
+  } else if (needle.starts_with("\\C")) {
     needle.erase(0, 2);
   }
   std::string haystack = Text();

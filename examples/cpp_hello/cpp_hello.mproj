@@ -1,0 +1,12 @@
+[project]
+name = "CppHello"
+main_map = "res://maps/main.mmap"
+engine_version = "dev"
+
+[window]
+title = "Mercury C++ Hello"
+width = 1280
+height = 720
+
+[build]
+target = "//examples/cpp_hello:cpp_hello"

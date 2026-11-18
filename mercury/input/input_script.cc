@@ -38,7 +38,7 @@ bool InputScript::LoadFromString(const std::string& text, std::string* error) {
   int number = 0;
   while (std::getline(lines, line)) {
     number++;
-    const auto first = line.find_first_not_of(" 	");
+    const auto first = line.find_first_not_of(" \t\r");
     if (first == std::string::npos || line[first] == '#') continue;
     std::istringstream words(line);
     Step step;
@@ -48,9 +48,9 @@ bool InputScript::LoadFromString(const std::string& text, std::string* error) {
       return false;
     }
     std::getline(words, step.rest);
-    step.rest.erase(0, step.rest.find_first_not_of(" 	"));
+    step.rest.erase(0, step.rest.find_first_not_of(" \t"));
     while (!step.rest.empty() &&
-           (step.rest.back() == '' || step.rest.back() == ' ')) {
+           (step.rest.back() == '\r' || step.rest.back() == ' ')) {
       step.rest.pop_back();
     }
     std::istringstream args(step.rest);

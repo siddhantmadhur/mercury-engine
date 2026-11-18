@@ -8,9 +8,10 @@
  * Every component and asset type the engine knows about, with its fields.
  *
  * Built-in components register at startup (RegisterBuiltinTypes). Game
- * scripts register when the player loads the script bundle (ScriptRuntime). The
- * editor never runs game code, so it learns about scripts from the schema
- * file that the player writes with `--dump-schema`.
+ * scripts register from the game executable through MERCURY_SCRIPT, and
+ * AngelScript classes register when the player loads the script bundle
+ * (ScriptRuntime). The editor never runs game code, so it learns about scripts
+ * from the schema file that the player writes with `--dump-schema`.
  */
 #ifndef MERCURY_SCRIPTING_TYPE_REGISTRY_H
 #define MERCURY_SCRIPTING_TYPE_REGISTRY_H
@@ -63,6 +64,10 @@ struct ComponentInfo {
   HasComponentFn has;
   GetFieldFn get_field;
   SetFieldFn set_field;
+  // Registered by MERCURY_SCRIPT in this executable. Native scripts survive
+  // ScriptRuntime::Shutdown (which drops AngelScript classes); the script
+  // runtime must not remove code that was linked into the game.
+  bool native_script = false;
 
   const FieldInfo* FindField(std::string_view field) const;
 };
@@ -73,6 +78,9 @@ struct AssetTypeInfo {
   std::vector<FieldInfo> fields;
   // Declared by game code (@dataAsset), so saved in the schema.
   bool from_game = false;
+  // Registered by MERCURY_DATA_ASSET in this executable, so it outlives the
+  // script runtime like a native component does.
+  bool native_asset = false;
 
   const FieldInfo* FindField(std::string_view field) const;
 };
@@ -94,8 +102,9 @@ class TypeRegistry {
 
   // Removes scripts that were loaded from a schema (have no attach function).
   void ClearSchemaScripts();
-  // Removes scripts and data assets that game code registered
-  // (ScriptRuntime::Shutdown).
+  // Removes AngelScript scripts and data assets registered by ScriptRuntime.
+  // Types registered by MERCURY_SCRIPT / MERCURY_DATA_ASSET stay: they are
+  // code linked into this executable, not data to reload.
   void ClearGameTypes();
 
   /**

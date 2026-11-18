@@ -27,13 +27,14 @@ Source layout under `mercury/`: `application`, `scene`, `components`, `pipelines
 
 ## Projects and the editor
 
-Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples; `examples/breakout` and `examples/space_invaders` are the classic arcade games built the same way. `examples/model_viewer` loads scenes from the McGuire Computer Graphics Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through benchmark cameras that report per-lap frame rates. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu. Every example is an AngelScript project (`scripts/*.as`), and each has a replay in `tests/`.
+Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples; `examples/breakout` and `examples/space_invaders` are the classic arcade games built the same way. `examples/model_viewer` loads scenes from the McGuire Computer Graphics Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through benchmark cameras that report per-lap frame rates. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu. `examples/cpp_hello` is the same idea as the smallest AngelScript example, but its gameplay component is C++. Every example has a replay in `tests/`.
 
 ```
 pong.mproj              project settings (name, main map, window size)
 maps/main.mmap          the map: nodes and their components
 assets/*.masset         materials and physics materials
-scripts/*.as            game logic: one or more [script] classes per file
+scripts/*.as            game logic in AngelScript (optional when scripts are C++)
+scripts/*.cc            game logic in C++ (optional; see C++ scripts)
 .mercury/               generated: scripts.mschema and build caches (not committed)
 ```
 
@@ -94,7 +95,7 @@ Other files:
 
 Models bring their own materials: base color and texture, opacity, emission (`Ke`, `map_Ke`), normal maps (or `bump` height maps, converted to normal maps on import) and, for OBJ, glossiness from `Ns`/`Ks`. Texture names are matched case-insensitively.
 
-`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]`.
+`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]` (game output folder, and `target = "//pkg:game"` when the gameplay is C++).
 
 ## Components
 
@@ -169,6 +170,13 @@ Configured by a `PostProcessProfile` asset chosen on a `PostProcessVolume`:
 - After editing shaders, rebuild both Debug and Release trees; Debug (`-Od`) output can produce invalid SPIR-V.
 
 ## Scripts
+
+Gameplay is written in either AngelScript or C++. Both use the same component model, reflection and
+map format: a `[script]` AngelScript class and a C++ `MERCURY_SCRIPT` type are both registered in the
+`TypeRegistry`, both show their `Reflect` fields in the Inspector, and both are saved in a `.mmap` by
+name. A project may use both at once.
+
+### AngelScript
 
 Scripts are AngelScript classes in `scripts/` (any `.as` file). The engine compiles every file with
 `CScriptBuilder` in-process at Build/Play time, so there is no external bundler, source map or type
@@ -281,6 +289,60 @@ registers no raw pointers.
 build. There is no separate language-server step. `.mercury/` holds the generated schema and build
 stamps and should not be committed. The editor never runs game code: after each build it runs
 `mercury_player <project> --dump-schema .mercury/scripts.mschema` to learn the scripts' fields.
+
+### C++ scripts
+
+A project can also compile C++ gameplay into its own executable. Derive from `Mercury::Behaviour`,
+describe fields in `Reflect`, and register the class with `MERCURY_SCRIPT` in its `.cc` file:
+
+```cpp
+#include "scripting/behaviour.h"
+
+class Spinner : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed).Tooltip("Degrees per second");
+  }
+  void OnFrame(double dt) override {
+    GetTransform().ChangeRotate({0.0f, speed * static_cast<float>(dt), 0.0f});
+  }
+  float speed = 90.0f;
+};
+
+MERCURY_SCRIPT(Spinner);
+```
+
+The callback names are the C++ ones (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
+`OnCollisionEnter`, ...). `MERCURY_SCRIPT` runs at static initialization, before the player loads a
+map. A reflected struct can be registered as a `.masset` type with `MERCURY_DATA_ASSET(T)` and loaded
+with `Assets().LoadAs<T>(path)`.
+
+C++ scripts and AngelScript classes use the same map component name and field names, so a node can
+mix them. Unlike AngelScript, C++ code is linked into the executable: the shared `mercury_player`
+cannot load it. Build a game executable with the `mercury_game` Bazel macro:
+
+```python
+# my_game/BUILD.bazel
+load("//tools:mercury_game.bzl", "mercury_game")
+
+mercury_game(
+    name = "my_game",
+    project = "my_game.mproj",
+)
+```
+
+`mercury_game` compiles every `.cc`/`.cpp` under `scripts/` and generates a `main()` that calls
+`Mercury::RunPlayer`. Name the target in the project file:
+
+```ini
+[build]
+target = "//my_game:my_game"
+```
+
+The editor's **Build Scripts** and **Play** then run `bazel build` on that target, ask the executable
+for its script list with `--dump-schema`, and launch it. Projects without `[build] target` keep using
+the shared player and its AngelScript runtime. `examples/cpp_hello` is a complete C++ project; build
+and run it with `bazelisk run //examples/cpp_hello:cpp_hello`.
 
 ## UI Toolkit
 

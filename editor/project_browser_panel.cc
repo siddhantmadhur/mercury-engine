@@ -69,8 +69,7 @@ std::string ComputeDirSignature(const fs::path& root) {
       continue;
     }
     mix(it->path().string());
-    hash ^= '
-';
+    hash ^= '\n';
   }
   return std::to_string(hash);
 }

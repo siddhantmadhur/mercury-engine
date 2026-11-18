@@ -182,7 +182,7 @@ std::filesystem::path ArchivePath(const std::filesystem::path& dir,
 
 bool IsValidEntryPath(std::string_view path) {
   if (path.empty() || path.front() == '/' || path.back() == '/') return false;
-  if (path.find('\') != std::string_view::npos) return false;
+  if (path.find('\\') != std::string_view::npos) return false;
   if (path.find(':') != std::string_view::npos) return false;
   size_t start = 0;
   while (start <= path.size()) {

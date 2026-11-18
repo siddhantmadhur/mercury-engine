@@ -57,7 +57,8 @@ constexpr std::string_view kProjectCacheDir = ".mercury";
  * folder as `res://...`; @ref Resolve turns them into filesystem paths and
  * @ref ToResPath does the reverse. The project also holds the settings every
  * scene needs: the main map, window size, gravity and tick rate, layer and tag
- * names, the input actions asset, import defaults and build output.
+ * names, the input actions asset, import defaults, build output and the
+ * optional Bazel target that builds C++ gameplay.
  *
  * @par Minimal .mproj
  * @code{.ini}
@@ -111,6 +112,11 @@ class Project {
   // [build] output: a folder, absolute or relative to the root; empty if unset
   std::string GetBuildOutput() const;
   void SetBuildOutput(std::string path);
+  // [build] target: a Bazel label for a C++ script project's executable, e.g.
+  // "//examples/cpp_hello:cpp_hello". Empty for AngelScript-only projects,
+  // which run the shared mercury_player.
+  std::string GetBuildTarget() const;
+  void SetBuildTarget(std::string target);
   // [physics] gravity, in units per second squared
   glm::vec3 GetGravity() const;
   // [physics] tick_rate: fixed ticks (OnTick + physics steps) per second

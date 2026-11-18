@@ -59,8 +59,7 @@ std::string GuessResourceType(const std::string& path) {
 std::string SanitizeNodeName(std::string_view name) {
   std::string out;
   for (char c : name) {
-    if (c == '/' || c == '"' || c == '\' || c == '
-' || c == '') continue;
+    if (c == '/' || c == '"' || c == '\\' || c == '\n' || c == '\r') continue;
     out.push_back(c);
   }
   // "." and ".." would read as path components.

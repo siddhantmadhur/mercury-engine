@@ -12,14 +12,13 @@
 #include <cstdlib>
 #include <format>
 
-#include "scripting/as/script_api.h"
-#include "scripting/as/script_behaviour.h"
-#include "scripting/type_registry.h"
 #include "debugger/debugger.h"
 #include "math/time.h"
 #include "os/filesystem.h"
-
 #include "scriptbuilder/scriptbuilder.h"
+#include "scripting/as/script_api.h"
+#include "scripting/as/script_behaviour.h"
+#include "scripting/type_registry.h"
 
 namespace Mercury {
 
@@ -86,7 +85,7 @@ std::string MetaValue(const std::vector<std::string>& metadata,
       const char quote = entry[at++];
       std::string value;
       while (at < entry.size() && entry[at] != quote) {
-        if (entry[at] == '\' && at + 1 < entry.size()) at++;
+        if (entry[at] == '\\' && at + 1 < entry.size()) at++;
         value += entry[at++];
       }
       return value;
@@ -108,7 +107,7 @@ std::vector<std::string> MetaQuoted(const std::vector<std::string>& metadata,
         const char quote = entry[at++];
         std::string value;
         while (at < entry.size() && entry[at] != quote) {
-          if (entry[at] == '\' && at + 1 < entry.size()) at++;
+          if (entry[at] == '\\' && at + 1 < entry.size()) at++;
           value += entry[at++];
         }
         values.push_back(std::move(value));
@@ -452,6 +451,27 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
   if (!register_types) return;
 
   for (const auto& script_class : classes_) {
+    // C++ code linked into the executable wins over a script with the same
+    // name; the native type is the one the executable was built with.
+    if (script_class->data_asset) {
+      if (const auto* existing =
+              TypeRegistry::Instance().FindAssetType(script_class->name);
+          existing && existing->native_asset) {
+        PDebug::warn(
+            "{}: a C++ MERCURY_DATA_ASSET with this name is already "
+            "registered; the AngelScript class is ignored",
+            script_class->name);
+        continue;
+      }
+    } else if (const auto* existing =
+                   TypeRegistry::Instance().FindComponent(script_class->name);
+               existing && existing->native_script) {
+      PDebug::warn(
+          "{}: a C++ MERCURY_SCRIPT with this name is already registered; "
+          "the AngelScript class is ignored",
+          script_class->name);
+      continue;
+    }
     std::vector<FieldInfo> fields;
     if (auto instance =
             ScriptBehaviour::Create(*script_class, nullptr, entt::null)) {
