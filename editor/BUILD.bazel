@@ -52,7 +52,7 @@ cc_binary(
     # (PlaySession::PlayerPath), so building the editor builds the player too.
     data = [
         "//mercury:mercury_player",
-        "//mercury/shaders:shaders",
+        "//mercury/materials:materials",
     ],
     deps = [":editor_lib"],
 )

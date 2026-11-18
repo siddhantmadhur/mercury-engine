@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "project.h"
 
 #include <algorithm>
@@ -99,6 +103,15 @@ std::string Project::GetBuildOutput() const {
 
 void Project::SetBuildOutput(std::string path) {
   GetOrAddSection("build").properties.Set("output", std::move(path));
+}
+
+std::string Project::GetBuildTarget() const {
+  auto section = document_.Find("build");
+  return section ? section->properties.GetString("target") : "";
+}
+
+void Project::SetBuildTarget(std::string target) {
+  GetOrAddSection("build").properties.Set("target", std::move(target));
 }
 
 glm::vec3 Project::GetGravity() const {

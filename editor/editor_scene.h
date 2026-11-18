@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * editor_scene.h
  *
@@ -11,14 +15,13 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include <glm/gtc/quaternion.hpp>
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
 
 #include "console.h"
 #include "editor_settings.h"
@@ -35,6 +38,17 @@
 
 namespace Mercury {
 
+/**
+ * @brief Editing controller for a project and its current map
+ *
+ * An @ref EditorScene is a @ref Mercury::MapScene in edit mode plus everything
+ * the editor needs: the open project, the current map, selection, undo/redo,
+ * the scene-viewport camera and tools, asset creation, script builds and Play.
+ * It never executes game code; it edits the map model and saves `.mmap`,
+ * `.mproj` and asset files.
+ *
+ * The panels and frames are the views of this class.
+ */
 class EditorScene : public MapScene {
  public:
   enum class Preset {

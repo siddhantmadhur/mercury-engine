@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * project.h
  *
@@ -45,6 +49,36 @@ constexpr std::string_view kInputActionsExtension = ".minput";
 // Generated per-project data (build info, script schema); never committed.
 constexpr std::string_view kProjectCacheDir = ".mercury";
 
+/**
+ * @brief A Mercury project: the `.mproj` file and its root folder
+ *
+ * A project is a folder with a `.mproj` at its root, like Godot's
+ * `project.godot`. Paths inside project files are written relative to this
+ * folder as `res://...`; @ref Resolve turns them into filesystem paths and
+ * @ref ToResPath does the reverse. The project also holds the settings every
+ * scene needs: the main map, window size, gravity and tick rate, layer and tag
+ * names, the input actions asset, import defaults, build output and the
+ * optional Bazel target that builds C++ gameplay.
+ *
+ * @par Minimal .mproj
+ * @code{.ini}
+ * [project]
+ * name = "HelloMercury"
+ * main_map = "res://maps/main.mmap"
+ *
+ * [window]
+ * title = "Hello Mercury"
+ * width = 1280
+ * height = 720
+ * @endcode
+ *
+ * `Project::Create` creates the file in memory; call @ref Save to write it.
+ * The editor's New Project template uses this, and `RunPlayer` loads a
+ * project before building scripts and creating a @ref MapScene.
+ *
+ * @see Mercury::Map, Mercury::AssetDatabase, Mercury::RunPlayer,
+ * @ref getting_started
+ */
 class Project {
  public:
   /**
@@ -78,6 +112,11 @@ class Project {
   // [build] output: a folder, absolute or relative to the root; empty if unset
   std::string GetBuildOutput() const;
   void SetBuildOutput(std::string path);
+  // [build] target: a Bazel label for a C++ script project's executable, e.g.
+  // "//examples/cpp_hello:cpp_hello". Empty for AngelScript-only projects,
+  // which run the shared mercury_player.
+  std::string GetBuildTarget() const;
+  void SetBuildTarget(std::string target);
   // [physics] gravity, in units per second squared
   glm::vec3 GetGravity() const;
   // [physics] tick_rate: fixed ticks (OnTick + physics steps) per second

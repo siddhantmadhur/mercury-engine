@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Test-only path helpers. Bazel gives each test its own TEST_TMPDIR; fall back
 // to the system temp directory when MERCURY_TEST_CACHE_DIR is not set.
 #ifndef MERCURY_TESTS_TEST_PATHS_H

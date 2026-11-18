@@ -1,11 +1,15 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "parallel_obj.h"
 
 #include <assimp/DefaultIOSystem.h>
-#include <assimp/IOSystem.hpp>
 #include <assimp/MemoryIOWrapper.h>
 #include <assimp/material.h>
 
 #include <algorithm>
+#include <assimp/IOSystem.hpp>
 #include <atomic>
 #include <charconv>
 #include <cstdint>

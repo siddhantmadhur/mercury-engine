@@ -1,11 +1,16 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //
 // Created by smadhur on 5/8/2026.
 //
 
 #ifndef MERCURY_ENGINE_CAMERA_H
 #define MERCURY_ENGINE_CAMERA_H
-#include "transform.h"
 #include <glm/glm.hpp>
+
+#include "transform.h"
 
 namespace Mercury {
 class Camera {

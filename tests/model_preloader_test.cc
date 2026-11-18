@@ -1,4 +1,10 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Tests for loading a map's models on background threads.
+
+#include "scene/model_preloader.h"
 
 #include <gtest/gtest.h>
 
@@ -10,7 +16,6 @@
 #include "project/map.h"
 #include "project/project.h"
 #include "scene/map_scene.h"
-#include "scene/model_preloader.h"
 #include "scripting/type_registry.h"
 
 using namespace Mercury;

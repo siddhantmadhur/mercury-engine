@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * filesystem.h
  *
@@ -30,7 +34,7 @@ namespace Mercury::os {
 /**
  * @brief Serves reads under `prefix` from `pack`
  * @param entry_prefix prepended to the path below `prefix` to name the entry,
- * e.g. "ui/" so <prefix>/fonts/a.ttf reads the entry ui/fonts/a.ttf
+ * e.g. "ui/" so `<prefix>/fonts/a.ttf` reads the entry `ui/fonts/a.ttf`
  *
  * Later mounts are searched first. A path under a mount that the pack
  * doesn't have is read from disk.
@@ -64,10 +68,11 @@ fs::path BundleResourcesDir();
 // packaged editor. A shipped game mounts engine.mpack at this path instead.
 fs::path EngineUiResourceDir();
 
-// Where the compiled SPIR-V shaders live: bazel-bin/mercury/shaders in a
-// development build, or Contents/Resources/shaders in a packaged editor.
-// A shipped game mounts engine.mpack at this path instead.
-fs::path EngineShaderDir();
+// Where the compiled Filament materials (.filamat) live:
+// bazel-bin/mercury/materials in a development build, or
+// Contents/Resources/materials in a packaged editor. A shipped game mounts
+// engine.mpack at this path instead.
+fs::path EngineMaterialDir();
 
 // Points the Vulkan loader at the MoltenVK ICD shipped next to the program (in
 // a .app bundle's Resources, or in the game folder that Build Game wrote).

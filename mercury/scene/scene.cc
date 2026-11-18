@@ -1,8 +1,13 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //
 // Created by smadhur on 4/20/2026.
 //
 
 #include "scene.h"
+
 #include <properties/camera.h>
 
 namespace Mercury {
@@ -55,13 +60,6 @@ bool GameScene::GetCameraPosition(glm::vec3& position) {
   return true;
 }
 
-std::vector<StaticVertex> GameScene::GetStaticVertices() {
-  return object_manager_->GetStaticVertices();
-}
-std::vector<UINT> GameScene::GetStaticIndices() {
-  return object_manager_->GetStaticIndices();
-}
-TextureAtlas& GameScene::GetAtlas() { return object_manager_->GetAtlas(); }
 float GameScene::GetWidth() const { return this->width_; }
 void GameScene::SetHeight(float height) { this->height_ = height; }
 void GameScene::SetInputManager(InputManager* input_manager) {

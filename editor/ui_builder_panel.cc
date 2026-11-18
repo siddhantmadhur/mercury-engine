@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "ui_builder_panel.h"
 
 #include <wx/dataobj.h>
@@ -13,11 +17,11 @@
 #include <format>
 #include <sstream>
 
-#include "scene/scene.h"
 #include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
 #include "project/asset_database.h"
+#include "scene/scene.h"
 #include "ui/style.h"
 
 namespace Mercury::EditorUI {

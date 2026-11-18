@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * application.h
  *
@@ -22,7 +26,6 @@
 #endif
 #include "GLFW/glfw3.h"
 #include "input/input_script.h"
-#include "pobject/texture_atlas.h"
 #include "scene/scene.h"
 
 constexpr int kTicksPerSec = 60;
@@ -40,6 +43,34 @@ namespace Mercury {
  * data structure that defines the types of objects needed to be rendered along
  * with the types of shaders required for each backend.
  *
+ * @details
+ * An Application owns the window and the frame loop, but not the game itself:
+ * a @ref Mercury::GameScene holds the world and is stepped by the application.
+ * The loop turns real time into two different deltas:
+ *
+ * - @ref Mercury::GameScene::OnFrame runs once per rendered frame, for camera
+ *   movement, animation and UI;
+ * - @ref Mercury::GameScene::OnTick runs at the scene's fixed rate
+ *   (@ref kTicksPerSec by default), before physics, so simulation is stable
+ *   regardless of the frame rate.
+ *
+ * The usual entry point for a game is @ref Mercury::RunPlayer, which loads a
+ * project and creates a @ref Mercury::MapScene. Derive from this class only
+ * when you are adding a graphics backend; use `Mercury::DefaultApplication`
+ * directly (or derive from its backend) when hosting a custom scene.
+ *
+ * @par Example
+ * @code{.cpp}
+ * #include "application/default_application.h"
+ *
+ * int main() {
+ *   Mercury::DefaultApplication app("My Game", 1280, 720);
+ *   app.SetGameScene(std::make_unique<MyScene>());  // a GameScene subclass
+ *   return app.Run();
+ * }
+ * @endcode
+ *
+ * @see Mercury::VulkanApplication, Mercury::GameScene, Mercury::RunPlayer
  */
 class Application : public RenderHost {
  public:
@@ -119,8 +150,6 @@ class Application : public RenderHost {
    * rendered by the backend. Runs once every frame
    */
   virtual void Render() = 0;  // Renders objects
-
-  virtual void OnNewTick() = 0;
 
   /**
    * @brief Callback that runs when an application is resized

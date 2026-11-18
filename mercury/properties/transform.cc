@@ -1,16 +1,20 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //
 // Created by smadhur on 4/12/2026.
 //
 
 #include "transform.h"
 
-#include "glm/common.hpp"
-#include "glm/glm.hpp"
-#include "debugger/debugger.h"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/trigonometric.hpp"
-
 #include <cmath>
+
+#include "debugger/debugger.h"
+#include "glm/common.hpp"
+#include "glm/ext/matrix_transform.hpp"
+#include "glm/glm.hpp"
+#include "glm/trigonometric.hpp"
 
 namespace Mercury {
 Transform::Transform() : transformations_(0) {

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * script_runtime.cc
  */
@@ -8,14 +12,13 @@
 #include <cstdlib>
 #include <format>
 
-#include "scripting/as/script_api.h"
-#include "scripting/as/script_behaviour.h"
-#include "scripting/type_registry.h"
 #include "debugger/debugger.h"
 #include "math/time.h"
 #include "os/filesystem.h"
-
 #include "scriptbuilder/scriptbuilder.h"
+#include "scripting/as/script_api.h"
+#include "scripting/as/script_behaviour.h"
+#include "scripting/type_registry.h"
 
 namespace Mercury {
 
@@ -448,6 +451,27 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
   if (!register_types) return;
 
   for (const auto& script_class : classes_) {
+    // C++ code linked into the executable wins over a script with the same
+    // name; the native type is the one the executable was built with.
+    if (script_class->data_asset) {
+      if (const auto* existing =
+              TypeRegistry::Instance().FindAssetType(script_class->name);
+          existing && existing->native_asset) {
+        PDebug::warn(
+            "{}: a C++ MERCURY_DATA_ASSET with this name is already "
+            "registered; the AngelScript class is ignored",
+            script_class->name);
+        continue;
+      }
+    } else if (const auto* existing =
+                   TypeRegistry::Instance().FindComponent(script_class->name);
+               existing && existing->native_script) {
+      PDebug::warn(
+          "{}: a C++ MERCURY_SCRIPT with this name is already registered; "
+          "the AngelScript class is ignored",
+          script_class->name);
+      continue;
+    }
     std::vector<FieldInfo> fields;
     if (auto instance =
             ScriptBehaviour::Create(*script_class, nullptr, entt::null)) {

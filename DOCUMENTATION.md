@@ -23,17 +23,18 @@ Mercury is a C++ engine for producing games, covering windowing, input, renderin
 - **Scenes** (`Mercury::GameScene`) are a state of the game. They manage objects, their properties and physics, and know nothing about drawing or windowing.
 - **Primitives** are the minimum a scene must hand over to get an object on screen. The Application turns them into buffers and draws them. How primitives are batched or pooled (for example one texture atlas to cut draw calls) is up to the scene.
 
-Source layout under `mercury/`: `application`, `scene`, `components`, `pipelines` (Vulkan rendering), `shaders` (HLSL), `physics_engine`, `animation`, `audio`, `input`, `ui`, `scripting`, `serialization`, `project`, `pack` and `os`.
+Source layout under `mercury/`: `application` (Filament renderer), `materials` (Filament `.mat` definitions), `scene`, `components`, `physics_engine`, `animation`, `audio`, `input`, `ui`, `scripting`, `serialization`, `project`, `pack` and `os`.
 
 ## Projects and the editor
 
-Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples; `examples/breakout` and `examples/space_invaders` are the classic arcade games built the same way. `examples/model_viewer` loads scenes from the McGuire Computer Graphics Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through benchmark cameras that report per-lap frame rates. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu. Every example is an AngelScript project (`scripts/*.as`), and each has a replay in `tests/`.
+Games are projects, like in Unity and Godot, rather than hand-written `GameScene`s. `examples/pong` (2D) and `examples/roll_a_ball` (3D, after Unity's tutorial) are complete examples; `examples/breakout` and `examples/space_invaders` are the classic arcade games built the same way. `examples/model_viewer` loads scenes from the McGuire Computer Graphics Archive (Sponza, the Stanford Bunny, Cornell boxes, ...) from a menu, with fly-through benchmark cameras that report per-lap frame rates. `examples/monkey_ball` is a Super Monkey Ball style stage with a HUD and pause menu. `examples/cpp_hello` is the same idea as the smallest AngelScript example, but its gameplay component is C++. Every example has a replay in `tests/`.
 
 ```
 pong.mproj              project settings (name, main map, window size)
 maps/main.mmap          the map: nodes and their components
 assets/*.masset         materials and physics materials
-scripts/*.as            game logic: one or more [script] classes per file
+scripts/*.as            game logic in AngelScript (optional when scripts are C++)
+scripts/*.cc            game logic in C++ (optional; see C++ scripts)
 .mercury/               generated: scripts.mschema and build caches (not committed)
 ```
 
@@ -94,7 +95,7 @@ Other files:
 
 Models bring their own materials: base color and texture, opacity, emission (`Ke`, `map_Ke`), normal maps (or `bump` height maps, converted to normal maps on import) and, for OBJ, glossiness from `Ns`/`Ks`. Texture names are matched case-insensitively.
 
-`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]`.
+`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]` (game output folder, and `target = "//pkg:game"` when the gameplay is C++).
 
 ## Components
 
@@ -105,11 +106,11 @@ A node's position is relative to its parent; maps are flattened to world positio
 | `Transform` | `position`, `rotation` (Euler degrees, applied X, then Y, then Z) and `scale` |
 | `SpriteRenderer` | An unlit quad on the XY plane, sized by the scale (2D) |
 | `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file (node tree, materials, skin and clips; `node` draws one part, `materials` overrides them) |
-| `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture`, `post_processing` |
+| `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `skybox` + `skybox_intensity`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture`, `post_processing` |
 | `DirectionalLight` | Sunlight along its -Z: `color`, `intensity`, `ambient`, `ground_ambient`, `cast_shadows` (see [Lighting](#lighting)) |
-| `PointLight` | Light in every direction: `color`, `intensity`, `range` (Unity's falloff; up to 16 per map). Soft cube-map shadows that widen with `radius`; `shadows = "hard"` or `"none"` changes that |
-| `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance. Exact diffuse lighting, soft shadows; up to 4 per map, 8 shadowed point and area lights in all |
-| `LightProbeVolume` | Settings for global illumination (see [Global illumination](#global-illumination)): `size`, `resolution`, `fit_to_scene`, `bounces`, `intensity` (0 turns it off) |
+| `PointLight` | Light in every direction: `color`, `intensity`, `range` (Unity's falloff; up to 16 per map). Soft shadows that widen with `radius`; `shadows = "hard"` or `"none"` changes that |
+| `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance. The Filament renderer approximates it with a spot light; up to 4 per map |
+| `LightProbeVolume` | Legacy global-illumination settings; the Filament renderer uses the skybox IBL instead (see [Lighting](#lighting)) |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps without pushing |
 | `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |
@@ -121,54 +122,99 @@ A node's position is relative to its parent; maps are flattened to world positio
 
 ## Rendering
 
-Rendering uses Vulkan 1.3 with dynamic rendering. Shaders are written in HLSL (`mercury/shaders/`) and compiled to SPIR-V by DXC at build time (Bazel's shader rule finds `dxc` in `bin/dxc/`, `VULKAN_SDK` or the system). Shader files are named by stage: `*.vs.hlsl` vertex, `*.ps.hlsl` pixel, `*.cs.hlsl` compute, with shared code in `*.hlsli`.
+Mercury renders with [Filament](https://github.com/google/filament) (Google's
+PBR engine), on its Vulkan backend. Filament owns the GPU: device, swapchain,
+pipeline state, shadow maps and post-processing are the library's, so the
+engine only translates its own world into Filament objects.
+
+- `mercury/application/filament_application.{h,cc}` — the `Application` and
+  `RenderHost` implementation: Engine/Renderer/SwapChain lifetime, one `View`
+  per output (window, editor viewport, camera preview, UI Builder canvas) and
+  the pixel readbacks the editor copies out.
+- `mercury/application/filament/filament_renderer.{h,cc}` — mirrors the ECS
+  into a Filament `Scene`: `RenderMesh` draws become renderables (with skins),
+  `ImageData` becomes textures, `SceneLighting` becomes a sun, point lights and
+  a constant ambient `IndirectLight`.
+- `mercury/application/filament/filament_ui.{h,cc}` — draws
+  `UI::UIDrawData` with Filament (one renderable per command, textures from
+  `UITextureRegistry`).
+- `mercury/materials/*.mat` — Mercury's material definitions. `matc`
+  (built by `//third_party:filament_build`) compiles them to `.filamat` at
+  build time; the player and editor read them from `mercury/materials` (or
+  from `engine.mpack` in a shipped build).
 
 ### Frame outline
 
-1. **Culling:** `cull.cs.hlsl` runs on the GPU, one thread per draw slot, testing each against a view and appending indexed indirect draws to four buckets (single/double-sided, normal/mirrored). Views then draw with `vkCmdDrawIndexedIndirectCount`.
-2. **Shadow passes:** the sun's maps, and cube maps for point and area lights, are drawn with `shadow.vs`/`model_shadow.vs` and `shadow_cube.ps`. Glass is drawn into transmittance maps (`shadow_transmit.ps`).
-3. **Probe capture** (when lights or still geometry change): see [Global illumination](#global-illumination).
-4. **Main pass:** `model.vs`/`model.ps` draw lit models into a linear HDR target, plus a view-space normal target used by SSAO. `sky.ps` draws the background and `skybox` a cubemap/panorama.
-5. **Glass:** after the opaque pass the scene is copied (`scene_copy.ps`) so transmissive surfaces can sample what is behind them.
-6. **Post-processing:** fullscreen passes (`fullscreen.vs` + `post_common.hlsli`) for SSAO, bloom, FXAA, outline and the final composite.
-7. **UI:** `ui.vs`/`ui.ps` draw the UI Toolkit on top.
+1. `FilamentRenderer::SyncScene` reconciles the registry: new/changed
+   `RenderMesh` entities are rebuilt, transforms and bones updated, lights
+   rebuilt when their values changed.
+2. The main camera becomes the window's scene view; the game's
+   `UI::UIDrawData`, when there is one, is drawn by a second view over it
+   (`BlendMode::TRANSLUCENT`).
+3. Editor outputs render into `RenderTarget`s (colour + depth textures) and
+   are copied to the CPU with `Renderer::readPixels`; `CopyScenePixels`,
+   `CopyPreviewPixels` and `CopyUIPreviewPixels` hand those buffers to the
+   editor.
+4. Filament's own passes follow: shadow maps, GTAO/SSAO, bloom, tonemapping
+   and anti-aliasing are all library features enabled through `View` options.
 
 ### Lighting
 
-Surfaces use Cook-Torrance GGX shading with a metallic/roughness material model. Light sources:
+Materials are Filament's physically-based `lit` model (metallic/roughness,
+image-based ambient). `SceneLighting` maps onto:
 
-- **Directional light:** PCF shadows from a detailed shadow map covering `shadow_distance` around the camera, plus a scene-wide map of the still geometry (redrawn only when it or the sun changes) that shadows everything farther away.
-- **Point lights:** Unity's falloff, soft cube-map shadows whose softness follows `radius`.
-- **Area lights:** rectangles with exact diffuse lighting and shadows whose penumbra grows with distance from the caster.
-- **Shadow cost control:** point/area shadow maps are redrawn only when the light or something near it moves.
-- **Glass and transmissive materials** refract the scene behind them (blurred by roughness, tinted, under a Fresnel reflection), and tint light passing through them via the transmittance maps. Without a scene copy (overlays, RenderTextures) they just alpha-blend.
+- **Directional light** → a Filament `SUN` (colour × intensity in lux), with
+  shadow maps.
+- **Point lights** → Filament `POINT` lights (lumens), with per-light shadow
+  bias and bulb radius.
+- **Area lights** → a Filament `SPOT` aimed along the rectangle's normal.
+  Filament has no rectangle light; the spot is the native approximation.
+- **Ambient (`ambient`, `ambient_ground`)** → a constant ambient
+  `IndirectLight` built from spherical harmonics; the two colours are
+  averaged, so the hemispheric gradient the old renderer had is gone.
+- **Skybox panoramas** (`.png`, `.jpg`, `.hdr`) → prefiltered with Filament's
+  `IBLPrefilterContext` into a `Skybox` and an `IndirectLight` with specular
+  reflections and irradiance. `skybox_intensity` is the `IndirectLight`
+  intensity in lux; `clear = "color"` keeps the panorama out of the frame
+  while still using it for image-based light and reflections.
+- **Soft shadows** → Filament's PCSS (`View::setShadowType`); the light's
+  physical size (`radius`, or the area light's rectangle) sets the penumbra.
 
-### Global illumination
-
-Every map has GI. Without a `LightProbeVolume` component the renderer fits a grid of light probes around the still geometry.
-
-- Each probe captures the lit scene (sun shadowed over the whole grid, ambient colors as the sky) as six cube faces, which `probe_sh.ps` projects to L2 spherical harmonics. `probe_octa.ps` and `probe_visibility.ps` build octahedral irradiance and distance maps, so walls hide the probes behind them (no light leaking).
-- One bounce is added per pass (`bounces`). Probes that mostly see back faces are inside geometry and are marked unusable.
-- Surfaces take indirect light from the probes instead of the flat hemispheric ambient. The grid updates when lights or still objects change; objects that moved in the last 2 seconds and skinned meshes are lit by it but not captured.
+`LightProbeVolume` is a legacy component. Filament's global illumination is
+its distant IBL (the camera's skybox panorama) plus screen-space reflections;
+the renderer does not build a probe grid from the volume. Keep the component
+in old maps for compatibility, but author new lighting with the skybox and
+the Filament light components.
 
 ### Post-processing
 
-Configured by a `PostProcessProfile` asset chosen on a `PostProcessVolume`:
+`RenderSettings`/`PostProcessProfile` are applied to each Filament `View`:
+tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO, FXAA,
+screen-space reflections (mirrors and glossy surfaces), and PCSS soft
+shadows. Refraction uses Filament's cubemap mode so it also works on
+MoltenVK, where the screen-space refraction pass currently draws nothing.
 
-- **Tonemapping:** none, Neutral (Hable's curve, as Unity's) or ACES, plus exposure, then sRGB encoding.
-- **Bloom:** downsample/upsample chain (`bloom_down`, `bloom_up`).
-- **Vignette.**
-- **SSAO:** half-resolution, darkens only the *indirect* share of the light. On by default; `ambient_occlusion = 0` in the profile, or `ssao_intensity = 0` in the project's `[render]` section for maps without a volume, turns it off. `ao_radius` sets its reach.
-- **FXAA:** on by default; `antialiasing = false` or `fxaa = false` in `[render]` turns it off.
-- **Outline:** a layer-based outline from a mask pass (`outline_mask.ps`).
+### Material notes
 
-### Shader notes
-
-- Descriptor set 0 holds per-frame resources (shadow maps, probe maps, draw data); set 1 holds the bindless texture array. Binding numbers are documented at the top of `model_common.hlsli` and `lighting.hlsli`.
-- C++ structs such as `CullData` (`vk_scene_renderer.h`) must match their HLSL counterparts.
-- After editing shaders, rebuild both Debug and Release trees; Debug (`-Od`) output can produce invalid SPIR-V.
+- `lit_opaque`, `lit_opaque_double_sided`, `lit_transparent`,
+  `lit_transparent_double_sided`, `unlit` and `text_sdf` are the shipped
+  materials. culling and blending are compile-time material properties, which
+  is why each combination exists.
+- Parameters set per draw: `baseColor` (linear), `baseColorMap` (always
+  bound — Filament panics on unbound samplers), `tiling`, `offset`,
+  `metallic`, `roughness` (`1 - smoothness`) and `emissive`.
+- Material variables (`uiParams`, `uiOutline` in `ui.mat`) come from custom
+  vertex attributes (`CUSTOM0`, `CUSTOM1`); the vertex shader copies them with
+  `getCustom0()` so the fragment can read `variable_*`.
 
 ## Scripts
+
+Gameplay is written in either AngelScript or C++. Both use the same component model, reflection and
+map format: a `[script]` AngelScript class and a C++ `MERCURY_SCRIPT` type are both registered in the
+`TypeRegistry`, both show their `Reflect` fields in the Inspector, and both are saved in a `.mmap` by
+name. A project may use both at once.
+
+### AngelScript
 
 Scripts are AngelScript classes in `scripts/` (any `.as` file). The engine compiles every file with
 `CScriptBuilder` in-process at Build/Play time, so there is no external bundler, source map or type
@@ -281,6 +327,60 @@ registers no raw pointers.
 build. There is no separate language-server step. `.mercury/` holds the generated schema and build
 stamps and should not be committed. The editor never runs game code: after each build it runs
 `mercury_player <project> --dump-schema .mercury/scripts.mschema` to learn the scripts' fields.
+
+### C++ scripts
+
+A project can also compile C++ gameplay into its own executable. Derive from `Mercury::Behaviour`,
+describe fields in `Reflect`, and register the class with `MERCURY_SCRIPT` in its `.cc` file:
+
+```cpp
+#include "scripting/behaviour.h"
+
+class Spinner : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed).Tooltip("Degrees per second");
+  }
+  void OnFrame(double dt) override {
+    GetTransform().ChangeRotate({0.0f, speed * static_cast<float>(dt), 0.0f});
+  }
+  float speed = 90.0f;
+};
+
+MERCURY_SCRIPT(Spinner);
+```
+
+The callback names are the C++ ones (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
+`OnCollisionEnter`, ...). `MERCURY_SCRIPT` runs at static initialization, before the player loads a
+map. A reflected struct can be registered as a `.masset` type with `MERCURY_DATA_ASSET(T)` and loaded
+with `Assets().LoadAs<T>(path)`.
+
+C++ scripts and AngelScript classes use the same map component name and field names, so a node can
+mix them. Unlike AngelScript, C++ code is linked into the executable: the shared `mercury_player`
+cannot load it. Build a game executable with the `mercury_game` Bazel macro:
+
+```python
+# my_game/BUILD.bazel
+load("//tools:mercury_game.bzl", "mercury_game")
+
+mercury_game(
+    name = "my_game",
+    project = "my_game.mproj",
+)
+```
+
+`mercury_game` compiles every `.cc`/`.cpp` under `scripts/` and generates a `main()` that calls
+`Mercury::RunPlayer`. Name the target in the project file:
+
+```ini
+[build]
+target = "//my_game:my_game"
+```
+
+The editor's **Build Scripts** and **Play** then run `bazel build` on that target, ask the executable
+for its script list with `--dump-schema`, and launch it. Projects without `[build] target` keep using
+the shared player and its AngelScript runtime. `examples/cpp_hello` is a complete C++ project; build
+and run it with `bazelisk run //examples/cpp_hello:cpp_hello`.
 
 ## UI Toolkit
 

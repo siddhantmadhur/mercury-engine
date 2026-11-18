@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * map_scene.h
  *
@@ -17,16 +21,16 @@
 #include <unordered_map>
 #include <vector>
 
-#include "components/components.h"
-#include "properties/model.h"
-#include "properties/render_mesh.h"
 #include "animation/animator_controller.h"
 #include "audio/audio_system.h"
+#include "components/components.h"
 #include "input/input_actions.h"
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/prefab_cache.h"
 #include "project/project.h"
+#include "properties/model.h"
+#include "properties/render_mesh.h"
 #include "scene/model_preloader.h"
 #include "scene/scene.h"
 #include "ui/ui_system.h"
@@ -38,6 +42,19 @@ class MapScene;
 
 /**
  * @brief Lightweight handle to an entity created from a map node
+ *
+ * A GameObject does not own anything: it is a scene pointer plus an entity id.
+ * Copying it is cheap, and it becomes `!IsValid()` when the object is
+ * destroyed. Scripts see the same concept as the `GameObject` value type;
+ * C++ code can use the typed helpers below to reach components and behaviours.
+ *
+ * @par Example
+ * @code{.cpp}
+ * Mercury::GameObject player = scene.Find("Player");
+ * if (player.IsValid()) {
+ *   player.GetTransform()->SetPosition({0.0f, 1.0f, 0.0f});
+ * }
+ * @endcode
  */
 class GameObject {
  public:
@@ -114,6 +131,32 @@ struct ColliderSet {
   std::vector<ColliderShape> shapes;  // sizes before the Transform's scale
 };
 
+/**
+ * @brief A scene built from a `.mmap` file
+ *
+ * MapScene is the production @ref GameScene. In play mode it creates the
+ * entities for every map node and component, builds physics bodies, loads
+ * assets, runs the `[script]` behaviours and steps the UI. In edit mode it
+ * builds only what the editor needs to draw and edit the map.
+ *
+ * A map node becomes a @ref GameObject; its components are ordinary structs
+ * in `mercury/components/components.h` (Transform, MeshRenderer, Camera,
+ * Rigidbody, colliders, lights, ...). Script components are
+ * @ref Behaviour objects, normally `ScriptBehaviour` instances that forward
+ * the lifecycle callbacks to an AngelScript object.
+ *
+ * @par Example
+ * @code{.cpp}
+ * auto project = Mercury::Project::Load("examples/pong/pong.mproj", &error);
+ * auto scene = std::make_unique<Mercury::MapScene>(
+ *     project, Mercury::MapScene::Mode::kPlay);
+ * Mercury::Map map;
+ * map.Load(project->Resolve(project->GetMainMap()), &error);
+ * scene->Instantiate(map);
+ * @endcode
+ *
+ * @see Mercury::GameObject, Mercury::Behaviour, Mercury::Map, Mercury::Project
+ */
 class MapScene : public GameScene {
  public:
   enum class Mode { kPlay, kEdit };
@@ -295,10 +338,6 @@ class MapScene : public GameScene {
   // scene may change on its own every frame.
   bool HasActiveBehaviours() const;
 
-  // Loads (once) a texture owned by the scene; nullptr if it can't be read.
-  Texture2D* GetTexture(std::string_view res_path);
-  // Loads (once) a model file; nullptr if it can't be read.
-  const Mesh* GetModel(std::string_view res_path);
   // Loads (once) a model with its hierarchy, materials and clips.
   std::shared_ptr<const Model> GetModelAsset(std::string_view res_path);
   // Loads (once) an image for the model renderer; null if unreadable.
@@ -407,8 +446,6 @@ class MapScene : public GameScene {
   bool running_ = false;
   PrefabCache prefabs_;
 
-  std::map<std::string, std::unique_ptr<Texture2D>, std::less<>> textures_;
-  std::map<std::string, std::unique_ptr<Mesh>, std::less<>> models_;
   std::string pending_map_;  // LoadMap
   void LoadPendingMap();
   ModelPreloader preloader_;

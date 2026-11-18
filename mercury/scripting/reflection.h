@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * reflection.h
  *
@@ -15,8 +19,8 @@
 #ifndef MERCURY_SCRIPTING_REFLECTION_H
 #define MERCURY_SCRIPTING_REFLECTION_H
 
-#include <glm/glm.hpp>
 #include <functional>
+#include <glm/glm.hpp>
 #include <initializer_list>
 #include <string>
 #include <string_view>

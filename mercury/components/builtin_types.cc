@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Registers the engine's built-in components and asset types with the
 // TypeRegistry, along with how MapScene attaches each one to an entity.
 
@@ -5,11 +9,11 @@
 #include <cmath>
 #include <optional>
 
+#include "animation/animator.h"
+#include "audio/audio_system.h"
 #include "components/components.h"
 #include "properties/camera.h"
 #include "properties/primitives.h"
-#include "animation/animator.h"
-#include "audio/audio_system.h"
 #include "properties/render_mesh.h"
 #include "scene/map_scene.h"
 #include "scripting/type_registry.h"
@@ -61,23 +65,50 @@ AttachFn StoreAsProperty(const char* name) {
   };
 }
 
+// A sprite's quad as RenderMesh geometry, so every renderer draws sprites
+// through the same path as MeshRenderer.
+std::shared_ptr<const MeshGeometry> MakeSpriteQuad(glm::vec4 color) {
+  std::vector<ModelVertex> vertices(4);
+  vertices[0].position = glm::vec3(0.5f, 0.5f, 0.0f);
+  vertices[0].uv = glm::vec2(1.0f, 0.0f);
+  vertices[1].position = glm::vec3(0.5f, -0.5f, 0.0f);
+  vertices[1].uv = glm::vec2(1.0f, 1.0f);
+  vertices[2].position = glm::vec3(-0.5f, -0.5f, 0.0f);
+  vertices[2].uv = glm::vec2(0.0f, 1.0f);
+  vertices[3].position = glm::vec3(-0.5f, 0.5f, 0.0f);
+  vertices[3].uv = glm::vec2(0.0f, 0.0f);
+  for (ModelVertex& vertex : vertices) vertex.color = color;
+  // Counter-clockwise seen from +Z, so the quad faces a camera looking
+  // down -Z (the same convention as the primitives).
+  return MeshGeometry::Create(std::move(vertices), {0, 3, 1, 1, 3, 2});
+}
+
 void AttachSprite(MapScene& scene, kEntityId entity,
                   const mtext::PropertyList& properties) {
   auto sprite = ReadFields<SpriteRenderer>(
       properties, scene.GetGameObject(entity).GetPath() + ".SpriteRenderer");
   scene.Objects().AddProperty(entity, sprite);
-  if (!sprite.visible) return;
 
   const auto material =
       scene.Assets().LoadAs<MaterialAsset>(sprite.material.path);
-  Mesh quad = PObjectManager::MakeQuadMesh(sprite.color * material.color);
-  quad.tiling_ = material.tiling;
-  scene.Objects().AddProperty(entity, std::move(quad));
+
+  RenderMesh mesh;
+  mesh.visible = sprite.visible;
+  mesh.cast_shadows = false;  // sprites never cast shadows
+  RenderMaterial surface;
+  surface.unlit = true;  // sprites are never lit
+  surface.transparent = true;
+  surface.color = sprite.color * material.color;
+  surface.tiling = material.tiling;
   if (material.texture.IsSet()) {
-    if (auto texture = scene.GetTexture(material.texture.path)) {
-      scene.Objects().AddProperty(entity, TextureRef{texture});
-    }
+    surface.texture = scene.GetImage(material.texture.path);
   }
+  RenderDraw draw;
+  draw.geometry = MakeSpriteQuad(surface.color);
+  mesh.draws.push_back(draw);
+  mesh.materials.push_back(std::move(surface));
+  mesh.ComputeBounds();
+  scene.Objects().AddProperty(entity, std::move(mesh));
 }
 
 void AttachMeshRenderer(MapScene& scene, kEntityId entity,

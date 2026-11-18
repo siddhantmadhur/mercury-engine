@@ -1,0 +1,335 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+/**
+@page getting_started Getting Started
+
+@tableofcontents
+
+This page is a hands-on introduction to Mercury. It takes you from a fresh
+checkout to a small project that runs in the editor and in the player. If you
+only want the reference for a class, start at the
+<a href="namespaces.html">Namespaces</a> or
+<a href="annotated.html">Classes</a> pages; every public
+type has a page generated from its header.
+
+@section getting_started_what What Mercury is
+
+Mercury is a C++ engine for simulation games (think SimCity or Railroad
+Tycoon), not a general-purpose 3D engine. It provides:
+
+- a Vulkan 1.3 renderer with lighting, shadows, global illumination,
+  post-processing and a UI renderer;
+- a fixed-step game loop, input, physics (Jolt), audio (miniaudio), animation
+  and asset loading;
+- **the Mercury Editor**, a wxWidgets application for making projects; and
+- **AngelScript and C++** as gameplay languages. AngelScript scripts are
+  compiled by an embedded engine; C++ components are linked into a per-project
+  executable. Both use the same component model, reflection and map format.
+
+For a beginner, the quickest path is AngelScript: a project (`.mproj`), a map
+(`.mmap`) and `.as` files, run by the shared `mercury_player`. C++ scripts use
+the same `Behaviour` callbacks but need a small Bazel target; see
+@ref getting_started_cpp "Writing gameplay in C++".
+
+@section getting_started_requirements Requirements
+
+| Platform | Renderer | Status |
+|---|---|---|
+| Windows 10/11 | Vulkan | Renderer supported; the setup and build scripts currently target macOS and Linux |
+| Linux (X11/Wayland) | Vulkan | Supported |
+| macOS (Apple Silicon) | MoltenVK | Supported |
+
+You need a GPU and driver with Vulkan 1.3 and dynamic rendering, plus
+[Bazelisk](https://github.com/bazelbuild/bazelisk). On macOS the minimum is
+macOS 26. Follow the more detailed platform steps in the project
+<a href="index.html">README</a> or run the setup script, which installs the
+toolchain, Vulkan loader, MoltenVK, DXC and the other development packages:
+
+@code{.sh}
+./scripts/setup_project.pl
+@endcode
+
+@section getting_started_build Build and run an example
+
+Build the player and run the Pong example:
+
+@code{.sh}
+bazelisk build //mercury:mercury_player
+bazelisk test //tests/...
+bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+@endcode
+
+A bare `bazel build` has no implicit target in Bazel 8, so name a target.
+Close the game window (or press Escape, where the example supports it) to
+stop it.
+
+Other complete examples live in `examples/`:
+
+- `pong` -- 2D, the smallest complete game;
+- `roll_a_ball` -- 3D physics, input actions and a HUD;
+- `breakout` and `space_invaders` -- 2D arcade games;
+- `monkey_ball` -- 3D stage with a pause menu;
+- `model_viewer` -- loading larger 3D scenes.
+
+@section getting_started_editor Open the editor
+
+The editor is a separate executable. Give it a project, or no argument to see
+the project launcher:
+
+@code{.sh}
+bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
+bazelisk run //editor:mercury_editor
+@endcode
+
+The launcher lists recent projects and has a **New Project** card. Enter a
+name, choose a folder and pick **2D** or **3D**; the editor creates the
+project, an empty map and the folders a project needs.
+
+The main editor window has these panels:
+
+| Panel | What it is for |
+|---|---|
+| **Hierarchy** | The objects in the current map. **Create** adds objects and child objects. |
+| **Inspector** | The fields of the selected object and the components on it. **Add Component** adds another component or one of your scripts. |
+| **Scene Viewport** | Where you select and move objects. Press W, E or R for move, rotate and scale handles; F frames the selection. |
+| **Project Browser** | The project's files. **Create** makes maps, scripts, assets, UI documents and more. Double-click a file to open it. |
+| **Console** | Engine and script output, including errors. Click a script location in an error to open that line. |
+| **Script Editor** | The built-in AngelScript editor with completion and diagnostics. |
+| **UI Builder**, **Input Actions**, **Lore VCS** | Optional windows under the **Window** menu. |
+
+Useful menu commands:
+
+- **File > Save** (Ctrl+S) saves the current map; **File > Set Current Map as
+  Main Map** makes it the map that runs when the project starts.
+- **GameObject** and the Hierarchy's **Create** menu add empty objects, 3D
+  primitives, lights, cameras and 2D sprites.
+- **Project > Build Scripts** (F7) compiles the AngelScript without running.
+- **Project > Play / Stop** (F5) saves the map, builds the scripts and starts
+  the game in its own process. The Console shows the game's output.
+- **File > Build Game...** (Ctrl+B) produces a shippable folder.
+- **File > Preferences...** switches between the built-in and an external
+  script editor.
+
+The editor never executes game scripts itself. It builds them and asks the
+player for their fields (`--dump-schema`), which is what the Inspector uses to
+show your `[field]` values.
+
+@section getting_started_project A project on disk
+
+A project is a folder with a `.mproj` file at its root. Every stored path is
+relative to that folder and written as `res://...`:
+
+@code{.ini}
+my_game/
+  my_game.mproj          project settings: name, main map, window size, ...
+  maps/main.mmap         the main map: nodes and their components
+  scripts/spinner.as     AngelScript gameplay code (optional)
+  scripts/spinner.cc     C++ gameplay code (optional, needs a build target)
+  assets/white.masset    materials, physics materials and other assets
+  ui/hud.uxml            optional UI Toolkit documents
+  .mercury/              generated (scripts schema and build caches)
+@endcode
+
+`.mercury/` and `Builds/` are generated. Do not commit them; new projects
+include a `.gitignore` that ignores `.mercury/`.
+
+A minimal `.mproj` is:
+
+@code{.ini}
+[project]
+name = "HelloMercury"
+main_map = "res://maps/main.mmap"
+
+[window]
+title = "Hello Mercury"
+width = 1280
+height = 720
+@endcode
+
+@section getting_started_first_script Your first AngelScript script
+
+Scripts are AngelScript files in `scripts/`. A class marked `[script]` becomes
+a component that you can add to a node. The class name is the name the map
+uses; the file name has no special meaning.
+
+Create `scripts/spinner.as`:
+
+@code{.cpp}
+// Rotate this object around its Y axis.
+
+[script]
+class Spinner : Behaviour
+{
+    [field tooltip="Degrees per second"]
+    float speed = 90.0f;
+
+    void onStart()
+    {
+        Debug::Log("Spinner started on " + GetGameObject().name);
+    }
+
+    void onFrame(double dt)
+    {
+        GameObject self = GetGameObject();
+        Vector3 angles = self.eulerAngles;
+        self.eulerAngles = Vector3(angles.x, angles.y + speed * dt, angles.z);
+    }
+}
+@endcode
+
+What each part does:
+
+- `[script]` registers `Spinner` as a component.
+- `float speed` wrapped in `[field]` is shown in the Inspector, saved in the
+  map, and can be changed while designing the game.
+- `onStart()` runs once, after every object in the map exists.
+- `onFrame(double dt)` runs once per rendered frame. `dt` is the frame time in
+  seconds, so `speed * dt` is independent of the frame rate.
+- `onTick(double dt)` is the alternative for physics and simulation work. It
+  runs at the project's fixed tick rate, before physics.
+- `GetGameObject()` returns a handle to the object that owns the script.
+  `name`, `position`, `eulerAngles` and `localScale` are properties on that
+  handle.
+
+Do not call engine functions from a script constructor; the object does not
+exist yet. Use `onStart()` or `awake()` instead.
+
+@section getting_started_add_script Add the script in the editor
+
+1. Create `scripts/spinner.as` in the Project Browser (**Create > Script...**
+   also writes a template) and press **F7** (**Project > Build Scripts**) so
+   the new class appears in the Inspector's component list.
+2. Open the project and select the object that should spin in the
+   **Hierarchy**; the new 3D template already has a **Cube**.
+3. In the **Inspector**, press **Add Component** and choose **Spinner**.
+4. Set **Speed** to the value you want.
+5. Press **F5** (**Project > Play / Stop**) to run it.
+
+The Inspector writes a component section into the map, so the same object can
+also be described by hand:
+
+@code{.ini}
+[node name="Cube" parent="."]
+
+[component type="Transform" node="Cube"]
+position = Vector3(0, 0.5, 0)
+
+[component type="MeshRenderer" node="Cube"]
+
+[component type="Spinner" node="Cube"]
+speed = 45.0
+@endcode
+
+The `node` value is the path from the map root (`.` is the root itself). The
+property names after `[component ...]` are exactly the field names in the
+script. A key that no field has is reported as a warning when the project is
+built, so a renamed field is caught early.
+
+@section getting_started_run Run without the editor
+
+The player executes any project, so you can share a project or run it from a
+terminal:
+
+@code{.sh}
+bazelisk run //mercury:mercury_player -- my_game/my_game.mproj
+# start at another map
+bazelisk run //mercury:mercury_player -- my_game/my_game.mproj --map res://maps/level2.mmap
+@endcode
+
+If the scripts changed, the player compiles them before starting. Useful
+options:
+
+- `--build-scripts` compiles and exits (the same check as F7).
+- `--dump-schema file` writes the fields of every script and exits; the editor
+  uses this to build its Inspector.
+- `--help` prints the usage.
+
+When a script throws, the game keeps running: the error and its
+`scripts/file.as:line:column` location appear in the Console (or terminal). A
+call that runs longer than `MERCURY_SCRIPT_TIMEOUT` seconds (10 by default) is
+aborted as an infinite loop.
+
+@section getting_started_cpp Writing gameplay in C++
+
+AngelScript is optional. A project can link C++ gameplay into its own
+executable, and a project may mix C++ and AngelScript components. A C++ script
+is a class deriving from @ref Mercury::Behaviour, registered with
+`MERCURY_SCRIPT`:
+
+@code{.cpp}
+// scripts/spinner.h
+#include "scripting/behaviour.h"
+
+class Spinner : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed).Tooltip("Degrees per second");
+  }
+  void OnFrame(double dt) override {
+    auto& transform = GetTransform();
+    transform.SetRotate(transform.GetRotate() +
+                        glm::vec3(0.0f, speed * static_cast<float>(dt), 0.0f));
+  }
+  float speed = 45.0f;
+};
+@endcode
+
+@code{.cpp}
+// scripts/spinner.cc
+#include "spinner.h"
+
+MERCURY_SCRIPT(Spinner);
+@endcode
+
+`Reflect` works exactly like `[field]` in AngelScript: it describes the
+Inspector fields and the values saved in the map. The callbacks are the C++
+names (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
+`OnCollisionEnter`, ...). A reflected struct registered with
+`MERCURY_DATA_ASSET(Type)` is the C++ equivalent of `[dataAsset]`.
+
+A C++ project builds its own player with the `mercury_game` Bazel macro:
+
+@code{.py}
+# my_game/BUILD.bazel
+load("//tools:mercury_game.bzl", "mercury_game")
+
+mercury_game(
+    name = "my_game",
+    project = "my_game.mproj",
+)
+@endcode
+
+The macro compiles every `.cc`/`.cpp` under the package's `scripts/` folder,
+links the engine, and generates a `main()` that calls
+@ref Mercury::RunPlayer. Name the executable in the project file so the editor
+knows how to build and run it:
+
+@code{.ini}
+[build]
+target = "//my_game:my_game"
+@endcode
+
+The editor's **Build Scripts** and **Play** then run `bazel build` on the
+target, ask the executable for its script list (`--dump-schema`), and launch
+it. Without `[build] target`, the shared `mercury_player` compiles `.as`
+scripts at run time as before. To run the C++ example:
+
+@code{.sh}
+bazelisk run //examples/cpp_hello:cpp_hello
+@endcode
+
+@section getting_started_next Where to go next
+
+- @ref editor_guide "Mercury Editor guide" -- every panel, Play/Build and
+  shipping.
+- @ref scripting_guide "Scripting guide" -- the script lifecycle, input,
+  physics, UI, events and the full native API.
+- @ref cpp_api "Using the C++ library" -- the engine's C++ entry points.
+- The project
+  <a href="md__d_o_c_u_m_e_n_t_a_t_i_o_n.html">DOCUMENTATION.md</a> describes the
+  file formats, renderer, components and testing in depth.
+- `examples/` contains complete, working projects to copy from.
+
+*/

@@ -32,24 +32,24 @@ single_version_override(
 )
 
 # --------------------------------------------------------------------------
-# Third-party dependencies keep their own build systems. These repositories
-# expose the existing submodule checkouts, and rules_foreign_cc runs their
-# CMake builds (see third_party/BUILD.bazel).
+# Third-party dependencies. The ones with their own build systems keep it, and
+# rules_foreign_cc runs their CMake builds (see third_party/BUILD.bazel).
+# glfw, assimp and Jolt are built from these checkouts; the remaining small
+# dependencies are compiled directly by Bazel and need no repository.
 # --------------------------------------------------------------------------
 
 local_source_repo = use_repo_rule("//third_party:repositories.bzl", "local_source_repo")
+exclude_source_repo = use_repo_rule("//third_party:repositories.bzl", "exclude_source_repo")
 
 local_source_repo(name = "glfw_src", path = "third_party/glfw")
 local_source_repo(name = "assimp_src", path = "third_party/assimp")
 local_source_repo(name = "jolt_src", path = "third_party/JoltPhysics")
-local_source_repo(name = "yoga_src", path = "third_party/yoga")
-local_source_repo(name = "tinyxml2_src", path = "third_party/tinyxml2")
-local_source_repo(name = "meshoptimizer_src", path = "third_party/meshoptimizer")
-local_source_repo(name = "miniaudio_src", path = "third_party/miniaudio")
 
-yoga_wrapper_repo = use_repo_rule("//third_party:repositories.bzl", "yoga_wrapper_repo")
+# Filament keeps its build outputs in out/ and carries nested Bazel package
+# markers; the rule copies the tree and strips both.
+filament_repo = use_repo_rule("//third_party:repositories.bzl", "filament_repo")
 
-yoga_wrapper_repo(name = "yoga_wrapper")
+filament_repo(name = "filament_src", path = "third_party/filament")
 
 vulkan_repo = use_repo_rule("//third_party:repositories.bzl", "vulkan_repo")
 
@@ -58,10 +58,6 @@ vulkan_repo(name = "vulkan")
 wxwidgets_repo = use_repo_rule("//third_party:repositories.bzl", "wxwidgets_repo")
 
 wxwidgets_repo(name = "wxwidgets")
-
-dxc_repo = use_repo_rule("//third_party:repositories.bzl", "dxc_repo")
-
-dxc_repo(name = "dxc")
 
 build_config_repo = use_repo_rule("//third_party:repositories.bzl", "build_config_repo")
 

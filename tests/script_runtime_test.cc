@@ -1,10 +1,14 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Tests of the embedded AngelScript engine itself: evaluation, exceptions and
 // the infinite-loop guard.
+#include "scripting/as/script_runtime.h"
+
 #include <gtest/gtest.h>
 
 #include <string>
-
-#include "scripting/as/script_runtime.h"
 
 using namespace Mercury;
 

@@ -1,13 +1,17 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //
 // Created by smadhur on 4/12/2026.
 //
 
 #ifndef MERCURYENGINE_TRANSFORM_H
 #define MERCURYENGINE_TRANSFORM_H
-#include "glm/detail/func_packing_simd.inl"
 #include <functional>
 #include <vector>
 
+#include "glm/detail/func_packing_simd.inl"
 #include "glm/gtc/quaternion.hpp"
 #include "glm/mat4x4.hpp"
 #include "glm/vec3.hpp"

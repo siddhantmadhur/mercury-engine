@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //
 // Created by smadhur on 4/5/2026.
 //
@@ -210,12 +214,6 @@ void Application::StepFrame() {
   {
     MERCURY_PROFILE_SCOPE("process_on_frame");
     game_scene_->ProcessOnFrame(alpha);
-  }
-  // Rebuild the per-frame vertex/index buffers to match the primitives_ we
-  // are about to render.
-  {
-    MERCURY_PROFILE_SCOPE("new_tick");
-    OnNewTick();
   }
 
   // A minimized window has a 0x0 framebuffer, which most backends cannot create

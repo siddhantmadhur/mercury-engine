@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "map_scene.h"
 
 #include <Jolt/Jolt.h>
@@ -11,8 +15,8 @@
 #include "debugger/profiler.h"
 #include "properties/camera.h"
 #include "properties/primitives.h"
-#include "scripting/behaviour.h"
 #include "scripting/as/script_runtime.h"
+#include "scripting/behaviour.h"
 #include "scripting/type_registry.h"
 #include "ui/ui_document.h"
 
@@ -292,8 +296,6 @@ void MapScene::SetProject(std::shared_ptr<Project> project) {
   ClearMap();
   model_assets_.clear();
   images_.clear();
-  textures_.clear();
-  models_.clear();
   project_ = std::move(project);
   assets_ = std::make_unique<AssetDatabase>(project_);
   prefabs_.SetProject(project_);
@@ -576,6 +578,7 @@ void MapScene::ApplyEnvironmentFrom(kEntityId camera_entity) {
   }
   if (!camera) return;
   clear_color_ = camera->background;
+  lighting_.environment_intensity = camera->skybox_intensity;
   // Loaded by the renderer into its own texture: a panorama is far too
   // big for the sprite atlas that GetTexture() packs into.
   if (camera->skybox.IsSet() && project_) {
@@ -1140,6 +1143,13 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.ssao_samples =
         static_cast<int>(p.GetInt("ssao_samples", settings.ssao_samples));
     settings.fxaa = p.GetBool("fxaa", settings.fxaa);
+    settings.screen_space_reflections = p.GetBool(
+        "screen_space_reflections", settings.screen_space_reflections);
+    settings.reflection_distance = static_cast<float>(
+        p.GetFloat("reflection_distance", settings.reflection_distance));
+    settings.reflection_thickness = static_cast<float>(
+        p.GetFloat("reflection_thickness", settings.reflection_thickness));
+    settings.soft_shadows = p.GetBool("soft_shadows", settings.soft_shadows);
     settings.outline_layers =
         static_cast<uint32_t>(p.GetInt("outline_layers", 0));
     settings.outline_width =
@@ -1175,6 +1185,10 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.ssao_intensity = profile.ambient_occlusion;
     settings.ssao_radius = profile.ao_radius;
     settings.fxaa = profile.antialiasing;
+    settings.screen_space_reflections = profile.screen_space_reflections;
+    settings.reflection_distance = profile.reflection_distance;
+    settings.reflection_thickness = profile.reflection_thickness;
+    settings.soft_shadows = profile.soft_shadows;
   }
   return settings;
 }
@@ -1247,8 +1261,6 @@ std::vector<RenderCamera> MapScene::GetRenderCameras(float width,
     camera.culling_mask =
         static_cast<uint32_t>(candidate.settings->culling_mask);
     camera.clear = static_cast<int>(candidate.settings->clear);
-    if (candidate.settings->skybox.IsSet())
-      camera.clear = static_cast<int>(CameraClear::kSkybox);
     camera.background = candidate.settings->background;
     camera.overlay = candidate.settings->overlay;
     camera.post_processing = candidate.settings->post_processing;
@@ -2113,45 +2125,6 @@ RenderMaterial MapScene::MakeRenderMaterial(const MaterialAsset& material,
   result.double_sided = material.cull == CullMode::kOff;
   result.unlit = material.unlit;
   return result;
-}
-
-const Mesh* MapScene::GetModel(std::string_view res_path) {
-  if (res_path.empty() || !project_) return nullptr;
-  auto it = models_.find(res_path);
-  if (it != models_.end()) return it->second.get();
-
-  std::string error;
-  std::unique_ptr<Mesh> model;
-  if (auto mesh = Primitives::LoadModel(project_->Resolve(res_path).string(),
-                                        glm::vec4(1.0f), &error)) {
-    model = std::make_unique<Mesh>(std::move(*mesh));
-  } else {
-    // Remember the failure so it is only logged once.
-    PDebug::warn("Could not load model {}: {}", res_path, error);
-  }
-  const Mesh* raw = model.get();
-  models_.emplace(std::string(res_path), std::move(model));
-  return raw;
-}
-
-Texture2D* MapScene::GetTexture(std::string_view res_path) {
-  if (res_path.empty() || !project_) return nullptr;
-  auto it = textures_.find(res_path);
-  if (it != textures_.end()) return it->second.get();
-
-  auto texture =
-      std::make_unique<Texture2D>(project_->Resolve(res_path).string());
-  Texture2D* raw = nullptr;
-  if (texture->GetData()) {
-    raw = texture.get();
-    auto& atlas = object_manager_->GetAtlas();
-    atlas.AddTexture(raw);
-    atlas.UpdateAtlas();
-  } else {
-    texture.reset();  // remember the failure so it is only logged once
-  }
-  textures_.emplace(std::string(res_path), std::move(texture));
-  return raw;
 }
 
 }  // namespace Mercury

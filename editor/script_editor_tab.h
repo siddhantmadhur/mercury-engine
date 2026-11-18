@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * script_editor_tab.h
  *
@@ -7,8 +11,8 @@
 #ifndef MERCURY_EDITOR_SCRIPT_EDITOR_TAB_H
 #define MERCURY_EDITOR_SCRIPT_EDITOR_TAB_H
 
-#include <wx/stc/stc.h>
 #include <wx/panel.h>
+#include <wx/stc/stc.h>
 
 #include <filesystem>
 #include <map>

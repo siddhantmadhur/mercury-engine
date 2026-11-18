@@ -1,0 +1,73 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+// The UI Toolkit surface: vertices arrive in normalized device coordinates
+// (the app maps render-target pixels on the CPU), and uiParams carries the
+// draw mode (0 solid, 1 textured, 2 SDF glyph), the SDF edge, the outline
+// width and any extra softness. uiOutline is the glyph outline color.
+
+material {
+    name: MercuryUI,
+    shadingModel: unlit,
+    blending: transparent,
+    depthWrite: false,
+    depthCulling: false,
+    culling: none,
+    flipUV: false,
+    vertexDomain: device,
+    requires: [
+        position,
+        uv0,
+        color,
+        custom0,
+        custom1
+    ],
+    variables: [
+        { name: uiParams, precision: high },
+        { name: uiOutline, precision: high }
+    ],
+    parameters: [
+        { type: sampler2d, name: uiTexture, precision: high }
+    ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        // The draw mode/outline values ride as custom attributes.
+        material.uiParams = getCustom0();
+        material.uiOutline = getCustom1();
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        uint mode = uint(variable_uiParams.x + 0.5);
+        vec4 color = getColor();
+        if (mode == 1u) {
+            color *= texture(materialParams_uiTexture, getUV0());
+            material.baseColor = vec4(color.rgb * color.a, color.a);
+            return;
+        }
+        if (mode != 2u) {
+            material.baseColor = vec4(color.rgb * color.a, color.a);
+            return;
+        }
+        // Signed distance field glyph: alpha is the distance, 0.5 the edge.
+        float distance = texture(materialParams_uiTexture, getUV0()).a;
+        float width = max(fwidth(distance) * 0.7, 1e-4) + variable_uiParams.w;
+        float edge = variable_uiParams.y;
+        float fill = smoothstep(edge - width, edge + width, distance);
+        if (variable_uiParams.z <= 0.0) {
+            float a = color.a * fill;
+            material.baseColor = vec4(color.rgb * a, a);
+            return;
+        }
+        float outer = edge - variable_uiParams.z;
+        float coverage = smoothstep(outer - width, outer + width, distance);
+        vec4 mixed = mix(variable_uiOutline, color, fill);
+        float a = mixed.a * coverage;
+        material.baseColor = vec4(mixed.rgb * a, a);
+    }
+}

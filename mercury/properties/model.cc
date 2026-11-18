@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "model.h"
 
 #include <assimp/ObjMaterial.h>
@@ -8,18 +12,18 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
-#include <set>
 #include <filesystem>
 #include <functional>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <set>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include "algorithms/parallel_for.h"
 #include "debugger/debugger.h"
 #include "meshoptimizer/src/meshoptimizer.h"
 #include "os/filesystem.h"
-#include "algorithms/parallel_for.h"
 #include "properties/model_cache.h"
 #include "properties/parallel_obj.h"
 #include "properties/texture2d.h"

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Tests for loading one big model on several threads: an .obj read in pieces
 // must give the model the whole file would, and ParallelFor must run
 // everything once.
@@ -6,9 +10,9 @@
 
 #include <algorithm>
 #include <atomic>
-#include <map>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 

@@ -1,11 +1,15 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "mesh.h"
 
 #include <utility>
 
 #include "assimp/Importer.hpp"
+#include "assimp/code/Common/StackAllocator.h"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
-#include "assimp/code/Common/StackAllocator.h"
 #include "debugger/debugger.h"
 #include "properties/vfs_io_system.h"
 

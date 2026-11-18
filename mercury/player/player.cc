@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "player.h"
 
 #include <memory>
@@ -73,8 +77,8 @@ bool MountShippedPacks(std::string& project_path) {
   os::Mount(dir, game);
   os::Mount(UI::UIResources::EngineResourceDir(), engine,
             std::string(mpack::kEngineUiFolder));
-  os::Mount(os::EngineShaderDir(), engine,
-            std::string(mpack::kEngineShaderFolder));
+  os::Mount(os::EngineMaterialDir(), engine,
+            std::string(mpack::kEngineMaterialFolder));
   project_path = (dir / mproj).string();
   PDebug::info("Running from {}", game_file.string());
   return true;

@@ -1,14 +1,18 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * script_editor_panel.cc
  */
 #include "script_editor_panel.h"
 
-#include <wx/filename.h>
 #include <wx/clipbrd.h>
+#include <wx/filename.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
-#include <wx/utils.h>
 #include <wx/statbox.h>
+#include <wx/utils.h>
 
 #include <algorithm>
 #include <cctype>

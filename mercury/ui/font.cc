@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "font.h"
 
 #include <algorithm>
@@ -11,7 +15,6 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include "stb/stb_truetype.h"
-
 #include "ui/style_sheet.h"
 
 namespace Mercury::UI {

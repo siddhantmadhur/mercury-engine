@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //
 // Created by smadhur on 4/10/2026.
 //
@@ -13,10 +17,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <glm/glm.hpp>
-#include <vector>
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 #include <memory>
+#include <vector>
 
 using entity_id = uint16_t;
 using kEntityId = entt::entity;

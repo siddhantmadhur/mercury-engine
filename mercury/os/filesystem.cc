@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "filesystem.h"
 
 #include <cstdlib>
@@ -286,13 +290,13 @@ fs::path EngineUiResourceDir() {
   return FirstExistingDir(ResourceCandidates("ui", compiled));
 }
 
-fs::path EngineShaderDir() {
-#ifdef MERCURY_SPIRV_PATH
-  const fs::path compiled(MERCURY_SPIRV_PATH);
+fs::path EngineMaterialDir() {
+#ifdef MERCURY_MATERIAL_PATH
+  const fs::path compiled(MERCURY_MATERIAL_PATH);
 #else
-  const fs::path compiled("shaders");
+  const fs::path compiled("materials");
 #endif
-  return FirstExistingDir(ResourceCandidates("shaders", compiled));
+  return FirstExistingDir(ResourceCandidates("materials", compiled));
 }
 
 void UseBundledVulkanDriver() {

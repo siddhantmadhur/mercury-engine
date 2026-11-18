@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * overlay_canvas.h
  *
@@ -8,9 +12,8 @@
 #define MERCURY_EDITOR_OVERLAY_CANVAS_H
 
 #include <cstdint>
-#include <string>
-
 #include <glm/vec2.hpp>
+#include <string>
 
 namespace Mercury {
 

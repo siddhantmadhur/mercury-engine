@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * mpack.h
  *
@@ -62,7 +66,7 @@ inline constexpr std::string_view kGamePackName = "game";
 inline constexpr std::string_view kEnginePackName = "engine";
 // Folders inside engine.mpack.
 inline constexpr std::string_view kEngineUiFolder = "ui/";
-inline constexpr std::string_view kEngineShaderFolder = "shaders/";
+inline constexpr std::string_view kEngineMaterialFolder = "materials/";
 
 enum class Compression : uint8_t { kStored = 0, kZlib = 1 };
 
@@ -99,7 +103,7 @@ class Writer {
   size_t GetEntryCount() const { return sources_.size(); }
 
   /**
-   * @brief Writes <dir>/<base_name>.mindex, <base_name>.mpack and any _NNN
+   * @brief Writes `<dir>/<base_name>.mindex`, `<base_name>.mpack` and any _NNN
    * archives it needs; max_archive_bytes 0 keeps everything in one archive
    * @return false with `error` filled if a source could not be read or an
    * archive could not be written

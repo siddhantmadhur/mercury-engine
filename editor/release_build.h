@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * release_build.h
  *
@@ -16,6 +20,7 @@
  *
  *   development editor (an engine checkout is present)
  *     -> bazel build -c opt //mercury:mercury_player
+ *     -> or, for C++ scripts, bazel build -c opt <project [build] target>
  *   released editor (no checkout: the player and engine resources ship in the
  *   .app)
  *     -> use Contents/MacOS/mercury_player and Contents/Resources/{ui,shaders}
@@ -77,11 +82,15 @@ class ReleaseBuild {
 
  private:
   struct Config {
-    std::string executable;   // the Release mercury_player
+    std::string executable;   // the Release mercury_player, or the game exe
     std::string source_dir;   // the engine checkout
     std::string target_name;  // what the shipped executable is called
-    std::string spirv_dir;
+    std::string materials_dir;
     std::string ui_resources;
+    // C++ script projects: a Bazel target and its workspace.
+    std::string build_target;
+    std::string workspace_dir;
+    bool native = false;
     Runtime runtime;
   };
   struct PackResult {
@@ -113,6 +122,8 @@ class ReleaseBuild {
   std::string project_name_;
   std::filesystem::path output_dir_;
   uint64_t max_archive_bytes_ = 0;
+  std::string build_target_;
+  std::filesystem::path workspace_dir_;
   std::optional<Config> config_;
 };
 

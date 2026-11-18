@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //! Rust feature crates linked into the Mercury Engine static library.
 //!
 //! Each feature crate (such as `os_filesystem_rs`) is compiled with

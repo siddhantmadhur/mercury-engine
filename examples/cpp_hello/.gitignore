@@ -1,0 +1,3 @@
+# Editor caches and build output.
+.mercury/
+Builds/

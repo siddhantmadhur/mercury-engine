@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * components.h
  *
@@ -142,6 +146,9 @@ struct CameraComponent {
   float far_clip = 1000.0f;
   glm::vec4 background = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
   AssetRef skybox;
+  // Filament's IndirectLight intensity for the skybox, in lux. A bright
+  // studio HDR needs far less than a daylight sky.
+  float skybox_intensity = 30000.0f;
   bool current = true;
   // Camera.enabled: disabled cameras draw nothing.
   bool enabled = true;
@@ -172,8 +179,12 @@ struct CameraComponent {
     r.Field("background", background).Tooltip("Color behind everything");
     r.Field("skybox", skybox, "Texture")
         .Tooltip(
-            "A 2:1 panorama (.png or .jpg) drawn behind everything; replaces "
-            "the background color");
+            "A 2:1 panorama (.png, .jpg or .hdr) drawn behind everything; "
+            "replaces the background color and provides image-based light");
+    r.Field("skybox_intensity", skybox_intensity)
+        .Tooltip(
+            "Brightness (lux) of the skybox's image-based light; lower it for "
+            "a dim or studio environment");
     r.Field("current", current).Tooltip("Render the game from this camera");
     r.Field("enabled", enabled).Tooltip("Disabled cameras draw nothing");
     r.Field("culling_mask", culling_mask)
@@ -291,21 +302,13 @@ struct AreaLight {
 };
 
 /**
- * @brief Settings for light bouncing between surfaces (global illumination)
+ * @brief Legacy light-probe settings (kept for older maps)
  *
- * Every scene has global illumination: without this component the renderer
- * fits a grid of light probes around the scene's still geometry. Like Unity's
- * Adaptive Probe Volume, but computed while the game runs: each probe sees the
- * scene around it and records the light arriving from every direction, and
- * surfaces take their indirect light from the probes instead of the
- * DirectionalLight's ambient colors, so walls tint what is near them and
- * enclosed spaces are darker. Each pass over the probes adds one more bounce;
- * the probes update again when lights or still objects change. Objects that
- * move are lit by the probes but not seen by them.
- *
- * With this component the grid is `size` across, centered on the node, or
- * fitted to the scene when `fit_to_scene` is set. Intensity 0 turns global
- * illumination off (the ambient colors light everything).
+ * Mercury's Filament renderer does not build a probe grid. Its global
+ * illumination is Filament's image-based lighting: give the camera a skybox
+ * panorama and set `skybox_intensity`, and use screen-space reflections for
+ * mirror-like surfaces. The fields below still parse and round-trip so old
+ * maps keep loading.
  */
 struct LightProbeVolume {
   bool fit_to_scene = false;
@@ -878,6 +881,14 @@ struct PostProcessProfile {
   float ambient_occlusion = 0.8f;
   float ao_radius = 0.5f;
   bool antialiasing = true;  // FXAA
+  // Mirror and glossy surfaces reflect the rendered scene. Filament marches
+  // the depth buffer; whatever is off screen comes from the IBL.
+  bool screen_space_reflections = false;
+  float reflection_distance = 5.0f;
+  float reflection_thickness = 0.1f;
+  // Filament's PCSS shadows: point and area lights get penumbrae from their
+  // physical size instead of a fixed blur.
+  bool soft_shadows = true;
 
   void Reflect(Reflector& r) {
     r.Enum("tonemap", tonemap, {"none", "neutral", "aces"});
@@ -900,6 +911,18 @@ struct PostProcessProfile {
         .Tooltip("World-space reach of the occlusion");
     r.Field("antialiasing", antialiasing)
         .Tooltip("Smooths jagged edges (FXAA)");
+    r.Field("screen_space_reflections", screen_space_reflections)
+        .Tooltip(
+            "Mirror and glossy surfaces reflect the rendered scene; what is "
+            "off screen comes from the skybox IBL");
+    r.Field("reflection_distance", reflection_distance)
+        .Tooltip("World-space reach of the reflection rays");
+    r.Field("reflection_thickness", reflection_thickness)
+        .Tooltip("Ray thickness; raise it for thicker geometry");
+    r.Field("soft_shadows", soft_shadows)
+        .Tooltip(
+            "Area and point lights cast soft shadows sized by the light "
+            "(Filament's PCSS)");
   }
 };
 

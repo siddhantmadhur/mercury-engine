@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //
 // Created by smadhur on 4/25/2026.
 //
@@ -13,12 +17,12 @@
 #define NANOSVG_IMPLEMENTATION
 #include "nanosvg/src/nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
-#include "nanosvg/src/nanosvgrast.h"
-
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <string>
+
+#include "nanosvg/src/nanosvgrast.h"
 
 namespace Mercury {
 

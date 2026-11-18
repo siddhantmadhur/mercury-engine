@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * bindings_core.cc
  *
@@ -18,12 +22,12 @@
 #include "physics_engine/physics_engine.h"
 #include "properties/render_mesh.h"
 #include "properties/transform.h"
+#include "scriptarray/scriptarray.h"
 #include "scripting/as/bindings.h"
 #include "scripting/as/bindings_types.h"
 #include "scripting/as/script_behaviour.h"
 #include "scripting/as/script_event.h"
 #include "scripting/as/script_runtime.h"
-#include "scriptarray/scriptarray.h"
 
 namespace Mercury::as {
 

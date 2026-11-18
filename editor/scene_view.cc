@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // The editor's Scene viewport logic: the map rendered offscreen, an editor
 // camera that works in 2D (looking down -Z: pan and zoom) or 3D (look, fly,
 // orbit), click-to-select, move/rotate/scale handles, and gizmos for things

@@ -40,6 +40,7 @@ rotation = Vector3(-22, 0, 0)
 
 [component type="Camera" node="Camera"]
 background = Color(0.42, 0.68, 0.92, 1)
+clear = "skybox"
 skybox = ExtResource("3")
 
 [component type="MonkeyCamera" node="Camera"]

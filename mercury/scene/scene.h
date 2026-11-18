@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 /*
  * scene.h
  *
@@ -129,6 +133,8 @@ struct SceneLighting {
   glm::vec3 color = glm::vec3(1.0f);            // color * intensity
   glm::vec3 ambient = glm::vec3(0.2f);          // from above
   glm::vec3 ambient_ground = glm::vec3(0.07f);  // from below
+  // Filament IndirectLight intensity for the skybox, in lux.
+  float environment_intensity = 30000.0f;
   bool cast_shadows = true;
   float shadow_bias = 0.0015f;
   float shadow_normal_bias = 0.035f;
@@ -160,6 +166,12 @@ struct RenderSettings {
   float ssao_radius = 0.5f;
   int ssao_samples = 12;
   bool fxaa = true;
+  // Filament screen-space reflections for mirrors and glossy surfaces.
+  bool screen_space_reflections = false;
+  float reflection_distance = 5.0f;
+  float reflection_thickness = 0.1f;
+  // Filament's PCSS soft shadows for point and area lights.
+  bool soft_shadows = true;
   // Linework's wide outline around objects on these rendering layers.
   uint32_t outline_layers = 0;
   glm::vec4 outline_color = glm::vec4(1.0f);
@@ -197,6 +209,35 @@ struct RenderCamera {
  * however it likes(one by one or batched) and create the shaders required for
  * each primitive type
  *
+ * @details
+ * The application drives a scene in this order every frame:
+ *
+ * 1. `OnFrame(delta_time)` -- input, animation and non-simulation work.
+ * 2. `OnTickBegin()`, then zero or more `OnTick(fixed_dt)` calls, each followed
+ *    by one physics step. A long frame runs several ticks (capped at five) so
+ *    simulation catches up without a stall snowballing.
+ * 3. `ProcessOnFrame(alpha)` -- interpolation between the last two ticks.
+ * 4. The application's `Render()` reads the cameras, lights and draw data the
+ *    scene exposes.
+ *
+ * A scene therefore never calls Vulkan or GLFW itself. @ref Mercury::MapScene
+ * is the production implementation: it builds the world from a `.mmap`, runs
+ * its @ref Mercury::Behaviour objects and owns physics, assets and UI. Derive
+ * from GameScene when making a custom world without a map file, or when
+ * testing engine pieces in isolation.
+ *
+ * @par Example
+ * @code{.cpp}
+ * class MyScene : public Mercury::GameScene {
+ *  public:
+ *   void OnStart() override {}
+ *   void OnFrame(double dt) override {}
+ *   void OnTick(double dt) override {}
+ *   void OnDestroy() override {}
+ * };
+ * @endcode
+ *
+ * @see Mercury::Application, Mercury::MapScene, Mercury::RenderHost
  */
 class GameScene {
  public:
@@ -250,11 +291,6 @@ class GameScene {
                                                      float height) {
     return {};
   }
-
-  std::vector<StaticVertex> GetStaticVertices();
-  std::vector<UINT> GetStaticIndices();
-
-  TextureAtlas& GetAtlas();
 
   float GetWidth() const;
   float GetHeight() const;

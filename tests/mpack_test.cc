@@ -1,3 +1,9 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+#include "pack/mpack.h"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -5,7 +11,6 @@
 #include <random>
 
 #include "os/filesystem.h"
-#include "pack/mpack.h"
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"

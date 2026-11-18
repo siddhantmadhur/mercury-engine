@@ -1,3 +1,9 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+#include "input/input_actions.h"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -5,7 +11,6 @@
 #include <sstream>
 
 #include "GLFW/glfw3.h"
-#include "input/input_actions.h"
 #include "input/input_actions_codegen.rs.h"
 
 using namespace Mercury;

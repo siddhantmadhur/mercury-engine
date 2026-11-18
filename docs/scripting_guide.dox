@@ -1,0 +1,415 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+/**
+@page scripting_guide Scripting Guide
+
+@tableofcontents
+
+Game behaviour is written in [AngelScript](https://www.angelcode.com/angelscript/)
+files under `scripts/`. The engine compiles every `.as` file in-process when
+you build or play a project. There is no separate bundler, source map or
+language server: a compile error fails **Build Scripts** / **Play** and is
+printed in the Console.
+
+Gameplay can also be written in C++ with the same callbacks, fields, Events
+and map format. The C++ side of both systems is @ref Mercury::Behaviour (the
+base class the engine calls) and @ref Mercury::MapScene (the scene that owns
+the objects). See @ref getting_started_cpp for a complete C++ example.
+
+@section scripting_file A script file
+
+@code{.cpp}
+// scripts/player.as
+[script]
+class Player : Behaviour
+{
+    [field tooltip="Units per second"]
+    float speed = 8.0f;
+
+    void onStart()
+    {
+        Debug::Log("Player ready");
+    }
+
+    void onTick(double dt)
+    {
+        GameObject self = GetGameObject();
+        Vector3 move = Vector3(1.0f, 0.0f, 0.0f) * speed * dt;
+        self.position = self.position + move;
+    }
+}
+@endcode
+
+- A class marked `[script]` is registered as a component. Its map name is
+  the class name; `[script "Name"]` overrides it.
+- A file may hold several classes.
+- A class marked `[dataAsset]` is a ScriptableObject-style asset type: it
+  appears in the **Create** menu and is saved as a `.masset`.
+- Add the component in the Inspector (**Add Component**), or write
+  `[component type="Player" node="Player"]` in a `.mmap`.
+
+@section scripting_lifecycle Lifecycle
+
+The names are Unity's, in camelCase. Define only the callbacks you need.
+
+| Callback | When it runs |
+|---|---|
+| `awake()` | As soon as the object exists; every object in a loaded map exists by then. May run for a disabled script. |
+| `onEnable()` | When the script becomes enabled on an active object. |
+| `onDisable()` | When it stops being enabled or active. |
+| `onStart()` | Once, before the first tick or frame for which the script is enabled. |
+| `onFrame(double dt)` | Every rendered frame. `dt` is in seconds. |
+| `onLateFrame(double dt)` | Every frame after every script's `onFrame` (Unity's `LateUpdate`). |
+| `onTick(double dt)` | Every fixed tick, before physics. Use this for forces, movement and simulation. |
+| `onCollisionEnter/Stay/Leave(GameObject)` | Physics contacts. |
+| `onTriggerEnter/Stay/Exit(GameObject)` | Trigger overlaps. |
+| `onDestroy()` | When the object is destroyed. |
+
+Inside `onTick`, `Time::FixedDeltaTime()` is the fixed step. Do not call
+engine functions from a constructor: the object and its components do not
+exist yet. Initialise plain fields in the constructor and everything else in
+`awake()` or `onStart()`.
+
+Collisions are reported at the start of the next tick. A script that is
+disabled receives no `onStart`, `onFrame` or `onTick`.
+
+@section scripting_fields Inspector fields
+
+`[field]` exposes a public or private field to the Inspector and saves it in
+the map:
+
+@code{.cpp}
+[field tooltip="World units per second"]
+float speed = 60.0f;
+
+[field] int lives = 3;
+[field] string label = "Score";
+[field] Vector3 spawn = Vector3(0.0f, 1.0f, 0.0f);
+[field] Color tint = Color(1.0f, 1.0f, 1.0f, 1.0f);
+[field] array<int> scores;
+[field] Event onDefeated;
+@endcode
+
+Supported field types are `bool`, `int`, `float`, `string`, `Vector2`,
+`Vector3`, `Color`, `Event` and `array<T>` of those. The map key is the field
+name exactly (`minHorizontal`, not `min_horizontal`). A key that no field has
+is a warning when the project is built.
+
+Other metadata:
+
+| Metadata | Meaning |
+|---|---|
+| `[field tooltip="..."]` | An Inspector field with a tooltip. |
+| `[enum "a", "b"]` | Show an `int` as a drop-down; the map stores the name. |
+| `[nodeRef]` | A `string` edited as a node path. |
+| `[asset "Material"]` | A `string` edited as an asset path of the given type. |
+| `[bindable]` on `get_x()` | A computed value UI bindings may read; not saved or shown in the Inspector. |
+| `[callable]` | A method an `Event` may call. Its argument may be none, `bool`, `int`, `float` or `string`. |
+| `[dataAsset]` | A ScriptableObject-style asset type. |
+
+@section scripting_objects Objects and the scene
+
+`GetGameObject()` returns a `GameObject`, a lightweight handle to the object
+that owns the script. Its properties are `name`, `path`, `tag`, `layer`,
+`activeSelf`, `activeInHierarchy`, `parent`, `children`, `position`,
+`rotation`, `eulerAngles`, `localScale`, `velocity`, `isValid`, `hasBounds`,
+`boundsMin` and `boundsMax`. Methods include `FindChild`, `SetParent` and
+`Destroy`.
+
+@code{.cpp}
+GameObject self = GetGameObject();
+self.position = Vector3(0.0f, 2.0f, 0.0f);
+self.eulerAngles = Vector3(0.0f, 90.0f, 0.0f);
+
+GameObject left_wall = Scene::Find("Walls/Left");
+GameObject player = Scene::FindWithTag("Player");
+@endcode
+
+`Scene` creates and loads:
+
+@code{.cpp}
+GameObject bullet = Scene::CreateGameObject("Bullet", GetGameObject());
+GameObject enemy = Scene::Instantiate(prefab, position, rotation, parent);
+Scene::LoadMap("res://maps/level2.mmap");   // applied at the next frame
+Scene::Quit();
+@endcode
+
+`GetGameObject().isValid` is false after `Destroy()`. Using a destroyed
+object throws `GameObject was destroyed`; check `isValid` if another script
+may have destroyed it.
+
+@section scripting_vectors Vectors and math
+
+`Vector2`, `Vector3`, `Quaternion` and `Color` are native value types. Assign
+whole values instead of mutating components:
+
+@code{.cpp}
+Vector3 position = GetGameObject().position;
+Vector3 next = position + Vector3(0.0f, 1.0f, 0.0f) * speed * dt;
+GetGameObject().position = next;
+
+float length = next.Length();
+Vector3 direction = next.Normalized();
+float dot = a.Dot(b);
+Vector3 cross = a.Cross(b);
+@endcode
+
+`Mathf`, `Random` and `Time` follow Unity's names: `Mathf::Clamp`,
+`Mathf::Lerp`, `Mathf::Deg2Rad`, `Mathf::Sqrt`, `Random::Range`,
+`Random::Value`, `Time::DeltaTime`, `Time::FixedDeltaTime`.
+
+@section scripting_components Components
+
+`Components` reads and writes a component by type name:
+
+@code{.cpp}
+Component body = Components::Get(GetGameObject(), "Rigidbody");
+if (!body.isValid)
+    Components::Add(GetGameObject(), "Rigidbody");
+
+float mass = body.GetFloat("mass");
+body.SetFloat("mass", 2.0f);
+@endcode
+
+The generic accessors are `GetFloat`/`SetFloat`, `GetBool`/`SetBool`,
+`GetInt`/`SetInt`, `GetString`/`SetString`, `GetVector2`/`SetVector2`,
+`GetVector3`/`SetVector3` and `GetColor`/`SetColor`. Typed helpers cover
+common components: `AnimatorSetFloat`, `AnimatorPlay`, `AudioPlay`,
+`AudioPlayOneShot`, `AudioSetFloat`, `CharacterMove` and `CharacterGrounded`.
+
+Other scripts are found by type:
+
+@code{.cpp}
+IBehaviour@ other = GetBehaviour(GetGameObject(), "Health");
+Health@ health = cast<Health>(other);
+if (health !is null) health.TakeDamage(10.0f);
+@endcode
+
+@section scripting_physics Physics
+
+@code{.cpp}
+Physics::AddForce(GetGameObject(), Vector3(0.0f, 0.0f, 1.0f), ForceMode::Force);
+Physics::AddImpulse(GetGameObject(), Vector3(0.0f, 5.0f, 0.0f));
+Physics::AddTorque(GetGameObject(), Vector3(0.0f, 1.0f, 0.0f));
+
+bool hit = Physics::Raycast(origin, direction, max_distance, layer_mask,
+                            query_triggers, hit_object, point, normal,
+                            distance);
+@endcode
+
+Use `onTick` for forces and impulses: `onFrame` runs at the display rate,
+while physics advances at the project's fixed tick rate. For a character,
+add a `CharacterController` and call `CharacterMove(displacement)`; check
+`CharacterGrounded()` before jumping. A `Rigidbody` controls static,
+kinematic or dynamic motion, mass, locked axes, damping and gravity;
+`BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`,
+`PlaneCollider` and `MeshCollider` define the shapes. A collider with
+`is_trigger` reports overlaps without pushing.
+
+@section scripting_input Input
+
+Keyboard and mouse:
+
+@code{.cpp}
+if (Input::IsKeyPressed(Key::W))       { /* held */ }
+if (Input::IsKeyJustPressed(Key::Space)) { /* pressed this frame */ }
+if (Input::IsMouseButtonPressed(MouseButton::Left)) { /* ... */ }
+
+Vector2 delta = Input::CursorDelta();
+float wheel = Input::Scroll();
+bool over_ui = Input::IsPointerOverUI();
+@endcode
+
+Projects may define input actions in a `.minput` asset (Unity's Input System).
+Use the generated constants from **Window > Input Actions** with the
+**Generate AngelScript** option enabled:
+
+@code{.cpp}
+private InputAction move;
+private InputAction jump;
+private bool jump_requested = false;
+
+void onStart()
+{
+    move = Input::RequireAction(GameInput::Player::Move);
+    jump = Input::RequireAction(GameInput::Player::Jump);
+}
+
+void onFrame(double dt)
+{
+    if (jump.wasPressedThisFrame) jump_requested = true;
+}
+
+void onTick(double dt)
+{
+    Vector2 value = move.ReadVector2();
+    Vector3 direction(value.x, 0.0f, -value.y);
+    if (direction.SqrLength() != 0.0f)
+        Physics::AddForce(GetGameObject(), direction.Scale(force), 0);
+
+    if (jump_requested) { /* jump */ }
+    jump_requested = false;
+}
+@endcode
+
+Actions update once per frame, but a frame may run zero or several fixed
+ticks. Read a press in `onFrame` and remember it for `onTick`, as above.
+`Input::RequireAction` fails the script at `onStart` if the action does not
+exist, which is why the generated constants are recommended.
+
+@section scripting_ui UI Toolkit
+
+In-game UI is built with `.uxml` documents and `.uss` style sheets, and shown
+by a `UIDocument` component. From a script:
+
+@code{.cpp}
+void onStart()
+{
+    VisualElement root = UI::Root();
+    if (!root.isValid) return;
+
+    VisualElement score = root.Q("score");
+    if (score.isValid) score.SetText("0");
+
+    VisualElement pause = root.Q("pause");
+    if (pause.isValid) pause.OnClick("Pause");
+}
+
+void Pause()
+{
+    Debug::Log("Paused");
+}
+@endcode
+
+Useful calls are `Q("name")` / `QClass("class")`, `SetText`, `get_text` /
+`set_text`, `SetClass("name", on)`, `HasClass`, `Focus`, `BlurFocused`,
+`SetDisplay`, `OnClick("Method")` (optionally with one string argument),
+`OnToggleChanged("Method")` and `SetDataSource()`.
+
+Callbacks are method names, not closures: keep per-callback state in fields.
+`UI::Root()` returns null when the object has no `UIDocument`.
+
+To bind values, mark the values you want as `[field]` or `[bindable]` and
+call `SetDataSource()` on the root. The UXML binding's
+`data-source-path` is the field or getter name:
+
+@code{.cpp}
+[field] int score = 0;
+
+[bindable]
+int get_time()
+{
+    return int(Time::Now());
+}
+
+void onStart()
+{
+    UI::Root().SetDataSource();
+}
+@endcode
+
+`[field]` values are also saved in the map and shown in the Inspector;
+`[bindable]` values are computed and are not saved. See
+@ref Mercury::Behaviour::ReflectData and
+@ref Mercury::Behaviour::AsDataSource for the C++ equivalent.
+
+@section scripting_events Events
+
+An `Event` field is a UnityEvent. The map saves a list of calls to other
+scripts' `[callable]` methods:
+
+@code{.cpp}
+[field] Event entered;
+
+void onTriggerEnter(GameObject other)
+{
+    entered.Invoke();
+}
+
+// In another script on another object:
+[callable]
+void TakeDamage(float amount)
+{
+    health -= amount;
+}
+@endcode
+
+In the Inspector, add a call to the event, pick the target object and choose
+the method and argument. A method does not need to be `[callable]` to be
+called directly from a script you already have a handle to.
+
+@section scripting_errors Errors and debugging
+
+`Debug::Log`, `Debug::Warn`, `Debug::Error` and `Debug::Info` write to the
+Console. A script that throws does not stop the game: the error includes its
+`scripts/file.as:line:column` location, and the next callback still runs.
+
+A call that exceeds `MERCURY_SCRIPT_TIMEOUT` seconds (10 by default; `0`
+disables the check) is aborted as an infinite loop. Scripts hold only opaque
+handles (a scene serial and an entity id); the engine compiles AngelScript
+with unsafe references disabled and registers no raw pointers, so a bad
+script cannot crash the engine.
+
+The editor never runs game code. After **Build Scripts** it runs
+`mercury_player --dump-schema .mercury/scripts.mschema` to learn the fields
+of every script. That generated folder is not committed.
+
+@section scripting_cpp C++ scripts
+
+A C++ script derives from @ref Mercury::Behaviour, describes its fields in
+`Reflect`, and registers itself with `MERCURY_SCRIPT`:
+
+@code{.cpp}
+class Spinner : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed).Tooltip("Degrees per second");
+  }
+  void OnFrame(double dt) override {
+    GetTransform().ChangeRotate(
+        {0.0f, speed * static_cast<float>(dt), 0.0f});
+  }
+  float speed = 45.0f;
+};
+
+MERCURY_SCRIPT(Spinner);
+@endcode
+
+The class can be used from a map exactly like an AngelScript `[script]` class:
+
+@code{.ini}
+[component type="Spinner" node="Cube"]
+speed = 45.0
+@endcode
+
+C++ code is linked into the executable, so a C++ project names its own Bazel
+target in the `.mproj`:
+
+@code{.ini}
+[build]
+target = "//my_game:my_game"
+@endcode
+
+The target is built with the `mercury_game` macro in `tools/mercury_game.bzl`.
+The editor's Build/Play uses `bazel build` and runs that executable, so its
+native scripts provide the schema. Both languages can be used in one project;
+`MERCURY_DATA_ASSET(Type)` registers a reflected struct as a `.masset` type.
+See @ref getting_started_cpp and `examples/cpp_hello`.
+
+@section scripting_examples Learn from the examples
+
+The `examples/` folder is the best reference. In particular:
+
+- `examples/pong/scripts/ball.as` shows a fixed-step behaviour with a
+  `[callable]` method and randomisation.
+- `examples/roll_a_ball/scripts/player_controller.as` shows input actions,
+  buffering a press between `onFrame` and `onTick`, and physics forces.
+- `examples/monkey_ball/` shows a 3D game with a HUD and a pause menu.
+- `examples/breakout/` and `examples/space_invaders/` show 2D collisions and
+  spawning.
+- `examples/cpp_hello/` is the same spinning-cube idea as this page, written
+  as a C++ `MERCURY_SCRIPT` component.
+
+*/

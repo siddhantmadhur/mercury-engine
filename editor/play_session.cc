@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include "play_session.h"
 
 #include <chrono>
@@ -10,6 +14,32 @@
 namespace Mercury {
 
 namespace fs = std::filesystem;
+
+namespace {
+
+// Bazelisk honors .bazelversion; plain bazel may not.
+std::string FindBazel() {
+  return os::IsOnPath("bazelisk") ? "bazelisk" : "bazel";
+}
+
+// The directory with MODULE.bazel or WORKSPACE above `start`, or empty.
+fs::path FindWorkspaceRoot(const fs::path& start) {
+  std::error_code ec;
+  fs::path dir = fs::weakly_canonical(start, ec);
+  if (ec) dir = start;
+  while (!dir.empty()) {
+    for (const char* marker :
+         {"MODULE.bazel", "WORKSPACE.bazel", "WORKSPACE"}) {
+      if (fs::exists(dir / marker, ec)) return dir;
+    }
+    const fs::path parent = dir.parent_path();
+    if (parent == dir) break;
+    dir = parent;
+  }
+  return {};
+}
+
+}  // namespace
 
 fs::path PlaySession::SchemaPath(const Project& project) {
   return project.GetCacheDir() / "scripts.mschema";
@@ -45,8 +75,20 @@ void PlaySession::Begin(const Project& project, bool run) {
   project_root_ = project.GetRoot();
   project_file_ = project.GetFile();
   schema_path_ = SchemaPath(project);
+  working_dir_ = project_root_;
+  build_target_ = project.GetBuildTarget();
+  native_ = !build_target_.empty();
   run_after_build_ = run;
-  if (PlayerPath().empty()) {
+  if (native_) {
+    working_dir_ = FindWorkspaceRoot(project_root_);
+    if (working_dir_.empty()) {
+      Finish(
+          "This project names a C++ build target, but no Bazel workspace "
+          "(MODULE.bazel or WORKSPACE) was found above it.",
+          true);
+      return;
+    }
+  } else if (PlayerPath().empty()) {
     Finish(
         "mercury_player was not found next to the editor. Install the complete "
         "editor release, or build //mercury:mercury_player in the engine "
@@ -66,7 +108,7 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
   process_ = std::make_unique<os::Process>();
   source_ = source;
   std::string error;
-  if (!process_->Start(args, project_root_, &error)) {
+  if (!process_->Start(args, working_dir_, &error)) {
     process_.reset();
     Finish(error, true);
     return false;
@@ -75,24 +117,40 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
 }
 
 bool PlaySession::StartBuild() {
-  std::vector<std::string> args = {PlayerPath().string(),
-                                   project_file_.string(), "--build-scripts"};
+  std::vector<std::string> args;
+  if (native_) {
+    args = {FindBazel(), "build", build_target_};
+  } else {
+    args = {PlayerPath().string(), project_file_.string(), "--build-scripts"};
+  }
   if (!Launch(args, Console::Source::kBuild)) return false;
   state_ = State::kBuilding;
   return true;
 }
 
 bool PlaySession::DumpSchema() {
+  std::vector<std::string> args;
+  if (native_) {
+    args = {FindBazel(),
+            "run",
+            build_target_,
+            "--",
+            project_file_.string(),
+            "--dump-schema",
+            schema_path_.string()};
+  } else {
+    args = {PlayerPath().string(), project_file_.string(), "--dump-schema",
+            schema_path_.string()};
+  }
   os::Process dump;
   std::string error;
-  if (!dump.Start({PlayerPath().string(), project_file_.string(),
-                   "--dump-schema", schema_path_.string()},
-                  project_root_, &error)) {
+  if (!dump.Start(args, working_dir_, &error)) {
     console_.Error("Could not read the game's scripts: " + error);
     return false;
   }
-  // Writing the schema takes milliseconds; wait at most a few seconds.
-  for (int i = 0; i < 500 && dump.IsRunning(); i++) {
+  // Writing the schema takes milliseconds, but a cold `bazel run` may build.
+  // Wait at most 30 seconds.
+  for (int i = 0; i < 3000 && dump.IsRunning(); i++) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   if (dump.IsRunning()) dump.Kill();
@@ -108,8 +166,12 @@ bool PlaySession::DumpSchema() {
 }
 
 bool PlaySession::StartGame() {
-  std::vector<std::string> args = {PlayerPath().string(),
-                                   project_file_.string()};
+  std::vector<std::string> args;
+  if (native_) {
+    args = {FindBazel(), "run", build_target_, "--", project_file_.string()};
+  } else {
+    args = {PlayerPath().string(), project_file_.string()};
+  }
   if (!map_.empty()) {
     args.push_back("--map");
     args.push_back(map_);
