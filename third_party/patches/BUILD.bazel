@@ -1,3 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-exports_files(["rules_cc_xcode26.patch"])

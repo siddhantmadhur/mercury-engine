@@ -8,38 +8,13 @@
 #include <format>
 #include <thread>
 
+#include "cmake_build.h"
 #include "os/filesystem.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury {
 
 namespace fs = std::filesystem;
-
-namespace {
-
-// Bazelisk honors .bazelversion; plain bazel may not.
-std::string FindBazel() {
-  return os::IsOnPath("bazelisk") ? "bazelisk" : "bazel";
-}
-
-// The directory with MODULE.bazel or WORKSPACE above `start`, or empty.
-fs::path FindWorkspaceRoot(const fs::path& start) {
-  std::error_code ec;
-  fs::path dir = fs::weakly_canonical(start, ec);
-  if (ec) dir = start;
-  while (!dir.empty()) {
-    for (const char* marker :
-         {"MODULE.bazel", "WORKSPACE.bazel", "WORKSPACE"}) {
-      if (fs::exists(dir / marker, ec)) return dir;
-    }
-    const fs::path parent = dir.parent_path();
-    if (parent == dir) break;
-    dir = parent;
-  }
-  return {};
-}
-
-}  // namespace
 
 fs::path PlaySession::SchemaPath(const Project& project) {
   return project.GetCacheDir() / "scripts.mschema";
@@ -61,10 +36,12 @@ fs::path PlaySession::PlayerPath() {
 #endif
   const fs::path dir = os::ExecutableDir();
   std::error_code ec;
-  // A packaged editor puts the player next to itself; Bazel builds it into
-  // bazel-bin/mercury and the editor into bazel-bin/editor.
-  for (const fs::path& candidate :
-       {dir / file, dir.parent_path() / "mercury" / file}) {
+  // A packaged editor puts the player next to itself. A development build
+  // puts both in <build>/bin.
+  std::vector<fs::path> candidates = {dir / file};
+  const fs::path build_dir = cmake_build::BuildDir();
+  if (!build_dir.empty()) candidates.push_back(build_dir / "bin" / file);
+  for (const fs::path& candidate : candidates) {
     if (fs::exists(candidate, ec)) return candidate;
   }
   return {};
@@ -80,18 +57,21 @@ void PlaySession::Begin(const Project& project, bool run) {
   native_ = !build_target_.empty();
   run_after_build_ = run;
   if (native_) {
-    working_dir_ = FindWorkspaceRoot(project_root_);
-    if (working_dir_.empty()) {
+    working_dir_ = cmake_build::BuildDir();
+    std::error_code ec;
+    if (working_dir_.empty() ||
+        !fs::exists(working_dir_ / "CMakeCache.txt", ec)) {
       Finish(
-          "This project names a C++ build target, but no Bazel workspace "
-          "(MODULE.bazel or WORKSPACE) was found above it.",
+          "This project names a C++ build target, but the engine has no "
+          "configured CMake build directory. Run `cmake --preset release` in "
+          "the engine checkout first.",
           true);
       return;
     }
   } else if (PlayerPath().empty()) {
     Finish(
         "mercury_player was not found next to the editor. Install the complete "
-        "editor release, or build //mercury:mercury_player in the engine "
+        "editor release, or build the mercury_player target in the engine "
         "checkout.",
         true);
     return;
@@ -119,7 +99,7 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
 bool PlaySession::StartBuild() {
   std::vector<std::string> args;
   if (native_) {
-    args = {FindBazel(), "build", build_target_};
+    args = cmake_build::BuildArguments(build_target_);
   } else {
     args = {PlayerPath().string(), project_file_.string(), "--build-scripts"};
   }
@@ -131,13 +111,8 @@ bool PlaySession::StartBuild() {
 bool PlaySession::DumpSchema() {
   std::vector<std::string> args;
   if (native_) {
-    args = {FindBazel(),
-            "run",
-            build_target_,
-            "--",
-            project_file_.string(),
-            "--dump-schema",
-            schema_path_.string()};
+    args = {cmake_build::Executable(build_target_).string(),
+            project_file_.string(), "--dump-schema", schema_path_.string()};
   } else {
     args = {PlayerPath().string(), project_file_.string(), "--dump-schema",
             schema_path_.string()};
@@ -148,8 +123,8 @@ bool PlaySession::DumpSchema() {
     console_.Error("Could not read the game's scripts: " + error);
     return false;
   }
-  // Writing the schema takes milliseconds, but a cold `bazel run` may build.
-  // Wait at most 30 seconds.
+  // Writing the schema takes milliseconds, but a cold `cmake --build` may
+  // compile the game. Wait at most 30 seconds.
   for (int i = 0; i < 3000 && dump.IsRunning(); i++) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
@@ -168,7 +143,8 @@ bool PlaySession::DumpSchema() {
 bool PlaySession::StartGame() {
   std::vector<std::string> args;
   if (native_) {
-    args = {FindBazel(), "run", build_target_, "--", project_file_.string()};
+    args = {cmake_build::Executable(build_target_).string(),
+            project_file_.string()};
   } else {
     args = {PlayerPath().string(), project_file_.string()};
   }

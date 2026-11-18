@@ -13,7 +13,7 @@
 # The editor bundle additionally carries mercury_player, the loose UI theme,
 # fonts and compiled materials, the Vulkan driver, the static libraries for
 # native builds, and the list of runtime libraries a game made by Build Game
-# needs. It therefore needs no engine checkout, compiler or Bazel on the
+# needs. It therefore needs no engine checkout or compiler on the
 # machine it runs on.
 #
 # Typical flags:
@@ -21,7 +21,7 @@
 #           distribution (default is an ad-hoc signature)
 #   --zip   also write a ditto-compatible .zip next to the app
 #   --packs DIR   reuse .mpack files from an editor "Build Game" folder
-#   --skip-build  reuse the binaries already in bazel-bin
+#   --skip-build  reuse the binaries already in the build directory
 #   --target editor   package mercury_editor instead of the player
 #
 # macOS only; run from anywhere in the repository.
@@ -76,6 +76,7 @@ GetOptions(
     'packs=s'        => \$opt{packs},
     'pack-size-mb=i' => \$opt{pack_size_mb},
     'skip-build'     => \$skip_build,
+    'build-dir=s'    => \$opt{build_dir},
     'no-engine-libs' => sub { $engine_libs = 0 },
     'zip'            => \$want_zip,
     'verbose|v'      => \$verbose,
@@ -116,7 +117,8 @@ usage: $name --project PATH/TO/game.mproj [options]
   --no-sign             do not sign the bundle
   --packs DIR           reuse an editor "Build Game" output instead of packing
   --pack-size-mb N      split game.mpack past N MB; 0 keeps one file (256)
-  --skip-build          do not run Bazel first
+  --skip-build          reuse the binaries already in the build directory
+  --build-dir DIR       CMake build directory (default: build/release)
   --no-engine-libs      editor only: leave the static libraries out of the bundle
   --zip                 also write a .zip for distribution
   --verbose             show every command
@@ -221,48 +223,53 @@ make_path($output_dir);
 $output_dir = abs_path($output_dir);
 my $app_dir = File::Spec->catdir($output_dir, "$name.app");
 
-my $bazel_target =
-    $opt{target} eq 'editor' ? '//editor:mercury_editor' : '//mercury:mercury_player';
+my $build_dir = File::Spec->rel2abs(
+    $opt{build_dir} // File::Spec->catdir($REPO, 'build', 'release'));
+my $build_bin = File::Spec->catdir($build_dir, 'bin');
+my $build_lib = File::Spec->catdir($build_dir, 'lib');
+my $materials_dir = File::Spec->catdir($build_dir, 'materials');
 
 log_line("Packaging $name.app");
 log_line("  project : $project_root") if $opt{target} eq 'player';
 log_line("  output  : $app_dir");
+log_line("  build   : $build_dir");
 
 # --------------------------------------------------------------------------
 # Build
 # --------------------------------------------------------------------------
 
-my $bazel_bin = File::Spec->catfile($REPO, 'bazel-bin');
-
 unless ($skip_build) {
-    my $bazel = which('bazelisk') // which('bazel');
-    fail("Bazelisk was not found; install it with ./scripts/setup_project.pl")
-        unless $bazel;
+    my $cmake = which('cmake');
+    fail("CMake was not found; install it with ./scripts/setup_project.pl")
+        unless $cmake;
     # The editor bundle also carries the player, so Play and Build Game work
     # on a machine that has no engine checkout or compiler.
-    my @targets = ($bazel_target);
-    push @targets, '//mercury:mercury_player' if $opt{target} eq 'editor';
+    my @targets = ($opt{target} eq 'editor'
+        ? ('mercury_editor', 'mercury_player')
+        : ('mercury_player'));
     log_line("Building " . join(' ', @targets) . " (Release)");
-    # The deployment target must match LSMinimumSystemVersion below. Bazel
-    # otherwise stamps the installed SDK version (e.g. 27.0) into the binary
-    # and macOS refuses to launch it on older systems.
-    run_or_die($bazel, 'build', '-c', 'opt',
-        "--macos_minimum_os=$opt{min_macos}", @targets);
+    # The deployment target must match LSMinimumSystemVersion below. CMake
+    # stamps it into every binary so macOS does not refuse to launch them on
+    # older systems. Reconfiguring is cheap and keeps the build directory in
+    # sync with the requested floor.
+    run_or_die($cmake, '-S', $REPO, '-B', $build_dir, '-G', 'Ninja',
+        '-DCMAKE_BUILD_TYPE=Release',
+        "-DCMAKE_OSX_DEPLOYMENT_TARGET=$opt{min_macos}");
+    run_or_die($cmake, '--build', $build_dir, '--target', @targets,
+        '--parallel');
 }
 
 my $source_exe =
     $opt{target} eq 'editor'
-    ? File::Spec->catfile($bazel_bin, 'editor', 'mercury_editor')
-    : File::Spec->catfile($bazel_bin, 'mercury', 'mercury_player');
+    ? File::Spec->catfile($build_bin, 'mercury_editor')
+    : File::Spec->catfile($build_bin, 'mercury_player');
 
-# bazel-bin is a symlink; resolve it so install_name_tool rewrites the real file
-# in the output tree rather than failing on the link.
 my $real_exe = abs_path($source_exe);
 fail("the build did not produce $source_exe") unless defined $real_exe && -f $real_exe;
 
 my $real_player;
 if ($opt{target} eq 'editor') {
-    my $source_player = File::Spec->catfile($bazel_bin, 'mercury', 'mercury_player');
+    my $source_player = File::Spec->catfile($build_bin, 'mercury_player');
     $real_player = abs_path($source_player);
     fail("the build did not produce $source_player")
         unless defined $real_player && -f $real_player;
@@ -481,10 +488,12 @@ sub is_source_file {
 
 sub is_skipped_at_root {
     my ($name) = @_;
-    return 1 if $name eq 'CMakeLists.txt' || $name eq 'MODULE.bazel'
-        || $name eq 'MODULE.bazel.lock' || $name eq 'WORKSPACE'
-        || $name eq 'WORKSPACE.bazel' || $name eq 'Builds'
-        || $name =~ /^bazel-/ || $name =~ /\.app$/;
+    return 1 if $name eq 'CMakeLists.txt' || $name eq 'CMakePresets.json'
+        || $name eq 'CMakeCache.txt' || $name eq 'CMakeFiles'
+        || $name eq 'Cargo.toml' || $name eq 'Cargo.lock'
+        || $name eq 'build' || $name eq 'target'
+        || $name eq 'compile_commands.json' || $name eq 'Builds'
+        || $name =~ /^cmake-build/ || $name =~ /\.app$/;
     return 0;
 }
 
@@ -702,7 +711,7 @@ sub pack_engine {
     };
     $walk->($ui, '');
 
-    my $materials = File::Spec->catdir($REPO, 'bazel-bin', 'mercury', 'materials');
+    my $materials = $materials_dir;
     opendir(my $dh, $materials) or fail("no compiled materials in $materials");
     my @filamat = sort grep { /\.filamat$/ && -f File::Spec->catfile($materials, $_) }
         readdir $dh;
@@ -761,7 +770,7 @@ sub bundle_engine_resources {
     fail("the engine's UI resources are missing ($ui)") unless -d $ui;
     my $ui_files = copy_tree($ui, File::Spec->catdir($res, 'ui'));
 
-    my $materials = File::Spec->catdir($bazel_bin, 'mercury', 'materials');
+    my $materials = $materials_dir;
     opendir(my $dh, $materials) or fail("no compiled materials in $materials");
     my @filamat = sort grep { /\.filamat$/ && -f File::Spec->catfile($materials, $_) }
         readdir $dh;
@@ -784,37 +793,29 @@ sub bundle_engine_resources {
 # own build system (Jolt, Assimp, ...). A game that needs to link a custom
 # player can take them from the editor instead of rebuilding the components.
 sub bundle_static_libraries {
-    my @libraries = (
-        ['mercury',                             'libmercury.a'],
-        ['mercury',                             'libmercury_rust.a'],
-        ['mercury',                             'libinput_actions_codegen_rs_bridge.a'],
-        ['mercury/rust',                        'libbridge.a'],
-        ['mercury/rust',                        'libffi_bridge.a'],
-        ['third_party',                         'libangelscript.a'],
-        ['third_party/jolt_build/lib',          'libJolt.a'],
-        ['third_party/assimp_build/lib',        'libassimp.a'],
-        ['third_party/assimp_build/lib',        'libzlibstatic.a'],
-        ['third_party/glfw_build/lib',          'libglfw3.a'],
-        ['third_party/yoga_build/lib',          'libyogacore.a'],
-        ['third_party/tinyxml2_build/lib',      'libtinyxml2.a'],
-        ['third_party/meshoptimizer_build/lib', 'libmeshoptimizer.a'],
-        ['third_party/miniaudio_build/lib',     'libminiaudio.a'],
+    # CMake writes the engine and dependency archives to <build>/lib. Filament
+    # builds in its own Ninja tree, so include that folder too.
+    my @library_dirs = (
+        $build_lib,
+        File::Spec->catdir($build_dir, '_deps', 'filament', 'out', 'lib'),
     );
     my $dest = File::Spec->catdir($res, 'engine', 'lib');
     make_path($dest);
     my $count = 0;
     my $bytes = 0;
-    for my $entry (@libraries) {
-        my ($dir, $file) = @$entry;
-        my $source = File::Spec->catfile($bazel_bin, split(m{/}, $dir), $file);
-        if (!-f $source) {
-            log_line("  warning: $file was not built; leaving it out of the bundle");
-            next;
+    for my $dir (@library_dirs) {
+        next unless -d $dir;
+        opendir(my $dh, $dir) or fail("cannot read $dir: $!");
+        my @files = sort grep { /\.a$/ && -f File::Spec->catfile($dir, $_) }
+            readdir $dh;
+        closedir $dh;
+        for my $file (@files) {
+            my $source = File::Spec->catfile($dir, $file);
+            copy($source, File::Spec->catfile($dest, $file))
+                or fail("cannot copy $source: $!");
+            $bytes += -s $source;
+            $count++;
         }
-        copy($source, File::Spec->catfile($dest, $file))
-            or fail("cannot copy $source: $!");
-        $bytes += -s $source;
-        $count++;
     }
     log_line("Bundled $count static libraries for native builds (" . bytes($bytes) . ")");
 
@@ -1126,8 +1127,8 @@ sub verify_bundle {
         next unless defined $exe_min;
         if (version_cmp($exe_min, $opt{min_macos}) > 0) {
             fail("$binary was built for macOS $exe_min but the bundle advertises "
-                . "$opt{min_macos}; rebuild with --macos_minimum_os=$opt{min_macos} "
-                . "or raise --min-macos to $exe_min");
+                . "$opt{min_macos}; raise --min-macos to $exe_min or rebuild "
+                . "with -DCMAKE_OSX_DEPLOYMENT_TARGET=$opt{min_macos}");
         }
     }
 

@@ -7,16 +7,17 @@
  *
  * Drives Build and Play from the editor. AngelScript projects use the
  * mercury_player build from the same checkout (next to the editor, or in
- * bazel-bin/mercury):
+ * <build>/bin):
  *
  *   mercury_player <project.mproj> --build-scripts     (AngelScript compile)
  *     -> mercury_player <project.mproj> --dump-schema .mercury/scripts.mschema
  *     -> mercury_player <project.mproj> --map <current map>      (Play only)
  *
- * A project with C++ scripts names a Bazel executable in `[build] target`.
- * Its build and the commands above go through `bazel run <target> -- ...`, so
- * the native scripts linked into that executable provide the schema and run
- * the game. The build's output (compiler messages) streams to the Console.
+ * A project with C++ scripts names a CMake target in `[build] target`. Its
+ * build runs `cmake --build <MERCURY_BUILD_DIR> --target <target>` and then
+ * executes <build>/bin/<target> with the same arguments, so the native scripts
+ * linked into that executable provide the schema and run the game. The build's
+ * output (compiler messages) streams to the Console.
  */
 #ifndef MERCURY_EDITOR_PLAY_SESSION_H
 #define MERCURY_EDITOR_PLAY_SESSION_H
@@ -54,8 +55,8 @@ class PlaySession {
 
   static std::filesystem::path SchemaPath(const Project& project);
 
-  // The player executable that ships with the editor, or the one Bazel built
-  // next to it. Empty if there is none.
+  // The player executable that ships with the editor, or the one the CMake
+  // build put in <build>/bin. Empty if there is none.
   static std::filesystem::path PlayerPath();
 
  private:

@@ -17,13 +17,13 @@ is documented at the C++ level starting at
 
 @code{.sh}
 # open a project at its main map
-bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
+./build/release/bin/mercury_editor examples/pong/pong.mproj
 
 # open a project at a specific map
-bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj --map res://maps/main.mmap
+./build/release/bin/mercury_editor examples/pong/pong.mproj --map res://maps/main.mmap
 
 # open the project launcher
-bazelisk run //editor:mercury_editor
+./build/release/bin/mercury_editor
 @endcode
 
 The launcher shows recent projects, an **Open** button for a `.mproj` or a
@@ -163,7 +163,7 @@ with any version control system.
 **Project > Play / Stop** (F5) saves the map, compiles the scripts and starts
 the game as a separate process. AngelScript projects run
 `mercury_player <project> --map <map>`; a C++ project runs its
-`[build] target` through `bazel run <target> -- <project> --map <map>`. The
+`[build] target` by building it with `cmake --build` and running the result. The
 game's output goes to the **Console**. There is no hot reload: stopping and
 playing again starts a new process and a new game state.
 

@@ -1,0 +1,12 @@
+[package]
+name = "mercury_kernel"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "mercury_kernel"
+path = "lib.rs"
+
+[dependencies]
+cxx = "=1.0.205"

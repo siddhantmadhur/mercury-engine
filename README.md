@@ -72,35 +72,40 @@ rendering) sits behind the engine, and scripts reach it only through a small che
 | UI | [Yoga](https://github.com/facebook/yoga), [tinyxml2](https://github.com/leethomason/tinyxml2) | Flexbox layout, UXML parsing |
 | Audio | [miniaudio](https://miniaud.io) | Playback with 3D attenuation |
 | Editor | [wxWidgets](https://www.wxwidgets.org) (wxAUI, wxStyledTextCtrl), [Dear ImGui](https://github.com/ocornut/imgui) | Editor panels and code editor; Dear ImGui for debug overlays |
-| Build | [Bazel](https://bazel.build) | Builds everything, runs the tests |
+| Build | [CMake](https://cmake.org) + [Ninja](https://ninja-build.org) | Builds everything, runs the tests; ccache caches compiles |
 
 ## Building
 
 Game scripts are AngelScript (`.as`) or C++ (`scripts/*.cc` linked into the game executable).
-AngelScript is a C++ library built directly by Bazel from
-the pinned `third_party/angelscript` submodule; there is no external code generation or bundler.
+AngelScript is a C++ library built directly by CMake from the pinned
+`third_party/angelscript` submodule; there is no external code generation or bundler.
 
-The build requires [Bazelisk](https://github.com/bazelbuild/bazelisk); the repository pins Bazel
-in `.bazelversion`. The editor's built-in code editor uses `wxStyledTextCtrl`, so the system
-wxWidgets installation must provide the `stc` library (`wx-config --libs ...,stc`). Build the player with `bazelisk build //:mercury_player` (or
-`//mercury:mercury_player`); a bare `bazel build` has no implicit target in Bazel 8. `.bazelrc`
-points Bazel at `/usr/bin/cc` and `/usr/bin/c++` so its autoconf probes do not go through a ccache
-wrapper; override with `--repo_env=CC=... --repo_env=CXX=...` if your compilers live elsewhere. CMake and Ninja are still used, but only to build the third-party dependencies
-through `rules_foreign_cc`.
+The build uses CMake with Ninja. `ccache` (installed by the setup script) caches compiler
+output, so rebuilding after a branch switch or in a second build directory is fast.
+Rust modules are built by Cargo from the `Cargo.toml` workspace; CMake runs `cxxbridge` to
+generate their C++ bridge code, and both `cargo` and `cxxbridge` are installed by the setup
+script. The editor's built-in code editor uses `wxStyledTextCtrl`, so the system wxWidgets
+installation must provide the `stc` library (`wx-config --libs ...,stc`).
+
+Build directories live in `build/<preset>/` and are ignored by git. `cmake --build` builds
+the player, editor, examples and compiled materials; tests are built and run by the `check`
+target (`cmake --build --preset check`). Use `cmake --preset debug` (or `relwithdebinfo`)
+for a different configuration; all presets share the same ccache.
 
 ### macOS (Apple Silicon)
 
 Mercury requires macOS 26.0 or later; builds are stamped with that deployment
-target so the packaged `.app` runs on any macOS 26 release. See the
-`--macos_minimum_os` comment in `.bazelrc`.
+target so the packaged `.app` runs on any macOS 26 release. See
+`CMAKE_OSX_DEPLOYMENT_TARGET` in `CMakeLists.txt`.
 
 ```sh
-./scripts/setup_project.pl              # detects macOS; Homebrew: Bazelisk, CMake, Ninja, MoltenVK, Vulkan, DXC
-bazelisk build //mercury:mercury_player
-bazelisk test //tests/...
-bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+./scripts/setup_project.pl              # detects macOS; Homebrew: CMake, Ninja, ccache, Rust, MoltenVK, Vulkan, DXC
+cmake --preset release
+cmake --build --preset release
+cmake --build --preset check            # build and run the tests
+./build/release/bin/mercury_player examples/pong/pong.mproj
 # C++ gameplay example (its own executable)
-bazelisk run //examples/cpp_hello:cpp_hello
+./build/release/bin/cpp_hello
 ```
 
 To ship a game as a self-contained `.app` bundle:
@@ -123,12 +128,13 @@ To publish the editor itself (Play and Build Game work without this checkout):
 ### Linux (X11 and Wayland)
 
 ```sh
-./scripts/setup_project.pl              # detects Linux; apt or pacman: Vulkan, GLFW deps, DXC, Bazelisk
-bazelisk build //mercury:mercury_player
-bazelisk test //tests/...
-bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+./scripts/setup_project.pl              # detects Linux; apt or pacman: Vulkan, GLFW deps, DXC, CMake, Ninja, ccache, Rust
+cmake --preset release
+cmake --build --preset release
+cmake --build --preset check            # build and run the tests
+./build/release/bin/mercury_player examples/pong/pong.mproj
 # C++ gameplay example (its own executable)
-bazelisk run //examples/cpp_hello:cpp_hello
+./build/release/bin/cpp_hello
 ```
 
 Debian/Ubuntu don't package DXC, so the setup script downloads the official release into

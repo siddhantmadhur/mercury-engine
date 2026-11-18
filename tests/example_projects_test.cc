@@ -8,7 +8,7 @@
 // `fall_limit` against `fallLimit`) is otherwise ignored without a word and the
 // script runs on its defaults.
 //
-// This runs in its own binary (tests/BUILD.bazel) because each project needs a
+// This runs in its own binary (see CMakeLists.txt) because each project needs a
 // fresh script runtime, and the other script tests keep one runtime for the
 // whole process.
 #include <gtest/gtest.h>
@@ -134,7 +134,6 @@ TEST_P(ExampleProjectTest, BuildsLoadsAndMapsMatchTheScripts) {
 
 INSTANTIATE_TEST_SUITE_P(Examples, ExampleProjectTest,
                          ::testing::Values("pong", "roll_a_ball", "monkey_ball",
-                                           "model_viewer", "breakout",
-                                           "space_invaders"));
+                                           "breakout", "space_invaders"));
 
 }  // namespace

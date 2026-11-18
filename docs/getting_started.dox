@@ -30,7 +30,7 @@ Tycoon), not a general-purpose 3D engine. It provides:
 
 For a beginner, the quickest path is AngelScript: a project (`.mproj`), a map
 (`.mmap`) and `.as` files, run by the shared `mercury_player`. C++ scripts use
-the same `Behaviour` callbacks but need a small Bazel target; see
+the same `Behaviour` callbacks but need a small CMake target; see
 @ref getting_started_cpp "Writing gameplay in C++".
 
 @section getting_started_requirements Requirements
@@ -42,8 +42,8 @@ the same `Behaviour` callbacks but need a small Bazel target; see
 | macOS (Apple Silicon) | MoltenVK | Supported |
 
 You need a GPU and driver with Vulkan 1.3 and dynamic rendering, plus
-[Bazelisk](https://github.com/bazelbuild/bazelisk). On macOS the minimum is
-macOS 26. Follow the more detailed platform steps in the project
+[CMake](https://cmake.org), [Ninja](https://ninja-build.org), a C++20 compiler
+and the Rust toolchain. On macOS the minimum is macOS 26. Follow the more detailed platform steps in the project
 <a href="index.html">README</a> or run the setup script, which installs the
 toolchain, Vulkan loader, MoltenVK, DXC and the other development packages:
 
@@ -56,12 +56,12 @@ toolchain, Vulkan loader, MoltenVK, DXC and the other development packages:
 Build the player and run the Pong example:
 
 @code{.sh}
-bazelisk build //mercury:mercury_player
-bazelisk test //tests/...
-bazelisk run //mercury:mercury_player -- examples/pong/pong.mproj
+cmake --preset release
+cmake --build --preset release
+cmake --build --preset check            # build and run the tests
+./build/release/bin/mercury_player examples/pong/pong.mproj
 @endcode
 
-A bare `bazel build` has no implicit target in Bazel 8, so name a target.
 Close the game window (or press Escape, where the example supports it) to
 stop it.
 
@@ -70,8 +70,7 @@ Other complete examples live in `examples/`:
 - `pong` -- 2D, the smallest complete game;
 - `roll_a_ball` -- 3D physics, input actions and a HUD;
 - `breakout` and `space_invaders` -- 2D arcade games;
-- `monkey_ball` -- 3D stage with a pause menu;
-- `model_viewer` -- loading larger 3D scenes.
+- `monkey_ball` -- 3D stage with a pause menu.
 
 @section getting_started_editor Open the editor
 
@@ -79,8 +78,8 @@ The editor is a separate executable. Give it a project, or no argument to see
 the project launcher:
 
 @code{.sh}
-bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
-bazelisk run //editor:mercury_editor
+./build/release/bin/mercury_editor examples/pong/pong.mproj
+./build/release/bin/mercury_editor
 @endcode
 
 The launcher lists recent projects and has a **New Project** card. Enter a
@@ -233,9 +232,9 @@ The player executes any project, so you can share a project or run it from a
 terminal:
 
 @code{.sh}
-bazelisk run //mercury:mercury_player -- my_game/my_game.mproj
+./build/release/bin/mercury_player my_game/my_game.mproj
 # start at another map
-bazelisk run //mercury:mercury_player -- my_game/my_game.mproj --map res://maps/level2.mmap
+./build/release/bin/mercury_player my_game/my_game.mproj --map res://maps/level2.mmap
 @endcode
 
 If the scripts changed, the player compiles them before starting. Useful
@@ -289,35 +288,30 @@ names (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
 `OnCollisionEnter`, ...). A reflected struct registered with
 `MERCURY_DATA_ASSET(Type)` is the C++ equivalent of `[dataAsset]`.
 
-A C++ project builds its own player with the `mercury_game` Bazel macro:
+A C++ project builds its own player with the `mercury_add_game` CMake function:
 
-@code{.py}
-# my_game/BUILD.bazel
-load("//tools:mercury_game.bzl", "mercury_game")
-
-mercury_game(
-    name = "my_game",
-    project = "my_game.mproj",
-)
+@code{.cmake}
+# my_game/CMakeLists.txt
+mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
 @endcode
 
-The macro compiles every `.cc`/`.cpp` under the package's `scripts/` folder,
-links the engine, and generates a `main()` that calls
+The function compiles every `.cc`/`.cpp` under the package's `scripts/`
+folder, links the engine, and generates a `main()` that calls
 @ref Mercury::RunPlayer. Name the executable in the project file so the editor
 knows how to build and run it:
 
 @code{.ini}
 [build]
-target = "//my_game:my_game"
+target = "my_game"
 @endcode
 
-The editor's **Build Scripts** and **Play** then run `bazel build` on the
+The editor's **Build Scripts** and **Play** then run `cmake --build` for the
 target, ask the executable for its script list (`--dump-schema`), and launch
 it. Without `[build] target`, the shared `mercury_player` compiles `.as`
 scripts at run time as before. To run the C++ example:
 
 @code{.sh}
-bazelisk run //examples/cpp_hello:cpp_hello
+./build/release/bin/cpp_hello
 @endcode
 
 @section getting_started_next Where to go next

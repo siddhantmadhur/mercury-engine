@@ -1,3 +1,4 @@
+# Build outputs (CMake/Ninja; also used by cargo and the editor)
 build/
 *Builds
 build-*/
@@ -8,6 +9,7 @@ bin/
 /.idea
 /sdk
 out/
+target/
 imgui.ini
 GOAL.md
 game
@@ -19,8 +21,8 @@ bench/
 
 tests/scripts/project/.mercury/
 
-# Bazel convenience symlinks and outputs
-bazel-*
+# CMake files generated in the source tree
+CMakeUserPresets.json
 compile_commands.json
 
 # Python bytecode

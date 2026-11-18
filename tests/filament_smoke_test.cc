@@ -95,7 +95,9 @@ TEST(FilamentSmokeTest, HeadlessOffscreenRenderIsNonUniform) {
   uint64_t frame_id = 0;
   std::vector<uint8_t> pixels;
   bool got_pixels = false;
-  for (int i = 0; i < 60 && !got_pixels; i++) {
+  // Debug builds can take a while to present the first offscreen frame under
+  // load, so allow a few seconds rather than a fixed 60 iterations.
+  for (int i = 0; i < 600 && !got_pixels; i++) {
     app.StepFrame();
     if (app.CopyScenePixels(width, height, pixels, &frame_id) && frame_id > 0) {
       got_pixels = true;

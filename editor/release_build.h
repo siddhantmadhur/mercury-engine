@@ -10,7 +10,7 @@
  *
  *   <output>/<game>(.exe)
  *   <output>/engine.mindex    index of engine.mpack
- *   <output>/engine.mpack     compiled shaders, default UI theme and fonts
+ *   <output>/engine.mpack     compiled materials, default UI theme and fonts
  *   <output>/game.mindex      index of game.mpack and its game_NNN.mpack
  *   <output>/game.mpack       the project's maps, assets and UI
  *                             (game_001.mpack, ... once game.mpack is full;
@@ -19,13 +19,13 @@
  * Steps, each started from Update():
  *
  *   development editor (an engine checkout is present)
- *     -> bazel build -c opt //mercury:mercury_player
- *     -> or, for C++ scripts, bazel build -c opt <project [build] target>
- *   released editor (no checkout: the player and engine resources ship in the
- *   .app)
- *     -> use Contents/MacOS/mercury_player and Contents/Resources/{ui,shaders}
- *   then, on a worker thread: compile the scripts, pack the files, copy the
- *   player and the runtime libraries it needs
+ *     -> cmake --build <build-dir> --target mercury_player
+ *     -> or, for C++ scripts, cmake --build <build-dir> --target <project
+ * target> released editor (no checkout: the player and engine resources ship in
+ * the .app)
+ *     -> use Contents/MacOS/mercury_player and
+ * Contents/Resources/{ui,materials} then, on a worker thread: compile the
+ * scripts, pack the files, copy the player and the runtime libraries it needs
  *
  * The .as scripts are packed as sources; the executable finds game.mpack next
  * to itself and runs from it (see RunPlayer). Build and Play are unchanged and
@@ -87,9 +87,10 @@ class ReleaseBuild {
     std::string target_name;  // what the shipped executable is called
     std::string materials_dir;
     std::string ui_resources;
-    // C++ script projects: a Bazel target and its workspace.
+    // C++ script projects: a CMake target and the build directory that holds
+    // it.
     std::string build_target;
-    std::string workspace_dir;
+    std::string build_dir;
     bool native = false;
     Runtime runtime;
   };
@@ -123,7 +124,7 @@ class ReleaseBuild {
   std::filesystem::path output_dir_;
   uint64_t max_archive_bytes_ = 0;
   std::string build_target_;
-  std::filesystem::path workspace_dir_;
+  std::filesystem::path build_dir_;
   std::optional<Config> config_;
 };
 

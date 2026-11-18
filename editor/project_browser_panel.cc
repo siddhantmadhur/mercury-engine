@@ -38,8 +38,8 @@ std::string ToLower(std::string s) {
 }
 
 bool ShouldSkipDirName(const std::string& name) {
-  return name.starts_with(".") || name == "build" ||
-         name.starts_with("cmake-build") || name.starts_with("bazel-");
+  return name.starts_with(".") || name == "build" || name == "target" ||
+         name.starts_with("cmake-build");
 }
 
 uint64_t NowMs() {
