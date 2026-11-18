@@ -120,6 +120,7 @@ class FilamentRenderer {
 
   utils::Entity sun_ = {};
   std::vector<utils::Entity> points_;
+  std::vector<utils::Entity> areas_;
   filament::IndirectLight* ambient_ = nullptr;
   filament::Skybox* fallback_sky_ = nullptr;
   filament::Skybox* panorama_sky_ = nullptr;
@@ -141,6 +142,7 @@ class FilamentRenderer {
   float shadow_bias_ = 0.0f;
   float shadow_normal_bias_ = 0.0f;
   std::vector<PointLightData> point_values_;
+  std::vector<AreaLightData> area_values_;
   glm::vec3 ambient_sky_ = glm::vec3(-1.0f);
   glm::vec3 ambient_ground_ = glm::vec3(-1.0f);
 

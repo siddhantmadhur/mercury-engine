@@ -799,11 +799,62 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           .position(ToFilament(light.position))
           .color(ToFilament(light.color / intensity))
           .intensity(intensity * kPointLumensPerIntensity)
+          .falloff(std::max(light.range, 0.1f))
+          .castShadows(light.shadows != 0)
           .build(*engine, entity);
       scene_->addEntity(entity);
       points_.push_back(entity);
     }
     point_values_ = lighting.point_lights;
+  }
+
+  const size_t area_count = std::min<size_t>(lighting.area_lights.size(), 4);
+  bool areas_changed = area_count != area_values_.size();
+  for (size_t i = 0; !areas_changed && i < area_values_.size(); i++) {
+    const AreaLightData& a = lighting.area_lights[i];
+    const AreaLightData& b = area_values_[i];
+    if (a.position != b.position || a.right != b.right || a.up != b.up ||
+        a.color != b.color || a.range != b.range ||
+        a.two_sided != b.two_sided || a.shadows != b.shadows) {
+      areas_changed = true;
+    }
+  }
+  if (areas_changed) {
+    for (utils::Entity area : areas_) {
+      scene_->remove(area);
+      engine->destroy(area);
+    }
+    areas_.clear();
+    area_values_.assign(lighting.area_lights.begin(),
+                        lighting.area_lights.begin() + area_count);
+    for (const AreaLightData& light : area_values_) {
+      const glm::vec3 cross = glm::cross(light.right, light.up);
+      const glm::vec3 dir = glm::length(cross) < 1e-4f
+                                ? glm::vec3(0.0f, -1.0f, 0.0f)
+                                : glm::normalize(cross);
+      const float intensity =
+          std::max({light.color.r, light.color.g, light.color.b, 1e-6f});
+      const float area =
+          4.0f * glm::length(light.right) * glm::length(light.up);
+      const float lumens =
+          intensity * kPointLumensPerIntensity * std::max(area, 1.0f);
+      auto add_spot = [&](const glm::vec3& spot_dir, bool shadows) {
+        utils::Entity entity = utils::EntityManager::get().create();
+        filament::LightManager::Builder(filament::LightManager::Type::SPOT)
+            .position(ToFilament(light.position))
+            .direction(ToFilament(spot_dir))
+            .color(ToFilament(light.color / intensity))
+            .intensity(lumens)
+            .falloff(std::max(light.range, 0.1f))
+            .spotLightCone(glm::radians(35.0f), glm::radians(75.0f))
+            .castShadows(shadows)
+            .build(*engine, entity);
+        scene_->addEntity(entity);
+        areas_.push_back(entity);
+      };
+      add_spot(dir, light.shadows != 0);
+      if (light.two_sided) add_spot(-dir, false);
+    }
   }
 
   const std::string& skybox_path = game.GetSkyboxPath();
@@ -946,6 +997,12 @@ void FilamentRenderer::DestroyLights(filament::Engine* engine) {
   }
   points_.clear();
   point_values_.clear();
+  for (utils::Entity area : areas_) {
+    if (scene_) scene_->remove(area);
+    engine->destroy(area);
+  }
+  areas_.clear();
+  area_values_.clear();
   if (scene_) {
     scene_->setSkybox(nullptr);
     scene_->setIndirectLight(nullptr);
