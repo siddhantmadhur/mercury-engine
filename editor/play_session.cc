@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "cmake_build.h"
+#include "editor_settings.h"
 #include "os/filesystem.h"
 #include "scripting/type_registry.h"
 
@@ -80,7 +81,8 @@ void PlaySession::Begin(const Project& project, bool run) {
 }
 
 bool PlaySession::Launch(const std::vector<std::string>& args,
-                         Console::Source source) {
+                         Console::Source source,
+                         const std::vector<std::string>& environment) {
   std::string command;
   for (const auto& arg : args) command += (command.empty() ? "" : " ") + arg;
   console_.Add(Console::Level::kInfo, source, "> " + command);
@@ -88,7 +90,7 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
   process_ = std::make_unique<os::Process>();
   source_ = source;
   std::string error;
-  if (!process_->Start(args, working_dir_, &error)) {
+  if (!process_->Start(args, working_dir_, &error, environment)) {
     process_.reset();
     Finish(error, true);
     return false;
@@ -152,7 +154,13 @@ bool PlaySession::StartGame() {
     args.push_back("--map");
     args.push_back(map_);
   }
-  if (!Launch(args, Console::Source::kGame)) return false;
+  std::vector<std::string> environment;
+#if defined(__APPLE__)
+  if (cmake_build::IsDebugBuild() && settings_.show_metal_hud) {
+    environment.emplace_back("MTL_HUD_ENABLED=1");
+  }
+#endif
+  if (!Launch(args, Console::Source::kGame, environment)) return false;
   state_ = State::kRunning;
   return true;
 }

@@ -126,6 +126,11 @@ To use another editor, open **File > Preferences...** and set an external
 editor command. `{project}` and `{file}` in the command are replaced with the
 project root and the selected file.
 
+On macOS Debug builds, **File > Preferences...** also has **Debug Play FPS**.
+When enabled, **Play** launches the game with `MTL_HUD_ENABLED=1` so Metal's
+frame-rate and GPU statistics overlay is visible over the game window. Release
+builds and other platforms do not offer or apply this option.
+
 @subsection editor_console Console
 
 The **Console** collects engine messages, script output and errors. Each line

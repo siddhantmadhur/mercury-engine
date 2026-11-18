@@ -33,11 +33,14 @@
 
 namespace Mercury {
 
+struct EditorSettings;
+
 class PlaySession {
  public:
   enum class State { kIdle, kBuilding, kRunning };
 
-  explicit PlaySession(Console& console) : console_(console) {}
+  PlaySession(Console& console, const EditorSettings& settings)
+      : console_(console), settings_(settings) {}
 
   void Play(const Project& project, const std::string& map_res_path);
   void Build(const Project& project);
@@ -64,10 +67,12 @@ class PlaySession {
   bool StartBuild();
   bool StartGame();
   bool DumpSchema();
-  bool Launch(const std::vector<std::string>& args, Console::Source source);
+  bool Launch(const std::vector<std::string>& args, Console::Source source,
+              const std::vector<std::string>& environment = {});
   void Finish(const std::string& message, bool error);
 
   Console& console_;
+  const EditorSettings& settings_;
   std::unique_ptr<os::Process> process_;
   Console::Source source_ = Console::Source::kBuild;
   State state_ = State::kIdle;

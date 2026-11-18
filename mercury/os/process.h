@@ -29,11 +29,14 @@ class Process {
 
   /**
    * @brief Start `args[0]` (searched on PATH) with the remaining arguments
+   * @param environment "NAME=VALUE" entries added to (or overriding) the
+   *        inherited environment for this child only
    * @return false with `error` filled if it could not be started
    */
   bool Start(const std::vector<std::string>& args,
              const std::filesystem::path& working_dir = {},
-             std::string* error = nullptr);
+             std::string* error = nullptr,
+             const std::vector<std::string>& environment = {});
 
   // Checks (without blocking) whether the child has exited.
   bool IsRunning();

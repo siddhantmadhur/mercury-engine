@@ -33,6 +33,10 @@ inline std::string BuildConfig() {
 #endif
 }
 
+// True for the Debug configuration. Used to keep developer-only behavior
+// (such as the Metal HUD) out of release builds.
+inline bool IsDebugBuild() { return BuildConfig() == "Debug"; }
+
 inline std::vector<std::string> BuildArguments(const std::string& target) {
   std::vector<std::string> args = {"cmake", "--build", BuildDir().string()};
   const std::string config = BuildConfig();

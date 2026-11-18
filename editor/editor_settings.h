@@ -12,6 +12,7 @@
  *   external_editor = "code {project} {file}"
  *   open_scripts_in_editor = true
  *   vim_mode = false
+ *   show_metal_hud = false
  *   pack_size_mb = 256
  *
  *   [recent]
@@ -43,6 +44,11 @@ struct EditorSettings {
   bool open_scripts_in_editor = true;
   // Enable modal Vim keybindings in the built-in script editor.
   bool vim_mode = false;
+#if defined(__APPLE__)
+  // macOS Debug builds: set MTL_HUD_ENABLED=1 when Play launches the game, so
+  // Metal's FPS and GPU statistics overlay is visible over the game window.
+  bool show_metal_hud = false;
+#endif
   // Build Game: size at which game.mpack rolls over into the next archive,
   // in MiB. 0 keeps the whole pack in one archive.
   int pack_size_mb = 256;

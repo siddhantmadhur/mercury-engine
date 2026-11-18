@@ -279,6 +279,7 @@ if (MERCURY_BUILD_TESTS)
             tests/parallel_load_test.cc
             tests/physics_constraints_test.cc
             tests/primitives_test.cc
+            tests/process_test.cc
             tests/reflection_test.cc
             tests/rust_bridge_test.cc
             tests/script_behaviour_test.cc
