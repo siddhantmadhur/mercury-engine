@@ -11,7 +11,7 @@
 #   open Builds/Pong.app
 #
 # The editor bundle additionally carries mercury_player, the loose UI theme,
-# fonts and compiled shaders, the Vulkan driver, the static libraries for
+# fonts and compiled materials, the Vulkan driver, the static libraries for
 # native builds, and the list of runtime libraries a game made by Build Game
 # needs. It therefore needs no engine checkout, compiler or Bazel on the
 # machine it runs on.
@@ -702,14 +702,16 @@ sub pack_engine {
     };
     $walk->($ui, '');
 
-    my $spirv = File::Spec->catdir($REPO, 'bazel-bin', 'mercury', 'shaders');
-    opendir(my $dh, $spirv) or fail("no compiled shaders in $spirv");
-    my @spv = sort grep { /\.spv$/ && -f File::Spec->catfile($spirv, $_) } readdir $dh;
+    my $materials = File::Spec->catdir($REPO, 'bazel-bin', 'mercury', 'materials');
+    opendir(my $dh, $materials) or fail("no compiled materials in $materials");
+    my @filamat = sort grep { /\.filamat$/ && -f File::Spec->catfile($materials, $_) }
+        readdir $dh;
     closedir $dh;
-    fail("no compiled shaders in $spirv") unless @spv;
-    push @files, ["shaders/$_", File::Spec->catfile($spirv, $_)] for @spv;
+    fail("no compiled materials in $materials") unless @filamat;
+    push @files, ["materials/$_", File::Spec->catfile($materials, $_)]
+        for @filamat;
 
-    log_line("Packing the engine's UI theme and shaders into engine.mpack");
+    log_line("Packing the engine's UI theme and materials into engine.mpack");
     write_pack($dest, 'engine', \@files, $max_bytes);
 }
 
@@ -751,29 +753,29 @@ sub copy_tree {
     return $count;
 }
 
-# The player and the editor read shaders and the default UI theme from disk
-# unless a game mounts engine.mpack. Ship both so Play and the editor's own
+# The player and the editor read compiled materials and the default UI theme
+# from disk unless a game mounts engine.mpack. Ship both so Play and the editor's own
 # renderer work on a machine without the checkout.
 sub bundle_engine_resources {
     my $ui = File::Spec->catdir($REPO, 'mercury', 'ui', 'resources');
     fail("the engine's UI resources are missing ($ui)") unless -d $ui;
     my $ui_files = copy_tree($ui, File::Spec->catdir($res, 'ui'));
 
-    my $spirv = File::Spec->catdir($bazel_bin, 'mercury', 'shaders');
-    opendir(my $dh, $spirv) or fail("no compiled shaders in $spirv");
-    my @spv = sort grep { /\.spv$/ && -f File::Spec->catfile($spirv, $_) }
+    my $materials = File::Spec->catdir($bazel_bin, 'mercury', 'materials');
+    opendir(my $dh, $materials) or fail("no compiled materials in $materials");
+    my @filamat = sort grep { /\.filamat$/ && -f File::Spec->catfile($materials, $_) }
         readdir $dh;
     closedir $dh;
-    fail("no compiled shaders in $spirv") unless @spv;
-    my $shaders = File::Spec->catdir($res, 'shaders');
-    make_path($shaders);
-    for my $file (@spv) {
-        copy(File::Spec->catfile($spirv, $file),
-            File::Spec->catfile($shaders, $file))
-            or fail("cannot copy shader $file: $!");
+    fail("no compiled materials in $materials") unless @filamat;
+    my $material_dir = File::Spec->catdir($res, 'materials');
+    make_path($material_dir);
+    for my $file (@filamat) {
+        copy(File::Spec->catfile($materials, $file),
+            File::Spec->catfile($material_dir, $file))
+            or fail("cannot copy material $file: $!");
     }
     log_line("Bundled the engine's UI resources ($ui_files files) and "
-        . scalar(@spv) . " shaders");
+        . scalar(@filamat) . " materials");
 
     bundle_static_libraries() if $engine_libs;
 }
@@ -1170,12 +1172,13 @@ sub verify_bundle {
         # player and the engine's loose resources.
         fail("missing Contents/MacOS/mercury_player")
             unless defined $player && -f $player;
-        for my $required (qw(ui shaders)) {
+        for my $required (qw(ui materials)) {
             my $dir = File::Spec->catdir($res, $required);
             fail("missing Contents/Resources/$required") unless -d $dir;
         }
-        my $shaders = glob(File::Spec->catfile($res, 'shaders', '*.spv'));
-        fail("Contents/Resources/shaders has no .spv files") unless $shaders;
+        my $filamat = glob(File::Spec->catfile($res, 'materials', '*.filamat'));
+        fail("Contents/Resources/materials has no .filamat files")
+            unless $filamat;
         fail("missing Contents/Resources/engine/player-libs.txt")
             unless -f File::Spec->catfile($res, 'engine', 'player-libs.txt');
     }

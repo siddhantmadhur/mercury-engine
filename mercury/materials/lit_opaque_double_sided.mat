@@ -1,0 +1,37 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+material {
+    name: MercuryLitOpaqueDoubleSided,
+    shadingModel: lit,
+    blending: opaque,
+    culling: none,
+    requires: [
+        position,
+        tangents,
+        uv0,
+        color
+    ],
+    parameters: [
+        { type: float4, name: baseColor },
+        { type: sampler2d, name: baseColorMap, precision: high },
+        { type: float2, name: tiling },
+        { type: float2, name: offset },
+        { type: float, name: metallic },
+        { type: float, name: roughness },
+        { type: float4, name: emissive }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        vec2 uv = getUV0() * materialParams.tiling + materialParams.offset;
+        material.baseColor = materialParams.baseColor * getColor() *
+                             texture(materialParams_baseColorMap, uv);
+        material.roughness = materialParams.roughness;
+        material.metallic = materialParams.metallic;
+        material.emissive = materialParams.emissive;
+    }
+}

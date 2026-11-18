@@ -85,7 +85,7 @@ class ReleaseBuild {
     std::string executable;   // the Release mercury_player, or the game exe
     std::string source_dir;   // the engine checkout
     std::string target_name;  // what the shipped executable is called
-    std::string spirv_dir;
+    std::string materials_dir;
     std::string ui_resources;
     // C++ script projects: a Bazel target and its workspace.
     std::string build_target;

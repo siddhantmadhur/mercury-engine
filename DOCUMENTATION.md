@@ -23,7 +23,7 @@ Mercury is a C++ engine for producing games, covering windowing, input, renderin
 - **Scenes** (`Mercury::GameScene`) are a state of the game. They manage objects, their properties and physics, and know nothing about drawing or windowing.
 - **Primitives** are the minimum a scene must hand over to get an object on screen. The Application turns them into buffers and draws them. How primitives are batched or pooled (for example one texture atlas to cut draw calls) is up to the scene.
 
-Source layout under `mercury/`: `application`, `scene`, `components`, `pipelines` (Vulkan rendering), `shaders` (HLSL), `physics_engine`, `animation`, `audio`, `input`, `ui`, `scripting`, `serialization`, `project`, `pack` and `os`.
+Source layout under `mercury/`: `application` (Filament renderer), `materials` (Filament `.mat` definitions), `scene`, `components`, `physics_engine`, `animation`, `audio`, `input`, `ui`, `scripting`, `serialization`, `project`, `pack` and `os`.
 
 ## Projects and the editor
 
@@ -122,52 +122,76 @@ A node's position is relative to its parent; maps are flattened to world positio
 
 ## Rendering
 
-Rendering uses Vulkan 1.3 with dynamic rendering. Shaders are written in HLSL (`mercury/shaders/`) and compiled to SPIR-V by DXC at build time (Bazel's shader rule finds `dxc` in `bin/dxc/`, `VULKAN_SDK` or the system). Shader files are named by stage: `*.vs.hlsl` vertex, `*.ps.hlsl` pixel, `*.cs.hlsl` compute, with shared code in `*.hlsli`.
+Mercury renders with [Filament](https://github.com/google/filament) (Google's
+PBR engine), on its Vulkan backend. Filament owns the GPU: device, swapchain,
+pipeline state, shadow maps and post-processing are the library's, so the
+engine only translates its own world into Filament objects.
+
+- `mercury/application/filament_application.{h,cc}` — the `Application` and
+  `RenderHost` implementation: Engine/Renderer/SwapChain lifetime, one `View`
+  per output (window, editor viewport, camera preview, UI Builder canvas) and
+  the pixel readbacks the editor copies out.
+- `mercury/application/filament/filament_renderer.{h,cc}` — mirrors the ECS
+  into a Filament `Scene`: `RenderMesh` draws become renderables (with skins),
+  `ImageData` becomes textures, `SceneLighting` becomes a sun, point lights and
+  a constant ambient `IndirectLight`.
+- `mercury/application/filament/filament_ui.{h,cc}` — draws
+  `UI::UIDrawData` with Filament (one renderable per command, textures from
+  `UITextureRegistry`).
+- `mercury/materials/*.mat` — Mercury's material definitions. `matc`
+  (built by `//third_party:filament_build`) compiles them to `.filamat` at
+  build time; the player and editor read them from `mercury/materials` (or
+  from `engine.mpack` in a shipped build).
 
 ### Frame outline
 
-1. **Culling:** `cull.cs.hlsl` runs on the GPU, one thread per draw slot, testing each against a view and appending indexed indirect draws to four buckets (single/double-sided, normal/mirrored). Views then draw with `vkCmdDrawIndexedIndirectCount`.
-2. **Shadow passes:** the sun's maps, and cube maps for point and area lights, are drawn with `shadow.vs`/`model_shadow.vs` and `shadow_cube.ps`. Glass is drawn into transmittance maps (`shadow_transmit.ps`).
-3. **Probe capture** (when lights or still geometry change): see [Global illumination](#global-illumination).
-4. **Main pass:** `model.vs`/`model.ps` draw lit models into a linear HDR target, plus a view-space normal target used by SSAO. `sky.ps` draws the background and `skybox` a cubemap/panorama.
-5. **Glass:** after the opaque pass the scene is copied (`scene_copy.ps`) so transmissive surfaces can sample what is behind them.
-6. **Post-processing:** fullscreen passes (`fullscreen.vs` + `post_common.hlsli`) for SSAO, bloom, FXAA, outline and the final composite.
-7. **UI:** `ui.vs`/`ui.ps` draw the UI Toolkit on top.
+1. `FilamentRenderer::SyncScene` reconciles the registry: new/changed
+   `RenderMesh` entities are rebuilt, transforms and bones updated, lights
+   rebuilt when their values changed.
+2. The main camera becomes the window's scene view; the game's
+   `UI::UIDrawData`, when there is one, is drawn by a second view over it
+   (`BlendMode::TRANSLUCENT`).
+3. Editor outputs render into `RenderTarget`s (colour + depth textures) and
+   are copied to the CPU with `Renderer::readPixels`; `CopyScenePixels`,
+   `CopyPreviewPixels` and `CopyUIPreviewPixels` hand those buffers to the
+   editor.
+4. Filament's own passes follow: shadow maps, GTAO/SSAO, bloom, tonemapping
+   and anti-aliasing are all library features enabled through `View` options.
 
 ### Lighting
 
-Surfaces use Cook-Torrance GGX shading with a metallic/roughness material model. Light sources:
+Materials are Filament's physically-based `lit` model (metallic/roughness,
+image-based ambient). `SceneLighting` maps onto:
 
-- **Directional light:** PCF shadows from a detailed shadow map covering `shadow_distance` around the camera, plus a scene-wide map of the still geometry (redrawn only when it or the sun changes) that shadows everything farther away.
-- **Point lights:** Unity's falloff, soft cube-map shadows whose softness follows `radius`.
-- **Area lights:** rectangles with exact diffuse lighting and shadows whose penumbra grows with distance from the caster.
-- **Shadow cost control:** point/area shadow maps are redrawn only when the light or something near it moves.
-- **Glass and transmissive materials** refract the scene behind them (blurred by roughness, tinted, under a Fresnel reflection), and tint light passing through them via the transmittance maps. Without a scene copy (overlays, RenderTextures) they just alpha-blend.
-
-### Global illumination
-
-Every map has GI. Without a `LightProbeVolume` component the renderer fits a grid of light probes around the still geometry.
-
-- Each probe captures the lit scene (sun shadowed over the whole grid, ambient colors as the sky) as six cube faces, which `probe_sh.ps` projects to L2 spherical harmonics. `probe_octa.ps` and `probe_visibility.ps` build octahedral irradiance and distance maps, so walls hide the probes behind them (no light leaking).
-- One bounce is added per pass (`bounces`). Probes that mostly see back faces are inside geometry and are marked unusable.
-- Surfaces take indirect light from the probes instead of the flat hemispheric ambient. The grid updates when lights or still objects change; objects that moved in the last 2 seconds and skinned meshes are lit by it but not captured.
+- **Directional light** → a Filament `SUN` (colour × intensity in lux), with
+  shadow maps.
+- **Point lights** → Filament `POINT` lights (lumens).
+- **Ambient (`ambient`, `ambient_ground`)** → a constant ambient
+  `IndirectLight` built from spherical harmonics; the two colours are
+  averaged, so the hemispheric gradient the old renderer had is gone.
+- **Area lights** are not forwarded yet (they still exist in the map format).
 
 ### Post-processing
 
-Configured by a `PostProcessProfile` asset chosen on a `PostProcessVolume`:
+`RenderSettings`/`PostProcessProfile` are not wired into Filament yet: views
+run with Filament's defaults (ACES-style tonemapping, FXAA). Bloom, SSAO,
+exposure, vignette and outline settings in the profile are currently ignored;
+enabling them means setting `View::setBloomOptions`,
+`View::setAmbientOcclusionOptions`, `ColorGrading` and friends — see
+`PHASE3.md`.
 
-- **Tonemapping:** none, Neutral (Hable's curve, as Unity's) or ACES, plus exposure, then sRGB encoding.
-- **Bloom:** downsample/upsample chain (`bloom_down`, `bloom_up`).
-- **Vignette.**
-- **SSAO:** half-resolution, darkens only the *indirect* share of the light. On by default; `ambient_occlusion = 0` in the profile, or `ssao_intensity = 0` in the project's `[render]` section for maps without a volume, turns it off. `ao_radius` sets its reach.
-- **FXAA:** on by default; `antialiasing = false` or `fxaa = false` in `[render]` turns it off.
-- **Outline:** a layer-based outline from a mask pass (`outline_mask.ps`).
+### Material notes
 
-### Shader notes
-
-- Descriptor set 0 holds per-frame resources (shadow maps, probe maps, draw data); set 1 holds the bindless texture array. Binding numbers are documented at the top of `model_common.hlsli` and `lighting.hlsli`.
-- C++ structs such as `CullData` (`vk_scene_renderer.h`) must match their HLSL counterparts.
-- After editing shaders, rebuild both Debug and Release trees; Debug (`-Od`) output can produce invalid SPIR-V.
+- `lit_opaque`, `lit_opaque_double_sided`, `lit_transparent`,
+  `lit_transparent_double_sided`, `unlit` and `text_sdf` are the shipped
+  materials. culling and blending are compile-time material properties, which
+  is why each combination exists.
+- Parameters set per draw: `baseColor` (linear), `baseColorMap` (always
+  bound — Filament panics on unbound samplers), `tiling`, `offset`,
+  `metallic`, `roughness` (`1 - smoothness`) and `emissive`.
+- Material variables (`uiParams`, `uiOutline` in `ui.mat`) come from custom
+  vertex attributes (`CUSTOM0`, `CUSTOM1`); the vertex shader copies them with
+  `getCustom0()` so the fragment can read `variable_*`.
 
 ## Scripts
 

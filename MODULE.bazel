@@ -38,6 +38,7 @@ single_version_override(
 # --------------------------------------------------------------------------
 
 local_source_repo = use_repo_rule("//third_party:repositories.bzl", "local_source_repo")
+exclude_source_repo = use_repo_rule("//third_party:repositories.bzl", "exclude_source_repo")
 
 local_source_repo(name = "glfw_src", path = "third_party/glfw")
 local_source_repo(name = "assimp_src", path = "third_party/assimp")
@@ -46,6 +47,12 @@ local_source_repo(name = "yoga_src", path = "third_party/yoga")
 local_source_repo(name = "tinyxml2_src", path = "third_party/tinyxml2")
 local_source_repo(name = "meshoptimizer_src", path = "third_party/meshoptimizer")
 local_source_repo(name = "miniaudio_src", path = "third_party/miniaudio")
+
+# Filament keeps its build outputs in out/ and carries nested Bazel package
+# markers; the rule copies the tree and strips both.
+filament_repo = use_repo_rule("//third_party:repositories.bzl", "filament_repo")
+
+filament_repo(name = "filament_src", path = "third_party/filament")
 
 yoga_wrapper_repo = use_repo_rule("//third_party:repositories.bzl", "yoga_wrapper_repo")
 
@@ -58,10 +65,6 @@ vulkan_repo(name = "vulkan")
 wxwidgets_repo = use_repo_rule("//third_party:repositories.bzl", "wxwidgets_repo")
 
 wxwidgets_repo(name = "wxwidgets")
-
-dxc_repo = use_repo_rule("//third_party:repositories.bzl", "dxc_repo")
-
-dxc_repo(name = "dxc")
 
 build_config_repo = use_repo_rule("//third_party:repositories.bzl", "build_config_repo")
 

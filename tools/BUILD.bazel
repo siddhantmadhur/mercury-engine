@@ -2,6 +2,23 @@ load("@mercury_config//:defs.bzl", "COPTS")
 
 package(default_visibility = ["//visibility:public"])
 
+# The matc material compiler Filament's CMake build installs. The cmake rule
+# exposes it as the "matc" output group; wrap it so it can be used as an
+# executable tool.
+filegroup(
+    name = "matc_out",
+    output_group = "matc",
+    srcs = ["//third_party:filament_build"],
+)
+
+genrule(
+    name = "matc",
+    executable = True,
+    outs = ["matc.sh"],
+    srcs = [":matc_out"],
+    cmd = "cp $(execpath :matc_out) $@ && chmod +x $@",
+)
+
 cc_binary(
     name = "model_info",
     srcs = ["model_info.cc"],

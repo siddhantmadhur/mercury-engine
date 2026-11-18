@@ -75,7 +75,7 @@ def mercury_game(name, project, scripts = None, srcs = [], deps = [],
         defines = _DEFINES,
         data = [
             project,
-            "//mercury/shaders:shaders",
+            "//mercury/materials:materials",
         ],
         copts = copts,
         visibility = visibility,

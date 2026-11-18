@@ -46,7 +46,8 @@ If a platform is not on the list then that means supporting is not a goal of thi
 
 
 Rendering requires a GPU and driver with Vulkan 1.3 (dynamic rendering). Shaders are
-written in HLSL and compiled to SPIR-V with DXC at build time.
+authored as [Filament](https://github.com/google/filament) materials and
+compiled with `matc` at build time.
 
 [^1]: The goal is to have SteamOS specific features like support for those touchpads on the
 SteamDeck or the controllers. Along with support for controller layouts, battery modes and more.
@@ -66,7 +67,7 @@ rendering) sits behind the engine, and scripts reach it only through a small che
 | Scripting | [AngelScript](https://www.angelcode.com/angelscript/), C++ | Compile and run `.as` scripts, or link C++ `MERCURY_SCRIPT` components |
 | Scene | [EnTT](https://github.com/skypjack/entt), [GLM](https://github.com/g-truc/glm) | Entity-component storage, math |
 | Physics | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Rigid bodies, colliders, character controller |
-| Rendering | Vulkan 1.3, [VMA](https://github.com/GPUOpen-LibrariesAndPlugins/VulkanMemoryAllocator), [DXC](https://github.com/microsoft/DirectXShaderCompiler), [GLFW](https://www.glfw.org) | Drawing, GPU memory, HLSL to SPIR-V, window and input |
+| Rendering | [Filament](https://github.com/google/filament) (Vulkan), [GLFW](https://www.glfw.org) | Drawing, lighting, shadows, post-processing, window and input |
 | Assets | [Assimp](https://github.com/assimp/assimp), [stb](https://github.com/nothings/stb), [nanosvg](https://github.com/memononen/nanosvg), [meshoptimizer](https://github.com/zeux/meshoptimizer) | Models, images, SVG, mesh simplification |
 | UI | [Yoga](https://github.com/facebook/yoga), [tinyxml2](https://github.com/leethomason/tinyxml2) | Flexbox layout, UXML parsing |
 | Audio | [miniaudio](https://miniaud.io) | Playback with 3D attenuation |

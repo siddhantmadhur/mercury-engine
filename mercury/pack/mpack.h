@@ -66,7 +66,7 @@ inline constexpr std::string_view kGamePackName = "game";
 inline constexpr std::string_view kEnginePackName = "engine";
 // Folders inside engine.mpack.
 inline constexpr std::string_view kEngineUiFolder = "ui/";
-inline constexpr std::string_view kEngineShaderFolder = "shaders/";
+inline constexpr std::string_view kEngineMaterialFolder = "materials/";
 
 enum class Compression : uint8_t { kStored = 0, kZlib = 1 };
 

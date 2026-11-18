@@ -68,10 +68,11 @@ fs::path BundleResourcesDir();
 // packaged editor. A shipped game mounts engine.mpack at this path instead.
 fs::path EngineUiResourceDir();
 
-// Where the compiled SPIR-V shaders live: bazel-bin/mercury/shaders in a
-// development build, or Contents/Resources/shaders in a packaged editor.
-// A shipped game mounts engine.mpack at this path instead.
-fs::path EngineShaderDir();
+// Where the compiled Filament materials (.filamat) live:
+// bazel-bin/mercury/materials in a development build, or
+// Contents/Resources/materials in a packaged editor. A shipped game mounts
+// engine.mpack at this path instead.
+fs::path EngineMaterialDir();
 
 // Points the Vulkan loader at the MoltenVK ICD shipped next to the program (in
 // a .app bundle's Resources, or in the game folder that Build Game wrote).

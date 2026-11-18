@@ -220,9 +220,9 @@ ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
   config.workspace_dir = workspace_dir_.string();
   config.native = !build_target_.empty();
   // Prefer the copies that ship with the editor; in a development build these
-  // resolve to the checkout's UI resources and bazel-bin shaders.
+  // resolve to the checkout's UI resources and bazel-bin materials.
   config.ui_resources = os::EngineUiResourceDir().string();
-  config.spirv_dir = os::EngineShaderDir().string();
+  config.materials_dir = os::EngineMaterialDir().string();
   const fs::path bundle = os::BundleResourcesDir();
   if (!bundle.empty()) {
     const fs::path engine = bundle / "engine";
@@ -422,19 +422,19 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
                entry.path());
     engine_bytes += entry.file_size(ec);
   }
-  const fs::path spirv = config.spirv_dir;
-  int shaders = 0;
-  for (const auto& entry : fs::directory_iterator(spirv, ec)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".spv")
+  const fs::path materials = config.materials_dir;
+  int built = 0;
+  for (const auto& entry : fs::directory_iterator(materials, ec)) {
+    if (!entry.is_regular_file() || entry.path().extension() != ".filamat")
       continue;
-    engine.Add(std::string(mpack::kEngineShaderFolder) +
+    engine.Add(std::string(mpack::kEngineMaterialFolder) +
                    entry.path().filename().generic_string(),
                entry.path());
     engine_bytes += entry.file_size(ec);
-    shaders++;
+    built++;
   }
-  if (shaders == 0) {
-    return fail("no compiled shaders in " + spirv.string());
+  if (built == 0) {
+    return fail("no compiled materials in " + materials.string());
   }
 
   std::string error;

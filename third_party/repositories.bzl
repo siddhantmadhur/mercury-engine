@@ -41,6 +41,111 @@ local_source_repo = repository_rule(
 )
 
 
+def _exclude_source_repo_impl(ctx):
+    # Like local_source_repo, but with a glob exclusion list so build outputs
+    # and other large files inside the checkout never become action inputs.
+    ctx.symlink(ctx.workspace_root.get_child(ctx.attr.path), "src")
+    ctx.file("REPO.bazel", "")
+    ctx.file(
+        "BUILD.bazel",
+        """package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all",
+    srcs = glob(
+        ["src/**"],
+        exclude = {excludes},
+    ),
+)
+""".format(excludes = ctx.attr.excludes),
+    )
+
+exclude_source_repo = repository_rule(
+    implementation = _exclude_source_repo_impl,
+    attrs = {
+        "path": attr.string(mandatory = True),
+        "excludes": attr.string_list(mandatory = True),
+    },
+    local = True,
+)
+
+
+# --------------------------------------------------------------------------
+# Filament (google/filament)
+# --------------------------------------------------------------------------
+
+def _filament_repo_impl(ctx):
+    # Filament's checkout carries nested BUILD.bazel files (spirv-headers,
+    # meshoptimizer, ...). For Bazel those are package boundaries, so a glob
+    # from the root would silently skip them. Copy the tree instead and strip
+    # the nested package markers, keeping only CMake-relevant sources.
+    ctx.execute(["mkdir", "-p", "src"])
+    ctx.report_progress("copying filament sources")
+    source = ctx.workspace_root.get_child(ctx.attr.path)
+    result = ctx.execute(["cp", "-R", str(source) + "/.", "src/"])
+    if result.return_code != 0:
+        fail("could not copy filament sources: " + result.stderr)
+
+    for junk in [
+        "src/out",
+        "src/.git",
+        "src/.github",
+        "src/web",
+        "src/docs",
+        "src/docs_src",
+        "src/android",
+        "src/ios",
+        "src/ide",
+        "src/skills",
+        "src/art",
+        "src/assets",
+        "src/test",
+        # Data only used by the samples and the WebGPU backend, both off.
+        "src/third_party/dawn",
+        "src/third_party/textures",
+        "src/third_party/models",
+        "src/third_party/environments",
+    ]:
+        ctx.execute(["rm", "-rf", junk])
+
+    ctx.report_progress("removing nested package markers")
+    # On case-insensitive filesystems Bazel treats a file named "build" as a
+    # BUILD package marker, which silently breaks the root glob. Rename those
+    # (civetweb ships one); the scripts are not used by CMake builds.
+    result = ctx.execute(
+        [
+            "bash",
+            "-c",
+            "find src -type f -name build -exec mv {} {}.script \\; ; " +
+            "find src -name BUILD -delete -o -name BUILD.bazel -delete " +
+            "-o -name MODULE.bazel -delete -o -name WORKSPACE -delete " +
+            "-o -name WORKSPACE.bazel -delete",
+        ],
+    )
+    if result.return_code != 0:
+        fail("could not clean filament sources: " + result.stderr)
+
+    ctx.file("REPO.bazel", "")
+    ctx.file(
+        "BUILD.bazel",
+        """package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all",
+    srcs = glob(["src/**"]),
+)
+""",
+    )
+
+filament_repo = repository_rule(
+    implementation = _filament_repo_impl,
+    attrs = {
+        "path": attr.string(mandatory = True),
+    },
+    local = True,
+)
+
+
 # --------------------------------------------------------------------------
 # Vulkan loader + headers
 # --------------------------------------------------------------------------
@@ -238,59 +343,6 @@ wxwidgets_repo = repository_rule(
 )
 
 
-# --------------------------------------------------------------------------
-# DXC (HLSL -> SPIR-V)
-# --------------------------------------------------------------------------
-
-def _find_dxc(ctx):
-    env = ctx.os.environ
-    candidates = []
-    if env.get("DXC"):
-        candidates.append(env["DXC"])
-    if env.get("VULKAN_SDK"):
-        sdk = env["VULKAN_SDK"]
-        candidates.append(paths.join(sdk, "bin/dxc"))
-        candidates.append(paths.join(sdk, "bin/dxc.exe"))
-    ws = str(ctx.workspace_root)
-    candidates += [
-        paths.join(ws, "bin/dxc/bin/dxc"),
-        paths.join(ws, "bin/vulkansdk/macOS/bin/dxc"),
-        paths.join(ws, "bin/vulkansdk/windows/bin/dxc.exe"),
-    ]
-    for candidate in candidates:
-        if ctx.path(candidate).exists:
-            return candidate
-    result = ctx.execute(["which", "dxc"])
-    if result.return_code == 0 and result.stdout.strip():
-        return result.stdout.strip()
-    fail("dxc was not found. Run scripts/setup_project_*.sh or set VULKAN_SDK.")
-
-
-def _dxc_repo_impl(ctx):
-    dxc = _find_dxc(ctx)
-    ctx.file("REPO.bazel", "")
-    ctx.file(
-        "dxc.sh",
-        "#!/bin/sh\nexec {} \"$@\"\n".format(dxc),
-        executable = True,
-    )
-    ctx.file(
-        "BUILD.bazel",
-        """package(default_visibility = ["//visibility:public"])
-
-sh_binary(
-    name = "dxc",
-    srcs = ["dxc.sh"],
-)
-""",
-    )
-
-dxc_repo = repository_rule(
-    implementation = _dxc_repo_impl,
-    local = True,
-)
-
-
 def _yoga_wrapper_repo_impl(ctx):
     ctx.symlink(ctx.workspace_root.get_child("third_party/yoga"), "yoga_src")
     ctx.file("REPO.bazel", "")
@@ -340,10 +392,9 @@ def _config_repo_impl(ctx):
     values = {
         "MERCURY_ENGINE_DIR": root,
         "MERCURY_SOURCE_DIR": root,
-        "MERCURY_SHADER_PATH": paths.join(root, "mercury/shaders"),
+        "MERCURY_MATERIAL_PATH": paths.join(root, "bazel-bin/mercury/materials"),
         "MERCURY_ASSET_PATH": paths.join(root, "examples/assets"),
         "MERCURY_UI_RESOURCE_PATH": paths.join(root, "mercury/ui/resources"),
-        "MERCURY_SPIRV_PATH": paths.join(root, "bazel-bin/mercury/shaders"),
         "MERCURY_GRAPHICS_VULKAN": "1",
         "GLFW_INCLUDE_VULKAN": "1",
         "GLM_FORCE_DEPTH_ZERO_TO_ONE": "1",

@@ -392,6 +392,70 @@ cc_library(
 )
 
 cmake(
+    name = "filament_build",
+    # Filament installs its libraries under lib/<arch>.
+    out_lib_dir = select({
+        "@platforms//os:macos": "lib/arm64",
+        "@platforms//os:linux": "lib/x86_64",
+        "//conditions:default": "lib",
+    }),
+    generate_args = ["-G", "Ninja"] + CMAKE_RANLIB_ARGS + [
+        # Filament's CMakeLists overrides CMAKE_*_ARCHIVE_CREATE with
+        # "<CMAKE_AR> qc -S", which the Bazel toolchain's libtool wrapper
+        # rejects; pin the plain Apple archiver instead.
+        "-DCMAKE_AR=/usr/bin/ar",
+        "-DCMAKE_RANLIB=/usr/bin/ranlib",
+    ],
+    cache_entries = {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "FILAMENT_BUILD_TESTING": "OFF",
+        "FILAMENT_SKIP_SAMPLES": "ON",
+        "FILAMENT_SKIP_SDL2": "ON",
+        "FILAMENT_SUPPORTS_METAL": "OFF",
+        "FILAMENT_SUPPORTS_OPENGL": "OFF",
+        "FILAMENT_SUPPORTS_VULKAN": "ON",
+    },
+    env = CMAKE_DEPLOYMENT_ENV,
+    lib_source = "@filament_src//:all",
+    out_binaries = ["matc"],
+    out_include_dir = "include",
+    out_static_libs = [
+        "libfilament.a",
+        "libbackend.a",
+        "libbluevk.a",
+        "libfilaflat.a",
+        "libfilabridge.a",
+        "libsmol-v.a",
+        "libutils.a",
+        "libzstd.a",
+        "libgeometry.a",
+        "libibl.a",
+        "libimage.a",
+        "libfilament-iblprefilter.a",
+    ],
+)
+
+# Filament dlopen()s the Vulkan loader (bluevk); linking Mercury's loader
+# target also adds the SDK rpath that lets that call succeed.
+cc_library(
+    name = "filament",
+    deps = [
+        ":filament_build",
+        "@vulkan//:vulkan",
+    ],
+    linkopts = select({
+        "@platforms//os:macos": [
+            "-framework CoreFoundation",
+            "-framework Foundation",
+        ],
+        "@platforms//os:linux": ["-lpthread", "-ldl"],
+        "//conditions:default": [],
+    }),
+)
+
+cmake(
     name = "miniaudio_build",
     build_args = ["-j4"],
     generate_args = CMAKE_RANLIB_ARGS,

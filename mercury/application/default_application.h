@@ -6,16 +6,17 @@
 #define MERCURYENGINE_DEFAULT_APPLICATION_H
 
 #if defined(MERCURY_GRAPHICS_VULKAN)
-#include "application/vulkan_application.h"
+#include "application/filament_application.h"
 namespace Mercury {
 /**
  * @brief The application backend selected when Mercury was built
  *
- * Today this is @ref Mercury::VulkanApplication (Vulkan 1.3), so game code
- * can construct `Mercury::DefaultApplication` without naming a renderer.
- * The alias is only defined when `MERCURY_GRAPHICS_VULKAN` is set.
+ * This is @ref Mercury::FilamentApplication (Filament over Vulkan), so
+ * game code can construct `Mercury::DefaultApplication` without naming a
+ * renderer. The alias is only defined when `MERCURY_GRAPHICS_VULKAN` is
+ * set.
  */
-using DefaultApplication = VulkanApplication;
+using DefaultApplication = FilamentApplication;
 }  // namespace Mercury
 #else
 #error "No MERCURY_GRAPHICS_* backend selected"

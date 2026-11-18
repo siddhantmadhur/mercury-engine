@@ -1,0 +1,44 @@
+load("//tools:matc.bzl", "filament_material")
+
+package(default_visibility = ["//visibility:public"])
+
+# Lit PBR material set: culling and blending are material properties, so the
+# combinations Mercury's RenderMaterial needs each get their own compile.
+# matc runs as an exec tool built by //third_party:filament_build.
+
+[
+    filament_material(
+        name = "lit_%s%s" % (blend, side),
+        src = "lit_%s%s.mat" % (blend, side),
+    )
+    for blend in ["opaque", "transparent"]
+    for side in ["_double_sided", ""]
+]
+
+filament_material(
+    name = "unlit",
+    src = "unlit.mat",
+)
+
+filament_material(
+    name = "text_sdf",
+    src = "text_sdf.mat",
+)
+
+filament_material(
+    name = "ui",
+    src = "ui.mat",
+)
+
+filegroup(
+    name = "materials",
+    srcs = [
+        ":lit_opaque",
+        ":lit_opaque_double_sided",
+        ":lit_transparent",
+        ":lit_transparent_double_sided",
+        ":unlit",
+        ":text_sdf",
+        ":ui",
+    ],
+)

@@ -1,0 +1,36 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+// Signed-distance-field text (TextMesh): the texture's alpha channel is a
+// distance field where 0.5 is the glyph edge, smoothed by the screen-space
+// derivative like the Vulkan UI shader did.
+
+material {
+    name: MercurySdfText,
+    shadingModel: unlit,
+    blending: transparent,
+    culling: none,
+    requires: [
+        position,
+        uv0
+    ],
+    parameters: [
+        { type: float4, name: baseColor },
+        { type: sampler2d, name: baseColorMap, precision: high },
+        { type: float2, name: tiling },
+        { type: float2, name: offset }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        vec2 uv = getUV0() * materialParams.tiling + materialParams.offset;
+        float distance = texture(materialParams_baseColorMap, uv).a;
+        float width = max(fwidth(distance) * 0.75, 1e-4);
+        float fill = smoothstep(0.5 - width, 0.5 + width, distance);
+        material.baseColor = vec4(materialParams.baseColor.rgb,
+                                   materialParams.baseColor.a * fill);
+    }
+}

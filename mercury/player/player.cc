@@ -76,9 +76,9 @@ bool MountShippedPacks(std::string& project_path) {
 
   os::Mount(dir, game);
   os::Mount(UI::UIResources::EngineResourceDir(), engine,
-            std::string(mpack::kEngineUiFolder));
-  os::Mount(os::EngineShaderDir(), engine,
-            std::string(mpack::kEngineShaderFolder));
+             std::string(mpack::kEngineUiFolder));
+  os::Mount(os::EngineMaterialDir(), engine,
+            std::string(mpack::kEngineMaterialFolder));
   project_path = (dir / mproj).string();
   PDebug::info("Running from {}", game_file.string());
   return true;

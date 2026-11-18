@@ -76,7 +76,7 @@ cc_binary(
     name = "editor_smoke",
     srcs = ["editor_smoke.cc"],
     copts = COPTS,
-    data = ["//mercury/shaders:shaders"],
+    data = ["//mercury/materials:materials"],
     deps = [
         "//editor:editor_lib",
         "@wxwidgets//:wxwidgets",

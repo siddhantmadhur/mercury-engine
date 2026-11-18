@@ -51,20 +51,28 @@ cc_library(
         "@platforms//os:macos": ["-Wno-deprecated-declarations"],
         "//conditions:default": [],
     }),
-    data = ["//mercury/shaders:shaders"],
+    data = ["//mercury/materials:materials"],
     includes = ["."],
     linkopts = select({
-        "@platforms//os:macos": ["-framework CoreFoundation"],
+        # metal_layer_darwin.cc: the CAMetalLayer Filament's Vulkan backend
+        # needs, through the Objective-C runtime.
+        "@platforms//os:macos": [
+            "-framework AppKit",
+            "-framework CoreFoundation",
+            "-framework Metal",
+            "-framework QuartzCore",
+            "-lobjc",
+        ],
         "//conditions:default": [],
     }),
     deps = [
         ":input_actions_codegen_rs_bridge",
         ":mercury_rust",
         "//mercury/rust:bridge",
-        "@vulkan//:vulkan",
         "//third_party:assimp",
         "//third_party:angelscript",
         "//third_party:entt",
+        "//third_party:filament",
         "//third_party:glfw",
         "//third_party:glm",
         "//third_party:jolt",
@@ -73,14 +81,14 @@ cc_library(
         "//third_party:nanosvg",
         "//third_party:stb",
         "//third_party:tinyxml2",
-        "//third_party:vulkan_memory_allocator",
         "//third_party:yoga",
+        "@vulkan//:vulkan",
     ],
 )
 
 cc_binary(
     name = "mercury_player",
     srcs = ["player/main.cc"],
-    data = ["//mercury/shaders:shaders"],
+    data = ["//mercury/materials:materials"],
     deps = [":mercury"],
 )
