@@ -12,9 +12,8 @@
 #define MERCURY_EDITOR_OVERLAY_CANVAS_H
 
 #include <cstdint>
-#include <string>
-
 #include <glm/vec2.hpp>
+#include <string>
 
 namespace Mercury {
 

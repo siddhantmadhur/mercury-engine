@@ -1,10 +1,10 @@
 // Tests of the embedded AngelScript engine itself: evaluation, exceptions and
 // the infinite-loop guard.
+#include "scripting/as/script_runtime.h"
+
 #include <gtest/gtest.h>
 
 #include <string>
-
-#include "scripting/as/script_runtime.h"
 
 using namespace Mercury;
 

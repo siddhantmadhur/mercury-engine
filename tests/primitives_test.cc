@@ -1,8 +1,9 @@
+#include "properties/primitives.h"
+
 #include <gtest/gtest.h>
 
 #include <glm/glm.hpp>
 
-#include "properties/primitives.h"
 #include "properties/transform.h"
 
 using namespace Mercury;

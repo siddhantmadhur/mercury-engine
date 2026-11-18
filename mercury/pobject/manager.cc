@@ -20,9 +20,7 @@ void PObjectManager::CaptureTickSnapshots() {
   });
 }
 
-kEntityId PObjectManager::NewObject() {
-  return registry_.create();
-}
+kEntityId PObjectManager::NewObject() { return registry_.create(); }
 
 void PObjectManager::DestroyObject(kEntityId id) {
   if (registry_.valid(id)) registry_.destroy(id);

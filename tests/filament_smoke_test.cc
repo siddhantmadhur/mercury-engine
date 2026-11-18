@@ -59,7 +59,8 @@ class SmokeScene : public GameScene {
     material.smoothness = 0.6f;
 
     RenderDraw draw;
-    draw.geometry = MeshGeometry::Create(std::move(vertices), {0, 3, 1, 1, 3, 2});
+    draw.geometry =
+        MeshGeometry::Create(std::move(vertices), {0, 3, 1, 1, 3, 2});
 
     RenderMesh mesh;
     mesh.draws.push_back(std::move(draw));

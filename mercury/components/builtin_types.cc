@@ -9,11 +9,11 @@
 #include <cmath>
 #include <optional>
 
+#include "animation/animator.h"
+#include "audio/audio_system.h"
 #include "components/components.h"
 #include "properties/camera.h"
 #include "properties/primitives.h"
-#include "animation/animator.h"
-#include "audio/audio_system.h"
 #include "properties/render_mesh.h"
 #include "scene/map_scene.h"
 #include "scripting/type_registry.h"

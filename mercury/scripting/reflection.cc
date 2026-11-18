@@ -4,10 +4,10 @@
 
 #include "reflection.h"
 
-#include "scripting/event.h"
-
 #include <format>
 #include <optional>
+
+#include "scripting/event.h"
 
 namespace Mercury {
 

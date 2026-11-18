@@ -17,12 +17,12 @@
 #define NANOSVG_IMPLEMENTATION
 #include "nanosvg/src/nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
-#include "nanosvg/src/nanosvgrast.h"
-
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <string>
+
+#include "nanosvg/src/nanosvgrast.h"
 
 namespace Mercury {
 

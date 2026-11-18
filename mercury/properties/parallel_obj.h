@@ -17,9 +17,9 @@
 #ifndef MERCURY_PROPERTIES_PARALLEL_OBJ_H
 #define MERCURY_PROPERTIES_PARALLEL_OBJ_H
 
-#include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 
+#include <assimp/Importer.hpp>
 #include <cstddef>
 #include <functional>
 #include <memory>

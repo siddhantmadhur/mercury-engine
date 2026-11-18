@@ -7,12 +7,12 @@
  */
 #include "script_editor_panel.h"
 
-#include <wx/filename.h>
 #include <wx/clipbrd.h>
+#include <wx/filename.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
-#include <wx/utils.h>
 #include <wx/statbox.h>
+#include <wx/utils.h>
 
 #include <algorithm>
 #include <cctype>

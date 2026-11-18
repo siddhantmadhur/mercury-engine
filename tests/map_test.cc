@@ -1,10 +1,11 @@
+#include "project/map.h"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 
-#include "project/map.h"
 #include "project/project.h"
 #include "scene/map_scene.h"
 

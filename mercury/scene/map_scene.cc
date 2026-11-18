@@ -15,8 +15,8 @@
 #include "debugger/profiler.h"
 #include "properties/camera.h"
 #include "properties/primitives.h"
-#include "scripting/behaviour.h"
 #include "scripting/as/script_runtime.h"
+#include "scripting/behaviour.h"
 #include "scripting/type_registry.h"
 #include "ui/ui_document.h"
 
@@ -1145,10 +1145,10 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.fxaa = p.GetBool("fxaa", settings.fxaa);
     settings.screen_space_reflections = p.GetBool(
         "screen_space_reflections", settings.screen_space_reflections);
-    settings.reflection_distance = static_cast<float>(p.GetFloat(
-        "reflection_distance", settings.reflection_distance));
-    settings.reflection_thickness = static_cast<float>(p.GetFloat(
-        "reflection_thickness", settings.reflection_thickness));
+    settings.reflection_distance = static_cast<float>(
+        p.GetFloat("reflection_distance", settings.reflection_distance));
+    settings.reflection_thickness = static_cast<float>(
+        p.GetFloat("reflection_thickness", settings.reflection_thickness));
     settings.soft_shadows = p.GetBool("soft_shadows", settings.soft_shadows);
     settings.outline_layers =
         static_cast<uint32_t>(p.GetInt("outline_layers", 0));

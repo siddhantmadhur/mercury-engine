@@ -5,11 +5,11 @@
 #include "parallel_obj.h"
 
 #include <assimp/DefaultIOSystem.h>
-#include <assimp/IOSystem.hpp>
 #include <assimp/MemoryIOWrapper.h>
 #include <assimp/material.h>
 
 #include <algorithm>
+#include <assimp/IOSystem.hpp>
 #include <atomic>
 #include <charconv>
 #include <cstdint>

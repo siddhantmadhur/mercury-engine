@@ -8,13 +8,13 @@
 
 #include "transform.h"
 
-#include "glm/common.hpp"
-#include "glm/glm.hpp"
-#include "debugger/debugger.h"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/trigonometric.hpp"
-
 #include <cmath>
+
+#include "debugger/debugger.h"
+#include "glm/common.hpp"
+#include "glm/ext/matrix_transform.hpp"
+#include "glm/glm.hpp"
+#include "glm/trigonometric.hpp"
 
 namespace Mercury {
 Transform::Transform() : transformations_(0) {

@@ -8,11 +8,10 @@
 
 #ifndef MERCURYENGINE_TEXTURE2D_H
 #define MERCURYENGINE_TEXTURE2D_H
-#include "stb/stb_image.h"
-
 #include <string>
 
 #include "glm/vec4.hpp"
+#include "stb/stb_image.h"
 
 namespace Mercury {
 

@@ -2,9 +2,8 @@
 // raycasts, CharacterController, prefab instances, models, the animator
 // controller format, input scripts and ListView.itemsSource.
 
-#include <gtest/gtest.h>
-
 #include <GLFW/glfw3.h>
+#include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
@@ -17,9 +16,9 @@
 #include "project/map.h"
 #include "project/project.h"
 #include "properties/model.h"
-#include "stb/stb_image_write.h"
 #include "scene/map_scene.h"
 #include "scripting/behaviour.h"
+#include "stb/stb_image_write.h"
 #include "test_scripts.h"
 #include "ui/controls.h"
 

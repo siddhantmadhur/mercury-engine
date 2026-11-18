@@ -111,23 +111,22 @@ filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
   if (id == 0) {
     if (!white_) {
       white_ = filament::Texture::Builder()
-                  .width(1)
-                  .height(1)
-                  .levels(1)
-                  .usage(filament::Texture::Usage::SAMPLEABLE |
-                         filament::Texture::Usage::UPLOADABLE)
-                  .format(filament::Texture::InternalFormat::SRGB8_A8)
-                  .sampler(filament::Texture::Sampler::SAMPLER_2D)
-                  .build(*engine);
+                   .width(1)
+                   .height(1)
+                   .levels(1)
+                   .usage(filament::Texture::Usage::SAMPLEABLE |
+                          filament::Texture::Usage::UPLOADABLE)
+                   .format(filament::Texture::InternalFormat::SRGB8_A8)
+                   .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                   .build(*engine);
       if (white_) {
         const uint8_t pixel[4] = {0xff, 0xff, 0xff, 0xff};
-        white_->setImage(
-            *engine, 0,
-            filament::Texture::PixelBufferDescriptor(
-                CopyToHeap(pixel, sizeof(pixel)), sizeof(pixel),
-                filament::backend::PixelDataFormat::RGBA,
-                filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
-                DeleteUpload));
+        white_->setImage(*engine, 0,
+                         filament::Texture::PixelBufferDescriptor(
+                             CopyToHeap(pixel, sizeof(pixel)), sizeof(pixel),
+                             filament::backend::PixelDataFormat::RGBA,
+                             filament::backend::PixelDataType::UBYTE, 1, 0, 0,
+                             0, DeleteUpload));
       }
     }
     return white_;
@@ -146,8 +145,7 @@ filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
   // is re-uploaded rather than recreated: a fresh Filament texture would be
   // sampled before its contents are usable (and destroying the old one races
   // with frames in flight).
-  if (it != textures_.end() &&
-      it->second.width == texture->width &&
+  if (it != textures_.end() && it->second.width == texture->width &&
       it->second.height == texture->height) {
     if (it->second.version != texture->version) {
       it->second.texture->setImage(
@@ -166,26 +164,24 @@ filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,
     textures_.erase(it);
   }
 
-  filament::Texture* gpu =
-      filament::Texture::Builder()
-          .width(static_cast<uint32_t>(texture->width))
-          .height(static_cast<uint32_t>(texture->height))
-          .levels(1)
-          .usage(filament::Texture::Usage::SAMPLEABLE |
-                 filament::Texture::Usage::UPLOADABLE)
-          .format(filament::Texture::InternalFormat::RGBA8)
-          .sampler(filament::Texture::Sampler::SAMPLER_2D)
-          .build(*engine);
+  filament::Texture* gpu = filament::Texture::Builder()
+                               .width(static_cast<uint32_t>(texture->width))
+                               .height(static_cast<uint32_t>(texture->height))
+                               .levels(1)
+                               .usage(filament::Texture::Usage::SAMPLEABLE |
+                                      filament::Texture::Usage::UPLOADABLE)
+                               .format(filament::Texture::InternalFormat::RGBA8)
+                               .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                               .build(*engine);
   if (!gpu) return nullptr;
-  gpu->setImage(*engine, 0,
-                filament::Texture::PixelBufferDescriptor(
-                    CopyToHeap(texture->rgba.data(), texture->rgba.size()),
-                    texture->rgba.size(),
-                    filament::backend::PixelDataFormat::RGBA,
-                    filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
-                    DeleteUpload));
-  textures_.emplace(id, TextureEntry{gpu, texture->version,
-                                     texture->width, texture->height});
+  gpu->setImage(
+      *engine, 0,
+      filament::Texture::PixelBufferDescriptor(
+          CopyToHeap(texture->rgba.data(), texture->rgba.size()),
+          texture->rgba.size(), filament::backend::PixelDataFormat::RGBA,
+          filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0, DeleteUpload));
+  textures_.emplace(
+      id, TextureEntry{gpu, texture->version, texture->width, texture->height});
   return gpu;
 }
 
@@ -193,7 +189,8 @@ void FilamentUiRenderer::DestroyRenderables(filament::Engine* engine) {
   for (const RenderableRecord& record : renderables_) {
     if (scene_) scene_->remove(record.renderable);
     engine->destroy(record.renderable);
-    if (record.material) garbage_materials_.push_back({frame_, record.material});
+    if (record.material)
+      garbage_materials_.push_back({frame_, record.material});
   }
   renderables_.clear();
 }
@@ -249,9 +246,9 @@ void FilamentUiRenderer::Prepare(filament::Engine* engine,
                     .normalized(filament::VertexAttribute::CUSTOM1)
                     .build(*engine);
     indices_ = filament::IndexBuffer::Builder()
-                  .indexCount(index_capacity_)
-                  .bufferType(filament::IndexBuffer::IndexType::UINT)
-                  .build(*engine);
+                   .indexCount(index_capacity_)
+                   .bufferType(filament::IndexBuffer::IndexType::UINT)
+                   .build(*engine);
     if (!vertices_ || !indices_) return;
   }
 
@@ -276,12 +273,11 @@ void FilamentUiRenderer::Prepare(filament::Engine* engine,
   }
   const size_t vertex_bytes = packed.size() * sizeof(UiVertex);
   const size_t index_bytes = data.indices.size() * sizeof(uint32_t);
-  vertices_->setBufferAt(*engine, 0,
-                         {CopyToHeap(packed.data(), vertex_bytes),
-                          vertex_bytes, DeleteUpload});
-  indices_->setBuffer(*engine,
-                      {CopyToHeap(data.indices.data(), index_bytes),
-                       index_bytes, DeleteUpload});
+  vertices_->setBufferAt(
+      *engine, 0,
+      {CopyToHeap(packed.data(), vertex_bytes), vertex_bytes, DeleteUpload});
+  indices_->setBuffer(*engine, {CopyToHeap(data.indices.data(), index_bytes),
+                                index_bytes, DeleteUpload});
 
   for (size_t cmd_index = 0; cmd_index < data.commands.size(); cmd_index++) {
     const UI::UIDrawCommand& command = data.commands[cmd_index];
@@ -296,15 +292,17 @@ void FilamentUiRenderer::Prepare(filament::Engine* engine,
 
     utils::Entity renderable = utils::EntityManager::get().create();
     filament::RenderableManager::Builder build(1);
-    build.boundingBox(filament::Box(filament::math::float3(-1.0f),
-                                    filament::math::float3(1.0f)))
-         .geometry(0, filament::RenderableManager::PrimitiveType::TRIANGLES,
-                   vertices_, indices_, command.index_offset,
-                   command.index_count)
-         .material(0, instance)
-         .blendOrder(0, static_cast<uint16_t>(std::min<size_t>(cmd_index, 0x7fffu)))
-         .globalBlendOrderEnabled(0, true)
-         .culling(false);
+    build
+        .boundingBox(filament::Box(filament::math::float3(-1.0f),
+                                   filament::math::float3(1.0f)))
+        .geometry(0, filament::RenderableManager::PrimitiveType::TRIANGLES,
+                  vertices_, indices_, command.index_offset,
+                  command.index_count)
+        .material(0, instance)
+        .blendOrder(0,
+                    static_cast<uint16_t>(std::min<size_t>(cmd_index, 0x7fffu)))
+        .globalBlendOrderEnabled(0, true)
+        .culling(false);
     if (build.build(*engine, renderable) !=
         filament::RenderableManager::Builder::Success) {
       engine->destroy(renderable);

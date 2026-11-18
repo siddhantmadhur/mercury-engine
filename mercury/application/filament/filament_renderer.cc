@@ -4,6 +4,7 @@
 
 #include "filament_renderer.h"
 
+#include <filament-iblprefilter/IBLPrefilterContext.h>
 #include <filament/Color.h>
 #include <filament/IndexBuffer.h>
 #include <filament/LightManager.h>
@@ -12,7 +13,6 @@
 #include <filament/TextureSampler.h>
 #include <filament/TransformManager.h>
 #include <filament/VertexBuffer.h>
-#include <filament-iblprefilter/IBLPrefilterContext.h>
 #include <geometry/SurfaceOrientation.h>
 #include <stb/stb_image.h>
 #include <utils/EntityManager.h>
@@ -73,9 +73,7 @@ filament::LightManager::ShadowOptions MakeShadowOptions(float bias,
 
 // Filament's matrices are column-major like glm's, so the scalar
 // constructor takes glm's column order directly.
-filament::math::float2 ToFilament(const glm::vec2& v) {
-  return {v.x, v.y};
-}
+filament::math::float2 ToFilament(const glm::vec2& v) { return {v.x, v.y}; }
 filament::math::float3 ToFilament(const glm::vec3& v) {
   return {v.x, v.y, v.z};
 }
@@ -105,8 +103,7 @@ std::vector<uint8_t> PackColors(const MeshGeometry& geometry) {
 // Tangent frames as quaternions, Filament's TANGENTS attribute. The
 // builder takes tangents exactly as ModelVertex stores them: xyz direction,
 // w the bitangent's sign.
-std::vector<filament::math::quatf> PackTangents(
-    const MeshGeometry& source) {
+std::vector<filament::math::quatf> PackTangents(const MeshGeometry& source) {
   const size_t count = source.vertices.size();
   std::vector<filament::math::float3> normals(count);
   std::vector<filament::math::float4> tangents(count);
@@ -119,11 +116,11 @@ std::vector<filament::math::quatf> PackTangents(
   builder.vertexCount(count);
   builder.normals(normals.data(), sizeof(filament::math::float3));
   builder.tangents(tangents.data(), sizeof(filament::math::float4));
-  std::unique_ptr<filament::geometry::SurfaceOrientation> orientation(builder.build());
+  std::unique_ptr<filament::geometry::SurfaceOrientation> orientation(
+      builder.build());
   std::vector<filament::math::quatf> quats(count);
   if (orientation) {
-    orientation->getQuats(quats.data(), count,
-                          sizeof(filament::math::quatf));
+    orientation->getQuats(quats.data(), count, sizeof(filament::math::quatf));
   } else {
     // No usable tangent data: identity frames (the normal still reads).
     for (size_t i = 0; i < count; i++) quats[i] = {1.0f, 0.0f, 0.0f, 0.0f};
@@ -157,15 +154,16 @@ bool FilamentRenderer::Init(filament::Engine* engine) {
   // samplers, so every material sampler is always bound to something.
   auto make_1x1 = [&](filament::Texture::InternalFormat format,
                       const uint8_t pixel[4]) {
-    filament::Texture* tex = filament::Texture::Builder()
-                                 .width(1)
-                                 .height(1)
-                                 .levels(1)
-                                 .usage(filament::Texture::Usage::SAMPLEABLE |
-                                        filament::Texture::Usage::UPLOADABLE)
-                                 .format(format)
-                                 .sampler(filament::Texture::Sampler::SAMPLER_2D)
-                                 .build(*engine_);
+    filament::Texture* tex =
+        filament::Texture::Builder()
+            .width(1)
+            .height(1)
+            .levels(1)
+            .usage(filament::Texture::Usage::SAMPLEABLE |
+                   filament::Texture::Usage::UPLOADABLE)
+            .format(format)
+            .sampler(filament::Texture::Sampler::SAMPLER_2D)
+            .build(*engine_);
     if (tex) {
       tex->setImage(
           *engine_, 0,
@@ -192,8 +190,8 @@ filament::Material* FilamentRenderer::LoadMaterial(const char* name) {
     return nullptr;
   }
   filament::Material* material = filament::Material::Builder()
-                                    .package(bytes->data(), bytes->size())
-                                    .build(*engine_);
+                                     .package(bytes->data(), bytes->size())
+                                     .build(*engine_);
   if (!material) {
     PDebug::error("Filament: could not compile material {}", name);
   }
@@ -368,8 +366,8 @@ filament::VertexBuffer* FilamentRenderer::UploadGeometry(
     joints.resize(count * 4);
     for (size_t i = 0; i < count; i++) {
       for (int b = 0; b < 4; b++)
-        joints[i * 4 + b] = static_cast<uint16_t>(
-            geometry.vertices[i].joints[b] & 0xffffu);
+        joints[i * 4 + b] =
+            static_cast<uint16_t>(geometry.vertices[i].joints[b] & 0xffffu);
     }
   }
 
@@ -405,27 +403,26 @@ filament::VertexBuffer* FilamentRenderer::UploadGeometry(
   vertices->setBufferAt(*engine, 0,
                         {CopyToHeap(geometry.vertices.data(), position_bytes),
                          position_bytes, DeleteUpload});
-  vertices->setBufferAt(*engine, 1,
-                        {CopyToHeap(quats.data(), quat_bytes), quat_bytes,
-                         DeleteUpload});
-  vertices->setBufferAt(*engine, 2,
-                        {CopyToHeap(colors.data(), color_bytes), color_bytes,
-                         DeleteUpload});
-  vertices->setBufferAt(*engine, 3,
-                        {CopyToHeap(uvs.data(), uv_bytes), uv_bytes,
-                         DeleteUpload});
+  vertices->setBufferAt(
+      *engine, 1,
+      {CopyToHeap(quats.data(), quat_bytes), quat_bytes, DeleteUpload});
+  vertices->setBufferAt(
+      *engine, 2,
+      {CopyToHeap(colors.data(), color_bytes), color_bytes, DeleteUpload});
+  vertices->setBufferAt(
+      *engine, 3, {CopyToHeap(uvs.data(), uv_bytes), uv_bytes, DeleteUpload});
   if (geometry.skinned) {
     const size_t joint_bytes = joints.size() * sizeof(uint16_t);
     const size_t weight_bytes = count * sizeof(glm::vec4);
-    vertices->setBufferAt(*engine, 4,
-                          {CopyToHeap(joints.data(), joint_bytes), joint_bytes,
-                           DeleteUpload});
+    vertices->setBufferAt(
+        *engine, 4,
+        {CopyToHeap(joints.data(), joint_bytes), joint_bytes, DeleteUpload});
     std::vector<glm::vec4> weights(count);
     for (size_t i = 0; i < count; i++)
       weights[i] = geometry.vertices[i].weights;
-    vertices->setBufferAt(*engine, 5,
-                          {CopyToHeap(weights.data(), weight_bytes),
-                           weight_bytes, DeleteUpload});
+    vertices->setBufferAt(
+        *engine, 5,
+        {CopyToHeap(weights.data(), weight_bytes), weight_bytes, DeleteUpload});
   }
 
   filament::IndexBuffer* indices =
@@ -438,10 +435,8 @@ filament::VertexBuffer* FilamentRenderer::UploadGeometry(
     return nullptr;
   }
   const size_t index_bytes = geometry.indices.size() * sizeof(uint32_t);
-  indices->setBuffer(
-      *engine,
-      {CopyToHeap(geometry.indices.data(), index_bytes), index_bytes,
-       DeleteUpload});
+  indices->setBuffer(*engine, {CopyToHeap(geometry.indices.data(), index_bytes),
+                               index_bytes, DeleteUpload});
 
   const glm::vec3 half = (geometry.bounds_max - geometry.bounds_min) * 0.5f;
   bounds->center = ToFilament(geometry.bounds_min + half);
@@ -522,10 +517,9 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     }
 
     const RenderMaterial& material =
-        mesh.materials.empty()
-            ? kDefault
-            : mesh.materials[std::min<size_t>(draw.material,
-                                             mesh.materials.size() - 1)];
+        mesh.materials.empty() ? kDefault
+                               : mesh.materials[std::min<size_t>(
+                                     draw.material, mesh.materials.size() - 1)];
 
     const bool is_unlit = material.sdf_text || material.unlit;
     const bool is_transmissive = !is_unlit && material.transmission > 0.0f;
@@ -542,18 +536,17 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         filament::TextureSampler::WrapMode::REPEAT);
 
     filament::MaterialInstance* instance = base->createInstance();
-    instance->setParameter("baseColor",
-                           ToFilament(glm::vec4(SrgbToLinear(
-                                          glm::vec3(material.color)),
-                                          material.color.a)));
+    instance->setParameter(
+        "baseColor",
+        ToFilament(glm::vec4(SrgbToLinear(glm::vec3(material.color)),
+                             material.color.a)));
     instance->setParameter("tiling", ToFilament(material.tiling));
     instance->setParameter("offset", ToFilament(material.offset));
     if (!is_unlit) {
       instance->setParameter("metallic",
                              std::clamp(material.metallic, 0.0f, 1.0f));
-      instance->setParameter("roughness",
-                             std::clamp(1.0f - material.smoothness, 0.05f,
-                                        1.0f));
+      instance->setParameter(
+          "roughness", std::clamp(1.0f - material.smoothness, 0.05f, 1.0f));
       instance->setParameter("emissive",
                              ToFilament(glm::vec4(material.emission, 1.0f)));
       filament::Texture* emissive_tex = white_;
@@ -645,7 +638,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
                             ToFilament(draw_world));
     if (skinned) {
       renderables.setBones(renderables.getInstance(renderable), bones.data(),
-                            bones.size());
+                           bones.size());
     }
     scene_->addEntity(renderable);
 
@@ -681,16 +674,14 @@ void FilamentRenderer::SyncScene(GameScene& game) {
        registry.view<RenderMesh, Transform>().each()) {
     ProxyRecord& record = proxies_[entity];
     const glm::mat4 world =
-        glm::translate(glm::mat4(1.0f),
-                       transform.GetInterpolatedPosition()) *
+        glm::translate(glm::mat4(1.0f), transform.GetInterpolatedPosition()) *
         transform.GetRotationMatrix() *
         glm::scale(glm::mat4(1.0f), transform.GetInterpolatedScale());
     const bool inactive = registry.all_of<InactiveTag>(entity);
     const bool visible = mesh.visible && !inactive;
     const bool moved = world != record.world;
     const ModelPose* pose = nullptr;
-    if (mesh.pose_entity != entt::null &&
-        registry.valid(mesh.pose_entity)) {
+    if (mesh.pose_entity != entt::null && registry.valid(mesh.pose_entity)) {
       pose = registry.try_get<ModelPose>(mesh.pose_entity);
     }
 
@@ -725,8 +716,7 @@ void FilamentRenderer::SyncScene(GameScene& game) {
       if (draw.skinned) {
         mesh.SkinMatrices(render, pose, skin);
         std::vector<filament::math::mat4f> bones(skin.size());
-        for (size_t i = 0; i < skin.size(); i++)
-          bones[i] = ToFilament(skin[i]);
+        for (size_t i = 0; i < skin.size(); i++) bones[i] = ToFilament(skin[i]);
         renderables.setBones(renderables.getInstance(draw.renderable),
                              bones.data(), bones.size());
       } else {
@@ -776,8 +766,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
       scene_->remove(sun_);
       engine->destroy(sun_);
     }
-    const float intensity =
-        std::max({color.r, color.g, color.b, 1e-6f});
+    const float intensity = std::max({color.r, color.g, color.b, 1e-6f});
     filament::LightManager::ShadowOptions shadow;
     shadow.mapSize = 2048;
     shadow.shadowCascades = 4;
@@ -811,8 +800,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
   for (size_t i = 0; !points_changed && i < point_values_.size(); i++) {
     const PointLightData& a = lighting.point_lights[i];
     const PointLightData& b = point_values_[i];
-    if (a.position != b.position || a.color != b.color ||
-        a.range != b.range) {
+    if (a.position != b.position || a.color != b.color || a.range != b.range) {
       points_changed = true;
     }
   }
@@ -870,8 +858,8 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           4.0f * glm::length(light.right) * glm::length(light.up);
       const float lumens =
           intensity * kPointLumensPerIntensity * std::max(area, 1.0f);
-      const float bulb = std::max(glm::length(light.right),
-                                  glm::length(light.up));
+      const float bulb =
+          std::max(glm::length(light.right), glm::length(light.up));
       auto add_spot = [&](const glm::vec3& spot_dir, bool shadows) {
         utils::Entity entity = utils::EntityManager::get().create();
         filament::LightManager::Builder(filament::LightManager::Type::SPOT)
@@ -921,9 +909,9 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
         {0.0f, 0.0f, 0.0f},
     };
     ambient_ = filament::IndirectLight::Builder()
-                  .irradiance(2, sh)
-                  .intensity(kSunLuxPerIntensity / glm::pi<float>())
-                  .build(*engine);
+                   .irradiance(2, sh)
+                   .intensity(kSunLuxPerIntensity / glm::pi<float>())
+                   .build(*engine);
     scene_->setIndirectLight(ambient_);
     ambient_sky_ = lighting.ambient;
     ambient_ground_ = lighting.ambient_ground;
@@ -965,12 +953,11 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
 
   if (path.empty()) return;
 
-  const bool is_hdr =
-      path.size() >= 4 && [&] {
-        std::string ext = path.substr(path.size() - 4);
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-        return ext == ".hdr";
-      }();
+  const bool is_hdr = path.size() >= 4 && [&] {
+    std::string ext = path.substr(path.size() - 4);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".hdr";
+  }();
 
   uint32_t image_width = 0;
   uint32_t image_height = 0;
@@ -986,9 +973,9 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
       return;
     }
     int width = 0, height = 0, channels = 0;
-    float* pixels = stbi_loadf_from_memory(
-        bytes->data(), static_cast<int>(bytes->size()), &width, &height,
-        &channels, 3);
+    float* pixels =
+        stbi_loadf_from_memory(bytes->data(), static_cast<int>(bytes->size()),
+                               &width, &height, &channels, 3);
     if (!pixels || width <= 0 || height <= 0) {
       if (pixels) stbi_image_free(pixels);
       PDebug::warn("Filament: could not decode skybox panorama {}", path);
@@ -998,17 +985,16 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
     image_height = static_cast<uint32_t>(height);
     const uint8_t levels = std::max<uint8_t>(
         1, static_cast<uint8_t>(std::ilogbf(static_cast<float>(width)) + 1));
-    equirect =
-        filament::Texture::Builder()
-            .width(image_width)
-            .height(image_height)
-            .levels(levels)
-            .usage(filament::Texture::Usage::SAMPLEABLE |
-                   filament::Texture::Usage::UPLOADABLE |
-                   filament::Texture::Usage::GEN_MIPMAPPABLE)
-            .format(filament::Texture::InternalFormat::R11F_G11F_B10F)
-            .sampler(filament::Texture::Sampler::SAMPLER_2D)
-            .build(*engine);
+    equirect = filament::Texture::Builder()
+                   .width(image_width)
+                   .height(image_height)
+                   .levels(levels)
+                   .usage(filament::Texture::Usage::SAMPLEABLE |
+                          filament::Texture::Usage::UPLOADABLE |
+                          filament::Texture::Usage::GEN_MIPMAPPABLE)
+                   .format(filament::Texture::InternalFormat::R11F_G11F_B10F)
+                   .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                   .build(*engine);
     if (!equirect) {
       stbi_image_free(pixels);
       return;
@@ -1039,17 +1025,16 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
     const uint8_t levels = std::max<uint8_t>(
         1, static_cast<uint8_t>(std::ilogbf(static_cast<float>(image->width)) +
                                 1));
-    equirect =
-        filament::Texture::Builder()
-            .width(image_width)
-            .height(image_height)
-            .levels(levels)
-            .usage(filament::Texture::Usage::SAMPLEABLE |
-                   filament::Texture::Usage::UPLOADABLE |
-                   filament::Texture::Usage::GEN_MIPMAPPABLE)
-            .format(filament::Texture::InternalFormat::SRGB8_A8)
-            .sampler(filament::Texture::Sampler::SAMPLER_2D)
-            .build(*engine);
+    equirect = filament::Texture::Builder()
+                   .width(image_width)
+                   .height(image_height)
+                   .levels(levels)
+                   .usage(filament::Texture::Usage::SAMPLEABLE |
+                          filament::Texture::Usage::UPLOADABLE |
+                          filament::Texture::Usage::GEN_MIPMAPPABLE)
+                   .format(filament::Texture::InternalFormat::SRGB8_A8)
+                   .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                   .build(*engine);
     if (!equirect) return;
     const size_t bytes = image->pixels.size();
     equirect->setImage(
@@ -1057,8 +1042,7 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
         filament::Texture::PixelBufferDescriptor(
             CopyToHeap(image->pixels.data(), bytes), bytes,
             filament::backend::PixelDataFormat::RGBA,
-            filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
-            DeleteUpload));
+            filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0, DeleteUpload));
   }
 
   if (image_width != 2 * image_height) {
@@ -1083,7 +1067,8 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
   irr_options.generateMipmap = false;
   ibl_irradiance_ = irradiance(irr_options, sky_cube_);
 
-  panorama_sky_ = filament::Skybox::Builder().environment(sky_cube_).build(*engine);
+  panorama_sky_ =
+      filament::Skybox::Builder().environment(sky_cube_).build(*engine);
   ambient_ = filament::IndirectLight::Builder()
                  .reflections(ibl_reflections_)
                  .irradiance(ibl_irradiance_)

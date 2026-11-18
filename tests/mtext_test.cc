@@ -1,6 +1,6 @@
-#include <gtest/gtest.h>
-
 #include "serialization/mtext.h"
+
+#include <gtest/gtest.h>
 
 using namespace Mercury;
 

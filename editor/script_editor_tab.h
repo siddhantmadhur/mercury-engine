@@ -11,8 +11,8 @@
 #ifndef MERCURY_EDITOR_SCRIPT_EDITOR_TAB_H
 #define MERCURY_EDITOR_SCRIPT_EDITOR_TAB_H
 
-#include <wx/stc/stc.h>
 #include <wx/panel.h>
+#include <wx/stc/stc.h>
 
 #include <filesystem>
 #include <map>

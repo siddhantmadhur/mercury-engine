@@ -15,7 +15,6 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STBTT_STATIC
 #include "stb/stb_truetype.h"
-
 #include "ui/style_sheet.h"
 
 namespace Mercury::UI {

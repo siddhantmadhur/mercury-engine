@@ -7,6 +7,7 @@
 //
 
 #include "scene.h"
+
 #include <properties/camera.h>
 
 namespace Mercury {

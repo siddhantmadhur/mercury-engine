@@ -17,10 +17,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <glm/glm.hpp>
-#include <vector>
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 #include <memory>
+#include <vector>
 
 using entity_id = uint16_t;
 using kEntityId = entt::entity;

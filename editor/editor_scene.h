@@ -15,14 +15,13 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include <glm/gtc/quaternion.hpp>
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
 
 #include "console.h"
 #include "editor_settings.h"

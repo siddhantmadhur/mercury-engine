@@ -21,8 +21,8 @@
 #include <stb/stb_image_write.h>
 
 #include "components/components.h"
-#include "filament/metal_layer.h"
 #include "debugger/debugger.h"
+#include "filament/metal_layer.h"
 #include "os/filesystem.h"
 #include "properties/camera.h"
 #include "properties/transform.h"
@@ -147,8 +147,9 @@ bool FilamentApplication::OnLoad() {
   scene_view_ = engine_->createView();
   scene_view_->setScene(scene_renderer_.scene());
   scene_view_->setCamera(scene_camera_);
-  scene_sky_ =
-      filament::Skybox::Builder().color({0.1f, 0.1f, 0.1f, 1.0f}).build(*engine_);
+  scene_sky_ = filament::Skybox::Builder()
+                   .color({0.1f, 0.1f, 0.1f, 1.0f})
+                   .build(*engine_);
   scene_renderer_.SetFallbackSkybox(scene_sky_);
   scene_view_->setAntiAliasing(filament::View::AntiAliasing::FXAA);
 
@@ -201,7 +202,7 @@ std::vector<RenderCamera> FilamentApplication::FrameCameras(float width,
 }
 
 void FilamentApplication::SetupCamera(filament::Camera* camera,
-                                     const RenderCamera& render) {
+                                      const RenderCamera& render) {
   // Mercury builds projections for Vulkan (NDC z in [0, 1]); Filament's
   // post-processing, SSR and refraction reconstruct depth assuming the GL
   // convention (z in [-1, 1]). Remap only the clip-space z, leaving x/y/w
@@ -307,47 +308,42 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
   target.width = width;
   target.height = height;
 
-  target.color =
-      filament::Texture::Builder()
-          .width(width)
-          .height(height)
-          .levels(1)
-          .usage(filament::Texture::Usage::COLOR_ATTACHMENT |
-                 filament::Texture::Usage::SAMPLEABLE |
-                 filament::Texture::Usage::BLIT_SRC)
-          .sampler(filament::Texture::Sampler::SAMPLER_2D)
-          .format(filament::Texture::InternalFormat::RGBA8)
-          .build(*engine_);
+  target.color = filament::Texture::Builder()
+                     .width(width)
+                     .height(height)
+                     .levels(1)
+                     .usage(filament::Texture::Usage::COLOR_ATTACHMENT |
+                            filament::Texture::Usage::SAMPLEABLE |
+                            filament::Texture::Usage::BLIT_SRC)
+                     .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                     .format(filament::Texture::InternalFormat::RGBA8)
+                     .build(*engine_);
   const auto depth_format =
       filament::Texture::isTextureFormatSupported(
           *engine_, filament::Texture::InternalFormat::DEPTH32F)
           ? filament::Texture::InternalFormat::DEPTH32F
           : filament::Texture::InternalFormat::DEPTH24;
-  target.depth =
-      filament::Texture::Builder()
-          .width(width)
-          .height(height)
-          .levels(1)
-          .usage(filament::Texture::Usage::DEPTH_ATTACHMENT)
-          .sampler(filament::Texture::Sampler::SAMPLER_2D)
-          .format(depth_format)
+  target.depth = filament::Texture::Builder()
+                     .width(width)
+                     .height(height)
+                     .levels(1)
+                     .usage(filament::Texture::Usage::DEPTH_ATTACHMENT)
+                     .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                     .format(depth_format)
+                     .build(*engine_);
+  target.target =
+      filament::RenderTarget::Builder()
+          .texture(filament::RenderTarget::AttachmentPoint::COLOR0,
+                   target.color)
+          .texture(filament::RenderTarget::AttachmentPoint::DEPTH, target.depth)
           .build(*engine_);
-  target.target = filament::RenderTarget::Builder()
-                      .texture(
-                          filament::RenderTarget::AttachmentPoint::COLOR0,
-                          target.color)
-                      .texture(
-                          filament::RenderTarget::AttachmentPoint::DEPTH,
-                          target.depth)
-                      .build(*engine_);
   target.camera_entity = utils::EntityManager::get().create();
   target.camera = engine_->createCamera(target.camera_entity);
   target.view = engine_->createView();
   target.view->setScene(scene);
   target.view->setCamera(target.camera);
   target.view->setRenderTarget(target.target);
-  target.view->setViewport(
-      filament::Viewport(0, 0, width, height));
+  target.view->setViewport(filament::Viewport(0, 0, width, height));
   target.view->setAntiAliasing(filament::View::AntiAliasing::FXAA);
   if (is_ui) {
     target.view->setBlendMode(filament::View::BlendMode::OPAQUE);
@@ -487,8 +483,8 @@ void FilamentApplication::Render() {
         ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
     SetupCamera(rt.camera, camera);
     ApplyPostProcess(rt.view, render_settings, camera);
-    scene_renderer_.SetSkyboxForClear(
-        camera.clear == static_cast<int>(CameraClear::kSkybox));
+    scene_renderer_.SetSkyboxForClear(camera.clear ==
+                                      static_cast<int>(CameraClear::kSkybox));
     rt.view->setVisibleLayers(0xff, camera.culling_mask & 0xff);
     renderer_->render(rt.view);
   }
@@ -511,8 +507,8 @@ void FilamentApplication::Render() {
     ApplyPostProcess(scene_view_, render_settings, *main);
     scene_view_->setViewport(
         filament::Viewport(0, 0, window_width, window_height));
-    scene_renderer_.SetSkyboxForClear(
-        main->clear == static_cast<int>(CameraClear::kSkybox));
+    scene_renderer_.SetSkyboxForClear(main->clear ==
+                                      static_cast<int>(CameraClear::kSkybox));
     scene_view_->setVisibleLayers(0xff, main->culling_mask & 0xff);
     renderer_->render(scene_view_);
     if (game_ui) {
@@ -532,8 +528,8 @@ void FilamentApplication::Render() {
           ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
       SetupCamera(scene_target_.camera, *main);
       ApplyPostProcess(scene_target_.view, render_settings, *main);
-      scene_renderer_.SetSkyboxForClear(
-          main->clear == static_cast<int>(CameraClear::kSkybox));
+      scene_renderer_.SetSkyboxForClear(main->clear ==
+                                        static_cast<int>(CameraClear::kSkybox));
       scene_target_.view->setVisibleLayers(0xff, main->culling_mask & 0xff);
       renderer_->render(scene_target_.view);
       ReadOffscreen(scene_target_);
@@ -550,16 +546,15 @@ void FilamentApplication::Render() {
     auto* transform = registry.try_get<Transform>(preview_camera_);
     const float w = static_cast<float>(preview_target_.width);
     const float h = static_cast<float>(preview_target_.height);
-    if (cam && transform && game_scene_->GetCameraMatrices(preview_camera_, w,
-                                                           h, view_proj, sky,
-                                                           position)) {
+    if (cam && transform &&
+        game_scene_->GetCameraMatrices(preview_camera_, w, h, view_proj, sky,
+                                       position)) {
       preview.entity = preview_camera_;
       preview.view = cam->GetView(*transform);
       preview.projection = cam->GetProjection(w, h);
       preview.position = position;
       preview.background = game_scene_->GetClearColor();
-      if (auto* settings =
-              registry.try_get<CameraComponent>(preview_camera_)) {
+      if (auto* settings = registry.try_get<CameraComponent>(preview_camera_)) {
         preview.background = settings->background;
         preview.culling_mask = static_cast<uint32_t>(settings->culling_mask);
         preview.near_clip = settings->near_clip;
@@ -568,10 +563,9 @@ void FilamentApplication::Render() {
       }
       SetupCamera(preview_target_.camera, preview);
       ApplyPostProcess(preview_target_.view, render_settings, preview);
-      scene_renderer_.SetSkyboxForClear(
-          preview.clear == static_cast<int>(CameraClear::kSkybox));
-      preview_target_.view->setVisibleLayers(0xff,
-                                             preview.culling_mask & 0xff);
+      scene_renderer_.SetSkyboxForClear(preview.clear ==
+                                        static_cast<int>(CameraClear::kSkybox));
+      preview_target_.view->setVisibleLayers(0xff, preview.culling_mask & 0xff);
       renderer_->render(preview_target_.view);
       ReadOffscreen(preview_target_);
     }
@@ -635,10 +629,9 @@ void FilamentApplication::OnResize(int32_t width, int32_t height) {
 void FilamentApplication::EnableSceneTexture(bool enabled) {
   scene_texture_enabled_ = enabled;
   if (game_scene_) {
-    const float w =
-        enabled && scene_target_.width
-            ? static_cast<float>(scene_target_.width)
-            : static_cast<float>(GetWidth());
+    const float w = enabled && scene_target_.width
+                        ? static_cast<float>(scene_target_.width)
+                        : static_cast<float>(GetWidth());
     const float h = enabled && scene_target_.height
                         ? static_cast<float>(scene_target_.height)
                         : static_cast<float>(GetHeight());
@@ -664,7 +657,7 @@ bool FilamentApplication::CopyScenePixels(int& width, int& height,
 }
 
 void FilamentApplication::SetPreviewCamera(kEntityId camera, int width,
-                                            int height) {
+                                           int height) {
   preview_camera_ = camera;
   const uint32_t w = static_cast<uint32_t>(std::max(1, width));
   const uint32_t h = static_cast<uint32_t>(std::max(1, height));

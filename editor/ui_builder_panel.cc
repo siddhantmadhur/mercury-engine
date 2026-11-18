@@ -17,11 +17,11 @@
 #include <format>
 #include <sstream>
 
-#include "scene/scene.h"
 #include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
 #include "project/asset_database.h"
+#include "scene/scene.h"
 #include "ui/style.h"
 
 namespace Mercury::EditorUI {

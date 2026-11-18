@@ -18,12 +18,14 @@
 #ifndef MERCURY_PHYSICS_ENGINE_H_
 #define MERCURY_PHYSICS_ENGINE_H_
 #include <Jolt/Jolt.h>
+
 #include <glm/gtc/quaternion.hpp>
 #include <map>
 #include <optional>
 #include <set>
 #include <stack>
 #include <vector>
+
 #include "Jolt/Core/Core.h"
 #include "Jolt/Core/JobSystem.h"
 #include "Jolt/Core/JobSystemThreadPool.h"

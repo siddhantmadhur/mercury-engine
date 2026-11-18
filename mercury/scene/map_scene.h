@@ -21,16 +21,16 @@
 #include <unordered_map>
 #include <vector>
 
-#include "components/components.h"
-#include "properties/model.h"
-#include "properties/render_mesh.h"
 #include "animation/animator_controller.h"
 #include "audio/audio_system.h"
+#include "components/components.h"
 #include "input/input_actions.h"
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/prefab_cache.h"
 #include "project/project.h"
+#include "properties/model.h"
+#include "properties/render_mesh.h"
 #include "scene/model_preloader.h"
 #include "scene/scene.h"
 #include "ui/ui_system.h"

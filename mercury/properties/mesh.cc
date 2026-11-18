@@ -7,9 +7,9 @@
 #include <utility>
 
 #include "assimp/Importer.hpp"
+#include "assimp/code/Common/StackAllocator.h"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
-#include "assimp/code/Common/StackAllocator.h"
 #include "debugger/debugger.h"
 #include "properties/vfs_io_system.h"
 

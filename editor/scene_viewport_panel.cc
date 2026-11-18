@@ -12,9 +12,9 @@
 #include <filesystem>
 #include <system_error>
 
-#include "scene/scene.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "scene/scene.h"
 #include "wx_theme.h"
 
 namespace Mercury::EditorUI {

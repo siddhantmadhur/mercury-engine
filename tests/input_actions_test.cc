@@ -1,3 +1,5 @@
+#include "input/input_actions.h"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -5,7 +7,6 @@
 #include <sstream>
 
 #include "GLFW/glfw3.h"
-#include "input/input_actions.h"
 #include "input/input_actions_codegen.rs.h"
 
 using namespace Mercury;

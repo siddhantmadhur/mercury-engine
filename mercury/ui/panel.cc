@@ -5,8 +5,8 @@
 #include "panel.h"
 
 #include <algorithm>
-#include <functional>
 #include <cmath>
+#include <functional>
 #include <limits>
 
 #include "ui/layout.h"

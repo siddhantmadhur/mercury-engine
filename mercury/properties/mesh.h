@@ -7,10 +7,10 @@
 
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <string>
 #include <vector>
 
 #include "globals.h"
-#include <string>
 
 namespace Mercury {
 // TODO: allow two gameobjects to combine their vertices so that the no. of draw

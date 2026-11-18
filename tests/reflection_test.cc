@@ -1,7 +1,8 @@
+#include "scripting/reflection.h"
+
 #include <gtest/gtest.h>
 
 #include "components/components.h"
-#include "scripting/reflection.h"
 #include "scripting/type_registry.h"
 
 using namespace Mercury;

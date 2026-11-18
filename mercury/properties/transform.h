@@ -8,10 +8,10 @@
 
 #ifndef MERCURYENGINE_TRANSFORM_H
 #define MERCURYENGINE_TRANSFORM_H
-#include "glm/detail/func_packing_simd.inl"
 #include <functional>
 #include <vector>
 
+#include "glm/detail/func_packing_simd.inl"
 #include "glm/gtc/quaternion.hpp"
 #include "glm/mat4x4.hpp"
 #include "glm/vec3.hpp"

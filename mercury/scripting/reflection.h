@@ -19,8 +19,8 @@
 #ifndef MERCURY_SCRIPTING_REFLECTION_H
 #define MERCURY_SCRIPTING_REFLECTION_H
 
-#include <glm/glm.hpp>
 #include <functional>
+#include <glm/glm.hpp>
 #include <initializer_list>
 #include <string>
 #include <string_view>

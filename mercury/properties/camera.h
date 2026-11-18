@@ -8,8 +8,9 @@
 
 #ifndef MERCURY_ENGINE_CAMERA_H
 #define MERCURY_ENGINE_CAMERA_H
-#include "transform.h"
 #include <glm/glm.hpp>
+
+#include "transform.h"
 
 namespace Mercury {
 class Camera {

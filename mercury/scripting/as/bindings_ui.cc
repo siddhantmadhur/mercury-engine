@@ -9,11 +9,12 @@
  * integer), never an element pointer. The table is emptied whenever a
  * UIDocument is destroyed, after which old handles throw.
  */
+#include "scripting/as/bindings_ui.h"
+
 #include <string>
 #include <vector>
 
 #include "scripting/as/bindings.h"
-#include "scripting/as/bindings_ui.h"
 #include "scripting/as/script_behaviour.h"
 #include "scripting/as/script_runtime.h"
 #include "ui/controls.h"
