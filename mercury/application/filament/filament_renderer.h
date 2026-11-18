@@ -21,12 +21,15 @@
 #include <filament/Material.h>
 #include <filament/MaterialInstance.h>
 #include <filament/Scene.h>
+#include <filament/Skybox.h>
 #include <filament/Texture.h>
 #include <utils/Entity.h>
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "globals.h"
@@ -44,6 +47,7 @@ class FilamentRenderer {
   void Shutdown(filament::Engine* engine);
 
   filament::Scene* scene() const { return scene_; }
+  void SetFallbackSkybox(filament::Skybox* skybox);
 
   // Brings the Filament world in step with the game's registry and lighting:
   // creates/removes renderables, updates transforms, bones and visibility,
@@ -89,8 +93,10 @@ class FilamentRenderer {
   void BuildProxy(filament::Engine* engine, GameScene& game,
                   entt::entity entity, const RenderMesh& mesh,
                   const Transform& transform, ProxyRecord& record);
-  // Recreates the sun, point lights and ambient when values changed.
+  // Recreates the sun, point lights, skybox and IBL when values changed.
   void SyncLights(filament::Engine* engine, GameScene& game);
+  void SyncSkybox(filament::Engine* engine, const std::string& path);
+  void SweepGarbage(filament::Engine* engine, bool all);
   void DestroyLights(filament::Engine* engine);
 
   filament::Engine* engine_ = nullptr;
@@ -108,6 +114,18 @@ class FilamentRenderer {
   utils::Entity sun_ = {};
   std::vector<utils::Entity> points_;
   filament::IndirectLight* ambient_ = nullptr;
+  filament::Skybox* fallback_sky_ = nullptr;
+  filament::Skybox* panorama_sky_ = nullptr;
+  filament::Texture* sky_cube_ = nullptr;
+  filament::Texture* ibl_reflections_ = nullptr;
+  filament::Texture* ibl_irradiance_ = nullptr;
+  std::string skybox_path_;
+  bool skybox_synced_ = false;
+  bool has_panorama_ibl_ = false;
+  std::vector<std::pair<uint64_t, filament::IndirectLight*>>
+      garbage_indirect_lights_;
+  std::vector<std::pair<uint64_t, filament::Skybox*>> garbage_skyboxes_;
+  std::vector<std::pair<uint64_t, filament::Texture*>> garbage_textures_;
   // What the current lights were built from, to notice changes.
   glm::vec3 sun_direction_ = glm::vec3(0.0f);
   glm::vec3 sun_color_ = glm::vec3(0.0f);

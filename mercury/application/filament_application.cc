@@ -76,6 +76,7 @@ FilamentApplication::~FilamentApplication() {
     engine_->destroyCameraComponent(ui_camera_entity_);
     engine_->destroy(scene_view_);
     engine_->destroyCameraComponent(scene_camera_entity_);
+    scene_renderer_.SetFallbackSkybox(nullptr);
     scene_renderer_.scene()->setSkybox(nullptr);
     engine_->destroy(scene_sky_);
     ui_renderer_.scene()->setSkybox(nullptr);
@@ -141,7 +142,7 @@ bool FilamentApplication::OnLoad() {
   scene_view_->setCamera(scene_camera_);
   scene_sky_ =
       filament::Skybox::Builder().color({0.1f, 0.1f, 0.1f, 1.0f}).build(*engine_);
-  scene_renderer_.scene()->setSkybox(scene_sky_);
+  scene_renderer_.SetFallbackSkybox(scene_sky_);
   scene_view_->setAntiAliasing(filament::View::AntiAliasing::FXAA);
 
   // The game's UI drawn over the scene.
@@ -410,12 +411,6 @@ void FilamentApplication::Render() {
       render_textures_logged_ = true;
       PDebug::warn("Filament: RenderTexture cameras are not supported yet");
     }
-  }
-  if (!game_scene_->GetSkyboxPath().empty() && !skybox_logged_) {
-    skybox_logged_ = true;
-    PDebug::warn(
-        "Filament: skybox panoramas are not supported yet; using the "
-        "camera's background color");
   }
 
   const RenderCamera* main = nullptr;

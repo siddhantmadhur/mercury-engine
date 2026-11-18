@@ -131,7 +131,6 @@ class FilamentApplication : public Application {
   const UI::UIDrawData* ui_preview_data_ = nullptr;
   glm::vec4 ui_preview_background_ = glm::vec4(0.0f);
   bool render_textures_logged_ = false;
-  bool skybox_logged_ = false;
 
   bool show_stats_ = true;
   uint64_t frame_counter_ = 0;

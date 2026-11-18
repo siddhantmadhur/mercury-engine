@@ -11,6 +11,7 @@
 #include <filament/TextureSampler.h>
 #include <filament/TransformManager.h>
 #include <filament/VertexBuffer.h>
+#include <filament-iblprefilter/IBLPrefilterContext.h>
 #include <geometry/SurfaceOrientation.h>
 #include <utils/EntityManager.h>
 
@@ -173,6 +174,35 @@ filament::Material* FilamentRenderer::LoadMaterial(const char* name) {
   return material;
 }
 
+void FilamentRenderer::SetFallbackSkybox(filament::Skybox* skybox) {
+  fallback_sky_ = skybox;
+  if (scene_ && !has_panorama_ibl_) {
+    scene_->setSkybox(fallback_sky_);
+  }
+}
+
+void FilamentRenderer::SweepGarbage(filament::Engine* engine, bool all) {
+  auto ready = [&](const auto& item) {
+    return all || item.first + 3 <= frame_;
+  };
+  // Destroy Skybox and IndirectLight before the Texture objects they sample.
+  std::erase_if(garbage_skyboxes_, [&](const auto& item) {
+    if (!ready(item)) return false;
+    engine->destroy(item.second);
+    return true;
+  });
+  std::erase_if(garbage_indirect_lights_, [&](const auto& item) {
+    if (!ready(item)) return false;
+    engine->destroy(item.second);
+    return true;
+  });
+  std::erase_if(garbage_textures_, [&](const auto& item) {
+    if (!ready(item)) return false;
+    engine->destroy(item.second);
+    return true;
+  });
+}
+
 void FilamentRenderer::Shutdown(filament::Engine* engine) {
   if (!engine) return;
   for (auto& [entity, record] : proxies_) {
@@ -184,6 +214,8 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
   }
   proxies_.clear();
   DestroyLights(engine);
+  SweepGarbage(engine, true);
+  fallback_sky_ = nullptr;
   for (auto& [id, entry] : meshes_) {
     engine->destroy(entry.vertices);
     engine->destroy(entry.indices);
@@ -516,6 +548,7 @@ void FilamentRenderer::SyncScene(GameScene& game) {
   auto& transforms = engine->getTransformManager();
   auto& renderables = engine->getRenderableManager();
   frame_++;
+  SweepGarbage(engine, false);
 
   // Entities that went away.
   std::vector<entt::entity> gone;
@@ -678,13 +711,19 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     point_values_ = lighting.point_lights;
   }
 
+  const std::string& skybox_path = game.GetSkyboxPath();
+  if (!skybox_synced_ || skybox_path != skybox_path_) {
+    SyncSkybox(engine, skybox_path);
+  }
+
   // Ambient hemisphere light as band-1 spherical harmonics scaled to match the
-  // physical sun lux range so shadowed regions receive natural fill light.
-  if (lighting.ambient != ambient_sky_ ||
-      lighting.ambient_ground != ambient_ground_) {
+  // physical sun lux range when no skybox panorama provides an IBL.
+  if (!has_panorama_ibl_ && (lighting.ambient != ambient_sky_ ||
+                             lighting.ambient_ground != ambient_ground_)) {
     if (ambient_) {
       scene_->setIndirectLight(nullptr);
-      engine->destroy(ambient_);
+      garbage_indirect_lights_.emplace_back(frame_, ambient_);
+      ambient_ = nullptr;
     }
     const glm::vec3 sky = SrgbToLinear(lighting.ambient);
     const glm::vec3 ground = SrgbToLinear(lighting.ambient_ground);
@@ -704,6 +743,102 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
   }
 }
 
+void FilamentRenderer::SyncSkybox(filament::Engine* engine,
+                                  const std::string& path) {
+  skybox_path_ = path;
+  skybox_synced_ = true;
+
+  // Retire the current panorama resources (destroyed after 3 frames).
+  if (scene_) scene_->setSkybox(fallback_sky_);
+  if (panorama_sky_) {
+    garbage_skyboxes_.emplace_back(frame_, panorama_sky_);
+    panorama_sky_ = nullptr;
+  }
+  if (has_panorama_ibl_ && ambient_) {
+    if (scene_) scene_->setIndirectLight(nullptr);
+    garbage_indirect_lights_.emplace_back(frame_, ambient_);
+    ambient_ = nullptr;
+  }
+  if (sky_cube_) {
+    garbage_textures_.emplace_back(frame_, sky_cube_);
+    sky_cube_ = nullptr;
+  }
+  if (ibl_reflections_) {
+    garbage_textures_.emplace_back(frame_, ibl_reflections_);
+    ibl_reflections_ = nullptr;
+  }
+  if (ibl_irradiance_) {
+    garbage_textures_.emplace_back(frame_, ibl_irradiance_);
+    ibl_irradiance_ = nullptr;
+  }
+  has_panorama_ibl_ = false;
+  ambient_sky_ = glm::vec3(-1.0f);
+  ambient_ground_ = glm::vec3(-1.0f);
+
+  if (path.empty()) return;
+
+  std::shared_ptr<ImageData> image = ImageData::Load(path);
+  if (!image || image->pixels.empty() || image->width <= 0 ||
+      image->height <= 0) {
+    PDebug::warn("Filament: could not load skybox panorama {}", path);
+    return;
+  }
+  if (image->width != 2 * image->height) {
+    PDebug::warn(
+        "Filament: skybox panorama {} ({}x{}) is not 2:1 equirectangular", path,
+        image->width, image->height);
+    return;
+  }
+
+  const uint8_t levels = std::max<uint8_t>(
+      1, static_cast<uint8_t>(std::ilogbf(static_cast<float>(image->width)) + 1));
+  filament::Texture* equirect =
+      filament::Texture::Builder()
+          .width(static_cast<uint32_t>(image->width))
+          .height(static_cast<uint32_t>(image->height))
+          .levels(levels)
+          .usage(filament::Texture::Usage::SAMPLEABLE |
+                 filament::Texture::Usage::UPLOADABLE |
+                 filament::Texture::Usage::GEN_MIPMAPPABLE)
+          .format(filament::Texture::InternalFormat::SRGB8_A8)
+          .sampler(filament::Texture::Sampler::SAMPLER_2D)
+          .build(*engine);
+  if (!equirect) return;
+  const size_t bytes = image->pixels.size();
+  equirect->setImage(
+      *engine, 0,
+      filament::Texture::PixelBufferDescriptor(
+          CopyToHeap(image->pixels.data(), bytes), bytes,
+          filament::backend::PixelDataFormat::RGBA,
+          filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0, DeleteUpload));
+
+  IBLPrefilterContext prefilter(*engine);
+  IBLPrefilterContext::EquirectangularToCubemap to_cube(prefilter);
+  IBLPrefilterContext::SpecularFilter specular(prefilter);
+  IBLPrefilterContext::IrradianceFilter irradiance(prefilter);
+
+  sky_cube_ = to_cube(equirect);
+  garbage_textures_.emplace_back(frame_, equirect);
+  if (!sky_cube_) return;
+
+  ibl_reflections_ = specular(sky_cube_);
+  IBLPrefilterContext::IrradianceFilter::Options irr_options;
+  irr_options.generateMipmap = false;
+  ibl_irradiance_ = irradiance(irr_options, sky_cube_);
+
+  panorama_sky_ = filament::Skybox::Builder().environment(sky_cube_).build(*engine);
+  ambient_ = filament::IndirectLight::Builder()
+                 .reflections(ibl_reflections_)
+                 .irradiance(ibl_irradiance_)
+                 .intensity(kSunLuxPerIntensity / glm::pi<float>())
+                 .build(*engine);
+  if (scene_) {
+    scene_->setSkybox(panorama_sky_);
+    scene_->setIndirectLight(ambient_);
+  }
+  has_panorama_ibl_ = true;
+}
+
 void FilamentRenderer::DestroyLights(filament::Engine* engine) {
   if (sun_.getId()) {
     if (scene_) scene_->remove(sun_);
@@ -716,11 +851,33 @@ void FilamentRenderer::DestroyLights(filament::Engine* engine) {
   }
   points_.clear();
   point_values_.clear();
+  if (scene_) {
+    scene_->setSkybox(nullptr);
+    scene_->setIndirectLight(nullptr);
+  }
+  if (panorama_sky_) {
+    engine->destroy(panorama_sky_);
+    panorama_sky_ = nullptr;
+  }
   if (ambient_) {
-    if (scene_) scene_->setIndirectLight(nullptr);
     engine->destroy(ambient_);
     ambient_ = nullptr;
   }
+  if (sky_cube_) {
+    engine->destroy(sky_cube_);
+    sky_cube_ = nullptr;
+  }
+  if (ibl_reflections_) {
+    engine->destroy(ibl_reflections_);
+    ibl_reflections_ = nullptr;
+  }
+  if (ibl_irradiance_) {
+    engine->destroy(ibl_irradiance_);
+    ibl_irradiance_ = nullptr;
+  }
+  skybox_path_.clear();
+  skybox_synced_ = false;
+  has_panorama_ibl_ = false;
   ambient_sky_ = glm::vec3(-1.0f);
   ambient_ground_ = glm::vec3(-1.0f);
 }
