@@ -174,21 +174,52 @@ filament::Material* FilamentRenderer::LoadMaterial(const char* name) {
 }
 
 void FilamentRenderer::Shutdown(filament::Engine* engine) {
-  // Engine::destroy() frees everything the Engine created, in the right
-  // order, so this only drops the bookkeeping: destroying renderables and
-  // their buffers individually races with frames still in flight and
-  // Filament panics on resources freed after being handed to a frame.
+  if (!engine) return;
+  for (auto& [entity, record] : proxies_) {
+    for (DrawRecord& draw : record.draws) {
+      if (scene_ && draw.in_scene) scene_->remove(draw.renderable);
+      engine->destroy(draw.renderable);
+      engine->destroy(draw.material);
+    }
+  }
   proxies_.clear();
+  DestroyLights(engine);
+  for (auto& [id, entry] : meshes_) {
+    engine->destroy(entry.vertices);
+    engine->destroy(entry.indices);
+  }
   meshes_.clear();
+  for (auto& [id, entry] : textures_) {
+    engine->destroy(entry.texture);
+  }
   textures_.clear();
-  sun_ = {};
-  points_.clear();
-  point_values_.clear();
-  ambient_ = nullptr;
-  scene_ = nullptr;
-  std::fill(&lit_[0][0], &lit_[1][2], nullptr);
-  unlit_ = sdf_ = nullptr;
-  white_ = nullptr;
+  if (white_) {
+    engine->destroy(white_);
+    white_ = nullptr;
+  }
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      if (lit_[i][j]) {
+        engine->destroy(lit_[i][j]);
+        lit_[i][j] = nullptr;
+      }
+    }
+  }
+  if (unlit_) {
+    engine->destroy(unlit_);
+    unlit_ = nullptr;
+  }
+  if (sdf_) {
+    engine->destroy(sdf_);
+    sdf_ = nullptr;
+  }
+  if (scene_) {
+    engine->destroy(scene_);
+    scene_ = nullptr;
+  }
+  sun_direction_ = glm::vec3(0.0f);
+  sun_color_ = glm::vec3(0.0f);
+  sun_shadows_ = false;
   engine_ = nullptr;
 }
 

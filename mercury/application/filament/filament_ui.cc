@@ -61,16 +61,47 @@ bool FilamentUiRenderer::Init(filament::Engine* engine) {
 }
 
 void FilamentUiRenderer::Shutdown(filament::Engine* engine) {
-  // Engine::destroy() frees these (see FilamentRenderer::Shutdown).
+  if (!engine) return;
+  for (const RenderableRecord& record : renderables_) {
+    if (scene_) scene_->remove(record.renderable);
+    engine->destroy(record.renderable);
+    if (record.material) engine->destroy(record.material);
+  }
   renderables_.clear();
-  textures_.clear();
-  garbage_.clear();
+  for (const GarbageMaterial& garbage : garbage_materials_) {
+    engine->destroy(garbage.material);
+  }
   garbage_materials_.clear();
-  scene_ = nullptr;
-  material_ = nullptr;
-  white_ = nullptr;
-  vertices_ = nullptr;
-  indices_ = nullptr;
+  if (vertices_) {
+    engine->destroy(vertices_);
+    vertices_ = nullptr;
+  }
+  if (indices_) {
+    engine->destroy(indices_);
+    indices_ = nullptr;
+  }
+  vertex_capacity_ = 0;
+  index_capacity_ = 0;
+  for (auto& [id, entry] : textures_) {
+    engine->destroy(entry.texture);
+  }
+  textures_.clear();
+  for (const GarbageTexture& garbage : garbage_) {
+    engine->destroy(garbage.texture);
+  }
+  garbage_.clear();
+  if (white_) {
+    engine->destroy(white_);
+    white_ = nullptr;
+  }
+  if (material_) {
+    engine->destroy(material_);
+    material_ = nullptr;
+  }
+  if (scene_) {
+    engine->destroy(scene_);
+    scene_ = nullptr;
+  }
 }
 
 filament::Texture* FilamentUiRenderer::SyncTexture(filament::Engine* engine,

@@ -74,15 +74,8 @@ FilamentApplication::~FilamentApplication() {
     engine_->destroy(renderer_);
     engine_->destroy(swapchain_);
     engine_->destroy(headless_swap_);
-    // Nothing above may still be referenced by a frame when the engine frees
-    // what is left.
     engine_->flushAndWait();
-    // Filament's teardown of a Vulkan engine panics on MoltenVK
-    // ("texture used after it has been freed") when the last frame's
-    // descriptor sets are still cached, so the engine is intentionally left
-    // for the OS to reclaim at process exit. Nothing else can use it after
-    // this point.
-    engine_ = nullptr;
+    filament::Engine::destroy(&engine_);
   }
 }
 
