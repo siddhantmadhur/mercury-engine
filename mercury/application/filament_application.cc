@@ -297,10 +297,16 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
           .height(height)
           .levels(1)
           .usage(filament::Texture::Usage::COLOR_ATTACHMENT |
-                 filament::Texture::Usage::SAMPLEABLE)
+                 filament::Texture::Usage::SAMPLEABLE |
+                 filament::Texture::Usage::BLIT_SRC)
           .sampler(filament::Texture::Sampler::SAMPLER_2D)
           .format(filament::Texture::InternalFormat::RGBA8)
           .build(*engine_);
+  const auto depth_format =
+      filament::Texture::isTextureFormatSupported(
+          *engine_, filament::Texture::InternalFormat::DEPTH32F)
+          ? filament::Texture::InternalFormat::DEPTH32F
+          : filament::Texture::InternalFormat::DEPTH24;
   target.depth =
       filament::Texture::Builder()
           .width(width)
@@ -308,7 +314,7 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
           .levels(1)
           .usage(filament::Texture::Usage::DEPTH_ATTACHMENT)
           .sampler(filament::Texture::Sampler::SAMPLER_2D)
-          .format(filament::Texture::InternalFormat::DEPTH24)
+          .format(depth_format)
           .build(*engine_);
   target.target = filament::RenderTarget::Builder()
                       .texture(
@@ -396,7 +402,11 @@ bool FilamentApplication::CopyOffscreen(Offscreen& target, int& width,
 void FilamentApplication::Render() {
   if (!engine_ || !renderer_ || !game_scene_) return;
   filament::SwapChain* frame_swap = IsHeadless() ? headless_swap_ : swapchain_;
-  if (!frame_swap || !renderer_->shouldRenderFrame()) return;
+  if (!frame_swap) return;
+  if (!renderer_->shouldRenderFrame()) {
+    renderer_->skipFrame();
+    return;
+  }
   frame_counter_++;
 
   const uint32_t window_width = static_cast<uint32_t>(GetWidth());
