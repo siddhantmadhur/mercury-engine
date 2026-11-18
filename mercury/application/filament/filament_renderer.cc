@@ -193,6 +193,24 @@ void FilamentRenderer::SetFallbackSkybox(filament::Skybox* skybox) {
   }
 }
 
+void FilamentRenderer::SetRenderTextures(
+    const std::unordered_map<std::string, filament::Texture*>& textures) {
+  if (textures == render_textures_) return;
+  render_textures_ = textures;
+  const filament::TextureSampler rt_sampler(
+      filament::TextureSampler::MagFilter::LINEAR,
+      filament::TextureSampler::WrapMode::CLAMP_TO_EDGE);
+  for (auto& [entity, record] : proxies_) {
+    for (DrawRecord& draw : record.draws) {
+      if (draw.render_texture.empty() || !draw.material) continue;
+      auto it = render_textures_.find(draw.render_texture);
+      filament::Texture* tex =
+          (it != render_textures_.end() && it->second) ? it->second : white_;
+      if (tex) draw.material->setParameter("baseColorMap", tex, rt_sampler);
+    }
+  }
+}
+
 void FilamentRenderer::SweepGarbage(filament::Engine* engine, bool all) {
   auto ready = [&](const auto& item) {
     return all || item.first + 3 <= frame_;
@@ -225,6 +243,7 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
     }
   }
   proxies_.clear();
+  render_textures_.clear();
   DestroyLights(engine);
   SweepGarbage(engine, true);
   fallback_sky_ = nullptr;
@@ -549,11 +568,20 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     // The sampler must always be bound (Filament panics on unbound
     // samplers at draw time), so textures without an image show white.
     filament::Texture* texture = white_;
-    if (material.texture) {
+    filament::TextureSampler base_sampler = sampler;
+    if (!material.render_texture.empty()) {
+      auto rt_it = render_textures_.find(material.render_texture);
+      if (rt_it != render_textures_.end() && rt_it->second) {
+        texture = rt_it->second;
+      }
+      base_sampler = filament::TextureSampler(
+          filament::TextureSampler::MagFilter::LINEAR,
+          filament::TextureSampler::WrapMode::CLAMP_TO_EDGE);
+    } else if (material.texture) {
       if (filament::Texture* uploaded = UploadTexture(engine, *material.texture))
         texture = uploaded;
     }
-    instance->setParameter("baseColorMap", texture, sampler);
+    instance->setParameter("baseColorMap", texture, base_sampler);
 
     glm::mat4 draw_world = world;
     std::vector<filament::math::mat4f> bones;
@@ -597,6 +625,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     record_draw.skinned = skinned;
     record_draw.draw_index = static_cast<uint32_t>(draw_index);
     record_draw.in_scene = true;
+    record_draw.render_texture = material.render_texture;
     record.draws.push_back(record_draw);
   }
 }

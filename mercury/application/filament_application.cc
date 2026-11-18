@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <unordered_set>
 
 #include <stb/stb_image_write.h>
 
@@ -77,12 +78,17 @@ FilamentApplication::~FilamentApplication() {
     engine_->destroy(scene_view_);
     engine_->destroyCameraComponent(scene_camera_entity_);
     scene_renderer_.SetFallbackSkybox(nullptr);
+    scene_renderer_.SetRenderTextures({});
     scene_renderer_.scene()->setSkybox(nullptr);
     engine_->destroy(scene_sky_);
     ui_renderer_.scene()->setSkybox(nullptr);
     engine_->destroy(ui_preview_sky_);
     ui_renderer_.Shutdown(engine_);
     scene_renderer_.Shutdown(engine_);
+    for (auto& [path, target] : render_texture_targets_) {
+      DestroyOffscreen(target);
+    }
+    render_texture_targets_.clear();
     engine_->destroy(renderer_);
     engine_->destroy(swapchain_);
     engine_->destroy(headless_swap_);
@@ -277,7 +283,10 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
       target.view->getScene() == scene) {
     return;
   }
-  DestroyOffscreen(target);
+  if (target.target) {
+    engine_->flushAndWait();
+    DestroyOffscreen(target);
+  }
   target.width = width;
   target.height = height;
 
@@ -377,6 +386,42 @@ void FilamentApplication::Render() {
   if (!engine_ || !game_scene_) return;
   frame_counter_++;
 
+  const uint32_t window_width = static_cast<uint32_t>(GetWidth());
+  const uint32_t window_height = static_cast<uint32_t>(GetHeight());
+  const uint32_t view_width = scene_texture_enabled_ && scene_target_.target
+                                  ? scene_target_.width
+                                  : window_width;
+  const uint32_t view_height = scene_texture_enabled_ && scene_target_.target
+                                   ? scene_target_.height
+                                   : window_height;
+  std::vector<RenderCamera> cameras = FrameCameras(
+      static_cast<float>(view_width), static_cast<float>(view_height));
+
+  std::unordered_set<std::string> active_rts;
+  std::unordered_map<std::string, filament::Texture*> rt_map;
+  for (const RenderCamera& camera : cameras) {
+    if (camera.target_texture.empty()) continue;
+    active_rts.insert(camera.target_texture);
+    Offscreen& rt = render_texture_targets_[camera.target_texture];
+    const uint32_t w =
+        static_cast<uint32_t>(std::clamp(camera.target_width, 1, 8192));
+    const uint32_t h =
+        static_cast<uint32_t>(std::clamp(camera.target_height, 1, 8192));
+    EnsureOffscreen(rt, w, h, scene_renderer_.scene(), false);
+    if (rt.color) rt_map[camera.target_texture] = rt.color;
+  }
+  scene_renderer_.SetRenderTextures(rt_map);
+  bool flushed_for_rt_removal = false;
+  std::erase_if(render_texture_targets_, [&](auto& item) {
+    if (active_rts.contains(item.first)) return false;
+    if (!flushed_for_rt_removal) {
+      engine_->flushAndWait();
+      flushed_for_rt_removal = true;
+    }
+    DestroyOffscreen(item.second);
+    return true;
+  });
+
   scene_renderer_.SyncScene(*game_scene_);
   std::erase_if(garbage_color_gradings_, [&](const auto& item) {
     if (item.first + 3 > frame_counter_) return false;
@@ -394,23 +439,18 @@ void FilamentApplication::Render() {
   filament::SwapChain* frame_swap = IsHeadless() ? headless_swap_ : swapchain_;
   if (!frame_swap || !renderer_->beginFrame(frame_swap)) return;
 
-  const uint32_t window_width = static_cast<uint32_t>(GetWidth());
-  const uint32_t window_height = static_cast<uint32_t>(GetHeight());
-  const uint32_t view_width = scene_texture_enabled_ && scene_target_.target
-                                  ? scene_target_.width
-                                  : window_width;
-  const uint32_t view_height = scene_texture_enabled_ && scene_target_.target
-                                   ? scene_target_.height
-                                   : window_height;
-  std::vector<RenderCamera> cameras = FrameCameras(
-      static_cast<float>(view_width), static_cast<float>(view_height));
-
-  // Features still on the way (each is only reported once).
   for (const RenderCamera& camera : cameras) {
-    if (!camera.target_texture.empty() && !render_textures_logged_) {
-      render_textures_logged_ = true;
-      PDebug::warn("Filament: RenderTexture cameras are not supported yet");
-    }
+    if (camera.target_texture.empty()) continue;
+    auto it = render_texture_targets_.find(camera.target_texture);
+    if (it == render_texture_targets_.end() || !it->second.target) continue;
+    Offscreen& rt = it->second;
+    const glm::vec4 bg = glm::clamp(camera.background, 0.0f, 1.0f);
+    scene_sky_->setColor(
+        ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
+    SetupCamera(rt.camera, camera);
+    ApplyPostProcess(rt.view, render_settings, camera);
+    rt.view->setVisibleLayers(0xff, camera.culling_mask & 0xff);
+    renderer_->render(rt.view);
   }
 
   const RenderCamera* main = nullptr;

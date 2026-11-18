@@ -18,6 +18,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "application.h"
@@ -127,10 +130,10 @@ class FilamentApplication : public Application {
   Offscreen scene_target_;
   Offscreen preview_target_;
   Offscreen ui_preview_target_;
+  std::unordered_map<std::string, Offscreen> render_texture_targets_;
   kEntityId preview_camera_ = entt::null;
   const UI::UIDrawData* ui_preview_data_ = nullptr;
   glm::vec4 ui_preview_background_ = glm::vec4(0.0f);
-  bool render_textures_logged_ = false;
 
   bool show_stats_ = true;
   uint64_t frame_counter_ = 0;

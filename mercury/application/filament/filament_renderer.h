@@ -48,6 +48,9 @@ class FilamentRenderer {
 
   filament::Scene* scene() const { return scene_; }
   void SetFallbackSkybox(filament::Skybox* skybox);
+  // Registers offscreen RenderTexture color attachments keyed by res:// path.
+  void SetRenderTextures(
+      const std::unordered_map<std::string, filament::Texture*>& textures);
 
   // Brings the Filament world in step with the game's registry and lighting:
   // creates/removes renderables, updates transforms, bones and visibility,
@@ -72,6 +75,7 @@ class FilamentRenderer {
     uint32_t draw_index = 0;  // index into RenderMesh::draws
     bool skinned = false;
     bool in_scene = false;
+    std::string render_texture;
   };
   struct ProxyRecord {
     std::vector<DrawRecord> draws;
@@ -111,6 +115,7 @@ class FilamentRenderer {
 
   std::unordered_map<uint64_t, MeshEntry> meshes_;
   std::unordered_map<uint64_t, TextureEntry> textures_;
+  std::unordered_map<std::string, filament::Texture*> render_textures_;
   std::unordered_map<entt::entity, ProxyRecord> proxies_;
 
   utils::Entity sun_ = {};
