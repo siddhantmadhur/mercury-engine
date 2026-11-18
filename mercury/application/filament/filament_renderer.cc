@@ -413,7 +413,8 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     instance->setParameter("tiling", ToFilament(material.tiling));
     instance->setParameter("offset", ToFilament(material.offset));
     if (base != sdf_ && base != unlit_) {
-      instance->setParameter("metallic", material.metallic);
+      instance->setParameter("metallic",
+                             std::clamp(material.metallic, 0.0f, 1.0f));
       instance->setParameter("roughness",
                              std::clamp(1.0f - material.smoothness, 0.05f,
                                         1.0f));
@@ -573,8 +574,12 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           ? glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f))
           : glm::normalize(lighting.direction);
   const glm::vec3 color = glm::max(lighting.color, glm::vec3(0.0f));
+  const float shadow_distance = std::max(lighting.shadow_distance, 1.0f);
   const bool sun_changed = direction != sun_direction_ || color != sun_color_ ||
                            lighting.cast_shadows != sun_shadows_ ||
+                           shadow_distance != shadow_distance_ ||
+                           lighting.shadow_bias != shadow_bias_ ||
+                           lighting.shadow_normal_bias != shadow_normal_bias_ ||
                            !sun_.getId();
   if (sun_changed) {
     if (sun_.getId()) {
@@ -583,17 +588,33 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     }
     const float intensity =
         std::max({color.r, color.g, color.b, 1e-6f});
+    filament::LightManager::ShadowOptions shadow;
+    shadow.mapSize = 2048;
+    shadow.shadowCascades = 4;
+    filament::LightManager::ShadowCascades::computePracticalSplits(
+        shadow.cascadeSplitPositions, shadow.shadowCascades, 0.1f,
+        shadow_distance, 0.5f);
+    shadow.shadowFar = shadow_distance;
+    shadow.shadowNearHint = 0.5f;
+    shadow.shadowFarHint = shadow_distance;
+    shadow.constantBias = std::clamp(lighting.shadow_bias, 0.0f, 0.05f);
+    shadow.normalBias =
+        std::clamp(lighting.shadow_normal_bias * 25.0f, 0.25f, 2.5f);
     sun_ = utils::EntityManager::get().create();
     filament::LightManager::Builder(filament::LightManager::Type::SUN)
         .color(ToFilament(color / intensity))
         .intensity(intensity * kSunLuxPerIntensity)
         .direction(ToFilament(direction))
         .castShadows(lighting.cast_shadows)
+        .shadowOptions(shadow)
         .build(*engine, sun_);
     scene_->addEntity(sun_);
     sun_direction_ = direction;
     sun_color_ = color;
     sun_shadows_ = lighting.cast_shadows;
+    shadow_distance_ = shadow_distance;
+    shadow_bias_ = lighting.shadow_bias;
+    shadow_normal_bias_ = lighting.shadow_normal_bias;
   }
 
   bool points_changed = lighting.point_lights.size() != points_.size();
@@ -626,8 +647,8 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     point_values_ = lighting.point_lights;
   }
 
-  // Ambient light as a constant spherical harmonic: Filament wants the
-  // irradiance pre-convolved, which for band 0 means multiplying by pi.
+  // Ambient hemisphere light as band-1 spherical harmonics scaled to match the
+  // physical sun lux range so shadowed regions receive natural fill light.
   if (lighting.ambient != ambient_sky_ ||
       lighting.ambient_ground != ambient_ground_) {
     if (ambient_) {
@@ -636,11 +657,15 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     }
     const glm::vec3 sky = SrgbToLinear(lighting.ambient);
     const glm::vec3 ground = SrgbToLinear(lighting.ambient_ground);
-    const filament::math::float3 sh[3 * 9] = {
-        ToFilament((sky + ground) * 0.5f * glm::pi<float>())};
+    const filament::math::float3 sh[4] = {
+        ToFilament((sky + ground) * 0.5f),
+        ToFilament((sky - ground) * 0.5f),
+        {0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f},
+    };
     ambient_ = filament::IndirectLight::Builder()
-                  .irradiance(3, sh)
-                  .intensity(1.0f)
+                  .irradiance(2, sh)
+                  .intensity(kSunLuxPerIntensity / glm::pi<float>())
                   .build(*engine);
     scene_->setIndirectLight(ambient_);
     ambient_sky_ = lighting.ambient;

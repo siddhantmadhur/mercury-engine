@@ -112,6 +112,9 @@ class FilamentRenderer {
   glm::vec3 sun_direction_ = glm::vec3(0.0f);
   glm::vec3 sun_color_ = glm::vec3(0.0f);
   bool sun_shadows_ = false;
+  float shadow_distance_ = 0.0f;
+  float shadow_bias_ = 0.0f;
+  float shadow_normal_bias_ = 0.0f;
   std::vector<PointLightData> point_values_;
   glm::vec3 ambient_sky_ = glm::vec3(-1.0f);
   glm::vec3 ambient_ground_ = glm::vec3(-1.0f);
