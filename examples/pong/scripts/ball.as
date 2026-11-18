@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Serves the ball and keeps it moving at a constant speed. Moving paddles add
 // energy on contact, and a near-vertical ball would never reach either side, so
 // onTick corrects both.

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Rolls the ball with the Player/Move action (W/A/S/D, the arrow keys or the
 // left stick) and jumps with Player/Jump; see input/actions.minput.
 

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Registers C++ Behaviours for engine tests. Game scripts can use the same
 // MERCURY_SCRIPT API; this helper keeps the test name parameterizable.
 #ifndef MERCURY_TESTS_TEST_SCRIPTS_H

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 // Checks every example project as a whole: its AngelScript compiles, its
 // scripts load, and every map only uses components, properties and resources
 // that exist. A map property that does not match a script field (say
