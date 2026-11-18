@@ -202,8 +202,17 @@ std::vector<RenderCamera> FilamentApplication::FrameCameras(float width,
 
 void FilamentApplication::SetupCamera(filament::Camera* camera,
                                      const RenderCamera& render) {
+  // Mercury builds projections for Vulkan (NDC z in [0, 1]); Filament's
+  // post-processing, SSR and refraction reconstruct depth assuming the GL
+  // convention (z in [-1, 1]). Remap only the clip-space z, leaving x/y/w
+  // untouched.
+  glm::mat4 projection = render.projection;
+  glm::mat4 to_gl(1.0f);
+  to_gl[2][2] = 2.0f;
+  to_gl[3][2] = -1.0f;
+  projection = to_gl * projection;
   camera->setCustomProjection(
-      ToFilament(render.projection), std::max(render.near_clip, 1e-4f),
+      ToFilament(projection), std::max(render.near_clip, 1e-4f),
       std::max(render.far_clip, render.near_clip * 2.0f + 1.0f));
   camera->setModelMatrix(ToFilament(glm::inverse(render.view)));
 }
@@ -224,6 +233,13 @@ void FilamentApplication::ApplyPostProcess(filament::View* view,
   view->setAmbientOcclusionOptions(ao);
 
   const bool pp_active = settings.post_processing && camera.post_processing;
+  view->setShadowType(settings.soft_shadows ? filament::ShadowType::PCSS
+                                            : filament::ShadowType::PCF);
+  filament::ScreenSpaceReflectionsOptions reflections;
+  reflections.enabled = pp_active && settings.screen_space_reflections;
+  reflections.maxDistance = std::max(0.1f, settings.reflection_distance);
+  reflections.thickness = std::max(0.001f, settings.reflection_thickness);
+  view->setScreenSpaceReflectionsOptions(reflections);
   if (!pp_active) {
     filament::BloomOptions bloom;
     bloom.enabled = false;
@@ -471,6 +487,8 @@ void FilamentApplication::Render() {
         ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
     SetupCamera(rt.camera, camera);
     ApplyPostProcess(rt.view, render_settings, camera);
+    scene_renderer_.SetSkyboxForClear(
+        camera.clear == static_cast<int>(CameraClear::kSkybox));
     rt.view->setVisibleLayers(0xff, camera.culling_mask & 0xff);
     renderer_->render(rt.view);
   }
@@ -493,6 +511,8 @@ void FilamentApplication::Render() {
     ApplyPostProcess(scene_view_, render_settings, *main);
     scene_view_->setViewport(
         filament::Viewport(0, 0, window_width, window_height));
+    scene_renderer_.SetSkyboxForClear(
+        main->clear == static_cast<int>(CameraClear::kSkybox));
     scene_view_->setVisibleLayers(0xff, main->culling_mask & 0xff);
     renderer_->render(scene_view_);
     if (game_ui) {
@@ -512,6 +532,8 @@ void FilamentApplication::Render() {
           ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
       SetupCamera(scene_target_.camera, *main);
       ApplyPostProcess(scene_target_.view, render_settings, *main);
+      scene_renderer_.SetSkyboxForClear(
+          main->clear == static_cast<int>(CameraClear::kSkybox));
       scene_target_.view->setVisibleLayers(0xff, main->culling_mask & 0xff);
       renderer_->render(scene_target_.view);
       ReadOffscreen(scene_target_);
@@ -542,9 +564,12 @@ void FilamentApplication::Render() {
         preview.culling_mask = static_cast<uint32_t>(settings->culling_mask);
         preview.near_clip = settings->near_clip;
         preview.far_clip = settings->far_clip;
+        preview.clear = static_cast<int>(settings->clear);
       }
       SetupCamera(preview_target_.camera, preview);
       ApplyPostProcess(preview_target_.view, render_settings, preview);
+      scene_renderer_.SetSkyboxForClear(
+          preview.clear == static_cast<int>(CameraClear::kSkybox));
       preview_target_.view->setVisibleLayers(0xff,
                                              preview.culling_mask & 0xff);
       renderer_->render(preview_target_.view);

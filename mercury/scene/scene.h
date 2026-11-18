@@ -133,6 +133,8 @@ struct SceneLighting {
   glm::vec3 color = glm::vec3(1.0f);            // color * intensity
   glm::vec3 ambient = glm::vec3(0.2f);          // from above
   glm::vec3 ambient_ground = glm::vec3(0.07f);  // from below
+  // Filament IndirectLight intensity for the skybox, in lux.
+  float environment_intensity = 30000.0f;
   bool cast_shadows = true;
   float shadow_bias = 0.0015f;
   float shadow_normal_bias = 0.035f;
@@ -164,6 +166,12 @@ struct RenderSettings {
   float ssao_radius = 0.5f;
   int ssao_samples = 12;
   bool fxaa = true;
+  // Filament screen-space reflections for mirrors and glossy surfaces.
+  bool screen_space_reflections = false;
+  float reflection_distance = 5.0f;
+  float reflection_thickness = 0.1f;
+  // Filament's PCSS soft shadows for point and area lights.
+  bool soft_shadows = true;
   // Linework's wide outline around objects on these rendering layers.
   uint32_t outline_layers = 0;
   glm::vec4 outline_color = glm::vec4(1.0f);

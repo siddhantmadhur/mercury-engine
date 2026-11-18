@@ -14,10 +14,12 @@
 #include <filament/VertexBuffer.h>
 #include <filament-iblprefilter/IBLPrefilterContext.h>
 #include <geometry/SurfaceOrientation.h>
+#include <stb/stb_image.h>
 #include <utils/EntityManager.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 #include "components/components.h"
@@ -56,6 +58,17 @@ float SrgbToLinear(float c) {
 
 glm::vec3 SrgbToLinear(const glm::vec3& c) {
   return {SrgbToLinear(c.r), SrgbToLinear(c.g), SrgbToLinear(c.b)};
+}
+
+// Shared per-light shadow settings. Filament derives a soft penumbra from
+// the light's physical size when the View uses ShadowType::PCSS.
+filament::LightManager::ShadowOptions MakeShadowOptions(float bias,
+                                                        float bulb_radius) {
+  filament::LightManager::ShadowOptions options;
+  options.mapSize = 1024;
+  options.constantBias = std::clamp(bias, 0.0f, 0.05f);
+  options.shadowBulbRadius = std::max(bulb_radius, 0.01f);
+  return options;
 }
 
 // Filament's matrices are column-major like glm's, so the scalar
@@ -192,6 +205,12 @@ void FilamentRenderer::SetFallbackSkybox(filament::Skybox* skybox) {
   if (scene_ && !has_panorama_ibl_) {
     scene_->setSkybox(fallback_sky_);
   }
+}
+
+void FilamentRenderer::SetSkyboxForClear(bool show_panorama) {
+  if (!scene_) return;
+  scene_->setSkybox(show_panorama && panorama_sky_ ? panorama_sky_
+                                                   : fallback_sky_);
 }
 
 void FilamentRenderer::SetRenderTextures(
@@ -813,6 +832,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           .intensity(intensity * kPointLumensPerIntensity)
           .falloff(std::max(light.range, 0.1f))
           .castShadows(light.shadows != 0)
+          .shadowOptions(MakeShadowOptions(light.shadow_bias, light.radius))
           .build(*engine, entity);
       scene_->addEntity(entity);
       points_.push_back(entity);
@@ -850,6 +870,8 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           4.0f * glm::length(light.right) * glm::length(light.up);
       const float lumens =
           intensity * kPointLumensPerIntensity * std::max(area, 1.0f);
+      const float bulb = std::max(glm::length(light.right),
+                                  glm::length(light.up));
       auto add_spot = [&](const glm::vec3& spot_dir, bool shadows) {
         utils::Entity entity = utils::EntityManager::get().create();
         filament::LightManager::Builder(filament::LightManager::Type::SPOT)
@@ -860,6 +882,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
             .falloff(std::max(light.range, 0.1f))
             .spotLightCone(glm::radians(35.0f), glm::radians(75.0f))
             .castShadows(shadows)
+            .shadowOptions(MakeShadowOptions(light.shadow_bias, bulb))
             .build(*engine, entity);
         scene_->addEntity(entity);
         areas_.push_back(entity);
@@ -871,7 +894,13 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
 
   const std::string& skybox_path = game.GetSkyboxPath();
   if (!skybox_synced_ || skybox_path != skybox_path_) {
-    SyncSkybox(engine, skybox_path);
+    SyncSkybox(engine, skybox_path, lighting.environment_intensity);
+  } else if (has_panorama_ibl_ && ambient_ &&
+             lighting.environment_intensity != env_intensity_) {
+    // Filament scales the whole IBL; no need to rebuild the prefiltered
+    // textures when only the brightness changes.
+    ambient_->setIntensity(lighting.environment_intensity);
+    env_intensity_ = lighting.environment_intensity;
   }
 
   // Ambient hemisphere light as band-1 spherical harmonics scaled to match the
@@ -902,9 +931,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
 }
 
 void FilamentRenderer::SyncSkybox(filament::Engine* engine,
-                                  const std::string& path) {
+                                  const std::string& path, float intensity) {
   skybox_path_ = path;
   skybox_synced_ = true;
+  env_intensity_ = intensity;
 
   // Retire the current panorama resources (destroyed after 3 frames).
   if (scene_) scene_->setSkybox(fallback_sky_);
@@ -935,40 +965,109 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
 
   if (path.empty()) return;
 
-  std::shared_ptr<ImageData> image = ImageData::Load(path);
-  if (!image || image->pixels.empty() || image->width <= 0 ||
-      image->height <= 0) {
-    PDebug::warn("Filament: could not load skybox panorama {}", path);
-    return;
-  }
-  if (image->width != 2 * image->height) {
-    PDebug::warn(
-        "Filament: skybox panorama {} ({}x{}) is not 2:1 equirectangular", path,
-        image->width, image->height);
-    return;
+  const bool is_hdr =
+      path.size() >= 4 && [&] {
+        std::string ext = path.substr(path.size() - 4);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return ext == ".hdr";
+      }();
+
+  uint32_t image_width = 0;
+  uint32_t image_height = 0;
+  filament::Texture* equirect = nullptr;
+
+  if (is_hdr) {
+    // Radiance HDR panoramas carry values above 1, which is what the IBL
+    // prefilter wants: the studio lights keep their intensity and show up in
+    // reflections. Upload them as floats instead of 8-bit sRGB.
+    auto bytes = os::ReadBytes(path);
+    if (!bytes || bytes->empty() || bytes->size() > INT32_MAX) {
+      PDebug::warn("Filament: could not read skybox panorama {}", path);
+      return;
+    }
+    int width = 0, height = 0, channels = 0;
+    float* pixels = stbi_loadf_from_memory(
+        bytes->data(), static_cast<int>(bytes->size()), &width, &height,
+        &channels, 3);
+    if (!pixels || width <= 0 || height <= 0) {
+      if (pixels) stbi_image_free(pixels);
+      PDebug::warn("Filament: could not decode skybox panorama {}", path);
+      return;
+    }
+    image_width = static_cast<uint32_t>(width);
+    image_height = static_cast<uint32_t>(height);
+    const uint8_t levels = std::max<uint8_t>(
+        1, static_cast<uint8_t>(std::ilogbf(static_cast<float>(width)) + 1));
+    equirect =
+        filament::Texture::Builder()
+            .width(image_width)
+            .height(image_height)
+            .levels(levels)
+            .usage(filament::Texture::Usage::SAMPLEABLE |
+                   filament::Texture::Usage::UPLOADABLE |
+                   filament::Texture::Usage::GEN_MIPMAPPABLE)
+            .format(filament::Texture::InternalFormat::R11F_G11F_B10F)
+            .sampler(filament::Texture::Sampler::SAMPLER_2D)
+            .build(*engine);
+    if (!equirect) {
+      stbi_image_free(pixels);
+      return;
+    }
+    const size_t bytes_float =
+        size_t{image_width} * image_height * 3 * sizeof(float);
+    equirect->setImage(
+        *engine, 0,
+        filament::Texture::PixelBufferDescriptor(
+            pixels, bytes_float, filament::backend::PixelDataFormat::RGB,
+            filament::backend::PixelDataType::FLOAT, 1, 0, 0, 0,
+            [](void* buffer, size_t, void*) { stbi_image_free(buffer); }));
+  } else {
+    std::shared_ptr<ImageData> image = ImageData::Load(path);
+    if (!image || image->pixels.empty() || image->width <= 0 ||
+        image->height <= 0) {
+      PDebug::warn("Filament: could not load skybox panorama {}", path);
+      return;
+    }
+    if (image->width != 2 * image->height) {
+      PDebug::warn(
+          "Filament: skybox panorama {} ({}x{}) is not 2:1 equirectangular",
+          path, image->width, image->height);
+      return;
+    }
+    image_width = static_cast<uint32_t>(image->width);
+    image_height = static_cast<uint32_t>(image->height);
+    const uint8_t levels = std::max<uint8_t>(
+        1, static_cast<uint8_t>(std::ilogbf(static_cast<float>(image->width)) +
+                                1));
+    equirect =
+        filament::Texture::Builder()
+            .width(image_width)
+            .height(image_height)
+            .levels(levels)
+            .usage(filament::Texture::Usage::SAMPLEABLE |
+                   filament::Texture::Usage::UPLOADABLE |
+                   filament::Texture::Usage::GEN_MIPMAPPABLE)
+            .format(filament::Texture::InternalFormat::SRGB8_A8)
+            .sampler(filament::Texture::Sampler::SAMPLER_2D)
+            .build(*engine);
+    if (!equirect) return;
+    const size_t bytes = image->pixels.size();
+    equirect->setImage(
+        *engine, 0,
+        filament::Texture::PixelBufferDescriptor(
+            CopyToHeap(image->pixels.data(), bytes), bytes,
+            filament::backend::PixelDataFormat::RGBA,
+            filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0,
+            DeleteUpload));
   }
 
-  const uint8_t levels = std::max<uint8_t>(
-      1, static_cast<uint8_t>(std::ilogbf(static_cast<float>(image->width)) + 1));
-  filament::Texture* equirect =
-      filament::Texture::Builder()
-          .width(static_cast<uint32_t>(image->width))
-          .height(static_cast<uint32_t>(image->height))
-          .levels(levels)
-          .usage(filament::Texture::Usage::SAMPLEABLE |
-                 filament::Texture::Usage::UPLOADABLE |
-                 filament::Texture::Usage::GEN_MIPMAPPABLE)
-          .format(filament::Texture::InternalFormat::SRGB8_A8)
-          .sampler(filament::Texture::Sampler::SAMPLER_2D)
-          .build(*engine);
-  if (!equirect) return;
-  const size_t bytes = image->pixels.size();
-  equirect->setImage(
-      *engine, 0,
-      filament::Texture::PixelBufferDescriptor(
-          CopyToHeap(image->pixels.data(), bytes), bytes,
-          filament::backend::PixelDataFormat::RGBA,
-          filament::backend::PixelDataType::UBYTE, 1, 0, 0, 0, DeleteUpload));
+  if (image_width != 2 * image_height) {
+    PDebug::warn(
+        "Filament: skybox panorama {} ({}x{}) is not 2:1 equirectangular", path,
+        image_width, image_height);
+    garbage_textures_.emplace_back(frame_, equirect);
+    return;
+  }
 
   IBLPrefilterContext prefilter(*engine);
   IBLPrefilterContext::EquirectangularToCubemap to_cube(prefilter);
@@ -988,7 +1087,7 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
   ambient_ = filament::IndirectLight::Builder()
                  .reflections(ibl_reflections_)
                  .irradiance(ibl_irradiance_)
-                 .intensity(kSunLuxPerIntensity / glm::pi<float>())
+                 .intensity(intensity)
                  .build(*engine);
   if (scene_) {
     scene_->setSkybox(panorama_sky_);
@@ -1042,6 +1141,7 @@ void FilamentRenderer::DestroyLights(filament::Engine* engine) {
   skybox_path_.clear();
   skybox_synced_ = false;
   has_panorama_ibl_ = false;
+  env_intensity_ = 0.0f;
   ambient_sky_ = glm::vec3(-1.0f);
   ambient_ground_ = glm::vec3(-1.0f);
 }

@@ -106,11 +106,11 @@ A node's position is relative to its parent; maps are flattened to world positio
 | `Transform` | `position`, `rotation` (Euler degrees, applied X, then Y, then Z) and `scale` |
 | `SpriteRenderer` | An unlit quad on the XY plane, sized by the scale (2D) |
 | `MeshRenderer` | A lit `mesh`: `cube`, `sphere`, `capsule`, `cylinder`, `plane`, `quad`, or `model` with a `.obj`/`.gltf`/`.glb`/`.fbx` file (node tree, materials, skin and clips; `node` draws one part, `materials` overrides them) |
-| `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture`, `post_processing` |
+| `Camera` | Looks along its -Z. `fit_height` makes a 2D camera; also `fov`, clip distances, `background`, `skybox` + `skybox_intensity`, `clear`, `culling_mask`, `depth`, `overlay` (drawn over `base_camera`), `target_texture`, `post_processing` |
 | `DirectionalLight` | Sunlight along its -Z: `color`, `intensity`, `ambient`, `ground_ambient`, `cast_shadows` (see [Lighting](#lighting)) |
-| `PointLight` | Light in every direction: `color`, `intensity`, `range` (Unity's falloff; up to 16 per map). Soft cube-map shadows that widen with `radius`; `shadows = "hard"` or `"none"` changes that |
-| `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance. Exact diffuse lighting, soft shadows; up to 4 per map, 8 shadowed point and area lights in all |
-| `LightProbeVolume` | Settings for global illumination (see [Global illumination](#global-illumination)): `size`, `resolution`, `fit_to_scene`, `bounces`, `intensity` (0 turns it off) |
+| `PointLight` | Light in every direction: `color`, `intensity`, `range` (Unity's falloff; up to 16 per map). Soft shadows that widen with `radius`; `shadows = "hard"` or `"none"` changes that |
+| `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance. The Filament renderer approximates it with a spot light; up to 4 per map |
+| `LightProbeVolume` | Legacy global-illumination settings; the Filament renderer uses the skybox IBL instead (see [Lighting](#lighting)) |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps without pushing |
 | `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |
@@ -165,20 +165,34 @@ image-based ambient). `SceneLighting` maps onto:
 
 - **Directional light** → a Filament `SUN` (colour × intensity in lux), with
   shadow maps.
-- **Point lights** → Filament `POINT` lights (lumens).
+- **Point lights** → Filament `POINT` lights (lumens), with per-light shadow
+  bias and bulb radius.
+- **Area lights** → a Filament `SPOT` aimed along the rectangle's normal.
+  Filament has no rectangle light; the spot is the native approximation.
 - **Ambient (`ambient`, `ambient_ground`)** → a constant ambient
   `IndirectLight` built from spherical harmonics; the two colours are
   averaged, so the hemispheric gradient the old renderer had is gone.
-- **Area lights** are not forwarded yet (they still exist in the map format).
+- **Skybox panoramas** (`.png`, `.jpg`, `.hdr`) → prefiltered with Filament's
+  `IBLPrefilterContext` into a `Skybox` and an `IndirectLight` with specular
+  reflections and irradiance. `skybox_intensity` is the `IndirectLight`
+  intensity in lux; `clear = "color"` keeps the panorama out of the frame
+  while still using it for image-based light and reflections.
+- **Soft shadows** → Filament's PCSS (`View::setShadowType`); the light's
+  physical size (`radius`, or the area light's rectangle) sets the penumbra.
+
+`LightProbeVolume` is a legacy component. Filament's global illumination is
+its distant IBL (the camera's skybox panorama) plus screen-space reflections;
+the renderer does not build a probe grid from the volume. Keep the component
+in old maps for compatibility, but author new lighting with the skybox and
+the Filament light components.
 
 ### Post-processing
 
-`RenderSettings`/`PostProcessProfile` are not wired into Filament yet: views
-run with Filament's defaults (ACES-style tonemapping, FXAA). Bloom, SSAO,
-exposure, vignette and outline settings in the profile are currently ignored;
-enabling them means setting `View::setBloomOptions`,
-`View::setAmbientOcclusionOptions`, `ColorGrading` and friends — see
-`PHASE3.md`.
+`RenderSettings`/`PostProcessProfile` are applied to each Filament `View`:
+tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO, FXAA,
+screen-space reflections (mirrors and glossy surfaces), and PCSS soft
+shadows. Refraction uses Filament's cubemap mode so it also works on
+MoltenVK, where the screen-space refraction pass currently draws nothing.
 
 ### Material notes
 

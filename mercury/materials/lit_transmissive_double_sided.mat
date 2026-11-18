@@ -6,8 +6,8 @@ material {
     name: MercuryLitTransmissiveDoubleSided,
     shadingModel: lit,
     blending: opaque,
-    refractionMode: screenspace,
-    refractionType: solid,
+    refractionMode: cubemap,
+    refractionType: thin,
     culling: none,
     flipUV: false,
     requires: [

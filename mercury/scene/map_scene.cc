@@ -578,6 +578,7 @@ void MapScene::ApplyEnvironmentFrom(kEntityId camera_entity) {
   }
   if (!camera) return;
   clear_color_ = camera->background;
+  lighting_.environment_intensity = camera->skybox_intensity;
   // Loaded by the renderer into its own texture: a panorama is far too
   // big for the sprite atlas that GetTexture() packs into.
   if (camera->skybox.IsSet() && project_) {
@@ -1142,6 +1143,13 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.ssao_samples =
         static_cast<int>(p.GetInt("ssao_samples", settings.ssao_samples));
     settings.fxaa = p.GetBool("fxaa", settings.fxaa);
+    settings.screen_space_reflections = p.GetBool(
+        "screen_space_reflections", settings.screen_space_reflections);
+    settings.reflection_distance = static_cast<float>(p.GetFloat(
+        "reflection_distance", settings.reflection_distance));
+    settings.reflection_thickness = static_cast<float>(p.GetFloat(
+        "reflection_thickness", settings.reflection_thickness));
+    settings.soft_shadows = p.GetBool("soft_shadows", settings.soft_shadows);
     settings.outline_layers =
         static_cast<uint32_t>(p.GetInt("outline_layers", 0));
     settings.outline_width =
@@ -1177,6 +1185,10 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.ssao_intensity = profile.ambient_occlusion;
     settings.ssao_radius = profile.ao_radius;
     settings.fxaa = profile.antialiasing;
+    settings.screen_space_reflections = profile.screen_space_reflections;
+    settings.reflection_distance = profile.reflection_distance;
+    settings.reflection_thickness = profile.reflection_thickness;
+    settings.soft_shadows = profile.soft_shadows;
   }
   return settings;
 }
@@ -1249,8 +1261,6 @@ std::vector<RenderCamera> MapScene::GetRenderCameras(float width,
     camera.culling_mask =
         static_cast<uint32_t>(candidate.settings->culling_mask);
     camera.clear = static_cast<int>(candidate.settings->clear);
-    if (candidate.settings->skybox.IsSet())
-      camera.clear = static_cast<int>(CameraClear::kSkybox);
     camera.background = candidate.settings->background;
     camera.overlay = candidate.settings->overlay;
     camera.post_processing = candidate.settings->post_processing;

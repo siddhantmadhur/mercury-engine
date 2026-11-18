@@ -48,6 +48,9 @@ class FilamentRenderer {
 
   filament::Scene* scene() const { return scene_; }
   void SetFallbackSkybox(filament::Skybox* skybox);
+  // Draws the panorama or the solid clear color. The IBL is the same either
+  // way, so a camera can reflect the environment without showing it.
+  void SetSkyboxForClear(bool show_panorama);
   // Registers offscreen RenderTexture color attachments keyed by res:// path.
   void SetRenderTextures(
       const std::unordered_map<std::string, filament::Texture*>& textures);
@@ -99,7 +102,8 @@ class FilamentRenderer {
                   const Transform& transform, ProxyRecord& record);
   // Recreates the sun, point lights, skybox and IBL when values changed.
   void SyncLights(filament::Engine* engine, GameScene& game);
-  void SyncSkybox(filament::Engine* engine, const std::string& path);
+  void SyncSkybox(filament::Engine* engine, const std::string& path,
+                  float intensity);
   void SweepGarbage(filament::Engine* engine, bool all);
   void DestroyLights(filament::Engine* engine);
 
@@ -131,6 +135,7 @@ class FilamentRenderer {
   std::string skybox_path_;
   bool skybox_synced_ = false;
   bool has_panorama_ibl_ = false;
+  float env_intensity_ = 0.0f;
   std::vector<std::pair<uint64_t, filament::IndirectLight*>>
       garbage_indirect_lights_;
   std::vector<std::pair<uint64_t, filament::Skybox*>> garbage_skyboxes_;
