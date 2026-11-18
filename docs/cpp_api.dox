@@ -1,0 +1,159 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+/**
+@page cpp_api Using the C++ Library
+
+@tableofcontents
+
+Most Mercury games are projects run by the shared player: game logic lives in
+AngelScript, and C++ is only the engine. This page explains the C++ interface
+for extending the engine, writing tools and tests, or embedding the player in
+another executable.
+
+@section cpp_api_entry The player entry point
+
+`mercury_player` is a thin wrapper around @ref Mercury::RunPlayer.
+
+@code{.cpp}
+// mercury/player/main.cc
+#include "player/player.h"
+
+int main(int argc, char** argv) {
+  return Mercury::RunPlayer(argc, argv, nullptr);
+}
+@endcode
+
+@ref Mercury::RunPlayer loads a `.mproj`, compiles and runs its scripts, and
+creates a @ref Mercury::MapScene. Passing a default project makes a dedicated
+executable that runs your game when it is started without arguments:
+
+@code{.cpp}
+#include "player/player.h"
+
+int main(int argc, char** argv) {
+  return Mercury::RunPlayer(argc, argv, "my_game/my_game.mproj");
+}
+@endcode
+
+Add it to a `BUILD.bazel` with the engine library:
+
+@code{.py}
+cc_binary(
+    name = "my_game",
+    srcs = ["main.cc"],
+    deps = ["//mercury:mercury"],
+)
+@endcode
+
+@section cpp_api_layers The layers
+
+| Type | Role |
+|---|---|
+| @ref Mercury::Application | The platform layer: GLFW window, input, frame loop, fixed ticks. |
+| @ref Mercury::VulkanApplication | The Vulkan renderer implementation of the application hooks. `Mercury::DefaultApplication` is an alias for it. |
+| @ref Mercury::GameScene | The contract between game state and the renderer. |
+| @ref Mercury::MapScene | A `GameScene` built from a `.mmap`; runs the map's @ref Mercury::Behaviour objects. |
+| @ref Mercury::RenderHost | What a scene may ask the application to render. Used by the editor for viewports. |
+| @ref Mercury::Project | A `.mproj` file and its `res://` path resolution. |
+| @ref Mercury::AssetDatabase | Loads and caches `.masset` assets. |
+| @ref Mercury::Behaviour | The base class the engine runs; scripts are driven by `ScriptBehaviour`. |
+| @ref Mercury::EditorUI::MercuryEditorApp | The wxWidgets editor application. |
+
+The application owns the loop and the scene owns the game state. The scene
+never touches Vulkan or GLFW: it exposes lights, cameras and draw data that
+the application turns into GPU work. This keeps the renderer replaceable and
+lets the editor render the same scene into an offscreen viewport.
+
+@section cpp_api_scene Hosting a custom scene
+
+A custom scene derives from @ref Mercury::GameScene and implements its four
+pure virtual callbacks. @ref Mercury::VulkanApplication (aliased as
+`Mercury::DefaultApplication`) supplies the window and renderer:
+
+@code{.cpp}
+#include <memory>
+
+#include "application/default_application.h"
+#include "scene/scene.h"
+
+class MyScene : public Mercury::GameScene {
+ public:
+  void OnStart() override {
+    // Create entities, camera, lights and assets here.
+  }
+  void OnTick(double dt) override {
+    // Fixed-step simulation. dt is in seconds.
+  }
+  void OnFrame(double dt) override {
+    // Per-frame work that is not simulation.
+  }
+  void OnDestroy() override {}
+};
+
+int main() {
+  Mercury::DefaultApplication app("My Mercury Game", 1280, 720);
+  app.SetGameScene(std::make_unique<MyScene>());
+  return app.Run();
+}
+@endcode
+
+@ref Mercury::Application::Run calls `StartHosted()` (initialise the device,
+call `OnLoad()` and `GameScene::OnStart()`), then steps frames until the
+scene quits or the window closes. Use @ref Mercury::Application::StepFrame
+when another framework owns the event loop, and
+@ref Mercury::Application::EnableHeadlessMode when there is no window at all
+(the editor uses this).
+
+For a map-driven game, prefer @ref Mercury::MapScene. It loads a
+@ref Mercury::Map, creates the physics world and render resources, and runs
+the `[script]` behaviours:
+
+@code{.cpp}
+#include "project/map.h"
+#include "project/project.h"
+#include "scene/map_scene.h"
+
+std::string error;
+auto project = Mercury::Project::Load("my_game/my_game.mproj", &error);
+auto scene = std::make_unique<Mercury::MapScene>(
+    project, Mercury::MapScene::Mode::kPlay);
+
+Mercury::Map map;
+if (map.Load(project->Resolve(project->GetMainMap()), &error)) {
+  scene->Instantiate(map);
+}
+@endcode
+
+@section cpp_api_editor The editor
+
+The editor is also C++. @ref Mercury::EditorUI::MercuryEditorApp is the
+`wxApp`; it owns a headless `Mercury::DefaultApplication` and an
+@ref Mercury::EditorScene (the map-editing controller), and switches
+between @ref Mercury::EditorUI::LauncherFrame and
+@ref Mercury::EditorUI::EditorFrame. The panels and document editors are
+under `editor/`. The editor is built separately:
+
+@code{.sh}
+bazelisk build //editor:mercury_editor
+bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
+@endcode
+
+@section cpp_api_paths Include paths
+
+The engine library adds `mercury/` to the include path, so headers are
+included from the engine root:
+
+@code{.cpp}
+#include "application/default_application.h"
+#include "scene/map_scene.h"
+#include "scripting/behaviour.h"
+#include "project/project.h"
+@endcode
+
+The generated API reference lists every public header, namespace and class.
+Start from the <a href="namespaces.html">Namespaces</a> page or search for a
+type in the search box.
+
+*/

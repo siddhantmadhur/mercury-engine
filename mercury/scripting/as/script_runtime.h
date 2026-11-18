@@ -178,7 +178,7 @@ class ScriptRuntime {
   asIScriptModule* GetModule() const { return module_; }
 
   /**
-   * @brief Compiles every .as under <project>/scripts (plus the API prelude)
+   * @brief Compiles every .as under `<project>/scripts` (plus the API prelude)
    *
    * Classes register themselves while the module is built. Afterwards every
    * registered script is described and added to the TypeRegistry.

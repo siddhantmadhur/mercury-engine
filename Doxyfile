@@ -54,7 +54,7 @@ PROJECT_NUMBER         =
 # for a project that appears at the top of each page and should give viewer a
 # quick idea about the purpose of the project. Keep the description short.
 
-PROJECT_BRIEF          =
+PROJECT_BRIEF          = "A C++ game engine and editor for performant simulation games"
 
 # With the PROJECT_LOGO tag one can specify a logo or an icon that is included
 # in the documentation. The maximum height of the logo should not exceed 55
@@ -74,7 +74,7 @@ PROJECT_ICON           =
 # entered, it will be relative to the location where doxygen was started. If
 # left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = doc/
+OUTPUT_DIRECTORY       = docs/doxygen
 
 # If the CREATE_SUBDIRS tag is set to YES then doxygen will create up to 4096
 # sub-directories (in 2 levels) under the output directory of each output format
@@ -378,7 +378,7 @@ TOC_INCLUDE_HEADINGS   = 6
 # The default value is: DOXYGEN.
 # This tag requires that the tag MARKDOWN_SUPPORT is set to YES.
 
-MARKDOWN_ID_STYLE      = DOXYGEN
+MARKDOWN_ID_STYLE      = GITHUB
 
 # When enabled doxygen tries to link words that correspond to documented
 # classes, or namespaces to their corresponding documentation. Such a link can
@@ -524,7 +524,7 @@ TIMESTAMP              = NO
 # normally produced when WARNINGS is set to YES.
 # The default value is: NO.
 
-EXTRACT_ALL            = NO
+EXTRACT_ALL            = YES
 
 # If the EXTRACT_PRIVATE tag is set to YES, all private members of a class will
 # be included in the documentation.
@@ -949,7 +949,11 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  =
+INPUT                  = README.md \
+                         DOCUMENTATION.md \
+                         docs \
+                         mercury \
+                         editor
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -989,11 +993,12 @@ INPUT_FILE_ENCODING    =
 # be provided as doxygen C comment), *.py, *.pyw, *.f90, *.f95, *.f03, *.f08,
 # *.f18, *.f, *.for, *.vhd, *.vhdl, *.ucf, *.qsf and *.ice.
 
-FILE_PATTERNS          = *.c  \
-                         *.cc \
-                         *.hh \
-                         *.md \
-                         *.h \
+FILE_PATTERNS          = *.c   \
+                         *.cc  \
+                         *.h   \
+                         *.hh  \
+                         *.hpp \
+                         *.md  \
                          *.dox
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
@@ -1010,7 +1015,9 @@ RECURSIVE              = YES
 # run.
 
 EXCLUDE                = third_party/ \
-			 20-games-challenge/
+                         20-games-challenge/ \
+                         Builds/ \
+                         docs/doxygen/
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
 # directories that are symbolic links (a Unix file system feature) are excluded
@@ -1060,7 +1067,7 @@ EXAMPLE_RECURSIVE      = NO
 # that contain images that are to be included in the documentation (see the
 # \image command).
 
-IMAGE_PATH             =
+IMAGE_PATH             = assets
 
 # The INPUT_FILTER tag can be used to specify a program that doxygen should
 # invoke to filter for each input file. Doxygen will invoke the filter program
@@ -1143,7 +1150,7 @@ FORTRAN_COMMENT_AFTER  = 72
 # also VERBATIM_HEADERS is set to NO.
 # The default value is: NO.
 
-SOURCE_BROWSER         = NO
+SOURCE_BROWSER         = YES
 
 # Setting the INLINE_SOURCES tag to YES will include the body of functions,
 # multi-line macros, enums or list initialized variables directly into the
@@ -1672,7 +1679,7 @@ DISABLE_INDEX          = NO
 # The default value is: NO.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-GENERATE_TREEVIEW      = NO
+GENERATE_TREEVIEW      = YES
 
 # When both GENERATE_TREEVIEW and DISABLE_INDEX are set to YES, then the
 # FULL_SIDEBAR option determines if the side bar is limited to only the treeview
@@ -1912,7 +1919,7 @@ EXTRA_SEARCH_MAPPINGS  =
 # If the GENERATE_LATEX tag is set to YES, doxygen will generate LaTeX output.
 # The default value is: YES.
 
-GENERATE_LATEX         = YES
+GENERATE_LATEX         = NO
 
 # The LATEX_OUTPUT tag is used to specify where the LaTeX docs will be put. If a
 # relative path is entered the value of OUTPUT_DIRECTORY will be put in front of
@@ -2779,8 +2786,6 @@ MAX_DOT_GRAPH_DEPTH    = 0
 # this, this feature is disabled by default.
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
-
-DOT_MULTI_TARGETS      = NO
 
 # If the GENERATE_LEGEND tag is set to YES doxygen will generate a legend page
 # explaining the meaning of the various boxes and arrows in the dot generated

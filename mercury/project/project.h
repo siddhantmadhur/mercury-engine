@@ -49,6 +49,35 @@ constexpr std::string_view kInputActionsExtension = ".minput";
 // Generated per-project data (build info, script schema); never committed.
 constexpr std::string_view kProjectCacheDir = ".mercury";
 
+/**
+ * @brief A Mercury project: the `.mproj` file and its root folder
+ *
+ * A project is a folder with a `.mproj` at its root, like Godot's
+ * `project.godot`. Paths inside project files are written relative to this
+ * folder as `res://...`; @ref Resolve turns them into filesystem paths and
+ * @ref ToResPath does the reverse. The project also holds the settings every
+ * scene needs: the main map, window size, gravity and tick rate, layer and tag
+ * names, the input actions asset, import defaults and build output.
+ *
+ * @par Minimal .mproj
+ * @code{.ini}
+ * [project]
+ * name = "HelloMercury"
+ * main_map = "res://maps/main.mmap"
+ *
+ * [window]
+ * title = "Hello Mercury"
+ * width = 1280
+ * height = 720
+ * @endcode
+ *
+ * `Project::Create` creates the file in memory; call @ref Save to write it.
+ * The editor's New Project template uses this, and `RunPlayer` loads a
+ * project before building scripts and creating a @ref MapScene.
+ *
+ * @see Mercury::Map, Mercury::AssetDatabase, Mercury::RunPlayer,
+ * @ref getting_started
+ */
 class Project {
  public:
   /**

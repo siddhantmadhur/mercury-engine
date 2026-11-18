@@ -1,0 +1,206 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+/**
+@page editor_guide Mercury Editor Guide
+
+@tableofcontents
+
+The Mercury Editor is the graphical tool for making projects. It edits the
+same text files the engine loads (`.mproj`, `.mmap`, `.masset`, `.uxml`,
+`.minput`), so you can commit those files and diff them like code. The editor
+is documented at the C++ level starting at
+@ref Mercury::EditorUI::MercuryEditorApp.
+
+@section editor_launch Opening the editor
+
+@code{.sh}
+# open a project at its main map
+bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj
+
+# open a project at a specific map
+bazelisk run //editor:mercury_editor -- examples/pong/pong.mproj --map res://maps/main.mmap
+
+# open the project launcher
+bazelisk run //editor:mercury_editor
+@endcode
+
+The launcher shows recent projects, an **Open** button for a `.mproj` or a
+folder, drag-and-drop from the OS, and a **New Project** card. A new project
+gets a `.mproj`, a main map, `scripts/`, `assets/` and a `.gitignore` that
+keeps `.mercury/` out of version control. Pick **2D** for sprites and
+orthographic play, or **3D** for a camera, sun, ground plane and cube.
+
+The menus are:
+
+| Menu | Commands |
+|---|---|
+| **File** | New Map, Open Map, Save, Save Map As, Set Current Map as Main Map, Build Game, Preferences, Close Project, Exit |
+| **Edit** | Undo, Redo, Duplicate, Delete |
+| **GameObject** | Empty Node, 3D Object, Light, 2D Sprite, Camera |
+| **Project** | Build Scripts (F7), Play / Stop (F5) |
+| **Script** | Go to Method, Find, Replace |
+| **Window** | Toggle every panel, pop out the UI Builder and Input Actions, camera preview, reset layout |
+
+@section editor_panels The panels
+
+@subsection editor_hierarchy Hierarchy
+
+The **Hierarchy** lists the current map's nodes as a tree. Select a node to
+show it in the **Inspector** and the **Scene Viewport**. The **Create**
+button adds an empty object, a 3D primitive (cube, sphere, capsule, cylinder,
+plane or quad), a light (directional, point, area or probe volume), a 2D
+sprite or a camera. Right-click a node to add a child or delete it. Drag to
+re-parent; the parent's transform is applied when the map runs.
+
+@subsection editor_inspector Inspector
+
+The **Inspector** edits the selected node:
+
+- **Transform** position, rotation (Euler degrees) and scale.
+- Every component on the node, with typed widgets for numbers, colors, node
+  references, asset references and arrays.
+- **Add Component** adds a built-in component or a `[script]` class from the
+  project.
+- Script fields marked `[field]` appear here, with their tooltips. Fields
+  marked `[nodeRef]`, `[asset "Material"]`, `[enum ...]` and `[callable]`
+  get purpose-built editors.
+- **Event** fields get a list editor for choosing another object, one of its
+  `[callable]` methods and the argument. This is Mercury's UnityEvent.
+
+Changes are written to the map when you save. Undo and redo are in the
+**Edit** menu.
+
+@subsection editor_scene Scene Viewport
+
+The scene viewport draws the map with the same renderer the game uses.
+
+| Action | 2D | 3D |
+|---|---|---|
+| Select | Click an object | Click an object |
+| Move / rotate / scale | Drag, or W / E / R handles | Drag, or W / E / R handles |
+| Snap | Hold Ctrl while dragging | Hold Ctrl while dragging |
+| Frame selection | F | F |
+| Pan | Right or middle drag | Middle drag |
+| Zoom | Mouse wheel | Mouse wheel |
+| Look | -- | Right drag (W/A/S/D/Q/E to fly, Shift for speed) |
+| Orbit | -- | Alt + left drag |
+
+The **2D** button forces the 2D view for a map whose camera is 3D, and the
+camera preview window renders through the selected camera. If the viewport is
+slow, releasing the mouse stops the high-rate viewport timer and the editor
+returns to its normal 60 fps timer.
+
+@subsection editor_project Project Browser
+
+The **Project Browser** shows the project folder. Double-click a `.as` file
+to open it in the script editor, a `.uxml` file to open the UI Builder, a
+`.minput` file to open the Input Actions editor, or a map to open it.
+
+The **Create** button creates:
+
+- **Script...** -- a new `[script] class Name : Behaviour` in `scripts/`;
+- **Map...** -- a new map in `maps/`;
+- **Material**, **Physics Material** and **Input Actions**;
+- **UI Toolkit > UI Document** (`.uxml`), **Style Sheet** (`.uss`) and
+  **Panel Settings**;
+- folders.
+
+@subsection editor_script Script Editor
+
+Double-click a `.as` file to edit it in the built-in editor. It provides line
+numbers, code folding, AngelScript completion for the project and the native
+API, compiler-backed error squiggles, an outline for jumping between methods,
+find/replace and optional Vim keybindings. **Script > Go to Method** lists the
+methods in the open file.
+
+The editor compiles the project's scripts in **Build Scripts** and **Play**.
+A compile error is shown in the **Console** and the build fails, so the game
+is not started with broken scripts. The editor does not run game code itself;
+it runs `mercury_player --dump-schema` to learn the scripts' fields for the
+Inspector.
+
+To use another editor, open **File > Preferences...** and set an external
+editor command. `{project}` and `{file}` in the command are replaced with the
+project root and the selected file.
+
+@subsection editor_console Console
+
+The **Console** collects engine messages, script output and errors. Each line
+has a level (info, warning, error) and the panel can filter them. Clicking a
+line that names a script location such as `scripts/ball.as:42:5` opens that
+file at the line in the script editor.
+
+@subsection editor_ui_builder UI Builder
+
+**Window > UI Builder** (or double-click a `.uxml` file) edits player-facing
+UI visually. It shows the document tree, a control library, the style sheets
+and selectors, and an Inspector for attributes, classes, bindings and styles.
+The canvas is rendered by the engine, with a preview mode, so what you see is
+what the game draws. Create documents and style sheets with **Create > UI
+Toolkit > UI Document (.uxml)** / **Style Sheet (.uss)**.
+
+@subsection editor_input_actions Input Actions
+
+**Window > Input Actions** (or double-click a `.minput` file) edits Unity-style
+input actions: action maps on the left, actions and bindings in the middle,
+and the selected binding's properties on the right. A binding can be typed,
+picked from a searchable list, or recorded with **Listen**. **Use as Project
+Actions** writes `[input] actions` in the `.mproj`. The **Generate
+AngelScript** option writes a namespace of action constants so a renamed
+action fails to compile instead of silently doing nothing.
+
+@subsection editor_lore Lore VCS
+
+**Window > Lore VCS** shows the project's changes if the project is in a Lore
+repository. It is optional; Mercury projects are ordinary folders and work
+with any version control system.
+
+@section editor_play Play, build and ship
+
+**Project > Play / Stop** (F5) saves the map, compiles the scripts and starts
+`mercury_player <project> --map <map>` as a separate process. The game's
+output goes to the **Console**. There is no hot reload: stopping and playing
+again starts a new process and a new game state.
+
+**Project > Build Scripts** (F7) only compiles. Do this after changing a script
+to refresh the script list in the Inspector.
+
+**File > Build Game...** (Ctrl+B) writes a shippable folder. It reuses the
+Release player (building one from source in a development editor), minifies
+and compiles the scripts, and packs assets into compressed `.mpack` archives
+instead of thousands of loose files:
+
+@code{.text}
+Builds/MyGame/MyGame          the game executable (mercury_player copy)
+Builds/MyGame/engine.mpack    shaders, the default theme and fonts
+Builds/MyGame/game.mpack      the project: map, assets, UI, scripts
+Builds/MyGame/*.mindex        indexes that map a path to an archive and offset
+@endcode
+
+The dialog chooses where to write the build and how large each archive may be;
+the output folder is remembered in the `.mproj` as `[build] output`. Run the
+executable from the folder; if it finds `game.mpack` next to itself it runs
+from the packs. See the project
+<a href="md__d_o_c_u_m_e_n_t_a_t_i_o_n.html">DOCUMENTATION.md</a> for the packing
+format and the macOS `.app` packaging script.
+
+@section editor_shortcuts Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+N / Ctrl+O | New map / open map |
+| Ctrl+S / Ctrl+Shift+S | Save / save map as |
+| Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
+| Ctrl+D / Delete | Duplicate / delete selected node |
+| F5 | Play / stop |
+| F7 | Build scripts |
+| Ctrl+B | Build Game |
+| W / E / R | Move / rotate / scale handles |
+| Ctrl while dragging | Snap |
+| F | Frame selection |
+| Ctrl+Q | Exit |
+| Ctrl+Space | Script completion (in the script editor) |
+
+*/

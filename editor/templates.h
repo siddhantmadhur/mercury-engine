@@ -16,7 +16,7 @@
 namespace Mercury::Templates {
 
 /**
- * @brief Create <parent>/<name>/ with a .mproj, a main map, an AngelScript
+ * @brief Create `<parent>/<name>/` with a .mproj, a main map, an AngelScript
  * scripts folder, and empty folders
  * @return The .mproj path, or empty with `error` filled
  */
@@ -25,7 +25,7 @@ std::filesystem::path CreateProject(const std::filesystem::path& parent,
                                     std::string* error);
 
 /**
- * @brief Write scripts/<snake_name>.as with a [script] Behaviour class
+ * @brief Write `scripts/<snake_name>.as` with a [script] Behaviour class
  * @return The .as path, or empty with `error` filled
  */
 std::filesystem::path CreateScript(const std::filesystem::path& project_root,

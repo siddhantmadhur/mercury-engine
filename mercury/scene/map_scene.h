@@ -42,6 +42,19 @@ class MapScene;
 
 /**
  * @brief Lightweight handle to an entity created from a map node
+ *
+ * A GameObject does not own anything: it is a scene pointer plus an entity id.
+ * Copying it is cheap, and it becomes `!IsValid()` when the object is
+ * destroyed. Scripts see the same concept as the `GameObject` value type;
+ * C++ code can use the typed helpers below to reach components and behaviours.
+ *
+ * @par Example
+ * @code{.cpp}
+ * Mercury::GameObject player = scene.Find("Player");
+ * if (player.IsValid()) {
+ *   player.GetTransform()->SetPosition({0.0f, 1.0f, 0.0f});
+ * }
+ * @endcode
  */
 class GameObject {
  public:
@@ -118,6 +131,32 @@ struct ColliderSet {
   std::vector<ColliderShape> shapes;  // sizes before the Transform's scale
 };
 
+/**
+ * @brief A scene built from a `.mmap` file
+ *
+ * MapScene is the production @ref GameScene. In play mode it creates the
+ * entities for every map node and component, builds physics bodies, loads
+ * assets, runs the `[script]` behaviours and steps the UI. In edit mode it
+ * builds only what the editor needs to draw and edit the map.
+ *
+ * A map node becomes a @ref GameObject; its components are ordinary structs
+ * in `mercury/components/components.h` (Transform, MeshRenderer, Camera,
+ * Rigidbody, colliders, lights, ...). Script components are
+ * @ref Behaviour objects, normally `ScriptBehaviour` instances that forward
+ * the lifecycle callbacks to an AngelScript object.
+ *
+ * @par Example
+ * @code{.cpp}
+ * auto project = Mercury::Project::Load("examples/pong/pong.mproj", &error);
+ * auto scene = std::make_unique<Mercury::MapScene>(
+ *     project, Mercury::MapScene::Mode::kPlay);
+ * Mercury::Map map;
+ * map.Load(project->Resolve(project->GetMainMap()), &error);
+ * scene->Instantiate(map);
+ * @endcode
+ *
+ * @see Mercury::GameObject, Mercury::Behaviour, Mercury::Map, Mercury::Project
+ */
 class MapScene : public GameScene {
  public:
   enum class Mode { kPlay, kEdit };

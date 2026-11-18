@@ -22,6 +22,14 @@
 
 namespace Mercury::EditorUI {
 
+/**
+ * @brief The project launcher window
+ *
+ * Shown before a project is open. Lists recent projects, opens a `.mproj` or
+ * folder (including OS drag-and-drop) and creates a new 2D or 3D project from
+ * the editor templates. Once a project opens, the editor destroys this frame
+ * and shows @ref EditorFrame.
+ */
 class LauncherFrame : public wxFrame {
  public:
   LauncherFrame(EditorScene& scene, std::function<void()> on_project_opened);

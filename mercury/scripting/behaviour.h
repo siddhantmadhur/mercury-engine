@@ -36,6 +36,40 @@
 
 namespace Mercury {
 
+/**
+ * @brief The engine's base class for gameplay behaviour
+ *
+ * A Behaviour is a component that receives lifecycle callbacks from
+ * @ref MapScene. Game code is normally written in AngelScript, not C++: each
+ * `[script] class Name : Behaviour` is wrapped by a `ScriptBehaviour` that
+ * forwards every callback to the script object. Derive from this class in C++
+ * for engine tests or native gameplay components (see `tests/test_scripts.h`).
+ *
+ * The callback order is:
+ * 1. `Awake()` once, as soon as the object exists.
+ * 2. `OnEnable()` when the script becomes enabled on an active object.
+ * 3. `OnStart()` before the first tick/frame.
+ * 4. `OnFrame(dt)` every rendered frame, then `OnLateFrame(dt)`.
+ * 5. `OnTick(dt)` at the project's fixed rate, before physics.
+ * 6. Collision and trigger callbacks at the start of a tick.
+ * 7. `OnDisable()` / `OnDestroy()` when it stops or is removed.
+ *
+ * @par For script authors
+ * The same callbacks exist in AngelScript in camelCase (`onStart`,
+ * `onFrame`, `onTick`, ...). See @ref scripting_guide for a complete tutorial.
+ *
+ * @par Example
+ * @code{.cpp}
+ * class Spinner : public Mercury::Behaviour {
+ *  public:
+ *   void OnFrame(double dt) override {
+ *     GetTransform().ChangeRotate({0.0f, float(90.0 * dt), 0.0f});
+ *   }
+ * };
+ * @endcode
+ *
+ * @see Mercury::GameObject, Mercury::MapScene, Mercury::Reflector
+ */
 class Behaviour {
  public:
   virtual ~Behaviour() = default;

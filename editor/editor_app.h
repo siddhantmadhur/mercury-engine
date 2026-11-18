@@ -25,6 +25,22 @@
 
 namespace Mercury::EditorUI {
 
+/**
+ * @brief wxWidgets entry point for the Mercury Editor
+ *
+ * Owns one headless `Mercury::DefaultApplication` and one
+ * @ref Mercury::EditorScene for the whole process, and hosts either the
+ * @ref LauncherFrame or the @ref EditorFrame. A 60 fps timer drives the editor
+ * UI, the simulation and the scene canvas; while the user navigates the scene
+ * viewport a second, unlocked timer drives only the Vulkan canvas so camera
+ * movement stays responsive.
+ *
+ * The application never runs game scripts in-process. Play starts a separate
+ * `mercury_player`; the editor asks that process for the scripts' fields with
+ * `--dump-schema`.
+ *
+ * @see @ref editor_guide
+ */
 class MercuryEditorApp : public wxApp {
  public:
   bool OnInit() override;

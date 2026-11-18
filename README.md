@@ -162,6 +162,16 @@ How the engine works (application structure, projects and the editor, file forma
 rendering and lighting, scripting, UI Toolkit, shipping and testing) is in
 [DOCUMENTATION.md](DOCUMENTATION.md). Planned work is in [GOAL.md](GOAL.md).
 
+The API reference and beginner guides are generated with Doxygen from the
+headers, the editor and `docs/`:
+
+```sh
+doxygen Doxyfile
+open docs/doxygen/html/index.html   # macOS; use a browser elsewhere
+```
+
+The output in `docs/doxygen/` is generated and is not committed.
+
 ## License
 
 [MPL 2.0](/LICENSE)

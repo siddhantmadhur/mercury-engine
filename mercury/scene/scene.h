@@ -201,6 +201,35 @@ struct RenderCamera {
  * however it likes(one by one or batched) and create the shaders required for
  * each primitive type
  *
+ * @details
+ * The application drives a scene in this order every frame:
+ *
+ * 1. `OnFrame(delta_time)` -- input, animation and non-simulation work.
+ * 2. `OnTickBegin()`, then zero or more `OnTick(fixed_dt)` calls, each followed
+ *    by one physics step. A long frame runs several ticks (capped at five) so
+ *    simulation catches up without a stall snowballing.
+ * 3. `ProcessOnFrame(alpha)` -- interpolation between the last two ticks.
+ * 4. The application's `Render()` reads the cameras, lights and draw data the
+ *    scene exposes.
+ *
+ * A scene therefore never calls Vulkan or GLFW itself. @ref Mercury::MapScene
+ * is the production implementation: it builds the world from a `.mmap`, runs
+ * its @ref Mercury::Behaviour objects and owns physics, assets and UI. Derive
+ * from GameScene when making a custom world without a map file, or when
+ * testing engine pieces in isolation.
+ *
+ * @par Example
+ * @code{.cpp}
+ * class MyScene : public Mercury::GameScene {
+ *  public:
+ *   void OnStart() override {}
+ *   void OnFrame(double dt) override {}
+ *   void OnTick(double dt) override {}
+ *   void OnDestroy() override {}
+ * };
+ * @endcode
+ *
+ * @see Mercury::Application, Mercury::MapScene, Mercury::RenderHost
  */
 class GameScene {
  public:

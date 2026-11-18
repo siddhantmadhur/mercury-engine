@@ -27,5 +27,8 @@ compile_commands.json
 __pycache__/
 *.pyc
 
+# Generated Doxygen output (run `doxygen Doxyfile`)
+/docs/doxygen/
+
 # Screenshots from input-script replays (examples/*/tests/*.input)
 captures/

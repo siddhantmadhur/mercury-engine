@@ -34,7 +34,7 @@ namespace Mercury::os {
 /**
  * @brief Serves reads under `prefix` from `pack`
  * @param entry_prefix prepended to the path below `prefix` to name the entry,
- * e.g. "ui/" so <prefix>/fonts/a.ttf reads the entry ui/fonts/a.ttf
+ * e.g. "ui/" so `<prefix>/fonts/a.ttf` reads the entry `ui/fonts/a.ttf`
  *
  * Later mounts are searched first. A path under a mount that the pack
  * doesn't have is read from disk.

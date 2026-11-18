@@ -103,7 +103,7 @@ class Writer {
   size_t GetEntryCount() const { return sources_.size(); }
 
   /**
-   * @brief Writes <dir>/<base_name>.mindex, <base_name>.mpack and any _NNN
+   * @brief Writes `<dir>/<base_name>.mindex`, `<base_name>.mpack` and any _NNN
    * archives it needs; max_archive_bytes 0 keeps everything in one archive
    * @return false with `error` filled if a source could not be read or an
    * archive could not be written

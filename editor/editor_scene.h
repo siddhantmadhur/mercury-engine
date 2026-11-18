@@ -39,6 +39,17 @@
 
 namespace Mercury {
 
+/**
+ * @brief Editing controller for a project and its current map
+ *
+ * An @ref EditorScene is a @ref Mercury::MapScene in edit mode plus everything
+ * the editor needs: the open project, the current map, selection, undo/redo,
+ * the scene-viewport camera and tools, asset creation, script builds and Play.
+ * It never executes game code; it edits the map model and saves `.mmap`,
+ * `.mproj` and asset files.
+ *
+ * The panels and frames are the views of this class.
+ */
 class EditorScene : public MapScene {
  public:
   enum class Preset {

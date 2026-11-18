@@ -47,6 +47,18 @@ class MercuryAuiManager : public wxAuiManager {
   EditorFrame* owner_ = nullptr;
 };
 
+/**
+ * @brief The main editor window: menus, toolbar, docked panels and tabs
+ *
+ * EditorFrame owns the wxAUI layout and the panels (Hierarchy, Inspector,
+ * Scene Viewport, Project Browser, Console, Script Editor, UI Builder, Input
+ * Actions, Lore VCS). It forwards menu and toolbar commands to
+ * @ref Mercury::EditorScene, which is the model; the frame is the view.
+ *
+ * Panels are synced from the controller either every 60 fps UI tick
+ * (`SyncPanels`) or at the viewport's higher rate (`SyncViewports`). Closing a
+ * project returns to the launcher; closing the frame exits the app.
+ */
 class EditorFrame : public wxFrame {
  public:
   EditorFrame(EditorScene& scene, std::function<void()> on_close_project,
