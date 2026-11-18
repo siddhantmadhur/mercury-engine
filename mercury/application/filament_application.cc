@@ -5,6 +5,8 @@
 #include "filament_application.h"
 
 #include <backend/PixelBufferDescriptor.h>
+#include <filament/Options.h>
+#include <filament/ToneMapper.h>
 #include <filament/Viewport.h>
 #include <utils/EntityManager.h>
 
@@ -61,6 +63,15 @@ FilamentApplication::~FilamentApplication() {
     DestroyOffscreen(scene_target_);
     DestroyOffscreen(preview_target_);
     DestroyOffscreen(ui_preview_target_);
+    if (scene_view_) scene_view_->setColorGrading(nullptr);
+    if (color_grading_) {
+      engine_->destroy(color_grading_);
+      color_grading_ = nullptr;
+    }
+    for (auto& [frame, cg] : garbage_color_gradings_) {
+      engine_->destroy(cg);
+    }
+    garbage_color_gradings_.clear();
     engine_->destroy(ui_view_);
     engine_->destroyCameraComponent(ui_camera_entity_);
     engine_->destroy(scene_view_);
@@ -189,6 +200,75 @@ void FilamentApplication::SetupCamera(filament::Camera* camera,
   camera->setModelMatrix(ToFilament(glm::inverse(render.view)));
 }
 
+void FilamentApplication::ApplyPostProcess(filament::View* view,
+                                           const RenderSettings& settings,
+                                           const RenderCamera& camera) {
+  if (!view) return;
+  view->setAntiAliasing(settings.fxaa ? filament::View::AntiAliasing::FXAA
+                                      : filament::View::AntiAliasing::NONE);
+
+  filament::AmbientOcclusionOptions ao;
+  ao.aoType = filament::AmbientOcclusionOptions::AmbientOcclusionType::GTAO;
+  ao.enabled = settings.ssao_intensity > 0.0f;
+  ao.intensity = std::max(0.0f, settings.ssao_intensity);
+  ao.radius = std::max(0.05f, settings.ssao_radius);
+  ao.lowPassFilter = filament::QualityLevel::HIGH;
+  view->setAmbientOcclusionOptions(ao);
+
+  const bool pp_active = settings.post_processing && camera.post_processing;
+  if (!pp_active) {
+    filament::BloomOptions bloom;
+    bloom.enabled = false;
+    view->setBloomOptions(bloom);
+    filament::VignetteOptions vignette;
+    vignette.enabled = false;
+    view->setVignetteOptions(vignette);
+    view->setColorGrading(nullptr);
+    return;
+  }
+
+  if (!color_grading_ || settings.tonemap != cached_tonemap_ ||
+      settings.exposure != cached_exposure_) {
+    std::unique_ptr<filament::ToneMapper> tone_mapper;
+    if (settings.tonemap == 0) {
+      tone_mapper = std::make_unique<filament::LinearToneMapper>();
+    } else if (settings.tonemap == 2) {
+      tone_mapper = std::make_unique<filament::ACESToneMapper>();
+    } else {
+      tone_mapper = std::make_unique<filament::PBRNeutralToneMapper>();
+    }
+    const float ev = std::log2(std::max(settings.exposure, 1e-4f));
+    filament::ColorGrading* next = filament::ColorGrading::Builder()
+                                       .toneMapper(tone_mapper.get())
+                                       .exposure(ev)
+                                       .build(*engine_);
+    if (color_grading_) {
+      garbage_color_gradings_.emplace_back(frame_counter_, color_grading_);
+    }
+    color_grading_ = next;
+    cached_tonemap_ = settings.tonemap;
+    cached_exposure_ = settings.exposure;
+  }
+  view->setColorGrading(color_grading_);
+
+  filament::BloomOptions bloom;
+  bloom.enabled = settings.bloom_intensity > 0.0f;
+  bloom.strength = std::clamp(settings.bloom_intensity, 0.0f, 1.0f);
+  bloom.threshold = settings.bloom_threshold > 0.0f;
+  bloom.levels = static_cast<uint8_t>(std::clamp(
+      static_cast<int>(std::lround(3.0f + settings.bloom_scatter * 6.0f)), 3,
+      11));
+  view->setBloomOptions(bloom);
+
+  filament::VignetteOptions vignette;
+  vignette.enabled = settings.vignette_intensity > 0.0f;
+  vignette.midPoint =
+      std::clamp(1.0f - settings.vignette_intensity * 0.6f, 0.0f, 1.0f);
+  vignette.feather = std::clamp(settings.vignette_smoothness, 0.05f, 1.0f);
+  vignette.roundness = 0.5f;
+  view->setVignetteOptions(vignette);
+}
+
 void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
                                           uint32_t height,
                                           filament::Scene* scene, bool is_ui) {
@@ -245,6 +325,7 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
 
 void FilamentApplication::DestroyOffscreen(Offscreen& target) {
   if (!target.target) return;
+  if (target.view) target.view->setColorGrading(nullptr);
   engine_->destroy(target.view);
   engine_->destroyCameraComponent(target.camera_entity);
   engine_->destroy(target.target);
@@ -296,6 +377,12 @@ void FilamentApplication::Render() {
   frame_counter_++;
 
   scene_renderer_.SyncScene(*game_scene_);
+  std::erase_if(garbage_color_gradings_, [&](const auto& item) {
+    if (item.first + 3 > frame_counter_) return false;
+    engine_->destroy(item.second);
+    return true;
+  });
+  const RenderSettings render_settings = game_scene_->GetRenderSettings();
 
   const UI::UIDrawData* game_ui = nullptr;
   if (!IsHeadless() && !scene_texture_enabled_) {
@@ -346,6 +433,7 @@ void FilamentApplication::Render() {
     scene_sky_->setColor(
         ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
     SetupCamera(scene_camera_, *main);
+    ApplyPostProcess(scene_view_, render_settings, *main);
     scene_view_->setViewport(
         filament::Viewport(0, 0, window_width, window_height));
     scene_view_->setVisibleLayers(0xff, main->culling_mask & 0xff);
@@ -366,6 +454,7 @@ void FilamentApplication::Render() {
       scene_sky_->setColor(
           ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
       SetupCamera(scene_target_.camera, *main);
+      ApplyPostProcess(scene_target_.view, render_settings, *main);
       scene_target_.view->setVisibleLayers(0xff, main->culling_mask & 0xff);
       renderer_->render(scene_target_.view);
       ReadOffscreen(scene_target_);
@@ -398,6 +487,7 @@ void FilamentApplication::Render() {
         preview.far_clip = settings->far_clip;
       }
       SetupCamera(preview_target_.camera, preview);
+      ApplyPostProcess(preview_target_.view, render_settings, preview);
       preview_target_.view->setVisibleLayers(0xff,
                                              preview.culling_mask & 0xff);
       renderer_->render(preview_target_.view);

@@ -6,6 +6,7 @@
 #define MERCURYENGINE_FILAMENT_APPLICATION_H
 
 #include <filament/Camera.h>
+#include <filament/ColorGrading.h>
 #include <filament/Engine.h>
 #include <filament/RenderTarget.h>
 #include <filament/Renderer.h>
@@ -90,6 +91,9 @@ class FilamentApplication : public Application {
                      std::vector<uint8_t>& rgba_out, uint64_t* frame_id);
   // Points `camera` at what `render` sees, with its sky color.
   void SetupCamera(filament::Camera* camera, const RenderCamera& render);
+  // Applies RenderSettings (tonemap, exposure, bloom, vignette, GTAO, FXAA).
+  void ApplyPostProcess(filament::View* view, const RenderSettings& settings,
+                        const RenderCamera& camera);
   // The cameras this frame, like the Vulkan backend's FrameCameras.
   std::vector<RenderCamera> FrameCameras(float width, float height);
   // Reads `target`'s pixels into its CPU buffer (top-down RGBA).
@@ -131,6 +135,12 @@ class FilamentApplication : public Application {
 
   bool show_stats_ = true;
   uint64_t frame_counter_ = 0;
+
+  filament::ColorGrading* color_grading_ = nullptr;
+  int cached_tonemap_ = -1;
+  float cached_exposure_ = -1.0f;
+  std::vector<std::pair<uint64_t, filament::ColorGrading*>>
+      garbage_color_gradings_;
 
   // MERCURY_CAPTURE=<file.png> saves a frame of the window.
   std::string capture_path_;
