@@ -5,6 +5,7 @@
 #include "filament_application.h"
 
 #include <backend/PixelBufferDescriptor.h>
+#include <filament/Color.h>
 #include <filament/Options.h>
 #include <filament/ToneMapper.h>
 #include <filament/Viewport.h>
@@ -31,12 +32,10 @@ namespace Mercury {
 
 namespace {
 
-float SrgbToLinear(float c) {
-  return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
 glm::vec3 SrgbToLinear(const glm::vec3& c) {
-  return {SrgbToLinear(c.r), SrgbToLinear(c.g), SrgbToLinear(c.b)};
+  const filament::LinearColor linear =
+      filament::Color::toLinear(filament::sRGBColor{c.r, c.g, c.b});
+  return {linear.r, linear.g, linear.b};
 }
 
 filament::math::float4 ToFilament(const glm::vec4& v) {

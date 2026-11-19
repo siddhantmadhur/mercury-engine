@@ -72,12 +72,10 @@ uint8_t* CopyToHeap(const void* data, size_t bytes) {
   return copy;
 }
 
-float SrgbToLinear(float c) {
-  return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
 glm::vec3 SrgbToLinear(const glm::vec3& c) {
-  return {SrgbToLinear(c.r), SrgbToLinear(c.g), SrgbToLinear(c.b)};
+  const filament::LinearColor linear =
+      filament::Color::toLinear(filament::sRGBColor{c.r, c.g, c.b});
+  return {linear.r, linear.g, linear.b};
 }
 
 // Shared per-light shadow settings. Filament derives a soft penumbra from
@@ -1052,8 +1050,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
       garbage_indirect_lights_.emplace_back(frame_, ambient_);
       ambient_ = nullptr;
     }
-    const glm::vec3 sky = SrgbToLinear(lighting.ambient);
-    const glm::vec3 ground = SrgbToLinear(lighting.ambient_ground);
+    // Light and ambient colors are linear (map-format contract; the old Vulkan
+    // renderer uploaded them unchanged).
+    const glm::vec3 sky = lighting.ambient;
+    const glm::vec3 ground = lighting.ambient_ground;
     const filament::math::float3 sh[4] = {
         ToFilament((sky + ground) * 0.5f),
         ToFilament((sky - ground) * 0.5f),
