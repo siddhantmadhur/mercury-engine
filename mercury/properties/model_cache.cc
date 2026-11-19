@@ -121,10 +121,12 @@ fs::path CacheFile(const std::string& path) {
 
 class Writer {
  public:
-  explicit Writer(FILE* file) : file_(file) {}
+  explicit Writer(std::string& out) : out_(out) {}
   bool ok() const { return ok_; }
   void Bytes(const void* data, size_t size) {
-    if (ok_ && size > 0) ok_ = std::fwrite(data, 1, size, file_) == size;
+    if (ok_ && size > 0) {
+      out_.append(static_cast<const char*>(data), size);
+    }
   }
   template <typename T>
   void Pod(const T& v) {
@@ -143,7 +145,7 @@ class Writer {
   }
 
  private:
-  FILE* file_;
+  std::string& out_;
   bool ok_ = true;
 };
 
@@ -376,13 +378,11 @@ void ModelCache::Write(const Model& model, const std::string& path,
   if (!Enabled() || model.embedded_textures_ || os::IsPacked(path)) return;
   const fs::path cache = CacheFile(path);
   if (cache.empty()) return;
-  std::error_code ec;
-  fs::create_directories(cache.parent_path(), ec);
-  // Written beside it and renamed over it, so a reader never sees half.
-  const fs::path temporary = cache.string() + ".tmp";
-  FILE* file = std::fopen(temporary.string().c_str(), "wb");
-  if (!file) return;
-  Writer out(file);
+  // Serialize in memory, then use the same exclusive, randomly named temp
+  // file + rename path as every other save so a planted symlink cannot
+  // redirect the write.
+  std::string bytes;
+  Writer out(bytes);
   out.Bytes(kMagic, sizeof(kMagic));
   out.Pod(CacheKey(path, settings));
   out.Pod<uint8_t>(model.root_on_object_ ? 1 : 0);
@@ -448,16 +448,10 @@ void ModelCache::Write(const Model& model, const std::string& path,
       out.Vector(channel.scales);
     }
   }
-  bool written = out.ok();
-  if (std::fclose(file) != 0) written = false;
-  if (!written) {
-    fs::remove(temporary, ec);
+  if (!out.ok() || !os::WriteFileAtomic(cache, bytes)) {
     PDebug::warn("{}: could not write the model cache {}", path,
                  cache.string());
-    return;
   }
-  fs::rename(temporary, cache, ec);
-  if (ec) fs::remove(temporary, ec);
 }
 
 }  // namespace Mercury

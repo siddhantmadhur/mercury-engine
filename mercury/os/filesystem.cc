@@ -149,8 +149,10 @@ constexpr FileHandle kInvalidFile = -1;
 #endif
 
 FileHandle OpenExclusive(const fs::path& path) {
+  // 0666 is reduced by the process umask, matching the permissions a normal
+  // save produced before writes were made atomic.
   return ::open(path.c_str(),
-                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
 }
 bool WriteAll(FileHandle file, std::string_view data) {
   size_t written = 0;
