@@ -266,6 +266,10 @@ namespace {
 bool IsFiniteVec(const glm::vec3& v) {
   return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
 }
+bool IsFiniteQuat(const glm::quat& q) {
+  return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) &&
+         std::isfinite(q.w);
+}
 }  // namespace
 
 void PhysicsEngine::AddForce(kEntityId self, glm::vec3 force, ForceMode mode) {
@@ -414,13 +418,17 @@ void PhysicsEngine::SynchronizePObjects() {
           }
           case kTransformPosition: {
             auto pos = transform->GetPosition();
+            // Jolt asserts (and poisons the simulation) on non-finite values,
+            // which script math such as Repeat(v, 0) used to produce.
+            if (!IsFiniteVec(pos)) break;
             body_interface.SetPosition(jolt_id, JPH::Vec3(pos.x, pos.y, pos.z),
                                        JPH::EActivation::Activate);
             break;
           }
           case kTransformRotation: {
-            body_interface.SetRotation(jolt_id,
-                                       ToJolt(transform->GetRotationQuat()),
+            auto rotation = transform->GetRotationQuat();
+            if (!IsFiniteQuat(rotation)) break;
+            body_interface.SetRotation(jolt_id, ToJolt(rotation),
                                        JPH::EActivation::Activate);
             break;
           }
