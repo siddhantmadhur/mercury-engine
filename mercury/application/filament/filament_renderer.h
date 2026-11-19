@@ -94,7 +94,9 @@ class FilamentRenderer {
     uint32_t draw_index = 0;  // index into RenderMesh::draws
     bool skinned = false;
     bool transmissive = false;
-    glm::vec3 emission = glm::vec3(0.0f);  // zero when the draw does not glow
+    // Emissive radiance in nits (as uploaded to Filament); zero when the
+    // draw does not glow.
+    glm::vec3 emission = glm::vec3(0.0f);
     bool in_scene = false;
     std::string render_texture;
   };

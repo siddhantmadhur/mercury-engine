@@ -44,6 +44,12 @@ namespace {
 constexpr float kSunLuxPerIntensity = 100000.0f;
 constexpr float kPointLumensPerIntensity =
     4.0f * glm::pi<float>() * kSunLuxPerIntensity;
+// An authored radiance R maps to R * kSunLuxPerIntensity / pi nits at the sun
+// anchor: a Lambertian surface lit to the sun's 100000 lux has radiance
+// 100000/pi (nits are candela per square metre, i.e. lux/pi for a Lambertian
+// emitter). Lit emissive is converted so it shares the lights' pre-exposed
+// scale; Filament then applies the camera exposure (emissive.w = 1).
+constexpr float kLuminancePerIntensity = kSunLuxPerIntensity / glm::pi<float>();
 // How often expired mesh/texture sources are swept away.
 constexpr uint64_t kSweepEvery = 30;
 // The room probe is captured once the scene has been still for this many
@@ -639,10 +645,14 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       instance->setParameter("roughness",
                              std::clamp(1.0f - material.smoothness,
                                         is_transmissive ? 0.0f : 0.05f, 1.0f));
-      // Not the exposure weight (w): emission is a plain linear radiance
-      // added to the lit color, not nits scaled by the camera exposure.
-      instance->setParameter("emissive",
-                             ToFilament(glm::vec4(material.emission, 0.0f)));
+      // Filament treats emissive.rgb as nits and multiplies it by the camera
+      // exposure when the alpha (the exposure weight) is 1. Convert the
+      // authored radiance so lit and emissive surfaces share the lights'
+      // pre-exposed scale; w = 0 would leave emission at display scale and
+      // make probe captures (post-processing off) 1/exposure too bright.
+      instance->setParameter(
+          "emissive", ToFilament(glm::vec4(
+                          material.emission * kLuminancePerIntensity, 1.0f)));
       filament::Texture* emissive_tex = white_;
       if (material.emission_texture) {
         if (filament::Texture* uploaded =
@@ -747,7 +757,8 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     record_draw.skinned = skinned;
     record_draw.transmissive = is_transmissive;
     if (!is_unlit && glm::length(material.emission) > 0.0f)
-      record_draw.emission = material.emission;
+      record_draw.emission =
+          material.emission * kLuminancePerIntensity;  // nits, as set above
     record_draw.draw_index = static_cast<uint32_t>(draw_index);
     record_draw.in_scene = true;
     record_draw.render_texture = material.render_texture;
@@ -1422,7 +1433,7 @@ bool FilamentRenderer::CaptureProbe(filament::Engine* engine,
         if (!draw.material || glm::length(draw.emission) <= 0.0f) continue;
         draw.material->setParameter(
             "emissive",
-            ToFilament(glm::vec4(on ? draw.emission : glm::vec3(0.0f), 0.0f)));
+            ToFilament(glm::vec4(on ? draw.emission : glm::vec3(0.0f), 1.0f)));
       }
     }
   };
