@@ -4,6 +4,10 @@
 
 #include "resources.h"
 
+#include <algorithm>
+#include <functional>
+#include <set>
+
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
 #include "ui/uxml.h"
@@ -156,12 +160,34 @@ void UIResources::Reload() {
 void UIResources::CollectSheets(const std::shared_ptr<StyleSheet>& sheet,
                                 std::vector<const StyleSheet*>& out) {
   if (!sheet) return;
-  // Guards against import cycles.
-  if (std::find(out.begin(), out.end(), sheet.get()) != out.end()) return;
-  for (const auto& import : sheet->imports) {
-    CollectSheets(LoadStyleSheet(import), out);
-  }
-  out.push_back(sheet.get());
+  // A sheet is appended to `out` only after its imports, so it cannot be used
+  // to detect a cycle: track the sheets whose imports are being collected and
+  // cap the import depth as well.
+  constexpr int kMaxImportDepth = 64;
+  std::set<const StyleSheet*> visiting;
+  std::function<bool(const std::shared_ptr<StyleSheet>&, int)> collect =
+      [&](const std::shared_ptr<StyleSheet>& current, int depth) {
+        if (!current) return true;
+        if (depth >= kMaxImportDepth) {
+          Error("style sheet imports are nested too deeply");
+          return false;
+        }
+        // Guards against import cycles.
+        if (std::find(out.begin(), out.end(), current.get()) != out.end()) {
+          return true;
+        }
+        if (!visiting.insert(current.get()).second) return true;
+        for (const auto& import : current->imports) {
+          if (!collect(LoadStyleSheet(import), depth + 1)) {
+            visiting.erase(current.get());
+            return false;
+          }
+        }
+        visiting.erase(current.get());
+        out.push_back(current.get());
+        return true;
+      };
+  collect(sheet, 0);
 }
 
 }  // namespace Mercury::UI
