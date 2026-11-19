@@ -5,6 +5,7 @@
 #include "audio_system.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <vector>
 
@@ -23,8 +24,12 @@ struct MemoryFile {
 };
 
 struct Vfs {
-  ma_vfs_callbacks callbacks;  // must come first
+  ma_vfs_callbacks callbacks;
 };
+// miniaudio recovers the ma_vfs pointer as if the callbacks were the whole
+// object, so this layout is part of the ABI.
+static_assert(offsetof(Vfs, callbacks) == 0,
+              "ma_vfs_callbacks must be the first member of AudioSystem::Vfs");
 
 ma_result VfsOpen(ma_vfs*, const char* path, ma_uint32 mode,
                   ma_vfs_file* file) {
