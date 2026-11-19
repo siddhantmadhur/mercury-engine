@@ -83,14 +83,18 @@ glm::vec3 SrgbToLinear(const glm::vec3& c) {
   return {linear.r, linear.g, linear.b};
 }
 
-// Shared per-light shadow settings. Filament derives a soft penumbra from
-// the light's physical size when the View uses ShadowType::PCSS.
+// Shared per-light shadow settings. Under ShadowType::PCSS Filament derives
+// the penumbra from the light's physical size scaled by `penumbraScale`, so
+// `soft` selects the PCSS edge: 1 widens it by the bulb radius, 0 collapses
+// it to a sharp edge. The constant bias only matters on the PCF path.
 filament::LightManager::ShadowOptions MakeShadowOptions(float bias,
-                                                        float bulb_radius) {
+                                                        float bulb_radius,
+                                                        bool soft) {
   filament::LightManager::ShadowOptions options;
   options.mapSize = 1024;
   options.constantBias = std::clamp(bias, 0.0f, 0.05f);
   options.shadowBulbRadius = std::max(bulb_radius, 0.01f);
+  options.penumbraScale = soft ? 1.0f : 0.0f;
   return options;
 }
 
@@ -958,7 +962,9 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
   for (size_t i = 0; !points_changed && i < point_values_.size(); i++) {
     const PointLightData& a = lighting.point_lights[i];
     const PointLightData& b = point_values_[i];
-    if (a.position != b.position || a.color != b.color || a.range != b.range) {
+    if (a.position != b.position || a.color != b.color ||
+        a.range != b.range || a.radius != b.radius ||
+        a.shadows != b.shadows || a.shadow_bias != b.shadow_bias) {
       points_changed = true;
     }
   }
@@ -979,7 +985,9 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           .intensity(intensity * kPointLumensPerIntensity)
           .falloff(std::max(light.range, 0.1f))
           .castShadows(light.shadows != 0)
-          .shadowOptions(MakeShadowOptions(light.shadow_bias, light.radius))
+          .shadowOptions(MakeShadowOptions(
+              light.shadow_bias, light.radius,
+              light.shadows == static_cast<int>(LightShadows::kSoft)))
           .build(*engine, entity);
       scene_->addEntity(entity);
       points_.push_back(entity);
@@ -994,7 +1002,8 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     const AreaLightData& b = area_values_[i];
     if (a.position != b.position || a.right != b.right || a.up != b.up ||
         a.color != b.color || a.range != b.range ||
-        a.two_sided != b.two_sided || a.shadows != b.shadows) {
+        a.two_sided != b.two_sided || a.shadows != b.shadows ||
+        a.shadow_bias != b.shadow_bias) {
       areas_changed = true;
     }
   }
@@ -1032,7 +1041,9 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
             .falloff(std::max(light.range, 0.1f))
             .spotLightCone(glm::radians(35.0f), glm::radians(75.0f))
             .castShadows(shadows)
-            .shadowOptions(MakeShadowOptions(light.shadow_bias, bulb))
+            .shadowOptions(MakeShadowOptions(
+                light.shadow_bias, bulb,
+                light.shadows == static_cast<int>(LightShadows::kSoft)))
             .build(*engine, entity);
         scene_->addEntity(entity);
         areas_.push_back(entity);

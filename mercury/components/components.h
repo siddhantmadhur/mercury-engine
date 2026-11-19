@@ -231,15 +231,21 @@ struct DirectionalLight {
         .Tooltip("Ambient light from below; alpha 0 uses 35% of ambient");
     r.Field("cast_shadows", cast_shadows).Tooltip("Enable shadow casting");
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Depth bias against shadow acne");
+        .Tooltip(
+            "Depth bias against shadow acne; PCF only (soft shadows off)");
     r.Field("shadow_normal_bias", shadow_normal_bias)
-        .Tooltip("Normal offset bias for sloped geometry");
+        .Tooltip(
+            "Normal offset bias for sloped geometry; PCF only (soft shadows "
+            "off)");
     r.Field("shadow_distance", shadow_distance)
         .Tooltip("Shadow coverage distance");
   }
 };
 
-// How a point or area light casts shadows.
+// How a point or area light casts shadows. With the project's soft shadows
+// on (PCSS), soft gives a penumbra scaled by the light's size and hard gives
+// a sharp PCSS edge; with soft shadows off (PCF) any non-none value casts the
+// same crisp shadow.
 enum class LightShadows { kNone, kHard, kSoft };
 
 /**
@@ -266,7 +272,10 @@ struct PointLight {
     r.Field("radius", radius)
         .Tooltip("Size of the light; soft shadows blur more for larger lights");
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Distance bias against shadow acne");
+        .Tooltip(
+            "Distance bias against shadow acne; PCF only (soft shadows off). "
+            "Under PCSS the radius sets the softness and shadows selects the "
+            "edge");
   }
 };
 
@@ -297,7 +306,10 @@ struct AreaLight {
     r.Field("two_sided", two_sided).Tooltip("Shine from both faces");
     r.Enum("shadows", shadows, {"none", "hard", "soft"});
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Distance bias against shadow acne");
+        .Tooltip(
+            "Distance bias against shadow acne; PCF only (soft shadows off). "
+            "Under PCSS the rectangle size sets the softness and shadows "
+            "selects the edge");
   }
 };
 
