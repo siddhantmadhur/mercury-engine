@@ -277,7 +277,7 @@ TEST(Hierarchy, RefusesParentingThatWouldLoop) {
   auto b = scene.Find("A/B");
   auto c = scene.Find("A/B/C");
   ASSERT_TRUE(a.IsValid() && b.IsValid() && c.IsValid());
-  const auto root = a.GetParent();
+  auto root = a.GetParent();
 
   a.SetParent(a, false);  // itself
   EXPECT_EQ(a.GetParent(), root);
@@ -288,6 +288,12 @@ TEST(Hierarchy, RefusesParentingThatWouldLoop) {
   EXPECT_EQ(c.GetParent(), b);
   EXPECT_EQ(a.GetChildren().size(), 1u);
   EXPECT_EQ(c.GetPath(), "A/B/C");  // still walks without recursing forever
+
+  root.SetParent(c, true);  // the root under its own descendant
+  EXPECT_NE(root.GetParent(), c);
+  EXPECT_EQ(a.GetParent(), root);
+  a.SetParent(a, true);  // itself, keeping the world transform
+  EXPECT_EQ(a.GetParent(), root);
 
   // Moving to a non-descendant still works.
   c.SetParent(a, false);
