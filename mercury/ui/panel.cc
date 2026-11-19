@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #include <limits>
 
@@ -48,13 +49,39 @@ AliveList CollectElements(VisualElement* root) {
   return out;
 }
 
+// Clip rectangles are device pixels. Clamp before narrowing a float: floor or
+// ceil of a non-finite value is undefined, and huge coordinates would
+// overflow the additions below.
+constexpr float kMaxClipCoordinate = 16777216.0f;  // 2^24
+
+int ClipFloor(float v) {
+  if (!std::isfinite(v)) return 0;
+  return static_cast<int>(
+      std::floor(std::clamp(v, -kMaxClipCoordinate, kMaxClipCoordinate)));
+}
+
+int ClipCeil(float v) {
+  if (!std::isfinite(v)) return 0;
+  return static_cast<int>(
+      std::ceil(std::clamp(v, -kMaxClipCoordinate, kMaxClipCoordinate)));
+}
+
 glm::ivec4 Intersect(glm::ivec4 a, glm::ivec4 b) {
   if (a.z < 0) return b;
   if (b.z < 0) return a;
-  const int x0 = std::max(a.x, b.x), y0 = std::max(a.y, b.y);
-  const int x1 = std::min(a.x + a.z, b.x + b.z),
-            y1 = std::min(a.y + a.w, b.y + b.w);
-  return {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
+  // Extents are added in 64-bit so two extreme clips cannot wrap.
+  const int64_t x0 = std::max<int64_t>(a.x, b.x);
+  const int64_t y0 = std::max<int64_t>(a.y, b.y);
+  const int64_t x1 = std::min<int64_t>(static_cast<int64_t>(a.x) + a.z,
+                                       static_cast<int64_t>(b.x) + b.z);
+  const int64_t y1 = std::min<int64_t>(static_cast<int64_t>(a.y) + a.w,
+                                       static_cast<int64_t>(b.y) + b.w);
+  auto to_int = [](int64_t v) {
+    return static_cast<int>(std::clamp<int64_t>(
+        v, std::numeric_limits<int>::min(), std::numeric_limits<int>::max()));
+  };
+  return {to_int(x0), to_int(y0), to_int(std::max<int64_t>(0, x1 - x0)),
+          to_int(std::max<int64_t>(0, y1 - y0))};
 }
 
 void Paint(VisualElement* e, const glm::mat3& parent, float opacity,
@@ -84,10 +111,9 @@ void Paint(VisualElement* e, const glm::mat3& parent, float opacity,
       lo = glm::min(lo, p);
       hi = glm::max(hi, p);
     }
-    const glm::ivec4 rect(static_cast<int>(std::floor(lo.x)),
-                          static_cast<int>(std::floor(lo.y)),
-                          static_cast<int>(std::ceil(hi.x) - std::floor(lo.x)),
-                          static_cast<int>(std::ceil(hi.y) - std::floor(lo.y)));
+    const glm::ivec4 rect(ClipFloor(lo.x), ClipFloor(lo.y),
+                          ClipCeil(hi.x) - ClipFloor(lo.x),
+                          ClipCeil(hi.y) - ClipFloor(lo.y));
     child_clip = Intersect(clip, rect);
     if (child_clip.z <= 0 || child_clip.w <= 0) return;
   }
@@ -759,10 +785,11 @@ bool Panel::YGNodeIsDirtyRoot() const { return IsLayoutDirty(root_.get()); }
 
 void Panel::Repaint() {
   draw_data_.Clear();
-  draw_data_.target_size = glm::ivec2(target_size_);
+  draw_data_.target_size =
+      glm::ivec2(ClipFloor(target_size_.x), ClipFloor(target_size_.y));
   MeshBuilder builder(draw_data_);
-  const glm::ivec4 full(0, 0, static_cast<int>(target_size_.x),
-                        static_cast<int>(target_size_.y));
+  const glm::ivec4 full(0, 0, std::max(0, ClipCeil(target_size_.x)),
+                        std::max(0, ClipCeil(target_size_.y)));
   Paint(root_.get(), Scaling(scale_), 1.0f, full, builder);
 }
 
