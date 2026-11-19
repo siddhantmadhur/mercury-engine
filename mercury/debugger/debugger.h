@@ -31,19 +31,33 @@ inline Sink& GetSink() {
   return sink;
 }
 
-inline void SetSink(Sink sink) { GetSink() = std::move(sink); }
+// Guards both the sink itself and the output streams in Emit.
+inline std::mutex& SinkMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
+inline void SetSink(Sink sink) {
+  std::lock_guard lock(SinkMutex());
+  GetSink() = std::move(sink);
+}
 
 inline void Emit(Level level, std::ostream& stream, const char* tag,
                  const std::string& message) {
-  static std::mutex mutex;
   std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
   std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-  std::lock_guard lock(mutex);
-  std::tm time_struct = *std::localtime(&now_c);
+  Sink sink;
+  {
+    std::lock_guard lock(SinkMutex());
+    std::tm time_struct = *std::localtime(&now_c);
 
-  stream << tag << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ") << message
-         << std::endl;
-  if (auto& sink = GetSink()) sink(level, message);
+    stream << tag << std::put_time(&time_struct, " %Y-%m-%d %H:%M:%S ")
+           << message << std::endl;
+    // Called after the lock is released: the sink may log again, and a
+    // std::mutex is not recursive.
+    sink = GetSink();
+  }
+  if (sink) sink(level, message);
 }
 
 template <class... Args>
