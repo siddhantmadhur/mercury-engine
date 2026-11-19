@@ -302,20 +302,26 @@ struct AreaLight {
 };
 
 /**
- * @brief Legacy light-probe settings (kept for older maps)
+ * @brief A room-capture light probe at the node's position
  *
- * Mercury's Filament renderer does not build a probe grid. Its global
- * illumination is Filament's image-based lighting: give the camera a skybox
- * panorama and set `skybox_intensity`, and use screen-space reflections for
- * mirror-like surfaces. The fields below still parse and round-trip so old
- * maps keep loading.
+ * The renderer draws the scene from the node into a cubemap, filters it
+ * into image-based light (reflections plus irradiance) and lights the whole
+ * scene with it, so mirrors reflect the room and walls bleed their color.
+ * Each bounce captures again with the previous result as the light.
+ * It replaces the camera skybox's light while it is in the scene; the
+ * skybox can still be drawn as the background. `size`, `resolution`,
+ * `fit_to_scene`, `include_emission` and `probes_per_frame` come from the
+ * old probe grid; they still parse and round-trip but do not change the
+ * capture.
  */
 struct LightProbeVolume {
   bool fit_to_scene = false;
   glm::vec3 size = glm::vec3(10.0f);
   glm::vec3 resolution = glm::vec3(8.0f);  // probes along x, y and z
   float intensity = 1.0f;
-  int bounces = 3;
+  int bounces = 2;
+  // Edge of each captured cubemap face, in pixels.
+  int capture_size = 256;
   // Emissive surfaces light the scene through the probes; turn it off when
   // an AreaLight already stands for them, or their light counts twice.
   bool include_emission = true;
@@ -333,7 +339,11 @@ struct LightProbeVolume {
         .Tooltip("Probes along x, y and z (2 to 16 each)");
     r.Field("intensity", intensity).Tooltip("Multiplies the indirect light");
     r.Field("bounces", bounces)
-        .Tooltip("Passes over the probes; each adds a bounce of light");
+        .Tooltip(
+            "Captures of the room; each lights the next, adding a bounce of "
+            "light (1 to 4)");
+    r.Field("capture_size", capture_size)
+        .Tooltip("Resolution of the captured cubemap faces (64 to 1024)");
     r.Field("include_emission", include_emission)
         .Tooltip(
             "Emissive surfaces add light; off when an AreaLight stands for "

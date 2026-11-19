@@ -6,6 +6,7 @@
 
 #include <filament-iblprefilter/IBLPrefilterContext.h>
 #include <filament/Color.h>
+#include <filament/Exposure.h>
 #include <filament/IndexBuffer.h>
 #include <filament/LightManager.h>
 #include <filament/RenderableManager.h>
@@ -13,11 +14,13 @@
 #include <filament/TextureSampler.h>
 #include <filament/TransformManager.h>
 #include <filament/VertexBuffer.h>
+#include <filament/Viewport.h>
 #include <geometry/SurfaceOrientation.h>
 #include <stb/stb_image.h>
 #include <utils/EntityManager.h>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -39,6 +42,10 @@ constexpr float kSunLuxPerIntensity = 100000.0f;
 constexpr float kPointLumensPerIntensity = 1200.0f;
 // How often expired mesh/texture sources are swept away.
 constexpr uint64_t kSweepEvery = 30;
+// The room probe is captured once the scene has been still for this many
+// frames, and no more often than every kProbeMinInterval frames.
+constexpr uint64_t kProbeQuietFrames = 3;
+constexpr uint64_t kProbeMinInterval = 30;
 
 // Uploads hand ownership of their buffer to Filament, which releases it
 // through this callback once the copy has been consumed.
@@ -263,6 +270,8 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
   proxies_.clear();
   render_textures_.clear();
   DestroyLights(engine);
+  RetireProbeLight();
+  DestroyProbeTargets(engine);
   SweepGarbage(engine, true);
   fallback_sky_ = nullptr;
   for (auto& [id, entry] : meshes_) {
@@ -454,6 +463,7 @@ void FilamentRenderer::DestroyProxy(filament::Engine* engine,
                                     entt::entity entity) {
   auto it = proxies_.find(entity);
   if (it == proxies_.end()) return;
+  scene_revision_++;
   for (DrawRecord& draw : it->second.draws) {
     if (scene_ && draw.in_scene) scene_->remove(draw.renderable);
     engine->destroy(draw.renderable);
@@ -467,6 +477,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
                                   const Transform& transform,
                                   ProxyRecord& record) {
   auto& registry = game.GetRegistry();
+  scene_revision_++;
   const bool inactive = registry.all_of<InactiveTag>(entity);
   uint32_t layer = 0;
   if (auto* info = registry.try_get<NodeInfo>(entity))
@@ -723,6 +734,7 @@ void FilamentRenderer::SyncScene(GameScene& game) {
     }
 
     if (visible != record.visible) {
+      scene_revision_++;
       for (DrawRecord& draw : record.draws) {
         if (visible && !draw.in_scene) {
           scene_->addEntity(draw.renderable);
@@ -737,6 +749,7 @@ void FilamentRenderer::SyncScene(GameScene& game) {
 
     if (!moved && !pose) continue;
     record.world = world;
+    if (moved) scene_revision_++;
 
     // What moved: rigid draws shift with the entity (their node matrix is
     // folded into the transform), skinned ones carry their own bones.
@@ -773,6 +786,7 @@ void FilamentRenderer::SyncScene(GameScene& game) {
   }
 
   SyncLights(engine, game);
+  SyncProbe(engine, game);
 }
 
 void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
@@ -791,6 +805,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
                            lighting.shadow_normal_bias != shadow_normal_bias_ ||
                            !sun_.getId();
   if (sun_changed) {
+    scene_revision_++;
     if (sun_.getId()) {
       scene_->remove(sun_);
       engine->destroy(sun_);
@@ -834,6 +849,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     }
   }
   if (points_changed) {
+    scene_revision_++;
     for (utils::Entity point : points_) {
       scene_->remove(point);
       engine->destroy(point);
@@ -869,6 +885,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     }
   }
   if (areas_changed) {
+    scene_revision_++;
     for (utils::Entity area : areas_) {
       scene_->remove(area);
       engine->destroy(area);
@@ -1108,6 +1125,250 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
     scene_->setIndirectLight(ambient_);
   }
   has_panorama_ibl_ = true;
+}
+
+void FilamentRenderer::SyncProbe(filament::Engine* engine, GameScene& game) {
+  const ProbeVolumeData& probe = game.GetLighting().probes;
+  const bool wanted = probe.placed && probe.enabled;
+  if (!wanted) {
+    if (probe_wanted_ || probe_light_) {
+      probe_wanted_ = false;
+      RetireProbeLight();
+      probe_revision_ = 0;
+      // The probe no longer overrides the scene's own image-based light.
+      if (scene_) scene_->setIndirectLight(ambient_);
+    }
+    return;
+  }
+  probe_wanted_ = true;
+
+  // The probe moving or being retuned is as good as the scene changing.
+  if (probe.min != probe_values_.min || probe.max != probe_values_.max ||
+      probe.intensity != probe_values_.intensity ||
+      probe.bounces != probe_values_.bounces ||
+      probe.capture_size != probe_values_.capture_size) {
+    probe_values_ = probe;
+    scene_revision_++;
+  }
+  if (scene_revision_ != probe_seen_revision_) {
+    probe_seen_revision_ = scene_revision_;
+    probe_change_frame_ = frame_;
+  }
+
+  // Capture once the scene has settled (a load adds meshes over several
+  // frames), and not again until it has been still for a moment.
+  const bool stale = !probe_light_ || probe_revision_ != scene_revision_;
+  const bool settled = frame_ >= probe_change_frame_ + kProbeQuietFrames;
+  const bool rested =
+      !probe_light_ || frame_ >= probe_capture_frame_ + kProbeMinInterval;
+  if (stale && settled && rested) {
+    probe_revision_ = scene_revision_;
+    probe_capture_frame_ = frame_;
+    CaptureProbe(engine, probe, game.GetRenderSettings().soft_shadows);
+  }
+
+  // The probe's light replaces the skybox's (or the ambient hemisphere's).
+  if (probe_light_ && scene_ && scene_->getIndirectLight() != probe_light_) {
+    scene_->setIndirectLight(probe_light_);
+  }
+}
+
+bool FilamentRenderer::EnsureProbeTargets(filament::Engine* engine,
+                                          uint32_t size) {
+  if (probe_cube_ && probe_size_ == size) return true;
+  DestroyProbeTargets(engine);
+
+  // The prefilter wants every mip level of a power-of-two cubemap.
+  const uint8_t levels = static_cast<uint8_t>(std::bit_width(size));
+  probe_cube_ = filament::Texture::Builder()
+                    .width(size)
+                    .height(size)
+                    .levels(levels)
+                    .usage(filament::Texture::Usage::COLOR_ATTACHMENT |
+                           filament::Texture::Usage::SAMPLEABLE |
+                           filament::Texture::Usage::GEN_MIPMAPPABLE)
+                    .format(filament::Texture::InternalFormat::RGBA16F)
+                    .sampler(filament::Texture::Sampler::SAMPLER_CUBEMAP)
+                    .build(*engine);
+  const auto depth_format =
+      filament::Texture::isTextureFormatSupported(
+          *engine, filament::Texture::InternalFormat::DEPTH32F)
+          ? filament::Texture::InternalFormat::DEPTH32F
+          : filament::Texture::InternalFormat::DEPTH24;
+  probe_depth_ = filament::Texture::Builder()
+                     .width(size)
+                     .height(size)
+                     .levels(1)
+                     .usage(filament::Texture::Usage::DEPTH_ATTACHMENT)
+                     .format(depth_format)
+                     .build(*engine);
+  if (!probe_cube_ || !probe_depth_) {
+    DestroyProbeTargets(engine);
+    return false;
+  }
+  for (int face = 0; face < 6; face++) {
+    probe_faces_[face] =
+        filament::RenderTarget::Builder()
+            .texture(filament::RenderTarget::AttachmentPoint::COLOR0,
+                     probe_cube_)
+            .face(filament::RenderTarget::AttachmentPoint::COLOR0,
+                  static_cast<filament::RenderTarget::CubemapFace>(face))
+            .texture(filament::RenderTarget::AttachmentPoint::DEPTH,
+                     probe_depth_)
+            .build(*engine);
+    if (!probe_faces_[face]) {
+      DestroyProbeTargets(engine);
+      return false;
+    }
+  }
+  probe_size_ = size;
+
+  if (!probe_renderer_) {
+    probe_renderer_ = engine->createRenderer();
+    // Anything the sky does not cover is black, not left over.
+    filament::Renderer::ClearOptions clear;
+    clear.clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    clear.clear = true;
+    probe_renderer_->setClearOptions(clear);
+  }
+  if (!probe_view_) {
+    probe_camera_entity_ = utils::EntityManager::get().create();
+    probe_camera_ = engine->createCamera(probe_camera_entity_);
+    probe_view_ = engine->createView();
+    probe_view_->setScene(scene_);
+    probe_view_->setCamera(probe_camera_);
+    // The raw lit radiance, before any tone mapping or grading: the filters
+    // and the IndirectLight work in linear HDR.
+    probe_view_->setPostProcessingEnabled(false);
+    probe_view_->setAntiAliasing(filament::View::AntiAliasing::NONE);
+    probe_view_->setDithering(filament::View::Dithering::NONE);
+    probe_view_->setBlendMode(filament::View::BlendMode::OPAQUE);
+  }
+  probe_view_->setViewport(filament::Viewport(0, 0, size, size));
+  return true;
+}
+
+void FilamentRenderer::DestroyProbeTargets(filament::Engine* engine) {
+  // The six views may still be in flight.
+  if (probe_cube_ || probe_view_) engine->flushAndWait();
+  if (probe_view_) {
+    engine->destroy(probe_view_);
+    engine->destroyCameraComponent(probe_camera_entity_);
+    probe_view_ = nullptr;
+    probe_camera_ = nullptr;
+    probe_camera_entity_ = {};
+  }
+  if (probe_renderer_) {
+    engine->destroy(probe_renderer_);
+    probe_renderer_ = nullptr;
+  }
+  for (filament::RenderTarget*& face : probe_faces_) {
+    if (face) engine->destroy(face);
+    face = nullptr;
+  }
+  if (probe_depth_) {
+    engine->destroy(probe_depth_);
+    probe_depth_ = nullptr;
+  }
+  if (probe_cube_) {
+    engine->destroy(probe_cube_);
+    probe_cube_ = nullptr;
+  }
+  probe_size_ = 0;
+}
+
+void FilamentRenderer::RetireProbeLight() {
+  if (probe_light_) {
+    if (scene_ && scene_->getIndirectLight() == probe_light_) {
+      scene_->setIndirectLight(ambient_);
+    }
+    garbage_indirect_lights_.emplace_back(frame_, probe_light_);
+    probe_light_ = nullptr;
+  }
+  if (probe_reflections_) {
+    garbage_textures_.emplace_back(frame_, probe_reflections_);
+    probe_reflections_ = nullptr;
+  }
+  if (probe_irradiance_) {
+    garbage_textures_.emplace_back(frame_, probe_irradiance_);
+    probe_irradiance_ = nullptr;
+  }
+}
+
+void FilamentRenderer::CaptureProbe(filament::Engine* engine,
+                                    const ProbeVolumeData& probe,
+                                    bool soft_shadows) {
+  const uint32_t size = std::bit_floor(
+      static_cast<uint32_t>(std::clamp(probe.capture_size, 64, 1024)));
+  if (!EnsureProbeTargets(engine, size)) {
+    PDebug::warn("Filament: could not allocate the {}px light probe", size);
+    return;
+  }
+
+  // Start again from the scene's own light, not the previous capture's, so a
+  // recapture does not pile bounces on top of old bounces.
+  RetireProbeLight();
+  filament::Skybox* sky_before = scene_->getSkybox();
+  scene_->setSkybox(panorama_sky_ ? panorama_sky_ : fallback_sky_);
+  scene_->setIndirectLight(ambient_);
+
+  probe_view_->setShadowType(soft_shadows ? filament::ShadowType::PCSS
+                                          : filament::ShadowType::PCF);
+  probe_camera_->setProjection(90.0, 1.0, 0.02, 200.0);
+
+  // The faces are the usual cubemap ones: +X, -X, +Y, -Y, +Z, -Z, each seen
+  // from the probe with these up vectors (the ones OpenGL and Vulkan cube
+  // sampling expect).
+  struct Face {
+    filament::math::double3 forward;
+    filament::math::double3 up;
+  };
+  const Face faces[6] = {
+      {{1, 0, 0}, {0, -1, 0}}, {{-1, 0, 0}, {0, -1, 0}},
+      {{0, 1, 0}, {0, 0, 1}},  {{0, -1, 0}, {0, 0, -1}},
+      {{0, 0, 1}, {0, -1, 0}}, {{0, 0, -1}, {0, -1, 0}},
+  };
+  const glm::vec3 center = (probe.min + probe.max) * 0.5f;
+  const filament::math::double3 eye{center.x, center.y, center.z};
+
+  IBLPrefilterContext prefilter(*engine);
+  IBLPrefilterContext::SpecularFilter specular(prefilter);
+  IBLPrefilterContext::IrradianceFilter irradiance(prefilter);
+  IBLPrefilterContext::IrradianceFilter::Options irradiance_options;
+  irradiance_options.generateMipmap = false;  // the specular pass makes them
+
+  // The captured pixels are exposed (radiance times the camera's exposure);
+  // the IndirectLight multiplies them by its intensity and the viewing
+  // camera's exposure, so cancel the capturing camera's.
+  const float exposure =
+      std::max(filament::Exposure::exposure(*probe_camera_), 1e-9f);
+  const float intensity = std::max(probe.intensity, 0.0f) / exposure;
+
+  const int bounces = std::clamp(probe.bounces, 1, 4);
+  for (int bounce = 0; bounce < bounces; bounce++) {
+    for (int face = 0; face < 6; face++) {
+      probe_camera_->lookAt(eye, eye + faces[face].forward, faces[face].up);
+      probe_view_->setRenderTarget(probe_faces_[face]);
+      probe_renderer_->renderStandaloneView(probe_view_);
+    }
+    filament::Texture* reflections = specular(probe_cube_);
+    filament::Texture* irradiance_map =
+        irradiance(irradiance_options, probe_cube_);
+    filament::IndirectLight* light = filament::IndirectLight::Builder()
+                                         .reflections(reflections)
+                                         .irradiance(irradiance_map)
+                                         .intensity(intensity)
+                                         .build(*engine);
+    // The next bounce is lit by this one; the one before it is done with.
+    scene_->setIndirectLight(light);
+    RetireProbeLight();
+    probe_light_ = light;
+    probe_reflections_ = reflections;
+    probe_irradiance_ = irradiance_map;
+  }
+  probe_view_->setRenderTarget(nullptr);
+  scene_->setSkybox(sky_before);
+  probe_captures_++;
 }
 
 void FilamentRenderer::DestroyLights(filament::Engine* engine) {

@@ -109,7 +109,7 @@ A node's position is relative to its parent; maps are flattened to world positio
 | `DirectionalLight` | Sunlight along its -Z: `color`, `intensity`, `ambient`, `ground_ambient`, `cast_shadows` (see [Lighting](#lighting)) |
 | `PointLight` | Light in every direction: `color`, `intensity`, `range` (Unity's falloff; up to 16 per map). Soft shadows that widen with `radius`; `shadows = "hard"` or `"none"` changes that |
 | `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance. The Filament renderer approximates it with a spot light; up to 4 per map |
-| `LightProbeVolume` | Legacy global-illumination settings; the Filament renderer uses the skybox IBL instead (see [Lighting](#lighting)) |
+| `LightProbeVolume` | A room-capture light probe at the node: the renderer draws the scene from it into a cubemap and lights everything with it, so mirrors reflect the room and walls bleed color. `bounces` (captures), `intensity`, `capture_size` (see [Lighting](#lighting)) |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps without pushing |
 | `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |
@@ -179,11 +179,17 @@ image-based ambient). `SceneLighting` maps onto:
 - **Soft shadows** → Filament's PCSS (`View::setShadowType`); the light's
   physical size (`radius`, or the area light's rectangle) sets the penumbra.
 
-`LightProbeVolume` is a legacy component. Filament's global illumination is
-its distant IBL (the camera's skybox panorama) plus screen-space reflections;
-the renderer does not build a probe grid from the volume. Keep the component
-in old maps for compatibility, but author new lighting with the skybox and
-the Filament light components.
+- **`LightProbeVolume`** → a room-capture probe. The renderer draws the
+  scene from the node's position into the six faces of a cubemap (six
+  Filament `View`s at 90 degrees, rendered with `renderStandaloneView`),
+  filters it with `IBLPrefilterContext` (specular and irradiance) and sets
+  the result as the scene's `IndirectLight`. Each of `bounces` captures is
+  lit by the one before it. While a probe is in the map it replaces the
+  skybox's and the ambient's image-based light (a skybox can still be drawn
+  as the background); the ambient only reaches the final image through the
+  captured bounces, so raise the probe's `intensity` to compensate. It is
+  captured once the scene has been still for a few frames, and again after
+  the scene, its lights or the probe change.
 
 ### Post-processing
 

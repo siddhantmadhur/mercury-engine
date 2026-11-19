@@ -15,14 +15,18 @@
 #define MERCURY_ENGINE_FILAMENT_FILAMENT_RENDERER_H
 
 #include <filament/Box.h>
+#include <filament/Camera.h>
 #include <filament/Engine.h>
 #include <filament/IndirectLight.h>
 #include <filament/LightManager.h>
 #include <filament/Material.h>
 #include <filament/MaterialInstance.h>
+#include <filament/RenderTarget.h>
+#include <filament/Renderer.h>
 #include <filament/Scene.h>
 #include <filament/Skybox.h>
 #include <filament/Texture.h>
+#include <filament/View.h>
 #include <utils/Entity.h>
 
 #include <cstdint>
@@ -59,6 +63,14 @@ class FilamentRenderer {
   // creates/removes renderables, updates transforms, bones and visibility,
   // and rebuilds the lights when the scene's lighting values change.
   void SyncScene(GameScene& game);
+
+  // Marks the room probe's capture as stale so it is taken again once the
+  // scene has been still for a few frames.
+  void InvalidateProbe() { scene_revision_++; }
+  // True once a LightProbeVolume's capture lights the scene.
+  bool HasProbe() const { return probe_light_ != nullptr; }
+  // How many room captures (all bounces count once) have been taken.
+  uint32_t ProbeCaptureCount() const { return probe_captures_; }
 
  private:
   struct MeshEntry {
@@ -104,6 +116,15 @@ class FilamentRenderer {
   void SyncLights(filament::Engine* engine, GameScene& game);
   void SyncSkybox(filament::Engine* engine, const std::string& path,
                   float intensity);
+  // The room probe: a LightProbeVolume is captured into a cubemap, filtered
+  // into reflections and irradiance, and becomes the scene's IndirectLight.
+  void SyncProbe(filament::Engine* engine, GameScene& game);
+  void CaptureProbe(filament::Engine* engine, const ProbeVolumeData& probe,
+                    bool soft_shadows);
+  bool EnsureProbeTargets(filament::Engine* engine, uint32_t size);
+  void DestroyProbeTargets(filament::Engine* engine);
+  // Retires the probe's IndirectLight and filtered cubemaps.
+  void RetireProbeLight();
   void SweepGarbage(filament::Engine* engine, bool all);
   void DestroyLights(filament::Engine* engine);
 
@@ -151,6 +172,27 @@ class FilamentRenderer {
   std::vector<AreaLightData> area_values_;
   glm::vec3 ambient_sky_ = glm::vec3(-1.0f);
   glm::vec3 ambient_ground_ = glm::vec3(-1.0f);
+
+  // Room probe (LightProbeVolume).
+  filament::Renderer* probe_renderer_ = nullptr;
+  filament::View* probe_view_ = nullptr;
+  filament::Camera* probe_camera_ = nullptr;
+  utils::Entity probe_camera_entity_ = {};
+  filament::Texture* probe_cube_ = nullptr;   // the captured room
+  filament::Texture* probe_depth_ = nullptr;  // shared by the six faces
+  filament::RenderTarget* probe_faces_[6] = {};
+  uint32_t probe_size_ = 0;
+  filament::IndirectLight* probe_light_ = nullptr;
+  filament::Texture* probe_reflections_ = nullptr;
+  filament::Texture* probe_irradiance_ = nullptr;
+  ProbeVolumeData probe_values_;
+  bool probe_wanted_ = false;
+  uint32_t probe_captures_ = 0;
+  uint64_t scene_revision_ = 1;  // bumps when the scene or its lights change
+  uint64_t probe_revision_ = 0;  // the revision the current capture saw
+  uint64_t probe_seen_revision_ = 0;
+  uint64_t probe_change_frame_ = 0;  // when the revision last changed
+  uint64_t probe_capture_frame_ = 0;
 
   uint64_t frame_ = 0;
 };

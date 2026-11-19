@@ -577,6 +577,7 @@ void MapScene::GatherPointLights() {
     ProbeVolumeData& data = lighting_.probes;
     const glm::vec3 half = glm::abs(volume.size * transform.GetScale()) * 0.5f;
     data.enabled = volume.intensity > 0.0f;
+    data.placed = true;
     data.automatic = volume.fit_to_scene;
     data.min = transform.GetPosition() - half;
     data.max = transform.GetPosition() + half;
@@ -584,6 +585,7 @@ void MapScene::GatherPointLights() {
                              glm::ivec3(2), glm::ivec3(16));
     data.intensity = volume.intensity;
     data.bounces = std::max(volume.bounces, 1);
+    data.capture_size = volume.capture_size;
     data.include_emission = volume.include_emission;
     data.probes_per_frame = volume.probes_per_frame;
     break;

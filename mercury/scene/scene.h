@@ -112,6 +112,9 @@ struct AreaLightData {
  */
 struct ProbeVolumeData {
   bool enabled = false;
+  // A LightProbeVolume is in the map (the renderer captures a probe only for
+  // these; without one, `enabled` and `automatic` are the defaults).
+  bool placed = false;
   // The renderer fits the grid around the scene's still geometry (min, max
   // and counts are then ignored).
   bool automatic = false;
@@ -119,7 +122,8 @@ struct ProbeVolumeData {
   glm::vec3 max = glm::vec3(0.0f);
   glm::ivec3 counts = glm::ivec3(0);
   float intensity = 1.0f;
-  int bounces = 3;
+  int bounces = 2;
+  int capture_size = 256;
   bool include_emission = true;
   int probes_per_frame = 0;
 };
