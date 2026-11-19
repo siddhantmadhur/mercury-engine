@@ -794,8 +794,8 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
           const float tf_max = std::max({filter.r, filter.g, filter.b});
           glm::vec3 tint(1.0f);
           if (tinted && !chromatic) {
-            tint = glm::clamp(glm::vec3(filter.r, filter.g, filter.b), 0.0f,
-                              1.0f);
+            tint =
+                glm::clamp(glm::vec3(filter.r, filter.g, filter.b), 0.0f, 1.0f);
           } else if (tinted) {
             tint = glm::vec3(color.r, color.g, color.b) / kd_max * tf_max;
           } else if (chromatic) {

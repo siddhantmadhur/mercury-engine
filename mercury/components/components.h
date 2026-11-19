@@ -231,8 +231,7 @@ struct DirectionalLight {
         .Tooltip("Ambient light from below; alpha 0 uses 35% of ambient");
     r.Field("cast_shadows", cast_shadows).Tooltip("Enable shadow casting");
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip(
-            "Depth bias against shadow acne; PCF only (soft shadows off)");
+        .Tooltip("Depth bias against shadow acne; PCF only (soft shadows off)");
     r.Field("shadow_normal_bias", shadow_normal_bias)
         .Tooltip(
             "Normal offset bias for sloped geometry; PCF only (soft shadows "

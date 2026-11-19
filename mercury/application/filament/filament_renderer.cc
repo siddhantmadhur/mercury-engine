@@ -695,8 +695,8 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         // dividing by a clamped epsilon.
         const filament::math::float3 absorption =
             tinted && thickness > 0.0f
-                ? filament::Color::absorptionAtDistance(
-                      ToFilament(trans_color), thickness)
+                ? filament::Color::absorptionAtDistance(ToFilament(trans_color),
+                                                        thickness)
                 : filament::math::float3{0.0f, 0.0f, 0.0f};
         instance->setParameter("transmission",
                                std::clamp(material.transmission, 0.0f, 1.0f));
@@ -978,9 +978,9 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
   for (size_t i = 0; !points_changed && i < point_values_.size(); i++) {
     const PointLightData& a = lighting.point_lights[i];
     const PointLightData& b = point_values_[i];
-    if (a.position != b.position || a.color != b.color ||
-        a.range != b.range || a.radius != b.radius ||
-        a.shadows != b.shadows || a.shadow_bias != b.shadow_bias) {
+    if (a.position != b.position || a.color != b.color || a.range != b.range ||
+        a.radius != b.radius || a.shadows != b.shadows ||
+        a.shadow_bias != b.shadow_bias) {
       points_changed = true;
     }
   }
@@ -1049,8 +1049,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
       // by a spot whose cone covers its emission hemisphere (one-sided
       // Lambertian). The penumbra is driven by the panel's half-diagonal,
       // which bounds its extent from the centre in every direction.
-      const float bulb =
-          std::max(glm::length(light.right + light.up), 0.01f);
+      const float bulb = std::max(glm::length(light.right + light.up), 0.01f);
       auto add_spot = [&](const glm::vec3& spot_dir, bool shadows) {
         utils::Entity entity = utils::EntityManager::get().create();
         filament::LightManager::Builder(filament::LightManager::Type::SPOT)
