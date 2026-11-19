@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 #include "Jolt/Core/Factory.h"
 #include "Jolt/Core/JobSystemSingleThreaded.h"
@@ -117,6 +118,13 @@ class PhysicsContactListener : public JPH::ContactListener {
 
 // PhysicsEngine instances share Jolt's process-global type registry: the first
 // one registers, the last one unregisters and frees the factory.
+// Scenes can be created and destroyed from different threads (the editor
+// loads maps on workers), so the count and the registration it guards change
+// together under one lock.
+std::mutex& JoltGlobalsMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
 int& InstanceCount() {
   static int count = 0;
   return count;
@@ -126,10 +134,13 @@ int& InstanceCount() {
 PhysicsEngine::PhysicsEngine(PObjectManager& object_manager)
     : object_manager_(object_manager) {
   PDebug::info("Created physics engine...");
-  if (InstanceCount()++ == 0) {
-    JPH::RegisterDefaultAllocator();
-    JPH::Factory::sInstance = new JPH::Factory();
-    JPH::RegisterTypes();
+  {
+    std::lock_guard lock(JoltGlobalsMutex());
+    if (InstanceCount()++ == 0) {
+      JPH::RegisterDefaultAllocator();
+      JPH::Factory::sInstance = new JPH::Factory();
+      JPH::RegisterTypes();
+    }
   }
   temp_allocator_ = new JPH::TempAllocatorImpl(10 * 1024 * 1024);  // 10MB
 
@@ -153,10 +164,13 @@ PhysicsEngine::~PhysicsEngine() {
     delete contact_listener_;
     contact_listener_ = nullptr;
   }
-  if (--InstanceCount() == 0) {
-    JPH::UnregisterTypes();
-    delete JPH::Factory::sInstance;
-    JPH::Factory::sInstance = nullptr;
+  {
+    std::lock_guard lock(JoltGlobalsMutex());
+    if (--InstanceCount() == 0) {
+      JPH::UnregisterTypes();
+      delete JPH::Factory::sInstance;
+      JPH::Factory::sInstance = nullptr;
+    }
   }
 }
 
