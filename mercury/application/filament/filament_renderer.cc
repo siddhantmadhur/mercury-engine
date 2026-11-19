@@ -37,9 +37,13 @@ namespace Mercury::fil {
 namespace {
 
 // Filament lights use physical units; Mercury's intensities are Unity-like
-// multipliers around 1. These keep the two talking.
+// multipliers around 1. The sun anchors the scale at Filament's reference
+// 100000 lux. A point light's intensity is luminous power in lumens, so its
+// illuminance at distance d is power / (4*pi*d^2); multiplying by 4*pi makes
+// an intensity-1 point at 1 m match an intensity-1 sun.
 constexpr float kSunLuxPerIntensity = 100000.0f;
-constexpr float kPointLumensPerIntensity = 1200.0f;
+constexpr float kPointLumensPerIntensity =
+    4.0f * glm::pi<float>() * kSunLuxPerIntensity;
 // How often expired mesh/texture sources are swept away.
 constexpr uint64_t kSweepEvery = 30;
 // The room probe is captured once the scene has been still for this many
@@ -986,8 +990,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           std::max({light.color.r, light.color.g, light.color.b, 1e-6f});
       const float area =
           4.0f * glm::length(light.right) * glm::length(light.up);
-      const float lumens =
-          intensity * kPointLumensPerIntensity * std::max(area, 1.0f);
+      // The authored intensity is radiance R. At the sun anchor its luminance
+      // is R * kSunLuxPerIntensity / pi nits, so a Lambertian rectangle of
+      // area A emits pi * luminance * A = R * kSunLuxPerIntensity * A lumens.
+      const float lumens = intensity * kSunLuxPerIntensity * area;
       const float bulb =
           std::max(glm::length(light.right), glm::length(light.up));
       auto add_spot = [&](const glm::vec3& spot_dir, bool shadows) {
