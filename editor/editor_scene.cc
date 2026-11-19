@@ -795,9 +795,15 @@ bool EditorScene::DeleteProjectPath(const fs::path& target) {
 bool EditorScene::BuildGame(const std::string& output_str) {
   auto project = GetProject();
   if (!project) return false;
-  const fs::path output = project->ResolveUnchecked(output_str);
+  // The output folder is cleaned of old packs and written to, so it has to be
+  // inside the project; a project file must not aim the build elsewhere.
+  const fs::path output = project->Resolve(output_str);
   std::error_code ec;
-  if (output_str.empty() || fs::equivalent(output, project->GetRoot(), ec)) {
+  if (output_str.empty() || output.empty()) {
+    console_.Error("The build output folder must be inside the project");
+    return false;
+  }
+  if (fs::equivalent(output, project->GetRoot(), ec)) {
     console_.Error("Invalid build output folder");
     return false;
   }

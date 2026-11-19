@@ -153,14 +153,6 @@ class Project {
   fs::path Resolve(std::string_view path) const;
 
   /**
-   * @brief Like @ref Resolve without the containment check
-   *
-   * For paths the user picked themselves (such as the build output folder),
-   * never for paths read out of project content.
-   */
-  fs::path ResolveUnchecked(std::string_view path) const;
-
-  /**
    * @brief Turn a path inside the project into "res://..." form
    * @return An empty string if the path is outside the project folder
    */

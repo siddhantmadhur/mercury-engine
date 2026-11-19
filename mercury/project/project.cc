@@ -199,16 +199,6 @@ std::vector<std::string> Project::GetTags() const {
   return tags;
 }
 
-fs::path Project::ResolveUnchecked(std::string_view path) const {
-  if (IsResPath(path)) {
-    path.remove_prefix(kResPrefix.size());
-    return (root_ / fs::path(path)).lexically_normal();
-  }
-  fs::path p(path);
-  if (p.is_absolute()) return p;
-  return (root_ / p).lexically_normal();
-}
-
 fs::path Project::Resolve(std::string_view path) const {
   if (path.empty()) return {};
   fs::path candidate;
