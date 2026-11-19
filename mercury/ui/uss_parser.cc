@@ -637,6 +637,9 @@ std::string ResolveRelativePath(std::string_view base, std::string_view path) {
 
 std::optional<ComplexSelector> ParseSelector(std::string_view text,
                                              std::string* error) {
+  // Matching walks the parts recursively; a selector longer than this is not
+  // something a real sheet needs and would recurse until the stack ran out.
+  constexpr size_t kMaxParts = 32;
   ComplexSelector selector;
   selector.text = std::string(Trim(text));
   std::string_view s = selector.text;
@@ -716,6 +719,9 @@ std::optional<ComplexSelector> ParseSelector(std::string_view text,
       any = true;
     }
     if (!any) return fail("empty selector");
+    if (selector.parts.size() >= kMaxParts) {
+      return fail("selector has too many parts");
+    }
     selector.parts.push_back(std::move(part));
   }
   if (selector.parts.empty()) return fail("empty selector");
