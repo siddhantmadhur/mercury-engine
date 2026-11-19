@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <format>
+#include <set>
 #include <sstream>
 
 #include "debugger/debugger.h"
@@ -184,8 +185,57 @@ mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
   }
 }
 
+constexpr int kMaxCloneDepth = 128;
+constexpr size_t kMaxCloneElements = 100000;
+
+// Shared by one CloneTree call and every template it instantiates, so a
+// malicious document cannot multiply depth or element count through
+// <ui:Instance> chains.
+struct CloneContext {
+  std::set<std::string> instantiating;  // asset paths on the stack
+  size_t elements = 0;
+  bool limit_reported = false;
+};
+
 void CloneNode(const UxmlNode& node, VisualElement* parent,
-               UIResources& resources, const VisualTreeAsset& asset) {
+               UIResources& resources, const VisualTreeAsset& asset,
+               CloneContext& context, int depth);
+
+void CloneTreeImpl(const VisualTreeAsset& asset, VisualElement* target,
+                   UIResources& resources, CloneContext& context, int depth) {
+  if (depth > kMaxCloneDepth) {
+    if (!context.limit_reported) {
+      PDebug::warn("UI: {}: templates are nested too deeply", asset.path);
+      context.limit_reported = true;
+    }
+    return;
+  }
+  const bool tracked = !asset.path.empty();
+  if (tracked && !context.instantiating.insert(asset.path).second) {
+    PDebug::warn("UI: {}: template instantiates itself", asset.path);
+    return;
+  }
+  for (const auto& sheet : asset.root.style_sheets) {
+    target->AddStyleSheet(
+        resources.LoadStyleSheet(ResolveRelativePath(asset.path, sheet)));
+  }
+  for (const auto& child : asset.root.children) {
+    CloneNode(child, target, resources, asset, context, depth);
+  }
+  if (tracked) context.instantiating.erase(asset.path);
+}
+
+void CloneNode(const UxmlNode& node, VisualElement* parent,
+               UIResources& resources, const VisualTreeAsset& asset,
+               CloneContext& context, int depth) {
+  if (depth > kMaxCloneDepth || context.elements >= kMaxCloneElements) {
+    if (!context.limit_reported) {
+      PDebug::warn("UI: {}: template is too large to instantiate", asset.path);
+      context.limit_reported = true;
+    }
+    return;
+  }
+  context.elements++;
   auto& registry = UxmlFactoryRegistry::Instance();
   if (node.type == "Instance") {
     const std::string* name = node.FindAttribute("template");
@@ -196,7 +246,7 @@ void CloneNode(const UxmlNode& node, VisualElement* parent,
       container->templateId = ref->name;
       if (auto tree =
               resources.LoadUxml(ResolveRelativePath(asset.path, ref->src))) {
-        tree->CloneTree(container.get(), resources);
+        CloneTreeImpl(*tree, container.get(), resources, context, depth + 1);
       }
     } else {
       PDebug::warn("UI: {}:{}: no <Template> named \"{}\"", asset.path,
@@ -246,7 +296,7 @@ void CloneNode(const UxmlNode& node, VisualElement* parent,
   }
   VisualElement* raw = parent->Add(std::move(element));
   for (const auto& child : node.children)
-    CloneNode(child, raw, resources, asset);
+    CloneNode(child, raw, resources, asset, context, depth + 1);
 }
 
 }  // namespace
@@ -343,12 +393,8 @@ std::string VisualTreeAsset::Write() const {
 
 void VisualTreeAsset::CloneTree(VisualElement* target,
                                 UIResources& resources) const {
-  for (const auto& sheet : root.style_sheets) {
-    target->AddStyleSheet(
-        resources.LoadStyleSheet(ResolveRelativePath(path, sheet)));
-  }
-  for (const auto& child : root.children)
-    CloneNode(child, target, resources, *this);
+  CloneContext context;
+  CloneTreeImpl(*this, target, resources, context, 0);
 }
 
 std::unique_ptr<VisualElement> VisualTreeAsset::Instantiate(
