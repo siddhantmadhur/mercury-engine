@@ -174,6 +174,10 @@ class MapScene : public GameScene {
    *
    * Behaviours get OnStart once the scene starts (or straight away if it is
    * already running).
+   *
+   * Called from a behaviour callback (OnFrame, OnTick, Awake, OnStart,
+   * OnDestroy, collision or UI handlers) the scene is not replaced under the
+   * running code: the map is kept and applied at the start of the next frame.
    */
   void Instantiate(const Map& map);
 
@@ -183,7 +187,9 @@ class MapScene : public GameScene {
    * Instantiates straight away if every model is already cached. Otherwise
    * the scene keeps what it has (nothing, at startup, so only the clear
    * color is drawn) until OnFrame sees the models are ready. `fresh_assets`
-   * drops the cached models and images first, as LoadMap does.
+   * drops the cached models and images first, as LoadMap does. Like
+   * Instantiate, it is deferred to the next frame when called from a
+   * behaviour callback.
    */
   void BeginInstantiate(Map map, bool fresh_assets = false);
   // True while a map from BeginInstantiate is waiting for its models.
@@ -208,7 +214,8 @@ class MapScene : public GameScene {
   bool PollModelPreload();
   const ModelPreloader& GetModelPreloader() const { return preloader_; }
 
-  // Destroys every entity created from the map.
+  // Destroys every entity created from the map. Refused (with an error) from a
+  // behaviour callback; SetProject likewise.
   void ClearMap();
 
   /**
@@ -458,6 +465,7 @@ class MapScene : public GameScene {
   };
   std::optional<Map> deferred_map_;  // asked for during a callback
   bool deferred_fresh_ = false;
+  bool deferred_async_ = false;  // asked via BeginInstantiate
   PrefabCache prefabs_;
 
   std::string pending_map_;  // LoadMap

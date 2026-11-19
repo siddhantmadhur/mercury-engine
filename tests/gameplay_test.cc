@@ -98,6 +98,19 @@ class TestSceneReplacer : public Behaviour {
 };
 MERCURY_TEST_BEHAVIOUR(TestSceneReplacer);
 
+// Replaces the scene from OnStart: a map instantiated while the scene is
+// running starts its behaviours inside Instantiate itself.
+class TestStartReplacer : public Behaviour {
+ public:
+  static inline Map* replacement = nullptr;
+  void OnStart() override {
+    if (replacement) GetScene().Instantiate(*replacement);
+    alive_after = GetGameObject().IsValid();
+  }
+  bool alive_after = false;
+};
+MERCURY_TEST_BEHAVIOUR(TestStartReplacer);
+
 // A C++ data asset, the ScriptableObject equivalent.
 struct TestSettings {
   float amount = 1.0f;
@@ -446,6 +459,37 @@ TEST(Gameplay, ReplacingTheSceneInACallbackWaitsForTheNextFrame) {
   EXPECT_TRUE(scene.Find("Survivor").IsValid());
   EXPECT_FALSE(scene.Find("Replacer").IsValid());
   TestSceneReplacer::replacement = nullptr;
+}
+
+TEST(Gameplay, ReplacingTheSceneFromOnStartWaitsForTheNextFrame) {
+  auto project = LoadProject();
+  ASSERT_TRUE(project);
+  std::string error;
+  Map first, second;
+  ASSERT_TRUE(first.LoadFromString(R"([mmap format=1]
+[node name="Root"]
+[node name="Starter" parent="."]
+[component type="TestStartReplacer" node="Starter"]
+)",
+                                   &error))
+      << error;
+  ASSERT_TRUE(second.LoadFromString(R"([mmap format=1]
+[node name="Other"]
+[node name="Survivor" parent="."]
+)",
+                                    &error))
+      << error;
+  TestStartReplacer::replacement = &second;
+
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.OnStart();            // running, so Instantiate starts behaviours at once
+  scene.Instantiate(first);   // Starter::OnStart asks for `second` in here
+  EXPECT_TRUE(scene.Find("Starter").IsValid());  // still alive afterwards
+  EXPECT_FALSE(scene.Find("Survivor").IsValid());
+  scene.OnFrame(1000.0 / 60.0);  // the request is applied
+  EXPECT_TRUE(scene.Find("Survivor").IsValid());
+  EXPECT_FALSE(scene.Find("Starter").IsValid());
+  TestStartReplacer::replacement = nullptr;
 }
 
 TEST(Gameplay, LoadMapFromScriptReplacesTheScene) {

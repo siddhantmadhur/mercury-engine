@@ -297,6 +297,7 @@ void MapScene::SetProject(std::shared_ptr<Project> project) {
   // Models loading for the old project must not reach the new one's cache.
   preloader_.Cancel();
   loading_map_.reset();
+  deferred_map_.reset();  // a map of the old project
   ClearMap();
   model_assets_.clear();
   images_.clear();
@@ -322,6 +323,7 @@ MapScene::~MapScene() {
   physics_engine_->SetTriggerCallback({});
   physics_engine_->SetContactCallback({});
   // Behaviours may touch the scene from OnDestroy, so tear them down first.
+  CallbackScope callback_scope(this);
   std::vector<Behaviour*> behaviours;
   behaviours.reserve(behaviours_.size());
   for (const auto& behaviour : behaviours_)
@@ -357,8 +359,10 @@ void MapScene::Instantiate(const Map& map) {
     // Not while behaviours are running: it is applied at the next frame.
     deferred_map_ = map;
     deferred_fresh_ = false;
+    deferred_async_ = false;
     return;
   }
+  deferred_map_.reset();  // this replaces whatever was waiting
   ClearMap();
 
   std::vector<kEntityId> created;
@@ -386,8 +390,10 @@ void MapScene::BeginInstantiate(Map map, bool fresh_assets) {
   if (running_callbacks_ > 0) {
     deferred_map_ = std::move(map);
     deferred_fresh_ = fresh_assets;
+    deferred_async_ = true;
     return;
   }
+  deferred_map_.reset();
   preloader_.Cancel();
   loading_map_.reset();
   auto jobs = MissingModels(map, fresh_assets);
@@ -946,6 +952,7 @@ void MapScene::AwakeBehaviours() {
   // A map instantiated before the scene starts is awoken by OnStart, once the
   // application has a window and input (Unity's Awake runs on scene load).
   if (mode_ != Mode::kPlay || !running_) return;
+  CallbackScope callback_scope(this);
   // Awake/OnEnable may add more behaviours; index so the loop sees them.
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
@@ -978,6 +985,7 @@ void MapScene::OnBehaviourEnabledChanged(Behaviour& behaviour) {
 }
 
 void MapScene::StartPendingBehaviours() {
+  CallbackScope callback_scope(this);
   // OnStart may create more behaviours; index so the loop picks them up.
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
@@ -1024,7 +1032,13 @@ void MapScene::OnFrame(double delta_t) {
     // A behaviour asked for a new map during the last frame's callbacks.
     Map map = std::move(*deferred_map_);
     deferred_map_.reset();
-    BeginInstantiate(std::move(map), deferred_fresh_);
+    if (deferred_async_) {
+      BeginInstantiate(std::move(map), deferred_fresh_);
+    } else {
+      // A plain Instantiate stays synchronous, so a behaviour that asks for
+      // the same map every frame cannot keep restarting a model preload.
+      Instantiate(map);
+    }
   }
   if (mode_ == Mode::kPlay) FinishLoadingMap();
   if (mode_ == Mode::kPlay && !pending_map_.empty()) LoadPendingMap();
