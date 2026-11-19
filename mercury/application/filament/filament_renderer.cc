@@ -1029,8 +1029,12 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
       // is R * kSunLuxPerIntensity / pi nits, so a Lambertian rectangle of
       // area A emits pi * luminance * A = R * kSunLuxPerIntensity * A lumens.
       const float lumens = intensity * kSunLuxPerIntensity * area;
+      // Filament has no rectangular area light, so the panel is approximated
+      // by a spot whose cone covers its emission hemisphere (one-sided
+      // Lambertian). The penumbra is driven by the panel's half-diagonal,
+      // which bounds its extent from the centre in every direction.
       const float bulb =
-          std::max(glm::length(light.right), glm::length(light.up));
+          std::max(glm::length(light.right + light.up), 0.01f);
       auto add_spot = [&](const glm::vec3& spot_dir, bool shadows) {
         utils::Entity entity = utils::EntityManager::get().create();
         filament::LightManager::Builder(filament::LightManager::Type::SPOT)
@@ -1039,7 +1043,12 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
             .color(ToFilament(light.color / intensity))
             .intensity(lumens)
             .falloff(std::max(light.range, 0.1f))
-            .spotLightCone(glm::radians(35.0f), glm::radians(75.0f))
+            // A one-sided Lambertian panel emits into the hemisphere around
+            // its normal. Filament spot cones must fall short of pi/2, so use
+            // 85 degrees with a near-zero inner cone: a wide, one-sided
+            // emitter rather than the old fixed 35/75-degree flashlight cone
+            // that concentrated the flux into a circular hotspot.
+            .spotLightCone(0.0f, glm::radians(85.0f))
             .castShadows(shadows)
             .shadowOptions(MakeShadowOptions(
                 light.shadow_bias, bulb,
@@ -1049,7 +1058,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
         areas_.push_back(entity);
       };
       add_spot(dir, light.shadows != 0);
-      if (light.two_sided) add_spot(-dir, false);
+      if (light.two_sided) add_spot(-dir, light.shadows != 0);
     }
   }
 

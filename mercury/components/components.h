@@ -285,8 +285,11 @@ struct PointLight {
  * The rectangle lies in the node's XY plane, `size` across, and shines along
  * the node's -Z. `color` * `intensity` is the light's radiance, so matching an
  * emissive surface's emission makes it light the scene as brightly as it
- * looks. Lighting is exact for diffuse surfaces; shadows soften with the
- * rectangle's size.
+ * looks. Filament has no rectangular area light, so the renderer approximates
+ * the panel with a wide (hemisphere) spot that carries the panel's Lambertian
+ * flux (pi * L * A) and uses a PCSS bulb radius derived from the rectangle's
+ * half-diagonal. Shadows soften with the rectangle's size, but the emitted
+ * distribution is an approximation, not an exact PolygonFormFactor.
  */
 struct AreaLight {
   glm::vec4 color = glm::vec4(1.0f);
