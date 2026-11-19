@@ -645,27 +645,11 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       instance->setParameter("roughness",
                              std::clamp(1.0f - material.smoothness,
                                         is_transmissive ? 0.0f : 0.05f, 1.0f));
-      // Filament treats emissive.rgb as nits and multiplies it by the camera
-      // exposure when the alpha (the exposure weight) is 1. Convert the
-      // authored radiance so lit and emissive surfaces share the lights'
-      // pre-exposed scale; w = 0 would leave emission at display scale and
-      // make probe captures (post-processing off) 1/exposure too bright.
-      instance->setParameter(
-          "emissive", ToFilament(glm::vec4(
-                          material.emission * kLuminancePerIntensity, 1.0f)));
-      filament::Texture* emissive_tex = white_;
-      if (material.emission_texture) {
-        if (filament::Texture* uploaded =
-                UploadTexture(engine, material.emission_texture)) {
-          emissive_tex = uploaded;
-        }
-      }
       // Transmissive materials take F0 from their ior and have no
       // reflectance input (setting it would override the ior).
       if (!is_transmissive)
         instance->setParameter("reflectance",
                                std::clamp(material.reflectance, 0.0f, 1.0f));
-      instance->setParameter("emissiveMap", emissive_tex, sampler);
 
       filament::Texture* normal_tex = flat_normal_;
       bool has_normal = false;
@@ -696,6 +680,26 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         instance->setParameter("thickness", thickness);
         instance->setParameter("absorption", absorption);
       }
+    }
+    // Filament treats emissive.rgb as nits and multiplies it by the camera
+    // exposure when the alpha (the exposure weight) is 1. Convert the
+    // authored radiance so lit and emissive surfaces share the lights'
+    // pre-exposed scale; w = 0 would leave emission at display scale and
+    // make probe captures (post-processing off) 1/exposure too bright.
+    // Unlit surfaces support emission too, so this applies to both; the SDF
+    // text material has no emissive parameter.
+    if (!material.sdf_text) {
+      instance->setParameter(
+          "emissive", ToFilament(glm::vec4(
+                          material.emission * kLuminancePerIntensity, 1.0f)));
+      filament::Texture* emissive_tex = white_;
+      if (material.emission_texture) {
+        if (filament::Texture* uploaded =
+                UploadTexture(engine, material.emission_texture)) {
+          emissive_tex = uploaded;
+        }
+      }
+      instance->setParameter("emissiveMap", emissive_tex, sampler);
     }
     // The sampler must always be bound (Filament panics on unbound
     // samplers at draw time), so textures without an image show white.
@@ -756,7 +760,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     record_draw.layer = layer;
     record_draw.skinned = skinned;
     record_draw.transmissive = is_transmissive;
-    if (!is_unlit && glm::length(material.emission) > 0.0f)
+    if (!material.sdf_text && glm::length(material.emission) > 0.0f)
       record_draw.emission =
           material.emission * kLuminancePerIntensity;  // nits, as set above
     record_draw.draw_index = static_cast<uint32_t>(draw_index);
