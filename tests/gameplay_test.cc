@@ -9,6 +9,7 @@
 #include <GLFW/glfw3.h>
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -393,7 +394,10 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
   EXPECT_EQ(lamp->emission, glm::vec3(4.0f, 3.0f, 2.0f));
   // The .mimport's [material] section wins over the file.
   EXPECT_FLOAT_EQ(lamp->smoothness, 0.25f);
-  EXPECT_GT(stone->smoothness, 0.8f);
+  // Stone is illum 2 (the default), Ks 0.5, Ns 200: still glossy. Ns 200
+  // gives GGX alpha sqrt(2 / 202), and Filament's perceptual smoothness is
+  // 1 - sqrt(alpha) = 1 - pow(2 / 202, 0.25) ~ 0.685.
+  EXPECT_NEAR(stone->smoothness, 1.0f - std::pow(2.0f / 202.0f, 0.25f), 1e-4f);
   // Kd is linear; material colors are stored sRGB (0.5 linear ~ 0.735).
   EXPECT_NEAR(lamp->color.r, 0.7354f, 1e-3f);
 

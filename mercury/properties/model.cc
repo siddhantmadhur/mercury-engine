@@ -747,14 +747,17 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
         aiColor3D specular(0, 0, 0);
         source->Get(AI_MATKEY_COLOR_SPECULAR, specular);
         const float ks = std::max({specular.r, specular.g, specular.b});
-        // Blinn-Phong exponent (Ns) to GGX roughness: Ns 1024 is roughness
-        // 0.044 (a near-perfect mirror). With no specular color (Ks 0) the
-        // surface is matte whatever Ns says (exporters write Ns 1 or 10 next
-        // to Ks 0), so it is fully rough.
-        material.smoothness =
-            ks > 0.0f
-                ? 1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f))
-                : 0.0f;
+        // Blinn-Phong exponent (Ns) to the GGX alpha the distribution works
+        // in: alpha = sqrt(2 / (Ns + 2)). Filament's
+        // MaterialInputs.roughness is perceptual and its shaders square it
+        // into that alpha (surface_lighting.fs), so every path below passes
+        // the square root of alpha as the roughness. The old renderer also
+        // scaled glossiness by min(1, 4*Ks) (model.ps.hlsl history): with no
+        // specular color (Ks 0, common in OBJ exports next to the default Ns)
+        // the surface came out matte, while Ks >= 0.25 left it unchanged.
+        float alpha = std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
+        const float gloss = std::min(1.0f, 4.0f * ks);
+        material.smoothness = (1.0f - std::sqrt(alpha)) * gloss;
         const bool textured =
             !texture_of(source, aiTextureType_DIFFUSE).empty();
         const float kd_max = std::max({color.r, color.g, color.b});
@@ -804,9 +807,10 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
                         std::min(color.g + specular.g, 1.0f),
                         std::min(color.b + specular.b, 1.0f), material.color.a);
           material.metallic = 1.0f;
-          const float roughness = std::min(
-              std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f)), 0.1f);
-          material.smoothness = 1.0f - roughness;
+          // Cap the GGX alpha, not the perceptual roughness, at a polished
+          // 0.1, then hand Filament its perceptual square root (~0.316).
+          alpha = std::min(alpha, 0.1f);
+          material.smoothness = 1.0f - std::sqrt(alpha);
         } else if (illum >= 2 && !textured && kd_max < 0.05f && ks > 0.25f) {
           // No diffuse but a strong specular is how exporters write a
           // mirror or chrome: a metal of that specular color.
@@ -814,12 +818,12 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
               glm::vec4(specular.r, specular.g, specular.b, material.color.a);
           material.metallic = 1.0f;
         } else if (illum >= 2 && ks > 0.0f) {
-          // A dielectric: Ks says how strongly it reflects. Filament takes
-          // F0 = 0.16 * reflectance^2, so a Ks that is the surface's F0 (Ks
-          // 0.04 is the usual 4%) is reflectance sqrt(Ks / 0.16) = 0.5, and
-          // a Ks of 0.16 or more saturates at 1. Without Ks (or in the
-          // models 0 and 1, which have no specular) the default stays.
-          material.reflectance = std::clamp(std::sqrt(ks / 0.16f), 0.0f, 1.0f);
+          // A dielectric keeps the 4% F0 the old Vulkan renderer gave every
+          // dielectric (model.ps.hlsl: F0 = lerp(0.04, albedo, metallic)).
+          // There Ks only scaled the glossiness (see above), never the
+          // Fresnel, so it must not become Filament reflectance here.
+          // Filament's default reflectance 0.5 is F0 = 0.16 * 0.5^2 = 0.04.
+          material.reflectance = 0.5f;
         }
       }
       // glTF's KHR_materials_transmission and _volume: the base color tints

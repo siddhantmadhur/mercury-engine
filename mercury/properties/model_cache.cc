@@ -25,7 +25,7 @@ namespace {
 namespace fs = std::filesystem;
 
 // Bump when what is written, or how Model::Import builds a model, changes.
-constexpr uint32_t kVersion = 5;
+constexpr uint32_t kVersion = 6;
 constexpr char kMagic[4] = {'M', 'M', 'C', 'F'};
 
 struct Hash {
