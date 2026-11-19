@@ -1029,9 +1029,11 @@ void ScriptVim::ExecuteEx(const wxString& command) {
     // A number too big for an int (":99999999999999999999") clamps to the last
     // line instead of throwing out of stoi.
     int target = 0;
-    const auto [end, ec] =
-        std::from_chars(line.data(), line.data() + line.size(), target);
-    if (ec == std::errc::result_out_of_range) target = std::numeric_limits<int>::max();
+    const auto ec =
+        std::from_chars(line.data(), line.data() + line.size(), target).ec;
+    if (ec == std::errc::result_out_of_range) {
+      target = std::numeric_limits<int>::max();
+    }
     MoveToLine(std::max(1, target) - 1);
     return;
   }
