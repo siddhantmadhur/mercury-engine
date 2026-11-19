@@ -10,6 +10,12 @@ namespace Mercury {
 
 float Mathf::SmoothDamp(float current, float target, float& velocity,
                         float smooth_time, float delta_time, float max_speed) {
+  // A zero or backwards step has no meaning, and dividing by it below would
+  // turn the velocity into NaN.
+  if (delta_time <= 0.0f) {
+    velocity = 0.0f;
+    return current;
+  }
   // Game Programming Gems 4, chapter 1.10, as Unity implements it.
   smooth_time = glm::max(0.0001f, smooth_time);
   const float omega = 2.0f / smooth_time;
