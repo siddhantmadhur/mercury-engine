@@ -354,6 +354,9 @@ void ProjectBrowserPanel::PopulateFolderChildren(
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator(dir, ec)) {
     const std::string name = entry.path().filename().string();
+    // Symlinked folders can loop back on themselves (assets/loop -> ..) or
+    // lead out of the project, so the tree does not follow them.
+    if (entry.is_symlink(ec)) continue;
     if (entry.is_directory(ec) && !ShouldSkipDirName(name)) {
       folders.push_back(entry.path());
     }
