@@ -7,13 +7,9 @@ variables:
   GIT_CLEAN_FLAGS: -ffdxx -e .ccache/ -e .cargo/ -e .rustup/ -e bin/dxc/
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
-<<<<<<< HEAD
   # Prebuilt toolchain image (docker/Dockerfile; build and push it with scripts/build_ci_image.pl).
   BUILD_IMAGE: "$CI_REGISTRY_IMAGE/build-env:latest"
-=======
-  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
-  RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup"
->>>>>>> main
+
 
 clangformat-job:
   tags: ['us-east-2b']
