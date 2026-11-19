@@ -17,7 +17,7 @@ clangformat-job:
     - apt-get update && apt-get install -y --no-install-recommends git clang-format
   script:
     - echo "Linting code...."
-    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
+    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i -style=Google
     - git diff --exit-code
 
 verify-license-job:
