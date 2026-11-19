@@ -5,6 +5,14 @@ use File::Find;
 
 my $search_dir = $ARGV[0] // '.';
 
+my %exclude_dirs = map { $_ => 1 } qw(
+  .git
+  build
+  third_party
+  docs
+  bin
+);
+ 
 my $target_header = <<'END_HEADER';
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,6 +27,13 @@ $target_header =~ s/\n*\z/\n\n/;
 find(\&process_file, $search_dir);
 
 sub process_file {
+
+  if (-d $_) {
+    if ($exclude_dirs{$_}) {
+      $File::Find::prune = 1;
+    }
+    return 1;
+  }
 
   # skip directories and files that aren't source code
   return unless -f $_;
