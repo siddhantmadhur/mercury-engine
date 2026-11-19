@@ -289,6 +289,23 @@ bool ReleaseBuild::StartBuild() {
 }
 
 void ReleaseBuild::StartPacking() {
+  // Compile the scripts here, on the editor's thread. The compile replaces the
+  // process-wide script module and the type registry that the inspector and
+  // Add Component menu read, so it must not run on the packing thread.
+  {
+    BuildOptions options;
+    options.release = true;
+    std::string build_log;
+    const bool built = ScriptBuilder::Build(project_root_, options, &build_log);
+    std::istringstream lines(build_log);
+    for (std::string line; std::getline(lines, line);) {
+      console_.Add(Console::Level::kInfo, Console::Source::kBuild, line);
+    }
+    if (!built) {
+      Finish("building the scripts failed", true);
+      return;
+    }
+  }
   console_.Add(Console::Level::kInfo, Console::Source::kBuild,
                "Packing assets into .mpack files...");
   state_ = State::kPacking;
@@ -304,17 +321,8 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
     result.error = std::move(message);
     return result;
   };
-  // Compile the scripts in-process; the .as sources are packed with the game.
-  {
-    BuildOptions options;
-    options.release = true;
-    std::string build_log;
-    const bool built = ScriptBuilder::Build(root, options, &build_log);
-    std::istringstream lines(build_log);
-    for (std::string line; std::getline(lines, line);)
-      result.log.push_back(line);
-    if (!built) return fail("building the scripts failed");
-  }
+  // The scripts were compiled before this thread started (StartPacking); the
+  // .as sources are packed with the game.
   std::error_code ec;
   fs::create_directories(output_dir, ec);
   if (ec) return fail("could not create " + output_dir.string());
