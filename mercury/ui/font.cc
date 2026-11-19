@@ -188,6 +188,12 @@ bool Font::Init(std::vector<uint8_t> data) {
 }
 
 bool Font::Pack(int w, int h, glm::ivec2& out) {
+  // A glyph wider than a shelf or taller than the whole atlas can never fit,
+  // so reject it before changing the shelf. Without this a hostile font's
+  // oversized bitmap would walk rows past the end of the atlas.
+  if (w <= 0 || h <= 0 || w + 2 > atlas_->width || h + 2 > kMaxAtlasHeight) {
+    return false;
+  }
   if (shelf_x_ + w + 1 > atlas_->width) {
     shelf_x_ = 1;
     shelf_y_ += shelf_height_ + 1;
@@ -196,7 +202,7 @@ bool Font::Pack(int w, int h, glm::ivec2& out) {
   while (shelf_y_ + h + 1 > atlas_->height) {
     if (atlas_->height >= kMaxAtlasHeight) return false;
     // Growing downwards keeps every packed glyph where it is.
-    const int new_height = atlas_->height * 2;
+    const int new_height = std::min(atlas_->height * 2, kMaxAtlasHeight);
     std::vector<uint8_t> grown(static_cast<size_t>(atlas_->width) * new_height *
                                4);
     for (size_t i = 0; i < grown.size(); i += 4) {
@@ -241,7 +247,12 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
                         128.0f / kSdfPadding, &w, &h, &xoff, &yoff);
   if (sdf && w > 0 && h > 0) {
     glm::ivec2 at;
-    if (Pack(w, h, at)) {
+    const bool packed = Pack(w, h, at) && at.x >= 0 && at.y >= 0 &&
+                        at.x + w <= atlas_->width &&
+                        at.y + h <= atlas_->height &&
+                        static_cast<size_t>(at.y + h) * atlas_->width * 4 <=
+                            atlas_->rgba.size();
+    if (packed) {
       for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
           const size_t dst =
@@ -255,7 +266,7 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
       glyph.size = {static_cast<float>(w), static_cast<float>(h)};
       glyph.visible = true;
     } else {
-      PDebug::warn("UI: font atlas is full");
+      PDebug::warn("UI: glyph {}x{} does not fit in the font atlas", w, h);
     }
   }
   if (sdf) stbtt_FreeSDF(sdf, nullptr);
