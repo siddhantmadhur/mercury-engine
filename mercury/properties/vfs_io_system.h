@@ -71,7 +71,14 @@ class VfsIOSystem : public Assimp::IOSystem {
   bool Exists(const char* file) const override { return os::Exists(file); }
   char getOsSeparator() const override { return '/'; }
   Assimp::IOStream* Open(const char* file, const char* mode) override {
-    if (std::strchr(mode, 'w') || std::strchr(mode, 'a')) return nullptr;
+    if (!file || !mode) return nullptr;
+    // Assimp documents "rb", "r", and "rt" as the supported read modes.
+    // This adapter is read-only, so reject anything else instead of
+    // silently ignoring unknown mode characters.
+    const bool read_only = std::strcmp(mode, "r") == 0 ||
+                           std::strcmp(mode, "rb") == 0 ||
+                           std::strcmp(mode, "rt") == 0;
+    if (!read_only) return nullptr;
     auto data = os::ReadBytes(file);
     return data ? new VfsIOStream(std::move(*data)) : nullptr;
   }
