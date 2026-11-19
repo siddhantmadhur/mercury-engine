@@ -194,6 +194,8 @@ bool PhysicsEngine::CreateBodyFromShape(
   }
 
   auto& body_interface = physics_system_.GetBodyInterface();
+  // Registering a second body would orphan the first one.
+  RemoveBodyNow(self);
   auto body = body_interface.CreateBody(creation_settings);
   if (body == nullptr) {
     PDebug::error("Physics: out of bodies");
@@ -380,6 +382,8 @@ bool PhysicsEngine::CreatePlane(
 
   auto& body_interface = physics_system_.GetBodyInterface();
 
+  // Registering a second body would orphan the first one.
+  RemoveBodyNow(self);
   auto body = body_interface.CreateBody(creation_settings);
 
   auto body_id = body->GetID();
@@ -871,6 +875,8 @@ bool PhysicsEngine::CreateBody(kEntityId self,
     return body->GetID();
   };
 
+  // Registering a second body would orphan the first one.
+  RemoveBodyNow(self);
   bool created = false;
   if (!solid.empty()) {
     JPH::BodyID id = make_body(solid, false);
