@@ -3,10 +3,12 @@ stages:
   - build
 
 variables:
-  # Wipe all untracked files (like leftover build/ folders) and dirty submodules, EXCEPT .ccache/
-  GIT_CLEAN_FLAGS: -ffdxx -e .ccache/
+  # Wipe all untracked files (like build/) and dirty submodules, EXCEPT cached toolchains/ccache
+  GIT_CLEAN_FLAGS: -ffdxx -e .ccache/ -e .cargo/ -e .rustup/ -e bin/dxc/
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup"
 
 clangformat-job:
   tags: ['us-east-2b']
@@ -48,16 +50,21 @@ ctest-build-job:
     CMAKE_C_COMPILER_LAUNCHER: ccache
     CMAKE_CXX_COMPILER_LAUNCHER: ccache
   cache:
-    key: "ccache-$CI_COMMIT_REF_SLUG"
+    key: "mercury-build-$CI_COMMIT_REF_SLUG"
     fallback_keys:
-      - "ccache-$CI_DEFAULT_BRANCH"
+      - "mercury-build-$CI_DEFAULT_BRANCH"
     paths:
       - .ccache/
+      - .cargo/
+      - .rustup/
+      - bin/dxc/
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends
-        build-essential cmake ninja-build git perl ccache pkg-config
-        libvulkan-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+    # setup_project.pl invokes 'sudo apt-get' and needs perl/ca-certificates to bootstrap
+    - apt-get update && apt-get install -y --no-install-recommends sudo perl ca-certificates
+    - export PATH="$CARGO_HOME/bin:$PATH"
   script:
+    - ./scripts/setup_project.pl
+    - export PATH="$CARGO_HOME/bin:$PATH"
     - ccache --zero-stats
     - cmake --preset release
     - cmake --build --preset check
