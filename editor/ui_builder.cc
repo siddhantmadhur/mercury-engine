@@ -46,6 +46,18 @@ bool WriteFile(const fs::path& path, const std::string& text) {
   return static_cast<bool>(file);
 }
 
+// Elements point at nodes owned by the current VisualTreeAsset. Before that
+// asset is replaced or destroyed, drop the pointers so no later walk can
+// compare or dereference freed nodes.
+void ClearUxmlSources(VisualElement* root) {
+  if (!root) return;
+  std::function<void(VisualElement*)> walk = [&](VisualElement* element) {
+    element->uxmlSource = nullptr;
+    for (const auto& child : element->hierarchyChildren()) walk(child.get());
+  };
+  walk(root);
+}
+
 }  // namespace
 
 UIBuilder::UIBuilder(Console& console) : console_(console) {}
@@ -133,6 +145,9 @@ bool UIBuilder::Open(const std::string& res_path) {
   for (const auto& e : errors) {
     console_.Error(std::format("{}:{}: {}", res_path, e.line, e.message));
   }
+  // The old document's nodes are about to be freed.
+  ClearUxmlSources(preview_root_);
+  hovered_node_ = nullptr;
   doc_ = doc;
   doc_path_ = res_path;
   dirty_ = false;
@@ -152,6 +167,7 @@ bool UIBuilder::Open(const std::string& res_path) {
 }
 
 void UIBuilder::Close() {
+  ClearUxmlSources(preview_root_);
   doc_.reset();
   doc_path_.clear();
   sheets_.clear();
@@ -388,6 +404,10 @@ UIBuilder::Snapshot UIBuilder::TakeSnapshot() const {
 }
 
 void UIBuilder::RestoreSnapshot(const Snapshot& snapshot) {
+  // Undo/redo replaces the asset, so the preview's pointers into the old
+  // document must go first.
+  ClearUxmlSources(preview_root_);
+  hovered_node_ = nullptr;
   doc_ = VisualTreeAsset::Parse(snapshot.uxml, doc_path_);
   std::vector<SheetEntry> sheets;
   for (const auto& [src, text] : snapshot.sheets) {
