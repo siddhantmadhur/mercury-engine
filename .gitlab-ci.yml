@@ -7,19 +7,15 @@ variables:
   GIT_CLEAN_FLAGS: -ffdxx -e .ccache/
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
+  # Prebuilt toolchain image (docker/Dockerfile; build and push it with scripts/build_ci_image.pl).
+  BUILD_IMAGE: "$CI_REGISTRY_IMAGE/build-env:latest"
 
 clangformat-job:
   tags: ['us-east-2b']
   stage: format
-  image: ubuntu:24.04
+  image: $BUILD_IMAGE
   variables:
     GIT_SUBMODULE_STRATEGY: none
-  before_script:
-    - apt-get update && apt-get install -y --no-install-recommends git wget gnupg lsb-release software-properties-common
-    - wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-    - add-apt-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main"
-    - apt-get update && apt-get install -y --no-install-recommends clang-format-20
-    - ln -sf /usr/bin/clang-format-20 /usr/bin/clang-format
   script:
     - echo "Linting code...."
     - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
@@ -28,11 +24,9 @@ clangformat-job:
 verify-license-job:
   tags: ['us-east-2b']
   stage: format
-  image: ubuntu:24.04
+  image: $BUILD_IMAGE
   variables:
     GIT_SUBMODULE_STRATEGY: none
-  before_script:
-    - apt-get update && apt-get install -y --no-install-recommends git perl
   script:
     - echo "Checking for files not including LICENSE header..."
     - perl scripts/addlicenses.pl
@@ -41,7 +35,7 @@ verify-license-job:
 ctest-build-job:
   tags: ['us-east-2b']
   stage: build
-  image: ubuntu:24.04
+  image: $BUILD_IMAGE
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
     GIT_SUBMODULE_FORCE_CLEAN: "true"
@@ -54,12 +48,9 @@ ctest-build-job:
     paths:
       - .ccache/
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends
-        build-essential cmake ninja-build git perl ccache pkg-config
-        libvulkan-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+    - cargo fetch --manifest-path Cargo.toml --locked
   script:
     - ccache --zero-stats
-    - ./scripts/setup_project.pl
     - cmake --preset release
     - cmake --build --preset check
     - ccache --show-stats
