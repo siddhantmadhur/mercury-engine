@@ -183,6 +183,9 @@ class Application : public RenderHost {
 
  private:
   GLFWwindow* window_ = nullptr;
+  // Per instance: an editor's scene view and game view each own their input
+  // state, and their GLFW callbacks write to their own manager.
+  InputManager input_manager_;
   int32_t width_ = 0;
   int32_t height_ = 0;
   std::string title_ = "Mercury";
