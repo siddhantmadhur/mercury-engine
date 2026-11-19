@@ -653,11 +653,15 @@ bool ScriptRuntime::RunString(std::string_view source, std::string_view name,
   bool ok = false;
   asIScriptContext* context = engine_->CreateContext();
   if (context && context->Prepare(main) >= 0) {
+    const bool outermost = call_depth_++ == 0;
+    if (outermost) {
+      call_start_ = std::chrono::steady_clock::now();
+      timed_out_ = false;
+    }
     context->SetLineCallback(asFUNCTION(LineCallback), this, asCALL_CDECL);
-    call_start_ = std::chrono::steady_clock::now();
-    timed_out_ = false;
     const int r = context->Execute();
     context->ClearLineCallback();
+    call_depth_--;
     if (r == asEXECUTION_FINISHED) {
       ok = true;
       if (result) {
@@ -691,40 +695,91 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
     return false;
   }
   if (object) context->SetObject(object);
+  if (args.size() != static_cast<size_t>(function->GetParamCount())) {
+    PDebug::error("{}: the function takes {} argument(s), {} were passed",
+                  label, function->GetParamCount(), args.size());
+    context->Release();
+    return false;
+  }
+  // String arguments must outlive Execute(): a `const string &in` parameter is
+  // bound to this storage, not copied by the VM.
+  std::vector<std::string> strings;
+  strings.reserve(args.size());
   for (size_t i = 0; i < args.size(); i++) {
     const ScriptArg& arg = args[i];
+    const asUINT index = static_cast<asUINT>(i);
+    int param_type = 0;
+    function->GetParam(index, &param_type);
+    const int base =
+        param_type & ~(asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST);
+    asITypeInfo* param_info = engine_->GetTypeInfoById(base);
+    const std::string param_name = param_info ? param_info->GetName() : "";
+    bool matches = false;
     switch (arg.kind) {
       case ScriptArg::Kind::kBool:
-        context->SetArgByte(static_cast<asUINT>(i), arg.b ? 1 : 0);
+        matches = param_type == asTYPEID_BOOL;
         break;
       case ScriptArg::Kind::kInt:
-        context->SetArgDWord(static_cast<asUINT>(i), arg.i);
+        matches = param_type == asTYPEID_INT32 || param_type == asTYPEID_UINT32;
         break;
       case ScriptArg::Kind::kFloat:
-        context->SetArgFloat(static_cast<asUINT>(i), arg.f);
+        matches = param_type == asTYPEID_FLOAT;
         break;
       case ScriptArg::Kind::kDouble:
-        context->SetArgDouble(static_cast<asUINT>(i), arg.d);
+        matches = param_type == asTYPEID_DOUBLE;
         break;
-      case ScriptArg::Kind::kString: {
-        std::string text = arg.s;
-        context->SetArgObject(static_cast<asUINT>(i), &text);
+      case ScriptArg::Kind::kString:
+        matches = param_name == "string";
         break;
-      }
       case ScriptArg::Kind::kObject:
-        if (arg.object)
-          context->SetArgObject(static_cast<asUINT>(i), arg.object);
+        matches = arg.type_id != 0 &&
+                  base == (arg.type_id &
+                           ~(asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST));
+        break;
+      case ScriptArg::Kind::kNone:
+        break;
+    }
+    if (!matches) {
+      PDebug::error(
+          "{}: argument {} does not match the parameter type ({})", label, i,
+          param_name.empty() ? std::to_string(param_type) : param_name);
+      context->Release();
+      return false;
+    }
+    switch (arg.kind) {
+      case ScriptArg::Kind::kBool:
+        context->SetArgByte(index, arg.b ? 1 : 0);
+        break;
+      case ScriptArg::Kind::kInt:
+        context->SetArgDWord(index, arg.i);
+        break;
+      case ScriptArg::Kind::kFloat:
+        context->SetArgFloat(index, arg.f);
+        break;
+      case ScriptArg::Kind::kDouble:
+        context->SetArgDouble(index, arg.d);
+        break;
+      case ScriptArg::Kind::kString:
+        strings.push_back(arg.s);
+        context->SetArgObject(index, &strings.back());
+        break;
+      case ScriptArg::Kind::kObject:
+        context->SetArgObject(index, arg.object);
         break;
       case ScriptArg::Kind::kNone:
         break;
     }
   }
 
+  const bool outermost = call_depth_++ == 0;
+  if (outermost) {
+    call_start_ = std::chrono::steady_clock::now();
+    timed_out_ = false;
+  }
   context->SetLineCallback(asFUNCTION(LineCallback), this, asCALL_CDECL);
-  call_start_ = std::chrono::steady_clock::now();
-  timed_out_ = false;
   const int r = context->Execute();
   context->ClearLineCallback();
+  call_depth_--;
   if (r == asEXECUTION_FINISHED) {
     ok = true;
     if (result) {

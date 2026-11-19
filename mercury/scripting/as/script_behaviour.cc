@@ -169,13 +169,21 @@ void ScriptBehaviour::Forward(ScriptCallback callback, const char* method,
   asIScriptFunction* function = class_->callbacks_by_slot[slot];
   if (!function) return;
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
-  if (class_->callback_arg_types[slot] == 1) {
+  if (function->GetParamCount() == 0) {
+    ScriptRuntime::Instance().Call(function, instance_, {},
+                                   class_->name + "." + method);
+  } else if (class_->callback_arg_types[slot] == 1) {
     const ScriptArg args[] = {ScriptArg::Float(static_cast<float>(dt))};
     ScriptRuntime::Instance().Call(function, instance_, args,
                                    class_->name + "." + method);
-  } else {
+  } else if (class_->callback_arg_types[slot] == 2) {
     const ScriptArg args[] = {ScriptArg::Double(dt)};
     ScriptRuntime::Instance().Call(function, instance_, args,
+                                   class_->name + "." + method);
+  } else {
+    // The parameter is not one the engine can supply; an empty call makes
+    // Call() report the mismatch instead of leaving the slot uninitialised.
+    ScriptRuntime::Instance().Call(function, instance_, {},
                                    class_->name + "." + method);
   }
 }
@@ -186,6 +194,16 @@ void ScriptBehaviour::ForwardObject(ScriptCallback callback, const char* method,
   asIScriptFunction* function = class_->callbacks_by_slot[slot];
   if (!function || !other.GetScene()) return;
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
+  if (function->GetParamCount() == 0) {
+    ScriptRuntime::Instance().Call(function, instance_, {},
+                                   class_->name + "." + method);
+    return;
+  }
+  if (class_->callback_arg_types[slot] != 3) {
+    PDebug::error("{}: {} must take a GameObject parameter", class_->name,
+                  method);
+    return;
+  }
   const int type_id =
       ScriptRuntime::Instance().GetEngine()->GetTypeIdByDecl("GameObject");
   const ScriptArg args[] = {ScriptArg::Object(&other, type_id)};

@@ -294,6 +294,8 @@ class ScriptRuntime {
   bool timed_out_ = false;
   bool compile_failed_ = false;
   std::chrono::steady_clock::time_point call_start_;
+  // Nested calls inherit the outermost deadline (see LineCallback).
+  int call_depth_ = 0;
 
   friend class ScriptBuilder;
 };
