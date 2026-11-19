@@ -5,7 +5,9 @@
 #include "style_resolver.h"
 
 #include <algorithm>
-#include <functional>
+#include <map>
+#include <memory>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 
@@ -74,6 +76,93 @@ void ApplyDeclarations(
   }
 }
 
+constexpr size_t kMaxRuleIndexCache = 16;
+
+struct RuleRef {
+  const StyleSheet* sheet;
+  const StyleRule* rule;
+  int sheet_order;
+  int rule_order;
+};
+
+// Rules bucketed by the element type their rightmost selector requires, so
+// matching an element only scans rules that can possibly apply to it. Rules
+// with a universal rightmost selector (or no selectors) go in `universal`.
+struct RuleIndex {
+  std::map<std::string, std::vector<RuleRef>, std::less<>> by_type;
+  std::vector<RuleRef> universal;
+};
+
+void BuildRuleIndex(const std::vector<const StyleSheet*>& sheets,
+                    RuleIndex& index) {
+  for (size_t s = 0; s < sheets.size(); s++) {
+    const StyleSheet* sheet = sheets[s];
+    if (!sheet) continue;
+    for (size_t r = 0; r < sheet->rules.size(); r++) {
+      const StyleRule& rule = sheet->rules[r];
+      const RuleRef ref{sheet, &rule, static_cast<int>(s), static_cast<int>(r)};
+      bool universal = false;
+      std::vector<std::string_view> types;
+      for (const auto& selector : rule.selectors) {
+        if (selector.parts.empty()) {
+          universal = true;
+          break;
+        }
+        const std::string& type = selector.parts.back().type;
+        if (type.empty() || type == "*") {
+          universal = true;
+          break;
+        }
+        if (std::find(types.begin(), types.end(), type) == types.end()) {
+          types.push_back(type);
+        }
+      }
+      if (universal || types.empty()) {
+        index.universal.push_back(ref);
+        continue;
+      }
+      for (const auto& type : types)
+        index.by_type[std::string(type)].push_back(ref);
+    }
+  }
+}
+
+void MatchOneRule(const RuleRef& ref, const VisualElement& element,
+                  std::vector<MatchedRule>& matches) {
+  const ComplexSelector* best = nullptr;
+  for (const auto& selector : ref.rule->selectors) {
+    if (selector.Matches(element) &&
+        (!best || selector.specificity > best->specificity)) {
+      best = &selector;
+    }
+  }
+  if (best) {
+    matches.push_back({ref.sheet, ref.rule, best, best->specificity,
+                       ref.sheet_order, ref.rule_order});
+  }
+}
+
+std::vector<MatchedRule> MatchIndexedRules(const VisualElement* element,
+                                           const RuleIndex& index) {
+  std::vector<MatchedRule> matches;
+  for (const auto& ref : index.universal) MatchOneRule(ref, *element, matches);
+  if (auto it = index.by_type.find(element->typeName());
+      it != index.by_type.end()) {
+    for (const auto& ref : it->second) MatchOneRule(ref, *element, matches);
+  }
+  std::stable_sort(matches.begin(), matches.end(),
+                   [](const MatchedRule& a, const MatchedRule& b) {
+                     if (a.specificity != b.specificity) {
+                       return a.specificity < b.specificity;
+                     }
+                     if (a.sheet_order != b.sheet_order) {
+                       return a.sheet_order < b.sheet_order;
+                     }
+                     return a.rule_order < b.rule_order;
+                   });
+  return matches;
+}
+
 }  // namespace
 
 bool ComplexSelector::Matches(const VisualElement& element) const {
@@ -105,35 +194,9 @@ std::vector<const StyleSheet*> ApplicableSheets(
 std::vector<MatchedRule> MatchRules(
     const VisualElement* element,
     const std::vector<const StyleSheet*>& sheets) {
-  std::vector<MatchedRule> matches;
-  for (size_t s = 0; s < sheets.size(); s++) {
-    const StyleSheet* sheet = sheets[s];
-    for (size_t r = 0; r < sheet->rules.size(); r++) {
-      const StyleRule& rule = sheet->rules[r];
-      const ComplexSelector* best = nullptr;
-      for (const auto& selector : rule.selectors) {
-        if (selector.Matches(*element) &&
-            (!best || selector.specificity > best->specificity)) {
-          best = &selector;
-        }
-      }
-      if (best) {
-        matches.push_back({sheet, &rule, best, best->specificity,
-                           static_cast<int>(s), static_cast<int>(r)});
-      }
-    }
-  }
-  std::stable_sort(matches.begin(), matches.end(),
-                   [](const MatchedRule& a, const MatchedRule& b) {
-                     if (a.specificity != b.specificity) {
-                       return a.specificity < b.specificity;
-                     }
-                     if (a.sheet_order != b.sheet_order) {
-                       return a.sheet_order < b.sheet_order;
-                     }
-                     return a.rule_order < b.rule_order;
-                   });
-  return matches;
+  RuleIndex index;
+  BuildRuleIndex(sheets, index);
+  return MatchIndexedRules(element, index);
 }
 
 void ResolveStyles(VisualElement* root, UIResources& resources,
@@ -141,6 +204,21 @@ void ResolveStyles(VisualElement* root, UIResources& resources,
                    bool animate) {
   static const ComputedStyle kDefault;
   static const std::unordered_map<std::string, TokenList> kNoVariables;
+
+  // Sheet sets repeat across the tree (usually just the panel's sheets), so
+  // build one rule index per distinct set and reuse it for the whole pass.
+  // The cache is per call and bounded, so edited sheets never go stale.
+  std::map<std::vector<const StyleSheet*>, RuleIndex> indices;
+  auto index_for =
+      [&](const std::vector<const StyleSheet*>& sheets) -> const RuleIndex& {
+    auto it = indices.find(sheets);
+    if (it == indices.end()) {
+      if (indices.size() >= kMaxRuleIndexCache) indices.clear();
+      it = indices.emplace(sheets, RuleIndex{}).first;
+      BuildRuleIndex(sheets, it->second);
+    }
+    return it->second;
+  };
 
   // Iterative pre-order walk: CustomStyleResolvedEvent handlers may remove
   // elements, so a recursive walk could both overflow the stack on deep trees
@@ -169,7 +247,7 @@ void ResolveStyles(VisualElement* root, UIResources& resources,
       computed.InheritFrom(parent_style);
 
       const auto sheets = ApplicableSheets(e, resources, panel_sheets);
-      const auto matches = MatchRules(e, sheets);
+      const auto matches = MatchIndexedRules(e, index_for(sheets));
 
       // Custom properties inherit, then the matched rules add theirs.
       auto variables = parent ? parent->customStyle() : kNoVariables;
