@@ -88,7 +88,7 @@ class PhysicsContactListener : public JPH::ContactListener {
     // Triggers are found by overlap queries instead (PhysicsEngine::
     // UpdateTriggers), which also see characters and static triggers.
     if (inBody1.IsSensor() || inBody2.IsSensor()) return;
-    physics_engine_->TriggerCollisionCallback<kCollisionEnter>(self, other);
+    physics_engine_->QueueCollisionCallback(kCollisionEnter, self, other);
     physics_engine_->RecordContact(self, other, true);
   }
   virtual void OnContactPersisted(const JPH::Body& inBody1,
@@ -99,7 +99,7 @@ class PhysicsContactListener : public JPH::ContactListener {
     auto self = physics_engine_->Get(inBody1.GetID());
     auto other = physics_engine_->Get(inBody2.GetID());
 
-    physics_engine_->TriggerCollisionCallback<kCollisionPersisted>(self, other);
+    physics_engine_->QueueCollisionCallback(kCollisionPersisted, self, other);
   }
   virtual void OnContactRemoved(
       const JPH::SubShapeIDPair& inSubShapePair) override {
@@ -108,7 +108,7 @@ class PhysicsContactListener : public JPH::ContactListener {
     auto self = physics_engine_->Get(bodyID1);
     auto other = physics_engine_->Get(bodyID2);
 
-    physics_engine_->TriggerCollisionCallback<kCollisionLeave>(self, other);
+    physics_engine_->QueueCollisionCallback(kCollisionLeave, self, other);
     physics_engine_->RecordContact(self, other, false);
   }
 
@@ -1245,7 +1245,38 @@ void PhysicsEngine::RecordContact(kEntityId a, kEntityId b, bool added) {
   if (count <= 0) contact_counts_.erase({a, b});
 }
 
+void PhysicsEngine::QueueCollisionCallback(CollisionType type, kEntityId self,
+                                           kEntityId other) {
+  if (self == entt::null && other == entt::null) return;
+  std::lock_guard lock(contact_mutex_);
+  pending_callbacks_.push_back({type, self, other});
+}
+
 void PhysicsEngine::UpdateContacts() {
+  // The per-entity callbacks were queued from Jolt's threads during the step.
+  // They run here, between steps, where they may touch bodies and the scene.
+  std::vector<PendingCollisionCallback> callbacks;
+  {
+    std::lock_guard lock(contact_mutex_);
+    callbacks.swap(pending_callbacks_);
+  }
+  for (const auto& callback : callbacks) {
+    switch (callback.type) {
+      case kCollisionEnter:
+        TriggerCollisionCallback<kCollisionEnter>(callback.self,
+                                                  callback.other);
+        break;
+      case kCollisionPersisted:
+        TriggerCollisionCallback<kCollisionPersisted>(callback.self,
+                                                      callback.other);
+        break;
+      case kCollisionLeave:
+        TriggerCollisionCallback<kCollisionLeave>(callback.self,
+                                                  callback.other);
+        break;
+    }
+  }
+
   std::set<std::pair<kEntityId, kEntityId>> current;
   {
     std::lock_guard lock(contact_mutex_);

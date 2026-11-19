@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <thread>
 
 #include "components/components.h"
 #include "project/map.h"
@@ -284,4 +285,54 @@ lock_rotation_z = true
   }
 
   EXPECT_EQ(body.GetTransform()->GetPosition(), glm::vec3(0.0f, 2.0f, 0.0f));
+}
+
+// The per-entity collision callbacks used to run straight from Jolt's job
+// threads in the middle of the step. They are queued and run after the step,
+// on the thread that steps the physics.
+TEST(PhysicsConstraints, CollisionCallbacksRunOnTheSteppingThread) {
+  std::string error;
+  auto project = Project::Load(kRollABall / "roll_a_ball.mproj", &error);
+  ASSERT_TRUE(project) << error;
+
+  Map map;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+
+[node name="Root"]
+
+[node name="Floor" parent="."]
+[component type="Transform" node="Floor"]
+position = Vector3(0, -0.5, 0)
+[component type="BoxCollider" node="Floor"]
+size = Vector3(40, 1, 40)
+
+[node name="Ball" parent="."]
+[component type="Transform" node="Ball"]
+position = Vector3(0, 0.6, 0)
+[component type="SphereCollider" node="Ball"]
+radius = 0.5
+[component type="Rigidbody" node="Ball"]
+motion_type = "dynamic"
+mass = 1.0
+)",
+                                 &error))
+      << error;
+
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.Instantiate(map);
+  auto ball = scene.Find("Ball");
+  ASSERT_TRUE(ball.IsValid());
+
+  const auto stepping_thread = std::this_thread::get_id();
+  int enters = 0;
+  bool wrong_thread = false;
+  scene.Physics().AddCollisionCallback<kCollisionEnter>(
+      ball.GetEntity(), [&](kEntityId, kEntityId) {
+        enters++;
+        if (std::this_thread::get_id() != stepping_thread) wrong_thread = true;
+      });
+  for (int i = 0; i < 60; ++i) scene.SimulatePhysics(1);
+
+  EXPECT_GT(enters, 0);
+  EXPECT_FALSE(wrong_thread);
 }

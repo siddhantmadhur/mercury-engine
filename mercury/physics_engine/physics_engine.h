@@ -383,6 +383,11 @@ class PhysicsEngine {
   }
   // Called by the contact listener from Jolt's threads.
   void RecordContact(kEntityId a, kEntityId b, bool added);
+  // Also from Jolt's threads: remembers that the per-entity collision callback
+  // of `type` (AddCollisionCallback) is due. It runs later, on the thread that
+  // steps the physics, so it can safely change bodies and the scene.
+  void QueueCollisionCallback(CollisionType type, kEntityId self,
+                              kEntityId other);
 
   // Forces and impulses act on dynamic bodies at the next physics step.
   void AddForce(kEntityId self, glm::vec3 force,
@@ -520,6 +525,12 @@ class PhysicsEngine {
   // Touching pairs (a < b) with how many sub-shape contacts each has.
   std::mutex contact_mutex_;
   std::map<std::pair<kEntityId, kEntityId>, int> contact_counts_;
+  struct PendingCollisionCallback {
+    CollisionType type;
+    kEntityId self;
+    kEntityId other;
+  };
+  std::vector<PendingCollisionCallback> pending_callbacks_;  // contact_mutex_
   std::set<std::pair<kEntityId, kEntityId>> contact_pairs_;
   ContactCallback contact_callback_;
   void UpdateContacts();
