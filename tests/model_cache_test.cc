@@ -168,7 +168,14 @@ TEST_F(ModelCacheTest, DamagedCountsImportAgainWithoutAllocating) {
   }
   auto again = Model::Load(obj.string(), Settings(), &error);
   ASSERT_TRUE(again) << error;
-  EXPECT_NE(fs::last_write_time(cache_file), written);  // imported again
+  // The import wrote a good cache over the damaged one.
+  uint64_t count = 0;
+  {
+    std::ifstream file(cache_file, std::ios::binary);
+    file.seekg(13);
+    file.read(reinterpret_cast<char*>(&count), sizeof(count));
+  }
+  EXPECT_EQ(count, imported->Nodes().size());
   EXPECT_EQ(again->Nodes().size(), imported->Nodes().size());
 }
 

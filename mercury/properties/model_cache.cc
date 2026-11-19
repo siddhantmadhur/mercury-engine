@@ -220,7 +220,12 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   const auto start = std::chrono::steady_clock::now();
   FILE* file = std::fopen(cache.string().c_str(), "rb");
   if (!file) return nullptr;
-  Reader in(file, fs::file_size(cache, ec));
+  const uint64_t cache_size = fs::file_size(cache, ec);
+  if (ec) {
+    std::fclose(file);
+    return nullptr;
+  }
+  Reader in(file, cache_size);
   char magic[4] = {};
   in.Bytes(magic, sizeof(magic));
   const uint64_t key = in.Pod<uint64_t>();
@@ -317,8 +322,19 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   // Indices into the arrays must be in range, or the renderer reads past
   // them.
   const int node_count = static_cast<int>(model->nodes_.size());
-  for (const auto& node : model->nodes_) {
+  for (int i = 0; i < node_count; i++) {
+    const auto& node = model->nodes_[i];
     if (node.parent >= node_count) return nullptr;
+    // Walking children recurses, so the tree has to be a real one: every
+    // child exists and points back at its parent, and no parent chain loops.
+    for (int child : node.children) {
+      if (child < 0 || child >= node_count || model->nodes_[child].parent != i)
+        return nullptr;
+    }
+    int steps = 0;
+    for (int up = node.parent; up >= 0; up = model->nodes_[up].parent) {
+      if (++steps > node_count) return nullptr;
+    }
     for (int mesh : node.meshes) {
       if (mesh < 0 || mesh >= static_cast<int>(model->meshes_.size()))
         return nullptr;
