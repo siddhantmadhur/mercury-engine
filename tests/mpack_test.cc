@@ -214,6 +214,8 @@ TEST_F(MPackTest, IndexSizeArithmeticDoesNotWrap) {
   Patch(index, 24, &wrapped, 8);
   std::string error;
   EXPECT_FALSE(mpack::Reader::Open(dir_ / "game.mpack", &error));
+  // Rejected by the size check, before a table that large is allocated.
+  EXPECT_NE(error.find("truncated"), std::string::npos) << error;
 }
 
 // The index is untrusted: an entry that claims more bytes than its archive
@@ -242,6 +244,48 @@ TEST_F(MPackTest, EntryOutsideItsArchiveFailsToRead) {
   std::string error;
   EXPECT_FALSE(reader->Read("noise.bin", &error));
   EXPECT_NE(error.find("outside"), std::string::npos) << error;
+}
+
+// A compressed entry may not claim more than zlib can produce from its stored
+// bytes, nor more than its stream really holds.
+TEST_F(MPackTest, CompressedEntryWithAFalseSizeFailsToRead) {
+  mpack::Writer writer;
+  writer.AddBytes("text.txt", Bytes(std::string(4096, 'a')));
+  ASSERT_TRUE(writer.Write(dir_, "game"));
+  const auto index = dir_ / "game.mindex";
+  uint32_t bucket_count = 0;
+  {
+    std::ifstream in(index, std::ios::binary);
+    in.seekg(16);
+    in.read(reinterpret_cast<char*>(&bucket_count), 4);
+  }
+  const std::streamoff record = 32 + std::streamoff{bucket_count} * 4;
+  for (uint64_t claimed : {uint64_t{1} << 31, uint64_t{4096 + 1}}) {
+    Patch(index, record + 32, &claimed, 8);
+    auto reader = mpack::Reader::Open(dir_ / "game.mpack");
+    ASSERT_TRUE(reader);
+    std::string error;
+    EXPECT_FALSE(reader->Read("text.txt", &error)) << claimed;
+    EXPECT_FALSE(error.empty());
+  }
+}
+
+TEST_F(MPackTest, MissingDataArchiveFailsToRead) {
+  mpack::Writer writer;
+  for (int i = 0; i < 8; i++) {
+    writer.AddBytes("file" + std::to_string(i), Noise(2048, i));
+  }
+  ASSERT_TRUE(writer.Write(dir_, "game", 4096));
+  auto reader = mpack::Reader::Open(dir_ / "game.mpack");
+  ASSERT_TRUE(reader);
+  std::filesystem::remove(dir_ / "game_001.mpack");
+  std::string error;
+  bool failed = false;
+  for (int i = 0; i < 8; i++) {
+    if (!reader->Read("file" + std::to_string(i), &error)) failed = true;
+  }
+  EXPECT_TRUE(failed);
+  EXPECT_NE(error.find("could not read"), std::string::npos) << error;
 }
 
 TEST_F(MPackTest, RejectsUnsafePaths) {

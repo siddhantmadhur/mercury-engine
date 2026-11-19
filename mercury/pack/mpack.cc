@@ -500,6 +500,12 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
           ArchivePath(dir_, base_name_, entry->archive), std::ios::binary);
     }
     archive->clear();
+    if (!archive->is_open()) {
+      archive.reset();  // try again next time instead of caching a dead stream
+      return fail(std::format(
+          "could not read {}",
+          ArchivePath(dir_, base_name_, entry->archive).filename().string()));
+    }
     // The index is untrusted: the entry has to lie inside the archive before
     // a buffer is sized from it.
     archive->seekg(0, std::ios::end);
@@ -526,11 +532,25 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
     if (entry->size > UINT32_MAX || entry->stored_size > UINT32_MAX) {
       return fail("entry is too large to decompress");
     }
-    data.resize(entry->size);
-    uLongf size = static_cast<uLongf>(entry->size);
-    if (uncompress(data.data(), &size, stored.data(),
-                   static_cast<uLong>(stored.size())) != Z_OK ||
-        size != entry->size) {
+    // Inflate in steps instead of allocating the claimed size up front: a
+    // tiny stream that claims gigabytes only costs what it really produces.
+    z_stream stream = {};
+    if (inflateInit(&stream) != Z_OK) return fail("data is corrupt");
+    stream.next_in = stored.data();
+    stream.avail_in = static_cast<uInt>(stored.size());
+    constexpr size_t kStep = 1 << 20;
+    int status = Z_OK;
+    while (status == Z_OK) {
+      const size_t used = data.size();
+      if (used >= entry->size) break;  // more output than the index claims
+      data.resize(used + std::min<size_t>(kStep, entry->size - used));
+      stream.next_out = data.data() + used;
+      stream.avail_out = static_cast<uInt>(data.size() - used);
+      status = inflate(&stream, Z_NO_FLUSH);
+      data.resize(used + (data.size() - used - stream.avail_out));
+    }
+    inflateEnd(&stream);
+    if (status != Z_STREAM_END || data.size() != entry->size) {
       return fail("data is corrupt");
     }
   } else {
