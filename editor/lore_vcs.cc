@@ -90,6 +90,32 @@ fs::path FindLoreExecutable(const std::string& configured,
   return {};
 }
 
+// Joins a path reported by `lore` onto the project root, or returns an empty
+// path if it is not a plain relative path to something inside the project.
+// The text comes from the program's output, so it is checked like any other
+// untrusted input: no absolute paths, no "..", and the parent folder must
+// still be inside the project once symlinks are resolved. The entry itself
+// may be a symlink; deleting it removes only the link.
+fs::path ProjectFileFromLore(const fs::path& root, const std::string& text) {
+  const fs::path relative(text);
+  if (text.empty() || relative.is_absolute() || relative.has_root_name() ||
+      !relative.has_filename()) {
+    return {};
+  }
+  for (const auto& part : relative) {
+    if (part == "..") return {};
+  }
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(root, ec);
+  if (ec) return {};
+  const fs::path file = root / relative;
+  const fs::path real_parent = fs::weakly_canonical(file.parent_path(), ec);
+  if (ec) return {};
+  const fs::path inside = (real_parent / file.filename()).lexically_relative(real_root);
+  if (inside.empty() || inside == "." || *inside.begin() == "..") return {};
+  return file;
+}
+
 // Quotes a value for a TOML basic string. Newlines and other control
 // characters cannot be represented safely in a one-line key, so they are
 // rejected rather than written.
@@ -386,8 +412,15 @@ void LoreVcs::Discard(const Change& change) {
   if (!project_) return;
   if (change.section == Section::kUntracked) {
     // Never committed, so there is nothing for lore to restore.
+    const fs::path file =
+        ProjectFileFromLore(project_->GetRoot(), change.path);
+    if (file.empty()) {
+      console_.Error("Refusing to delete \"" + change.path +
+                     "\": it is not a file inside the project");
+      return;
+    }
     std::error_code ec;
-    fs::remove(project_->GetRoot() / change.path, ec);
+    fs::remove(file, ec);
     if (ec) {
       console_.Error("Could not delete " + change.path + ": " + ec.message());
     } else {
