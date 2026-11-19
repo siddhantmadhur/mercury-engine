@@ -79,6 +79,9 @@ class Font {
   std::unordered_map<char32_t, GlyphInfo> glyphs_;
   // Shelf packer state.
   int shelf_x_ = 1, shelf_y_ = 1, shelf_height_ = 0;
+  // Set once no glyph can fit any more, so later codepoints skip rasterizing.
+  bool atlas_exhausted_ = false;
+  bool atlas_warned_ = false;
   std::string path_;
 };
 

@@ -25,6 +25,9 @@ namespace {
 constexpr int kAtlasWidth = 1024;
 constexpr int kInitialAtlasHeight = 512;
 constexpr int kMaxAtlasHeight = 4096;
+// Upper bound on cached glyphs, so text with a huge number of distinct
+// codepoints cannot grow the cache (and the atlas) without limit.
+constexpr size_t kMaxCachedGlyphs = 65536;
 
 uint64_t g_atlas_resizes = 0;
 
@@ -241,6 +244,15 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
   stbtt_GetGlyphHMetrics(info_.get(), glyph_index, &advance, &lsb);
   glyph.advance = advance * scale_;
 
+  // A full atlas never frees space, so stop rasterizing (and warning) for
+  // every further codepoint. The empty glyph is cached under a hard cap so a
+  // long tail of distinct characters cannot grow the map without bound.
+  if (atlas_exhausted_) {
+    static const GlyphInfo kEmpty;
+    if (glyphs_.size() >= kMaxCachedGlyphs) return kEmpty;
+    return glyphs_.emplace(codepoint, glyph).first->second;
+  }
+
   int w = 0, h = 0, xoff = 0, yoff = 0;
   unsigned char* sdf =
       stbtt_GetGlyphSDF(info_.get(), scale_, glyph_index, kSdfPadding, 128,
@@ -266,7 +278,16 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
       glyph.size = {static_cast<float>(w), static_cast<float>(h)};
       glyph.visible = true;
     } else {
-      PDebug::warn("UI: glyph {}x{} does not fit in the font atlas", w, h);
+      // Only an atlas that is actually full stops future glyphs; a single
+      // oversized glyph is rejected and the next one may still fit.
+      if (w + 2 <= atlas_->width && h + 2 <= kMaxAtlasHeight) {
+        atlas_exhausted_ = true;
+      }
+      if (!atlas_warned_) {
+        atlas_warned_ = true;
+        PDebug::warn(
+            "UI: font atlas is full; later glyphs will not be rasterized");
+      }
     }
   }
   if (sdf) stbtt_FreeSDF(sdf, nullptr);
