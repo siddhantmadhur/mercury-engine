@@ -133,6 +133,35 @@ FieldType PrimitiveFieldType(int type_id) {
   return FieldType::kFloat;
 }
 
+// FieldType can only store bool, int and float. Reading a double, an int64,
+// a handle or any other value through those would touch the wrong number of
+// bytes, so [field] accepts only the types below.
+bool IsReflectableElementType(asITypeInfo* type) {
+  if (!type) return false;
+  const std::string name = type->GetName();
+  if (name == "string") return true;
+  // These element types are not saved, but reading them is skipped rather
+  // than reinterpreted, so they are safe to leave in place.
+  if (name == "Vector2" || name == "Vector3" || name == "Color" ||
+      name == "Event") {
+    return true;
+  }
+  const int type_id = type->GetTypeId();
+  return type_id == asTYPEID_BOOL || type_id == asTYPEID_INT32 ||
+         type_id == asTYPEID_UINT32 || type_id == asTYPEID_FLOAT;
+}
+
+bool IsReflectableFieldType(int type_id, asITypeInfo* type) {
+  const std::string name = type ? type->GetName() : "";
+  if (name == "Vector2" || name == "Vector3" || name == "Color" ||
+      name == "Event" || name == "string") {
+    return true;
+  }
+  if (name == "array") return IsReflectableElementType(type->GetSubType());
+  return type_id == asTYPEID_BOOL || type_id == asTYPEID_INT32 ||
+         type_id == asTYPEID_UINT32 || type_id == asTYPEID_FLOAT;
+}
+
 FieldType ElementFieldType(asITypeInfo* type) {
   if (!type) return FieldType::kString;
   const std::string name = type->GetName();
@@ -328,6 +357,7 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
       }
     }
 
+    bool class_supported = true;
     for (asUINT p = 0; p < type->GetPropertyCount(); p++) {
       const auto metadata = builder.GetMetadataForTypeProperty(type_id, p);
       bool is_field = false;
@@ -373,14 +403,32 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
         field.type = PrimitiveFieldType(field.type_id);
       }
 
+      if (!IsReflectableFieldType(field.type_id, field_type)) {
+        PDebug::error(
+            "{}: [field] {} is a {}; only bool, int, float, string, Vector2, "
+            "Vector3, Color, Event and array of those can be saved",
+            script_class->name, field.name,
+            field_type_name.empty() ? "value type" : field_type_name);
+        class_supported = false;
+        break;
+      }
+
       const auto enum_values = MetaQuoted(metadata, "enum");
       if (!enum_values.empty()) {
+        if (field.type_id != asTYPEID_INT32 &&
+            field.type_id != asTYPEID_UINT32) {
+          PDebug::error("{}: [field] {} is an enum but not an int",
+                        script_class->name, field.name);
+          class_supported = false;
+          break;
+        }
         field.type = FieldType::kEnum;
         field.enum_values = enum_values;
       }
       field.tooltip = MetaValue(metadata, "tooltip");
       script_class->fields.push_back(std::move(field));
     }
+    if (!class_supported) continue;
 
     for (asUINT m = 0; m < type->GetMethodCount(); m++) {
       asIScriptFunction* method = type->GetMethodByIndex(m, true);
