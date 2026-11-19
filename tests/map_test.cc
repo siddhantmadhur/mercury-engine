@@ -165,6 +165,24 @@ TEST(Project, ResolvesResPaths) {
   EXPECT_EQ(project->ToResPath("/definitely/outside"), "");
 }
 
+TEST(Project, ResolveStaysInsideProject) {
+  std::string error;
+  auto project = Project::Load(kPong / "pong.mproj", &error);
+  ASSERT_TRUE(project) << error;
+  EXPECT_FALSE(project->Resolve("res://maps/main.mmap").empty());
+  // New files inside the project are fine, existing or not.
+  EXPECT_FALSE(project->Resolve("res://maps/not_yet_saved.mmap").empty());
+  EXPECT_TRUE(project->Resolve("res://../../../../etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("../../../etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("res:///etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("/etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("").empty());
+  // An absolute path that points back inside the project is accepted.
+  EXPECT_FALSE(
+      project->Resolve((project->GetRoot() / "maps/main.mmap").string())
+          .empty());
+}
+
 TEST(MapScene, CurrentCameraSetsSkyboxPath) {
   std::string error;
   auto project = Project::Load(kPong / "pong.mproj", &error);

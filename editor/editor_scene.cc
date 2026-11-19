@@ -795,7 +795,7 @@ bool EditorScene::DeleteProjectPath(const fs::path& target) {
 bool EditorScene::BuildGame(const std::string& output_str) {
   auto project = GetProject();
   if (!project) return false;
-  const fs::path output = project->Resolve(output_str);
+  const fs::path output = project->ResolveUnchecked(output_str);
   std::error_code ec;
   if (output_str.empty() || fs::equivalent(output, project->GetRoot(), ec)) {
     console_.Error("Invalid build output folder");

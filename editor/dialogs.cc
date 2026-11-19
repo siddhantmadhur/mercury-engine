@@ -188,7 +188,7 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   root->Add(grid, 0, wxEXPAND | wxALL, 14);
 
   browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
-    fs::path initial = project->Resolve(out_ctrl->GetValue().ToStdString());
+    fs::path initial = project->ResolveUnchecked(out_ctrl->GetValue().ToStdString());
     if (!fs::exists(initial)) initial = project->GetRoot();
     wxDirDialog dir_dlg(&dlg, "Select Build Output Folder",
                         wxString::FromUTF8(initial.string()),
