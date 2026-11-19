@@ -902,6 +902,7 @@ struct PostProcessProfile {
   float exposure = 1.0f;
   float bloom_intensity = 0.0f;
   float bloom_threshold = 1.0f;
+  float bloom_highlight = 1000.0f;
   float bloom_scatter = 0.7f;
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;
@@ -924,7 +925,13 @@ struct PostProcessProfile {
         .Tooltip("Multiplies the scene before tonemapping");
     r.Field("bloom_intensity", bloom_intensity).Tooltip("0 turns bloom off");
     r.Field("bloom_threshold", bloom_threshold)
-        .Tooltip("Brightness (linear) above which pixels glow");
+        .Tooltip(
+            "0 disables the bloom threshold; any positive value enables "
+            "Filament's fixed 1.0 cutoff (the number itself has no effect)");
+    r.Field("bloom_highlight", bloom_highlight)
+        .Tooltip(
+            "Filament's brightest value fed to bloom (clamped to 10 or more); "
+            "lower values compress highlights and reduce bloom");
     r.Field("bloom_scatter", bloom_scatter)
         .Tooltip("How far the glow spreads, 0 to 1");
     r.Field("vignette_intensity", vignette_intensity)

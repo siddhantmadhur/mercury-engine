@@ -159,7 +159,13 @@ struct RenderSettings {
   int tonemap = 1;  // 0 none, 1 neutral, 2 ACES
   float exposure = 1.0f;
   float bloom_intensity = 0.0f;
+  // > 0 enables Filament's threshold, which is fixed at 1.0; the number
+  // itself has no further effect.
   float bloom_threshold = 1.0f;
+  // Filament's BloomOptions::highlight: the brightest value fed to bloom.
+  // The View clamps it to >= 10; lower values compress highlights and
+  // reduce bloom.
+  float bloom_highlight = 1000.0f;
   float bloom_scatter = 0.7f;
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;

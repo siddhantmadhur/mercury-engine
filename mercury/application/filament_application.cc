@@ -307,7 +307,13 @@ void FilamentApplication::ApplyPostProcess(filament::View* view,
   filament::BloomOptions bloom;
   bloom.enabled = settings.bloom_intensity > 0.0f;
   bloom.strength = std::clamp(settings.bloom_intensity, 0.0f, 1.0f);
+  // BloomOptions::threshold is a flag, not a cutoff: Filament always
+  // subtracts 1.0 from the HDR color. A positive authored threshold only
+  // enables it; the number itself has no further effect.
   bloom.threshold = settings.bloom_threshold > 0.0f;
+  // The real numeric control is BloomOptions::highlight, the brightest value
+  // fed to bloom. Expose it 1:1; the View clamps it to >= 10.
+  bloom.highlight = std::max(10.0f, settings.bloom_highlight);
   bloom.levels = static_cast<uint8_t>(std::clamp(
       static_cast<int>(std::lround(3.0f + settings.bloom_scatter * 6.0f)), 3,
       11));

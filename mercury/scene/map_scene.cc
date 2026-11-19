@@ -1260,6 +1260,7 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.exposure = profile.exposure;
     settings.bloom_intensity = profile.bloom_intensity;
     settings.bloom_threshold = profile.bloom_threshold;
+    settings.bloom_highlight = profile.bloom_highlight;
     settings.bloom_scatter = profile.bloom_scatter;
     settings.vignette_intensity = profile.vignette_intensity;
     settings.vignette_smoothness = profile.vignette_smoothness;
