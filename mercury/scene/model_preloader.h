@@ -10,7 +10,9 @@
  * uploads it to the GPU later, on the main thread), so a worker can run it;
  * the caller polls for progress and takes the finished models.
  *
- * Only the thread that calls Start() may use the other members.
+ * Only the thread that calls Start() may use the other members. The workers
+ * hold the load state themselves, so Cancel() can return without waiting for
+ * an import that is already running.
  */
 #ifndef MERCURY_SCENE_MODEL_PRELOADER_H
 #define MERCURY_SCENE_MODEL_PRELOADER_H
@@ -48,16 +50,20 @@ class ModelPreloader {
   // Starts loading; a load already in progress is cancelled first.
   void Start(std::vector<Job> jobs);
 
-  // Stops after the models being loaded now and drops every result.
+  // Stops the workers and drops every result. An import that is already
+  // running cannot be interrupted inside Assimp; the workers finish it in the
+  // background with the state they hold.
   void Cancel();
 
   // True from Start until TakeResults or Cancel.
   bool IsBusy() const { return active_; }
   // True once every job has run.
-  bool IsFinished() const { return active_ && done_ >= jobs_.size(); }
+  bool IsFinished() const {
+    return active_ && run_ && run_->done >= run_->jobs.size();
+  }
 
-  size_t Done() const { return done_; }
-  size_t Total() const { return jobs_.size(); }
+  size_t Done() const { return run_ ? run_->done.load() : 0; }
+  size_t Total() const { return run_ ? run_->jobs.size() : 0; }
   // How much of all the work is done (0-1), counting the models still loading
   // by how far along they are.
   float Fraction() const;
@@ -68,19 +74,24 @@ class ModelPreloader {
   std::vector<Result> TakeResults();
 
  private:
-  void Work();
+  // One load, shared with its workers so it outlives a Cancel().
+  struct Run {
+    std::vector<Job> jobs;
+    std::vector<Result> results;  // one slot per job; guarded by mutex
+    std::shared_ptr<std::atomic<float>[]> progress;  // per job, 0-1
+    std::atomic<size_t> next{0};
+    std::atomic<size_t> done{0};
+    std::atomic<bool> cancel{false};
 
-  std::vector<Job> jobs_;
+    mutable std::mutex mutex;
+    std::string current;
+  };
+
+  static void Work(std::shared_ptr<Run> run);
+
+  std::shared_ptr<Run> run_;
   std::vector<std::thread> workers_;
-  std::atomic<size_t> next_{0};
-  std::atomic<size_t> done_{0};
-  std::unique_ptr<std::atomic<float>[]> progress_;  // per job, 0-1
-  std::atomic<bool> cancel_{false};
   bool active_ = false;
-
-  mutable std::mutex mutex_;
-  std::vector<Result> results_;  // one slot per job; guarded by mutex_
-  std::string current_;
 };
 
 }  // namespace Mercury

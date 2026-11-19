@@ -12,88 +12,88 @@ namespace Mercury {
 
 void ModelPreloader::Start(std::vector<Job> jobs) {
   Cancel();
-  jobs_ = std::move(jobs);
-  results_.assign(jobs_.size(), Result{});
-  for (size_t i = 0; i < jobs_.size(); i++)
-    results_[i].res_path = jobs_[i].res_path;
-  progress_.reset(new std::atomic<float>[jobs_.size()]());
-  next_ = 0;
-  done_ = 0;
-  cancel_ = false;
+  auto run = std::make_shared<Run>();
+  run->jobs = std::move(jobs);
+  run->results.assign(run->jobs.size(), Result{});
+  for (size_t i = 0; i < run->jobs.size(); i++)
+    run->results[i].res_path = run->jobs[i].res_path;
+  run->progress = std::make_shared<std::atomic<float>[]>(run->jobs.size());
+  for (size_t i = 0; i < run->jobs.size(); i++) run->progress[i] = 0.0f;
+  run_ = run;
   active_ = true;
-  if (jobs_.empty()) return;
+  if (run->jobs.empty()) return;
 
   const size_t cores = std::max(1u, std::thread::hardware_concurrency());
   const size_t count = std::clamp<size_t>(cores > 1 ? cores - 1 : 1, 1, 4);
-  for (size_t i = 0; i < std::min(count, jobs_.size()); i++) {
-    workers_.emplace_back([this] { Work(); });
+  for (size_t i = 0; i < std::min(count, run->jobs.size()); i++) {
+    workers_.emplace_back([run] { Work(run); });
   }
 }
 
-void ModelPreloader::Work() {
-  while (!cancel_) {
-    const size_t index = next_++;
-    if (index >= jobs_.size()) return;
-    const Job& job = jobs_[index];
+void ModelPreloader::Work(std::shared_ptr<Run> run) {
+  while (!run->cancel) {
+    const size_t index = run->next++;
+    if (index >= run->jobs.size()) return;
+    const Job& job = run->jobs[index];
     {
-      std::lock_guard lock(mutex_);
-      current_ = job.res_path;
+      std::lock_guard lock(run->mutex);
+      run->current = job.res_path;
     }
     std::string error;
     std::shared_ptr<const Model> model;
     try {
-      model = Model::Load(job.file, job.settings, &error, &progress_[index]);
+      model = Model::Load(job.file, job.settings, &error, &run->progress[index],
+                          &run->cancel);
     } catch (const std::exception& e) {
       error = e.what();
     }
-    if (!model)
+    if (!model && !run->cancel)
       PDebug::warn("Could not load model {}: {}", job.res_path, error);
     {
-      std::lock_guard lock(mutex_);
-      results_[index].model = std::move(model);
+      std::lock_guard lock(run->mutex);
+      run->results[index].model = std::move(model);
     }
-    progress_[index] = 1.0f;
-    done_++;
+    run->progress[index] = 1.0f;
+    run->done++;
   }
 }
 
 float ModelPreloader::Fraction() const {
-  if (jobs_.empty() || !progress_) return 0.0f;
+  if (!run_ || run_->jobs.empty()) return 0.0f;
   float sum = 0.0f;
-  for (size_t i = 0; i < jobs_.size(); i++) sum += progress_[i];
-  return sum / static_cast<float>(jobs_.size());
+  for (size_t i = 0; i < run_->jobs.size(); i++) sum += run_->progress[i];
+  return sum / static_cast<float>(run_->jobs.size());
 }
 
 void ModelPreloader::Cancel() {
-  cancel_ = true;
-  for (auto& worker : workers_) worker.join();
+  if (run_) run_->cancel = true;
+  // Wait for nothing: an import that is already running cannot be interrupted
+  // inside Assimp, and the workers only need the state they hold. They exit
+  // once the model is built, and their results are dropped with `run_`.
+  for (auto& worker : workers_) worker.detach();
   workers_.clear();
-  jobs_.clear();
-  results_.clear();
-  current_.clear();
-  progress_.reset();
-  done_ = 0;
+  run_.reset();
   active_ = false;
 }
 
 std::string ModelPreloader::CurrentName() const {
-  std::lock_guard lock(mutex_);
-  return current_;
+  if (!run_) return {};
+  std::lock_guard lock(run_->mutex);
+  return run_->current;
 }
 
 std::vector<ModelPreloader::Result> ModelPreloader::TakeResults() {
+  auto run = std::move(run_);
+  run_.reset();
+  if (!run) return {};
   for (auto& worker : workers_) worker.join();
   workers_.clear();
   std::vector<Result> results;
   {
-    std::lock_guard lock(mutex_);
-    results = std::move(results_);
-    results_.clear();
+    std::lock_guard lock(run->mutex);
+    results = std::move(run->results);
+    run->results.clear();
   }
-  jobs_.clear();
-  current_.clear();
-  progress_.reset();
-  done_ = 0;
   active_ = false;
   return results;
 }

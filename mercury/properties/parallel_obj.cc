@@ -569,6 +569,10 @@ std::unique_ptr<aiScene> JoinScenes(
 std::unique_ptr<aiScene> ImportObjInParallel(
     const std::string& path, const ParallelObjOptions& options) {
   if (WorkerThreadCount() < 2) return nullptr;
+  const auto cancelled = [&options] {
+    return options.cancelled && options.cancelled();
+  };
+  if (cancelled()) return nullptr;
   std::error_code ec;
   const auto disk_size = fs::file_size(path, ec);
   if (!ec && disk_size < options.min_bytes) return nullptr;
@@ -607,8 +611,10 @@ std::unique_ptr<aiScene> ImportObjInParallel(
   bounds.push_back(size);
   std::vector<RangeScan> scans(bounds.size() - 1);
   ParallelFor(scans.size(), [&](size_t i) {
+    if (cancelled()) return;
     ScanRange(base, bounds[i], bounds[i + 1], scans[i]);
   });
+  if (cancelled()) return nullptr;
 
   // Join the ranges' events, with counts that run from the start of the file.
   struct Object {
@@ -762,6 +768,8 @@ std::unique_ptr<aiScene> ImportObjInParallel(
     }
   }
 
+  if (cancelled()) return nullptr;
+
   // ---- Import the pieces at the same time
   const fs::path file_path(path);
   const std::string stem = file_path.stem().string();
@@ -769,7 +777,10 @@ std::unique_ptr<aiScene> ImportObjInParallel(
   std::atomic<bool> failed{false};
   std::atomic<size_t> finished{0};
   ParallelFor(pieces.size(), [&](size_t i) {
-    if (failed) return;
+    if (failed || cancelled()) {
+      failed = true;
+      return;
+    }
     std::string text;
     if (!BuildPiece(base, pieces[i], i == 0, text)) {
       failed = true;
@@ -792,6 +803,7 @@ std::unique_ptr<aiScene> ImportObjInParallel(
                        static_cast<float>(pieces.size()));
     }
   });
+  if (cancelled()) return nullptr;
   if (failed) {
     PDebug::log("{}: could not be cut into pieces, importing it whole", path);
     return nullptr;
