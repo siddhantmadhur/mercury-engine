@@ -304,10 +304,13 @@ std::unique_ptr<VisualElement> VisualElement::HierarchyRemove(
 void VisualElement::SetPanel(Panel* panel) {
   if (panel_ == panel) return;
   if (panel_) {
+    Panel* previous = panel_;
     for (auto& child : children_) child->SetPanel(nullptr);
-    panel_->OnElementDetached(this);
+    previous->OnElementDetached(this);
     DetachFromPanelEvent event;
     SendEvent(event);
+    // A handler may have attached us somewhere else; keep that choice.
+    if (panel_ != previous) return;
     panel_ = nullptr;
   }
   panel_ = panel;
@@ -316,7 +319,18 @@ void VisualElement::SetPanel(Panel* panel) {
     MarkStyleDirty();
     AttachToPanelEvent event;
     SendEvent(event);
-    for (auto& child : children_) child->SetPanel(panel);
+    // The attach handler may have detached us or removed children, so walk a
+    // snapshot and validate each child before attaching it.
+    if (panel_ != panel) return;
+    std::vector<std::pair<VisualElement*, std::shared_ptr<const bool>>>
+        children;
+    children.reserve(children_.size());
+    for (auto& child : children_) {
+      children.emplace_back(child.get(), child->aliveToken());
+    }
+    for (auto& [child, alive] : children) {
+      if (*alive && child->panel_ != panel) child->SetPanel(panel);
+    }
   }
 }
 
