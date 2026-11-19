@@ -115,6 +115,8 @@ struct ModelMaterial {
   std::shared_ptr<ImageData> normal_texture;    // tangent space
   float normal_scale = 1.0f;
   bool transparent = false;
+  // Draw the back faces too (the file's two-sided flag).
+  bool double_sided = false;
   // Glass-like: the share of light that passes through (refracted) rather
   // than being reflected diffusely, the index of refraction, and the tint
   // what passes through takes on (linear) after `thickness` world units of
@@ -196,6 +198,7 @@ struct ModelMaterialOverride {
   std::optional<float> ior;
   std::optional<glm::vec3> transmission_color;  // linear
   std::optional<float> thickness;
+  std::optional<bool> double_sided;
 };
 
 struct ModelImportSettings {

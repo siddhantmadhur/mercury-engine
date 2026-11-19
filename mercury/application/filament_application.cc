@@ -5,6 +5,7 @@
 #include "filament_application.h"
 
 #include <backend/PixelBufferDescriptor.h>
+#include <filament/Color.h>
 #include <filament/Options.h>
 #include <filament/ToneMapper.h>
 #include <filament/Viewport.h>
@@ -31,12 +32,10 @@ namespace Mercury {
 
 namespace {
 
-float SrgbToLinear(float c) {
-  return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
 glm::vec3 SrgbToLinear(const glm::vec3& c) {
-  return {SrgbToLinear(c.r), SrgbToLinear(c.g), SrgbToLinear(c.b)};
+  const filament::LinearColor linear =
+      filament::Color::toLinear(filament::sRGBColor{c.r, c.g, c.b});
+  return {linear.r, linear.g, linear.b};
 }
 
 filament::math::float4 ToFilament(const glm::vec4& v) {
@@ -308,7 +307,13 @@ void FilamentApplication::ApplyPostProcess(filament::View* view,
   filament::BloomOptions bloom;
   bloom.enabled = settings.bloom_intensity > 0.0f;
   bloom.strength = std::clamp(settings.bloom_intensity, 0.0f, 1.0f);
+  // BloomOptions::threshold is a flag, not a cutoff: Filament always
+  // subtracts 1.0 from the HDR color. A positive authored threshold only
+  // enables it; the number itself has no further effect.
   bloom.threshold = settings.bloom_threshold > 0.0f;
+  // The real numeric control is BloomOptions::highlight, the brightest value
+  // fed to bloom. Expose it 1:1; the View clamps it to >= 10.
+  bloom.highlight = std::max(10.0f, settings.bloom_highlight);
   bloom.levels = static_cast<uint8_t>(std::clamp(
       static_cast<int>(std::lround(3.0f + settings.bloom_scatter * 6.0f)), 3,
       11));

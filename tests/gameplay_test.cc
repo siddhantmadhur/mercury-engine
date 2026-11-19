@@ -9,6 +9,7 @@
 #include <GLFW/glfw3.h>
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -374,11 +375,14 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
   {
     std::ofstream sidecar(dir / "scene.obj.mimport");
     sidecar << "[mimport]\nmax_texture_size = 32\n\n"
-               "[material name=\"Lamp\"]\nsmoothness = 0.25\n";
+               "[material name=\"Lamp\"]\nsmoothness = 0.25\n"
+               "double_sided = true\n";
   }
   ModelImportSettings settings = ModelImportSettings::ForFile(
       (dir / "scene.obj").string(), ModelImportSettings{});
   ASSERT_EQ(settings.materials.size(), 1u);
+  ASSERT_TRUE(settings.materials[0].double_sided.has_value());
+  EXPECT_TRUE(*settings.materials[0].double_sided);
   std::string error;
   auto model = Model::Load((dir / "scene.obj").string(), settings, &error);
   ASSERT_TRUE(model) << error;
@@ -393,7 +397,14 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
   EXPECT_EQ(lamp->emission, glm::vec3(4.0f, 3.0f, 2.0f));
   // The .mimport's [material] section wins over the file.
   EXPECT_FLOAT_EQ(lamp->smoothness, 0.25f);
-  EXPECT_GT(stone->smoothness, 0.8f);
+  // .obj/.mtl has no two-sided flag, so the override is how a model asks for
+  // it; materials without one stay single-sided (back-face culled).
+  EXPECT_TRUE(lamp->double_sided);
+  EXPECT_FALSE(stone->double_sided);
+  // Stone is illum 2 (the default), Ks 0.5, Ns 200: still glossy. Ns 200
+  // gives GGX alpha sqrt(2 / 202), and Filament's perceptual smoothness is
+  // 1 - sqrt(alpha) = 1 - pow(2 / 202, 0.25) ~ 0.685.
+  EXPECT_NEAR(stone->smoothness, 1.0f - std::pow(2.0f / 202.0f, 0.25f), 1e-4f);
   // Kd is linear; material colors are stored sRGB (0.5 linear ~ 0.735).
   EXPECT_NEAR(lamp->color.r, 0.7354f, 1e-3f);
 

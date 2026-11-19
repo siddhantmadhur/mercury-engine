@@ -18,7 +18,9 @@ material {
         { type: float4, name: baseColor },
         { type: sampler2d, name: baseColorMap, precision: high },
         { type: float2, name: tiling },
-        { type: float2, name: offset }
+        { type: float2, name: offset },
+        { type: float4, name: emissive },
+        { type: sampler2d, name: emissiveMap, precision: high }
     ]
 }
 
@@ -29,5 +31,9 @@ fragment {
         vec4 color = materialParams.baseColor *
                      texture(materialParams_baseColorMap, uv);
         material.baseColor = vec4(color.rgb * color.a, color.a);
+        material.emissive = vec4(
+            materialParams.emissive.rgb *
+                texture(materialParams_emissiveMap, uv).rgb,
+            materialParams.emissive.a);
     }
 }

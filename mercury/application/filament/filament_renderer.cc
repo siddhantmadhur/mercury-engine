@@ -37,9 +37,24 @@ namespace Mercury::fil {
 namespace {
 
 // Filament lights use physical units; Mercury's intensities are Unity-like
-// multipliers around 1. These keep the two talking.
+// multipliers around 1. The sun anchors the scale at Filament's reference
+// 100000 lux. A point light's intensity is luminous power in lumens, so its
+// illuminance at distance d is power / (4*pi*d^2); multiplying by 4*pi makes
+// an intensity-1 point at 1 m match an intensity-1 sun.
 constexpr float kSunLuxPerIntensity = 100000.0f;
-constexpr float kPointLumensPerIntensity = 1200.0f;
+constexpr float kPointLumensPerIntensity =
+    4.0f * glm::pi<float>() * kSunLuxPerIntensity;
+// An authored radiance R maps to R * kSunLuxPerIntensity / pi nits at the sun
+// anchor: a Lambertian surface lit to the sun's 100000 lux has radiance
+// 100000/pi (nits are candela per square metre, i.e. lux/pi for a Lambertian
+// emitter). Lit emissive is converted so it shares the lights' pre-exposed
+// scale; Filament then applies the camera exposure (emissive.w = 1).
+constexpr float kLuminancePerIntensity = kSunLuxPerIntensity / glm::pi<float>();
+// The sun's physical angular radius, as seen from the ground. PCSS takes a
+// SUN's shadowBulbRadius = tan(angular radius) directly; without it Filament
+// falls back to the sky-drawn sun's 0.545 deg radius scaled by the 10x halo
+// size, or 5.45 deg, which is ~20x too soft.
+constexpr float kSunAngularRadiusDegrees = 0.266f;
 // How often expired mesh/texture sources are swept away.
 constexpr uint64_t kSweepEvery = 30;
 // The room probe is captured once the scene has been still for this many
@@ -62,22 +77,24 @@ uint8_t* CopyToHeap(const void* data, size_t bytes) {
   return copy;
 }
 
-float SrgbToLinear(float c) {
-  return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
 glm::vec3 SrgbToLinear(const glm::vec3& c) {
-  return {SrgbToLinear(c.r), SrgbToLinear(c.g), SrgbToLinear(c.b)};
+  const filament::LinearColor linear =
+      filament::Color::toLinear(filament::sRGBColor{c.r, c.g, c.b});
+  return {linear.r, linear.g, linear.b};
 }
 
-// Shared per-light shadow settings. Filament derives a soft penumbra from
-// the light's physical size when the View uses ShadowType::PCSS.
+// Shared per-light shadow settings. Under ShadowType::PCSS Filament derives
+// the penumbra from the light's physical size scaled by `penumbraScale`, so
+// `soft` selects the PCSS edge: 1 widens it by the bulb radius, 0 collapses
+// it to a sharp edge. The constant bias only matters on the PCF path.
 filament::LightManager::ShadowOptions MakeShadowOptions(float bias,
-                                                        float bulb_radius) {
+                                                        float bulb_radius,
+                                                        bool soft) {
   filament::LightManager::ShadowOptions options;
   options.mapSize = 1024;
   options.constantBias = std::clamp(bias, 0.0f, 0.05f);
   options.shadowBulbRadius = std::max(bulb_radius, 0.01f);
+  options.penumbraScale = soft ? 1.0f : 0.0f;
   return options;
 }
 
@@ -146,7 +163,17 @@ struct FilamentRenderer::Prefilter {
   explicit Prefilter(filament::Engine& engine)
       : context(engine),
         to_cube(context),
-        specular(context),
+        // The default specular config has 5 roughness levels; 9 is
+        // log2(256) + 1, the full mip chain of the default probe cube, so
+        // every roughness step has its own filtered level instead of the
+        // roughest surfaces sampling a 16 px one (which shows a small bright
+        // emitter as mip-ring bands). Shared with the panorama skybox, which
+        // gets the same finer chain.
+        specular(context,
+                 IBLPrefilterContext::SpecularFilter::Config{
+                     .sampleCount = 1024,
+                     .levelCount = 9,
+                 }),
         irradiance(context) {}
   IBLPrefilterContext context;
   IBLPrefilterContext::EquirectangularToCubemap to_cube;
@@ -352,6 +379,7 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
   sun_direction_ = glm::vec3(0.0f);
   sun_color_ = glm::vec3(0.0f);
   sun_shadows_ = false;
+  sun_soft_shadows_ = false;
   engine_ = nullptr;
 }
 
@@ -635,23 +663,11 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       instance->setParameter("roughness",
                              std::clamp(1.0f - material.smoothness,
                                         is_transmissive ? 0.0f : 0.05f, 1.0f));
-      // Not the exposure weight (w): emission is a plain linear radiance
-      // added to the lit color, not nits scaled by the camera exposure.
-      instance->setParameter("emissive",
-                             ToFilament(glm::vec4(material.emission, 0.0f)));
-      filament::Texture* emissive_tex = white_;
-      if (material.emission_texture) {
-        if (filament::Texture* uploaded =
-                UploadTexture(engine, material.emission_texture)) {
-          emissive_tex = uploaded;
-        }
-      }
       // Transmissive materials take F0 from their ior and have no
       // reflectance input (setting it would override the ior).
       if (!is_transmissive)
         instance->setParameter("reflectance",
                                std::clamp(material.reflectance, 0.0f, 1.0f));
-      instance->setParameter("emissiveMap", emissive_tex, sampler);
 
       filament::Texture* normal_tex = flat_normal_;
       bool has_normal = false;
@@ -670,18 +686,44 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         const glm::vec3 trans_color =
             glm::clamp(material.transmission_color, 1e-4f, 1.0f);
         const bool tinted = trans_color != glm::vec3(1.0f);
-        // The light crosses the volume twice (in and out), so the colour is
-        // the transmittance over the full path: sqrt(tint) at one crossing.
+        // The solid refraction samples the medium once: Filament applies
+        // exp(-absorption * ray.d) along the ray's path inside the material
+        // (surface_light_indirect.fs), so the transmittance is over exactly
+        // one traversal and must not be halved for a second one. A material
+        // with no path length (a thin wall) has no volume to absorb over; its
+        // tint is all that remains, so absorption stays zero rather than
+        // dividing by a clamped epsilon.
         const filament::math::float3 absorption =
-            tinted ? filament::Color::absorptionAtDistance(
-                         ToFilament(trans_color), thickness * 2.0f)
-                   : filament::math::float3{0.0f, 0.0f, 0.0f};
+            tinted && thickness > 0.0f
+                ? filament::Color::absorptionAtDistance(ToFilament(trans_color),
+                                                        thickness)
+                : filament::math::float3{0.0f, 0.0f, 0.0f};
         instance->setParameter("transmission",
                                std::clamp(material.transmission, 0.0f, 1.0f));
         instance->setParameter("ior", std::max(material.ior, 1.0f));
         instance->setParameter("thickness", thickness);
         instance->setParameter("absorption", absorption);
       }
+    }
+    // Filament treats emissive.rgb as nits and multiplies it by the camera
+    // exposure when the alpha (the exposure weight) is 1. Convert the
+    // authored radiance so lit and emissive surfaces share the lights'
+    // pre-exposed scale; w = 0 would leave emission at display scale and
+    // make probe captures (post-processing off) 1/exposure too bright.
+    // Unlit surfaces support emission too, so this applies to both; the SDF
+    // text material has no emissive parameter.
+    if (!material.sdf_text) {
+      instance->setParameter(
+          "emissive", ToFilament(glm::vec4(
+                          material.emission * kLuminancePerIntensity, 1.0f)));
+      filament::Texture* emissive_tex = white_;
+      if (material.emission_texture) {
+        if (filament::Texture* uploaded =
+                UploadTexture(engine, material.emission_texture)) {
+          emissive_tex = uploaded;
+        }
+      }
+      instance->setParameter("emissiveMap", emissive_tex, sampler);
     }
     // The sampler must always be bound (Filament panics on unbound
     // samplers at draw time), so textures without an image show white.
@@ -742,8 +784,9 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     record_draw.layer = layer;
     record_draw.skinned = skinned;
     record_draw.transmissive = is_transmissive;
-    if (!is_unlit && glm::length(material.emission) > 0.0f)
-      record_draw.emission = material.emission;
+    if (!material.sdf_text && glm::length(material.emission) > 0.0f)
+      record_draw.emission =
+          material.emission * kLuminancePerIntensity;  // nits, as set above
     record_draw.draw_index = static_cast<uint32_t>(draw_index);
     record_draw.in_scene = true;
     record_draw.render_texture = material.render_texture;
@@ -882,8 +925,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           : glm::normalize(lighting.direction);
   const glm::vec3 color = glm::max(lighting.color, glm::vec3(0.0f));
   const float shadow_distance = std::max(lighting.shadow_distance, 1.0f);
+  const bool soft_shadows = game.GetRenderSettings().soft_shadows;
   const bool sun_changed = direction != sun_direction_ || color != sun_color_ ||
                            lighting.cast_shadows != sun_shadows_ ||
+                           soft_shadows != sun_soft_shadows_ ||
                            shadow_distance != shadow_distance_ ||
                            lighting.shadow_bias != shadow_bias_ ||
                            lighting.shadow_normal_bias != shadow_normal_bias_ ||
@@ -907,6 +952,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     shadow.constantBias = std::clamp(lighting.shadow_bias, 0.0f, 0.05f);
     shadow.normalBias =
         std::clamp(lighting.shadow_normal_bias * 25.0f, 0.25f, 2.5f);
+    shadow.shadowBulbRadius = std::tan(glm::radians(kSunAngularRadiusDegrees));
+    // LiSPSM improves shadow-map resolution but distorts the PCSS blur
+    // kernel, so only use it with the crisp PCF path.
+    shadow.lispsm = !soft_shadows;
     sun_ = utils::EntityManager::get().create();
     filament::LightManager::Builder(filament::LightManager::Type::SUN)
         .color(ToFilament(color / intensity))
@@ -919,6 +968,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     sun_direction_ = direction;
     sun_color_ = color;
     sun_shadows_ = lighting.cast_shadows;
+    sun_soft_shadows_ = soft_shadows;
     shadow_distance_ = shadow_distance;
     shadow_bias_ = lighting.shadow_bias;
     shadow_normal_bias_ = lighting.shadow_normal_bias;
@@ -928,7 +978,9 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
   for (size_t i = 0; !points_changed && i < point_values_.size(); i++) {
     const PointLightData& a = lighting.point_lights[i];
     const PointLightData& b = point_values_[i];
-    if (a.position != b.position || a.color != b.color || a.range != b.range) {
+    if (a.position != b.position || a.color != b.color || a.range != b.range ||
+        a.radius != b.radius || a.shadows != b.shadows ||
+        a.shadow_bias != b.shadow_bias) {
       points_changed = true;
     }
   }
@@ -949,7 +1001,9 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           .intensity(intensity * kPointLumensPerIntensity)
           .falloff(std::max(light.range, 0.1f))
           .castShadows(light.shadows != 0)
-          .shadowOptions(MakeShadowOptions(light.shadow_bias, light.radius))
+          .shadowOptions(MakeShadowOptions(
+              light.shadow_bias, light.radius,
+              light.shadows == static_cast<int>(LightShadows::kSoft)))
           .build(*engine, entity);
       scene_->addEntity(entity);
       points_.push_back(entity);
@@ -964,7 +1018,8 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     const AreaLightData& b = area_values_[i];
     if (a.position != b.position || a.right != b.right || a.up != b.up ||
         a.color != b.color || a.range != b.range ||
-        a.two_sided != b.two_sided || a.shadows != b.shadows) {
+        a.two_sided != b.two_sided || a.shadows != b.shadows ||
+        a.shadow_bias != b.shadow_bias) {
       areas_changed = true;
     }
   }
@@ -986,10 +1041,15 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           std::max({light.color.r, light.color.g, light.color.b, 1e-6f});
       const float area =
           4.0f * glm::length(light.right) * glm::length(light.up);
-      const float lumens =
-          intensity * kPointLumensPerIntensity * std::max(area, 1.0f);
-      const float bulb =
-          std::max(glm::length(light.right), glm::length(light.up));
+      // The authored intensity is radiance R. At the sun anchor its luminance
+      // is R * kSunLuxPerIntensity / pi nits, so a Lambertian rectangle of
+      // area A emits pi * luminance * A = R * kSunLuxPerIntensity * A lumens.
+      const float lumens = intensity * kSunLuxPerIntensity * area;
+      // Filament has no rectangular area light, so the panel is approximated
+      // by a spot whose cone covers its emission hemisphere (one-sided
+      // Lambertian). The penumbra is driven by the panel's half-diagonal,
+      // which bounds its extent from the centre in every direction.
+      const float bulb = std::max(glm::length(light.right + light.up), 0.01f);
       auto add_spot = [&](const glm::vec3& spot_dir, bool shadows) {
         utils::Entity entity = utils::EntityManager::get().create();
         filament::LightManager::Builder(filament::LightManager::Type::SPOT)
@@ -998,15 +1058,22 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
             .color(ToFilament(light.color / intensity))
             .intensity(lumens)
             .falloff(std::max(light.range, 0.1f))
-            .spotLightCone(glm::radians(35.0f), glm::radians(75.0f))
+            // A one-sided Lambertian panel emits into the hemisphere around
+            // its normal. Filament spot cones must fall short of pi/2, so use
+            // 85 degrees with a near-zero inner cone: a wide, one-sided
+            // emitter rather than the old fixed 35/75-degree flashlight cone
+            // that concentrated the flux into a circular hotspot.
+            .spotLightCone(0.0f, glm::radians(85.0f))
             .castShadows(shadows)
-            .shadowOptions(MakeShadowOptions(light.shadow_bias, bulb))
+            .shadowOptions(MakeShadowOptions(
+                light.shadow_bias, bulb,
+                light.shadows == static_cast<int>(LightShadows::kSoft)))
             .build(*engine, entity);
         scene_->addEntity(entity);
         areas_.push_back(entity);
       };
       add_spot(dir, light.shadows != 0);
-      if (light.two_sided) add_spot(-dir, false);
+      if (light.two_sided) add_spot(-dir, light.shadows != 0);
     }
   }
 
@@ -1031,8 +1098,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
       garbage_indirect_lights_.emplace_back(frame_, ambient_);
       ambient_ = nullptr;
     }
-    const glm::vec3 sky = SrgbToLinear(lighting.ambient);
-    const glm::vec3 ground = SrgbToLinear(lighting.ambient_ground);
+    // Light and ambient colors are linear (map-format contract; the old Vulkan
+    // renderer uploaded them unchanged).
+    const glm::vec3 sky = lighting.ambient;
+    const glm::vec3 ground = lighting.ambient_ground;
     const filament::math::float3 sh[4] = {
         ToFilament((sky + ground) * 0.5f),
         ToFilament((sky - ground) * 0.5f),
@@ -1416,7 +1485,7 @@ bool FilamentRenderer::CaptureProbe(filament::Engine* engine,
         if (!draw.material || glm::length(draw.emission) <= 0.0f) continue;
         draw.material->setParameter(
             "emissive",
-            ToFilament(glm::vec4(on ? draw.emission : glm::vec3(0.0f), 0.0f)));
+            ToFilament(glm::vec4(on ? draw.emission : glm::vec3(0.0f), 1.0f)));
       }
     }
   };

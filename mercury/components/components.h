@@ -231,15 +231,20 @@ struct DirectionalLight {
         .Tooltip("Ambient light from below; alpha 0 uses 35% of ambient");
     r.Field("cast_shadows", cast_shadows).Tooltip("Enable shadow casting");
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Depth bias against shadow acne");
+        .Tooltip("Depth bias against shadow acne; PCF only (soft shadows off)");
     r.Field("shadow_normal_bias", shadow_normal_bias)
-        .Tooltip("Normal offset bias for sloped geometry");
+        .Tooltip(
+            "Normal offset bias for sloped geometry; PCF only (soft shadows "
+            "off)");
     r.Field("shadow_distance", shadow_distance)
         .Tooltip("Shadow coverage distance");
   }
 };
 
-// How a point or area light casts shadows.
+// How a point or area light casts shadows. With the project's soft shadows
+// on (PCSS), soft gives a penumbra scaled by the light's size and hard gives
+// a sharp PCSS edge; with soft shadows off (PCF) any non-none value casts the
+// same crisp shadow.
 enum class LightShadows { kNone, kHard, kSoft };
 
 /**
@@ -266,7 +271,10 @@ struct PointLight {
     r.Field("radius", radius)
         .Tooltip("Size of the light; soft shadows blur more for larger lights");
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Distance bias against shadow acne");
+        .Tooltip(
+            "Distance bias against shadow acne; PCF only (soft shadows off). "
+            "Under PCSS the radius sets the softness and shadows selects the "
+            "edge");
   }
 };
 
@@ -276,8 +284,11 @@ struct PointLight {
  * The rectangle lies in the node's XY plane, `size` across, and shines along
  * the node's -Z. `color` * `intensity` is the light's radiance, so matching an
  * emissive surface's emission makes it light the scene as brightly as it
- * looks. Lighting is exact for diffuse surfaces; shadows soften with the
- * rectangle's size.
+ * looks. Filament has no rectangular area light, so the renderer approximates
+ * the panel with a wide (hemisphere) spot that carries the panel's Lambertian
+ * flux (pi * L * A) and uses a PCSS bulb radius derived from the rectangle's
+ * half-diagonal. Shadows soften with the rectangle's size, but the emitted
+ * distribution is an approximation, not an exact PolygonFormFactor.
  */
 struct AreaLight {
   glm::vec4 color = glm::vec4(1.0f);
@@ -297,7 +308,10 @@ struct AreaLight {
     r.Field("two_sided", two_sided).Tooltip("Shine from both faces");
     r.Enum("shadows", shadows, {"none", "hard", "soft"});
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Distance bias against shadow acne");
+        .Tooltip(
+            "Distance bias against shadow acne; PCF only (soft shadows off). "
+            "Under PCSS the rectangle size sets the softness and shadows "
+            "selects the edge");
   }
 };
 
@@ -887,6 +901,7 @@ struct PostProcessProfile {
   float exposure = 1.0f;
   float bloom_intensity = 0.0f;
   float bloom_threshold = 1.0f;
+  float bloom_highlight = 1000.0f;
   float bloom_scatter = 0.7f;
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;
@@ -909,7 +924,13 @@ struct PostProcessProfile {
         .Tooltip("Multiplies the scene before tonemapping");
     r.Field("bloom_intensity", bloom_intensity).Tooltip("0 turns bloom off");
     r.Field("bloom_threshold", bloom_threshold)
-        .Tooltip("Brightness (linear) above which pixels glow");
+        .Tooltip(
+            "0 disables the bloom threshold; any positive value enables "
+            "Filament's fixed 1.0 cutoff (the number itself has no effect)");
+    r.Field("bloom_highlight", bloom_highlight)
+        .Tooltip(
+            "Filament's brightest value fed to bloom (clamped to 10 or more); "
+            "lower values compress highlights and reduce bloom");
     r.Field("bloom_scatter", bloom_scatter)
         .Tooltip("How far the glow spreads, 0 to 1");
     r.Field("vignette_intensity", vignette_intensity)

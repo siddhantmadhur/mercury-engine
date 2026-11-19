@@ -86,9 +86,9 @@ struct PointLightData {
   glm::vec3 position = glm::vec3(0.0f);
   glm::vec3 color = glm::vec3(1.0f);  // linear color * intensity
   float range = 10.0f;
-  int shadows = 0;  // 0 none, 1 hard, 2 soft
-  float radius = 0.05f;
-  float shadow_bias = 0.02f;
+  int shadows = 0;            // 0 none, 1 hard, 2 soft (PCSS edge)
+  float radius = 0.05f;       // PCSS softness scales with it
+  float shadow_bias = 0.02f;  // PCF only
 };
 
 /**
@@ -101,8 +101,8 @@ struct AreaLightData {
   glm::vec3 color = glm::vec3(1.0f);              // linear radiance
   float range = 10.0f;
   bool two_sided = false;
-  int shadows = 2;
-  float shadow_bias = 0.02f;
+  int shadows = 2;            // 0 none, 1 hard, 2 soft (PCSS edge)
+  float shadow_bias = 0.02f;  // PCF only
   // The way it shines (right x up when single-sided).
   glm::vec3 Normal() const { return glm::normalize(glm::cross(right, up)); }
 };
@@ -140,8 +140,8 @@ struct SceneLighting {
   // Filament IndirectLight intensity for the skybox, in lux.
   float environment_intensity = 30000.0f;
   bool cast_shadows = true;
-  float shadow_bias = 0.0015f;
-  float shadow_normal_bias = 0.035f;
+  float shadow_bias = 0.0015f;        // PCF only
+  float shadow_normal_bias = 0.035f;  // PCF only
   float shadow_distance = 120.0f;
   std::vector<PointLightData> point_lights;  // the renderer uses the first 16
   std::vector<AreaLightData> area_lights;    // the renderer uses the first 4
@@ -159,7 +159,13 @@ struct RenderSettings {
   int tonemap = 1;  // 0 none, 1 neutral, 2 ACES
   float exposure = 1.0f;
   float bloom_intensity = 0.0f;
+  // > 0 enables Filament's threshold, which is fixed at 1.0; the number
+  // itself has no further effect.
   float bloom_threshold = 1.0f;
+  // Filament's BloomOptions::highlight: the brightest value fed to bloom.
+  // The View clamps it to >= 10; lower values compress highlights and
+  // reduce bloom.
+  float bloom_highlight = 1000.0f;
   float bloom_scatter = 0.7f;
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;

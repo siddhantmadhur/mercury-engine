@@ -75,17 +75,21 @@ TEST(ObjMaterials, CornellSphereMirrorAndGlass) {
   auto model = LoadBenchmark("models/cornell_box/CornellBox-Sphere.obj");
   if (!model) GTEST_SKIP() << "missing benchmark fixture";
 
-  // illum 5, Kd 0.01, Ks 0.95, Ns 1024: a metal tinted by Kd + Ks, with
-  // Ns 1024's 0.044.
+  // illum 5, Kd 0.01, Ks 0.95, Ns 1000: a metal tinted by Kd + Ks. Ns 1000
+  // gives GGX alpha sqrt(2 / 1002) (inside the 0.1 cap), so the perceptual
+  // roughness Filament wants is its square root.
   const ModelMaterial* mirror = Find(*model, "leftSphere");
   ASSERT_TRUE(mirror);
   EXPECT_FLOAT_EQ(mirror->metallic, 1.0f);
-  EXPECT_LT(Roughness(*mirror), 0.06f);
+  EXPECT_NEAR(Roughness(*mirror), std::pow(2.0f / 1002.0f, 0.25f), 1e-4f);
   EXPECT_FLOAT_EQ(mirror->transmission, 0.0f);
   EXPECT_NEAR(Linear(mirror->color.r), 0.96f, 1e-3f);
 
-  // illum 7, Kd 0.01, Tf 0.1, Ni 2.5: clear glass. White base color (Kd 0.01
-  // would turn everything black) and a white tint (Tf 0.1 is "mostly clear").
+  // illum 7, Kd 0.01, Tf 0.1, Ni 2.5: glass with its authored 10%
+  // transmittance. White base color (Kd 0.01 would turn everything black) and
+  // the tint keeps Tf's magnitude (0.1), which the renderer turns into an
+  // absorption over the path, so the glass is dim rather than perfectly
+  // clear.
   const ModelMaterial* glass = Find(*model, "rightSphere");
   ASSERT_TRUE(glass);
   EXPECT_FLOAT_EQ(glass->transmission, 1.0f);
@@ -93,9 +97,10 @@ TEST(ObjMaterials, CornellSphereMirrorAndGlass) {
   EXPECT_NEAR(glass->color.g, 1.0f, 1e-3f);
   EXPECT_NEAR(glass->color.b, 1.0f, 1e-3f);
   EXPECT_NEAR(glass->ior, 2.5f, 1e-5f);
-  EXPECT_NEAR(glass->transmission_color.r, 1.0f, 1e-3f);
-  EXPECT_NEAR(glass->transmission_color.g, 1.0f, 1e-3f);
-  EXPECT_NEAR(glass->transmission_color.b, 1.0f, 1e-3f);
+  // Tf is a transmittance, not a hue: its magnitude is retained.
+  EXPECT_NEAR(glass->transmission_color.r, 0.1f, 1e-3f);
+  EXPECT_NEAR(glass->transmission_color.g, 0.1f, 1e-3f);
+  EXPECT_NEAR(glass->transmission_color.b, 0.1f, 1e-3f);
   EXPECT_FLOAT_EQ(glass->metallic, 0.0f);
   // Glass is polished whatever Ns says.
   EXPECT_NEAR(Roughness(*glass), 0.0f, 1e-5f);
@@ -119,7 +124,8 @@ TEST(ObjMaterials, CornellMirrorBox) {
   const ModelMaterial* mirror = Find(*model, "tallBox");
   ASSERT_TRUE(mirror);
   EXPECT_FLOAT_EQ(mirror->metallic, 1.0f);
-  EXPECT_LT(Roughness(*mirror), 0.06f);
+  // Ns 1000: alpha sqrt(2 / 1002), perceptual roughness its square root.
+  EXPECT_NEAR(Roughness(*mirror), std::pow(2.0f / 1002.0f, 0.25f), 1e-4f);
 }
 
 TEST(ObjMaterials, CornellWaterIsGlassWithItsIor) {
@@ -130,36 +136,41 @@ TEST(ObjMaterials, CornellWaterIsGlassWithItsIor) {
   EXPECT_FLOAT_EQ(water->transmission, 1.0f);
   EXPECT_NEAR(water->ior, 1.33f, 1e-5f);
   EXPECT_NEAR(water->color.r, 1.0f, 1e-3f);
-  EXPECT_NEAR(water->transmission_color.r, 1.0f, 1e-3f);
+  // Tf 0.1 gray keeps its magnitude as the transmittance (the renderer turns
+  // it into absorption); it is not normalized to clear.
+  EXPECT_NEAR(water->transmission_color.r, 0.1f, 1e-3f);
+  EXPECT_NEAR(water->transmission_color.g, 0.1f, 1e-3f);
+  EXPECT_NEAR(water->transmission_color.b, 0.1f, 1e-3f);
 }
 
-TEST(ObjMaterials, CornellGlossyDielectricsReflectMore) {
+TEST(ObjMaterials, CornellGlossyDielectricsKeepDefaultF0) {
   auto model = LoadBenchmark("models/cornell_box/CornellBox-Glossy.obj");
   if (!model) GTEST_SKIP() << "missing benchmark fixture";
-  const ModelMaterial kDefault;
-  // illum 2, Ks 0.9 and 0.8: still dielectric, but shiny. Ks maps straight
-  // onto Filament's reflectance (F0 = 0.16 * r^2).
+  // illum 2, Ks 0.9 and 0.8: shiny dielectrics. Ks only modulated the old
+  // renderer's glossiness, so both keep its constant 4% dielectric F0;
+  // Filament's reflectance 0.5 is F0 = 0.16 * 0.5^2 = 0.04.
   const ModelMaterial* sphere = Find(*model, "sphere");
   ASSERT_TRUE(sphere);
   EXPECT_FLOAT_EQ(sphere->metallic, 0.0f);
   EXPECT_FLOAT_EQ(sphere->transmission, 0.0f);
-  EXPECT_GT(sphere->reflectance, kDefault.reflectance);
-  // F0 = 0.16 * r^2, so Ks 0.9 is past 0.16 and saturates at 1.
-  EXPECT_NEAR(sphere->reflectance, 1.0f, 1e-5f);
+  EXPECT_FLOAT_EQ(sphere->reflectance, 0.5f);
   const ModelMaterial* box = Find(*model, "shortBox");
   ASSERT_TRUE(box);
-  EXPECT_GT(box->reflectance, kDefault.reflectance);
-  EXPECT_NEAR(box->reflectance, 1.0f, 1e-5f);
-  // Ns 40 is a tight highlight, roughness sqrt(2 / 42).
-  EXPECT_NEAR(Roughness(*sphere), 0.218f, 1e-3f);
+  EXPECT_FLOAT_EQ(box->reflectance, 0.5f);
+  // Ns 40 gives GGX alpha sqrt(2 / 42); Filament's perceptual roughness is
+  // its square root, pow(2 / 42, 0.25) = 0.467.
+  EXPECT_NEAR(Roughness(*sphere), std::pow(2.0f / 42.0f, 0.25f), 1e-4f);
 }
 
 TEST(ObjMaterials, MoriKnobAmberGlassOverMetal) {
   auto model = LoadBenchmark("models/mori_knob/testObj.obj");
   if (!model) GTEST_SKIP() << "missing benchmark fixture";
 
-  // illum 4, Kd 0.1 0.04 0.01, Ni 1.01: amber glass. The tint is Kd's
-  // chromaticity (brightest channel 1), not its near-black value.
+  // illum 4, Kd 0.1 0.04 0.01, Tf 0.75 0.92 0.99, Ni 1.01: amber glass. The
+  // hue is Kd's chromaticity (its near-black value would be wrong, and its
+  // brightest channel 1 keeps the amber's own level), but Tf is a
+  // transmittance over the path, so its magnitude (0.99 at the brightest
+  // channel) still scales it instead of being normalized away.
   const ModelMaterial* shell = Find(*model, "OuterMat");
   ASSERT_TRUE(shell);
   EXPECT_FLOAT_EQ(shell->transmission, 1.0f);
@@ -169,9 +180,9 @@ TEST(ObjMaterials, MoriKnobAmberGlassOverMetal) {
   const glm::vec3 tint = shell->transmission_color;
   EXPECT_GT(tint.r, tint.g);
   EXPECT_GT(tint.g, tint.b);
-  EXPECT_NEAR(tint.r, 1.0f, 1e-3f);
-  EXPECT_NEAR(tint.g, 0.4f, 1e-3f);
-  EXPECT_NEAR(tint.b, 0.1f, 1e-3f);
+  EXPECT_NEAR(tint.r, 0.99f, 1e-3f);
+  EXPECT_NEAR(tint.g, 0.396f, 1e-3f);
+  EXPECT_NEAR(tint.b, 0.099f, 1e-3f);
   EXPECT_NEAR(shell->ior, 1.01f, 1e-5f);
   EXPECT_FLOAT_EQ(shell->metallic, 0.0f);
 
@@ -184,10 +195,12 @@ TEST(ObjMaterials, MoriKnobAmberGlassOverMetal) {
   }
   EXPECT_NEAR(Linear(Find(*model, "InnerMat")->color.r), 0.5f, 1e-3f);
   EXPECT_NEAR(Linear(Find(*model, "LTELogo")->color.r), 0.75f, 1e-3f);
-  // Ns 200 is sqrt(2 / 202); Ns 8 would be 0.447 but a metal is capped at a
-  // polished 0.1.
-  EXPECT_NEAR(Roughness(*Find(*model, "LTELogo")), 0.0995f, 1e-3f);
-  EXPECT_NEAR(Roughness(*Find(*model, "InnerMat")), 0.1f, 1e-3f);
+  // Ns 200 gives GGX alpha sqrt(2 / 202), perceptual pow(2 / 202, 0.25) =
+  // 0.315. Ns 8's alpha 0.447 is capped at a polished alpha 0.1, so its
+  // perceptual roughness is sqrt(0.1) = 0.316.
+  EXPECT_NEAR(Roughness(*Find(*model, "LTELogo")),
+              std::pow(2.0f / 202.0f, 0.25f), 1e-4f);
+  EXPECT_NEAR(Roughness(*Find(*model, "InnerMat")), std::sqrt(0.1f), 1e-4f);
 }
 
 TEST(ObjMaterials, BlenderIllum4IsNotGlass) {
@@ -248,6 +261,9 @@ std::shared_ptr<Model> LoadSynthetic(
 TEST(ObjMaterials, SyntheticMtlMapping) {
   const std::vector<SyntheticMaterial> materials = {
       {"matte", "illum 2\nKd 0.5 0.5 0.5\nKs 0 0 0\nNs 300\n"},
+      // Ks 0 with a huge exponent: the old glossiness attenuation still
+      // makes it fully rough rather than a sharp 4% mirror.
+      {"mattehigh", "illum 2\nKd 0.5 0.5 0.5\nKs 0 0 0\nNs 1000\n"},
       {"plastic", "illum 2\nKd 0.5 0.5 0.5\nKs 0.04 0.04 0.04\nNs 50\n"},
       {"glossy", "illum 2\nKd 0.5 0.5 0.5\nKs 0.9 0.9 0.9\nNs 40\n"},
       {"mirror", "illum 5\nKd 0 0 0\nKs 0.95 0.95 0.95\nNs 1000\n"},
@@ -270,23 +286,39 @@ TEST(ObjMaterials, SyntheticMtlMapping) {
     const ModelMaterial* matte = Find(*model, "matte");
     ASSERT_TRUE(matte);
     EXPECT_FLOAT_EQ(matte->reflectance, 0.5f);
-    EXPECT_GE(Roughness(*matte), 0.7f);
+    // Ks 0 -> gloss factor 0, so Ns cannot make it shiny.
+    EXPECT_FLOAT_EQ(Roughness(*matte), 1.0f);
     EXPECT_FLOAT_EQ(matte->metallic, 0.0f);
+
+    const ModelMaterial* mattehigh = Find(*model, "mattehigh");
+    ASSERT_TRUE(mattehigh);
+    EXPECT_FLOAT_EQ(Roughness(*mattehigh), 1.0f);
+    EXPECT_FLOAT_EQ(mattehigh->metallic, 0.0f);
 
     const ModelMaterial* plastic = Find(*model, "plastic");
     ASSERT_TRUE(plastic);
-    EXPECT_NEAR(plastic->reflectance, 0.5f, 1e-5f);
-    EXPECT_NEAR(Roughness(*plastic), std::sqrt(2.0f / 52.0f), 1e-3f);
+    // Ks only modulated glossiness historically; a dielectric keeps its 4%
+    // F0 whatever Ks says, i.e. Filament reflectance 0.5.
+    EXPECT_FLOAT_EQ(plastic->reflectance, 0.5f);
+    // Ns 50 -> alpha sqrt(2 / 52), perceptual pow(2 / 52, 0.25) = 0.443,
+    // scaled by the historical Ks gloss factor min(1, 4*0.04) = 0.16:
+    // roughness = 1 - (1 - 0.443) * 0.16 = 0.911.
+    EXPECT_NEAR(Roughness(*plastic),
+                1.0f - (1.0f - std::pow(2.0f / 52.0f, 0.25f)) * 0.16f, 1e-4f);
 
     const ModelMaterial* glossy = Find(*model, "glossy");
     ASSERT_TRUE(glossy);
-    EXPECT_NEAR(glossy->reflectance, 1.0f, 1e-5f);
+    EXPECT_FLOAT_EQ(glossy->reflectance, 0.5f);
     EXPECT_FLOAT_EQ(glossy->metallic, 0.0f);
+    // Ks 0.9 -> gloss factor 1, so the roughness is the pure Ns chain:
+    // Ns 40 -> perceptual pow(2 / 42, 0.25) = 0.467.
+    EXPECT_NEAR(Roughness(*glossy), std::pow(2.0f / 42.0f, 0.25f), 1e-4f);
 
     const ModelMaterial* mirror = Find(*model, "mirror");
     ASSERT_TRUE(mirror);
     EXPECT_FLOAT_EQ(mirror->metallic, 1.0f);
-    EXPECT_LT(Roughness(*mirror), 0.06f);
+    // Ns 1000 -> alpha sqrt(2 / 1002), perceptual pow(2 / 1002, 0.25).
+    EXPECT_NEAR(Roughness(*mirror), std::pow(2.0f / 1002.0f, 0.25f), 1e-4f);
 
     const ModelMaterial* clear = Find(*model, "clear");
     ASSERT_TRUE(clear);
@@ -295,10 +327,13 @@ TEST(ObjMaterials, SyntheticMtlMapping) {
     EXPECT_NEAR(clear->color.r, 1.0f, 1e-3f);
     EXPECT_NEAR(clear->color.g, 1.0f, 1e-3f);
     EXPECT_NEAR(clear->color.b, 1.0f, 1e-3f);
-    EXPECT_NEAR(clear->transmission_color.r, 1.0f, 1e-3f);
-    EXPECT_NEAR(clear->transmission_color.g, 1.0f, 1e-3f);
-    EXPECT_NEAR(clear->transmission_color.b, 1.0f, 1e-3f);
+    // Tf 0.1 gray: the transmittance keeps its magnitude.
+    EXPECT_NEAR(clear->transmission_color.r, 0.1f, 1e-3f);
+    EXPECT_NEAR(clear->transmission_color.g, 0.1f, 1e-3f);
+    EXPECT_NEAR(clear->transmission_color.b, 0.1f, 1e-3f);
 
+    // Tf 1 asks for full transmittance, so Kd's chromaticity alone is the
+    // tint (brightest channel 1).
     const ModelMaterial* amber = Find(*model, "amber");
     ASSERT_TRUE(amber);
     EXPECT_FLOAT_EQ(amber->transmission, 1.0f);
@@ -317,21 +352,29 @@ TEST(ObjMaterials, SyntheticMtlMapping) {
     EXPECT_FLOAT_EQ(bare->metallic, 1.0f);
     EXPECT_NEAR(Linear(bare->color.r), 0.8f, 1e-3f);
 
-    // illum 3/5 metals: Kd + Ks, saturated, never rougher than 0.1.
+    // illum 3/5 metals: Kd + Ks, saturated, with GGX alpha capped at a
+    // polished 0.1, i.e. perceptual roughness sqrt(0.1) = 0.316.
     const ModelMaterial* satin = Find(*model, "satinmetal");
     ASSERT_TRUE(satin);
     EXPECT_FLOAT_EQ(satin->metallic, 1.0f);
     EXPECT_NEAR(Linear(satin->color.r), 0.5f, 1e-3f);
-    EXPECT_NEAR(Roughness(*satin), 0.1f, 1e-3f);
+    // Ns 8 -> alpha sqrt(2 / 10) = 0.447, capped to 0.1.
+    EXPECT_NEAR(Roughness(*satin), std::sqrt(0.1f), 1e-4f);
     const ModelMaterial* bright = Find(*model, "brightmetal");
     ASSERT_TRUE(bright);
     EXPECT_NEAR(Linear(bright->color.r), 1.0f, 1e-3f);
-    EXPECT_NEAR(Roughness(*bright), std::sqrt(2.0f / 1002.0f), 1e-3f);
+    // Ns 1000 -> alpha sqrt(2 / 1002), perceptual pow(2 / 1002, 0.25).
+    EXPECT_NEAR(Roughness(*bright), std::pow(2.0f / 1002.0f, 0.25f), 1e-4f);
 
-    // illum 3 with a weak Ks is a dielectric, not a metal.
+    // illum 3 with a weak Ks is a dielectric, not a metal, and keeps the
+    // historical 4% F0 (Filament reflectance 0.5).
     const ModelMaterial* weak = Find(*model, "weakmetal");
     ASSERT_TRUE(weak);
     EXPECT_FLOAT_EQ(weak->metallic, 0.0f);
-    EXPECT_NEAR(weak->reflectance, std::sqrt(0.1f / 0.16f), 1e-4f);
+    EXPECT_FLOAT_EQ(weak->reflectance, 0.5f);
+    // Ks 0.1 -> gloss factor 0.4; Ns 100's perceptual roughness
+    // pow(2 / 102, 0.25) = 0.374 is scaled to 1 - (1 - 0.374) * 0.4 = 0.750.
+    EXPECT_NEAR(Roughness(*weak),
+                1.0f - (1.0f - std::pow(2.0f / 102.0f, 0.25f)) * 0.4f, 1e-4f);
   }
 }
