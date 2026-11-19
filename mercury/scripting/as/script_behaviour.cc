@@ -125,7 +125,9 @@ std::unique_ptr<ScriptBehaviour> ScriptBehaviour::Create(
     Event& event = behaviour->events_[field.name];
     event.Bind(scene);
     void* address = instance->GetAddressOfProperty(field.property_index);
-    if (auto* value = static_cast<ScriptEvent*>(address)) value->impl = &event;
+    const uint32_t id = runtime.RegisterEvent(&event);
+    behaviour->event_ids_.push_back(id);
+    if (auto* value = static_cast<ScriptEvent*>(address)) value->id = id;
   }
   return behaviour;
 }
@@ -139,9 +141,14 @@ ScriptBehaviour::~ScriptBehaviour() {
       if (field.type != FieldType::kEvent) continue;
       if (auto* value = static_cast<ScriptEvent*>(
               instance_->GetAddressOfProperty(field.property_index))) {
-        value->impl = nullptr;
+        value->id = 0;
       }
     }
+  }
+  // Copies of the Event values that scripts made keep the id; it stops
+  // resolving here, so using one later reports an unbound Event.
+  if (runtime.IsInitialized()) {
+    for (uint32_t id : event_ids_) runtime.UnregisterEvent(id);
   }
   if (runtime.IsInitialized()) {
     if (id_) runtime.UnregisterBehaviour(id_);

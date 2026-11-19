@@ -1004,6 +1004,19 @@ MapScene* ScriptRuntime::FindScene(uint32_t serial) const {
   return it == scenes_.end() ? nullptr : it->second;
 }
 
+uint32_t ScriptRuntime::RegisterEvent(Event* event) {
+  const uint32_t id = next_event_id_++;
+  events_[id] = event;
+  return id;
+}
+
+void ScriptRuntime::UnregisterEvent(uint32_t id) { events_.erase(id); }
+
+Event* ScriptRuntime::FindEvent(uint32_t id) const {
+  auto it = events_.find(id);
+  return it == events_.end() ? nullptr : it->second;
+}
+
 int ScriptRuntime::RegisterBehaviour(ScriptBehaviour* behaviour) {
   const int id = next_behaviour_id_++;
   behaviours_[id] = behaviour;

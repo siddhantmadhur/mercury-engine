@@ -41,6 +41,8 @@ class CScriptBuilder;
 
 namespace Mercury {
 
+class Event;
+
 class MapScene;
 class ScriptBehaviour;
 
@@ -234,6 +236,12 @@ class ScriptRuntime {
   uint32_t CurrentScene() const { return current_scene_; }
   void SetCurrentScene(uint32_t serial) { current_scene_ = serial; }
 
+  // --- events -------------------------------------------------------------
+  // A script's Event field refers to its Event by id (see script_event.h).
+  uint32_t RegisterEvent(Event* event);
+  void UnregisterEvent(uint32_t id);
+  Event* FindEvent(uint32_t id) const;
+
   // --- behaviours ---------------------------------------------------------
   int RegisterBehaviour(ScriptBehaviour* behaviour);
   void UnregisterBehaviour(int id);
@@ -306,6 +314,8 @@ class ScriptRuntime {
 
   std::unordered_map<uint32_t, MapScene*> scenes_;
   std::unordered_map<int, ScriptBehaviour*> behaviours_;
+  std::unordered_map<uint32_t, Event*> events_;
+  uint32_t next_event_id_ = 1;
   int next_behaviour_id_ = 1;
   uint32_t current_scene_ = 0;
   struct DataAssetEntry {

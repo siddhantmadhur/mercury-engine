@@ -6,11 +6,13 @@
 // the infinite-loop guard.
 #include "scripting/as/script_runtime.h"
 #include "scripting/as/script_builder.h"
+#include "scripting/event.h"
 
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <random>
 #include <string>
 
@@ -110,6 +112,28 @@ TEST(ScriptRuntime, BuildingAgainChecksTheScriptsAgain) {
   log.clear();
   EXPECT_FALSE(ScriptBuilder::Build(dir, options, &log)) << log;
   std::filesystem::remove_all(dir);
+}
+
+// A script copies its Event field value and keeps it; once the behaviour that
+// owned the Event is gone the copy must resolve to nothing, never to a
+// dangling pointer, and ids are not handed out twice.
+TEST(ScriptRuntime, EventHandlesStopResolvingWhenTheOwnerIsGone) {
+  auto& runtime = ScriptRuntime::Instance();
+  std::optional<Event> event(std::in_place);
+  const uint32_t id = runtime.RegisterEvent(&*event);
+  ASSERT_NE(id, 0u);
+  EXPECT_EQ(runtime.FindEvent(id), &*event);
+
+  runtime.UnregisterEvent(id);  // what ~ScriptBehaviour does
+  event.reset();
+  EXPECT_EQ(runtime.FindEvent(id), nullptr);
+  EXPECT_EQ(runtime.FindEvent(0), nullptr);
+
+  Event other;
+  const uint32_t next = runtime.RegisterEvent(&other);
+  EXPECT_NE(next, id);
+  EXPECT_EQ(runtime.FindEvent(id), nullptr);
+  runtime.UnregisterEvent(next);
 }
 
 TEST(ScriptRuntime, AThrownErrorIsCaughtNotFatal) {

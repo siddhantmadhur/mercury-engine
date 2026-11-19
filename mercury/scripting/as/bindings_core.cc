@@ -301,14 +301,17 @@ bool BehaviourIsEnabled() {
 // --------------------------------------------------------------------------------
 
 void EventInvoke(ScriptEvent* self) {
-  if (!self || !self->impl) {
+  Event* event = self ? Runtime().FindEvent(self->id) : nullptr;
+  if (!event) {
     Throw("The Event is not bound to a script");
     return;
   }
-  self->impl->Invoke();
+  event->Invoke();
 }
 void EventRemoveAllListeners(ScriptEvent* self) {
-  if (self && self->impl) self->impl->RemoveAllListeners();
+  if (Event* event = self ? Runtime().FindEvent(self->id) : nullptr) {
+    event->RemoveAllListeners();
+  }
 }
 
 // --- scene
