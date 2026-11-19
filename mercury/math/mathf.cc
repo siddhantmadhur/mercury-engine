@@ -4,6 +4,7 @@
 
 #include "mathf.h"
 
+#include <mutex>
 #include <random>
 
 namespace Mercury {
@@ -41,9 +42,16 @@ float Mathf::SmoothDamp(float current, float target, float& velocity,
 }
 
 namespace {
+// One engine keeps InitState() reproducible, but Range() can be called from
+// ParallelFor workers (through scripts), so every use is serialized.
 std::mt19937& Engine() {
   static std::mt19937 engine{std::random_device{}()};
   return engine;
+}
+
+std::mutex& EngineMutex() {
+  static std::mutex mutex;
+  return mutex;
 }
 }  // namespace
 
@@ -51,12 +59,14 @@ float Random::Range(float min, float max) {
   if (min > max) std::swap(min, max);
   std::uniform_real_distribution<float> distribution(
       min, std::nextafter(max, max + 1.0f));
+  std::lock_guard lock(EngineMutex());
   return distribution(Engine());
 }
 
 int Random::Range(int min, int max) {
   if (min >= max) return min;
   std::uniform_int_distribution<int> distribution(min, max - 1);
+  std::lock_guard lock(EngineMutex());
   return distribution(Engine());
 }
 
@@ -76,6 +86,9 @@ glm::vec2 Random::InsideUnitCircle() {
   }
 }
 
-void Random::InitState(uint32_t seed) { Engine().seed(seed); }
+void Random::InitState(uint32_t seed) {
+  std::lock_guard lock(EngineMutex());
+  Engine().seed(seed);
+}
 
 }  // namespace Mercury
