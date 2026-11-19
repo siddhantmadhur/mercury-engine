@@ -133,7 +133,10 @@ std::string Project::GetRenderAntiAliasing() const {
 }
 
 void Project::SetRenderAntiAliasing(std::string mode) {
-  GetOrAddSection("render").properties.Set("anti_aliasing", std::move(mode));
+  auto& properties = GetOrAddSection("render").properties;
+  properties.Set("anti_aliasing", std::move(mode));
+  // The legacy `fxaa` bool is superseded; leaving it would be stale data.
+  properties.Remove("fxaa");
 }
 
 bool Project::GetRenderFsr() const {

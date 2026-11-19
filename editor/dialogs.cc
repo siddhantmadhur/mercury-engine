@@ -206,12 +206,16 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
       new wxChoice(box, wxID_ANY, wxDefaultPosition, wxDefaultSize, aa_choices);
   const std::string aa_mode = project->GetRenderAntiAliasing();
   aa_choice->SetSelection(aa_mode == "none" ? 0 : aa_mode == "fxaa" ? 1 : 2);
+  aa_choice->SetToolTip(
+      "TAA is the default and the best partner for FSR 1. Filament discourages "
+      "running FXAA before FSR, so prefer TAA when upscaling.");
 
   auto* fsr_check = new wxCheckBox(box, wxID_ANY, "FSR 1 upscaling");
   fsr_check->SetValue(project->GetRenderFsr());
   fsr_check->SetToolTip(
       "Draws the scene smaller and upscales it with AMD FidelityFX Super "
-      "Resolution 1. Best together with TAA.");
+      "Resolution 1. FSR 1 works best with TAA; FXAA before FSR is "
+      "discouraged by Filament.");
 
   wxArrayString quality_choices;
   quality_choices.Add("High");

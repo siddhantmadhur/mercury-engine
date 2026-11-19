@@ -200,8 +200,15 @@ upscaler, `fsr = true`, with `fsr_quality = "high" | "ultra"`,
 `render_scale` (0.5 to 1, default 0.75) and `fsr_sharpness` (0 to 1, default
 0.9). FSR applies to the window's scene view and the editor's scene viewport
 only; render textures, previews and the UI stay at native resolution. TAA
-adds Filament's motion vectors pass. FSR 1 expects a well anti-aliased image,
-so pair it with TAA.
+adds Filament's motion vectors pass and runs only on the main scene views;
+other views (render textures, previews) use FXAA when the project chose TAA.
+FSR 1 expects a well anti-aliased image, so pair it with TAA.
+
+The default anti-aliasing is now TAA (it used to be FXAA), and a
+`PostProcessProfile`'s `antialiasing` key is no longer read; anti-aliasing
+comes only from the project. Filament's motion vectors do not capture skinned
+meshes, so animated characters rely on TAA's neighbourhood clamping and may
+show slight smearing.
 
 Refraction uses Filament's cubemap mode so it also works on
 MoltenVK, where the screen-space refraction pass currently draws nothing.

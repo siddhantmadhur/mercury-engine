@@ -220,15 +220,18 @@ void FilamentApplication::SetupCamera(filament::Camera* camera,
 void FilamentApplication::ApplyPostProcess(filament::View* view,
                                            const RenderSettings& settings,
                                            const RenderCamera& camera,
-                                           bool allow_fsr) {
+                                           bool main_view) {
   if (!view) return;
   // Anti-aliasing is a project option. TAA needs the motion vectors pass and
-  // runs inside Filament's post-processing, as does the FSR 1 upscaler.
-  const bool taa = settings.anti_aliasing == RenderSettings::AntiAliasing::kTaa;
-  view->setAntiAliasing(settings.anti_aliasing ==
-                                RenderSettings::AntiAliasing::kFxaa
-                            ? filament::View::AntiAliasing::FXAA
-                            : filament::View::AntiAliasing::NONE);
+  // keeps per-view history, so only the main scene views run it; every other
+  // view (render textures, previews) falls back to FXAA when the project chose
+  // TAA.
+  using AA = RenderSettings::AntiAliasing;
+  const bool taa = main_view && settings.anti_aliasing == AA::kTaa;
+  const bool fxaa = settings.anti_aliasing == AA::kFxaa ||
+                    (!main_view && settings.anti_aliasing == AA::kTaa);
+  view->setAntiAliasing(fxaa ? filament::View::AntiAliasing::FXAA
+                             : filament::View::AntiAliasing::NONE);
   filament::TemporalAntiAliasingOptions taa_options;
   taa_options.enabled = taa;
   view->setTemporalAntiAliasingOptions(taa_options);
@@ -240,7 +243,7 @@ void FilamentApplication::ApplyPostProcess(filament::View* view,
   // the dynamic resolution controller never moves it) and upscales it. Only
   // the main scene views; render textures, previews and the UI stay native.
   filament::DynamicResolutionOptions resolution;
-  resolution.enabled = allow_fsr && settings.fsr;
+  resolution.enabled = main_view && settings.fsr;
   const float scale = std::clamp(settings.render_scale, 0.5f, 1.0f);
   resolution.minScale = {scale, scale};
   resolution.maxScale = {scale, scale};
@@ -673,6 +676,12 @@ void FilamentApplication::SetSceneViewportSize(int width, int height) {
     game_scene_->SetWidth(static_cast<float>(w));
     game_scene_->SetHeight(static_cast<float>(h));
   }
+}
+
+filament::math::float2
+FilamentApplication::SceneViewDynamicResolutionScaleForTest() const {
+  if (!scene_target_.view) return {1.0f, 1.0f};
+  return scene_target_.view->getLastDynamicResolutionScale();
 }
 
 bool FilamentApplication::CopyScenePixels(int& width, int& height,

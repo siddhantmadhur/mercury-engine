@@ -5,8 +5,10 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -81,10 +83,18 @@ class SmokeScene : public GameScene {
   void OnDestroy() override {}
 };
 
-void ExpectNonUniformFullSizeFrame(const RenderSettings& settings) {
-  constexpr int kWidth = 128;
-  constexpr int kHeight = 128;
+constexpr int kWidth = 128;
+constexpr int kHeight = 128;
 
+struct RenderResult {
+  std::vector<uint8_t> pixels;
+  filament::math::float2 dynamic_scale{1.0f, 1.0f};
+};
+
+// Renders the smoke scene with `settings` and returns the pixels after a few
+// extra frames (so TAA history runs) plus the dynamic resolution scale
+// Filament applied to the scene viewport.
+void RenderSmokeScene(const RenderSettings& settings, RenderResult& result) {
   DefaultApplication app("Filament Smoke", kWidth, kHeight);
   app.EnableHeadlessMode(true);
   auto scene = std::make_unique<SmokeScene>();
@@ -98,7 +108,7 @@ void ExpectNonUniformFullSizeFrame(const RenderSettings& settings) {
   int width = 0;
   int height = 0;
   uint64_t frame_id = 0;
-  std::vector<uint8_t> pixels;
+  std::vector<uint8_t>& pixels = result.pixels;
   bool got_pixels = false;
   // Debug builds can take a while to present the first offscreen frame under
   // load, so allow a few seconds rather than a fixed 60 iterations.
@@ -112,10 +122,19 @@ void ExpectNonUniformFullSizeFrame(const RenderSettings& settings) {
   }
 
   ASSERT_TRUE(got_pixels);
+  // Let the TAA history (and the dynamic resolution controller) settle.
+  for (int i = 0; i < 5; i++) {
+    app.StepFrame();
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ASSERT_TRUE(app.CopyScenePixels(width, height, pixels, &frame_id));
   EXPECT_EQ(width, kWidth);
   EXPECT_EQ(height, kHeight);
   ASSERT_EQ(pixels.size(), static_cast<size_t>(kWidth) * kHeight * 4);
+  result.dynamic_scale = app.SceneViewDynamicResolutionScaleForTest();
+}
 
+void ExpectNonUniform(const std::vector<uint8_t>& pixels) {
   uint8_t min_rgb = 255;
   uint8_t max_rgb = 0;
   for (size_t i = 0; i < pixels.size(); i += 4) {
@@ -127,16 +146,66 @@ void ExpectNonUniformFullSizeFrame(const RenderSettings& settings) {
       << ", max=" << int(max_rgb) << ")";
 }
 
+double MeanAbsDiff(const std::vector<uint8_t>& a,
+                   const std::vector<uint8_t>& b) {
+  double sum = 0.0;
+  size_t count = 0;
+  for (size_t i = 0; i < a.size() && i < b.size(); i++) {
+    if (i % 4 == 3) continue;  // alpha
+    sum += std::abs(static_cast<int>(a[i]) - static_cast<int>(b[i]));
+    count++;
+  }
+  return count ? sum / static_cast<double>(count) : 0.0;
+}
+
+RenderSettings MakeSettings(RenderSettings::AntiAliasing aa, bool fsr) {
+  RenderSettings settings;
+  settings.anti_aliasing = aa;
+  settings.fsr = fsr;
+  settings.render_scale = 0.5f;
+  return settings;
+}
+
 TEST(FilamentSmokeTest, HeadlessOffscreenRenderIsNonUniform) {
-  ExpectNonUniformFullSizeFrame(RenderSettings{});
+  RenderResult result;
+  RenderSmokeScene(RenderSettings{}, result);
+  ExpectNonUniform(result.pixels);
+}
+
+TEST(FilamentSmokeTest, FxaaRendersFullSizeFrame) {
+  RenderResult result;
+  RenderSmokeScene(MakeSettings(RenderSettings::AntiAliasing::kFxaa, false),
+                   result);
+  ExpectNonUniform(result.pixels);
 }
 
 TEST(FilamentSmokeTest, TaaWithFsrRendersFullSizeFrame) {
-  RenderSettings settings;
-  settings.anti_aliasing = RenderSettings::AntiAliasing::kTaa;
-  settings.fsr = true;
-  settings.render_scale = 0.5f;
-  ExpectNonUniformFullSizeFrame(settings);
+  RenderResult off;
+  RenderSmokeScene(MakeSettings(RenderSettings::AntiAliasing::kTaa, false),
+                   off);
+  ExpectNonUniform(off.pixels);
+  EXPECT_FLOAT_EQ(off.dynamic_scale.x, 1.0f);
+  EXPECT_FLOAT_EQ(off.dynamic_scale.y, 1.0f);
+
+  RenderResult on;
+  RenderSmokeScene(MakeSettings(RenderSettings::AntiAliasing::kTaa, true), on);
+  ExpectNonUniform(on.pixels);
+  EXPECT_FLOAT_EQ(on.dynamic_scale.x, 0.5f);
+  EXPECT_FLOAT_EQ(on.dynamic_scale.y, 0.5f);
+}
+
+TEST(FilamentSmokeTest, FsrChangesThePixels) {
+  RenderResult off;
+  RenderSmokeScene(MakeSettings(RenderSettings::AntiAliasing::kNone, false),
+                   off);
+  RenderResult on;
+  RenderSmokeScene(MakeSettings(RenderSettings::AntiAliasing::kNone, true), on);
+  ASSERT_EQ(off.pixels.size(), on.pixels.size());
+  EXPECT_FLOAT_EQ(off.dynamic_scale.x, 1.0f);
+  EXPECT_FLOAT_EQ(on.dynamic_scale.x, 0.5f);
+  const double diff = MeanAbsDiff(off.pixels, on.pixels);
+  std::cout << "FSR on/off mean abs pixel diff: " << diff << "\n";
+  EXPECT_GT(diff, 0.05);
 }
 
 }  // namespace

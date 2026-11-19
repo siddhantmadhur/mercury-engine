@@ -117,4 +117,28 @@ TEST(RenderSettings, ProjectAccessorsRoundTrip) {
   std::filesystem::remove_all(dir);
 }
 
+TEST(RenderSettings, SettingAntiAliasingDropsLegacyFxaaKey) {
+  const auto dir =
+      std::filesystem::temp_directory_path() / "mercury_render_legacy_test";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  std::ofstream(dir / "test.mproj")
+      << "[project]\nname = \"Test\"\n[render]\nfxaa = false\n";
+  std::string error;
+  auto project = Project::Load(dir / "test.mproj", &error);
+  ASSERT_TRUE(project) << error;
+  EXPECT_EQ(project->GetRenderAntiAliasing(), "none");
+  project->SetRenderAntiAliasing("taa");
+  ASSERT_TRUE(project->Save());
+
+  std::ifstream in(dir / "test.mproj");
+  const std::string text((std::istreambuf_iterator<char>(in)),
+                         std::istreambuf_iterator<char>());
+  EXPECT_EQ(text.find("fxaa"), std::string::npos) << text;
+  auto reloaded = Project::Load(dir / "test.mproj", &error);
+  ASSERT_TRUE(reloaded) << error;
+  EXPECT_EQ(reloaded->GetRenderAntiAliasing(), "taa");
+  std::filesystem::remove_all(dir);
+}
+
 }  // namespace
