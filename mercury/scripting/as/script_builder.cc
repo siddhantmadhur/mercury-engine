@@ -59,6 +59,9 @@ bool ScriptBuilder::Build(const fs::path& project_dir,
   }
   Emit(options, log,
        "Compiling " + std::to_string(files.size()) + " AngelScript file(s)");
+  // A build must compile the files as they are now, not reuse the module
+  // from an earlier build of the same project.
+  runtime.ForgetLoadedProject();
   if (!runtime.LoadScripts(project_dir)) {
     Emit(options, log, "Script compilation failed");
     return false;

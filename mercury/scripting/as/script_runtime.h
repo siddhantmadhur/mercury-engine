@@ -184,6 +184,9 @@ class ScriptRuntime {
    * registered script is described and added to the TypeRegistry.
    */
   bool LoadScripts(const std::filesystem::path& project_root);
+  // Makes the next LoadScripts compile again even for the project that is
+  // loaded (for a build, which must check the files as they are now).
+  void ForgetLoadedProject() { loaded_project_.clear(); }
 
   /**
    * @brief Compiles one module from the given files (tests and tools)

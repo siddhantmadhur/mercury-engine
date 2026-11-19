@@ -5,6 +5,7 @@
 // Tests of the embedded AngelScript engine itself: evaluation, exceptions and
 // the infinite-loop guard.
 #include "scripting/as/script_runtime.h"
+#include "scripting/as/script_builder.h"
 
 #include <gtest/gtest.h>
 
@@ -88,6 +89,26 @@ TEST(ScriptRuntime, AFailedRebuildKeepsTheCurrentModule) {
   // And a later good build still works (a fresh module name each time).
   EXPECT_TRUE(runtime.LoadFiles({good}, "game", true));
   EXPECT_NE(runtime.GetModule(), nullptr);
+  std::filesystem::remove_all(dir);
+}
+
+// A second build of the same project must look at the files as they are now:
+// it used to reuse the first build's module and report success for scripts
+// that no longer compile.
+TEST(ScriptRuntime, BuildingAgainChecksTheScriptsAgain) {
+  const auto dir = std::filesystem::temp_directory_path() /
+                   ("rebuild_project_" + std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(dir / "scripts");
+  const auto script = dir / "scripts" / "game.as";
+  std::ofstream(script) << "class Thing { int Value() { return 1; } }";
+
+  BuildOptions options;
+  std::string log;
+  EXPECT_TRUE(ScriptBuilder::Build(dir, options, &log)) << log;
+
+  std::ofstream(script) << "class Thing { int Value() { return ; } }";
+  log.clear();
+  EXPECT_FALSE(ScriptBuilder::Build(dir, options, &log)) << log;
   std::filesystem::remove_all(dir);
 }
 
