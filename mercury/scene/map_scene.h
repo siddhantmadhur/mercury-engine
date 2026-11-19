@@ -444,6 +444,10 @@ class MapScene : public GameScene {
   std::unordered_map<kEntityId, std::vector<Behaviour*>> behaviours_by_entity_;
   size_t awoken_behaviours_ = 0;
   bool running_ = false;
+  // Bumped whenever the map is cleared. The update loops notice it changing
+  // under them (a callback replaced the scene) and stop instead of walking
+  // behaviours that no longer exist.
+  uint64_t map_generation_ = 0;
   PrefabCache prefabs_;
 
   std::string pending_map_;  // LoadMap

@@ -598,6 +598,7 @@ void MapScene::SetCurrentCamera(GameObject camera) {
 }
 
 void MapScene::ClearMap() {
+  map_generation_++;
   pending_destroy_.clear();
   // OnDestroy may instantiate a prefab, which appends to behaviours_ and can
   // reallocate it; iterate over a snapshot instead.
@@ -1009,12 +1010,15 @@ void MapScene::OnFrame(double delta_t) {
   if (ui && input_manager_) ui_.ProcessInput(*input_manager_);
   const float dt =
       mode_ == Mode::kPlay ? Time::GetDeltaTime() : static_cast<float>(seconds);
+  const uint64_t generation = map_generation_;
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnFrame(dt);
+    if (generation != map_generation_) break;  // the scene was replaced
   }
-  for (size_t i = 0; i < behaviours_.size(); i++) {
+  for (size_t i = 0; generation == map_generation_ && i < behaviours_.size();
+       i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled()) {
       behaviour->OnLateFrame(dt);
@@ -1037,10 +1041,12 @@ void MapScene::OnTick(double delta_t) {
   StartPendingBehaviours();
   DispatchCollisions();
   const float dt = Time::GetDeltaTime();
+  const uint64_t generation = map_generation_;
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnTick(dt);
+    if (generation != map_generation_) break;  // the scene was replaced
   }
   ScriptRuntime::Instance().SetCurrentScene(serial_);
   ScriptRuntime::Instance().PumpTimers();
