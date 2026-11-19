@@ -136,7 +136,7 @@ ScriptBehaviour::~ScriptBehaviour() {
   auto& runtime = ScriptRuntime::Instance();
   if (instance_) {
     // The script object may outlive this behaviour (a GetBehaviour() handle),
-    // so its Event fields must no longer point into events_.
+    // so its Event fields must no longer refer to events_.
     for (const ScriptField& field : class_->fields) {
       if (field.type != FieldType::kEvent) continue;
       if (auto* value = static_cast<ScriptEvent*>(
@@ -145,12 +145,10 @@ ScriptBehaviour::~ScriptBehaviour() {
       }
     }
   }
-  // Copies of the Event values that scripts made keep the id; it stops
-  // resolving here, so using one later reports an unbound Event.
   if (runtime.IsInitialized()) {
+    // Copies of the Event values that scripts made keep the id; it stops
+    // resolving here, so using one later reports an unbound Event.
     for (uint32_t id : event_ids_) runtime.UnregisterEvent(id);
-  }
-  if (runtime.IsInitialized()) {
     if (id_) runtime.UnregisterBehaviour(id_);
     if (instance_) instance_->SetUserData(nullptr);
   }

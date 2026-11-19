@@ -5,6 +5,7 @@
 // Tests of AngelScript scripts running as Behaviours: callback order, fields,
 // events, errors and data assets.
 #include "scripting/as/script_behaviour.h"
+#include "scripting/as/script_event.h"
 
 #include <gtest/gtest.h>
 
@@ -162,6 +163,37 @@ fired = [[NodePath("A"), "Probe", "Add", 15.0]]
 )");
   Tick(scene, 1);
   EXPECT_EQ(scene.Find("A").GetTag(), "aest+");
+}
+
+// A script can copy its Event field and keep the copy. The copy refers to the
+// Event by id, and the id must stop resolving once the owning behaviour is
+// gone, so using it then reports an unbound Event instead of reading freed
+// memory.
+TEST_F(ScriptBehaviourTest, EventIdsStopResolvingWhenTheBehaviourIsDestroyed) {
+  auto& runtime = ScriptRuntime::Instance();
+  uint32_t id = 0;
+  {
+    MapScene scene(g_project, MapScene::Mode::kPlay);
+    Load(scene, R"([mmap format=1]
+[node name="Root"]
+[node name="A" parent="."]
+[component type="Probe" node="A"]
+)");
+    ScriptBehaviour* script = Script(scene, "A", "Probe");
+    ASSERT_NE(script, nullptr);
+    const ScriptClass* script_class = runtime.FindScriptClass("Probe");
+    ASSERT_NE(script_class, nullptr);
+    for (const ScriptField& field : script_class->fields) {
+      if (field.type != FieldType::kEvent) continue;
+      auto* value = static_cast<ScriptEvent*>(
+          script->Instance()->GetAddressOfProperty(field.property_index));
+      ASSERT_NE(value, nullptr);
+      id = value->id;
+    }
+    ASSERT_NE(id, 0u);
+    EXPECT_NE(runtime.FindEvent(id), nullptr);
+  }
+  EXPECT_EQ(runtime.FindEvent(id), nullptr);
 }
 
 TEST_F(ScriptBehaviourTest, AnExceptionIsLoggedAndTheNextTickStillRuns) {

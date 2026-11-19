@@ -230,6 +230,7 @@ void ScriptRuntime::Shutdown() {
   data_assets_.clear();
   replaced_data_assets_.clear();
   behaviours_.clear();
+  events_.clear();  // their owners are gone with the engine
   timers_.clear();
   classes_.clear();
   retired_classes_.clear();

@@ -15,12 +15,14 @@
 #ifndef MERCURY_SCRIPTING_AS_SCRIPT_EVENT_H
 #define MERCURY_SCRIPTING_AS_SCRIPT_EVENT_H
 
+#include <cstdint>
+
 namespace Mercury {
 
 class Event;
 
 struct ScriptEvent {
-  unsigned int id = 0;  // 0: not bound to an Event
+  uint32_t id = 0;  // 0: not bound to an Event
 };
 
 }  // namespace Mercury
