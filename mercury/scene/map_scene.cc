@@ -290,6 +290,10 @@ int MapScene::GetTicksPerSecond() const {
 }
 
 void MapScene::SetProject(std::shared_ptr<Project> project) {
+  if (running_callbacks_ > 0) {
+    PDebug::error("SetProject was called from a behaviour callback; ignored");
+    return;
+  }
   // Models loading for the old project must not reach the new one's cache.
   preloader_.Cancel();
   loading_map_.reset();
@@ -349,6 +353,12 @@ const UI::UIDrawData* MapScene::GetUIDrawData() const {
 }
 
 void MapScene::Instantiate(const Map& map) {
+  if (running_callbacks_ > 0) {
+    // Not while behaviours are running: it is applied at the next frame.
+    deferred_map_ = map;
+    deferred_fresh_ = false;
+    return;
+  }
   ClearMap();
 
   std::vector<kEntityId> created;
@@ -373,6 +383,11 @@ void MapScene::Instantiate(const Map& map) {
 }
 
 void MapScene::BeginInstantiate(Map map, bool fresh_assets) {
+  if (running_callbacks_ > 0) {
+    deferred_map_ = std::move(map);
+    deferred_fresh_ = fresh_assets;
+    return;
+  }
   preloader_.Cancel();
   loading_map_.reset();
   auto jobs = MissingModels(map, fresh_assets);
@@ -598,7 +613,12 @@ void MapScene::SetCurrentCamera(GameObject camera) {
 }
 
 void MapScene::ClearMap() {
-  map_generation_++;
+  if (running_callbacks_ > 0) {
+    PDebug::error(
+        "ClearMap was called from a behaviour callback; the scene cannot be "
+        "cleared while it is running");
+    return;
+  }
   pending_destroy_.clear();
   // OnDestroy may instantiate a prefab, which appends to behaviours_ and can
   // reallocate it; iterate over a snapshot instead.
@@ -606,8 +626,11 @@ void MapScene::ClearMap() {
   behaviours.reserve(behaviours_.size());
   for (const auto& behaviour : behaviours_)
     behaviours.push_back(behaviour.get());
-  for (Behaviour* behaviour : behaviours) {
-    if (behaviour->awoken_) behaviour->OnDestroy();
+  {
+    CallbackScope scope(this);
+    for (Behaviour* behaviour : behaviours) {
+      if (behaviour->awoken_) behaviour->OnDestroy();
+    }
   }
   behaviours_.clear();
   behaviours_by_entity_.clear();
@@ -975,6 +998,7 @@ void MapScene::PlayAudioOnAwake() {
 }
 
 void MapScene::OnStart() {
+  CallbackScope callback_scope(this);
   running_ = true;
   PlayAudioOnAwake();
   AwakeBehaviours();
@@ -996,8 +1020,15 @@ void MapScene::LoadPendingMap() {
 
 void MapScene::OnFrame(double delta_t) {
   const double seconds = delta_t / 1000.0;
+  if (mode_ == Mode::kPlay && deferred_map_) {
+    // A behaviour asked for a new map during the last frame's callbacks.
+    Map map = std::move(*deferred_map_);
+    deferred_map_.reset();
+    BeginInstantiate(std::move(map), deferred_fresh_);
+  }
   if (mode_ == Mode::kPlay) FinishLoadingMap();
   if (mode_ == Mode::kPlay && !pending_map_.empty()) LoadPendingMap();
+  CallbackScope callback_scope(this);
   Profiler::SetLoading(!pending_map_.empty() || loading_map_.has_value());
   if (mode_ == Mode::kPlay) {
     Time::BeginFrame(seconds);
@@ -1010,15 +1041,12 @@ void MapScene::OnFrame(double delta_t) {
   if (ui && input_manager_) ui_.ProcessInput(*input_manager_);
   const float dt =
       mode_ == Mode::kPlay ? Time::GetDeltaTime() : static_cast<float>(seconds);
-  const uint64_t generation = map_generation_;
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnFrame(dt);
-    if (generation != map_generation_) break;  // the scene was replaced
   }
-  for (size_t i = 0; generation == map_generation_ && i < behaviours_.size();
-       i++) {
+  for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled()) {
       behaviour->OnLateFrame(dt);
@@ -1037,16 +1065,15 @@ void MapScene::OnFrame(double delta_t) {
 
 void MapScene::OnTick(double delta_t) {
   if (mode_ != Mode::kPlay) return;
+  CallbackScope callback_scope(this);
   Time::BeginTick();
   StartPendingBehaviours();
   DispatchCollisions();
   const float dt = Time::GetDeltaTime();
-  const uint64_t generation = map_generation_;
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnTick(dt);
-    if (generation != map_generation_) break;  // the scene was replaced
   }
   ScriptRuntime::Instance().SetCurrentScene(serial_);
   ScriptRuntime::Instance().PumpTimers();
@@ -1055,6 +1082,7 @@ void MapScene::OnTick(double delta_t) {
 }
 
 void MapScene::OnDestroy() {
+  CallbackScope callback_scope(this);
   // OnDestroy may instantiate a prefab, which appends to behaviours_.
   std::vector<Behaviour*> behaviours;
   behaviours.reserve(behaviours_.size());

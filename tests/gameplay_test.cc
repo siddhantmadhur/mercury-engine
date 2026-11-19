@@ -79,6 +79,25 @@ class TestMapSwitcher : public Behaviour {
 };
 MERCURY_TEST_BEHAVIOUR(TestMapSwitcher);
 
+// Replaces the whole scene from inside OnFrame, which a native behaviour can
+// do through GetScene(). The scene must not be torn down under the loop that
+// is running this very callback.
+class TestSceneReplacer : public Behaviour {
+ public:
+  static inline Map* replacement = nullptr;
+  static inline int frames = 0;
+  void OnFrame(double) override {
+    frames++;
+    if (frames == 1 && replacement) {
+      GetScene().Instantiate(*replacement);
+      GetScene().ClearMap();  // refused while callbacks are running
+      still_here = GetGameObject().IsValid();
+    }
+  }
+  bool still_here = false;
+};
+MERCURY_TEST_BEHAVIOUR(TestSceneReplacer);
+
 // A C++ data asset, the ScriptableObject equivalent.
 struct TestSettings {
   float amount = 1.0f;
@@ -392,6 +411,41 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
     }
   }
   std::filesystem::remove_all(dir);
+}
+
+TEST(Gameplay, ReplacingTheSceneInACallbackWaitsForTheNextFrame) {
+  auto project = LoadProject();
+  ASSERT_TRUE(project);
+  std::string error;
+  Map first, second;
+  ASSERT_TRUE(first.LoadFromString(R"([mmap format=1]
+[node name="Root"]
+[node name="Replacer" parent="."]
+[component type="TestSceneReplacer" node="Replacer"]
+)",
+                                   &error))
+      << error;
+  ASSERT_TRUE(second.LoadFromString(R"([mmap format=1]
+[node name="Other"]
+[node name="Survivor" parent="."]
+)",
+                                    &error))
+      << error;
+  TestSceneReplacer::replacement = &second;
+  TestSceneReplacer::frames = 0;
+
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.Instantiate(first);
+  scene.OnStart();
+  ASSERT_TRUE(scene.Find("Replacer").IsValid());
+
+  scene.OnFrame(1000.0 / 60.0);  // the behaviour asks for `second` here
+  EXPECT_TRUE(scene.Find("Replacer").IsValid());   // not torn down mid-callback
+  EXPECT_FALSE(scene.Find("Survivor").IsValid());
+  scene.OnFrame(1000.0 / 60.0);  // applied at the start of the next frame
+  EXPECT_TRUE(scene.Find("Survivor").IsValid());
+  EXPECT_FALSE(scene.Find("Replacer").IsValid());
+  TestSceneReplacer::replacement = nullptr;
 }
 
 TEST(Gameplay, LoadMapFromScriptReplacesTheScene) {
