@@ -498,7 +498,8 @@ struct Stats {
 TEST(Binding, ToTargetTwoWayAndReflectedSources) {
   TestPanel t;
   Stats stats;
-  t.root()->SetDataSource(ReflectedDataSource::Of(&stats));
+  auto stats_lifetime = std::make_shared<char>(0);
+  t.root()->SetDataSource(ReflectedDataSource::Of(&stats, stats_lifetime));
   auto* label = t.root()->Emplace<Label>();
   label->SetBinding("text", DataBinding{"score"});
   auto* greeting = t.root()->Emplace<Label>();
@@ -523,6 +524,12 @@ TEST(Binding, ToTargetTwoWayAndReflectedSources) {
   label->SetDataSource(bag);
   t.Update();
   EXPECT_EQ(label->text(), "99");
+
+  // An expired lifetime must stop the source reading the object.
+  auto expiring = std::make_shared<char>(0);
+  auto source = ReflectedDataSource::Of(&stats, expiring);
+  expiring.reset();
+  EXPECT_FALSE(source->GetValue("score").has_value());
 }
 
 // ------------------------------------------------------------------ Mesh --

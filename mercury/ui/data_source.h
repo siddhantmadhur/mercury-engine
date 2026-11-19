@@ -72,11 +72,13 @@ class ReflectedDataSource : public IDataSource {
   std::optional<mtext::Variant> GetValue(std::string_view path) const override;
   bool SetValue(std::string_view path, const mtext::Variant& value) override;
 
-  // Wraps anything with a Reflect(Reflector&) method.
+  // Wraps anything with a Reflect(Reflector&) method. `lifetime` must expire
+  // with the object (for example a weak_ptr to a token the owner holds).
   template <typename T>
-  static std::shared_ptr<ReflectedDataSource> Of(T* object) {
+  static std::shared_ptr<ReflectedDataSource> Of(T* object,
+                                                 std::weak_ptr<void> lifetime) {
     return std::make_shared<ReflectedDataSource>(
-        [object](Reflector& r) { object->Reflect(r); });
+        [object](Reflector& r) { object->Reflect(r); }, std::move(lifetime));
   }
 
  private:
