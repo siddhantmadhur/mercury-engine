@@ -4,6 +4,9 @@
 
 #include "time.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace Mercury {
 
 namespace {
@@ -45,7 +48,10 @@ uint64_t Time::GetFrameCount() { return State().frame_count; }
 float Time::GetTimeScale() { return State().time_scale; }
 
 void Time::SetTimeScale(float scale) {
-  State().time_scale = scale < 0 ? 0 : scale;
+  // NaN compares false with everything, so it used to slip past the old clamp
+  // and poison every later delta and fixed step.
+  if (!std::isfinite(scale)) return;
+  State().time_scale = std::max(0.0f, scale);
 }
 
 void Time::Reset(float fixed_delta_time) {
