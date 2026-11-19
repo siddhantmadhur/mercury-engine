@@ -5,6 +5,7 @@
 #include "filesystem.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <atomic>
 #include <climits>
 #include <cstdlib>
@@ -430,26 +431,58 @@ fs::path CopyFileWithoutOverwriting(const fs::path& source,
     ec = std::make_error_code(std::errc::invalid_argument);
     return {};
   }
-  const std::string stem = name.stem().string();
-  const std::string extension = name.extension().string();
+  auto data = ReadBytes(source);
+  if (!data) {
+    ec = std::make_error_code(std::errc::io_error);
+    return {};
+  }
+  const std::string_view bytes(reinterpret_cast<const char*>(data->data()),
+                               data->size());
   constexpr int kMaxAttempts = 1000;
   for (int attempt = 0; attempt < kMaxAttempts; attempt++) {
-    const fs::path candidate =
-        attempt == 0 ? dest_dir / name
-                     : dest_dir / (stem + " (" + std::to_string(attempt) + ")" +
-                                   extension);
+    // Built with path operations: a name that is not ANSI-representable (CJK on
+    // Windows) would throw if it went through std::string.
+    fs::path candidate = dest_dir / name;
+    if (attempt > 0) {
+      fs::path renamed = name.stem();
+      renamed += " (" + std::to_string(attempt) + ")";
+      renamed += name.extension();
+      candidate = dest_dir / renamed;
+    }
     // symlink_status looks at the entry itself, so a dangling link counts.
     std::error_code status_ec;
-    if (fs::symlink_status(candidate, status_ec).type() !=
-        fs::file_type::not_found) {
+    const auto status = fs::symlink_status(candidate, status_ec);
+    if (status.type() == fs::file_type::regular) {
+      // The same file dropped again: keep using the copy that is there.
+      std::error_code size_ec;
+      if (fs::file_size(candidate, size_ec) == bytes.size() && !size_ec) {
+        if (auto existing = ReadBytes(candidate);
+            existing && existing->size() == data->size() &&
+            std::equal(existing->begin(), existing->end(), data->begin())) {
+          return candidate;
+        }
+      }
       continue;
     }
-    // Not overwriting: fails if the name appeared in the meantime.
-    if (fs::copy_file(source, candidate, fs::copy_options::none, ec)) {
-      return candidate;
+    if (status.type() != fs::file_type::not_found) continue;
+    // O_EXCL | O_NOFOLLOW: fails if anything, including a link that appeared
+    // since the check above, is already there. (copy_file does not promise
+    // that: libc++ opens the destination without O_EXCL.)
+    const FileHandle file = OpenExclusive(candidate);
+    if (file == kInvalidFile) {
+      if (errno == EEXIST || errno == ELOOP) continue;
+      ec = std::error_code(errno, std::generic_category());
+      return {};
     }
-    if (ec != std::errc::file_exists) return {};
-    ec.clear();
+    const bool written = WriteAll(file, bytes);
+    const bool closed = CloseFile(file);
+    if (!written || !closed) {
+      std::error_code remove_ec;
+      fs::remove(candidate, remove_ec);
+      ec = std::make_error_code(std::errc::io_error);
+      return {};
+    }
+    return candidate;
   }
   ec = std::make_error_code(std::errc::file_exists);
   return {};

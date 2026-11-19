@@ -442,6 +442,11 @@ TEST_F(MPackTest, CopyIntoProjectNeverOverwritesOrFollowsLinks) {
   EXPECT_EQ(copy.filename(), "link (1).txt");
   EXPECT_FALSE(std::filesystem::exists(victim));
 
+  // The same file dropped twice reuses the copy already there.
+  copy = os::CopyFileWithoutOverwriting(source_dir / "hero.png", dest_dir, ec);
+  ASSERT_FALSE(ec);
+  EXPECT_EQ(copy.filename(), "hero (1).png");
+
   // No clash: the name is kept.
   write(source_dir / "fresh.txt", "x");
   copy = os::CopyFileWithoutOverwriting(source_dir / "fresh.txt", dest_dir, ec);
