@@ -210,9 +210,10 @@ TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
     ASSERT_TRUE(glass && mirror);
     EXPECT_FLOAT_EQ(glass->transmission, 1.0f);
     EXPECT_FLOAT_EQ(glass->ior, 2.5f);
-    // Tf 0.1 gray is clear glass: the tint is Tf scaled by its brightest
-    // channel, not Tf itself (which would be nearly black).
-    EXPECT_NEAR(glass->transmission_color.r, 1.0f, 1e-5f);
+    // Tf 0.1 gray is a 10% transmittance: the tint keeps its magnitude (the
+    // renderer turns it into absorption over the path) rather than being
+    // normalized to clear.
+    EXPECT_NEAR(glass->transmission_color.r, 0.1f, 1e-5f);
     EXPECT_FALSE(glass->transparent);
     EXPECT_FLOAT_EQ(mirror->transmission, 0.0f);
     EXPECT_FLOAT_EQ(mirror->metallic, 1.0f);

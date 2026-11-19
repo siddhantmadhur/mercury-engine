@@ -85,8 +85,11 @@ TEST(ObjMaterials, CornellSphereMirrorAndGlass) {
   EXPECT_FLOAT_EQ(mirror->transmission, 0.0f);
   EXPECT_NEAR(Linear(mirror->color.r), 0.96f, 1e-3f);
 
-  // illum 7, Kd 0.01, Tf 0.1, Ni 2.5: clear glass. White base color (Kd 0.01
-  // would turn everything black) and a white tint (Tf 0.1 is "mostly clear").
+  // illum 7, Kd 0.01, Tf 0.1, Ni 2.5: glass with its authored 10%
+  // transmittance. White base color (Kd 0.01 would turn everything black) and
+  // the tint keeps Tf's magnitude (0.1), which the renderer turns into an
+  // absorption over the path, so the glass is dim rather than perfectly
+  // clear.
   const ModelMaterial* glass = Find(*model, "rightSphere");
   ASSERT_TRUE(glass);
   EXPECT_FLOAT_EQ(glass->transmission, 1.0f);
@@ -94,9 +97,10 @@ TEST(ObjMaterials, CornellSphereMirrorAndGlass) {
   EXPECT_NEAR(glass->color.g, 1.0f, 1e-3f);
   EXPECT_NEAR(glass->color.b, 1.0f, 1e-3f);
   EXPECT_NEAR(glass->ior, 2.5f, 1e-5f);
-  EXPECT_NEAR(glass->transmission_color.r, 1.0f, 1e-3f);
-  EXPECT_NEAR(glass->transmission_color.g, 1.0f, 1e-3f);
-  EXPECT_NEAR(glass->transmission_color.b, 1.0f, 1e-3f);
+  // Tf is a transmittance, not a hue: its magnitude is retained.
+  EXPECT_NEAR(glass->transmission_color.r, 0.1f, 1e-3f);
+  EXPECT_NEAR(glass->transmission_color.g, 0.1f, 1e-3f);
+  EXPECT_NEAR(glass->transmission_color.b, 0.1f, 1e-3f);
   EXPECT_FLOAT_EQ(glass->metallic, 0.0f);
   // Glass is polished whatever Ns says.
   EXPECT_NEAR(Roughness(*glass), 0.0f, 1e-5f);
@@ -132,7 +136,11 @@ TEST(ObjMaterials, CornellWaterIsGlassWithItsIor) {
   EXPECT_FLOAT_EQ(water->transmission, 1.0f);
   EXPECT_NEAR(water->ior, 1.33f, 1e-5f);
   EXPECT_NEAR(water->color.r, 1.0f, 1e-3f);
-  EXPECT_NEAR(water->transmission_color.r, 1.0f, 1e-3f);
+  // Tf 0.1 gray keeps its magnitude as the transmittance (the renderer turns
+  // it into absorption); it is not normalized to clear.
+  EXPECT_NEAR(water->transmission_color.r, 0.1f, 1e-3f);
+  EXPECT_NEAR(water->transmission_color.g, 0.1f, 1e-3f);
+  EXPECT_NEAR(water->transmission_color.b, 0.1f, 1e-3f);
 }
 
 TEST(ObjMaterials, CornellGlossyDielectricsKeepDefaultF0) {
@@ -158,8 +166,11 @@ TEST(ObjMaterials, MoriKnobAmberGlassOverMetal) {
   auto model = LoadBenchmark("models/mori_knob/testObj.obj");
   if (!model) GTEST_SKIP() << "missing benchmark fixture";
 
-  // illum 4, Kd 0.1 0.04 0.01, Ni 1.01: amber glass. The tint is Kd's
-  // chromaticity (brightest channel 1), not its near-black value.
+  // illum 4, Kd 0.1 0.04 0.01, Tf 0.75 0.92 0.99, Ni 1.01: amber glass. The
+  // hue is Kd's chromaticity (its near-black value would be wrong, and its
+  // brightest channel 1 keeps the amber's own level), but Tf is a
+  // transmittance over the path, so its magnitude (0.99 at the brightest
+  // channel) still scales it instead of being normalized away.
   const ModelMaterial* shell = Find(*model, "OuterMat");
   ASSERT_TRUE(shell);
   EXPECT_FLOAT_EQ(shell->transmission, 1.0f);
@@ -169,9 +180,9 @@ TEST(ObjMaterials, MoriKnobAmberGlassOverMetal) {
   const glm::vec3 tint = shell->transmission_color;
   EXPECT_GT(tint.r, tint.g);
   EXPECT_GT(tint.g, tint.b);
-  EXPECT_NEAR(tint.r, 1.0f, 1e-3f);
-  EXPECT_NEAR(tint.g, 0.4f, 1e-3f);
-  EXPECT_NEAR(tint.b, 0.1f, 1e-3f);
+  EXPECT_NEAR(tint.r, 0.99f, 1e-3f);
+  EXPECT_NEAR(tint.g, 0.396f, 1e-3f);
+  EXPECT_NEAR(tint.b, 0.099f, 1e-3f);
   EXPECT_NEAR(shell->ior, 1.01f, 1e-5f);
   EXPECT_FLOAT_EQ(shell->metallic, 0.0f);
 
@@ -316,10 +327,13 @@ TEST(ObjMaterials, SyntheticMtlMapping) {
     EXPECT_NEAR(clear->color.r, 1.0f, 1e-3f);
     EXPECT_NEAR(clear->color.g, 1.0f, 1e-3f);
     EXPECT_NEAR(clear->color.b, 1.0f, 1e-3f);
-    EXPECT_NEAR(clear->transmission_color.r, 1.0f, 1e-3f);
-    EXPECT_NEAR(clear->transmission_color.g, 1.0f, 1e-3f);
-    EXPECT_NEAR(clear->transmission_color.b, 1.0f, 1e-3f);
+    // Tf 0.1 gray: the transmittance keeps its magnitude.
+    EXPECT_NEAR(clear->transmission_color.r, 0.1f, 1e-3f);
+    EXPECT_NEAR(clear->transmission_color.g, 0.1f, 1e-3f);
+    EXPECT_NEAR(clear->transmission_color.b, 0.1f, 1e-3f);
 
+    // Tf 1 asks for full transmittance, so Kd's chromaticity alone is the
+    // tint (brightest channel 1).
     const ModelMaterial* amber = Find(*model, "amber");
     ASSERT_TRUE(amber);
     EXPECT_FLOAT_EQ(amber->transmission, 1.0f);

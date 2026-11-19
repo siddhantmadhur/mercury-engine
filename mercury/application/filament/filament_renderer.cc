@@ -676,12 +676,18 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         const glm::vec3 trans_color =
             glm::clamp(material.transmission_color, 1e-4f, 1.0f);
         const bool tinted = trans_color != glm::vec3(1.0f);
-        // The light crosses the volume twice (in and out), so the colour is
-        // the transmittance over the full path: sqrt(tint) at one crossing.
+        // The solid refraction samples the medium once: Filament applies
+        // exp(-absorption * ray.d) along the ray's path inside the material
+        // (surface_light_indirect.fs), so the transmittance is over exactly
+        // one traversal and must not be halved for a second one. A material
+        // with no path length (a thin wall) has no volume to absorb over; its
+        // tint is all that remains, so absorption stays zero rather than
+        // dividing by a clamped epsilon.
         const filament::math::float3 absorption =
-            tinted ? filament::Color::absorptionAtDistance(
-                         ToFilament(trans_color), thickness * 2.0f)
-                   : filament::math::float3{0.0f, 0.0f, 0.0f};
+            tinted && thickness > 0.0f
+                ? filament::Color::absorptionAtDistance(
+                      ToFilament(trans_color), thickness)
+                : filament::math::float3{0.0f, 0.0f, 0.0f};
         instance->setParameter("transmission",
                                std::clamp(material.transmission, 0.0f, 1.0f));
         instance->setParameter("ior", std::max(material.ior, 1.0f));

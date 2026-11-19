@@ -779,22 +779,27 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
         if ((illum == 4 || illum == 6 || illum == 7) && refracts &&
             (tinted || !textured)) {
           // Glass. Filament multiplies what passes through by the base
-          // color, so the base is white and the tint is carried by the
-          // transmission color alone, scaled so its brightest channel is 1
-          // (Tf 0.1 gray is clear glass, not black). Without a diffuse
-          // texture that tint is the chromaticity of Kd when it has one (an
-          // amber shell); with one, Kd is the texture's multiplier and the
-          // base map already applies it, so only Tf is used.
+          // color, so the base is white and the attenuation is carried by
+          // the transmission color alone. Tf is the transmittance over the
+          // path, not just a hue: its magnitude is what makes Tf 0.1 gray a
+          // dim medium rather than perfectly clear glass, so it must not be
+          // normalized away (the renderer turns that transmittance into an
+          // absorption for the thickness). Without a diffuse texture Kd can
+          // supply the hue instead (an amber shell), but the Tf magnitude
+          // still scales it; with a texture, Kd is the base map's multiplier
+          // and already applied, so only Tf is used.
           const float kd_min = std::min({color.r, color.g, color.b});
           const bool chromatic =
               !textured && kd_max > 0.0f && (kd_max - kd_min) > 0.15f * kd_max;
+          const float tf_max = std::max({filter.r, filter.g, filter.b});
           glm::vec3 tint(1.0f);
-          if (chromatic) {
+          if (tinted && !chromatic) {
+            tint = glm::clamp(glm::vec3(filter.r, filter.g, filter.b), 0.0f,
+                              1.0f);
+          } else if (tinted) {
+            tint = glm::vec3(color.r, color.g, color.b) / kd_max * tf_max;
+          } else if (chromatic) {
             tint = glm::vec3(color.r, color.g, color.b) / kd_max;
-          } else {
-            const float tf_max = std::max({filter.r, filter.g, filter.b});
-            if (tf_max > 0.0f)
-              tint = glm::vec3(filter.r, filter.g, filter.b) / tf_max;
           }
           material.transmission = 1.0f;
           material.transmission_color = tint;
