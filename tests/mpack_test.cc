@@ -406,3 +406,45 @@ TEST_F(MPackTest, ModelFindsItsTexturesInAPack) {
   }
   EXPECT_EQ(textured, 2);
 }
+
+// Dropping a file into the project must not replace what is there nor write
+// through a symlink to somewhere else.
+TEST_F(MPackTest, CopyIntoProjectNeverOverwritesOrFollowsLinks) {
+  const auto source_dir = dir_ / "outside";
+  const auto dest_dir = dir_ / "assets";
+  std::filesystem::create_directories(source_dir);
+  std::filesystem::create_directories(dest_dir);
+  const auto write = [](const std::filesystem::path& file, const char* text) {
+    std::ofstream(file) << text;
+  };
+  const auto read = [](const std::filesystem::path& file) {
+    std::ifstream in(file);
+    std::string text((std::istreambuf_iterator<char>(in)), {});
+    return text;
+  };
+  write(source_dir / "hero.png", "new");
+  write(dest_dir / "hero.png", "old");
+
+  std::error_code ec;
+  auto copy = os::CopyFileWithoutOverwriting(source_dir / "hero.png", dest_dir, ec);
+  ASSERT_FALSE(ec) << ec.message();
+  EXPECT_EQ(copy.filename(), "hero (1).png");
+  EXPECT_EQ(read(dest_dir / "hero.png"), "old");
+  EXPECT_EQ(read(copy), "new");
+
+  // A symlink (even a dangling one) in the way is left alone too.
+  const auto victim = dir_ / "victim.txt";
+  write(source_dir / "link.txt", "payload");
+  std::filesystem::create_symlink(victim, dest_dir / "link.txt", ec);
+  ASSERT_FALSE(ec) << ec.message();
+  copy = os::CopyFileWithoutOverwriting(source_dir / "link.txt", dest_dir, ec);
+  ASSERT_FALSE(ec) << ec.message();
+  EXPECT_EQ(copy.filename(), "link (1).txt");
+  EXPECT_FALSE(std::filesystem::exists(victim));
+
+  // No clash: the name is kept.
+  write(source_dir / "fresh.txt", "x");
+  copy = os::CopyFileWithoutOverwriting(source_dir / "fresh.txt", dest_dir, ec);
+  ASSERT_FALSE(ec);
+  EXPECT_EQ(copy.filename(), "fresh.txt");
+}

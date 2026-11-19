@@ -55,6 +55,20 @@ std::optional<std::string> ReadText(const fs::path& path);
  * renamed over `path`.
  */
 bool WriteFileAtomic(const fs::path& path, std::string_view data);
+
+/**
+ * @brief Copies `source` into `dest_dir` without touching anything already there
+ *
+ * The copy keeps the file's name; if something with that name exists (a file, a
+ * folder, or a symlink, even a dangling one) it is left alone and the copy is
+ * named "name (1).ext", "name (2).ext" and so on. So a drop can neither replace
+ * a project asset nor write through a symlink to somewhere else.
+ *
+ * @return The path written, or an empty path with `ec` set on failure
+ */
+fs::path CopyFileWithoutOverwriting(const fs::path& source,
+                                    const fs::path& dest_dir,
+                                    std::error_code& ec);
 bool Exists(const fs::path& path);
 // Names of the files directly in `dir`, from mounted packs and from disk
 // (each once, packs first; folders are not listed).

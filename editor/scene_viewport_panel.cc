@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#include "os/filesystem.h"
 #include "scene_viewport_panel.h"
 
 #include <wx/dcbuffer.h>
@@ -327,8 +328,8 @@ SceneViewportPanel::SceneViewportPanel(wxWindow* parent, EditorScene& scene)
             // Copy dropped external asset into assets/
             fs::path dest_dir = root / "assets";
             fs::create_directories(dest_dir, ec);
-            fs::path dest = dest_dir / src.filename();
-            fs::copy_file(src, dest, fs::copy_options::overwrite_existing, ec);
+            // Never replaces an existing asset or writes through a symlink.
+            fs::path dest = os::CopyFileWithoutOverwriting(src, dest_dir, ec);
             if (!ec) {
               res_path = dest.lexically_relative(root).generic_string();
             }

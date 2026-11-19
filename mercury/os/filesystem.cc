@@ -421,4 +421,38 @@ void UseBundledVulkanDriver() {
 #endif
 }
 
+fs::path CopyFileWithoutOverwriting(const fs::path& source,
+                                    const fs::path& dest_dir,
+                                    std::error_code& ec) {
+  ec.clear();
+  const fs::path name = source.filename();
+  if (name.empty() || name == "." || name == "..") {
+    ec = std::make_error_code(std::errc::invalid_argument);
+    return {};
+  }
+  const std::string stem = name.stem().string();
+  const std::string extension = name.extension().string();
+  constexpr int kMaxAttempts = 1000;
+  for (int attempt = 0; attempt < kMaxAttempts; attempt++) {
+    const fs::path candidate =
+        attempt == 0 ? dest_dir / name
+                     : dest_dir / (stem + " (" + std::to_string(attempt) + ")" +
+                                   extension);
+    // symlink_status looks at the entry itself, so a dangling link counts.
+    std::error_code status_ec;
+    if (fs::symlink_status(candidate, status_ec).type() !=
+        fs::file_type::not_found) {
+      continue;
+    }
+    // Not overwriting: fails if the name appeared in the meantime.
+    if (fs::copy_file(source, candidate, fs::copy_options::none, ec)) {
+      return candidate;
+    }
+    if (ec != std::errc::file_exists) return {};
+    ec.clear();
+  }
+  ec = std::make_error_code(std::errc::file_exists);
+  return {};
+}
+
 }  // namespace Mercury::os

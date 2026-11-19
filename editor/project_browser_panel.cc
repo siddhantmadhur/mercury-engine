@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#include "os/filesystem.h"
 #include "project_browser_panel.h"
 
 #include <wx/clipbrd.h>
@@ -454,9 +455,10 @@ bool ProjectBrowserPanel::CopyExternalFilesInto(const fs::path& dest_dir,
   for (const wxString& f : files) {
     const fs::path src = f.ToStdString();
     if (!fs::is_regular_file(src, ec)) continue;
-    const fs::path dst = dest_dir / src.filename();
-    if (fs::equivalent(src, dst, ec)) continue;
-    fs::copy_file(src, dst, fs::copy_options::overwrite_existing, ec);
+    // Dropping a file that is already there (same file) does nothing; any
+    // other name clash gets a new name rather than replacing the asset.
+    if (fs::equivalent(src, dest_dir / src.filename(), ec)) continue;
+    const fs::path dst = os::CopyFileWithoutOverwriting(src, dest_dir, ec);
     if (!ec) {
       copied_any = true;
       scene_.ConsoleRef().Info("Imported file into project: " +
