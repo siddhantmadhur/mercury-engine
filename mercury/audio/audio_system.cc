@@ -59,7 +59,9 @@ ma_result VfsRead(ma_vfs*, ma_vfs_file file, void* dst, size_t bytes,
                                ? memory->data.size() - memory->cursor
                                : 0;
   const size_t count = std::min(bytes, available);
-  std::memcpy(dst, memory->data.data() + memory->cursor, count);
+  if (count > 0) {
+    std::memcpy(dst, memory->data.data() + memory->cursor, count);
+  }
   memory->cursor += count;
   if (read) *read = count;
   return count == 0 && bytes > 0 ? MA_AT_END : MA_SUCCESS;
@@ -269,8 +271,14 @@ void AudioSystem::PlayOneShot(SourceId id, std::string_view res_path,
   std::unique_ptr<Sound> owned(NewSound(res_path));
   if (!owned) return;
   Sound* sound = owned.get();
-  // Track it before it starts so the list owns it from here on.
-  source.one_shots.push_back(std::move(owned));
+  // Track it before it starts so the list owns it from here on. Sound has no
+  // destructor, so a failed push_back must tear the sound down by hand.
+  try {
+    source.one_shots.push_back(std::move(owned));
+  } catch (...) {
+    ma_sound_uninit(&sound->sound);
+    throw;
+  }
   Apply(source, *sound);
   ma_sound_set_volume(&sound->sound,
                       source.mute ? 0.0f : source.volume * volume_scale);
