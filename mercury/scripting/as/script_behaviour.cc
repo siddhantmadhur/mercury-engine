@@ -132,6 +132,17 @@ std::unique_ptr<ScriptBehaviour> ScriptBehaviour::Create(
 
 ScriptBehaviour::~ScriptBehaviour() {
   auto& runtime = ScriptRuntime::Instance();
+  if (instance_) {
+    // The script object may outlive this behaviour (a GetBehaviour() handle),
+    // so its Event fields must no longer point into events_.
+    for (const ScriptField& field : class_->fields) {
+      if (field.type != FieldType::kEvent) continue;
+      if (auto* value = static_cast<ScriptEvent*>(
+              instance_->GetAddressOfProperty(field.property_index))) {
+        value->impl = nullptr;
+      }
+    }
+  }
   if (runtime.IsInitialized()) {
     if (id_) runtime.UnregisterBehaviour(id_);
     if (instance_) instance_->SetUserData(nullptr);
