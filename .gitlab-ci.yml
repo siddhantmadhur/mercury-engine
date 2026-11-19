@@ -1,26 +1,39 @@
-stages:          # List of stages for jobs, and their order of execution
+stages:
   - format
   - build
 
-clangformat-job:   # This job also runs in the test stage.
+clangformat-job:
   tags: ['us-east-2b']
-  stage: format    # It can run at the same time as unit-test-job (in parallel).
+  stage: format
   script:
     - echo "Linting code...."
-    - git ls-tree --name-only --full-name -r HEAD | grep -E '\.([ch](pp)?|cc)$' | xargs clang-format -i --style=Google
+    # Exclude third_party/ and build/ from the file list using git pathspecs
+    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
     - git diff --exit-code
-    
-verify-license-job:   # This job also runs in the test stage.
+
+verify-license-job:
   tags: ['us-east-2b']
-  stage: format    # It can run at the same time as unit-test-job (in parallel).
+  stage: format
   script:
     - echo "Checking for files not including LICENSE header..."
     - perl scripts/addlicenses.pl
+    # Discard any accidental modifications to third_party/ or build/ before checking diff
+    - git checkout -- third_party/ build/ 2>/dev/null || true
     - git diff --exit-code
 
 ctest-build-job:
   tags: ['us-east-2b']
   stage: build
+  variables:
+    # Ensure git fetch/clean doesn't wipe out the cached build directory
+    GIT_CLEAN_FLAGS: -ffdx -e build/
+  cache:
+    # Scope cache to the branch/ref, falling back to default branch so new MRs still get a warm cache
+    key: "cmake-build-$CI_COMMIT_REF_SLUG"
+    fallback_keys:
+      - "cmake-build-$CI_DEFAULT_BRANCH"
+    paths:
+      - build/
   script:
     - ./scripts/setup_project.pl
     - git submodule update --init --recursive
