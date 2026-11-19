@@ -46,6 +46,10 @@ struct MountPoint {
 std::shared_mutex g_mounts_mutex;
 std::vector<MountPoint> g_mounts;
 
+// A whole-file read turns the size in the file header into one allocation, so
+// refuse absurd sizes instead of letting them reach std::bad_alloc.
+constexpr uint64_t kMaxWholeFileSize = 2ull * 1024 * 1024 * 1024;
+
 std::string Normalize(const fs::path& path) {
   return path.lexically_normal().generic_string();
 }
@@ -95,6 +99,7 @@ std::optional<std::vector<uint8_t>> ReadBytes(const fs::path& path) {
   if (!file) return std::nullopt;
   const auto size = static_cast<std::streamoff>(file.tellg());
   if (size < 0) return std::nullopt;
+  if (static_cast<uint64_t>(size) > kMaxWholeFileSize) return std::nullopt;
   std::vector<uint8_t> data(static_cast<size_t>(size));
   file.seekg(0);
   if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
