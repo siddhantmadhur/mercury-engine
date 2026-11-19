@@ -50,6 +50,11 @@ constexpr float kPointLumensPerIntensity =
 // emitter). Lit emissive is converted so it shares the lights' pre-exposed
 // scale; Filament then applies the camera exposure (emissive.w = 1).
 constexpr float kLuminancePerIntensity = kSunLuxPerIntensity / glm::pi<float>();
+// The sun's physical angular radius, as seen from the ground. PCSS takes a
+// SUN's shadowBulbRadius = tan(angular radius) directly; without it Filament
+// falls back to the sky-drawn sun's 0.545 deg radius scaled by the 10x halo
+// size, or 5.45 deg, which is ~20x too soft.
+constexpr float kSunAngularRadiusDegrees = 0.266f;
 // How often expired mesh/texture sources are swept away.
 constexpr uint64_t kSweepEvery = 30;
 // The room probe is captured once the scene has been still for this many
@@ -360,6 +365,7 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
   sun_direction_ = glm::vec3(0.0f);
   sun_color_ = glm::vec3(0.0f);
   sun_shadows_ = false;
+  sun_soft_shadows_ = false;
   engine_ = nullptr;
 }
 
@@ -899,8 +905,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
           : glm::normalize(lighting.direction);
   const glm::vec3 color = glm::max(lighting.color, glm::vec3(0.0f));
   const float shadow_distance = std::max(lighting.shadow_distance, 1.0f);
+  const bool soft_shadows = game.GetRenderSettings().soft_shadows;
   const bool sun_changed = direction != sun_direction_ || color != sun_color_ ||
                            lighting.cast_shadows != sun_shadows_ ||
+                           soft_shadows != sun_soft_shadows_ ||
                            shadow_distance != shadow_distance_ ||
                            lighting.shadow_bias != shadow_bias_ ||
                            lighting.shadow_normal_bias != shadow_normal_bias_ ||
@@ -924,6 +932,10 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     shadow.constantBias = std::clamp(lighting.shadow_bias, 0.0f, 0.05f);
     shadow.normalBias =
         std::clamp(lighting.shadow_normal_bias * 25.0f, 0.25f, 2.5f);
+    shadow.shadowBulbRadius = std::tan(glm::radians(kSunAngularRadiusDegrees));
+    // LiSPSM improves shadow-map resolution but distorts the PCSS blur
+    // kernel, so only use it with the crisp PCF path.
+    shadow.lispsm = !soft_shadows;
     sun_ = utils::EntityManager::get().create();
     filament::LightManager::Builder(filament::LightManager::Type::SUN)
         .color(ToFilament(color / intensity))
@@ -936,6 +948,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     sun_direction_ = direction;
     sun_color_ = color;
     sun_shadows_ = lighting.cast_shadows;
+    sun_soft_shadows_ = soft_shadows;
     shadow_distance_ = shadow_distance;
     shadow_bias_ = lighting.shadow_bias;
     shadow_normal_bias_ = lighting.shadow_normal_bias;
