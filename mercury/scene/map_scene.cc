@@ -2048,7 +2048,7 @@ void MapScene::BuildTextMesh(kEntityId entity) {
   settings.rich_text = text->rich_text;
   settings.white_space =
       text->word_wrap ? UI::WhiteSpace::kNormal : UI::WhiteSpace::kNoWrap;
-  const int align = static_cast<int>(text->alignment);
+  const int align = std::clamp(static_cast<int>(text->alignment), 0, 8);
   const int column = align % 3;  // 0 left, 1 center, 2 right
   const int row = align / 3;     // 0 top, 1 middle, 2 bottom
   static constexpr UI::TextAnchor kAnchors[3] = {UI::TextAnchor::kUpperLeft,
