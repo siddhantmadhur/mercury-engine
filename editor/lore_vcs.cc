@@ -36,6 +36,77 @@ std::string Trim(std::string_view text) {
   return std::string(text.substr(first, last - first + 1));
 }
 
+// The editor starts lore on its own whenever a project with a .lore folder is
+// opened, so the binary must not be something the project can supply. Plain
+// names are looked up in PATH ignoring empty and relative entries ("." would
+// pick up a binary in the working directory), and a binary that lives inside
+// the project is refused. Returns an empty path if nothing safe is found.
+fs::path FindLoreExecutable(const std::string& configured,
+                            const fs::path& project_root) {
+  const std::string name = configured.empty() ? "lore" : configured;
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(project_root, ec);
+  auto usable = [&](const fs::path& candidate) -> fs::path {
+    std::error_code e;
+    if (!candidate.is_absolute() || !fs::is_regular_file(candidate, e))
+      return {};
+    const fs::path real = fs::weakly_canonical(candidate, e);
+    const fs::path relative = real.lexically_relative(real_root);
+    const bool inside_project =
+        !relative.empty() && relative != "." && *relative.begin() != "..";
+    return inside_project ? fs::path{} : real;
+  };
+  if (name.find('/') != std::string::npos ||
+      name.find('\\') != std::string::npos) {
+    // An explicit path from the editor options must be absolute.
+    return usable(fs::path(name));
+  }
+  const char* path_env = std::getenv("PATH");
+  std::string_view dirs = path_env ? path_env : "";
+  while (!dirs.empty()) {
+    const size_t colon = dirs.find(':');
+    const std::string dir(dirs.substr(0, colon));
+    dirs = colon == std::string_view::npos ? std::string_view()
+                                           : dirs.substr(colon + 1);
+    if (dir.empty() || !fs::path(dir).is_absolute()) continue;
+    if (auto found = usable(fs::path(dir) / name); !found.empty()) {
+      return found;
+    }
+  }
+  return {};
+}
+
+// Quotes a value for a TOML basic string. Newlines and other control
+// characters cannot be represented safely in a one-line key, so they are
+// rejected rather than written.
+bool TomlQuote(const std::string& value, std::string* out) {
+  std::string quoted = "\"";
+  for (unsigned char c : value) {
+    if (c == '"') {
+      quoted += "\\\"";
+    } else if (c == '\\') {
+      quoted += "\\\\";
+    } else if (c < 0x20 || c == 0x7f) {
+      return false;
+    } else {
+      quoted += static_cast<char>(c);
+    }
+  }
+  quoted += '"';
+  *out = std::move(quoted);
+  return true;
+}
+
+// Reverses TomlQuote for the text between the outer quotes.
+std::string TomlUnescape(std::string_view text) {
+  std::string out;
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text[i] == '\\' && i + 1 < text.size()) i++;
+    out += text[i];
+  }
+  return out;
+}
+
 // Lore colors its output when it thinks it's on a terminal.
 std::string StripAnsi(const std::string& line) {
   std::string out;
@@ -127,9 +198,25 @@ void LoreVcs::StartNext() {
     current_ = std::move(queue_.front());
     queue_.pop_front();
 
-    std::vector<std::string> args = {
-        settings_.lore_executable.empty() ? "lore" : settings_.lore_executable,
-        "-P", "--non-interactive"};
+    const fs::path executable =
+        FindLoreExecutable(settings_.lore_executable, project_->GetRoot());
+    if (executable.empty()) {
+      Result result;
+      result.error =
+          "lore was not found outside the project; set an absolute path to "
+          "the lore executable in Options";
+      if (last_error_ != result.error) {
+        console_.Add(Console::Level::kError, Console::Source::kLore,
+                     result.error);
+      }
+      last_error_ = result.error;
+      Job job = std::move(current_);
+      if (job.done) job.done(result);
+      state_revision_++;
+      continue;
+    }
+    std::vector<std::string> args = {executable.string(), "-P",
+                                     "--non-interactive"};
     args.insert(args.end(), current_.args.begin(), current_.args.end());
     if (!current_.quiet) {
       std::string command = "lore";
@@ -423,7 +510,8 @@ std::string LoreVcs::ReadRemoteUrl() const {
     const auto first = line.find('"');
     const auto last = line.rfind('"');
     if (first != std::string::npos && last > first) {
-      return line.substr(first + 1, last - first - 1);
+      return TomlUnescape(
+          std::string_view(line).substr(first + 1, last - first - 1));
     }
   }
   return "";
@@ -438,7 +526,14 @@ bool LoreVcs::WriteRemoteUrl(const std::string& url) {
     std::string line;
     while (std::getline(file, line)) lines.push_back(line);
   }
-  const std::string entry = "remote_url = \"" + url + "\"";
+  std::string quoted;
+  if (!TomlQuote(url, &quoted)) {
+    console_.Add(Console::Level::kError, Console::Source::kLore,
+                 "The remote URL may not contain line breaks or control "
+                 "characters");
+    return false;
+  }
+  const std::string entry = "remote_url = " + quoted;
   auto it = std::find_if(
       lines.begin(), lines.end(),
       [](const std::string& line) { return line.starts_with("remote_url"); });
