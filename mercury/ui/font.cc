@@ -177,29 +177,62 @@ void AppendUtf8(std::string& out, char32_t c) {
 }
 
 std::u32string DecodeUtf8(std::string_view s) {
+  // Strict decoding per the Unicode standard: reject overlong forms,
+  // surrogate code points, values above U+10FFFF, and truncated or
+  // ill-formed sequences. A maximal invalid subpart becomes one U+FFFD.
+  constexpr char32_t kReplacement = 0xFFFD;
+  auto is_continuation = [](unsigned char b) { return (b & 0xC0) == 0x80; };
+
   std::u32string out;
   out.reserve(s.size());
-  for (size_t i = 0; i < s.size();) {
-    const unsigned char c = s[i];
-    char32_t cp = 0xFFFD;
+  size_t i = 0;
+  while (i < s.size()) {
+    const unsigned char lead = static_cast<unsigned char>(s[i]);
+    if (lead < 0x80) {
+      out.push_back(lead);
+      i++;
+      continue;
+    }
+
     int extra = 0;
-    if (c < 0x80) {
-      cp = c;
-    } else if ((c >> 5) == 0x6) {
-      cp = c & 0x1F;
+    char32_t cp = 0;
+    char32_t minimum = 0;
+    if (lead >= 0xC2 && lead <= 0xDF) {
       extra = 1;
-    } else if ((c >> 4) == 0xE) {
-      cp = c & 0x0F;
+      cp = lead & 0x1F;
+      minimum = 0x80;
+    } else if (lead >= 0xE0 && lead <= 0xEF) {
       extra = 2;
-    } else if ((c >> 3) == 0x1E) {
-      cp = c & 0x07;
+      cp = lead & 0x0F;
+      minimum = 0x800;
+    } else if (lead >= 0xF0 && lead <= 0xF4) {
       extra = 3;
+      cp = lead & 0x07;
+      minimum = 0x10000;
+    } else {
+      out.push_back(kReplacement);  // stray continuation or invalid lead
+      i++;
+      continue;
     }
-    i++;
-    for (int k = 0; k < extra && i < s.size(); k++, i++) {
-      cp = (cp << 6) | (static_cast<unsigned char>(s[i]) & 0x3F);
+
+    size_t next = i + 1;
+    bool complete = true;
+    for (int k = 0; k < extra; k++, next++) {
+      if (next >= s.size() ||
+          !is_continuation(static_cast<unsigned char>(s[next]))) {
+        complete = false;
+        break;
+      }
+      cp = (cp << 6) | (static_cast<unsigned char>(s[next]) & 0x3F);
     }
-    out.push_back(cp);
+
+    if (!complete || cp < minimum || (cp >= 0xD800 && cp <= 0xDFFF) ||
+        cp > 0x10FFFF) {
+      out.push_back(kReplacement);
+    } else {
+      out.push_back(cp);
+    }
+    i = next;
   }
   return out;
 }
