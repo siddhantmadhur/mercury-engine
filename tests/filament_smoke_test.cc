@@ -91,6 +91,21 @@ struct RenderResult {
   filament::math::float2 dynamic_scale{1.0f, 1.0f};
 };
 
+// Steps the app until `done()` is true or `timeout` elapses. The renderer skips
+// frames while the GPU drains queued work, which takes seconds on a software
+// rasterizer, so a wait must count wall-clock time, not iterations or frames.
+template <typename Done>
+bool StepUntil(DefaultApplication& app, std::chrono::milliseconds timeout,
+               Done done) {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (std::chrono::steady_clock::now() < deadline) {
+    app.StepFrame();
+    if (done()) return true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  return false;
+}
+
 // Renders the smoke scene with `settings` and returns the pixels after a few
 // extra frames (so TAA history runs) plus the dynamic resolution scale
 // Filament applied to the scene viewport.
@@ -109,17 +124,12 @@ void RenderSmokeScene(const RenderSettings& settings, RenderResult& result) {
   int height = 0;
   uint64_t frame_id = 0;
   std::vector<uint8_t>& pixels = result.pixels;
-  bool got_pixels = false;
   // Debug builds can take a while to present the first offscreen frame under
-  // load, so allow a few seconds rather than a fixed 60 iterations.
-  for (int i = 0; i < 600 && !got_pixels; i++) {
-    app.StepFrame();
-    if (app.CopyScenePixels(width, height, pixels, &frame_id) && frame_id > 0) {
-      got_pixels = true;
-      break;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
+  // load, so allow a generous wall-clock budget rather than a fixed count.
+  const bool got_pixels = StepUntil(app, std::chrono::seconds(60), [&] {
+    return app.CopyScenePixels(width, height, pixels, &frame_id) &&
+           frame_id > 0;
+  });
 
   ASSERT_TRUE(got_pixels);
   // Let the TAA history (and the dynamic resolution controller) settle.
@@ -357,13 +367,13 @@ TEST(FilamentSmokeTest, ProbeCaptureLightsAndReflectsTheRoom) {
   int height = 0;
   uint64_t frame_id = 0;
   std::vector<uint8_t> pixels;
-  bool got_pixels = false;
-  for (int i = 0; i < 1200 && !got_pixels; i++) {
-    app.StepFrame();
-    got_pixels =
-        app.CopyScenePixels(width, height, pixels, &frame_id) && frame_id >= 20;
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
+  // The capture is cheap to submit but its twelve queued faces take seconds to
+  // drain on a software rasterizer; frames are skipped meanwhile, so wait on
+  // wall-clock time rather than an iteration count.
+  const bool got_pixels = StepUntil(app, std::chrono::seconds(60), [&] {
+    return app.CopyScenePixels(width, height, pixels, &frame_id) &&
+           frame_id >= 20;
+  });
   ASSERT_TRUE(got_pixels);
   ASSERT_EQ(pixels.size(), static_cast<size_t>(kSize) * kSize * 4);
 
