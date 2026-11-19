@@ -38,6 +38,8 @@ bool ReadFile(const fs::path& path, std::string& out) {
 }
 
 bool WriteFile(const fs::path& path, const std::string& text) {
+  // Empty means Project::Resolve refused a path outside the project.
+  if (path.empty() || !path.has_filename()) return false;
   std::error_code ec;
   fs::create_directories(path.parent_path(), ec);
   std::ofstream file(path, std::ios::binary);

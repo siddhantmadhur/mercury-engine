@@ -170,6 +170,9 @@ bool CloseFile(FileHandle file) { return ::close(file) == 0; }
 }  // namespace
 
 bool WriteFileAtomic(const fs::path& path, std::string_view data) {
+  // An empty path is what Project::Resolve returns for a path that leaves the
+  // project; never turn it into a file in the working directory.
+  if (path.empty() || !path.has_filename()) return false;
   std::error_code ec;
   if (path.has_parent_path()) {
     fs::create_directories(path.parent_path(), ec);
