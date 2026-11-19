@@ -112,12 +112,15 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
   GlyphInfo glyph;
   int glyph_index =
       stbtt_FindGlyphIndex(info_.get(), static_cast<int>(codepoint));
-  if (glyph_index == 0 && codepoint != 0xFFFD && codepoint > 32) {
-    // Missing glyph: show the replacement character (or '?').
-    const GlyphInfo& fallback =
-        Glyph(stbtt_FindGlyphIndex(info_.get(), 0xFFFD) ? char32_t(0xFFFD)
-                                                        : char32_t('?'));
-    return glyphs_.emplace(codepoint, fallback).first->second;
+  if (glyph_index == 0 && codepoint != 0xFFFD && codepoint != '?' &&
+      codepoint > 32) {
+    // Missing glyph: show the replacement character, or '?' if the font lacks
+    // it too. Excluding both from this branch means a font with neither cannot
+    // fall back to itself forever.
+    const char32_t fallback =
+        stbtt_FindGlyphIndex(info_.get(), 0xFFFD) ? 0xFFFD : char32_t('?');
+    const GlyphInfo& replacement = Glyph(fallback);
+    return glyphs_.emplace(codepoint, replacement).first->second;
   }
   int advance = 0, lsb = 0;
   stbtt_GetGlyphHMetrics(info_.get(), glyph_index, &advance, &lsb);
