@@ -22,6 +22,7 @@ ctest-build-job:
   tags: ['us-east-2b']
   stage: build
   script:
+    - ./scripts/setup_project.pl
     - git submodule update --init --recursive
     - cmake --preset release
     - cmake --build --preset check
