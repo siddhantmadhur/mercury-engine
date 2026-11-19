@@ -437,36 +437,60 @@ void Panel::UpdateHover(glm::vec2 point, bool inside, KeyModifiers mods) {
   hover_chain_ = chain;
   hovered_ = hit;
 
+  // The dispatches below run user code that may remove any element in either
+  // chain, so snapshot the tokens before handing over control.
+  AliveList chain_alive, old_chain_alive;
+  chain_alive.reserve(chain.size());
+  for (VisualElement* e : chain) chain_alive.emplace_back(e, e->aliveToken());
+  old_chain_alive.reserve(old_chain.size());
   for (VisualElement* e : old_chain) {
-    if (std::find(chain.begin(), chain.end(), e) == chain.end()) {
-      e->SetPseudoState(kPseudoHover, false);
-    }
+    old_chain_alive.emplace_back(e, e->aliveToken());
   }
-  if (old_top != hit && old_top) {
+  const auto old_top_alive = old_top ? old_top->aliveToken() : nullptr;
+  const auto hit_alive = hit ? hit->aliveToken() : nullptr;
+  auto alive = [](const auto& tracked) {
+    return tracked.first && (!tracked.second || *tracked.second);
+  };
+  auto contains_new = [&](VisualElement* e) {
+    return std::find(chain.begin(), chain.end(), e) != chain.end();
+  };
+  auto contains_old = [&](VisualElement* e) {
+    return std::find(old_chain.begin(), old_chain.end(), e) != old_chain.end();
+  };
+
+  for (const auto& tracked : old_chain_alive) {
+    if (!alive(tracked)) continue;
+    VisualElement* e = tracked.first;
+    if (!contains_new(e)) e->SetPseudoState(kPseudoHover, false);
+  }
+  if (old_top != hit && old_top && (!old_top_alive || *old_top_alive)) {
     PointerOutEvent out;
     FillPointer(out, point, -1, mods);
     Dispatch(out, old_top, true);
   }
-  for (VisualElement* e : old_chain) {
-    if (std::find(chain.begin(), chain.end(), e) == chain.end() &&
-        std::find(hover_chain_.begin(), hover_chain_.end(), e) ==
-            hover_chain_.end()) {
+  for (const auto& tracked : old_chain_alive) {
+    if (!alive(tracked)) continue;
+    VisualElement* e = tracked.first;
+    if (!contains_new(e) && std::find(hover_chain_.begin(), hover_chain_.end(),
+                                      e) == hover_chain_.end()) {
       PointerLeaveEvent leave;
       FillPointer(leave, point, -1, mods);
-      // The element may have been removed by an earlier handler.
       if (e->panel() == this) Dispatch(leave, e, true);
     }
   }
-  for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
-    VisualElement* e = *it;
-    if (std::find(old_chain.begin(), old_chain.end(), e) == old_chain.end()) {
+  for (auto it = chain_alive.rbegin(); it != chain_alive.rend(); ++it) {
+    // An earlier handler may have destroyed this element.
+    if (!alive(*it)) continue;
+    VisualElement* e = it->first;
+    if (!contains_old(e)) {
       e->SetPseudoState(kPseudoHover, true);
       PointerEnterEvent enter;
       FillPointer(enter, point, -1, mods);
       if (e->panel() == this) Dispatch(enter, e, true);
     }
   }
-  if (old_top != hit && hit && hit->panel() == this) {
+  if (old_top != hit && hit && (!hit_alive || *hit_alive) &&
+      hit->panel() == this) {
     PointerOverEvent over;
     FillPointer(over, point, -1, mods);
     Dispatch(over, hit, true);
