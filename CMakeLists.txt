@@ -270,6 +270,7 @@ if (MERCURY_BUILD_TESTS)
     mercury_add_test(mercury_test
             tests/gameplay_test.cc
             tests/hierarchy_test.cc
+            tests/image_load_test.cc
             tests/input_actions_test.cc
             tests/map_test.cc
             tests/model_cache_test.cc
