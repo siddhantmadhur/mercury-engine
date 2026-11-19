@@ -64,14 +64,30 @@ TEST(ScriptRuntime, AFailedRebuildKeepsTheCurrentModule) {
   const auto dir = std::filesystem::temp_directory_path() /
                    ("rebuild_test_" + std::to_string(std::random_device{}()));
   std::filesystem::create_directories(dir);
+  const auto good = dir / "good.as";
   const auto bad = dir / "bad.as";
+  std::ofstream(good) << "class Good { int Value() { return 7; } }";
   std::ofstream(bad) << "class Broken { void f( }";
 
+  // A working module first, so there is something to lose.
+  ASSERT_TRUE(runtime.LoadFiles({good}, "game", true));
   asIScriptModule* before = runtime.GetModule();
-  const size_t classes_before = runtime.ScriptClasses().size();
+  ASSERT_NE(before, nullptr);
+  ASSERT_NE(before->GetTypeInfoByName("Good"), nullptr);
+  const std::string name = before->GetName();
+
   EXPECT_FALSE(runtime.LoadFiles({bad}, "game", true));
+
+  // Still the current module, still registered with the engine under its own
+  // name (not discarded by the failed build), and its class still there.
   EXPECT_EQ(runtime.GetModule(), before);
-  EXPECT_EQ(runtime.ScriptClasses().size(), classes_before);
+  EXPECT_EQ(runtime.GetEngine()->GetModule(name.c_str(), asGM_ONLY_IF_EXISTS),
+            before);
+  EXPECT_NE(before->GetTypeInfoByName("Good"), nullptr);
+
+  // And a later good build still works (a fresh module name each time).
+  EXPECT_TRUE(runtime.LoadFiles({good}, "game", true));
+  EXPECT_NE(runtime.GetModule(), nullptr);
   std::filesystem::remove_all(dir);
 }
 

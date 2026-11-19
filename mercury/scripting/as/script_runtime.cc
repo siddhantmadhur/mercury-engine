@@ -295,7 +295,7 @@ bool ScriptRuntime::BuildFromSections(
                      : module_name;
   CScriptBuilder builder;
   if (builder.StartNewModule(engine_, build_name.c_str()) < 0) {
-    PDebug::error("Could not start the script module {}", module_name);
+    PDebug::error("Could not start the script module {}", build_name);
     return false;
   }
   const auto abandon = [&] {
