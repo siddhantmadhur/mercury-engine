@@ -163,7 +163,17 @@ struct FilamentRenderer::Prefilter {
   explicit Prefilter(filament::Engine& engine)
       : context(engine),
         to_cube(context),
-        specular(context),
+        // The default specular config has 5 roughness levels; 9 is
+        // log2(256) + 1, the full mip chain of the default probe cube, so
+        // every roughness step has its own filtered level instead of the
+        // roughest surfaces sampling a 16 px one (which shows a small bright
+        // emitter as mip-ring bands). Shared with the panorama skybox, which
+        // gets the same finer chain.
+        specular(context,
+                 IBLPrefilterContext::SpecularFilter::Config{
+                     .sampleCount = 1024,
+                     .levelCount = 9,
+                 }),
         irradiance(context) {}
   IBLPrefilterContext context;
   IBLPrefilterContext::EquirectangularToCubemap to_cube;
