@@ -34,6 +34,10 @@ std::string FormatFloat(float v) {
   return s.empty() ? "0" : s;
 }
 
+// Items are real elements and the list is not virtualized, so an
+// attacker-supplied item-count must not be able to force a huge allocation.
+constexpr int kMaxListItemCount = 10000;
+
 }  // namespace
 
 // ------------------------------------------------------------ TextElement --
@@ -1638,7 +1642,7 @@ ListView::ListView() {
 }
 
 void ListView::SetItemCount(int count) {
-  count_ = std::max(0, count);
+  count_ = std::clamp(count, 0, kMaxListItemCount);
   std::erase_if(selected_, [this](int i) { return i >= count_; });
   RefreshItems();
 }
@@ -1651,7 +1655,7 @@ void ListView::SetFixedItemHeight(float height) {
 
 void ListView::RefreshItems() {
   if (items_source_size_) {
-    count_ = std::max(0, items_source_size_());
+    count_ = std::clamp(items_source_size_(), 0, kMaxListItemCount);
     std::erase_if(selected_, [this](int i) { return i >= count_; });
   }
   for (size_t i = 0; i < items_.size(); i++) {
