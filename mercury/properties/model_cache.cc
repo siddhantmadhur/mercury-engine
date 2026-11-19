@@ -180,6 +180,17 @@ class Reader {
     v.resize(count);
     Bytes(v.data(), count * sizeof(T));
   }
+  // An element count for a list of structs. Each element takes at least
+  // `min_bytes` in the file, so a count the rest of the file cannot hold is a
+  // damaged (or hostile) file, and nothing is allocated for it.
+  uint64_t Count(uint64_t min_bytes) {
+    const uint64_t count = Pod<uint64_t>();
+    if (!ok_ || count > left_ / std::max<uint64_t>(min_bytes, 1)) {
+      ok_ = false;
+      return 0;
+    }
+    return count;
+  }
   std::string String() {
     const uint64_t size = Pod<uint64_t>();
     if (!ok_ || size > left_) {
@@ -222,7 +233,9 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   auto model = std::make_shared<Model>();
   model->path_ = path;
   model->root_on_object_ = in.Pod<uint8_t>() != 0;
-  model->nodes_.resize(in.Pod<uint64_t>());
+  // Smallest possible records: a node is 68 bytes, a material 112, a mesh 73,
+  // a clip 20 and an animation channel 52.
+  model->nodes_.resize(in.Count(68));
   for (auto& node : model->nodes_) {
     if (!in.ok()) break;
     node.name = in.String();
@@ -233,7 +246,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     node.rotation = in.Pod<glm::quat>();
     node.scale = in.Pod<glm::vec3>();
   }
-  const uint64_t material_count = in.Pod<uint64_t>();
+  const uint64_t material_count = in.Count(112);
   if (in.ok()) {
     model->materials_.resize(material_count);
     model->material_sources_.resize(material_count);
@@ -259,7 +272,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
       source->bump_scale = in.Pod<float>();
     }
   }
-  const uint64_t mesh_count = in.Pod<uint64_t>();
+  const uint64_t mesh_count = in.Count(73);
   if (in.ok()) model->meshes_.resize(mesh_count);
   for (size_t i = 0; in.ok() && i < mesh_count; i++) {
     ModelMesh& mesh = model->meshes_[i];
@@ -277,13 +290,13 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     geometry->id = ImageData::NextId();
     mesh.geometry = std::move(geometry);
   }
-  const uint64_t clip_count = in.Pod<uint64_t>();
+  const uint64_t clip_count = in.Count(20);
   if (in.ok()) model->clips_.resize(clip_count);
   for (size_t c = 0; in.ok() && c < clip_count; c++) {
     AnimationClip& clip = model->clips_[c];
     clip.name = in.String();
     clip.duration = in.Pod<float>();
-    clip.channels.resize(in.Pod<uint64_t>());
+    clip.channels.resize(in.Count(52));
     for (auto& channel : clip.channels) {
       if (!in.ok()) break;
       channel.node = in.Pod<int32_t>();

@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <random>
 
 #include "properties/model.h"
@@ -132,6 +133,43 @@ TEST_F(ModelCacheTest, ReadBackIsTheImportedModel) {
   }
   EXPECT_EQ(imported->BoundsMin(), cached->BoundsMin());
   EXPECT_EQ(imported->BoundsMax(), cached->BoundsMax());
+}
+
+// The cache file is read from disk like any other input: a count that the rest
+// of the file cannot hold must make the import run again, not allocate it.
+TEST_F(ModelCacheTest, DamagedCountsImportAgainWithoutAllocating) {
+  const fs::path obj = dir_ / "triangle.obj";
+  fs::create_directories(dir_);
+  {
+    std::ofstream out(obj);
+    out << "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+  }
+  std::string error;
+  auto imported = Model::Load(obj.string(), Settings(), &error);
+  ASSERT_TRUE(imported) << error;
+  fs::path cache_file;
+  for (const auto& entry : fs::recursive_directory_iterator(dir_ / "models")) {
+    if (entry.is_regular_file()) cache_file = entry.path();
+  }
+  ASSERT_FALSE(cache_file.empty());
+  const auto written = fs::last_write_time(cache_file);
+  auto cached = Model::Load(obj.string(), Settings(), &error);  // from cache
+  ASSERT_TRUE(cached) << error;
+  ASSERT_EQ(imported->Nodes().size(), cached->Nodes().size());
+  // A valid cache is accepted as is; an import would have rewritten it.
+  EXPECT_EQ(fs::last_write_time(cache_file), written);
+  // magic (4) + key (8) + root_on_object (1), then the node count.
+  const uint64_t huge = uint64_t{1} << 60;
+  {
+    std::fstream file(cache_file,
+                      std::ios::binary | std::ios::in | std::ios::out);
+    file.seekp(13);
+    file.write(reinterpret_cast<const char*>(&huge), sizeof(huge));
+  }
+  auto again = Model::Load(obj.string(), Settings(), &error);
+  ASSERT_TRUE(again) << error;
+  EXPECT_NE(fs::last_write_time(cache_file), written);  // imported again
+  EXPECT_EQ(again->Nodes().size(), imported->Nodes().size());
 }
 
 TEST_F(ModelCacheTest, OtherSettingsImportAgain) {
