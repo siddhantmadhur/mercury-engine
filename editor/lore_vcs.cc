@@ -46,9 +46,16 @@ fs::path FindLoreExecutable(const std::string& configured,
   const std::string name = configured.empty() ? "lore" : configured;
   std::error_code ec;
   const fs::path real_root = fs::weakly_canonical(project_root, ec);
+  if (ec || real_root.empty()) return {};
   auto usable = [&](const fs::path& candidate) -> fs::path {
     std::error_code e;
     if (!candidate.is_absolute() || !fs::is_regular_file(candidate, e))
+      return {};
+    // Like execvp, skip a file that cannot be run so it cannot hide the
+    // real binary further down PATH.
+    constexpr auto kExec = fs::perms::owner_exec | fs::perms::group_exec |
+                           fs::perms::others_exec;
+    if ((fs::status(candidate, e).permissions() & kExec) == fs::perms::none)
       return {};
     const fs::path real = fs::weakly_canonical(candidate, e);
     const fs::path relative = real.lexically_relative(real_root);
@@ -61,15 +68,22 @@ fs::path FindLoreExecutable(const std::string& configured,
     // An explicit path from the editor options must be absolute.
     return usable(fs::path(name));
   }
+#ifdef _WIN32
+  constexpr char kPathSeparator = ';';
+  const std::string file_name = name + ".exe";
+#else
+  constexpr char kPathSeparator = ':';
+  const std::string& file_name = name;
+#endif
   const char* path_env = std::getenv("PATH");
   std::string_view dirs = path_env ? path_env : "";
   while (!dirs.empty()) {
-    const size_t colon = dirs.find(':');
-    const std::string dir(dirs.substr(0, colon));
-    dirs = colon == std::string_view::npos ? std::string_view()
-                                           : dirs.substr(colon + 1);
+    const size_t separator = dirs.find(kPathSeparator);
+    const std::string dir(dirs.substr(0, separator));
+    dirs = separator == std::string_view::npos ? std::string_view()
+                                               : dirs.substr(separator + 1);
     if (dir.empty() || !fs::path(dir).is_absolute()) continue;
-    if (auto found = usable(fs::path(dir) / name); !found.empty()) {
+    if (auto found = usable(fs::path(dir) / file_name); !found.empty()) {
       return found;
     }
   }
