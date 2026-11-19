@@ -4,9 +4,14 @@
 
 #include "filesystem.h"
 
+#include <algorithm>
+#include <atomic>
+#include <climits>
 #include <cstdlib>
+#include <format>
 #include <fstream>
 #include <mutex>
+#include <random>
 #include <set>
 #include <shared_mutex>
 #include <system_error>
@@ -16,9 +21,16 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
 #include <windows.h>
-#elif defined(__APPLE__)
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#if defined(__APPLE__)
 #include <mach-o/dyld.h>
+#endif
 #endif
 
 namespace Mercury::os {
@@ -95,6 +107,92 @@ std::optional<std::string> ReadText(const fs::path& path) {
   auto bytes = ReadBytes(path);
   if (!bytes) return std::nullopt;
   return std::string(bytes->begin(), bytes->end());
+}
+
+namespace {
+
+#if defined(_WIN32)
+using FileHandle = int;
+constexpr FileHandle kInvalidFile = -1;
+
+FileHandle OpenExclusive(const fs::path& path) {
+  return _wopen(path.c_str(),
+                _O_WRONLY | _O_CREAT | _O_EXCL | _O_BINARY | _O_NOINHERIT,
+                _S_IREAD | _S_IWRITE);
+}
+bool WriteAll(FileHandle file, std::string_view data) {
+  size_t written = 0;
+  while (written < data.size()) {
+    const auto chunk = static_cast<unsigned>(
+        std::min<size_t>(data.size() - written, UINT_MAX));
+    const int result = _write(file, data.data() + written, chunk);
+    if (result <= 0) return false;
+    written += static_cast<size_t>(result);
+  }
+  return true;
+}
+bool CloseFile(FileHandle file) { return _close(file) == 0; }
+#else
+using FileHandle = int;
+constexpr FileHandle kInvalidFile = -1;
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0
+#endif
+
+FileHandle OpenExclusive(const fs::path& path) {
+  return ::open(path.c_str(),
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+}
+bool WriteAll(FileHandle file, std::string_view data) {
+  size_t written = 0;
+  while (written < data.size()) {
+    const ssize_t result =
+        ::write(file, data.data() + written, data.size() - written);
+    if (result <= 0) return false;
+    written += static_cast<size_t>(result);
+  }
+  return true;
+}
+bool CloseFile(FileHandle file) { return ::close(file) == 0; }
+#endif
+
+}  // namespace
+
+bool WriteFileAtomic(const fs::path& path, std::string_view data) {
+  std::error_code ec;
+  if (path.has_parent_path()) {
+    fs::create_directories(path.parent_path(), ec);
+  }
+  // A predictable "<path>.tmp" let a symlink planted in the project redirect
+  // the write. Use a random name and O_EXCL|O_NOFOLLOW so nothing that exists
+  // can be opened.
+  static std::atomic<uint64_t> counter{0};
+  std::random_device random;
+  const uint64_t nonce = (static_cast<uint64_t>(random()) << 32) ^ random();
+  fs::path temp;
+  FileHandle file = kInvalidFile;
+  for (int attempt = 0; attempt < 16 && file == kInvalidFile; attempt++) {
+    temp = path;
+    temp += std::format(".{}.{}.tmp", nonce, counter.fetch_add(1));
+    file = OpenExclusive(temp);
+  }
+  if (file == kInvalidFile) return false;
+  const bool written = WriteAll(file, data);
+  const bool closed = CloseFile(file);
+  if (!written || !closed) {
+    fs::remove(temp, ec);
+    return false;
+  }
+  fs::rename(temp, path, ec);
+  if (ec) {
+    fs::remove(temp, ec);
+    return false;
+  }
+  return true;
 }
 
 bool Exists(const fs::path& path) {

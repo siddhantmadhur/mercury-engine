@@ -8,7 +8,6 @@
 #include "scripting/as/script_builder.h"
 
 #include <algorithm>
-#include <fstream>
 #include <system_error>
 
 #include "debugger/debugger.h"
@@ -67,10 +66,7 @@ bool ScriptBuilder::Build(const fs::path& project_dir,
   // A shipped game reads its scripts from a mounted .mpack; the project root
   // is then inside the (signed, read-only) app bundle, so leave it untouched.
   if (!os::HasMounts()) {
-    std::error_code ec;
-    fs::create_directories(StampPath(project_dir).parent_path(), ec);
-    std::ofstream stamp(StampPath(project_dir), std::ios::trunc);
-    stamp << "1\n";
+    os::WriteFileAtomic(StampPath(project_dir), "1\n");
   }
   Emit(options, log, "Scripts compiled");
   return true;

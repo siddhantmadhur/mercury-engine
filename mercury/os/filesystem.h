@@ -22,6 +22,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 namespace fs = std::filesystem;
 
@@ -46,6 +47,14 @@ bool HasMounts();
 
 std::optional<std::vector<uint8_t>> ReadBytes(const fs::path& path);
 std::optional<std::string> ReadText(const fs::path& path);
+/**
+ * @brief Writes `data` to `path`, replacing it atomically
+ *
+ * The data goes to a randomly named file beside `path`, opened so that an
+ * existing file (in particular a symlink) is never followed, and is then
+ * renamed over `path`.
+ */
+bool WriteFileAtomic(const fs::path& path, std::string_view data);
 bool Exists(const fs::path& path);
 // Names of the files directly in `dir`, from mounted packs and from disk
 // (each once, packs first; folders are not listed).

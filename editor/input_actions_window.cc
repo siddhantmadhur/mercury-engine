@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <format>
-#include <fstream>
 
 #include "input/input_actions_codegen.rs.h"
 #include "os/filesystem.h"
@@ -42,15 +41,7 @@ std::vector<std::string>* PartVector(InputActionDesc::Composite2D& composite,
 bool WriteIfChanged(const fs::path& file, const std::string& text) {
   if (auto current = os::ReadText(file); current && *current == text)
     return true;
-  std::error_code ec;
-  fs::create_directories(file.parent_path(), ec);
-  const fs::path temp = file.string() + ".tmp";
-  {
-    std::ofstream out(temp, std::ios::binary);
-    if (!out || !(out << text)) return false;
-  }
-  fs::rename(temp, file, ec);
-  return !ec;
+  return os::WriteFileAtomic(file, text);
 }
 
 }  // namespace
