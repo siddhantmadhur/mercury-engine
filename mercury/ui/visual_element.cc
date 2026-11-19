@@ -22,6 +22,11 @@ namespace {
 std::atomic<uint64_t> g_next_callback_id{1};
 std::atomic<EventTypeId> g_next_event_type{1};
 
+// Every tree walk (layout, paint, hit testing, panel attach/detach) recurses
+// over the hierarchy. Refuse to build a tree deeper than this so an untrusted
+// programmatic or generated tree cannot exhaust the stack.
+constexpr int kMaxHierarchyDepth = 512;
+
 glm::mat3 Translation(glm::vec2 t) {
   glm::mat3 m(1.0f);
   m[2][0] = t.x;
@@ -264,6 +269,10 @@ int VisualElement::Hierarchy::IndexOf(const VisualElement* child) const {
 VisualElement* VisualElement::HierarchyInsert(
     int index, std::unique_ptr<VisualElement> child) {
   if (!child) return nullptr;
+  int depth = 0;
+  for (const VisualElement* p = this; p; p = p->hierarchy_parent_) {
+    if (++depth >= kMaxHierarchyDepth) return nullptr;
+  }
   index = std::clamp(index, 0, static_cast<int>(children_.size()));
   if (has_measure_func_) {
     // Yoga doesn't allow measured nodes to have children.
