@@ -49,26 +49,28 @@ bool OsIsPacked(::rust::Str path) {
 bool OsHasMounts() { return Mercury::os::HasMounts(); }
 
 bool OsReadBytes(::rust::Str path, ::rust::Vec<uint8_t>& out) {
-  auto bytes = Mercury::os::ReadBytes(ToPath(path));
-  if (!bytes) return false;
-  out.clear();
-  // An exception must not unwind into Rust; report a failed read instead.
+  // Nothing may throw into Rust: a failed allocation anywhere on the way
+  // (the path, a pack entry, the copy) is just a failed read.
   try {
+    auto bytes = Mercury::os::ReadBytes(ToPath(path));
+    if (!bytes) return false;
+    out.clear();
     out.reserve(bytes->size());
     std::copy(bytes->begin(), bytes->end(), std::back_inserter(out));
+    return true;
   } catch (const std::exception&) {
     out.clear();
     return false;
   }
-  return true;
 }
 
 ::rust::String OsCacheDir() {
-  return ::rust::String(Mercury::os::CacheDir().generic_string());
+  // lossy(): a path that is not valid UTF-8 must not throw into Rust.
+  return ::rust::String::lossy(Mercury::os::CacheDir().generic_string());
 }
 
 ::rust::String OsExecutableDir() {
-  return ::rust::String(Mercury::os::ExecutableDir().generic_string());
+  return ::rust::String::lossy(Mercury::os::ExecutableDir().generic_string());
 }
 
 ::rust::Str EngineVersion() { return ::rust::Str(MERCURY_ENGINE_VERSION); }

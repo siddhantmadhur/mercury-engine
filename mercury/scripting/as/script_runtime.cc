@@ -301,6 +301,10 @@ bool ScriptRuntime::BuildFromSections(
 
   asIScriptModule* module = builder.GetModule();
   if (register_types) {
+    // Data-asset instances belong to classes of the module being discarded, and
+    // releasing them needs the module and the class table still in place.
+    data_assets_.clear();
+    replaced_data_assets_.clear();
     DiscardModule();
     classes_.clear();
     TypeRegistry::Instance().ClearGameTypes();
