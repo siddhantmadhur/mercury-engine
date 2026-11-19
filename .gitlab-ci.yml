@@ -3,7 +3,8 @@ stages:
   - build
 
 variables:
-  GIT_CLEAN_FLAGS: -ffdxx
+  # Wipe all untracked files (like leftover build/ folders) and dirty submodules, EXCEPT .ccache/
+  GIT_CLEAN_FLAGS: -ffdxx -e .ccache/
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
 
@@ -14,10 +15,14 @@ clangformat-job:
   variables:
     GIT_SUBMODULE_STRATEGY: none
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends git clang-format
+    - apt-get update && apt-get install -y --no-install-recommends git wget gnupg lsb-release software-properties-common
+    - wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+    - add-apt-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main"
+    - apt-get update && apt-get install -y --no-install-recommends clang-format-20
+    - ln -sf /usr/bin/clang-format-20 /usr/bin/clang-format
   script:
     - echo "Linting code...."
-    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i -style=Google
+    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
     - git diff --exit-code
 
 verify-license-job:
@@ -49,7 +54,6 @@ ctest-build-job:
     paths:
       - .ccache/
   before_script:
-    # Install your C++ toolchain & libraries needed by Jolt, GLFW, Vulkan, Assimp, etc.
     - apt-get update && apt-get install -y --no-install-recommends
         build-essential cmake ninja-build git perl ccache pkg-config
         libvulkan-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
