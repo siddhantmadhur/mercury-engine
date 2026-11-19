@@ -723,3 +723,23 @@ TEST(Utf8, RejectsMalformedOverlongAndSurrogateSequences) {
   EXPECT_EQ(DecodeUtf8("\xF4\x90\x80\x80"), std::u32string(1, 0xFFFD));
   EXPECT_EQ(DecodeUtf8("\xE2\x82"), std::u32string(1, 0xFFFD));
 }
+
+// A tree built from the leaves up never has a deep parent chain at the time
+// each element is added, so the depth limit has to look at the subtree being
+// attached too, or a hostile builder could make a tree deep enough to overflow
+// the stack when it is laid out, painted or destroyed.
+TEST(Hierarchy, DepthLimitAppliesToSubtreesBuiltBottomUp) {
+  auto top = std::make_unique<VisualElement>();
+  int attached = 0;
+  for (int i = 0; i < 5000; i++) {
+    auto parent = std::make_unique<VisualElement>();
+    if (!parent->Add(std::move(top))) {
+      top = nullptr;
+      break;
+    }
+    top = std::move(parent);
+    attached++;
+  }
+  EXPECT_LT(attached, 1000);  // stopped well before 5000 levels
+  EXPECT_GT(attached, 100);   // but ordinary nesting is unaffected
+}
