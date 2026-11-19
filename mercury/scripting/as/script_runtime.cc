@@ -796,25 +796,57 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
     ok = true;
     if (result) {
       const int type_id = function->GetReturnTypeId();
-      if (type_id == asTYPEID_BOOL) {
-        *result = ScriptArg::Bool(context->GetReturnByte() != 0);
-      } else if (type_id == asTYPEID_FLOAT) {
-        *result = ScriptArg::Float(context->GetReturnFloat());
-      } else if (type_id == asTYPEID_DOUBLE) {
-        *result = ScriptArg::Double(context->GetReturnDouble());
-      } else if (type_id & asTYPEID_OBJHANDLE) {
-        *result = ScriptArg::Object(context->GetReturnObject(), type_id);
-      } else if (type_id == asTYPEID_INT64 || type_id == asTYPEID_UINT64) {
-        *result = ScriptArg::Int(static_cast<int>(context->GetReturnQWord()));
-      } else if (type_id == asTYPEID_VOID) {
-        *result = ScriptArg{};
-      } else {
-        asITypeInfo* type = engine_->GetTypeInfoById(type_id);
-        if (type && std::string(type->GetName()) == "string") {
-          *result = ScriptArg::String(
-              *static_cast<std::string*>(context->GetAddressOfReturnValue()));
-        } else {
+      switch (type_id) {
+        case asTYPEID_BOOL:
+          *result = ScriptArg::Bool(context->GetReturnByte() != 0);
+          break;
+        case asTYPEID_FLOAT:
+          *result = ScriptArg::Float(context->GetReturnFloat());
+          break;
+        case asTYPEID_DOUBLE:
+          *result = ScriptArg::Double(context->GetReturnDouble());
+          break;
+        case asTYPEID_INT8:
+          *result = ScriptArg::Int(static_cast<int8_t>(context->GetReturnByte()));
+          break;
+        case asTYPEID_UINT8:
+          *result = ScriptArg::Int(context->GetReturnByte());
+          break;
+        case asTYPEID_INT16:
+          *result = ScriptArg::Int(static_cast<int16_t>(context->GetReturnWord()));
+          break;
+        case asTYPEID_UINT16:
+          *result = ScriptArg::Int(context->GetReturnWord());
+          break;
+        case asTYPEID_INT32:
+        case asTYPEID_UINT32:
           *result = ScriptArg::Int(static_cast<int>(context->GetReturnDWord()));
+          break;
+        case asTYPEID_INT64:
+        case asTYPEID_UINT64:
+          *result = ScriptArg::Int(static_cast<int>(context->GetReturnQWord()));
+          break;
+        case asTYPEID_VOID:
+          *result = ScriptArg{};
+          break;
+        default: {
+          asITypeInfo* type = engine_->GetTypeInfoById(type_id);
+          if (type_id & asTYPEID_OBJHANDLE) {
+            // The handle belongs to the context, which is released below, so
+            // it cannot be passed on as a raw pointer; no caller uses object
+            // results, so they are not returned.
+            *result = ScriptArg{};
+          } else if (type && std::string(type->GetName()) == "string") {
+            *result = ScriptArg::String(*static_cast<std::string*>(
+                context->GetAddressOfReturnValue()));
+          } else if (type_id & asTYPEID_MASK_OBJECT) {
+            // A value type (Vector3, ...) or other object: not an integer.
+            *result = ScriptArg{};
+          } else {
+            // An enum: stored as a 32-bit integer.
+            *result = ScriptArg::Int(static_cast<int>(context->GetReturnDWord()));
+          }
+          break;
         }
       }
     }
