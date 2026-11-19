@@ -17,8 +17,9 @@ namespace {
 
 std::filesystem::path WriteSvg(const std::string& name,
                                const std::string& text) {
-  const auto dir = std::filesystem::temp_directory_path() /
-                   ("image_load_test_" + std::to_string(std::random_device{}()));
+  const auto dir =
+      std::filesystem::temp_directory_path() /
+      ("image_load_test_" + std::to_string(std::random_device{}()));
   std::filesystem::create_directories(dir);
   const auto file = dir / name;
   std::ofstream(file) << text;

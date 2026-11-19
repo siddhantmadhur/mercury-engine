@@ -5,7 +5,6 @@
 // Tests of AngelScript scripts running as Behaviours: callback order, fields,
 // events, errors and data assets.
 #include "scripting/as/script_behaviour.h"
-#include "scripting/as/script_event.h"
 
 #include <gtest/gtest.h>
 
@@ -20,6 +19,7 @@
 #include "properties/transform.h"
 #include "scene/map_scene.h"
 #include "scripting/as/script_builder.h"
+#include "scripting/as/script_event.h"
 #include "scripting/as/script_runtime.h"
 #include "scripting/type_registry.h"
 #include "test_paths.h"

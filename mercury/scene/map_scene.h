@@ -454,7 +454,8 @@ class MapScene : public GameScene {
   // Nonzero while behaviour callbacks are being run (OnFrame, OnTick, OnStart,
   // the OnDestroy pass). The scene cannot be replaced under them: a native
   // behaviour that calls Instantiate/BeginInstantiate then has the new map
-  // applied at the start of the next frame, and ClearMap/SetProject are refused.
+  // applied at the start of the next frame, and ClearMap/SetProject are
+  // refused.
   int running_callbacks_ = 0;
   struct CallbackScope {
     explicit CallbackScope(MapScene* scene) : scene_(scene) {

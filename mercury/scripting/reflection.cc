@@ -358,9 +358,9 @@ void Reflector::EnumImpl(const char* name, int& index,
           if (*i >= 0 && *i < static_cast<int64_t>(values.size())) {
             index = static_cast<int>(*i);
           } else {
-            warnings_.push_back(std::format(
-                "\"{}\": {} is not one of the {} choices", name, *i,
-                values.size()));
+            warnings_.push_back(
+                std::format("\"{}\": {} is not one of the {} choices", name, *i,
+                            values.size()));
           }
         }
       }

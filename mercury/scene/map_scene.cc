@@ -1757,7 +1757,8 @@ void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
   // is a loop if that reaches `entity`. The step limit stops at a loop that
   // is already there.
   size_t steps = 0;
-  for (kEntityId up = new_parent; up != entt::null && GetRegistry().valid(up);) {
+  for (kEntityId up = new_parent;
+       up != entt::null && GetRegistry().valid(up);) {
     if (up == entity) {
       PDebug::warn(
           "Cannot make \"{}\" a child of \"{}\": that would put it inside "

@@ -10,9 +10,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
-
 #include <cstdint>
+#include <cstring>
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"

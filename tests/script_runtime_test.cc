@@ -5,8 +5,6 @@
 // Tests of the embedded AngelScript engine itself: evaluation, exceptions and
 // the infinite-loop guard.
 #include "scripting/as/script_runtime.h"
-#include "scripting/as/script_builder.h"
-#include "scripting/event.h"
 
 #include <gtest/gtest.h>
 
@@ -15,6 +13,9 @@
 #include <optional>
 #include <random>
 #include <string>
+
+#include "scripting/as/script_builder.h"
+#include "scripting/event.h"
 
 using namespace Mercury;
 
@@ -55,8 +56,8 @@ TEST(ScriptRuntime, ReturnsANumber) {
 
 TEST(ScriptRuntime, ANegativeNumberKeepsItsSign) {
   std::string result;
-  ASSERT_TRUE(ScriptRuntime::Instance().RunString(
-      "int main() { return -1; }", "negative", &result));
+  ASSERT_TRUE(ScriptRuntime::Instance().RunString("int main() { return -1; }",
+                                                  "negative", &result));
   EXPECT_EQ(result, "-1");
 }
 
@@ -98,8 +99,9 @@ TEST(ScriptRuntime, AFailedRebuildKeepsTheCurrentModule) {
 // it used to reuse the first build's module and report success for scripts
 // that no longer compile.
 TEST(ScriptRuntime, BuildingAgainChecksTheScriptsAgain) {
-  const auto dir = std::filesystem::temp_directory_path() /
-                   ("rebuild_project_" + std::to_string(std::random_device{}()));
+  const auto dir =
+      std::filesystem::temp_directory_path() /
+      ("rebuild_project_" + std::to_string(std::random_device{}()));
   std::filesystem::create_directories(dir / "scripts");
   const auto script = dir / "scripts" / "game.as";
   std::ofstream(script) << "class Thing { int Value() { return 1; } }";

@@ -221,8 +221,9 @@ skybox = ExtResource("1")
 // Asset a caller is still holding.
 TEST(AssetDatabase, ReloadLeavesEarlierSnapshotsUntouched) {
   namespace fs = std::filesystem;
-  const fs::path dir = fs::temp_directory_path() /
-                       ("asset_db_test_" + std::to_string(std::random_device{}()));
+  const fs::path dir =
+      fs::temp_directory_path() /
+      ("asset_db_test_" + std::to_string(std::random_device{}()));
   fs::create_directories(dir / "assets");
   {
     std::ofstream(dir / "t.mproj") << "[project]\nname = \"t\"\n";
@@ -243,9 +244,9 @@ TEST(AssetDatabase, ReloadLeavesEarlierSnapshotsUntouched) {
   EXPECT_EQ(*before->properties.Get("value")->ToString(), "first");
 
   write("second");
-  fs::last_write_time(dir / "assets/a.masset",
-                      fs::last_write_time(dir / "assets/a.masset") +
-                          std::chrono::seconds(5));
+  fs::last_write_time(
+      dir / "assets/a.masset",
+      fs::last_write_time(dir / "assets/a.masset") + std::chrono::seconds(5));
   auto after = assets.Load("res://assets/a.masset");
   ASSERT_TRUE(after);
   EXPECT_NE(after, before);

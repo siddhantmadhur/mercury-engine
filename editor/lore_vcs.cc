@@ -53,8 +53,8 @@ fs::path FindLoreExecutable(const std::string& configured,
       return {};
     // Like execvp, skip a file that cannot be run so it cannot hide the
     // real binary further down PATH.
-    constexpr auto kExec = fs::perms::owner_exec | fs::perms::group_exec |
-                           fs::perms::others_exec;
+    constexpr auto kExec =
+        fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec;
     if ((fs::status(candidate, e).permissions() & kExec) == fs::perms::none)
       return {};
     const fs::path real = fs::weakly_canonical(candidate, e);
@@ -111,7 +111,8 @@ fs::path ProjectFileFromLore(const fs::path& root, const std::string& text) {
   const fs::path file = root / relative;
   const fs::path real_parent = fs::weakly_canonical(file.parent_path(), ec);
   if (ec) return {};
-  const fs::path inside = (real_parent / file.filename()).lexically_relative(real_root);
+  const fs::path inside =
+      (real_parent / file.filename()).lexically_relative(real_root);
   if (inside.empty() || inside == "." || *inside.begin() == "..") return {};
   return file;
 }
@@ -412,8 +413,7 @@ void LoreVcs::Discard(const Change& change) {
   if (!project_) return;
   if (change.section == Section::kUntracked) {
     // Never committed, so there is nothing for lore to restore.
-    const fs::path file =
-        ProjectFileFromLore(project_->GetRoot(), change.path);
+    const fs::path file = ProjectFileFromLore(project_->GetRoot(), change.path);
     if (file.empty()) {
       console_.Error("Refusing to delete \"" + change.path +
                      "\": it is not inside the project");
@@ -637,8 +637,8 @@ void LoreVcs::ParseStatus(const std::vector<std::string>& lines) {
       change.section = section;
       // Only a move is written "old -> new"; in any other entry the arrow is
       // part of the file's name (an untracked "a -> b.txt").
-      const auto arrow = change.code == 'V' ? text.find(" -> ")
-                                            : std::string::npos;
+      const auto arrow =
+          change.code == 'V' ? text.find(" -> ") : std::string::npos;
       if (arrow != std::string::npos) {
         change.from = text.substr(0, arrow);
         change.path = text.substr(arrow + 4);

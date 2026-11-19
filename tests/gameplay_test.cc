@@ -453,7 +453,7 @@ TEST(Gameplay, ReplacingTheSceneInACallbackWaitsForTheNextFrame) {
   ASSERT_TRUE(scene.Find("Replacer").IsValid());
 
   scene.OnFrame(1000.0 / 60.0);  // the behaviour asks for `second` here
-  EXPECT_TRUE(scene.Find("Replacer").IsValid());   // not torn down mid-callback
+  EXPECT_TRUE(scene.Find("Replacer").IsValid());  // not torn down mid-callback
   EXPECT_FALSE(scene.Find("Survivor").IsValid());
   scene.OnFrame(1000.0 / 60.0);  // applied at the start of the next frame
   EXPECT_TRUE(scene.Find("Survivor").IsValid());
@@ -482,8 +482,8 @@ TEST(Gameplay, ReplacingTheSceneFromOnStartWaitsForTheNextFrame) {
   TestStartReplacer::replacement = &second;
 
   MapScene scene(project, MapScene::Mode::kPlay);
-  scene.OnStart();            // running, so Instantiate starts behaviours at once
-  scene.Instantiate(first);   // Starter::OnStart asks for `second` in here
+  scene.OnStart();  // running, so Instantiate starts behaviours at once
+  scene.Instantiate(first);  // Starter::OnStart asks for `second` in here
   EXPECT_TRUE(scene.Find("Starter").IsValid());  // still alive afterwards
   EXPECT_FALSE(scene.Find("Survivor").IsValid());
   scene.OnFrame(1000.0 / 60.0);  // the request is applied

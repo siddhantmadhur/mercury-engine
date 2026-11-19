@@ -57,7 +57,8 @@ std::optional<std::string> ReadText(const fs::path& path);
 bool WriteFileAtomic(const fs::path& path, std::string_view data);
 
 /**
- * @brief Copies `source` into `dest_dir` without touching anything already there
+ * @brief Copies `source` into `dest_dir` without touching anything already
+ * there
  *
  * The copy keeps the file's name; if something with that name exists (a file, a
  * folder, or a symlink, even a dangling one) it is left alone and the copy is

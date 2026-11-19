@@ -171,7 +171,8 @@ void Patch(const std::filesystem::path& file, std::streamoff offset,
            const void* bytes, size_t size) {
   std::fstream out(file, std::ios::binary | std::ios::in | std::ios::out);
   out.seekp(offset);
-  out.write(static_cast<const char*>(bytes), static_cast<std::streamsize>(size));
+  out.write(static_cast<const char*>(bytes),
+            static_cast<std::streamsize>(size));
 }
 
 }  // namespace
@@ -426,7 +427,8 @@ TEST_F(MPackTest, CopyIntoProjectNeverOverwritesOrFollowsLinks) {
   write(dest_dir / "hero.png", "old");
 
   std::error_code ec;
-  auto copy = os::CopyFileWithoutOverwriting(source_dir / "hero.png", dest_dir, ec);
+  auto copy =
+      os::CopyFileWithoutOverwriting(source_dir / "hero.png", dest_dir, ec);
   ASSERT_FALSE(ec) << ec.message();
   EXPECT_EQ(copy.filename(), "hero (1).png");
   EXPECT_EQ(read(dest_dir / "hero.png"), "old");

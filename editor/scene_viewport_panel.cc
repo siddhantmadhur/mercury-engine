@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#include "os/filesystem.h"
 #include "scene_viewport_panel.h"
 
 #include <wx/dcbuffer.h>
@@ -15,6 +14,7 @@
 
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "os/filesystem.h"
 #include "scene/scene.h"
 #include "wx_theme.h"
 

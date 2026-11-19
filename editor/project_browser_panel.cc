@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#include "os/filesystem.h"
 #include "project_browser_panel.h"
 
 #include <wx/clipbrd.h>
@@ -16,6 +15,7 @@
 #include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "os/filesystem.h"
 #include "os/process.h"
 #include "project/project.h"
 #include "wx_theme.h"

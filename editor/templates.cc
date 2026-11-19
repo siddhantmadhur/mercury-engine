@@ -9,10 +9,10 @@
 #include <fstream>
 
 #include "input/input_actions.h"
+#include "os/filesystem.h"
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
-#include "os/filesystem.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury::Templates {

@@ -513,7 +513,8 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
     archive->clear();
     if (archive_size < 0 ||
         entry->offset > static_cast<uint64_t>(archive_size) ||
-        entry->stored_size > static_cast<uint64_t>(archive_size) - entry->offset) {
+        entry->stored_size >
+            static_cast<uint64_t>(archive_size) - entry->offset) {
       return fail("entry lies outside its archive");
     }
     stored.resize(entry->stored_size);

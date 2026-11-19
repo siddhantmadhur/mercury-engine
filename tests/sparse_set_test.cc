@@ -29,7 +29,7 @@ TEST(SparseSet, DeleteKeepsTheOthersReachable) {
   for (unsigned i = 0; i < 100; i++) set.Set(i * 3, std::to_string(i));
   set.Delete(0);
   set.Delete(150);
-  set.Delete(150);  // already gone
+  set.Delete(150);     // already gone
   set.Delete(999999);  // never there
   EXPECT_EQ(set.Size(), 98u);
   EXPECT_EQ(set.Get(0), nullptr);

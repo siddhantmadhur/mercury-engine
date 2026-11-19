@@ -8,10 +8,10 @@
 #include "scripting/as/script_runtime.h"
 
 #include <algorithm>
-#include <limits>
 #include <cctype>
 #include <cstdlib>
 #include <format>
+#include <limits>
 
 #include "debugger/debugger.h"
 #include "math/time.h"
@@ -719,9 +719,8 @@ namespace {
 // ScriptArg integers are 32-bit; a bigger script value saturates rather than
 // wrapping around into a different number.
 int SaturateToInt(int64_t value) {
-  return static_cast<int>(
-      std::clamp<int64_t>(value, std::numeric_limits<int>::min(),
-                          std::numeric_limits<int>::max()));
+  return static_cast<int>(std::clamp<int64_t>(
+      value, std::numeric_limits<int>::min(), std::numeric_limits<int>::max()));
 }
 int SaturateToInt(uint64_t value) {
   return static_cast<int>(std::min<uint64_t>(
@@ -747,28 +746,31 @@ ScriptArg DecodeReturn(asIScriptEngine* engine, asIScriptContext* context,
       return ScriptArg::Bool(ref ? *static_cast<const bool*>(ref)
                                  : context->GetReturnByte() != 0);
     case asTYPEID_INT8:
-      return ScriptArg::Int(ref ? *static_cast<const int8_t*>(ref)
-                                : static_cast<int8_t>(context->GetReturnByte()));
+      return ScriptArg::Int(
+          ref ? *static_cast<const int8_t*>(ref)
+              : static_cast<int8_t>(context->GetReturnByte()));
     case asTYPEID_UINT8:
       return ScriptArg::Int(ref ? *static_cast<const uint8_t*>(ref)
                                 : context->GetReturnByte());
     case asTYPEID_INT16:
-      return ScriptArg::Int(ref ? *static_cast<const int16_t*>(ref)
-                                : static_cast<int16_t>(context->GetReturnWord()));
+      return ScriptArg::Int(
+          ref ? *static_cast<const int16_t*>(ref)
+              : static_cast<int16_t>(context->GetReturnWord()));
     case asTYPEID_UINT16:
       return ScriptArg::Int(ref ? *static_cast<const uint16_t*>(ref)
                                 : context->GetReturnWord());
     case asTYPEID_INT32:
-      return ScriptArg::Int(ref ? *static_cast<const int32_t*>(ref)
-                                : static_cast<int32_t>(context->GetReturnDWord()));
+      return ScriptArg::Int(
+          ref ? *static_cast<const int32_t*>(ref)
+              : static_cast<int32_t>(context->GetReturnDWord()));
     case asTYPEID_UINT32:
       return ScriptArg::Int(SaturateToInt(
           static_cast<uint64_t>(ref ? *static_cast<const uint32_t*>(ref)
                                     : context->GetReturnDWord())));
     case asTYPEID_INT64:
-      return ScriptArg::Int(SaturateToInt(
-          ref ? *static_cast<const int64_t*>(ref)
-              : static_cast<int64_t>(context->GetReturnQWord())));
+      return ScriptArg::Int(
+          SaturateToInt(ref ? *static_cast<const int64_t*>(ref)
+                            : static_cast<int64_t>(context->GetReturnQWord())));
     case asTYPEID_UINT64:
       return ScriptArg::Int(SaturateToInt(
           ref ? *static_cast<const uint64_t*>(ref)
@@ -791,11 +793,10 @@ ScriptArg DecodeReturn(asIScriptEngine* engine, asIScriptContext* context,
   if (type_id & asTYPEID_MASK_OBJECT) return ScriptArg{};
   // An enum: read it as its underlying integer type (32-bit unless declared).
   const int underlying = type ? type->GetUnderlyingTypeId() : asTYPEID_INT32;
-  return DecodeReturn(engine, context,
-                      underlying > 0 && underlying != type_id
-                          ? underlying
-                          : asTYPEID_INT32,
-                      is_reference);
+  return DecodeReturn(
+      engine, context,
+      underlying > 0 && underlying != type_id ? underlying : asTYPEID_INT32,
+      is_reference);
 }
 
 }  // namespace
@@ -902,8 +903,8 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
     if (result) {
       asDWORD flags = 0;
       const int type_id = function->GetReturnTypeId(&flags);
-      *result = DecodeReturn(engine_, context, type_id,
-                             (flags & asTM_INOUTREF) != 0);
+      *result =
+          DecodeReturn(engine_, context, type_id, (flags & asTM_INOUTREF) != 0);
     }
   } else if (timed_out_) {
     PDebug::error("{}: script took too long (infinite loop?)", label);
