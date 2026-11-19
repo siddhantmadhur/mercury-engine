@@ -685,6 +685,9 @@ sub collect_game_files {
             next if $depth == 0 && is_skipped_at_root($name);
             my $path = File::Spec->catfile($dir, $name);
             my $entry = length($rel) ? "$rel/$name" : $name;
+            # A symlink can lead anywhere (an SSH key, a folder that loops back
+            # on itself); only what really lives in the project is shipped.
+            next if -l $path;
             if (-d $path) {
                 my $canonical = abs_path($path) // $path;
                 next if $canonical eq $output;

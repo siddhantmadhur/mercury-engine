@@ -359,6 +359,12 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
       if (is_dir) it.disable_recursion_pending();
       continue;
     }
+    // A symlink can point anywhere (an SSH key, say); only files that really
+    // live in the project go into an archive that gets shipped.
+    if (it->is_symlink(ec)) {
+      if (is_dir) it.disable_recursion_pending();
+      continue;
+    }
     if (!it->is_regular_file(ec) || IsSourceFile(path)) continue;
     game.Add(path.lexically_relative(root).generic_string(), path);
     game_bytes += it->file_size(ec);
