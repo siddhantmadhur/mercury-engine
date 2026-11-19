@@ -392,8 +392,17 @@ std::shared_ptr<Reader> Reader::Open(const std::filesystem::path& archive0,
   }
   const uint64_t table_size = uint64_t{bucket_count} * 4;
   const uint64_t records_size = uint64_t{entry_count} * kIndexEntrySize;
-  if (index->size() !=
-      kIndexHeaderSize + table_size + records_size + strings_size) {
+  // strings_size comes straight from the file, so compare by subtraction: a
+  // sum could wrap around and match the real size. table_size and
+  // records_size are at most 2^34 and cannot overflow on their own, and
+  // requiring them to fit in the file bounds bucket_count and entry_count
+  // before anything is allocated from them.
+  const uint64_t index_size = index->size();
+  if (index_size < kIndexHeaderSize ||
+      table_size > index_size - kIndexHeaderSize ||
+      records_size > index_size - kIndexHeaderSize - table_size ||
+      strings_size !=
+          index_size - kIndexHeaderSize - table_size - records_size) {
     return fail("index is truncated");
   }
 
@@ -431,9 +440,14 @@ std::shared_ptr<Reader> Reader::Open(const std::filesystem::path& archive0,
     entry.compression = static_cast<Compression>(compression);
     reader->entries_.push_back(std::move(entry));
   }
+  // Every entry sits in exactly one bucket; Find relies on at least one
+  // bucket being empty to know a path is absent.
+  uint32_t used_buckets = 0;
   for (const uint32_t bucket : reader->buckets_) {
     if (bucket > entry_count) return fail("index is corrupt");
+    if (bucket != 0) used_buckets++;
   }
+  if (used_buckets != entry_count) return fail("index is corrupt");
   reader->archives_.resize(archive_count);
   reader->archives_[0] = std::move(file);
   return reader;
@@ -441,11 +455,16 @@ std::shared_ptr<Reader> Reader::Open(const std::filesystem::path& archive0,
 
 const Entry* Reader::Find(std::string_view path) const {
   const uint64_t mask = buckets_.size() - 1;
-  for (uint64_t b = HashPath(path) & mask;; b = (b + 1) & mask) {
+  uint64_t b = HashPath(path) & mask;
+  // Open() guarantees an empty bucket; the bound keeps a bad table from ever
+  // spinning forever.
+  for (size_t probes = 0; probes < buckets_.size();
+       probes++, b = (b + 1) & mask) {
     const uint32_t slot = buckets_[b];
     if (slot == 0) return nullptr;
     if (entries_[slot - 1].path == path) return &entries_[slot - 1];
   }
+  return nullptr;
 }
 
 bool Reader::Contains(std::string_view path) const {
@@ -465,7 +484,14 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
     return fail("entry is too large to read");
   }
 
-  std::vector<uint8_t> stored(entry->stored_size);
+  // zlib cannot expand data by more than about 1032:1, so a larger claimed
+  // size is a lie meant to make us allocate the output buffer.
+  if (entry->compression == Compression::kZlib &&
+      entry->size / 1032 > entry->stored_size) {
+    return fail("entry is corrupt");
+  }
+
+  std::vector<uint8_t> stored;
   {
     std::lock_guard lock(mutex_);
     auto& archive = archives_[entry->archive];
@@ -474,6 +500,24 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
           ArchivePath(dir_, base_name_, entry->archive), std::ios::binary);
     }
     archive->clear();
+    if (!archive->is_open()) {
+      archive.reset();  // try again next time instead of caching a dead stream
+      return fail(std::format(
+          "could not read {}",
+          ArchivePath(dir_, base_name_, entry->archive).filename().string()));
+    }
+    // The index is untrusted: the entry has to lie inside the archive before
+    // a buffer is sized from it.
+    archive->seekg(0, std::ios::end);
+    const auto archive_size = static_cast<int64_t>(archive->tellg());
+    archive->clear();
+    if (archive_size < 0 ||
+        entry->offset > static_cast<uint64_t>(archive_size) ||
+        entry->stored_size >
+            static_cast<uint64_t>(archive_size) - entry->offset) {
+      return fail("entry lies outside its archive");
+    }
+    stored.resize(entry->stored_size);
     archive->seekg(static_cast<std::streamoff>(entry->offset));
     if (!stored.empty() &&
         !archive->read(reinterpret_cast<char*>(stored.data()), stored.size())) {
@@ -489,11 +533,25 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
     if (entry->size > UINT32_MAX || entry->stored_size > UINT32_MAX) {
       return fail("entry is too large to decompress");
     }
-    data.resize(entry->size);
-    uLongf size = static_cast<uLongf>(entry->size);
-    if (uncompress(data.data(), &size, stored.data(),
-                   static_cast<uLong>(stored.size())) != Z_OK ||
-        size != entry->size) {
+    // Inflate in steps instead of allocating the claimed size up front: a
+    // tiny stream that claims gigabytes only costs what it really produces.
+    z_stream stream = {};
+    if (inflateInit(&stream) != Z_OK) return fail("data is corrupt");
+    stream.next_in = stored.data();
+    stream.avail_in = static_cast<uInt>(stored.size());
+    constexpr size_t kStep = 1 << 20;
+    int status = Z_OK;
+    while (status == Z_OK) {
+      const size_t used = data.size();
+      if (used >= entry->size) break;  // more output than the index claims
+      data.resize(used + std::min<size_t>(kStep, entry->size - used));
+      stream.next_out = data.data() + used;
+      stream.avail_out = static_cast<uInt>(data.size() - used);
+      status = inflate(&stream, Z_NO_FLUSH);
+      data.resize(used + (data.size() - used - stream.avail_out));
+    }
+    inflateEnd(&stream);
+    if (status != Z_STREAM_END || data.size() != entry->size) {
       return fail("data is corrupt");
     }
   } else {

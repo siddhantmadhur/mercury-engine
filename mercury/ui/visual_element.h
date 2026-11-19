@@ -127,7 +127,9 @@ class VisualElement {
   template <typename T>
   T* Add(std::unique_ptr<T> child) {
     T* raw = child.get();
-    Add(std::unique_ptr<VisualElement>(std::move(child)));
+    // Null when the insert is refused (the tree would nest too deeply): the
+    // child is destroyed then, so `raw` must not be handed back.
+    if (!Add(std::unique_ptr<VisualElement>(std::move(child)))) return nullptr;
     return raw;
   }
   // Constructs a child in place: box->Emplace<Label>("text").

@@ -797,10 +797,14 @@ std::string TextField::Coerce(std::string value) const {
 void TextField::SetValueWithoutNotify(std::string value) {
   BaseField::SetValueWithoutNotify(std::move(value));
   editing_ = DecodeUtf8(value_);
+  ClampCaret();
+  text_input_->Refresh();
+}
+
+void TextField::ClampCaret() {
   const int n = static_cast<int>(editing_.size());
   cursor_ = std::clamp(cursor_, 0, n);
   anchor_ = std::clamp(anchor_, 0, n);
-  text_input_->Refresh();
 }
 
 std::string TextField::DisplayText() const {
@@ -814,9 +818,7 @@ void TextField::CommitText(const std::string& text) { SetValue(text); }
 
 void TextField::ChangeText(std::u32string text) {
   editing_ = std::move(text);
-  const int n = static_cast<int>(editing_.size());
-  cursor_ = std::clamp(cursor_, 0, n);
-  anchor_ = std::clamp(anchor_, 0, n);
+  ClampCaret();
   text_input_->Refresh();
   if (delayed_) {
     pending_commit_ = true;
@@ -1010,6 +1012,7 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
     } else {
       cursor_ = index;
       if (!e.shiftKey()) anchor_ = index;
+      ClampCaret();
       dragging_ = true;
       CapturePointer(e.pointerId);
     }
@@ -1020,6 +1023,7 @@ void TextField::HandleEventBubbleUp(EventBase& event) {
   }
   if (Is<PointerMoveEvent>(event) && dragging_) {
     cursor_ = IndexAt(static_cast<PointerMoveEvent&>(event).position);
+    ClampCaret();
     EnsureCursorVisible();
     MarkDirtyRepaint();
     event.StopPropagation();
@@ -1680,6 +1684,7 @@ void ListView::RefreshItems() {
     item->style().height = Length::Px(item_height_);
     item->style().flexShrink = 0.0f;
     VisualElement* raw = scroll_->Add(std::move(item));
+    if (!raw) break;  // nested too deeply: the item was refused
     items_.push_back(raw);
     if (bindItem) {
       bindItem(raw, i);

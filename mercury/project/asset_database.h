@@ -41,10 +41,12 @@ class AssetDatabase {
   /**
    * @brief Load (or return the cached copy of) an asset
    *
-   * The file is read again when it changed on disk since the last load.
-   * @return nullptr if the file is missing or invalid; the error is logged
+   * The file is read again when it changed on disk since the last load. The
+   * result is a snapshot: a later reload makes a new Asset and leaves the one
+   * returned here untouched, so holding it across loads is safe.
+   * @return null if the file is missing or invalid; the error is logged
    */
-  const Asset* Load(std::string_view res_path);
+  std::shared_ptr<const Asset> Load(std::string_view res_path);
 
   /**
    * @brief Load an asset into its reflected C++ type, e.g. MaterialAsset
@@ -75,7 +77,7 @@ class AssetDatabase {
 
  private:
   struct Entry {
-    Asset asset;
+    std::shared_ptr<const Asset> asset;
     std::filesystem::file_time_type modified;
   };
 

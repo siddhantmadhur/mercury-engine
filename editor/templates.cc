@@ -9,6 +9,7 @@
 #include <fstream>
 
 #include "input/input_actions.h"
+#include "os/filesystem.h"
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
@@ -24,9 +25,9 @@ bool WriteText(const fs::path& file, const std::string& text,
                std::string* error) {
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
-  std::ofstream out(file, std::ios::binary);
-  out << text;
-  if (!out) {
+  // Atomic and symlink-safe: a link planted where the file goes (in a cloned
+  // project) is replaced, not written through to somewhere else.
+  if (!os::WriteFileAtomic(file, text)) {
     if (error) *error = "could not write " + file.string();
     return false;
   }

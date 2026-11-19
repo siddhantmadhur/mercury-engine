@@ -164,6 +164,131 @@ TEST_F(MPackTest, DetectsCorruptData) {
   EXPECT_NE(error.find("checksum"), std::string::npos) << error;
 }
 
+namespace {
+
+// Overwrites bytes of a file in place (index layout: see mpack.cc).
+void Patch(const std::filesystem::path& file, std::streamoff offset,
+           const void* bytes, size_t size) {
+  std::fstream out(file, std::ios::binary | std::ios::in | std::ios::out);
+  out.seekp(offset);
+  out.write(static_cast<const char*>(bytes),
+            static_cast<std::streamsize>(size));
+}
+
+}  // namespace
+
+// A hostile index whose buckets are all occupied used to make Find spin
+// forever on any path it did not hold.
+TEST_F(MPackTest, IndexWithNoEmptyBucketIsRejected) {
+  mpack::Writer writer;
+  writer.AddBytes("a", Noise(8, 1));
+  ASSERT_TRUE(writer.Write(dir_, "game"));
+  const auto index = dir_ / "game.mindex";
+  uint32_t bucket_count = 0;
+  {
+    std::ifstream in(index, std::ios::binary);
+    in.seekg(16);
+    in.read(reinterpret_cast<char*>(&bucket_count), 4);
+  }
+  ASSERT_GT(bucket_count, 1u);
+  const uint32_t one = 1;
+  for (uint32_t i = 0; i < bucket_count; i++) Patch(index, 32 + i * 4, &one, 4);
+  std::string error;
+  EXPECT_FALSE(mpack::Reader::Open(dir_ / "game.mpack", &error));
+}
+
+// strings_size is read from the file; adding it to the other sizes must not be
+// able to wrap around to the real file size and slip a huge bucket table past
+// the check (which then tried to allocate it).
+TEST_F(MPackTest, IndexSizeArithmeticDoesNotWrap) {
+  mpack::Writer writer;
+  writer.AddBytes("a", Noise(8, 1));
+  ASSERT_TRUE(writer.Write(dir_, "game"));
+  const auto index = dir_ / "game.mindex";
+  const uint64_t file_size = std::filesystem::file_size(index);
+  const uint32_t bucket_count = 1u << 31;
+  const uint32_t entry_count = 1;
+  const uint64_t records = uint64_t{entry_count} * 48;
+  const uint64_t table = uint64_t{bucket_count} * 4;
+  const uint64_t wrapped = file_size - 32 - table - records;  // wraps mod 2^64
+  Patch(index, 16, &bucket_count, 4);
+  Patch(index, 24, &wrapped, 8);
+  std::string error;
+  EXPECT_FALSE(mpack::Reader::Open(dir_ / "game.mpack", &error));
+  // Rejected by the size check, before a table that large is allocated.
+  EXPECT_NE(error.find("truncated"), std::string::npos) << error;
+}
+
+// The index is untrusted: an entry that claims more bytes than its archive
+// holds must fail the read instead of sizing a buffer from the claim.
+TEST_F(MPackTest, EntryOutsideItsArchiveFailsToRead) {
+  mpack::Writer writer;
+  writer.AddBytes("noise.bin", Noise(256, 7));
+  ASSERT_TRUE(writer.Write(dir_, "game"));
+  auto reader = mpack::Reader::Open(dir_ / "game.mpack");
+  ASSERT_TRUE(reader);
+  reader.reset();
+  const auto index = dir_ / "game.mindex";
+  uint32_t bucket_count = 0;
+  {
+    std::ifstream in(index, std::ios::binary);
+    in.seekg(16);
+    in.read(reinterpret_cast<char*>(&bucket_count), 4);
+  }
+  // First (only) record: stored_size is at +24 and size at +32.
+  const std::streamoff record = 32 + std::streamoff{bucket_count} * 4;
+  const uint64_t huge = 1ull << 30;
+  Patch(index, record + 24, &huge, 8);
+  Patch(index, record + 32, &huge, 8);
+  reader = mpack::Reader::Open(dir_ / "game.mpack");
+  ASSERT_TRUE(reader);
+  std::string error;
+  EXPECT_FALSE(reader->Read("noise.bin", &error));
+  EXPECT_NE(error.find("outside"), std::string::npos) << error;
+}
+
+// A compressed entry may not claim more than zlib can produce from its stored
+// bytes, nor more than its stream really holds.
+TEST_F(MPackTest, CompressedEntryWithAFalseSizeFailsToRead) {
+  mpack::Writer writer;
+  writer.AddBytes("text.txt", Bytes(std::string(4096, 'a')));
+  ASSERT_TRUE(writer.Write(dir_, "game"));
+  const auto index = dir_ / "game.mindex";
+  uint32_t bucket_count = 0;
+  {
+    std::ifstream in(index, std::ios::binary);
+    in.seekg(16);
+    in.read(reinterpret_cast<char*>(&bucket_count), 4);
+  }
+  const std::streamoff record = 32 + std::streamoff{bucket_count} * 4;
+  for (uint64_t claimed : {uint64_t{1} << 31, uint64_t{4096 + 1}}) {
+    Patch(index, record + 32, &claimed, 8);
+    auto reader = mpack::Reader::Open(dir_ / "game.mpack");
+    ASSERT_TRUE(reader);
+    std::string error;
+    EXPECT_FALSE(reader->Read("text.txt", &error)) << claimed;
+    EXPECT_FALSE(error.empty());
+  }
+}
+
+TEST_F(MPackTest, MissingDataArchiveFailsToRead) {
+  mpack::Writer writer;
+  for (int i = 0; i < 8; i++) {
+    writer.AddBytes("file" + std::to_string(i), Noise(2048, i));
+  }
+  ASSERT_TRUE(writer.Write(dir_, "game", 4096));
+  auto reader = mpack::Reader::Open(dir_ / "game.mpack");
+  ASSERT_TRUE(reader);
+  std::filesystem::remove(dir_ / "game_001.mpack");
+  std::string error;
+  bool failed = false;
+  for (int i = 0; i < 8; i++) {
+    if (!reader->Read("file" + std::to_string(i), &error)) failed = true;
+  }
+  EXPECT_TRUE(failed);
+  EXPECT_NE(error.find("could not read"), std::string::npos) << error;
+}
+
 TEST_F(MPackTest, RejectsUnsafePaths) {
   EXPECT_TRUE(mpack::IsValidEntryPath("maps/main.mmap"));
   EXPECT_FALSE(mpack::IsValidEntryPath(""));
@@ -281,4 +406,52 @@ TEST_F(MPackTest, ModelFindsItsTexturesInAPack) {
     textured++;
   }
   EXPECT_EQ(textured, 2);
+}
+
+// Dropping a file into the project must not replace what is there nor write
+// through a symlink to somewhere else.
+TEST_F(MPackTest, CopyIntoProjectNeverOverwritesOrFollowsLinks) {
+  const auto source_dir = dir_ / "outside";
+  const auto dest_dir = dir_ / "assets";
+  std::filesystem::create_directories(source_dir);
+  std::filesystem::create_directories(dest_dir);
+  const auto write = [](const std::filesystem::path& file, const char* text) {
+    std::ofstream(file) << text;
+  };
+  const auto read = [](const std::filesystem::path& file) {
+    std::ifstream in(file);
+    std::string text((std::istreambuf_iterator<char>(in)), {});
+    return text;
+  };
+  write(source_dir / "hero.png", "new");
+  write(dest_dir / "hero.png", "old");
+
+  std::error_code ec;
+  auto copy =
+      os::CopyFileWithoutOverwriting(source_dir / "hero.png", dest_dir, ec);
+  ASSERT_FALSE(ec) << ec.message();
+  EXPECT_EQ(copy.filename(), "hero (1).png");
+  EXPECT_EQ(read(dest_dir / "hero.png"), "old");
+  EXPECT_EQ(read(copy), "new");
+
+  // A symlink (even a dangling one) in the way is left alone too.
+  const auto victim = dir_ / "victim.txt";
+  write(source_dir / "link.txt", "payload");
+  std::filesystem::create_symlink(victim, dest_dir / "link.txt", ec);
+  ASSERT_FALSE(ec) << ec.message();
+  copy = os::CopyFileWithoutOverwriting(source_dir / "link.txt", dest_dir, ec);
+  ASSERT_FALSE(ec) << ec.message();
+  EXPECT_EQ(copy.filename(), "link (1).txt");
+  EXPECT_FALSE(std::filesystem::exists(victim));
+
+  // The same file dropped twice reuses the copy already there.
+  copy = os::CopyFileWithoutOverwriting(source_dir / "hero.png", dest_dir, ec);
+  ASSERT_FALSE(ec);
+  EXPECT_EQ(copy.filename(), "hero (1).png");
+
+  // No clash: the name is kept.
+  write(source_dir / "fresh.txt", "x");
+  copy = os::CopyFileWithoutOverwriting(source_dir / "fresh.txt", dest_dir, ec);
+  ASSERT_FALSE(ec);
+  EXPECT_EQ(copy.filename(), "fresh.txt");
 }

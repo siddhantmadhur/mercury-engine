@@ -780,8 +780,23 @@ bool EditorScene::CreateFolder(const fs::path& dir, const std::string& name) {
 }
 
 bool EditorScene::DeleteProjectPath(const fs::path& target) {
-  std::error_code ec;
-  fs::remove_all(target, ec);
+  auto project = GetProject();
+  if (!project) return false;
+  // Judge the entry itself, not what it points at: a symlink is removed as a
+  // link, but a path that goes *through* a symlinked folder is refused.
+  std::error_code root_ec, parent_ec, ec;
+  const fs::path real_root = fs::weakly_canonical(project->GetRoot(), root_ec);
+  const fs::path real_parent = fs::weakly_canonical(
+      fs::absolute(target, parent_ec).lexically_normal().parent_path(),
+      parent_ec);
+  const fs::path entry = real_parent / target.filename();
+  const fs::path relative = entry.lexically_relative(real_root);
+  if (root_ec || parent_ec || target.filename().empty() || relative.empty() ||
+      relative == "." || *relative.begin() == "..") {
+    console_.Error("Refusing to delete a path outside the project");
+    return false;
+  }
+  fs::remove_all(entry, ec);
   if (ec) {
     console_.Error("Could not delete: " + ec.message());
     return false;
@@ -795,9 +810,15 @@ bool EditorScene::DeleteProjectPath(const fs::path& target) {
 bool EditorScene::BuildGame(const std::string& output_str) {
   auto project = GetProject();
   if (!project) return false;
+  // The output folder is cleaned of old packs and written to, so it has to be
+  // inside the project; a project file must not aim the build elsewhere.
   const fs::path output = project->Resolve(output_str);
   std::error_code ec;
-  if (output_str.empty() || fs::equivalent(output, project->GetRoot(), ec)) {
+  if (output_str.empty() || output.empty()) {
+    console_.Error("The build output folder must be inside the project");
+    return false;
+  }
+  if (fs::equivalent(output, project->GetRoot(), ec)) {
     console_.Error("Invalid build output folder");
     return false;
   }

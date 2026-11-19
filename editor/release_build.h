@@ -24,8 +24,9 @@
  * target> released editor (no checkout: the player and engine resources ship in
  * the .app)
  *     -> use Contents/MacOS/mercury_player and
- * Contents/Resources/{ui,materials} then, on a worker thread: compile the
- * scripts, pack the files, copy the player and the runtime libraries it needs
+ * Contents/Resources/{ui,materials} then: compile the scripts (on the editor's
+ * thread), and on a worker thread pack the files, copy the player and the
+ * runtime libraries it needs
  *
  * The .as scripts are packed as sources; the executable finds game.mpack next
  * to itself and runs from it (see RunPlayer). Build and Play are unchanged and

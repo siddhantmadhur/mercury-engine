@@ -31,6 +31,11 @@ my $PROJECT_ROOT = abs_path(File::Spec->catdir($SCRIPT_DIR, '..'));
 die "cannot resolve project root\n" if !defined $PROJECT_ROOT;
 my $DXC_VERSION = 'v1.9.2609';
 my $DXC_ARCHIVE = 'linux_dxc_2026_09_28.x86_x64.tar.gz';
+# Downloads are pinned and checked against these SHA-256 digests before
+# anything is unpacked or run. Update the version and the digest together.
+my $DXC_SHA256 = '96faadc7f5c282d2ffda49804beb4c3ee38127bc252b723234e3c5cdf7aa39a1';
+my $VULKAN_SDK_VERSION = '1.4.363.0';
+my $VULKAN_SDK_MAC_SHA256 = '163431e0203c8215286a17cf393643ce6b951f77d1b4f74ab30821a1f0beb09b';
 
 if ($^O eq 'linux') {
     setup_linux();
@@ -187,6 +192,7 @@ sub install_dxc_linux {
         'https://github.com/microsoft/DirectXShaderCompiler/releases/download/'
             . $DXC_VERSION . '/' . $DXC_ARCHIVE,
         '-o', $archive);
+    verify_sha256($archive, $DXC_SHA256);
     run('tar', '-xzf', $archive, '-C', $dest);
     run($local, '--version');
 }
@@ -239,13 +245,7 @@ sub install_dxc_macos {
     }
 
     print "==> Fetching DXC from LunarG Vulkan SDK for macOS...\n";
-    my $sdk_ver = `curl -s https://vulkan.lunarg.com/sdk/latest/mac.txt`;
-    if ($? != 0 || !defined $sdk_ver || $sdk_ver =~ /^\s*$/) {
-        $sdk_ver = '1.4.363.0';
-    } else {
-        $sdk_ver =~ s/\A\s+//;
-        $sdk_ver =~ s/\s+\z//;
-    }
+    my $sdk_ver = $VULKAN_SDK_VERSION;
 
     my $tmp = tempdir(CLEANUP => 1);
     my $zip = File::Spec->catfile($tmp, 'vulkansdk.zip');
@@ -254,6 +254,7 @@ sub install_dxc_macos {
     run('curl', '-fL',
         "https://sdk.lunarg.com/sdk/download/$sdk_ver/mac/vulkansdk-macos-$sdk_ver.zip",
         '-o', $zip);
+    verify_sha256($zip, $VULKAN_SDK_MAC_SHA256);
     run('unzip', '-q', $zip, '-d', File::Spec->catdir($tmp, 'extracted'));
 
     my $installer;
@@ -276,6 +277,25 @@ sub install_dxc_macos {
         print STDERR "Could not execute SDK installer; please install LunarG Vulkan SDK manually.\n";
         exit 1;
     }
+}
+
+# Dies unless the file's SHA-256 digest matches, so a tampered or swapped
+# download is never extracted or executed.
+sub verify_sha256 {
+    my ($file, $expected) = @_;
+    my $tool = command_exists('sha256sum') ? ['sha256sum']
+             : command_exists('shasum')    ? ['shasum', '-a', '256']
+             : undef;
+    die "need sha256sum or shasum to verify downloads\n" unless $tool;
+    open(my $fh, '-|', @$tool, $file) or die "cannot run @$tool: $!\n";
+    my $line = <$fh>;
+    close $fh;
+    my ($actual) = defined $line ? ($line =~ /^([0-9a-fA-F]{64})/) : ();
+    die "could not compute the SHA-256 of $file\n" unless defined $actual;
+    if (lc($actual) ne lc($expected)) {
+        die "SHA-256 mismatch for $file\n  expected $expected\n  got      $actual\n";
+    }
+    print "SHA-256 verified: " . (File::Spec->splitpath($file))[2] . "\n";
 }
 
 sub command_exists {

@@ -301,6 +301,9 @@ void CloneNode(const UxmlNode& node, VisualElement* parent,
     element->SetBinding(b.property, DataBinding{b.data_source_path, b.mode});
   }
   VisualElement* raw = parent->Add(std::move(element));
+  // The insert is refused when it would nest too deeply; the element is gone
+  // then, so there is nothing to put the children into.
+  if (!raw) return;
   for (const auto& child : node.children)
     CloneNode(child, raw, resources, asset, context, depth + 1);
 }

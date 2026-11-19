@@ -11,6 +11,7 @@
 #include <sstream>
 #include <unordered_map>
 
+#include "os/filesystem.h"
 #include "ui/controls.h"
 #include "ui/style_resolver.h"
 
@@ -38,12 +39,11 @@ bool ReadFile(const fs::path& path, std::string& out) {
 }
 
 bool WriteFile(const fs::path& path, const std::string& text) {
-  std::error_code ec;
-  fs::create_directories(path.parent_path(), ec);
-  std::ofstream file(path, std::ios::binary);
-  if (!file) return false;
-  file << text;
-  return static_cast<bool>(file);
+  // Atomic write: it replaces a symlink at `path` rather than following it
+  // (an ofstream would create the link's target, possibly outside the
+  // project), and it refuses the empty path Project::Resolve returns for
+  // locations outside the project.
+  return os::WriteFileAtomic(path, text);
 }
 
 // Elements point at nodes owned by the current VisualTreeAsset. Before that

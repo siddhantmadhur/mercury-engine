@@ -48,6 +48,9 @@ ComponentInfo MakeInfo(const char* name, const char* category,
     if (!value) return false;
     auto reflector = Reflector::Set(field, in);
     value->Reflect(reflector);
+    for (const auto& warning : reflector.GetWarnings()) {
+      PDebug::warn("{}", warning);
+    }
     return reflector.Found();
   };
   return info;

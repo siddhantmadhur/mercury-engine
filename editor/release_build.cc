@@ -289,6 +289,23 @@ bool ReleaseBuild::StartBuild() {
 }
 
 void ReleaseBuild::StartPacking() {
+  // Compile the scripts here, on the editor's thread. The compile replaces the
+  // process-wide script module and the type registry that the inspector and
+  // Add Component menu read, so it must not run on the packing thread.
+  {
+    BuildOptions options;
+    options.release = true;
+    std::string build_log;
+    const bool built = ScriptBuilder::Build(project_root_, options, &build_log);
+    std::istringstream lines(build_log);
+    for (std::string line; std::getline(lines, line);) {
+      console_.Add(Console::Level::kInfo, Console::Source::kBuild, line);
+    }
+    if (!built) {
+      Finish("building the scripts failed", true);
+      return;
+    }
+  }
   console_.Add(Console::Level::kInfo, Console::Source::kBuild,
                "Packing assets into .mpack files...");
   state_ = State::kPacking;
@@ -304,21 +321,23 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
     result.error = std::move(message);
     return result;
   };
-  // Compile the scripts in-process; the .as sources are packed with the game.
-  {
-    BuildOptions options;
-    options.release = true;
-    std::string build_log;
-    const bool built = ScriptBuilder::Build(root, options, &build_log);
-    std::istringstream lines(build_log);
-    for (std::string line; std::getline(lines, line);)
-      result.log.push_back(line);
-    if (!built) return fail("building the scripts failed");
-  }
+  // The scripts were compiled before this thread started (StartPacking); the
+  // .as sources are packed with the game.
   std::error_code ec;
   fs::create_directories(output_dir, ec);
   if (ec) return fail("could not create " + output_dir.string());
   const fs::path output = fs::weakly_canonical(output_dir, ec);
+  // The CMake build can take minutes after BuildGame checked the folder; make
+  // sure it still resolves inside the project before deleting anything in it.
+  {
+    std::error_code root_ec;
+    const fs::path real_root = fs::weakly_canonical(root, root_ec);
+    const fs::path relative = output.lexically_relative(real_root);
+    if (ec || root_ec || relative.empty() || relative == "." ||
+        *relative.begin() == "..") {
+      return fail("the output folder is not inside the project");
+    }
+  }
 
   // Archives from an earlier build would shadow or outlive the new ones.
   for (const auto& entry : fs::directory_iterator(output, ec)) {
@@ -346,6 +365,13 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
                       (is_dir && fs::weakly_canonical(path, ec) == output);
     if (skip) {
       if (is_dir) it.disable_recursion_pending();
+      continue;
+    }
+    // A symlink can point anywhere (an SSH key, say); only files that really
+    // live in the project go into an archive that gets shipped.
+    if (it->is_symlink(ec) || ec) {
+      result.log.push_back("Skipped symlink (not packed): " +
+                           path.lexically_relative(root).generic_string());
       continue;
     }
     if (!it->is_regular_file(ec) || IsSourceFile(path)) continue;

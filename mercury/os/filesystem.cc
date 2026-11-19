@@ -6,11 +6,13 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <climits>
 #include <cstdlib>
 #include <format>
 #include <fstream>
 #include <mutex>
+#include <new>
 #include <random>
 #include <set>
 #include <shared_mutex>
@@ -100,12 +102,18 @@ std::optional<std::vector<uint8_t>> ReadBytes(const fs::path& path) {
   const auto size = static_cast<std::streamoff>(file.tellg());
   if (size < 0) return std::nullopt;
   if (static_cast<uint64_t>(size) > kMaxWholeFileSize) return std::nullopt;
-  std::vector<uint8_t> data(static_cast<size_t>(size));
-  file.seekg(0);
-  if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
+  // Callers include FFI boundaries that must not see an exception, and a big
+  // file on a small machine is an ordinary failure to read.
+  try {
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    file.seekg(0);
+    if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
+      return std::nullopt;
+    }
+    return data;
+  } catch (const std::bad_alloc&) {
     return std::nullopt;
   }
-  return data;
 }
 
 std::optional<std::string> ReadText(const fs::path& path) {
@@ -170,6 +178,9 @@ bool CloseFile(FileHandle file) { return ::close(file) == 0; }
 }  // namespace
 
 bool WriteFileAtomic(const fs::path& path, std::string_view data) {
+  // An empty path is what Project::Resolve returns for a path that leaves the
+  // project; never turn it into a file in the working directory.
+  if (path.empty() || !path.has_filename()) return false;
   std::error_code ec;
   if (path.has_parent_path()) {
     fs::create_directories(path.parent_path(), ec);
@@ -416,6 +427,72 @@ void UseBundledVulkanDriver() {
   setenv("VK_DRIVER_FILES", icd.c_str(), 1);
   setenv("VK_ICD_FILENAMES", icd.c_str(), 1);
 #endif
+}
+
+fs::path CopyFileWithoutOverwriting(const fs::path& source,
+                                    const fs::path& dest_dir,
+                                    std::error_code& ec) {
+  ec.clear();
+  const fs::path name = source.filename();
+  if (name.empty() || name == "." || name == "..") {
+    ec = std::make_error_code(std::errc::invalid_argument);
+    return {};
+  }
+  auto data = ReadBytes(source);
+  if (!data) {
+    ec = std::make_error_code(std::errc::io_error);
+    return {};
+  }
+  const std::string_view bytes(reinterpret_cast<const char*>(data->data()),
+                               data->size());
+  constexpr int kMaxAttempts = 1000;
+  for (int attempt = 0; attempt < kMaxAttempts; attempt++) {
+    // Built with path operations: a name that is not ANSI-representable (CJK on
+    // Windows) would throw if it went through std::string.
+    fs::path candidate = dest_dir / name;
+    if (attempt > 0) {
+      fs::path renamed = name.stem();
+      renamed += " (" + std::to_string(attempt) + ")";
+      renamed += name.extension();
+      candidate = dest_dir / renamed;
+    }
+    // symlink_status looks at the entry itself, so a dangling link counts.
+    std::error_code status_ec;
+    const auto status = fs::symlink_status(candidate, status_ec);
+    if (status.type() == fs::file_type::regular) {
+      // The same file dropped again: keep using the copy that is there.
+      std::error_code size_ec;
+      if (fs::file_size(candidate, size_ec) == bytes.size() && !size_ec) {
+        if (auto existing = ReadBytes(candidate);
+            existing && existing->size() == data->size() &&
+            std::equal(existing->begin(), existing->end(), data->begin())) {
+          return candidate;
+        }
+      }
+      continue;
+    }
+    if (status.type() != fs::file_type::not_found) continue;
+    // O_EXCL | O_NOFOLLOW: fails if anything, including a link that appeared
+    // since the check above, is already there. (copy_file does not promise
+    // that: libc++ opens the destination without O_EXCL.)
+    const FileHandle file = OpenExclusive(candidate);
+    if (file == kInvalidFile) {
+      if (errno == EEXIST || errno == ELOOP) continue;
+      ec = std::error_code(errno, std::generic_category());
+      return {};
+    }
+    const bool written = WriteAll(file, bytes);
+    const bool closed = CloseFile(file);
+    if (!written || !closed) {
+      std::error_code remove_ec;
+      fs::remove(candidate, remove_ec);
+      ec = std::make_error_code(std::errc::io_error);
+      return {};
+    }
+    return candidate;
+  }
+  ec = std::make_error_code(std::errc::file_exists);
+  return {};
 }
 
 }  // namespace Mercury::os

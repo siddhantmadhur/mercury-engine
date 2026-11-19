@@ -200,13 +200,27 @@ std::vector<std::string> Project::GetTags() const {
 }
 
 fs::path Project::Resolve(std::string_view path) const {
+  if (path.empty()) return {};
+  fs::path candidate;
   if (IsResPath(path)) {
     path.remove_prefix(kResPrefix.size());
-    return (root_ / fs::path(path)).lexically_normal();
+    candidate = fs::path(path);
+  } else {
+    candidate = fs::path(path);
   }
-  fs::path p(path);
-  if (p.is_absolute()) return p;
-  return (root_ / p).lexically_normal();
+  if (!candidate.is_absolute()) candidate = root_ / candidate;
+  candidate = candidate.lexically_normal();
+
+  // Compare real locations so a symlink inside the project cannot lead out of
+  // it. The target may not exist yet (a file about to be saved).
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(root_, ec);
+  if (ec) return {};
+  const fs::path real = fs::weakly_canonical(candidate, ec);
+  if (ec) return {};
+  const fs::path relative = real.lexically_relative(real_root);
+  if (relative.empty() || *relative.begin() == "..") return {};
+  return candidate;
 }
 
 std::string Project::ToResPath(const fs::path& path) const {

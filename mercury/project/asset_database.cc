@@ -44,7 +44,7 @@ bool SaveAssetFile(const std::filesystem::path& file, const Asset& asset) {
 AssetDatabase::AssetDatabase(std::shared_ptr<const Project> project)
     : project_(std::move(project)) {}
 
-const Asset* AssetDatabase::Load(std::string_view res_path) {
+std::shared_ptr<const Asset> AssetDatabase::Load(std::string_view res_path) {
   if (res_path.empty() || !project_) return nullptr;
   const auto file = project_->Resolve(res_path);
   // Packed files never change, so they keep the default time.
@@ -60,22 +60,24 @@ const Asset* AssetDatabase::Load(std::string_view res_path) {
 
   auto it = cache_.find(res_path);
   if (it != cache_.end() && it->second.modified == modified) {
-    return &it->second.asset;
+    return it->second.asset;
   }
 
-  Entry entry;
+  auto asset = std::make_shared<Asset>();
   std::string error;
-  if (!LoadAssetFile(file, entry.asset, &error)) {
+  if (!LoadAssetFile(file, *asset, &error)) {
     PDebug::error("Could not load asset: {}", error);
     return nullptr;
   }
-  entry.asset.path = std::string(res_path);
-  entry.modified = modified;
-  if (!TypeRegistry::Instance().FindAssetType(entry.asset.type)) {
-    PDebug::warn("{}: unknown asset type \"{}\"", res_path, entry.asset.type);
+  asset->path = std::string(res_path);
+  if (!TypeRegistry::Instance().FindAssetType(asset->type)) {
+    PDebug::warn("{}: unknown asset type \"{}\"", res_path, asset->type);
   }
-  auto [inserted, _] = cache_.insert_or_assign(std::string(res_path), entry);
-  return &inserted->second.asset;
+  Entry entry;
+  entry.asset = asset;
+  entry.modified = modified;
+  cache_.insert_or_assign(std::string(res_path), std::move(entry));
+  return asset;
 }
 
 bool AssetDatabase::Save(const Asset& asset) {

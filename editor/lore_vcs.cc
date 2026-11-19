@@ -36,6 +36,118 @@ std::string Trim(std::string_view text) {
   return std::string(text.substr(first, last - first + 1));
 }
 
+// The editor starts lore on its own whenever a project with a .lore folder is
+// opened, so the binary must not be something the project can supply. Plain
+// names are looked up in PATH ignoring empty and relative entries ("." would
+// pick up a binary in the working directory), and a binary that lives inside
+// the project is refused. Returns an empty path if nothing safe is found.
+fs::path FindLoreExecutable(const std::string& configured,
+                            const fs::path& project_root) {
+  const std::string name = configured.empty() ? "lore" : configured;
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(project_root, ec);
+  if (ec || real_root.empty()) return {};
+  auto usable = [&](const fs::path& candidate) -> fs::path {
+    std::error_code e;
+    if (!candidate.is_absolute() || !fs::is_regular_file(candidate, e))
+      return {};
+    // Like execvp, skip a file that cannot be run so it cannot hide the
+    // real binary further down PATH.
+    constexpr auto kExec =
+        fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec;
+    if ((fs::status(candidate, e).permissions() & kExec) == fs::perms::none)
+      return {};
+    const fs::path real = fs::weakly_canonical(candidate, e);
+    const fs::path relative = real.lexically_relative(real_root);
+    const bool inside_project =
+        !relative.empty() && relative != "." && *relative.begin() != "..";
+    return inside_project ? fs::path{} : real;
+  };
+  if (name.find('/') != std::string::npos ||
+      name.find('\\') != std::string::npos) {
+    // An explicit path from the editor options must be absolute.
+    return usable(fs::path(name));
+  }
+#ifdef _WIN32
+  constexpr char kPathSeparator = ';';
+  const std::string file_name = name + ".exe";
+#else
+  constexpr char kPathSeparator = ':';
+  const std::string& file_name = name;
+#endif
+  const char* path_env = std::getenv("PATH");
+  std::string_view dirs = path_env ? path_env : "";
+  while (!dirs.empty()) {
+    const size_t separator = dirs.find(kPathSeparator);
+    const std::string dir(dirs.substr(0, separator));
+    dirs = separator == std::string_view::npos ? std::string_view()
+                                               : dirs.substr(separator + 1);
+    if (dir.empty() || !fs::path(dir).is_absolute()) continue;
+    if (auto found = usable(fs::path(dir) / file_name); !found.empty()) {
+      return found;
+    }
+  }
+  return {};
+}
+
+// Joins a path reported by `lore` onto the project root, or returns an empty
+// path if it is not a plain relative path to something inside the project.
+// The text comes from the program's output, so it is checked like any other
+// untrusted input: no absolute paths, no "..", and the parent folder must
+// still be inside the project once symlinks are resolved. The entry itself
+// may be a symlink; deleting it removes only the link.
+fs::path ProjectFileFromLore(const fs::path& root, const std::string& text) {
+  const fs::path relative(text);
+  if (text.empty() || relative.is_absolute() || relative.has_root_name() ||
+      !relative.has_filename()) {
+    return {};
+  }
+  for (const auto& part : relative) {
+    if (part == "..") return {};
+  }
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(root, ec);
+  if (ec) return {};
+  const fs::path file = root / relative;
+  const fs::path real_parent = fs::weakly_canonical(file.parent_path(), ec);
+  if (ec) return {};
+  const fs::path inside =
+      (real_parent / file.filename()).lexically_relative(real_root);
+  if (inside.empty() || inside == "." || *inside.begin() == "..") return {};
+  return file;
+}
+
+// Quotes a value for a TOML basic string. Newlines and other control
+// characters cannot be represented safely in a one-line key, so they are
+// rejected rather than written.
+bool TomlQuote(const std::string& value, std::string* out) {
+  std::string quoted = "\"";
+  for (unsigned char c : value) {
+    if (c == '"') {
+      quoted += "\\\"";
+    } else if (c == '\\') {
+      quoted += "\\\\";
+    } else if (c < 0x20 || c == 0x7f) {
+      return false;
+    } else {
+      quoted += static_cast<char>(c);
+    }
+  }
+  quoted += '"';
+  *out = std::move(quoted);
+  return true;
+}
+
+// Reverses TomlQuote for the text between the outer quotes.
+std::string TomlUnescape(std::string_view text) {
+  std::string out;
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text[i] == '\\' && i + 1 < text.size()) i++;
+    out += text[i];
+  }
+  return out;
+}
+
 // Lore colors its output when it thinks it's on a terminal.
 std::string StripAnsi(const std::string& line) {
   std::string out;
@@ -127,9 +239,25 @@ void LoreVcs::StartNext() {
     current_ = std::move(queue_.front());
     queue_.pop_front();
 
-    std::vector<std::string> args = {
-        settings_.lore_executable.empty() ? "lore" : settings_.lore_executable,
-        "-P", "--non-interactive"};
+    const fs::path executable =
+        FindLoreExecutable(settings_.lore_executable, project_->GetRoot());
+    if (executable.empty()) {
+      Result result;
+      result.error =
+          "lore was not found outside the project; set an absolute path to "
+          "the lore executable in Options";
+      if (last_error_ != result.error) {
+        console_.Add(Console::Level::kError, Console::Source::kLore,
+                     result.error);
+      }
+      last_error_ = result.error;
+      Job job = std::move(current_);
+      if (job.done) job.done(result);
+      state_revision_++;
+      continue;
+    }
+    std::vector<std::string> args = {executable.string(), "-P",
+                                     "--non-interactive"};
     args.insert(args.end(), current_.args.begin(), current_.args.end());
     if (!current_.quiet) {
       std::string command = "lore";
@@ -285,8 +413,14 @@ void LoreVcs::Discard(const Change& change) {
   if (!project_) return;
   if (change.section == Section::kUntracked) {
     // Never committed, so there is nothing for lore to restore.
+    const fs::path file = ProjectFileFromLore(project_->GetRoot(), change.path);
+    if (file.empty()) {
+      console_.Error("Refusing to delete \"" + change.path +
+                     "\": it is not inside the project");
+      return;
+    }
     std::error_code ec;
-    fs::remove(project_->GetRoot() / change.path, ec);
+    fs::remove(file, ec);
     if (ec) {
       console_.Error("Could not delete " + change.path + ": " + ec.message());
     } else {
@@ -423,7 +557,8 @@ std::string LoreVcs::ReadRemoteUrl() const {
     const auto first = line.find('"');
     const auto last = line.rfind('"');
     if (first != std::string::npos && last > first) {
-      return line.substr(first + 1, last - first - 1);
+      return TomlUnescape(
+          std::string_view(line).substr(first + 1, last - first - 1));
     }
   }
   return "";
@@ -438,7 +573,14 @@ bool LoreVcs::WriteRemoteUrl(const std::string& url) {
     std::string line;
     while (std::getline(file, line)) lines.push_back(line);
   }
-  const std::string entry = "remote_url = \"" + url + "\"";
+  std::string quoted;
+  if (!TomlQuote(url, &quoted)) {
+    console_.Add(Console::Level::kError, Console::Source::kLore,
+                 "The remote URL may not contain line breaks or control "
+                 "characters");
+    return false;
+  }
+  const std::string entry = "remote_url = " + quoted;
   auto it = std::find_if(
       lines.begin(), lines.end(),
       [](const std::string& line) { return line.starts_with("remote_url"); });
@@ -493,7 +635,11 @@ void LoreVcs::ParseStatus(const std::vector<std::string>& lines) {
       Change change;
       change.code = line[0];
       change.section = section;
-      if (const auto arrow = text.find(" -> "); arrow != std::string::npos) {
+      // Only a move is written "old -> new"; in any other entry the arrow is
+      // part of the file's name (an untracked "a -> b.txt").
+      const auto arrow =
+          change.code == 'V' ? text.find(" -> ") : std::string::npos;
+      if (arrow != std::string::npos) {
         change.from = text.substr(0, arrow);
         change.path = text.substr(arrow + 4);
       } else {

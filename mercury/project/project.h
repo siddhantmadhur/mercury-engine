@@ -144,8 +144,11 @@ class Project {
   /**
    * @brief Turn "res://a/b.mmap" into an absolute path inside the project
    *
-   * Absolute paths are returned unchanged and other relative paths are taken
-   * relative to the project root.
+   * Relative paths are taken relative to the project root. The result must
+   * stay inside the project folder, symlinks followed: absolute paths outside
+   * it, `..` escapes and symlinks that lead out all yield an empty path, so
+   * a project file cannot make the engine read or write elsewhere. Check for
+   * an empty result before using it.
    */
   fs::path Resolve(std::string_view path) const;
 

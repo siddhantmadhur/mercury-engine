@@ -436,6 +436,9 @@ class TextField : public BaseField<std::string> {
   int IndexAt(glm::vec2 world) const;
   void EnsureCursorVisible();
   void ChangeText(std::u32string text);
+  // Keeps the caret and the selection anchor inside the text. Every change to
+  // the text or to the caret ends here, so no handler needs its own clamp.
+  void ClampCaret();
 
   TextInputBase* text_input_ = nullptr;
   int max_length_ = -1;

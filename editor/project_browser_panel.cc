@@ -15,6 +15,7 @@
 #include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "os/filesystem.h"
 #include "os/process.h"
 #include "project/project.h"
 #include "wx_theme.h"
@@ -354,6 +355,9 @@ void ProjectBrowserPanel::PopulateFolderChildren(
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator(dir, ec)) {
     const std::string name = entry.path().filename().string();
+    // Symlinked folders can loop back on themselves (assets/loop -> ..) or
+    // lead out of the project, so the tree does not follow them.
+    if (entry.is_symlink(ec)) continue;
     if (entry.is_directory(ec) && !ShouldSkipDirName(name)) {
       folders.push_back(entry.path());
     }
@@ -451,9 +455,10 @@ bool ProjectBrowserPanel::CopyExternalFilesInto(const fs::path& dest_dir,
   for (const wxString& f : files) {
     const fs::path src = f.ToStdString();
     if (!fs::is_regular_file(src, ec)) continue;
-    const fs::path dst = dest_dir / src.filename();
-    if (fs::equivalent(src, dst, ec)) continue;
-    fs::copy_file(src, dst, fs::copy_options::overwrite_existing, ec);
+    // Dropping a file that is already there (same file) does nothing; any
+    // other name clash gets a new name rather than replacing the asset.
+    if (fs::equivalent(src, dest_dir / src.filename(), ec)) continue;
+    const fs::path dst = os::CopyFileWithoutOverwriting(src, dest_dir, ec);
     if (!ec) {
       copied_any = true;
       scene_.ConsoleRef().Info("Imported file into project: " +

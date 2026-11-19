@@ -37,15 +37,17 @@ class Texture2D {
 
   glm::vec4 GetAtlasUV() const { return atlas_uv_; }
 
+  bool IsValid() const { return raw_data && x > 0 && y > 0; }
   bool IsDirty() const { return dirty_; }
   void ClearDirty() { dirty_ = false; }
 
  private:
   stbi_uc* raw_data = nullptr;
-  int x, y, channels;
+  // Zero until an image loads, so a failed load reads as an empty texture.
+  int x = 0, y = 0, channels = 0;
   std::string path_;
 
-  glm::vec4 atlas_uv_;
+  glm::vec4 atlas_uv_{0.0f};
   bool dirty_ = true;
 };
 }  // namespace Mercury

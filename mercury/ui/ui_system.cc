@@ -51,6 +51,7 @@ VisualElement* UISystem::AddDocument(
     if (doc.panel == panel && doc.sort_order <= sort_order) index++;
   }
   VisualElement* raw = panel->visualTree()->Insert(index, std::move(root));
+  if (!raw) return nullptr;  // too deep to attach
   documents_.push_back({raw, panel, sort_order});
   return raw;
 }

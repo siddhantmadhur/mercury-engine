@@ -99,6 +99,24 @@ TEST(Reflection, KeepsDefaultsForMissingOrMistypedProperties) {
   EXPECT_EQ(reader.GetWarnings().size(), 2u);
 }
 
+// A script or a file can set an enum by number; a number that is not one of
+// the choices must not become the value (it would index tables out of range).
+TEST(Reflection, SettingAnEnumByNumberChecksTheRange) {
+  Everything instance;
+  for (int64_t bad : {int64_t{-1}, int64_t{2}, int64_t{1} << 40}) {
+    mtext::Variant value(bad);
+    auto setter = Reflector::Set("mode", value);
+    instance.Reflect(setter);
+    EXPECT_TRUE(setter.Found());
+    EXPECT_EQ(instance.mode, Mode::kB) << bad;
+    EXPECT_EQ(setter.GetWarnings().size(), 1u) << bad;
+  }
+  mtext::Variant zero(int64_t{0});
+  auto setter = Reflector::Set("mode", zero);
+  instance.Reflect(setter);
+  EXPECT_EQ(instance.mode, Mode::kA);
+}
+
 TEST(TypeRegistry, BuiltinsAndSchemaRoundTrip) {
   RegisterBuiltinTypes();
   auto& registry = TypeRegistry::Instance();

@@ -88,8 +88,15 @@ if ($opt{target} ne 'player' && $opt{target} ne 'editor') {
     die "--target must be player or editor\n";
 }
 
-if (defined $opt{name} && $opt{name} =~ m{[/:]}) {
-    die "--name may not contain '/' or ':'\n";
+if (defined $opt{name} && $opt{name} =~ m{[/\\:\x00-\x1f]}) {
+    die "--name may not contain '/', '\\', ':' or control characters\n";
+}
+if (defined $opt{name} && $opt{name} =~ /^\.+$/) {
+    die "--name may not be '.' or '..'\n";
+}
+# The version ends up in the zip file name and Info.plist.
+if ($opt{version} !~ /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/) {
+    die "--version may only contain letters, digits and . + _ -\n";
 }
 
 # The player needs a project; the editor does not.
@@ -215,13 +222,30 @@ if ($opt{target} eq 'player') {
     $project_name = $opt{display_name} // 'Mercury Editor';
 }
 
-my $name = $opt{name} // ($opt{target} eq 'editor' ? 'Mercury Editor' : $project_name);
+# The project name comes from the project file, which is not trusted: it must
+# not be able to name a path outside the output folder ("../../Applications/X").
+sub sanitize_bundle_name {
+    my ($raw) = @_;
+    my $clean = $raw;
+    $clean =~ s{[/\\:\x00-\x1f]+}{-}g;
+    $clean =~ s/^[.\s-]+//;
+    $clean =~ s/\s+$//;
+    return length($clean) ? $clean : 'Game';
+}
+
+my $name = $opt{name}
+    // ($opt{target} eq 'editor' ? 'Mercury Editor' : sanitize_bundle_name($project_name));
 my $slug = slugify($name);
 my $bundle_id = $opt{bundle_id} // "dev.smadhur.$slug";
 my $output_dir = File::Spec->rel2abs($opt{output} // File::Spec->catdir($REPO, 'Builds'));
 make_path($output_dir);
 $output_dir = abs_path($output_dir);
 my $app_dir = File::Spec->catdir($output_dir, "$name.app");
+# Whatever the name was, the bundle (and the zip) must sit directly inside the
+# output folder: remove_tree below deletes it.
+if (dirname($app_dir) ne $output_dir) {
+    die "refusing to write outside the output folder: $app_dir\n";
+}
 
 my $build_dir = File::Spec->rel2abs(
     $opt{build_dir} // File::Spec->catdir($REPO, 'build', 'release'));
@@ -279,7 +303,7 @@ if ($opt{target} eq 'editor') {
 # Bundle skeleton
 # --------------------------------------------------------------------------
 
-remove_tree($app_dir) if -e $app_dir;
+remove_tree($app_dir) if -e $app_dir || -l $app_dir;
 my $contents = File::Spec->catdir($app_dir, 'Contents');
 my $macos    = File::Spec->catdir($contents, 'MacOS');
 my $res      = File::Spec->catdir($contents, 'Resources');
@@ -661,6 +685,12 @@ sub collect_game_files {
             next if $depth == 0 && is_skipped_at_root($name);
             my $path = File::Spec->catfile($dir, $name);
             my $entry = length($rel) ? "$rel/$name" : $name;
+            # A symlink can lead anywhere (an SSH key, a folder that loops back
+            # on itself); only what really lives in the project is shipped.
+            if (-l $path) {
+                log_line("  skipped symlink (not packed): $entry");
+                next;
+            }
             if (-d $path) {
                 my $canonical = abs_path($path) // $path;
                 next if $canonical eq $output;
