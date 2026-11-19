@@ -1,3 +1,14 @@
+# Create exactly one pipeline per push: a merge request pipeline when the branch has
+# an open MR, otherwise a normal branch pipeline. Without this, every push creates
+# both, and jobs that have no `rules:` (format, build) only run in the branch one,
+# so the MR page shows just build-image-job.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
 stages:
   - image
   - format
@@ -12,7 +23,7 @@ variables:
   # Bump BUILD_IMAGE_TAG whenever docker/Dockerfile changes. Runners use the
   # "if-not-present" pull policy, so a reused tag (like :latest) would keep running
   # jobs in the old cached image instead of the one build-image-job just pushed.
-  BUILD_IMAGE_TAG: "2"
+  BUILD_IMAGE_TAG: "3"
   BUILD_IMAGE: "$CI_REGISTRY_IMAGE/build-env:$BUILD_IMAGE_TAG"
 
 

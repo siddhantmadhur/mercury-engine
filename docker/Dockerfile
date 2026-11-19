@@ -45,6 +45,13 @@ ENV CC=clang \
     CXX=clang++ \
     CXXFLAGS=-stdlib=libc++
 
+# Software Vulkan driver (Mesa lavapipe). CI runners have no GPU, and tests such as
+# FilamentSmokeTest render through Filament's Vulkan backend; without an ICD they abort
+# with "Unable to create Vulkan instance. error=-9" (VK_ERROR_INCOMPATIBLE_DRIVER).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends mesa-vulkan-drivers \
+    && rm -rf /var/lib/apt/lists/*
+
 # Rust toolchain + cxxbridge (the C++ side of Mercury's Rust modules).
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
