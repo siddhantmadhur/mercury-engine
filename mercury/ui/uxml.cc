@@ -7,6 +7,7 @@
 #include <tinyxml2.h>
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <set>
 #include <sstream>
@@ -165,8 +166,12 @@ mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
     case FieldType::kInt:
       return static_cast<int64_t>(
           std::strtoll(std::string(value).c_str(), nullptr, 10));
-    case FieldType::kFloat:
-      return std::strtod(std::string(value).c_str(), nullptr);
+    case FieldType::kFloat: {
+      // strtod accepts "nan" and "inf"; letting either into the layout would
+      // later become an undefined float-to-int conversion.
+      const double parsed = std::strtod(std::string(value).c_str(), nullptr);
+      return std::isfinite(parsed) ? parsed : 0.0;
+    }
     case FieldType::kColor:
       if (auto c = ParseColor(value)) return mtext::Color{c->rgba};
       return std::string(value);
