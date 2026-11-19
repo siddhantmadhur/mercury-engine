@@ -53,7 +53,11 @@ ma_result VfsClose(ma_vfs*, ma_vfs_file file) {
 ma_result VfsRead(ma_vfs*, ma_vfs_file file, void* dst, size_t bytes,
                   size_t* read) {
   auto* memory = static_cast<MemoryFile*>(file);
-  const size_t available = memory->data.size() - memory->cursor;
+  // The cursor never passes the end (Seek refuses), but a subtraction that
+  // wrapped would turn into an unbounded memcpy, so don't rely on it.
+  const size_t available = memory->cursor <= memory->data.size()
+                               ? memory->data.size() - memory->cursor
+                               : 0;
   const size_t count = std::min(bytes, available);
   std::memcpy(dst, memory->data.data() + memory->cursor, count);
   memory->cursor += count;
@@ -106,7 +110,6 @@ struct AudioSystem::Source {
   std::string clip;
   std::unique_ptr<Sound> main;
   std::list<std::unique_ptr<Sound>> one_shots;
-  std::list<float> one_shot_scales;
   float volume = 1.0f;
   float pitch = 1.0f;
   bool loop = false;
@@ -263,14 +266,15 @@ void AudioSystem::PlayOneShot(SourceId id, std::string_view res_path,
   auto it = sources_.find(id);
   if (it == sources_.end()) return;
   Source& source = *it->second;
-  Sound* sound = NewSound(res_path);
-  if (!sound) return;
+  std::unique_ptr<Sound> owned(NewSound(res_path));
+  if (!owned) return;
+  Sound* sound = owned.get();
+  // Track it before it starts so the list owns it from here on.
+  source.one_shots.push_back(std::move(owned));
   Apply(source, *sound);
   ma_sound_set_volume(&sound->sound,
                       source.mute ? 0.0f : source.volume * volume_scale);
   ma_sound_start(&sound->sound);
-  source.one_shots.emplace_back(sound);
-  source.one_shot_scales.push_back(volume_scale);
 }
 
 bool AudioSystem::IsPlaying(SourceId id) const {
@@ -377,16 +381,13 @@ void AudioSystem::SetMasterVolume(float volume) {
 
 void AudioSystem::Update() {
   for (auto& [id, source] : sources_) {
-    auto scale = source->one_shot_scales.begin();
     for (auto it = source->one_shots.begin(); it != source->one_shots.end();) {
       if (ma_sound_at_end(&(*it)->sound) ||
           !ma_sound_is_playing(&(*it)->sound)) {
         ma_sound_uninit(&(*it)->sound);
         it = source->one_shots.erase(it);
-        scale = source->one_shot_scales.erase(scale);
       } else {
         ++it;
-        ++scale;
       }
     }
   }
