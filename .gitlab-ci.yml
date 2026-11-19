@@ -59,7 +59,6 @@ ctest-build-job:
         libvulkan-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
   script:
     - ccache --zero-stats
-    - ./scripts/setup_project.pl
     - cmake --preset release
     - cmake --build --preset check
     - ccache --show-stats
