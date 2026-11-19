@@ -2,33 +2,40 @@ stages:
   - format
   - build
 
-# Ensure all jobs wipe untracked files (like leftover build/ folders) before starting
 variables:
-  GIT_CLEAN_FLAGS: -ffdx
+  # 1. Gives every concurrent/sequential job its own isolated build directory on the shell runner
+  GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_RUNNER_SHORT_TOKEN/$CI_CONCURRENT_ID/$CI_PROJECT_PATH_SLUG/$CI_JOB_NAME
+  # 2. Tells GitLab to clean nested submodules and untracked files before every job
+  GIT_CLEAN_FLAGS: -ffdxx
 
 clangformat-job:
   tags: ['us-east-2b']
   stage: format
+  variables:
+    # Format jobs don't need submodules checked out at all
+    GIT_SUBMODULE_STRATEGY: none
   script:
     - echo "Linting code...."
-    - git ls-files | grep -E '\.([ch](pp)?|cc)$' | grep -vE '^(third_party|build)/' | xargs -r clang-format -i --style=Google
+    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
     - git diff --exit-code
 
 verify-license-job:
   tags: ['us-east-2b']
   stage: format
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
   script:
     - echo "Checking for files not including LICENSE header..."
-    - mkdir -p /tmp/ci_excluded
-    - '[ -d third_party ] && mv third_party /tmp/ci_excluded/'
-    - perl scripts/addlicenses.pl; EXIT_CODE=$?
-    - '[ -d /tmp/ci_excluded/third_party ] && mv /tmp/ci_excluded/third_party .'
-    - '[ "$EXIT_CODE" -eq 0 ] || exit $EXIT_CODE'
+    - perl scripts/addlicenses.pl
     - git diff --exit-code
 
 ctest-build-job:
   tags: ['us-east-2b']
   stage: build
+  variables:
+    # Let GitLab natively init and clean submodules before the script runs
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_SUBMODULE_FORCE_CLEAN: "true"
   cache:
     key: "cmake-build-$CI_COMMIT_REF_SLUG"
     fallback_keys:
@@ -37,6 +44,5 @@ ctest-build-job:
       - build/
   script:
     - ./scripts/setup_project.pl
-    - git submodule update --init --recursive
     - cmake --preset release
     - cmake --build --preset check
