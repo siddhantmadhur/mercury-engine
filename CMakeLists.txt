@@ -253,6 +253,11 @@ if (MERCURY_BUILD_TESTS)
     add_subdirectory(third_party/googletest EXCLUDE_FROM_ALL)
 
     set(MERCURY_TEST_CACHE_DIR "${CMAKE_BINARY_DIR}/test_cache")
+    # The benchmark project holds the large models some tests import; they skip
+    # when it is missing. The MERCURY_BENCHMARK_DIR environment variable
+    # overrides this at run time.
+    set(MERCURY_BENCHMARK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../benchmark" CACHE PATH
+            "Folder of the benchmark project (models and maps) used by tests")
     set(MERCURY_TEST_TARGETS "")
 
     function(mercury_add_test TARGET)
@@ -260,7 +265,8 @@ if (MERCURY_BUILD_TESTS)
         target_link_libraries(${TARGET} PRIVATE mercury GTest::gtest_main)
         target_compile_definitions(${TARGET} PRIVATE
                 MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-                MERCURY_TEST_CACHE_DIR="${MERCURY_TEST_CACHE_DIR}")
+                MERCURY_TEST_CACHE_DIR="${MERCURY_TEST_CACHE_DIR}"
+                MERCURY_BENCHMARK_DIR="${MERCURY_BENCHMARK_DIR}")
         # Keep the plain build fast: tests are built by the `check` target.
         set_target_properties(${TARGET} PROPERTIES EXCLUDE_FROM_ALL TRUE)
         gtest_discover_tests(${TARGET} DISCOVERY_MODE PRE_TEST)
@@ -277,6 +283,7 @@ if (MERCURY_BUILD_TESTS)
             tests/model_preloader_test.cc
             tests/mpack_test.cc
             tests/mtext_test.cc
+            tests/obj_material_test.cc
             tests/parallel_load_test.cc
             tests/physics_constraints_test.cc
             tests/primitives_test.cc

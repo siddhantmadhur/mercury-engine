@@ -25,7 +25,7 @@ namespace {
 namespace fs = std::filesystem;
 
 // Bump when what is written, or how Model::Import builds a model, changes.
-constexpr uint32_t kVersion = 2;
+constexpr uint32_t kVersion = 3;
 constexpr char kMagic[4] = {'M', 'M', 'C', 'F'};
 
 struct Hash {
@@ -251,7 +251,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     node.rotation = in.Pod<glm::quat>();
     node.scale = in.Pod<glm::vec3>();
   }
-  const uint64_t material_count = in.Count(112);
+  const uint64_t material_count = in.Count(116);
   if (in.ok()) {
     model->materials_.resize(material_count);
     model->material_sources_.resize(material_count);
@@ -269,6 +269,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     material.ior = in.Pod<float>();
     material.transmission_color = in.Pod<glm::vec3>();
     material.thickness = in.Pod<float>();
+    material.reflectance = in.Pod<float>();
     Model::MaterialSources& sources = model->material_sources_[m];
     for (Model::TextureSource* source :
          {&sources.texture, &sources.emission, &sources.normal}) {
@@ -439,6 +440,7 @@ void ModelCache::Write(const Model& model, const std::string& path,
     out.Pod(material.ior);
     out.Pod(material.transmission_color);
     out.Pod(material.thickness);
+    out.Pod(material.reflectance);
     const Model::MaterialSources sources = m < model.material_sources_.size()
                                                ? model.material_sources_[m]
                                                : Model::MaterialSources{};

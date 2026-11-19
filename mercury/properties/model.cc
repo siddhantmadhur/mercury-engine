@@ -738,37 +738,59 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
       if (source->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
         material.smoothness = 1.0f - std::clamp(roughness, 0.0f, 1.0f);
       } else if (is_obj) {
-        // Blinn-Phong exponent (Ns) to GGX roughness; without specular (Ks)
-        // the surface is matte whatever Ns says.
+        // The MTL illumination model decides what kind of surface this is;
+        // Kd/Ks/Ns/Tf/Ni then fill in its parameters.
+        int illum = 2;
+        source->Get(AI_MATKEY_OBJ_ILLUM, illum);
+        // Blinn-Phong exponent (Ns) to GGX roughness. Ns 0 is fully rough,
+        // Ns 1024 is roughness 0.044 (a near-perfect mirror).
         float shininess = 0.0f;
         source->Get(AI_MATKEY_SHININESS, shininess);
+        material.smoothness =
+            1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
         aiColor3D specular(0, 0, 0);
         source->Get(AI_MATKEY_COLOR_SPECULAR, specular);
         const float ks = std::max({specular.r, specular.g, specular.b});
-        const float smooth =
-            1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
-        material.smoothness =
-            std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
-        // Illumination models 4, 6 and 7 refract: glass when the file gives
-        // it a transmission filter (Tf), or when it has no diffuse but a
-        // strong specular. Without them, that look is a mirror.
-        const float kd = std::max({color.r, color.g, color.b});
-        const bool bare = kd < 0.05f && ks > 0.25f &&
-                          texture_of(source, aiTextureType_DIFFUSE).empty();
-        int illum = 2;
-        source->Get(AI_MATKEY_OBJ_ILLUM, illum);
+        const bool textured =
+            !texture_of(source, aiTextureType_DIFFUSE).empty();
         aiColor3D filter(1, 1, 1);
         source->Get(AI_MATKEY_COLOR_TRANSPARENT, filter);
         const bool tinted = std::min({filter.r, filter.g, filter.b}) < 0.999f;
-        if ((illum == 4 || illum == 6 || illum == 7) && (tinted || bare)) {
+        if ((illum == 4 || illum == 6 || illum == 7) && (tinted || !textured)) {
+          // Glass. Filament multiplies what passes through by the base
+          // color, so the base is white and the tint is carried by the
+          // transmission color alone: the chromaticity of Kd when it has
+          // one (an amber shell), otherwise Tf scaled so its brightest
+          // channel is 1 (Tf 0.1 gray is clear glass, not black).
+          const float kd_max = std::max({color.r, color.g, color.b});
+          const float kd_min = std::min({color.r, color.g, color.b});
+          const bool chromatic =
+              kd_max > 0.0f && (kd_max - kd_min) > 0.15f * kd_max;
+          glm::vec3 tint(1.0f);
+          if (chromatic) {
+            tint = glm::vec3(color.r, color.g, color.b) / kd_max;
+          } else {
+            const float tf_max = std::max({filter.r, filter.g, filter.b});
+            if (tf_max > 0.0f)
+              tint = glm::vec3(filter.r, filter.g, filter.b) / tf_max;
+          }
           material.transmission = 1.0f;
-          material.transmission_color = glm::vec3(filter.r, filter.g, filter.b);
+          material.transmission_color = tint;
+          material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
           // Glass is smooth whatever its exponent says.
           material.smoothness = std::max(material.smoothness, 0.9f);
-        } else if (bare) {
-          material.color =
-              glm::vec4(specular.r, specular.g, specular.b, material.color.a);
+        } else if (illum == 3 || illum == 5) {
+          // Reflective: a metal tinted by its specular color.
+          material.color = glm::vec4(
+              std::max(specular.r, color.r), std::max(specular.g, color.g),
+              std::max(specular.b, color.b), material.color.a);
           material.metallic = 1.0f;
+        } else {
+          // A dielectric: Ks (illum 2) is how strongly it reflects. Filament
+          // takes F0 = 0.16 * reflectance^2, so Ks maps straight onto
+          // reflectance: Ks 0.5 is the usual 4%, Ks 0.9 is 13%, Ks 0 none.
+          // Illumination models 0 and 1 have no specular at all.
+          material.reflectance = illum >= 2 ? std::clamp(ks, 0.0f, 1.0f) : 0.0f;
         }
       }
       // glTF's KHR_materials_transmission and _volume: the base color tints

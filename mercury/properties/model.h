@@ -123,6 +123,9 @@ struct ModelMaterial {
   float ior = 1.5f;
   glm::vec3 transmission_color = glm::vec3(1.0f);
   float thickness = 0.0f;
+  // Filament's dielectric specular strength: F0 = 0.16 * reflectance^2, so
+  // 0.5 (the default) is the usual 4%.
+  float reflectance = 0.5f;
 };
 
 struct ModelBone {

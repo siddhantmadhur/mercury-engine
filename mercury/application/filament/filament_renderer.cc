@@ -547,8 +547,10 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
                              std::clamp(material.metallic, 0.0f, 1.0f));
       instance->setParameter(
           "roughness", std::clamp(1.0f - material.smoothness, 0.05f, 1.0f));
+      // Not the exposure weight (w): emission is a plain linear radiance
+      // added to the lit color, not nits scaled by the camera exposure.
       instance->setParameter("emissive",
-                             ToFilament(glm::vec4(material.emission, 1.0f)));
+                             ToFilament(glm::vec4(material.emission, 0.0f)));
       filament::Texture* emissive_tex = white_;
       if (material.emission_texture) {
         if (filament::Texture* uploaded =
@@ -556,6 +558,11 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
           emissive_tex = uploaded;
         }
       }
+      // Transmissive materials take F0 from their ior and have no
+      // reflectance input (setting it would override the ior).
+      if (!is_transmissive)
+        instance->setParameter("reflectance",
+                               std::clamp(material.reflectance, 0.0f, 1.0f));
       instance->setParameter("emissiveMap", emissive_tex, sampler);
 
       filament::Texture* normal_tex = flat_normal_;
@@ -575,9 +582,17 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         const glm::vec3 trans_color =
             glm::clamp(material.transmission_color, 1e-4f, 1.0f);
         const bool tinted = trans_color != glm::vec3(1.0f);
-        const float thickness = material.thickness > 0.0f
-                                    ? material.thickness
-                                    : (tinted ? 0.01f : 0.0f);
+        // Solid refraction needs a path length through the object. Without
+        // one from the material, take the object's thinnest world extent:
+        // a sphere's diameter, a slab's depth.
+        float thickness = material.thickness;
+        if (thickness <= 0.0f) {
+          const glm::vec3 size =
+              glm::abs(transform.GetInterpolatedScale()) *
+              glm::vec3(box.halfExtent.x, box.halfExtent.y, box.halfExtent.z) *
+              2.0f;
+          thickness = std::max(std::min({size.x, size.y, size.z}), 0.001f);
+        }
         const filament::math::float3 absorption =
             tinted ? filament::Color::absorptionAtDistance(
                          ToFilament(trans_color), thickness)

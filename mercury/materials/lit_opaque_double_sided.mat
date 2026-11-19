@@ -21,6 +21,7 @@ material {
         { type: float2, name: offset },
         { type: float, name: metallic },
         { type: float, name: roughness },
+        { type: float, name: reflectance },
         { type: float4, name: emissive },
         { type: sampler2d, name: emissiveMap, precision: high },
         { type: sampler2d, name: normalMap, precision: high },
@@ -39,6 +40,7 @@ fragment {
                              texture(materialParams_baseColorMap, uv);
         material.roughness = materialParams.roughness;
         material.metallic = materialParams.metallic;
+        material.reflectance = materialParams.reflectance;
         material.emissive = vec4(
             materialParams.emissive.rgb *
                 texture(materialParams_emissiveMap, uv).rgb,

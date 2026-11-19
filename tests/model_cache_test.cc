@@ -33,8 +33,7 @@ const bool kTestCacheDir = [] {
 }();
 
 const fs::path kModel =
-    fs::path(MERCURY_SOURCE_DIR) /
-    "examples/model_viewer/models/breakfast_room/breakfast_room.obj";
+    Mercury::test::BenchmarkDir() / "models/breakfast_room/breakfast_room.obj";
 
 void SetCacheDir(const fs::path& dir) {
 #if defined(_WIN32)
@@ -194,9 +193,8 @@ TEST_F(ModelCacheTest, OtherSettingsImportAgain) {
 // OBJ glass (illum 7 with a transmission filter) imports as transmissive,
 // with its index of refraction and tint, and the cache keeps them.
 TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
-  const fs::path model =
-      fs::path(MERCURY_SOURCE_DIR) /
-      "examples/model_viewer/models/cornell_box/CornellBox-Sphere.obj";
+  const fs::path model = Mercury::test::BenchmarkDir() /
+                         "models/cornell_box/CornellBox-Sphere.obj";
   if (!fs::exists(model)) GTEST_SKIP() << "missing fixture " << model;
   for (int pass = 0; pass < 2; pass++) {  // imported, then from the cache
     std::string error;
@@ -211,7 +209,9 @@ TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
     ASSERT_TRUE(glass && mirror);
     EXPECT_FLOAT_EQ(glass->transmission, 1.0f);
     EXPECT_FLOAT_EQ(glass->ior, 2.5f);
-    EXPECT_NEAR(glass->transmission_color.r, 0.1f, 1e-5f);
+    // Tf 0.1 gray is clear glass: the tint is Tf scaled by its brightest
+    // channel, not Tf itself (which would be nearly black).
+    EXPECT_NEAR(glass->transmission_color.r, 1.0f, 1e-5f);
     EXPECT_FALSE(glass->transparent);
     EXPECT_FLOAT_EQ(mirror->transmission, 0.0f);
     EXPECT_FLOAT_EQ(mirror->metallic, 1.0f);
