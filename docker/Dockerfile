@@ -32,6 +32,19 @@ RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
     && ln -sf /usr/bin/clang-format-${LLVM_VERSION} /usr/local/bin/clang-format \
     && rm -rf /var/lib/apt/lists/*
 
+# clang + libc++: Filament (third_party/filament) refuses to configure with GCC on
+# Linux and must be built with clang and libc++ (see its BUILDING.md). Everything
+# else is built with the same toolchain so the C++ standard library matches.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        clang-${LLVM_VERSION} libc++-${LLVM_VERSION}-dev libc++abi-${LLVM_VERSION}-dev \
+    && ln -sf /usr/bin/clang-${LLVM_VERSION} /usr/local/bin/clang \
+    && ln -sf /usr/bin/clang++-${LLVM_VERSION} /usr/local/bin/clang++ \
+    && rm -rf /var/lib/apt/lists/*
+ENV CC=clang \
+    CXX=clang++ \
+    CXXFLAGS=-stdlib=libc++
+
 # Rust toolchain + cxxbridge (the C++ side of Mercury's Rust modules).
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \

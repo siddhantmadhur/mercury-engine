@@ -4,12 +4,16 @@ stages:
   - build
 
 variables:
-  # Wipe all untracked files (like build/) and dirty submodules, EXCEPT cached toolchains/ccache
-  GIT_CLEAN_FLAGS: -ffdxx -e .ccache/ -e .cargo/ -e .rustup/ -e bin/dxc/
+  # Wipe all untracked files (like build/) and dirty submodules, EXCEPT .ccache/
+  GIT_CLEAN_FLAGS: -ffdxx -e .ccache/
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
   # Prebuilt toolchain image (see docker/Dockerfile and build-image-job below).
-  BUILD_IMAGE: "$CI_REGISTRY_IMAGE/build-env:latest"
+  # Bump BUILD_IMAGE_TAG whenever docker/Dockerfile changes. Runners use the
+  # "if-not-present" pull policy, so a reused tag (like :latest) would keep running
+  # jobs in the old cached image instead of the one build-image-job just pushed.
+  BUILD_IMAGE_TAG: "2"
+  BUILD_IMAGE: "$CI_REGISTRY_IMAGE/build-env:$BUILD_IMAGE_TAG"
 
 
 # Rebuilds the toolchain image and pushes it to the GitLab container registry.
@@ -47,7 +51,7 @@ build-image-job:
       /kaniko/executor
       --context "$CI_PROJECT_DIR/docker"
       --dockerfile "$CI_PROJECT_DIR/docker/Dockerfile"
-      --destination "$PUSH_REPO/build-env:latest"
+      --destination "$PUSH_REPO/build-env:$BUILD_IMAGE_TAG"
       --cache=true
       --cache-repo "$PUSH_REPO/build-env/cache"
       $KANIKO_PUSH_ARGS
@@ -89,17 +93,9 @@ ctest-build-job:
       - "mercury-build-$CI_DEFAULT_BRANCH"
     paths:
       - .ccache/
-      - .cargo/
-      - .rustup/
-      - bin/dxc/
-  before_script:
-    # setup_project.pl invokes 'sudo apt-get' and needs perl/ca-certificates to bootstrap
-    - apt-get update && apt-get install -y --no-install-recommends sudo perl ca-certificates
-    - export PATH="$CARGO_HOME/bin:$PATH"
   script:
-    - ./scripts/setup_project.pl
-    - export PATH="$CARGO_HOME/bin:$PATH"
     - ccache --zero-stats
+    - cargo fetch --manifest-path Cargo.toml --locked
     - cmake --preset release
     - cmake --build --preset check
     - ccache --show-stats
