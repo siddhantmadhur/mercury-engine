@@ -124,9 +124,12 @@ PhysicsEngine::PhysicsEngine(PObjectManager& object_manager)
   JPH::RegisterTypes();
   temp_allocator_ = new JPH::TempAllocatorImpl(10 * 1024 * 1024);  // 10MB
 
+  // Jolt takes the number of worker threads, so a machine that reports zero
+  // cores must not turn into a huge unsigned underflow.
+  const JPH::uint worker_threads =
+      std::max<JPH::uint>(1, JPH::thread::hardware_concurrency()) - 1;
   job_system_thread_pool_ = new JPH::JobSystemThreadPool(
-      JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers,
-      JPH::thread::hardware_concurrency() - 1);
+      JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, worker_threads);
 }
 PhysicsEngine::~PhysicsEngine() {
   PDebug::info("Deleting physics engine...");
