@@ -195,6 +195,7 @@ class Application : public RenderHost {
   bool quit_after_frame_ = false;
 
   GLFWimage* current_cursor = nullptr;
+  GLFWcursor* cursor_ = nullptr;
   bool default_arrow_ = false;
 
   std::deque<double> fps_sliding_window_;

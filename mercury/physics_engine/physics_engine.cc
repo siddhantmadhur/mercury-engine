@@ -114,14 +114,23 @@ class PhysicsContactListener : public JPH::ContactListener {
  private:
   PhysicsEngine* physics_engine_ = nullptr;
 };
+
+// PhysicsEngine instances share Jolt's process-global type registry: the first
+// one registers, the last one unregisters and frees the factory.
+int& InstanceCount() {
+  static int count = 0;
+  return count;
+}
 }  // namespace
 
 PhysicsEngine::PhysicsEngine(PObjectManager& object_manager)
     : object_manager_(object_manager) {
   PDebug::info("Created physics engine...");
-  JPH::RegisterDefaultAllocator();
-  JPH::Factory::sInstance = new JPH::Factory();
-  JPH::RegisterTypes();
+  if (InstanceCount()++ == 0) {
+    JPH::RegisterDefaultAllocator();
+    JPH::Factory::sInstance = new JPH::Factory();
+    JPH::RegisterTypes();
+  }
   temp_allocator_ = new JPH::TempAllocatorImpl(10 * 1024 * 1024);  // 10MB
 
   // Jolt takes the number of worker threads, so a machine that reports zero
@@ -139,6 +148,16 @@ PhysicsEngine::~PhysicsEngine() {
   if (temp_allocator_) {
     delete temp_allocator_;
   }
+  if (contact_listener_) {
+    physics_system_.SetContactListener(nullptr);
+    delete contact_listener_;
+    contact_listener_ = nullptr;
+  }
+  if (--InstanceCount() == 0) {
+    JPH::UnregisterTypes();
+    delete JPH::Factory::sInstance;
+    JPH::Factory::sInstance = nullptr;
+  }
 }
 
 void PhysicsEngine::Initialize() {
@@ -153,8 +172,8 @@ void PhysicsEngine::Initialize() {
                        object_vs_broad_phase_layer_filter_impl_,
                        object_layer_pair_filter_impl_);
 
-  auto contact_listener = new PhysicsContactListener(this);
-  physics_system_.SetContactListener(contact_listener);
+  contact_listener_ = new PhysicsContactListener(this);
+  physics_system_.SetContactListener(contact_listener_);
   physics_system_.SetGravity(JPH::Vec3Arg{0.0, -98.0, 0.0});
   PDebug::info("Initialized Jolt Physics System");
 }

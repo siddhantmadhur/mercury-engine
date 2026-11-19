@@ -290,9 +290,9 @@ int Application::Run() {
   }
 
   if (!headless_ && window_ && current_cursor) {
-    GLFWcursor* cursor = glfwCreateCursor(current_cursor, 10, 8);
-    if (cursor) {
-      glfwSetCursor(window_, cursor);
+    cursor_ = glfwCreateCursor(current_cursor, 10, 8);
+    if (cursor_) {
+      glfwSetCursor(window_, cursor_);
     } else {
       PDebug::error("Cursor could not be created");
     }
@@ -311,8 +311,17 @@ int Application::Run() {
 Application::~Application() {
   PDebug::info("Application shutting down...");
   if (!headless_) {
+    if (cursor_) {
+      glfwDestroyCursor(cursor_);
+      cursor_ = nullptr;
+    }
     if (window_) glfwDestroyWindow(window_);
     glfwTerminate();
+  }
+  if (current_cursor) {
+    stbi_image_free(current_cursor->pixels);
+    delete current_cursor;
+    current_cursor = nullptr;
   }
 }
 
@@ -338,6 +347,10 @@ void Application::SetPointer(std::string file_path) {
   int x, y, channels;
   auto* res = LoadImageFile(file_path, &x, &y, &channels, 4);
   if (res) {
+    if (current_cursor) {
+      stbi_image_free(current_cursor->pixels);
+      delete current_cursor;
+    }
     GLFWimage* image = new GLFWimage();
     image->width = x;
     image->height = y;
