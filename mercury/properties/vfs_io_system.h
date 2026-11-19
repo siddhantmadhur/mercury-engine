@@ -36,9 +36,23 @@ class VfsIOStream : public Assimp::IOStream {
   }
   size_t Write(const void*, size_t, size_t) override { return 0; }
   aiReturn Seek(size_t offset, aiOrigin origin) override {
-    size_t target = offset;
-    if (origin == aiOrigin_CUR) target = pos_ + offset;
-    if (origin == aiOrigin_END) target = data_.size() - offset;
+    size_t target = 0;
+    switch (origin) {
+      case aiOrigin_SET:
+        target = offset;
+        break;
+      case aiOrigin_CUR:
+        // Check before adding so a large offset cannot wrap size_t.
+        if (offset > data_.size() - pos_) return aiReturn_FAILURE;
+        target = pos_ + offset;
+        break;
+      case aiOrigin_END:
+        if (offset > data_.size()) return aiReturn_FAILURE;
+        target = data_.size() - offset;
+        break;
+      default:
+        return aiReturn_FAILURE;
+    }
     if (target > data_.size()) return aiReturn_FAILURE;
     pos_ = target;
     return aiReturn_SUCCESS;
