@@ -736,10 +736,14 @@ void Panel::Update(double dt_seconds, glm::vec2 target_size, float dpi_scale) {
       CalculateLayout(root_.get(), size_.x, size_.y, changes);
       if (!changes.empty()) repaint_ = true;
       for (const auto& change : changes) {
+        // An earlier GeometryChangedEvent handler may have destroyed this
+        // element (or moved it to another panel).
+        if (!change.alive || !*change.alive) continue;
+        if (change.element->panel() != this) continue;
         GeometryChangedEvent event;
         event.oldRect = change.old_rect;
         event.newRect = change.new_rect;
-        if (change.element->panel() == this) Dispatch(event, change.element);
+        Dispatch(event, change.element);
       }
     }
     if (!style_dirty_ && !layout_dirty_) break;

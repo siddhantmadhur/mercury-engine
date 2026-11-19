@@ -145,7 +145,8 @@ void ReadLayout(VisualElement* element, std::vector<GeometryChange>& changes) {
   const Rect rect{YGNodeLayoutGetLeft(node), YGNodeLayoutGetTop(node),
                   YGNodeLayoutGetWidth(node), YGNodeLayoutGetHeight(node)};
   if (!(rect == element->layout())) {
-    changes.push_back({element, element->layout(), rect});
+    changes.push_back(
+        {element, element->aliveToken(), element->layout(), rect});
     element->SetLayout(rect);
   }
   for (const auto& child : element->hierarchyChildren()) {
