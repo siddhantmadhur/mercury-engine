@@ -784,13 +784,14 @@ bool EditorScene::DeleteProjectPath(const fs::path& target) {
   if (!project) return false;
   // Judge the entry itself, not what it points at: a symlink is removed as a
   // link, but a path that goes *through* a symlinked folder is refused.
-  std::error_code ec;
-  const fs::path real_root = fs::weakly_canonical(project->GetRoot(), ec);
+  std::error_code root_ec, parent_ec, ec;
+  const fs::path real_root = fs::weakly_canonical(project->GetRoot(), root_ec);
   const fs::path real_parent = fs::weakly_canonical(
-      fs::absolute(target, ec).lexically_normal().parent_path(), ec);
+      fs::absolute(target, parent_ec).lexically_normal().parent_path(),
+      parent_ec);
   const fs::path entry = real_parent / target.filename();
   const fs::path relative = entry.lexically_relative(real_root);
-  if (ec || target.filename().empty() || relative.empty() ||
+  if (root_ec || parent_ec || target.filename().empty() || relative.empty() ||
       relative == "." || *relative.begin() == "..") {
     console_.Error("Refusing to delete a path outside the project");
     return false;
