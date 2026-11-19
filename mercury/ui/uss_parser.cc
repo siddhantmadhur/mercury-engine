@@ -47,7 +47,21 @@ class ValueTokenizer {
  public:
   explicit ValueTokenizer(std::string_view text) : text_(text) {}
 
+  // A real value never nests this far; the cap keeps a hostile one such as
+  // a(a(a(...))) from recursing until the stack runs out.
+  static constexpr int kMaxNesting = 32;
+
   TokenList ReadList(bool inside_function) {
+    if (depth_ >= kMaxNesting) {
+      // Skip the rest instead of trying to recover from a value this deep.
+      pos_ = text_.size();
+      return {};
+    }
+    struct DepthGuard {
+      int& depth;
+      explicit DepthGuard(int& d) : depth(d) { ++depth; }
+      ~DepthGuard() { --depth; }
+    } guard(depth_);
     TokenList tokens;
     while (true) {
       SkipSpace();
@@ -172,6 +186,7 @@ class ValueTokenizer {
 
   std::string_view text_;
   size_t pos_ = 0;
+  int depth_ = 0;
 };
 
 // Splits a token list at top-level commas.
@@ -489,13 +504,8 @@ int CountLines(std::string_view text, size_t end) {
          1;
 }
 
-}  // namespace
-
-TokenList TokenizeStyleValue(std::string_view text) {
-  return ValueTokenizer(text).ReadList(false);
-}
-
-std::string TokensToString(const TokenList& tokens) {
+std::string TokensToStringImpl(const TokenList& tokens, int depth) {
+  if (depth >= ValueTokenizer::kMaxNesting) return "";
   std::string out;
   for (const auto& t : tokens) {
     if (t.type == StyleToken::Type::kComma) {
@@ -511,7 +521,7 @@ std::string TokensToString(const TokenList& tokens) {
         out += "\"" + t.text + "\"";
         break;
       case StyleToken::Type::kFunction:
-        out += t.text + "(" + TokensToString(t.args) + ")";
+        out += t.text + "(" + TokensToStringImpl(t.args, depth + 1) + ")";
         break;
       default:
         out += t.text;
@@ -519,6 +529,16 @@ std::string TokensToString(const TokenList& tokens) {
     }
   }
   return out;
+}
+
+}  // namespace
+
+TokenList TokenizeStyleValue(std::string_view text) {
+  return ValueTokenizer(text).ReadList(false);
+}
+
+std::string TokensToString(const TokenList& tokens) {
+  return TokensToStringImpl(tokens, 0);
 }
 
 std::optional<Color> ParseColor(std::string_view text) {
@@ -617,6 +637,9 @@ std::string ResolveRelativePath(std::string_view base, std::string_view path) {
 
 std::optional<ComplexSelector> ParseSelector(std::string_view text,
                                              std::string* error) {
+  // Matching walks the parts recursively; a selector longer than this is not
+  // something a real sheet needs and would recurse until the stack ran out.
+  constexpr size_t kMaxParts = 32;
   ComplexSelector selector;
   selector.text = std::string(Trim(text));
   std::string_view s = selector.text;
@@ -696,6 +719,9 @@ std::optional<ComplexSelector> ParseSelector(std::string_view text,
       any = true;
     }
     if (!any) return fail("empty selector");
+    if (selector.parts.size() >= kMaxParts) {
+      return fail("selector has too many parts");
+    }
     selector.parts.push_back(std::move(part));
   }
   if (selector.parts.empty()) return fail("empty selector");
@@ -1172,16 +1198,22 @@ std::optional<StyleValue> ParseStyleValue(StylePropertyId id,
       sample);
 }
 
-bool SubstituteVariables(
+namespace {
+
+bool SubstituteVariablesImpl(
     const TokenList& tokens,
-    const std::unordered_map<std::string, TokenList>& variables,
-    TokenList& out) {
+    const std::unordered_map<std::string, TokenList>& variables, TokenList& out,
+    int depth) {
+  // var() chains and self-referencing custom properties would otherwise
+  // recurse without bound.
+  if (depth >= ValueTokenizer::kMaxNesting) return false;
   for (const auto& t : tokens) {
     if (t.type == StyleToken::Type::kFunction && t.text == "var" &&
         !t.args.empty() && t.args[0].type == StyleToken::Type::kIdent) {
       auto it = variables.find(t.args[0].text);
       if (it != variables.end()) {
-        if (!SubstituteVariables(it->second, variables, out)) return false;
+        if (!SubstituteVariablesImpl(it->second, variables, out, depth + 1))
+          return false;
         continue;
       }
       // Fallback: everything after the first comma.
@@ -1190,19 +1222,30 @@ bool SubstituteVariables(
           [](const auto& a) { return a.type == StyleToken::Type::kComma; });
       if (comma == t.args.end()) return false;
       TokenList fallback(comma + 1, t.args.end());
-      if (!SubstituteVariables(fallback, variables, out)) return false;
+      if (!SubstituteVariablesImpl(fallback, variables, out, depth + 1))
+        return false;
       continue;
     }
     if (t.type == StyleToken::Type::kFunction) {
       StyleToken copy = t;
       copy.args.clear();
-      if (!SubstituteVariables(t.args, variables, copy.args)) return false;
+      if (!SubstituteVariablesImpl(t.args, variables, copy.args, depth + 1))
+        return false;
       out.push_back(std::move(copy));
       continue;
     }
     out.push_back(t);
   }
   return true;
+}
+
+}  // namespace
+
+bool SubstituteVariables(
+    const TokenList& tokens,
+    const std::unordered_map<std::string, TokenList>& variables,
+    TokenList& out) {
+  return SubstituteVariablesImpl(tokens, variables, out, 0);
 }
 
 }  // namespace Mercury::UI

@@ -114,19 +114,31 @@ class PhysicsContactListener : public JPH::ContactListener {
  private:
   PhysicsEngine* physics_engine_ = nullptr;
 };
+
+// PhysicsEngine instances share Jolt's process-global type registry: the first
+// one registers, the last one unregisters and frees the factory.
+int& InstanceCount() {
+  static int count = 0;
+  return count;
+}
 }  // namespace
 
 PhysicsEngine::PhysicsEngine(PObjectManager& object_manager)
     : object_manager_(object_manager) {
   PDebug::info("Created physics engine...");
-  JPH::RegisterDefaultAllocator();
-  JPH::Factory::sInstance = new JPH::Factory();
-  JPH::RegisterTypes();
+  if (InstanceCount()++ == 0) {
+    JPH::RegisterDefaultAllocator();
+    JPH::Factory::sInstance = new JPH::Factory();
+    JPH::RegisterTypes();
+  }
   temp_allocator_ = new JPH::TempAllocatorImpl(10 * 1024 * 1024);  // 10MB
 
+  // Jolt takes the number of worker threads, so a machine that reports zero
+  // cores must not turn into a huge unsigned underflow.
+  const JPH::uint worker_threads =
+      std::max<JPH::uint>(1, JPH::thread::hardware_concurrency()) - 1;
   job_system_thread_pool_ = new JPH::JobSystemThreadPool(
-      JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers,
-      JPH::thread::hardware_concurrency() - 1);
+      JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, worker_threads);
 }
 PhysicsEngine::~PhysicsEngine() {
   PDebug::info("Deleting physics engine...");
@@ -135,6 +147,16 @@ PhysicsEngine::~PhysicsEngine() {
   }
   if (temp_allocator_) {
     delete temp_allocator_;
+  }
+  if (contact_listener_) {
+    physics_system_.SetContactListener(nullptr);
+    delete contact_listener_;
+    contact_listener_ = nullptr;
+  }
+  if (--InstanceCount() == 0) {
+    JPH::UnregisterTypes();
+    delete JPH::Factory::sInstance;
+    JPH::Factory::sInstance = nullptr;
   }
 }
 
@@ -150,8 +172,8 @@ void PhysicsEngine::Initialize() {
                        object_vs_broad_phase_layer_filter_impl_,
                        object_layer_pair_filter_impl_);
 
-  auto contact_listener = new PhysicsContactListener(this);
-  physics_system_.SetContactListener(contact_listener);
+  contact_listener_ = new PhysicsContactListener(this);
+  physics_system_.SetContactListener(contact_listener_);
   physics_system_.SetGravity(JPH::Vec3Arg{0.0, -98.0, 0.0});
   PDebug::info("Initialized Jolt Physics System");
 }
@@ -191,6 +213,8 @@ bool PhysicsEngine::CreateBodyFromShape(
   }
 
   auto& body_interface = physics_system_.GetBodyInterface();
+  // Registering a second body would orphan the first one.
+  RemoveBodyNow(self);
   auto body = body_interface.CreateBody(creation_settings);
   if (body == nullptr) {
     PDebug::error("Physics: out of bodies");
@@ -260,6 +284,10 @@ namespace {
 // a zero-length vector yields NaN.
 bool IsFiniteVec(const glm::vec3& v) {
   return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+bool IsFiniteQuat(const glm::quat& q) {
+  return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) &&
+         std::isfinite(q.w);
 }
 }  // namespace
 
@@ -367,6 +395,11 @@ bool PhysicsEngine::CreatePlane(
   plane_shape_settings.SetEmbedded();
 
   JPH::ShapeSettings::ShapeResult shape_result = plane_shape_settings.Create();
+  if (shape_result.HasError()) {
+    PDebug::error("Physics: could not create plane shape: {}",
+                  shape_result.GetError().c_str());
+    return false;
+  }
   auto shape_ref = shape_result.Get();
 
   auto creation_settings = JPH::BodyCreationSettings(
@@ -377,7 +410,13 @@ bool PhysicsEngine::CreatePlane(
 
   auto& body_interface = physics_system_.GetBodyInterface();
 
+  // Registering a second body would orphan the first one.
+  RemoveBodyNow(self);
   auto body = body_interface.CreateBody(creation_settings);
+  if (body == nullptr) {
+    PDebug::error("Physics: out of bodies");
+    return false;
+  }
 
   auto body_id = body->GetID();
   this->jolt_bodies_ref_[body_id] = self;
@@ -407,13 +446,17 @@ void PhysicsEngine::SynchronizePObjects() {
           }
           case kTransformPosition: {
             auto pos = transform->GetPosition();
+            // Jolt asserts (and poisons the simulation) on non-finite values,
+            // which script math such as Repeat(v, 0) used to produce.
+            if (!IsFiniteVec(pos)) break;
             body_interface.SetPosition(jolt_id, JPH::Vec3(pos.x, pos.y, pos.z),
                                        JPH::EActivation::Activate);
             break;
           }
           case kTransformRotation: {
-            body_interface.SetRotation(jolt_id,
-                                       ToJolt(transform->GetRotationQuat()),
+            auto rotation = transform->GetRotationQuat();
+            if (!IsFiniteQuat(rotation)) break;
+            body_interface.SetRotation(jolt_id, ToJolt(rotation),
                                        JPH::EActivation::Activate);
             break;
           }
@@ -603,29 +646,33 @@ bool PhysicsEngine::IsRegistered(kEntityId id) {
 
 template <>
 void PhysicsEngine::Set<kRestitution>(kEntityId id, float restitution) {
-  auto jolt_body = entity_bodies_ref_[id];
+  auto it = entity_bodies_ref_.find(id);
+  if (it == entity_bodies_ref_.end()) return;
   auto& body_interface = physics_system_.GetBodyInterface();
-  body_interface.SetRestitution(jolt_body, restitution);
+  body_interface.SetRestitution(it->second, restitution);
 }
 
 template <>
 void PhysicsEngine::Set<kMotionType>(kEntityId id, JPH::EMotionType motion) {
-  auto jolt_body = entity_bodies_ref_[id];
+  auto it = entity_bodies_ref_.find(id);
+  if (it == entity_bodies_ref_.end()) return;
   auto& body_interface = physics_system_.GetBodyInterface();
-  body_interface.SetMotionType(jolt_body, motion, JPH::EActivation::Activate);
+  body_interface.SetMotionType(it->second, motion, JPH::EActivation::Activate);
 }
 template <>
 void PhysicsEngine::Set<kFriction>(kEntityId id, float friction) {
-  auto jolt_body = entity_bodies_ref_[id];
+  auto it = entity_bodies_ref_.find(id);
+  if (it == entity_bodies_ref_.end()) return;
   auto& body_interface = physics_system_.GetBodyInterface();
-  body_interface.SetFriction(jolt_body, friction);
+  body_interface.SetFriction(it->second, friction);
 }
 
 template <>
 void PhysicsEngine::Set<kGravity>(kEntityId id, float value) {
-  auto jolt_body = entity_bodies_ref_[id];
+  auto it = entity_bodies_ref_.find(id);
+  if (it == entity_bodies_ref_.end()) return;
   auto& body_interface = physics_system_.GetBodyInterface();
-  body_interface.SetGravityFactor(jolt_body, value);
+  body_interface.SetGravityFactor(it->second, value);
 }
 
 template <>
@@ -864,6 +911,8 @@ bool PhysicsEngine::CreateBody(kEntityId self,
     return body->GetID();
   };
 
+  // Registering a second body would orphan the first one.
+  RemoveBodyNow(self);
   bool created = false;
   if (!solid.empty()) {
     JPH::BodyID id = make_body(solid, false);

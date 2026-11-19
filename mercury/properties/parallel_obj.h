@@ -36,6 +36,8 @@ struct ParallelObjOptions {
   std::function<void(Assimp::Importer&)> configure;
   // Called from the worker threads with how much of the import is done (0-1).
   std::function<void(float)> progress;
+  // Polled while the pieces are imported; true abandons the import.
+  std::function<bool()> cancelled;
   // The most pieces to cut the file into; 0 picks from the core count.
   size_t max_pieces = 0;
 };

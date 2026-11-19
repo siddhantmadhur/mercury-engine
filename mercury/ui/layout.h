@@ -10,6 +10,7 @@
 #ifndef MERCURY_UI_LAYOUT_H
 #define MERCURY_UI_LAYOUT_H
 
+#include <memory>
 #include <vector>
 
 #include "ui/events.h"
@@ -24,6 +25,8 @@ YGConfig* SharedYogaConfig();
 
 struct GeometryChange {
   VisualElement* element;
+  // Becomes false if a handler destroys the element before its turn.
+  std::shared_ptr<const bool> alive;
   Rect old_rect;
   Rect new_rect;
 };

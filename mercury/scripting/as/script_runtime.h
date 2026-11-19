@@ -208,6 +208,14 @@ class ScriptRuntime {
             std::span<const ScriptArg> args, std::string_view label,
             ScriptArg* result = nullptr);
 
+  /**
+   * @brief Runs a class factory under the same timeout guard as Call
+   *
+   * On success @p instance holds a new reference the caller must Release.
+   */
+  bool RunFactory(asIScriptFunction* factory, std::string_view label,
+                  asIScriptObject** instance);
+
   // Seconds a call may run before it is aborted; 0 turns the guard off.
   // Defaults to MERCURY_SCRIPT_TIMEOUT or 10.
   void SetTimeoutSeconds(double seconds) { timeout_seconds_ = seconds; }
@@ -294,6 +302,8 @@ class ScriptRuntime {
   bool timed_out_ = false;
   bool compile_failed_ = false;
   std::chrono::steady_clock::time_point call_start_;
+  // Nested calls inherit the outermost deadline (see LineCallback).
+  int call_depth_ = 0;
 
   friend class ScriptBuilder;
 };

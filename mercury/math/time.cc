@@ -4,6 +4,10 @@
 
 #include "time.h"
 
+#include <algorithm>
+#include <cmath>
+#include <mutex>
+
 namespace Mercury {
 
 namespace {
@@ -24,36 +28,63 @@ TimeState& State() {
   return state;
 }
 
+// Time is process-global and scripts can read it from worker threads, so the
+// whole state is guarded. The critical sections are tiny.
+std::mutex& StateMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
 }  // namespace
 
 double Time::GetTime() {
+  std::lock_guard lock(StateMutex());
   const auto& s = State();
   return s.in_tick ? s.fixed_time : s.time;
 }
 
 float Time::GetDeltaTime() {
+  std::lock_guard lock(StateMutex());
   const auto& s = State();
   return s.in_tick ? s.fixed_delta_time * s.time_scale : s.delta_time;
 }
 
-float Time::GetFixedDeltaTime() { return State().fixed_delta_time; }
+float Time::GetFixedDeltaTime() {
+  std::lock_guard lock(StateMutex());
+  return State().fixed_delta_time;
+}
 
-double Time::GetRealtimeSinceStartup() { return State().realtime; }
+double Time::GetRealtimeSinceStartup() {
+  std::lock_guard lock(StateMutex());
+  return State().realtime;
+}
 
-uint64_t Time::GetFrameCount() { return State().frame_count; }
+uint64_t Time::GetFrameCount() {
+  std::lock_guard lock(StateMutex());
+  return State().frame_count;
+}
 
-float Time::GetTimeScale() { return State().time_scale; }
+float Time::GetTimeScale() {
+  std::lock_guard lock(StateMutex());
+  return State().time_scale;
+}
 
 void Time::SetTimeScale(float scale) {
-  State().time_scale = scale < 0 ? 0 : scale;
+  // NaN compares false with everything, so it used to slip past the old clamp
+  // and poison every later delta and fixed step.
+  if (!std::isfinite(scale)) return;
+  std::lock_guard lock(StateMutex());
+  State().time_scale = std::max(0.0f, scale);
 }
 
 void Time::Reset(float fixed_delta_time) {
+  std::lock_guard lock(StateMutex());
   State() = TimeState{};
   State().fixed_delta_time = fixed_delta_time;
 }
 
 void Time::BeginFrame(double real_delta_seconds) {
+  std::lock_guard lock(StateMutex());
   auto& s = State();
   // Long stalls (a breakpoint, loading) should not fast-forward the game.
   if (real_delta_seconds > 0.25) real_delta_seconds = 0.25;
@@ -65,11 +96,15 @@ void Time::BeginFrame(double real_delta_seconds) {
 }
 
 void Time::BeginTick() {
+  std::lock_guard lock(StateMutex());
   auto& s = State();
   s.in_tick = true;
   s.fixed_time += s.fixed_delta_time * s.time_scale;
 }
 
-void Time::EndTick() { State().in_tick = false; }
+void Time::EndTick() {
+  std::lock_guard lock(StateMutex());
+  State().in_tick = false;
+}
 
 }  // namespace Mercury

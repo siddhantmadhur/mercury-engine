@@ -20,11 +20,6 @@ namespace Mercury {
 
 namespace {
 
-void LogException(asIScriptContext* context, std::string_view label) {
-  PDebug::error("{}: {}", label,
-                ScriptRuntime::Instance().FormatException(context));
-}
-
 // --- field conversion
 // ---------------------------------------------------------------------
 
@@ -104,25 +99,20 @@ mtext::Variant ArgToVariant(const ScriptArg& value) {
 std::unique_ptr<ScriptBehaviour> ScriptBehaviour::Create(
     const ScriptClass& script_class, MapScene* scene, kEntityId entity) {
   auto& runtime = ScriptRuntime::Instance();
-  if (!runtime.IsInitialized() || !script_class.factory) {
+  if (!runtime.IsInitialized()) {
     PDebug::error("{}: the script engine is not ready", script_class.name);
     return nullptr;
   }
+  if (!script_class.factory) {
+    PDebug::error("{}: the script has no constructor with no parameters",
+                  script_class.name);
+    return nullptr;
+  }
 
-  asIScriptContext* context = runtime.GetEngine()->CreateContext();
-  if (!context) return nullptr;
   std::unique_ptr<ScriptBehaviour> behaviour(new ScriptBehaviour(script_class));
   asIScriptObject* instance = nullptr;
-  if (context->Prepare(script_class.factory) >= 0) {
-    if (context->Execute() == asEXECUTION_FINISHED) {
-      instance =
-          *static_cast<asIScriptObject**>(context->GetAddressOfReturnValue());
-      if (instance) instance->AddRef();
-    } else {
-      LogException(context, script_class.name + ".constructor");
-    }
-  }
-  context->Release();
+  runtime.RunFactory(script_class.factory, script_class.name + ".constructor",
+                     &instance);
   if (!instance) return nullptr;
 
   behaviour->instance_ = instance;
@@ -142,6 +132,17 @@ std::unique_ptr<ScriptBehaviour> ScriptBehaviour::Create(
 
 ScriptBehaviour::~ScriptBehaviour() {
   auto& runtime = ScriptRuntime::Instance();
+  if (instance_) {
+    // The script object may outlive this behaviour (a GetBehaviour() handle),
+    // so its Event fields must no longer point into events_.
+    for (const ScriptField& field : class_->fields) {
+      if (field.type != FieldType::kEvent) continue;
+      if (auto* value = static_cast<ScriptEvent*>(
+              instance_->GetAddressOfProperty(field.property_index))) {
+        value->impl = nullptr;
+      }
+    }
+  }
   if (runtime.IsInitialized()) {
     if (id_) runtime.UnregisterBehaviour(id_);
     if (instance_) instance_->SetUserData(nullptr);
@@ -169,13 +170,21 @@ void ScriptBehaviour::Forward(ScriptCallback callback, const char* method,
   asIScriptFunction* function = class_->callbacks_by_slot[slot];
   if (!function) return;
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
-  if (class_->callback_arg_types[slot] == 1) {
+  if (function->GetParamCount() == 0) {
+    ScriptRuntime::Instance().Call(function, instance_, {},
+                                   class_->name + "." + method);
+  } else if (class_->callback_arg_types[slot] == 1) {
     const ScriptArg args[] = {ScriptArg::Float(static_cast<float>(dt))};
     ScriptRuntime::Instance().Call(function, instance_, args,
                                    class_->name + "." + method);
-  } else {
+  } else if (class_->callback_arg_types[slot] == 2) {
     const ScriptArg args[] = {ScriptArg::Double(dt)};
     ScriptRuntime::Instance().Call(function, instance_, args,
+                                   class_->name + "." + method);
+  } else {
+    // The parameter is not one the engine can supply; an empty call makes
+    // Call() report the mismatch instead of leaving the slot uninitialised.
+    ScriptRuntime::Instance().Call(function, instance_, {},
                                    class_->name + "." + method);
   }
 }
@@ -186,6 +195,16 @@ void ScriptBehaviour::ForwardObject(ScriptCallback callback, const char* method,
   asIScriptFunction* function = class_->callbacks_by_slot[slot];
   if (!function || !other.GetScene()) return;
   ScriptRuntime::Instance().SetCurrentScene(scene_serial_);
+  if (function->GetParamCount() == 0) {
+    ScriptRuntime::Instance().Call(function, instance_, {},
+                                   class_->name + "." + method);
+    return;
+  }
+  if (class_->callback_arg_types[slot] != 3) {
+    PDebug::error("{}: {} must take a GameObject parameter", class_->name,
+                  method);
+    return;
+  }
   const int type_id =
       ScriptRuntime::Instance().GetEngine()->GetTypeIdByDecl("GameObject");
   const ScriptArg args[] = {ScriptArg::Object(&other, type_id)};

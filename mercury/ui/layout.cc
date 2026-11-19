@@ -100,12 +100,15 @@ YGWrap ToYoga(Wrap w) {
 template <typename SetPx, typename SetPercent, typename SetAuto>
 void SetLength(const Length& l, SetPx px, SetPercent percent,
                SetAuto automatic) {
+  // A non-finite length from a file would reach Yoga and, later, an undefined
+  // float-to-int clip conversion.
+  const float value = std::isfinite(l.value) ? l.value : 0.0f;
   switch (l.unit) {
     case Length::Unit::kPixel:
-      px(l.value);
+      px(value);
       break;
     case Length::Unit::kPercent:
-      percent(l.value);
+      percent(value);
       break;
     case Length::Unit::kAuto:
     case Length::Unit::kNone:
@@ -118,12 +121,13 @@ void SetEdge(YGNodeRef n, YGEdge edge, const Length& l,
              void (*px)(YGNodeRef, YGEdge, float),
              void (*percent)(YGNodeRef, YGEdge, float),
              void (*automatic)(YGNodeRef, YGEdge)) {
+  const float value = std::isfinite(l.value) ? l.value : 0.0f;
   switch (l.unit) {
     case Length::Unit::kPixel:
-      px(n, edge, l.value);
+      px(n, edge, value);
       break;
     case Length::Unit::kPercent:
-      percent(n, edge, l.value);
+      percent(n, edge, value);
       break;
     case Length::Unit::kAuto:
     case Length::Unit::kNone:
@@ -141,7 +145,8 @@ void ReadLayout(VisualElement* element, std::vector<GeometryChange>& changes) {
   const Rect rect{YGNodeLayoutGetLeft(node), YGNodeLayoutGetTop(node),
                   YGNodeLayoutGetWidth(node), YGNodeLayoutGetHeight(node)};
   if (!(rect == element->layout())) {
-    changes.push_back({element, element->layout(), rect});
+    changes.push_back(
+        {element, element->aliveToken(), element->layout(), rect});
     element->SetLayout(rect);
   }
   for (const auto& child : element->hierarchyChildren()) {

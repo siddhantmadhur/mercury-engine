@@ -28,8 +28,6 @@ namespace Mercury {
 
 constexpr int kFrametimeSlidingWindowSize = 50;
 
-static InputManager input_manager;
-
 #if defined(_WIN32)
 constexpr const char* kPlatformName = "Windows";
 #elif defined(__linux__)
@@ -56,12 +54,12 @@ bool Application::Initialize() {
   if (game_scene_) {
     game_scene_->SetWidth(width_);
     game_scene_->SetHeight(height_);
-    game_scene_->SetInputManager(&input_manager);
+    game_scene_->SetInputManager(&input_manager_);
     game_scene_->SetRenderHost(this);
   }
 
   if (headless_) {
-    input_manager.Initialize(nullptr);
+    input_manager_.Initialize(nullptr);
     return true;
   }
 
@@ -101,30 +99,40 @@ bool Application::Initialize() {
 
   glfwSetWindowUserPointer(window_, this);
   glfwSetFramebufferSizeCallback(window_, HandleResize);
-  input_manager.Initialize(window_);
+  input_manager_.Initialize(window_);
 
   glfwSetKeyCallback(window_, HandleKeyCallback);
+  // Each callback finds its own Application (and so its own input manager)
+  // through the window's user pointer.
   glfwSetCursorPosCallback(
-      window_, [](GLFWwindow* window, double xpos, double ypos) {
-        input_manager.HandleCursorCallback(window, xpos, ypos);
+      window_, [](GLFWwindow* win, double xpos, double ypos) {
+        auto* app = static_cast<Application*>(glfwGetWindowUserPointer(win));
+        if (app) app->input_manager_.HandleCursorCallback(win, xpos, ypos);
       });
 
   glfwSetScrollCallback(
-      window_, [](GLFWwindow* window, double xoffset, double yoffset) {
-        input_manager.HandleScrollCallback(window, xoffset, yoffset);
+      window_, [](GLFWwindow* win, double xoffset, double yoffset) {
+        auto* app = static_cast<Application*>(glfwGetWindowUserPointer(win));
+        if (app)
+          app->input_manager_.HandleScrollCallback(win, xoffset, yoffset);
       });
 
-  glfwSetMouseButtonCallback(
-      window_, [](GLFWwindow* win, int button, int action, int mods) {
-        input_manager.HandleMouseButtonCallback(win, button, action, mods);
-      });
+  glfwSetMouseButtonCallback(window_, [](GLFWwindow* win, int button,
+                                         int action, int mods) {
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(win));
+    if (app) {
+      app->input_manager_.HandleMouseButtonCallback(win, button, action, mods);
+    }
+  });
 
   glfwSetCharCallback(window_, [](GLFWwindow* win, unsigned int codepoint) {
-    input_manager.HandleCharCallback(win, codepoint);
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(win));
+    if (app) app->input_manager_.HandleCharCallback(win, codepoint);
   });
 
   glfwSetCursorEnterCallback(window_, [](GLFWwindow* win, int entered) {
-    input_manager.HandleCursorEnterCallback(win, entered);
+    auto* app = static_cast<Application*>(glfwGetWindowUserPointer(win));
+    if (app) app->input_manager_.HandleCursorEnterCallback(win, entered);
   });
 
   return true;
@@ -170,25 +178,25 @@ void Application::StepFrame() {
   time_since_last_tick_ += delta_time_;
 
   if (!headless_) {
-    input_manager.BeginFrame();
+    input_manager_.BeginFrame();
     glfwPollEvents();
     int window_w = 0, window_h = 0, fb_w = 0, fb_h = 0;
     glfwGetWindowSize(window_, &window_w, &window_h);
     glfwGetFramebufferSize(window_, &fb_w, &fb_h);
     if (window_w > 0 && window_h > 0) {
-      input_manager.SetFramebufferScale(
+      input_manager_.SetFramebufferScale(
           glm::vec2(float(fb_w) / window_w, float(fb_h) / window_h));
     }
     float content_x = 1.0f, content_y = 1.0f;
     glfwGetWindowContentScale(window_, &content_x, &content_y);
-    input_manager.SetContentScale(content_x);
-    input_manager.PollGamepads();
+    input_manager_.SetContentScale(content_x);
+    input_manager_.PollGamepads();
   }
   if (!input_script_.IsEmpty()) {
     InputScript::Hooks hooks;
     hooks.capture = [this](const std::string& file) { RequestCapture(file); };
     hooks.quit = [this] { quit_after_frame_ = true; };
-    input_script_.Apply(script_frame_++, input_manager, window_, hooks);
+    input_script_.Apply(script_frame_++, input_manager_, window_, hooks);
   }
 
   {
@@ -202,7 +210,7 @@ void Application::StepFrame() {
     game_scene_->OnTickBegin();
     game_scene_->OnTick(kTickMs);
     game_scene_->SimulatePhysics(1);
-    input_manager.ResetFreshPresses();
+    input_manager_.ResetFreshPresses();
     time_since_last_tick_ -= kTickMs;
     ticks_run++;
   }
@@ -242,7 +250,7 @@ void Application::StepFrame() {
   if (headless_) {
     // Hosted UI (e.g. wxWidgets) injects input between StepFrame() calls; clear
     // per-frame deltas only after this frame has finished consuming them.
-    input_manager.BeginFrame();
+    input_manager_.BeginFrame();
   }
   if (quit_after_frame_) Quit();
 }
@@ -282,9 +290,9 @@ int Application::Run() {
   }
 
   if (!headless_ && window_ && current_cursor) {
-    GLFWcursor* cursor = glfwCreateCursor(current_cursor, 10, 8);
-    if (cursor) {
-      glfwSetCursor(window_, cursor);
+    cursor_ = glfwCreateCursor(current_cursor, 10, 8);
+    if (cursor_) {
+      glfwSetCursor(window_, cursor_);
     } else {
       PDebug::error("Cursor could not be created");
     }
@@ -302,9 +310,22 @@ int Application::Run() {
 
 Application::~Application() {
   PDebug::info("Application shutting down...");
+  // Destroy the scene first: script OnDestroy callbacks can still reach the
+  // input manager, which is declared after game_scene_ and would otherwise
+  // already be gone by the time ~GameScene runs.
+  game_scene_.reset();
   if (!headless_) {
+    if (cursor_) {
+      glfwDestroyCursor(cursor_);
+      cursor_ = nullptr;
+    }
     if (window_) glfwDestroyWindow(window_);
     glfwTerminate();
+  }
+  if (current_cursor) {
+    stbi_image_free(current_cursor->pixels);
+    delete current_cursor;
+    current_cursor = nullptr;
   }
 }
 
@@ -317,7 +338,12 @@ void Application::HandleResize(GLFWwindow* window, int32_t width,
 }
 void Application::HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                     int action, int mods) {
-  input_manager.HandleKeyCallback(window, key, scancode, action, mods);
+  auto application =
+      static_cast<Application*>(glfwGetWindowUserPointer(window));
+  if (application) {
+    application->input_manager_.HandleKeyCallback(window, key, scancode, action,
+                                                  mods);
+  }
 }
 void Application::SetPointer(std::string file_path) {
   PDebug::info("Setting cursor...");
@@ -325,6 +351,10 @@ void Application::SetPointer(std::string file_path) {
   int x, y, channels;
   auto* res = LoadImageFile(file_path, &x, &y, &channels, 4);
   if (res) {
+    if (current_cursor) {
+      stbi_image_free(current_cursor->pixels);
+      delete current_cursor;
+    }
     GLFWimage* image = new GLFWimage();
     image->width = x;
     image->height = y;
@@ -351,12 +381,12 @@ void Application::SetGameScene(std::unique_ptr<GameScene> game_scene) {
   if (game_scene_) {
     game_scene_->SetWidth(width_);
     game_scene_->SetHeight(height_);
-    game_scene_->SetInputManager(&input_manager);
+    game_scene_->SetInputManager(&input_manager_);
     game_scene_->SetRenderHost(this);
   }
 }
 
-InputManager& Application::GetInputManager() { return input_manager; }
+InputManager& Application::GetInputManager() { return input_manager_; }
 
 int32_t Application::GetHeight() const { return height_; }
 

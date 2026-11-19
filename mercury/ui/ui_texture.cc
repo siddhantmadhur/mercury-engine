@@ -13,14 +13,37 @@
 
 namespace Mercury::UI {
 
+namespace {
+
+// Renderers upload these as one image; anything larger is almost certainly a
+// bad size and would exhaust memory while resizing.
+constexpr int kMaxTextureDimension = 16384;
+
+}  // namespace
+
 void UIDrawData::Append(const UIDrawData& other) {
-  const uint32_t base_vertex = static_cast<uint32_t>(vertices.size());
-  const uint32_t base_index = static_cast<uint32_t>(indices.size());
+  const uint64_t base_vertex = vertices.size();
+  const uint64_t base_index = indices.size();
+  const uint64_t total_vertices = base_vertex + other.vertices.size();
+  const uint64_t total_indices = base_index + other.indices.size();
+  // UIDrawData stores 32-bit indices, so merging must not narrow silently.
+  if (total_vertices > UINT32_MAX || total_indices > UINT32_MAX) {
+    PDebug::error("UI: draw data exceeds 32-bit vertex or index limits");
+    return;
+  }
+  for (const UIDrawCommand& command : other.commands) {
+    if (base_index + command.index_offset > UINT32_MAX) {
+      PDebug::error("UI: draw command index offset overflows uint32_t");
+      return;
+    }
+  }
   vertices.insert(vertices.end(), other.vertices.begin(), other.vertices.end());
-  indices.reserve(indices.size() + other.indices.size());
-  for (uint32_t index : other.indices) indices.push_back(index + base_vertex);
+  indices.reserve(static_cast<size_t>(total_indices));
+  for (uint32_t index : other.indices) {
+    indices.push_back(static_cast<uint32_t>(base_vertex) + index);
+  }
   for (UIDrawCommand command : other.commands) {
-    command.index_offset += base_index;
+    command.index_offset += static_cast<uint32_t>(base_index);
     commands.push_back(command);
   }
   target_size = glm::max(target_size, other.target_size);
@@ -33,11 +56,18 @@ UITextureRegistry& UITextureRegistry::Instance() {
 
 std::shared_ptr<UITexture> UITextureRegistry::Create(
     int width, int height, std::vector<uint8_t> rgba) {
+  if (width < 1 || height < 1 || width > kMaxTextureDimension ||
+      height > kMaxTextureDimension) {
+    PDebug::warn("UI: invalid texture size {}x{}", width, height);
+    return nullptr;
+  }
   auto texture = std::make_shared<UITexture>();
   texture->width = width;
   texture->height = height;
   texture->rgba = std::move(rgba);
-  texture->rgba.resize(static_cast<size_t>(width) * height * 4, 0);
+  const size_t required =
+      static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+  texture->rgba.resize(required, 0);
   std::lock_guard lock(mutex_);
   texture->id = next_id_++;
   textures_[texture->id] = texture;
@@ -68,6 +98,10 @@ std::shared_ptr<UITexture> UITextureRegistry::LoadFile(
   stbi_image_free(pixels);
   auto texture = Create(width, height, std::move(rgba));
   std::lock_guard lock(mutex_);
+  if (!texture) {
+    by_path_[absolute_path] = 0;
+    return nullptr;
+  }
   by_path_[absolute_path] = texture->id;
   return texture;
 }

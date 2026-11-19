@@ -99,9 +99,4 @@ static_assert(offsetof(VsModelBuffer, world_) == 16);
 static_assert(offsetof(VsModelBuffer, atlas_uv) == 80);
 static_assert(offsetof(VsModelBuffer, material_params) == 96);
 
-#define MERCURY_SAFE_FREE(pointer) \
-  {                                \
-    delete pointer;                \
-    pointer = nullptr;             \
-  }
 #endif  // MERCURYENGINE_GLOBALS_H

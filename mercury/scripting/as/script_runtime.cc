@@ -133,6 +133,35 @@ FieldType PrimitiveFieldType(int type_id) {
   return FieldType::kFloat;
 }
 
+// FieldType can only store bool, int and float. Reading a double, an int64,
+// a handle or any other value through those would touch the wrong number of
+// bytes, so [field] accepts only the types below.
+bool IsReflectableElementType(asITypeInfo* type) {
+  if (!type) return false;
+  const std::string name = type->GetName();
+  if (name == "string") return true;
+  // These element types are not saved, but reading them is skipped rather
+  // than reinterpreted, so they are safe to leave in place.
+  if (name == "Vector2" || name == "Vector3" || name == "Color" ||
+      name == "Event") {
+    return true;
+  }
+  const int type_id = type->GetTypeId();
+  return type_id == asTYPEID_BOOL || type_id == asTYPEID_INT32 ||
+         type_id == asTYPEID_UINT32 || type_id == asTYPEID_FLOAT;
+}
+
+bool IsReflectableFieldType(int type_id, asITypeInfo* type) {
+  const std::string name = type ? type->GetName() : "";
+  if (name == "Vector2" || name == "Vector3" || name == "Color" ||
+      name == "Event" || name == "string") {
+    return true;
+  }
+  if (name == "array") return IsReflectableElementType(type->GetSubType());
+  return type_id == asTYPEID_BOOL || type_id == asTYPEID_INT32 ||
+         type_id == asTYPEID_UINT32 || type_id == asTYPEID_FLOAT;
+}
+
 FieldType ElementFieldType(asITypeInfo* type) {
   if (!type) return FieldType::kString;
   const std::string name = type->GetName();
@@ -169,10 +198,10 @@ uint32_t ScriptRuntime::NextSceneSerial() {
 }
 
 void ScriptRuntime::Throw(const char* message) {
+  // The VM runs try/catch itself: the exception must always be raised, even
+  // when a catch block is active or one caught an earlier exception.
   if (asIScriptContext* context = asGetActiveContext()) {
-    if (!context->WillExceptionBeCaught()) {
-      context->SetException(message);
-    }
+    context->SetException(message);
   }
 }
 
@@ -309,7 +338,14 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
         !custom.empty()) {
       script_class->name = custom;
     }
-    script_class->factory = type->GetFactoryByIndex(0);
+    // Only a constructor with no parameters can be called by the engine.
+    for (asUINT f = 0; f < type->GetFactoryCount(); f++) {
+      asIScriptFunction* factory = type->GetFactoryByIndex(f);
+      if (factory && factory->GetParamCount() == 0) {
+        script_class->factory = factory;
+        break;
+      }
+    }
 
     const char* section = nullptr;
     int row = 0;
@@ -328,6 +364,7 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
       }
     }
 
+    bool class_supported = true;
     for (asUINT p = 0; p < type->GetPropertyCount(); p++) {
       const auto metadata = builder.GetMetadataForTypeProperty(type_id, p);
       bool is_field = false;
@@ -373,14 +410,32 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
         field.type = PrimitiveFieldType(field.type_id);
       }
 
+      if (!IsReflectableFieldType(field.type_id, field_type)) {
+        PDebug::error(
+            "{}: [field] {} is a {}; only bool, int, float, string, Vector2, "
+            "Vector3, Color, Event and array of those can be saved",
+            script_class->name, field.name,
+            field_type_name.empty() ? "value type" : field_type_name);
+        class_supported = false;
+        break;
+      }
+
       const auto enum_values = MetaQuoted(metadata, "enum");
       if (!enum_values.empty()) {
+        if (field.type_id != asTYPEID_INT32 &&
+            field.type_id != asTYPEID_UINT32) {
+          PDebug::error("{}: [field] {} is an enum but not an int",
+                        script_class->name, field.name);
+          class_supported = false;
+          break;
+        }
         field.type = FieldType::kEnum;
         field.enum_values = enum_values;
       }
       field.tooltip = MetaValue(metadata, "tooltip");
       script_class->fields.push_back(std::move(field));
     }
+    if (!class_supported) continue;
 
     for (asUINT m = 0; m < type->GetMethodCount(); m++) {
       asIScriptFunction* method = type->GetMethodByIndex(m, true);
@@ -451,26 +506,43 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
   if (!register_types) return;
 
   for (const auto& script_class : classes_) {
-    // C++ code linked into the executable wins over a script with the same
-    // name; the native type is the one the executable was built with.
     if (script_class->data_asset) {
-      if (const auto* existing =
-              TypeRegistry::Instance().FindAssetType(script_class->name);
-          existing && existing->native_asset) {
+      const auto* existing =
+          TypeRegistry::Instance().FindAssetType(script_class->name);
+      // A script may not take the name of a type the engine itself registers:
+      // it would replace the built-in in the TypeRegistry and ClearGameTypes
+      // would then remove the built-in when the runtime shuts down.
+      if (existing && !existing->from_game) {
+        PDebug::error(
+            "{}: a built-in asset type has this name; rename the class",
+            script_class->name);
+        continue;
+      }
+      // C++ code linked into the executable wins over a script with the same
+      // name; the native type is the one the executable was built with.
+      if (existing && existing->native_asset) {
         PDebug::warn(
             "{}: a C++ MERCURY_DATA_ASSET with this name is already "
             "registered; the AngelScript class is ignored",
             script_class->name);
         continue;
       }
-    } else if (const auto* existing =
-                   TypeRegistry::Instance().FindComponent(script_class->name);
-               existing && existing->native_script) {
-      PDebug::warn(
-          "{}: a C++ MERCURY_SCRIPT with this name is already registered; "
-          "the AngelScript class is ignored",
-          script_class->name);
-      continue;
+    } else {
+      const auto* existing =
+          TypeRegistry::Instance().FindComponent(script_class->name);
+      if (existing && !existing->is_script) {
+        PDebug::error(
+            "{}: a built-in component has this name; rename the class",
+            script_class->name);
+        continue;
+      }
+      if (existing && existing->native_script) {
+        PDebug::warn(
+            "{}: a C++ MERCURY_SCRIPT with this name is already registered; "
+            "the AngelScript class is ignored",
+            script_class->name);
+        continue;
+      }
     }
     std::vector<FieldInfo> fields;
     if (auto instance =
@@ -588,11 +660,15 @@ bool ScriptRuntime::RunString(std::string_view source, std::string_view name,
   bool ok = false;
   asIScriptContext* context = engine_->CreateContext();
   if (context && context->Prepare(main) >= 0) {
+    const bool outermost = call_depth_++ == 0;
+    if (outermost) {
+      call_start_ = std::chrono::steady_clock::now();
+      timed_out_ = false;
+    }
     context->SetLineCallback(asFUNCTION(LineCallback), this, asCALL_CDECL);
-    call_start_ = std::chrono::steady_clock::now();
-    timed_out_ = false;
     const int r = context->Execute();
     context->ClearLineCallback();
+    call_depth_--;
     if (r == asEXECUTION_FINISHED) {
       ok = true;
       if (result) {
@@ -626,40 +702,91 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
     return false;
   }
   if (object) context->SetObject(object);
+  if (args.size() != static_cast<size_t>(function->GetParamCount())) {
+    PDebug::error("{}: the function takes {} argument(s), {} were passed",
+                  label, function->GetParamCount(), args.size());
+    context->Release();
+    return false;
+  }
+  // String arguments must outlive Execute(): a `const string &in` parameter is
+  // bound to this storage, not copied by the VM.
+  std::vector<std::string> strings;
+  strings.reserve(args.size());
   for (size_t i = 0; i < args.size(); i++) {
     const ScriptArg& arg = args[i];
+    const asUINT index = static_cast<asUINT>(i);
+    int param_type = 0;
+    function->GetParam(index, &param_type);
+    const int base =
+        param_type & ~(asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST);
+    asITypeInfo* param_info = engine_->GetTypeInfoById(base);
+    const std::string param_name = param_info ? param_info->GetName() : "";
+    bool matches = false;
     switch (arg.kind) {
       case ScriptArg::Kind::kBool:
-        context->SetArgByte(static_cast<asUINT>(i), arg.b ? 1 : 0);
+        matches = param_type == asTYPEID_BOOL;
         break;
       case ScriptArg::Kind::kInt:
-        context->SetArgDWord(static_cast<asUINT>(i), arg.i);
+        matches = param_type == asTYPEID_INT32 || param_type == asTYPEID_UINT32;
         break;
       case ScriptArg::Kind::kFloat:
-        context->SetArgFloat(static_cast<asUINT>(i), arg.f);
+        matches = param_type == asTYPEID_FLOAT;
         break;
       case ScriptArg::Kind::kDouble:
-        context->SetArgDouble(static_cast<asUINT>(i), arg.d);
+        matches = param_type == asTYPEID_DOUBLE;
         break;
-      case ScriptArg::Kind::kString: {
-        std::string text = arg.s;
-        context->SetArgObject(static_cast<asUINT>(i), &text);
+      case ScriptArg::Kind::kString:
+        matches = param_name == "string";
         break;
-      }
       case ScriptArg::Kind::kObject:
-        if (arg.object)
-          context->SetArgObject(static_cast<asUINT>(i), arg.object);
+        matches = arg.type_id != 0 &&
+                  base == (arg.type_id &
+                           ~(asTYPEID_OBJHANDLE | asTYPEID_HANDLETOCONST));
+        break;
+      case ScriptArg::Kind::kNone:
+        break;
+    }
+    if (!matches) {
+      PDebug::error(
+          "{}: argument {} does not match the parameter type ({})", label, i,
+          param_name.empty() ? std::to_string(param_type) : param_name);
+      context->Release();
+      return false;
+    }
+    switch (arg.kind) {
+      case ScriptArg::Kind::kBool:
+        context->SetArgByte(index, arg.b ? 1 : 0);
+        break;
+      case ScriptArg::Kind::kInt:
+        context->SetArgDWord(index, arg.i);
+        break;
+      case ScriptArg::Kind::kFloat:
+        context->SetArgFloat(index, arg.f);
+        break;
+      case ScriptArg::Kind::kDouble:
+        context->SetArgDouble(index, arg.d);
+        break;
+      case ScriptArg::Kind::kString:
+        strings.push_back(arg.s);
+        context->SetArgObject(index, &strings.back());
+        break;
+      case ScriptArg::Kind::kObject:
+        context->SetArgObject(index, arg.object);
         break;
       case ScriptArg::Kind::kNone:
         break;
     }
   }
 
+  const bool outermost = call_depth_++ == 0;
+  if (outermost) {
+    call_start_ = std::chrono::steady_clock::now();
+    timed_out_ = false;
+  }
   context->SetLineCallback(asFUNCTION(LineCallback), this, asCALL_CDECL);
-  call_start_ = std::chrono::steady_clock::now();
-  timed_out_ = false;
   const int r = context->Execute();
   context->ClearLineCallback();
+  call_depth_--;
   if (r == asEXECUTION_FINISHED) {
     ok = true;
     if (result) {
@@ -685,6 +812,45 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
           *result = ScriptArg::Int(static_cast<int>(context->GetReturnDWord()));
         }
       }
+    }
+  } else if (timed_out_) {
+    PDebug::error("{}: script took too long (infinite loop?)", label);
+  } else {
+    PDebug::error("{}: {}", label, FormatException(context));
+  }
+  context->Release();
+  return ok;
+}
+
+bool ScriptRuntime::RunFactory(asIScriptFunction* factory,
+                               std::string_view label,
+                               asIScriptObject** instance) {
+  if (!engine_ || !factory || !instance) return false;
+  *instance = nullptr;
+  asIScriptContext* context = engine_->CreateContext();
+  if (!context) return false;
+  bool ok = false;
+  if (context->Prepare(factory) < 0) {
+    PDebug::error("{}: the constructor could not be prepared", label);
+    context->Release();
+    return false;
+  }
+  const bool outermost = call_depth_++ == 0;
+  if (outermost) {
+    call_start_ = std::chrono::steady_clock::now();
+    timed_out_ = false;
+  }
+  context->SetLineCallback(asFUNCTION(LineCallback), this, asCALL_CDECL);
+  const int r = context->Execute();
+  context->ClearLineCallback();
+  call_depth_--;
+  if (r == asEXECUTION_FINISHED) {
+    auto* object =
+        *static_cast<asIScriptObject**>(context->GetAddressOfReturnValue());
+    if (object) {
+      object->AddRef();
+      *instance = object;
+      ok = true;
     }
   } else if (timed_out_) {
     PDebug::error("{}: script took too long (infinite loop?)", label);

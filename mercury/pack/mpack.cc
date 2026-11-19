@@ -119,6 +119,10 @@ uint64_t HashPath(std::string_view path) {
 
 namespace {
 
+// Whole-file reads allocate what the file header reports; refuse sizes large
+// enough to make that allocation fail instead of crashing.
+constexpr uint64_t kMaxWholeFileSize = 2ull * 1024 * 1024 * 1024;
+
 uint32_t BucketCount(size_t entries) {
   uint32_t buckets = kMinBuckets;
   while (buckets < entries * 2) buckets *= 2;
@@ -155,6 +159,9 @@ std::optional<std::vector<uint8_t>> ReadWholeFile(
   if (!file) return std::nullopt;
   const auto size = static_cast<std::streamoff>(file.tellg());
   if (size < 0) return std::nullopt;
+  // The size comes from the file itself; a corrupt or hostile one should not
+  // be able to ask for an unbounded allocation.
+  if (static_cast<uint64_t>(size) > kMaxWholeFileSize) return std::nullopt;
   std::vector<uint8_t> data(static_cast<size_t>(size));
   file.seekg(0);
   if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
@@ -453,6 +460,10 @@ std::optional<std::vector<uint8_t>> Reader::Read(std::string_view path,
   };
   const Entry* entry = Find(path);
   if (!entry) return fail("not in the pack");
+  if (entry->stored_size > kMaxWholeFileSize ||
+      entry->size > kMaxWholeFileSize) {
+    return fail("entry is too large to read");
+  }
 
   std::vector<uint8_t> stored(entry->stored_size);
   {

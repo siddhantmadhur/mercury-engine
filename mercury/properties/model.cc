@@ -448,9 +448,14 @@ std::shared_ptr<ImageData> HeightToNormalMap(const ImageData& height,
 std::shared_ptr<Model> Model::Load(const std::string& path,
                                    const ModelImportSettings& settings,
                                    std::string* error,
-                                   std::atomic<float>* progress) {
+                                   std::atomic<float>* progress,
+                                   std::atomic<bool>* cancel) {
+  if (cancel && cancel->load()) {
+    if (error) *error = "cancelled";
+    return nullptr;
+  }
   if (auto cached = ModelCache::Read(path, settings, progress)) return cached;
-  auto model = Import(path, settings, error, progress);
+  auto model = Import(path, settings, error, progress, cancel);
   if (model) ModelCache::Write(*model, path, settings);
   return model;
 }
@@ -477,7 +482,14 @@ std::shared_ptr<ImageData> Model::DecodeTexture(
 std::shared_ptr<Model> Model::Import(const std::string& path,
                                      const ModelImportSettings& settings,
                                      std::string* error,
-                                     std::atomic<float>* progress) {
+                                     std::atomic<float>* progress,
+                                     std::atomic<bool>* cancel) {
+  const auto cancelled = [cancel] { return cancel && cancel->load(); };
+  const auto cancel_error = [error, &cancelled]() {
+    if (!cancelled()) return false;
+    if (error) *error = "cancelled";
+    return true;
+  };
   const auto start_time = std::chrono::steady_clock::now();
   auto seconds_since = [](std::chrono::steady_clock::time_point from) {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() -
@@ -516,8 +528,12 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
     options.flags = kImportFlags;
     options.configure = configure;
     options.progress = [&report](float done) { report(done * 0.5f); };
+    if (cancel) options.cancelled = cancelled;
     pieced_scene = ImportObjInParallel(path, options);
   }
+  // A cancel during the pieces leaves no scene; do not fall back to reading
+  // the whole file, which is the slow path cancellation exists to avoid.
+  if (cancel_error()) return nullptr;
   Assimp::Importer importer;
   const aiScene* scene = pieced_scene.get();
   if (!scene) {
@@ -527,6 +543,7 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   }
   const double import_seconds = seconds_since(start_time);
   report(0.5f);
+  if (cancel_error()) return nullptr;
   if (!scene || !scene->mRootNode) {
     if (error) *error = importer.GetErrorString();
     return nullptr;
@@ -867,6 +884,7 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   model->embedded_textures_ = embedded_any;
   const double textures_seconds = seconds_since(start_time) - materials_seconds;
   report(0.8f);
+  if (cancel_error()) return nullptr;
   if (model->materials_.empty()) {
     model->materials_.push_back(ModelMaterial{});
     model->material_sources_.push_back({});
@@ -972,6 +990,7 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
   }
 
   report(1.0f);
+  if (cancel_error()) return nullptr;
   PDebug::log("Loaded {} in {:.1f}s (file {:.1f}s, textures {:.1f}s)", path,
               seconds_since(start_time), import_seconds, textures_seconds);
   // ---- Animations

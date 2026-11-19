@@ -215,12 +215,15 @@ struct ModelImportSettings {
 class Model {
  public:
   // `progress`, if given, is set from 0 to 1 as the model loads, from any
-  // of the threads that load it. A model imported before comes from the
-  // cache (model_cache.h) while its files and settings are unchanged.
+  // of the threads that load it. `cancel`, if given, abandons the import as
+  // soon as it turns true and returns null. A model imported before comes
+  // from the cache (model_cache.h) while its files and settings are
+  // unchanged.
   static std::shared_ptr<Model> Load(const std::string& path,
                                      const ModelImportSettings& settings,
                                      std::string* error = nullptr,
-                                     std::atomic<float>* progress = nullptr);
+                                     std::atomic<float>* progress = nullptr,
+                                     std::atomic<bool>* cancel = nullptr);
 
   const std::vector<ModelNode>& Nodes() const { return nodes_; }
   const std::vector<ModelMesh>& Meshes() const { return meshes_; }
@@ -269,7 +272,8 @@ class Model {
   static std::shared_ptr<Model> Import(const std::string& path,
                                        const ModelImportSettings& settings,
                                        std::string* error,
-                                       std::atomic<float>* progress);
+                                       std::atomic<float>* progress,
+                                       std::atomic<bool>* cancel);
   // A texture file the model refers to, found, decoded and prepared as the
   // import does it (null if missing).
   static std::shared_ptr<ImageData> DecodeTexture(

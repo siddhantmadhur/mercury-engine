@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
@@ -24,8 +25,118 @@ namespace {
 constexpr int kAtlasWidth = 1024;
 constexpr int kInitialAtlasHeight = 512;
 constexpr int kMaxAtlasHeight = 4096;
+// Upper bound on cached glyphs, so text with a huge number of distinct
+// codepoints cannot grow the cache (and the atlas) without limit.
+constexpr size_t kMaxCachedGlyphs = 65536;
 
 uint64_t g_atlas_resizes = 0;
+
+uint16_t BeU16(const std::vector<uint8_t>& data, size_t at) {
+  return static_cast<uint16_t>((data[at] << 8) | data[at + 1]);
+}
+
+uint32_t BeU32(const std::vector<uint8_t>& data, size_t at) {
+  return (static_cast<uint32_t>(data[at]) << 24) |
+         (static_cast<uint32_t>(data[at + 1]) << 16) |
+         (static_cast<uint32_t>(data[at + 2]) << 8) |
+         static_cast<uint32_t>(data[at + 3]);
+}
+
+// stb_truetype takes no buffer length, so check the sfnt table directory and
+// the loca/glyf extents it walks before handing it the data. This keeps a
+// truncated file from turning into an out-of-bounds read.
+bool ValidSfnt(const std::vector<uint8_t>& data, size_t base) {
+  const size_t size = data.size();
+  if (base > size || size - base < 12) return false;
+  const uint32_t version = BeU32(data, base);
+  if (version != 0x00010000u && version != 0x74727565u &&  // 'true'
+      version != 0x4F54544Fu) {                            // 'OTTO'
+    return false;
+  }
+  const uint16_t table_count = BeU16(data, base + 4);
+  if (table_count == 0) return false;
+  const uint64_t directory_end = static_cast<uint64_t>(base) + 12 +
+                                 static_cast<uint64_t>(table_count) * 16;
+  if (directory_end > size) return false;
+
+  uint64_t glyf_offset = 0, glyf_length = 0, loca_offset = 0, loca_length = 0;
+  uint64_t head_offset = 0;
+  bool has_cmap = false, has_head = false, has_hhea = false, has_hmtx = false,
+       has_glyf = false, has_loca = false, has_cff = false;
+  for (uint16_t i = 0; i < table_count; i++) {
+    const size_t record = base + 12 + static_cast<size_t>(i) * 16;
+    const uint32_t tag = BeU32(data, record);
+    const uint64_t offset = BeU32(data, record + 8);
+    const uint64_t length = BeU32(data, record + 12);
+    if (offset + length > size) return false;
+    switch (tag) {
+      case 0x636D6170u:  // cmap
+        has_cmap = true;
+        break;
+      case 0x68656164u:  // head
+        has_head = true;
+        head_offset = offset;
+        break;
+      case 0x68686561u:  // hhea
+        has_hhea = true;
+        break;
+      case 0x686D7478u:  // hmtx
+        has_hmtx = true;
+        break;
+      case 0x676C7966u:  // glyf
+        has_glyf = true;
+        glyf_offset = offset;
+        glyf_length = length;
+        break;
+      case 0x6C6F6361u:  // loca
+        has_loca = true;
+        loca_offset = offset;
+        loca_length = length;
+        break;
+      case 0x43464620u:  // 'CFF '
+      case 0x43464632u:  // 'CFF2'
+        has_cff = true;
+        break;
+      default:
+        break;
+    }
+  }
+  if (!has_cmap || !has_head || !has_hhea || !has_hmtx) return false;
+  if (has_cff) return true;
+  if (!has_glyf || !has_loca) return false;
+
+  // loca holds one more entry than the glyph count, and each entry has to
+  // point inside glyf. indexToLocFormat lives at head+50.
+  if (head_offset + 54 > size) return false;
+  const uint16_t long_offsets = BeU16(data, head_offset + 50) != 0;
+  const size_t entry_size = long_offsets ? 4 : 2;
+  if (loca_length < entry_size || loca_length % entry_size != 0) return false;
+  const size_t entries = loca_length / entry_size;
+  for (size_t i = 0; i < entries; i++) {
+    const uint64_t at = loca_offset + i * entry_size;
+    const uint64_t glyph = long_offsets
+                               ? BeU32(data, at)
+                               : static_cast<uint64_t>(BeU16(data, at)) * 2;
+    if (glyph > glyf_length) return false;
+  }
+  return true;
+}
+
+bool ValidFontData(const std::vector<uint8_t>& data) {
+  const size_t size = data.size();
+  if (size < 4) return false;
+  if (size >= 12 && BeU32(data, 0) == 0x74746366u) {  // 'ttcf' collection
+    const uint32_t font_count = BeU32(data, 8);
+    if (font_count == 0 || font_count > 4096) return false;
+    if (static_cast<uint64_t>(12) + static_cast<uint64_t>(font_count) * 4 >
+        size) {
+      return false;
+    }
+    // Init only uses the first font.
+    return ValidSfnt(data, BeU32(data, 12));
+  }
+  return ValidSfnt(data, 0);
+}
 
 }  // namespace
 
@@ -57,6 +168,7 @@ std::shared_ptr<Font> Font::FromMemory(std::vector<uint8_t> data) {
 
 bool Font::Init(std::vector<uint8_t> data) {
   data_ = std::move(data);
+  if (!ValidFontData(data_)) return false;
   info_ = std::make_unique<stbtt_fontinfo>();
   const int offset = stbtt_GetFontOffsetForIndex(data_.data(), 0);
   if (offset < 0 || !stbtt_InitFont(info_.get(), data_.data(), offset)) {
@@ -79,6 +191,12 @@ bool Font::Init(std::vector<uint8_t> data) {
 }
 
 bool Font::Pack(int w, int h, glm::ivec2& out) {
+  // A glyph wider than a shelf or taller than the whole atlas can never fit,
+  // so reject it before changing the shelf. Without this a hostile font's
+  // oversized bitmap would walk rows past the end of the atlas.
+  if (w <= 0 || h <= 0 || w + 2 > atlas_->width || h + 2 > kMaxAtlasHeight) {
+    return false;
+  }
   if (shelf_x_ + w + 1 > atlas_->width) {
     shelf_x_ = 1;
     shelf_y_ += shelf_height_ + 1;
@@ -87,7 +205,7 @@ bool Font::Pack(int w, int h, glm::ivec2& out) {
   while (shelf_y_ + h + 1 > atlas_->height) {
     if (atlas_->height >= kMaxAtlasHeight) return false;
     // Growing downwards keeps every packed glyph where it is.
-    const int new_height = atlas_->height * 2;
+    const int new_height = std::min(atlas_->height * 2, kMaxAtlasHeight);
     std::vector<uint8_t> grown(static_cast<size_t>(atlas_->width) * new_height *
                                4);
     for (size_t i = 0; i < grown.size(); i += 4) {
@@ -112,16 +230,28 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
   GlyphInfo glyph;
   int glyph_index =
       stbtt_FindGlyphIndex(info_.get(), static_cast<int>(codepoint));
-  if (glyph_index == 0 && codepoint != 0xFFFD && codepoint > 32) {
-    // Missing glyph: show the replacement character (or '?').
-    const GlyphInfo& fallback =
-        Glyph(stbtt_FindGlyphIndex(info_.get(), 0xFFFD) ? char32_t(0xFFFD)
-                                                        : char32_t('?'));
-    return glyphs_.emplace(codepoint, fallback).first->second;
+  if (glyph_index == 0 && codepoint != 0xFFFD && codepoint != '?' &&
+      codepoint > 32) {
+    // Missing glyph: show the replacement character, or '?' if the font lacks
+    // it too. Excluding both from this branch means a font with neither cannot
+    // fall back to itself forever.
+    const char32_t fallback =
+        stbtt_FindGlyphIndex(info_.get(), 0xFFFD) ? 0xFFFD : char32_t('?');
+    const GlyphInfo& replacement = Glyph(fallback);
+    return glyphs_.emplace(codepoint, replacement).first->second;
   }
   int advance = 0, lsb = 0;
   stbtt_GetGlyphHMetrics(info_.get(), glyph_index, &advance, &lsb);
   glyph.advance = advance * scale_;
+
+  // A full atlas never frees space, so stop rasterizing (and warning) for
+  // every further codepoint. The empty glyph is cached under a hard cap so a
+  // long tail of distinct characters cannot grow the map without bound.
+  if (atlas_exhausted_) {
+    static const GlyphInfo kEmpty;
+    if (glyphs_.size() >= kMaxCachedGlyphs) return kEmpty;
+    return glyphs_.emplace(codepoint, glyph).first->second;
+  }
 
   int w = 0, h = 0, xoff = 0, yoff = 0;
   unsigned char* sdf =
@@ -129,7 +259,12 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
                         128.0f / kSdfPadding, &w, &h, &xoff, &yoff);
   if (sdf && w > 0 && h > 0) {
     glm::ivec2 at;
-    if (Pack(w, h, at)) {
+    const bool packed = Pack(w, h, at) && at.x >= 0 && at.y >= 0 &&
+                        at.x + w <= atlas_->width &&
+                        at.y + h <= atlas_->height &&
+                        static_cast<size_t>(at.y + h) * atlas_->width * 4 <=
+                            atlas_->rgba.size();
+    if (packed) {
       for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
           const size_t dst =
@@ -143,7 +278,16 @@ const GlyphInfo& Font::Glyph(char32_t codepoint) {
       glyph.size = {static_cast<float>(w), static_cast<float>(h)};
       glyph.visible = true;
     } else {
-      PDebug::warn("UI: font atlas is full");
+      // Only an atlas that is actually full stops future glyphs; a single
+      // oversized glyph is rejected and the next one may still fit.
+      if (w + 2 <= atlas_->width && h + 2 <= kMaxAtlasHeight) {
+        atlas_exhausted_ = true;
+      }
+      if (!atlas_warned_) {
+        atlas_warned_ = true;
+        PDebug::warn(
+            "UI: font atlas is full; later glyphs will not be rasterized");
+      }
     }
   }
   if (sdf) stbtt_FreeSDF(sdf, nullptr);
@@ -177,29 +321,62 @@ void AppendUtf8(std::string& out, char32_t c) {
 }
 
 std::u32string DecodeUtf8(std::string_view s) {
+  // Strict decoding per the Unicode standard: reject overlong forms,
+  // surrogate code points, values above U+10FFFF, and truncated or
+  // ill-formed sequences. A maximal invalid subpart becomes one U+FFFD.
+  constexpr char32_t kReplacement = 0xFFFD;
+  auto is_continuation = [](unsigned char b) { return (b & 0xC0) == 0x80; };
+
   std::u32string out;
   out.reserve(s.size());
-  for (size_t i = 0; i < s.size();) {
-    const unsigned char c = s[i];
-    char32_t cp = 0xFFFD;
+  size_t i = 0;
+  while (i < s.size()) {
+    const unsigned char lead = static_cast<unsigned char>(s[i]);
+    if (lead < 0x80) {
+      out.push_back(lead);
+      i++;
+      continue;
+    }
+
     int extra = 0;
-    if (c < 0x80) {
-      cp = c;
-    } else if ((c >> 5) == 0x6) {
-      cp = c & 0x1F;
+    char32_t cp = 0;
+    char32_t minimum = 0;
+    if (lead >= 0xC2 && lead <= 0xDF) {
       extra = 1;
-    } else if ((c >> 4) == 0xE) {
-      cp = c & 0x0F;
+      cp = lead & 0x1F;
+      minimum = 0x80;
+    } else if (lead >= 0xE0 && lead <= 0xEF) {
       extra = 2;
-    } else if ((c >> 3) == 0x1E) {
-      cp = c & 0x07;
+      cp = lead & 0x0F;
+      minimum = 0x800;
+    } else if (lead >= 0xF0 && lead <= 0xF4) {
       extra = 3;
+      cp = lead & 0x07;
+      minimum = 0x10000;
+    } else {
+      out.push_back(kReplacement);  // stray continuation or invalid lead
+      i++;
+      continue;
     }
-    i++;
-    for (int k = 0; k < extra && i < s.size(); k++, i++) {
-      cp = (cp << 6) | (static_cast<unsigned char>(s[i]) & 0x3F);
+
+    size_t next = i + 1;
+    bool complete = true;
+    for (int k = 0; k < extra; k++, next++) {
+      if (next >= s.size() ||
+          !is_continuation(static_cast<unsigned char>(s[next]))) {
+        complete = false;
+        break;
+      }
+      cp = (cp << 6) | (static_cast<unsigned char>(s[next]) & 0x3F);
     }
-    out.push_back(cp);
+
+    if (!complete || cp < minimum || (cp >= 0xD800 && cp <= 0xDFFF) ||
+        cp > 0x10FFFF) {
+      out.push_back(kReplacement);
+    } else {
+      out.push_back(cp);
+    }
+    i = next;
   }
   return out;
 }

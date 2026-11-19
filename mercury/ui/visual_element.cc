@@ -22,6 +22,11 @@ namespace {
 std::atomic<uint64_t> g_next_callback_id{1};
 std::atomic<EventTypeId> g_next_event_type{1};
 
+// Every tree walk (layout, paint, hit testing, panel attach/detach) recurses
+// over the hierarchy. Refuse to build a tree deeper than this so an untrusted
+// programmatic or generated tree cannot exhaust the stack.
+constexpr int kMaxHierarchyDepth = 512;
+
 glm::mat3 Translation(glm::vec2 t) {
   glm::mat3 m(1.0f);
   m[2][0] = t.x;
@@ -264,6 +269,10 @@ int VisualElement::Hierarchy::IndexOf(const VisualElement* child) const {
 VisualElement* VisualElement::HierarchyInsert(
     int index, std::unique_ptr<VisualElement> child) {
   if (!child) return nullptr;
+  int depth = 0;
+  for (const VisualElement* p = this; p; p = p->hierarchy_parent_) {
+    if (++depth >= kMaxHierarchyDepth) return nullptr;
+  }
   index = std::clamp(index, 0, static_cast<int>(children_.size()));
   if (has_measure_func_) {
     // Yoga doesn't allow measured nodes to have children.
@@ -304,10 +313,13 @@ std::unique_ptr<VisualElement> VisualElement::HierarchyRemove(
 void VisualElement::SetPanel(Panel* panel) {
   if (panel_ == panel) return;
   if (panel_) {
+    Panel* previous = panel_;
     for (auto& child : children_) child->SetPanel(nullptr);
-    panel_->OnElementDetached(this);
+    previous->OnElementDetached(this);
     DetachFromPanelEvent event;
     SendEvent(event);
+    // A handler may have attached us somewhere else; keep that choice.
+    if (panel_ != previous) return;
     panel_ = nullptr;
   }
   panel_ = panel;
@@ -316,7 +328,18 @@ void VisualElement::SetPanel(Panel* panel) {
     MarkStyleDirty();
     AttachToPanelEvent event;
     SendEvent(event);
-    for (auto& child : children_) child->SetPanel(panel);
+    // The attach handler may have detached us or removed children, so walk a
+    // snapshot and validate each child before attaching it.
+    if (panel_ != panel) return;
+    std::vector<std::pair<VisualElement*, std::shared_ptr<const bool>>>
+        children;
+    children.reserve(children_.size());
+    for (auto& child : children_) {
+      children.emplace_back(child.get(), child->aliveToken());
+    }
+    for (auto& [child, alive] : children) {
+      if (*alive && child->panel_ != panel) child->SetPanel(panel);
+    }
   }
 }
 

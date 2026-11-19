@@ -25,7 +25,9 @@ glm::mat4 Camera::GetProjection(float width, float height) {
                                      height / 2, -1.0f, 1.0f);
 #else
   float size = 40.0f;
-  float aspect = width / height;
+  // Before the first resize (or on a minimized window) the viewport has no
+  // height, so fall back to 16:9 instead of dividing by zero.
+  float aspect = height > 0.0f ? width / height : 16.0f / 9.0f;
 
   glm::mat4 proj = glm::perspective(glm::radians(fov_), aspect, near_, far_);
 

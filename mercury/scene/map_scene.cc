@@ -318,13 +318,18 @@ MapScene::~MapScene() {
   physics_engine_->SetTriggerCallback({});
   physics_engine_->SetContactCallback({});
   // Behaviours may touch the scene from OnDestroy, so tear them down first.
-  for (auto& behaviour : behaviours_) {
+  std::vector<Behaviour*> behaviours;
+  behaviours.reserve(behaviours_.size());
+  for (const auto& behaviour : behaviours_)
+    behaviours.push_back(behaviour.get());
+  for (Behaviour* behaviour : behaviours) {
     if (behaviour->awoken_) behaviour->OnDestroy();
   }
   behaviours_.clear();
   // Scripts hold the serial, never the pointer; from here on they see "scene
   // unloaded".
   ScriptRuntime::Instance().UnregisterScene(serial_);
+  InvalidateUiHandles();
 }
 
 void MapScene::OnUIDocumentDestroyed(entt::registry& registry,
@@ -594,7 +599,13 @@ void MapScene::SetCurrentCamera(GameObject camera) {
 
 void MapScene::ClearMap() {
   pending_destroy_.clear();
-  for (auto& behaviour : behaviours_) {
+  // OnDestroy may instantiate a prefab, which appends to behaviours_ and can
+  // reallocate it; iterate over a snapshot instead.
+  std::vector<Behaviour*> behaviours;
+  behaviours.reserve(behaviours_.size());
+  for (const auto& behaviour : behaviours_)
+    behaviours.push_back(behaviour.get());
+  for (Behaviour* behaviour : behaviours) {
     if (behaviour->awoken_) behaviour->OnDestroy();
   }
   behaviours_.clear();
@@ -610,6 +621,8 @@ void MapScene::ClearMap() {
   root_entity_ = entt::null;
   SetActiveCamera(default_camera_);
   ui_.Clear();
+  // Scripts hold handles to elements of the map that just went away.
+  InvalidateUiHandles();
 
   std::lock_guard lock(collision_mutex_);
   collisions_.clear();
@@ -1036,7 +1049,12 @@ void MapScene::OnTick(double delta_t) {
 }
 
 void MapScene::OnDestroy() {
-  for (auto& behaviour : behaviours_) {
+  // OnDestroy may instantiate a prefab, which appends to behaviours_.
+  std::vector<Behaviour*> behaviours;
+  behaviours.reserve(behaviours_.size());
+  for (const auto& behaviour : behaviours_)
+    behaviours.push_back(behaviour.get());
+  for (Behaviour* behaviour : behaviours) {
     if (behaviour->awoken_) behaviour->OnDestroy();
   }
   behaviours_.clear();

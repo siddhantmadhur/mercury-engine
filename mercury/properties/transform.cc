@@ -8,6 +8,7 @@
 
 #include "transform.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "debugger/debugger.h"
@@ -46,7 +47,7 @@ glm::vec3 Transform::GetPosition() const { return this->position_; }
 void Transform::SetPosition(glm::vec3 position) {
   at_rest_ = false;
   this->position_ = position;
-  transformations_.push_back(kTransformPosition);
+  MarkTransformation(kTransformPosition);
   dirty_ = true;
   if (on_world_changed_) on_world_changed_();
 }
@@ -78,22 +79,22 @@ void Transform::SetWorldTransformInternal(glm::vec3 pos, glm::vec3 rot,
   this->position_ = pos;
   this->rotation_ = rot;
   this->scale_ = scale;
-  transformations_.push_back(kTransformPosition);
-  transformations_.push_back(kTransformRotation);
+  MarkTransformation(kTransformPosition);
+  MarkTransformation(kTransformRotation);
   dirty_ = true;
 }
 
 void Transform::SetWorldPositionInternal(glm::vec3 pos) {
   at_rest_ = false;
   this->position_ = pos;
-  transformations_.push_back(kTransformPosition);
+  MarkTransformation(kTransformPosition);
   dirty_ = true;
 }
 
 void Transform::SetWorldRotationInternal(glm::vec3 rot) {
   at_rest_ = false;
   this->rotation_ = rot;
-  transformations_.push_back(kTransformRotation);
+  MarkTransformation(kTransformRotation);
   dirty_ = true;
 }
 
@@ -120,19 +121,19 @@ void Transform::SetInterpolatedTransformInternal(glm::vec3 pos, glm::vec3 rot,
 glm::vec3 Transform::GetVelocity() const { return this->velocity_; }
 void Transform::SetVelocity(glm::vec3 velocity) {
   this->velocity_ = velocity;
-  transformations_.push_back(kTransformLinearVelocity);
+  MarkTransformation(kTransformLinearVelocity);
 }
 void Transform::SetRotate(glm::vec3 new_value) {
   at_rest_ = false;
   this->rotation_ = new_value;
-  transformations_.push_back(kTransformRotation);
+  MarkTransformation(kTransformRotation);
   dirty_ = true;
   if (on_world_changed_) on_world_changed_();
 }
 void Transform::ChangeRotate(glm::vec3 delta) {
   at_rest_ = false;
   rotation_ += delta;
-  transformations_.push_back(kTransformRotation);
+  MarkTransformation(kTransformRotation);
   dirty_ = true;
   if (on_world_changed_) on_world_changed_();
 }
@@ -150,13 +151,13 @@ glm::vec3 Transform::GetInterpolatedRotation() const {
 }
 glm::mat4 Transform::GetRotationMatrix() const { return rotation_matrix_; }
 void Transform::SetVelocityMagnitude(float) {
-  transformations_.push_back(kTransformLinearMagnitude);
+  MarkTransformation(kTransformLinearMagnitude);
 }
 
 void Transform::Move(glm::vec3 movement) {
   at_rest_ = false;
   this->position_ += movement;
-  transformations_.push_back(kTransformPosition);
+  MarkTransformation(kTransformPosition);
   dirty_ = true;
   if (on_world_changed_) on_world_changed_();
 }
@@ -224,6 +225,16 @@ void Transform::SnapInterpolation() {
   CaptureTickSnapshot();
   Interpolate(1.0f);
   dirty_ = true;
+}
+
+void Transform::MarkTransformation(TransformationType type) {
+  // The list only records which properties were written since the last clear,
+  // in call order; recording a type twice would grow it without bound for
+  // entities the physics system never clears.
+  if (std::find(transformations_.begin(), transformations_.end(), type) ==
+      transformations_.end()) {
+    transformations_.push_back(type);
+  }
 }
 
 std::vector<TransformationType> Transform::GetTransformations() {

@@ -55,8 +55,10 @@ inline float MoveTowards(float current, float target, float max_delta) {
   return current + Sign(target - current) * max_delta;
 }
 
-// Wraps t into [0, length).
+// Wraps t into [0, length). A zero length has no period, so 0 is returned
+// rather than the NaN that dividing by it would produce.
 inline float Repeat(float t, float length) {
+  if (!(glm::abs(length) > 1e-6f)) return 0.0f;
   return Clamp(t - glm::floor(t / length) * length, 0.0f, length);
 }
 

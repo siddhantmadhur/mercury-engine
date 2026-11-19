@@ -10,6 +10,8 @@
 #include <format>
 #include <fstream>
 
+#include "os/filesystem.h"
+
 namespace Mercury {
 
 namespace fs = std::filesystem;
@@ -249,7 +251,7 @@ void LoreVcs::Initialize(const std::string& server_url,
   const fs::path ignore = project_->GetRoot() / kIgnoreFile;
   std::error_code ec;
   if (!fs::exists(ignore, ec)) {
-    std::ofstream(ignore) << kDefaultIgnore;
+    os::WriteFileAtomic(ignore, kDefaultIgnore);
   }
   Run({"repository", "create", server + "/" + name},
       [this, server](const Result& r) {
@@ -445,9 +447,9 @@ bool LoreVcs::WriteRemoteUrl(const std::string& url) {
   } else {
     lines.insert(lines.begin(), entry);  // top-level keys come before tables
   }
-  std::ofstream file(path, std::ios::trunc);
-  for (const auto& line : lines) file << line << '\n';
-  return static_cast<bool>(file);
+  std::string text;
+  for (const auto& line : lines) text += line + '\n';
+  return os::WriteFileAtomic(path, text);
 }
 
 // ----------------------------------------------------------------- Parsing ---

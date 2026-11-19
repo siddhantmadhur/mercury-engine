@@ -8,6 +8,7 @@
 #include <cmath>
 #include <numbers>
 
+#include "debugger/debugger.h"
 #include "ui/panel.h"
 #include "ui/visual_element.h"
 
@@ -16,6 +17,12 @@ namespace Mercury::UI {
 namespace {
 
 constexpr float kAA = 1.0f;  // fringe width in pixels
+// Hard caps for script-driven geometry: every one of these shapes is built on
+// the CPU each repaint, so degenerate input must not ask for unbounded work.
+constexpr size_t kMaxContourPoints = 2048;
+constexpr size_t kMaxPathPoints = 4096;
+constexpr int kMaxArcSteps = 512;
+constexpr size_t kPolygonWorkBudget = 1u << 21;
 
 glm::vec2 Apply(const glm::mat3& m, glm::vec2 p) {
   return glm::vec2(m * glm::vec3(p, 1.0f));
@@ -92,10 +99,18 @@ std::vector<glm::vec2> VertexNormals(const std::vector<glm::vec2>& p,
 }
 
 int CornerSegments(float radius_px) {
-  if (radius_px <= 0.01f) return 0;
+  if (!std::isfinite(radius_px) || radius_px <= 0.01f) return 0;
   int n = static_cast<int>(std::ceil(radius_px / 2.5f));
   n = std::clamp(n, 2, 16);
   return n + (n % 2);
+}
+
+// Appends a point to a Painter2D path, dropping non-finite values and
+// stopping at a hard cap so repeated calls cannot grow a path without bound.
+void AddPoint(std::vector<glm::vec2>& points, glm::vec2 p) {
+  if (points.size() >= kMaxPathPoints) return;
+  if (!std::isfinite(p.x) || !std::isfinite(p.y)) return;
+  points.push_back(p);
 }
 
 }  // namespace
@@ -126,18 +141,31 @@ void MeshBuilder::AddTriangles(const UIVertex* vertices, size_t vertex_count,
                                const uint32_t* indices, size_t index_count,
                                uint32_t texture_id) {
   if (vertex_count == 0 || index_count == 0) return;
+  // Check every narrowing conversion in 64-bit arithmetic first, so a huge
+  // batch is rejected instead of wrapping the 32-bit vertex/index space.
+  const uint64_t base = out_.vertices.size();
+  const uint64_t total_vertices = base + vertex_count;
+  const uint64_t total_indices = out_.indices.size() + index_count;
+  if (total_vertices > UINT32_MAX || total_indices > UINT32_MAX) {
+    PDebug::error("UI: mesh batch exceeds 32-bit vertex or index limits");
+    return;
+  }
   UIDrawCommand& command = CommandFor(texture_id);
-  const uint32_t base = static_cast<uint32_t>(out_.vertices.size());
+  if (static_cast<uint64_t>(command.index_count) + index_count > UINT32_MAX) {
+    PDebug::error("UI: mesh batch exceeds 32-bit command index count");
+    return;
+  }
+  const uint32_t base_vertex = static_cast<uint32_t>(base);
   out_.vertices.insert(out_.vertices.end(), vertices, vertices + vertex_count);
   for (size_t i = 0; i < index_count; i++)
-    out_.indices.push_back(base + indices[i]);
+    out_.indices.push_back(base_vertex + indices[i]);
   command.index_count += static_cast<uint32_t>(index_count);
 }
 
 void MeshBuilder::FillConvex(const std::vector<glm::vec2>& points,
                              uint32_t color, bool anti_alias) {
   const size_t n = points.size();
-  if (n < 3 || (color >> 24) == 0) return;
+  if (n < 3 || n > kMaxContourPoints || (color >> 24) == 0) return;
   std::vector<UIVertex> v;
   std::vector<uint32_t> idx;
   const glm::vec4 solid(static_cast<float>(VertexMode::kSolid), 0, 0, 0);
@@ -172,7 +200,10 @@ void MeshBuilder::FillRing(const std::vector<glm::vec2>& outer,
                            const std::vector<uint32_t>& colors,
                            bool anti_alias) {
   const size_t n = outer.size();
-  if (n < 3 || inner.size() != n || colors.size() != n) return;
+  if (n < 3 || n > kMaxContourPoints || inner.size() != n ||
+      colors.size() != n) {
+    return;
+  }
   std::vector<UIVertex> v;
   std::vector<uint32_t> idx;
   const glm::vec4 solid(static_cast<float>(VertexMode::kSolid), 0, 0, 0);
@@ -217,7 +248,10 @@ void MeshBuilder::AddQuad(const std::array<glm::vec2, 4>& c, glm::vec4 uv,
 void MeshBuilder::Stroke(const std::vector<glm::vec2>& points, float width,
                          uint32_t color, bool closed) {
   const size_t n = points.size();
-  if (n < 2 || width <= 0.0f || (color >> 24) == 0) return;
+  if (n < 2 || n > kMaxContourPoints || !std::isfinite(width) ||
+      width <= 0.0f || (color >> 24) == 0) {
+    return;
+  }
   const auto normals = VertexNormals(points, closed);
   const glm::vec4 solid(static_cast<float>(VertexMode::kSolid), 0, 0, 0);
   const float half = width / 2.0f;
@@ -256,17 +290,38 @@ void MeshBuilder::Stroke(const std::vector<glm::vec2>& points, float width,
 
 void MeshBuilder::FillPolygon(const std::vector<glm::vec2>& points,
                               uint32_t color) {
-  const size_t n = points.size();
-  if (n < 3 || (color >> 24) == 0) return;
+  if (points.size() < 3 || (color >> 24) == 0) return;
+  // Simplify the contour first: drop non-finite points and repeated vertices,
+  // then cap the vertex count. Ear clipping runs on the CPU for every repaint,
+  // so degenerate contours must not be able to make the work unbounded.
+  std::vector<glm::vec2> contour;
+  contour.reserve(std::min(points.size(), kMaxContourPoints));
+  for (const auto& p : points) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y)) return;
+    if (!contour.empty() && glm::distance(p, contour.back()) <= 1e-4f) {
+      continue;
+    }
+    contour.push_back(p);
+    if (contour.size() >= kMaxContourPoints) break;
+  }
+  while (contour.size() > 1 &&
+         glm::distance(contour.front(), contour.back()) <= 1e-4f) {
+    contour.pop_back();
+  }
+  const size_t n = contour.size();
+  if (n < 3) return;
+
   const glm::vec4 solid(static_cast<float>(VertexMode::kSolid), 0, 0, 0);
   std::vector<UIVertex> v;
-  for (const auto& p : points) v.push_back({p, {0, 0}, color, 0, solid});
+  for (const auto& p : contour) v.push_back({p, {0, 0}, color, 0, solid});
   // Ear clipping.
   std::vector<uint32_t> remaining(n), idx;
   for (uint32_t i = 0; i < n; i++) remaining[i] = i;
-  const float orientation = SignedArea(points) >= 0 ? 1.0f : -1.0f;
+  const float orientation = SignedArea(contour) >= 0 ? 1.0f : -1.0f;
   auto cross = [](glm::vec2 a, glm::vec2 b) { return a.x * b.y - a.y * b.x; };
   size_t guard = 0;
+  size_t work = 0;
+  bool out_of_budget = false;
   while (remaining.size() > 3 && guard++ < n * n) {
     bool clipped = false;
     for (size_t i = 0; i < remaining.size(); i++) {
@@ -274,12 +329,16 @@ void MeshBuilder::FillPolygon(const std::vector<glm::vec2>& points,
           remaining[(i + remaining.size() - 1) % remaining.size()];
       const uint32_t b = remaining[i];
       const uint32_t c = remaining[(i + 1) % remaining.size()];
-      const glm::vec2 pa = points[a], pb = points[b], pc = points[c];
+      const glm::vec2 pa = contour[a], pb = contour[b], pc = contour[c];
       if (cross(pb - pa, pc - pb) * orientation <= 0) continue;  // reflex
       bool inside = false;
       for (uint32_t k : remaining) {
         if (k == a || k == b || k == c) continue;
-        const glm::vec2 p = points[k];
+        if (++work > kPolygonWorkBudget) {
+          out_of_budget = true;
+          break;
+        }
+        const glm::vec2 p = contour[k];
         const float d1 = cross(pb - pa, p - pa) * orientation;
         const float d2 = cross(pc - pb, p - pb) * orientation;
         const float d3 = cross(pa - pc, p - pc) * orientation;
@@ -288,13 +347,14 @@ void MeshBuilder::FillPolygon(const std::vector<glm::vec2>& points,
           break;
         }
       }
+      if (out_of_budget) break;
       if (inside) continue;
       idx.insert(idx.end(), {a, b, c});
       remaining.erase(remaining.begin() + i);
       clipped = true;
       break;
     }
-    if (!clipped) break;  // degenerate polygon
+    if (out_of_budget || !clipped) break;
   }
   if (remaining.size() == 3)
     idx.insert(idx.end(), {remaining[0], remaining[1], remaining[2]});
@@ -312,23 +372,31 @@ void Painter2D::BeginPath() { paths_.clear(); }
 
 void Painter2D::MoveTo(glm::vec2 p) {
   paths_.emplace_back();
-  paths_.back().points.push_back(p);
+  AddPoint(paths_.back().points, p);
 }
 
-void Painter2D::LineTo(glm::vec2 p) { Current().points.push_back(p); }
+void Painter2D::LineTo(glm::vec2 p) { AddPoint(Current().points, p); }
 
 void Painter2D::Arc(glm::vec2 center, float radius, float start, float end,
                     bool counter_clockwise) {
+  if (!std::isfinite(center.x) || !std::isfinite(center.y) ||
+      !std::isfinite(radius) || !std::isfinite(start) || !std::isfinite(end)) {
+    return;
+  }
   float sweep = end - start;
   if (counter_clockwise && sweep > 0) sweep -= 360.0f;
   if (!counter_clockwise && sweep < 0) sweep += 360.0f;
+  if (!std::isfinite(sweep)) return;
+  // Clamp before narrowing to int: a huge sweep must not overflow the cast or
+  // ask for an unbounded number of points.
   const int steps =
-      std::max(2, static_cast<int>(std::ceil(std::abs(sweep) / 6.0f)));
+      static_cast<int>(std::clamp(std::ceil(std::abs(sweep) / 6.0f), 2.0f,
+                                  static_cast<float>(kMaxArcSteps)));
   auto& path = Current();
   for (int i = 0; i <= steps; i++) {
     const float a = glm::radians(start + sweep * i / steps);
-    path.points.push_back(center +
-                          radius * glm::vec2(std::cos(a), std::sin(a)));
+    AddPoint(path.points,
+             center + radius * glm::vec2(std::cos(a), std::sin(a)));
   }
 }
 
@@ -337,8 +405,8 @@ void Painter2D::QuadraticCurveTo(glm::vec2 control, glm::vec2 p) {
   const glm::vec2 start = path.points.empty() ? control : path.points.back();
   for (int i = 1; i <= 16; i++) {
     const float t = i / 16.0f;
-    path.points.push_back((1 - t) * (1 - t) * start +
-                          2 * (1 - t) * t * control + t * t * p);
+    AddPoint(path.points,
+             (1 - t) * (1 - t) * start + 2 * (1 - t) * t * control + t * t * p);
   }
 }
 
@@ -347,8 +415,8 @@ void Painter2D::BezierCurveTo(glm::vec2 c1, glm::vec2 c2, glm::vec2 p) {
   const glm::vec2 start = path.points.empty() ? c1 : path.points.back();
   for (int i = 1; i <= 20; i++) {
     const float t = i / 20.0f, u = 1 - t;
-    path.points.push_back(u * u * u * start + 3 * u * u * t * c1 +
-                          3 * u * t * t * c2 + t * t * t * p);
+    AddPoint(path.points, u * u * u * start + 3 * u * u * t * c1 +
+                              3 * u * t * t * c2 + t * t * t * p);
   }
 }
 

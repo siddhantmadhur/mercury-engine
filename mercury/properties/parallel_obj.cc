@@ -535,6 +535,7 @@ std::unique_ptr<aiScene> JoinScenes(
     for (aiNode* child : children) {
       for (unsigned i = 0; i < child->mNumMeshes; i++) {
         const unsigned old_index = child->mMeshes[i];
+        if (old_index >= meshes.size()) return nullptr;
         child->mMeshes[i] = static_cast<unsigned>(ordered.size());
         ordered.push_back(meshes[old_index]);
         meshes[old_index] = nullptr;
@@ -568,6 +569,10 @@ std::unique_ptr<aiScene> JoinScenes(
 std::unique_ptr<aiScene> ImportObjInParallel(
     const std::string& path, const ParallelObjOptions& options) {
   if (WorkerThreadCount() < 2) return nullptr;
+  const auto cancelled = [&options] {
+    return options.cancelled && options.cancelled();
+  };
+  if (cancelled()) return nullptr;
   std::error_code ec;
   const auto disk_size = fs::file_size(path, ec);
   if (!ec && disk_size < options.min_bytes) return nullptr;
@@ -582,7 +587,11 @@ std::unique_ptr<aiScene> ImportObjInParallel(
       std::clamp<size_t>(size / (1024 * 1024), 1, WorkerThreadCount() * 4);
   std::vector<size_t> bounds{0};
   for (size_t i = 1; i < range_count; i++) {
-    size_t at = std::max(bounds.back(), size * i / range_count);
+    // 64-bit math so the multiplication cannot wrap on a very large file.
+    size_t at =
+        static_cast<size_t>(static_cast<uint64_t>(size) * i / range_count);
+    at = std::max(bounds.back(), at);
+    if (at >= size) break;
     // Move to just after a real line break.
     while (at < size) {
       const char* newline =
@@ -593,7 +602,8 @@ std::unique_ptr<aiScene> ImportObjInParallel(
       }
       const char* last = newline;
       if (last > base && last[-1] == '\r') last--;
-      at = newline - base + 1;
+      at = static_cast<size_t>(newline - base) + 1;
+      if (at > size) at = size;
       if (!(last > base && last[-1] == '\\')) break;
     }
     if (at > bounds.back() && at < size) bounds.push_back(at);
@@ -601,8 +611,10 @@ std::unique_ptr<aiScene> ImportObjInParallel(
   bounds.push_back(size);
   std::vector<RangeScan> scans(bounds.size() - 1);
   ParallelFor(scans.size(), [&](size_t i) {
+    if (cancelled()) return;
     ScanRange(base, bounds[i], bounds[i + 1], scans[i]);
   });
+  if (cancelled()) return nullptr;
 
   // Join the ranges' events, with counts that run from the start of the file.
   struct Object {
@@ -756,6 +768,8 @@ std::unique_ptr<aiScene> ImportObjInParallel(
     }
   }
 
+  if (cancelled()) return nullptr;
+
   // ---- Import the pieces at the same time
   const fs::path file_path(path);
   const std::string stem = file_path.stem().string();
@@ -763,7 +777,10 @@ std::unique_ptr<aiScene> ImportObjInParallel(
   std::atomic<bool> failed{false};
   std::atomic<size_t> finished{0};
   ParallelFor(pieces.size(), [&](size_t i) {
-    if (failed) return;
+    if (failed || cancelled()) {
+      failed = true;
+      return;
+    }
     std::string text;
     if (!BuildPiece(base, pieces[i], i == 0, text)) {
       failed = true;
@@ -786,6 +803,7 @@ std::unique_ptr<aiScene> ImportObjInParallel(
                        static_cast<float>(pieces.size()));
     }
   });
+  if (cancelled()) return nullptr;
   if (failed) {
     PDebug::log("{}: could not be cut into pieces, importing it whole", path);
     return nullptr;

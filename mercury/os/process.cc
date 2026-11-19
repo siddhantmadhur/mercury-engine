@@ -38,15 +38,20 @@ Process::~Process() {
 void Process::Append(const char* data, size_t size) {
   std::lock_guard lock(mutex_);
   for (size_t i = 0; i < size; i++) {
+    // Drop new output once the buffer is full. The cap also bounds a child
+    // that writes an endless line without a newline.
+    if (buffered_bytes_ >= kMaxBufferedOutputBytes) return;
     char c = data[i];
     if (c == '\n') {
       if (!partial_line_.empty() && partial_line_.back() == '\r') {
         partial_line_.pop_back();
+        buffered_bytes_--;
       }
       lines_.push_back(std::move(partial_line_));
       partial_line_.clear();
     } else {
       partial_line_.push_back(c);
+      buffered_bytes_++;
     }
   }
 }
@@ -55,10 +60,13 @@ std::vector<std::string> Process::TakeOutput() {
   std::lock_guard lock(mutex_);
   std::vector<std::string> out;
   out.swap(lines_);
+  // Only the unfinished line remains buffered after the swap.
+  buffered_bytes_ = partial_line_.size();
   // Once the child is gone, a last line without '\n' is complete too.
-  if (!running_ && !partial_line_.empty() && !reader_.joinable()) {
+  if (!running_.load() && !partial_line_.empty() && !reader_.joinable()) {
     out.push_back(std::move(partial_line_));
     partial_line_.clear();
+    buffered_bytes_ = 0;
   }
   return out;
 }
@@ -97,7 +105,7 @@ bool Process::Start(const std::vector<std::string>& args,
                     const std::filesystem::path& working_dir,
                     std::string* error,
                     const std::vector<std::string>& environment) {
-  if (running_ || args.empty()) return false;
+  if (running_.load() || args.empty()) return false;
   SECURITY_ATTRIBUTES security = {sizeof(security), nullptr, TRUE};
   HANDLE read_pipe = nullptr;
   HANDLE write_pipe = nullptr;
@@ -163,7 +171,7 @@ bool Process::Start(const std::vector<std::string>& args,
   CloseHandle(info.hThread);
   process_ = info.hProcess;
   read_pipe_ = read_pipe;
-  running_ = true;
+  running_.store(true);
   exit_code_.reset();
   reader_ = std::thread([this] { ReadLoop(); });
   return true;
@@ -179,24 +187,24 @@ void Process::ReadLoop() {
 }
 
 void Process::Reap(bool block) {
-  if (!running_ || !process_) return;
+  if (!running_.load() || !process_) return;
   if (WaitForSingleObject(process_, block ? INFINITE : 0) != WAIT_OBJECT_0) {
     return;
   }
   DWORD code = 0;
   GetExitCodeProcess(process_, &code);
   exit_code_ = static_cast<int>(code);
-  running_ = false;
+  running_.store(false);
   if (reader_.joinable()) reader_.join();
 }
 
 bool Process::IsRunning() {
   Reap(false);
-  return running_;
+  return running_.load();
 }
 
 void Process::Kill() {
-  if (!running_ || !process_) return;
+  if (!running_.load() || !process_) return;
   TerminateProcess(process_, 1);
   Reap(true);
 }
@@ -232,7 +240,7 @@ bool Process::Start(const std::vector<std::string>& args,
                     const std::filesystem::path& working_dir,
                     std::string* error,
                     const std::vector<std::string>& environment) {
-  if (running_ || args.empty()) return false;
+  if (running_.load() || args.empty()) return false;
   int fds[2];
   if (pipe(fds) != 0) {
     if (error) *error = std::string("pipe: ") + std::strerror(errno);
@@ -308,7 +316,7 @@ bool Process::Start(const std::vector<std::string>& args,
 
   pid_ = pid;
   read_fd_ = fds[0];
-  running_ = true;
+  running_.store(true);
   exit_code_.reset();
   reader_ = std::thread([this] { ReadLoop(); });
   return true;
@@ -329,7 +337,7 @@ void Process::ReadLoop() {
 }
 
 void Process::Reap(bool block) {
-  if (!running_ || pid_ <= 0) return;
+  if (!running_.load() || pid_ <= 0) return;
   int status = 0;
   pid_t done = waitpid(pid_, &status, block ? 0 : WNOHANG);
   if (done != pid_) return;
@@ -340,7 +348,7 @@ void Process::Reap(bool block) {
   } else {
     exit_code_ = -1;
   }
-  running_ = false;
+  running_.store(false);
   pid_ = -1;
   // The pipe closes once every process in the group has exited.
   if (reader_.joinable()) reader_.join();
@@ -352,18 +360,18 @@ void Process::Reap(bool block) {
 
 bool Process::IsRunning() {
   Reap(false);
-  return running_;
+  return running_.load();
 }
 
 void Process::Kill() {
-  if (!running_ || pid_ <= 0) return;
+  if (!running_.load() || pid_ <= 0) return;
   kill(-pid_, SIGTERM);
   // Give it a moment to exit cleanly, then force it.
-  for (int i = 0; i < 50 && running_; i++) {
+  for (int i = 0; i < 50 && running_.load(); i++) {
     Reap(false);
-    if (running_) usleep(10'000);
+    if (running_.load()) usleep(10'000);
   }
-  if (running_) {
+  if (running_.load()) {
     kill(-pid_, SIGKILL);
     Reap(true);
   }

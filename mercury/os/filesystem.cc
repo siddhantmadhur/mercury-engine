@@ -4,9 +4,14 @@
 
 #include "filesystem.h"
 
+#include <algorithm>
+#include <atomic>
+#include <climits>
 #include <cstdlib>
+#include <format>
 #include <fstream>
 #include <mutex>
+#include <random>
 #include <set>
 #include <shared_mutex>
 #include <system_error>
@@ -16,9 +21,16 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
 #include <windows.h>
-#elif defined(__APPLE__)
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#if defined(__APPLE__)
 #include <mach-o/dyld.h>
+#endif
 #endif
 
 namespace Mercury::os {
@@ -33,6 +45,10 @@ struct MountPoint {
 
 std::shared_mutex g_mounts_mutex;
 std::vector<MountPoint> g_mounts;
+
+// A whole-file read turns the size in the file header into one allocation, so
+// refuse absurd sizes instead of letting them reach std::bad_alloc.
+constexpr uint64_t kMaxWholeFileSize = 2ull * 1024 * 1024 * 1024;
 
 std::string Normalize(const fs::path& path) {
   return path.lexically_normal().generic_string();
@@ -83,6 +99,7 @@ std::optional<std::vector<uint8_t>> ReadBytes(const fs::path& path) {
   if (!file) return std::nullopt;
   const auto size = static_cast<std::streamoff>(file.tellg());
   if (size < 0) return std::nullopt;
+  if (static_cast<uint64_t>(size) > kMaxWholeFileSize) return std::nullopt;
   std::vector<uint8_t> data(static_cast<size_t>(size));
   file.seekg(0);
   if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
@@ -95,6 +112,94 @@ std::optional<std::string> ReadText(const fs::path& path) {
   auto bytes = ReadBytes(path);
   if (!bytes) return std::nullopt;
   return std::string(bytes->begin(), bytes->end());
+}
+
+namespace {
+
+#if defined(_WIN32)
+using FileHandle = int;
+constexpr FileHandle kInvalidFile = -1;
+
+FileHandle OpenExclusive(const fs::path& path) {
+  return _wopen(path.c_str(),
+                _O_WRONLY | _O_CREAT | _O_EXCL | _O_BINARY | _O_NOINHERIT,
+                _S_IREAD | _S_IWRITE);
+}
+bool WriteAll(FileHandle file, std::string_view data) {
+  size_t written = 0;
+  while (written < data.size()) {
+    const auto chunk = static_cast<unsigned>(
+        std::min<size_t>(data.size() - written, UINT_MAX));
+    const int result = _write(file, data.data() + written, chunk);
+    if (result <= 0) return false;
+    written += static_cast<size_t>(result);
+  }
+  return true;
+}
+bool CloseFile(FileHandle file) { return _close(file) == 0; }
+#else
+using FileHandle = int;
+constexpr FileHandle kInvalidFile = -1;
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0
+#endif
+
+FileHandle OpenExclusive(const fs::path& path) {
+  // 0666 is reduced by the process umask, matching the permissions a normal
+  // save produced before writes were made atomic.
+  return ::open(path.c_str(),
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+}
+bool WriteAll(FileHandle file, std::string_view data) {
+  size_t written = 0;
+  while (written < data.size()) {
+    const ssize_t result =
+        ::write(file, data.data() + written, data.size() - written);
+    if (result <= 0) return false;
+    written += static_cast<size_t>(result);
+  }
+  return true;
+}
+bool CloseFile(FileHandle file) { return ::close(file) == 0; }
+#endif
+
+}  // namespace
+
+bool WriteFileAtomic(const fs::path& path, std::string_view data) {
+  std::error_code ec;
+  if (path.has_parent_path()) {
+    fs::create_directories(path.parent_path(), ec);
+  }
+  // A predictable "<path>.tmp" let a symlink planted in the project redirect
+  // the write. Use a random name and O_EXCL|O_NOFOLLOW so nothing that exists
+  // can be opened.
+  static std::atomic<uint64_t> counter{0};
+  std::random_device random;
+  const uint64_t nonce = (static_cast<uint64_t>(random()) << 32) ^ random();
+  fs::path temp;
+  FileHandle file = kInvalidFile;
+  for (int attempt = 0; attempt < 16 && file == kInvalidFile; attempt++) {
+    temp = path;
+    temp += std::format(".{}.{}.tmp", nonce, counter.fetch_add(1));
+    file = OpenExclusive(temp);
+  }
+  if (file == kInvalidFile) return false;
+  const bool written = WriteAll(file, data);
+  const bool closed = CloseFile(file);
+  if (!written || !closed) {
+    fs::remove(temp, ec);
+    return false;
+  }
+  fs::rename(temp, path, ec);
+  if (ec) {
+    fs::remove(temp, ec);
+    return false;
+  }
+  return true;
 }
 
 bool Exists(const fs::path& path) {

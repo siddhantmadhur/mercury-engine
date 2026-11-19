@@ -221,7 +221,9 @@ const char* EasingName(EasingMode mode) {
                                  "ease-in-bounce",
                                  "ease-out-bounce",
                                  "ease-in-out-bounce"};
-  return kNames[static_cast<int>(mode)];
+  const size_t index = static_cast<size_t>(mode);
+  constexpr size_t kCount = sizeof(kNames) / sizeof(kNames[0]);
+  return index < kCount ? kNames[index] : "ease";
 }
 
 float BounceOut(float t) {

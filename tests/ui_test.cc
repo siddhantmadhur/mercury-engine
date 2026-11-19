@@ -498,7 +498,8 @@ struct Stats {
 TEST(Binding, ToTargetTwoWayAndReflectedSources) {
   TestPanel t;
   Stats stats;
-  t.root()->SetDataSource(ReflectedDataSource::Of(&stats));
+  auto stats_lifetime = std::make_shared<char>(0);
+  t.root()->SetDataSource(ReflectedDataSource::Of(&stats, stats_lifetime));
   auto* label = t.root()->Emplace<Label>();
   label->SetBinding("text", DataBinding{"score"});
   auto* greeting = t.root()->Emplace<Label>();
@@ -523,6 +524,12 @@ TEST(Binding, ToTargetTwoWayAndReflectedSources) {
   label->SetDataSource(bag);
   t.Update();
   EXPECT_EQ(label->text(), "99");
+
+  // An expired lifetime must stop the source reading the object.
+  auto expiring = std::make_shared<char>(0);
+  auto source = ReflectedDataSource::Of(&stats, expiring);
+  expiring.reset();
+  EXPECT_FALSE(source->GetValue("score").has_value());
 }
 
 // ------------------------------------------------------------------ Mesh --
@@ -696,4 +703,23 @@ TEST(Controls, Painter2DAndScheduler) {
   });
   for (int i = 0; i < 5; i++) t.Update();
   EXPECT_EQ(ticks, 3);
+}
+
+TEST(Utf8, RejectsMalformedOverlongAndSurrogateSequences) {
+  const std::u32string valid =
+      DecodeUtf8("A\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80");
+  ASSERT_EQ(valid.size(), 4u);
+  EXPECT_EQ(valid[0], U'A');
+  EXPECT_EQ(valid[1], 0x00E9u);
+  EXPECT_EQ(valid[2], 0x20ACu);
+  EXPECT_EQ(valid[3], 0x1F600u);
+
+  // C0 AF is an overlong '/', E0 80 AF is an overlong code point below the
+  // two-byte minimum, ED A0 80 encodes a UTF-16 surrogate, and F4 90 80 80
+  // is above U+10FFFF. Truncated E2 82 ends after one continuation byte.
+  EXPECT_EQ(DecodeUtf8("\xC0\xAF"), std::u32string(2, 0xFFFD));
+  EXPECT_EQ(DecodeUtf8("\xE0\x80\xAF"), std::u32string(1, 0xFFFD));
+  EXPECT_EQ(DecodeUtf8("\xED\xA0\x80"), std::u32string(1, 0xFFFD));
+  EXPECT_EQ(DecodeUtf8("\xF4\x90\x80\x80"), std::u32string(1, 0xFFFD));
+  EXPECT_EQ(DecodeUtf8("\xE2\x82"), std::u32string(1, 0xFFFD));
 }

@@ -166,45 +166,69 @@ bool ReflectedDataSource::SetValue(std::string_view path,
 // ---------------------------------------------------------------- Update ---
 
 void VisualElement::UpdateBindings() {
-  for (auto& [property, binding] : bindings_) {
-    DataBinding& b = *binding;
+  // SetProperty sends a bubbling ChangeEvent whose handlers may add, replace
+  // or clear bindings, reallocating bindings_ mid-walk. Snapshot the property
+  // names and look the binding up again at every step.
+  std::vector<std::string> properties;
+  properties.reserve(bindings_.size());
+  for (const auto& [property, binding] : bindings_) {
+    properties.push_back(property);
+  }
+  auto find = [this](std::string_view property) -> DataBinding* {
+    for (auto& [name, binding] : bindings_) {
+      if (name == property) return binding.get();
+    }
+    return nullptr;
+  };
+
+  for (const std::string& property : properties) {
+    DataBinding* b = find(property);
+    if (!b) continue;  // cleared by an earlier binding's handler
     std::shared_ptr<IDataSource> source =
-        b.dataSource ? b.dataSource : ResolveDataSource();
+        b->dataSource ? b->dataSource : ResolveDataSource();
     if (!source) continue;
     std::string path = ResolveDataSourcePath();
-    if (!b.dataSourcePath.empty()) {
-      path = path.empty() ? b.dataSourcePath : path + "." + b.dataSourcePath;
+    if (!b->dataSourcePath.empty()) {
+      path = path.empty() ? b->dataSourcePath : path + "." + b->dataSourcePath;
     }
     const bool to_ui =
-        b.bindingMode == BindingMode::kToTarget ||
-        b.bindingMode == BindingMode::kTwoWay ||
-        (b.bindingMode == BindingMode::kToTargetOnce && !b.updated_once);
-    const bool to_source = b.bindingMode == BindingMode::kTwoWay ||
-                           b.bindingMode == BindingMode::kToSource;
+        b->bindingMode == BindingMode::kToTarget ||
+        b->bindingMode == BindingMode::kTwoWay ||
+        (b->bindingMode == BindingMode::kToTargetOnce && !b->updated_once);
+    const bool to_source = b->bindingMode == BindingMode::kTwoWay ||
+                           b->bindingMode == BindingMode::kToSource;
 
-    if (to_source && b.last_ui) {
+    if (to_source && b->last_ui) {
       // Push UI edits first so they aren't overwritten by the old value.
       auto ui = GetProperty(property);
-      if (ui && *ui != *b.last_ui) {
-        b.last_ui = ui;
-        source->SetValue(path, b.uiToSource ? b.uiToSource(*ui) : *ui);
-        b.last_source = source->GetValue(path);
+      if (ui && *ui != *b->last_ui) {
+        b->last_ui = ui;
+        source->SetValue(path, b->uiToSource ? b->uiToSource(*ui) : *ui);
+        b = find(property);  // the source may have changed the bindings
+        if (!b) continue;
+        b->last_source = source->GetValue(path);
       }
     }
     if (to_ui) {
       auto value = source->GetValue(path);
-      if (value && (!b.last_source || *b.last_source != *value)) {
-        b.last_source = value;
-        SetProperty(property, b.sourceToUi ? b.sourceToUi(*value) : *value);
+      if (value && (!b->last_source || *b->last_source != *value)) {
+        b->last_source = value;
+        // Compute before SetProperty, which may destroy `b`.
+        const mtext::Variant converted =
+            b->sourceToUi ? b->sourceToUi(*value) : *value;
+        SetProperty(property, converted);
       }
     }
-    if (to_source && !b.last_ui && b.bindingMode == BindingMode::kToSource) {
-      if (auto ui = GetProperty(property)) {
-        source->SetValue(path, b.uiToSource ? b.uiToSource(*ui) : *ui);
-      }
+    b = find(property);
+    if (!b) continue;
+    if (to_source && !b->last_ui && b->bindingMode == BindingMode::kToSource) {
+      auto ui = GetProperty(property);
+      if (ui) source->SetValue(path, b->uiToSource ? b->uiToSource(*ui) : *ui);
     }
-    b.last_ui = GetProperty(property);
-    b.updated_once = true;
+    b = find(property);
+    if (!b) continue;
+    b->last_ui = GetProperty(property);
+    b->updated_once = true;
   }
 }
 

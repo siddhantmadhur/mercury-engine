@@ -1,27 +1,78 @@
+# Create exactly one pipeline per push: a merge request pipeline when the branch has
+# an open MR, otherwise a normal branch pipeline. Without this, every push creates
+# both, and jobs that have no `rules:` (format, build) only run in the branch one,
+# so the MR page shows just build-image-job.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
 stages:
+  - image
   - format
   - build
 
 variables:
-  # Wipe all untracked files (like build/) and dirty submodules, EXCEPT cached toolchains/ccache
-  GIT_CLEAN_FLAGS: -ffdxx -e .ccache/ -e .cargo/ -e .rustup/ -e bin/dxc/
+  # Wipe all untracked files (like build/) and dirty submodules, EXCEPT .ccache/
+  GIT_CLEAN_FLAGS: -ffdxx -e .ccache/
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
-  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
-  RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup"
+  # Prebuilt toolchain image (see docker/Dockerfile and build-image-job below).
+  # Bump BUILD_IMAGE_TAG whenever docker/Dockerfile changes. Runners use the
+  # "if-not-present" pull policy, so a reused tag (like :latest) would keep running
+  # jobs in the old cached image instead of the one build-image-job just pushed.
+  BUILD_IMAGE_TAG: "3"
+  BUILD_IMAGE: "$CI_REGISTRY_IMAGE/build-env:$BUILD_IMAGE_TAG"
+
+
+# Rebuilds the toolchain image and pushes it to the GitLab container registry.
+# Uses kaniko so the runner needs neither privileged mode nor a Docker socket.
+# Runs when docker/ changes, or manually from the pipeline page.
+#
+# Pushing through the public (Cloudflare) registry URL fails with 413 because
+# image layers are larger than Cloudflare's request size limit. Set the CI/CD
+# variable REGISTRY_PUSH_HOST (Settings > CI/CD > Variables) to an address the
+# runner can reach directly, e.g. "10.0.0.5:5050" or an internal hostname. If it
+# serves plain HTTP or a self-signed certificate, also set KANIKO_PUSH_ARGS to
+# "--insecure --skip-tls-verify". The pushed image is the same one that jobs pull
+# as $BUILD_IMAGE; only the route taken by the upload differs.
+build-image-job:
+  tags: ['us-east-2b']
+  stage: image
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+    REGISTRY_PUSH_HOST: "$CI_REGISTRY"
+    KANIKO_PUSH_ARGS: "--insecure --skip-tls-verify"
+  rules:
+    - changes:
+        - docker/**/*
+    - when: manual
+      allow_failure: true
+  script:
+    - 'PUSH_REPO="${REGISTRY_PUSH_HOST}${CI_REGISTRY_IMAGE#$CI_REGISTRY}"'
+    - 'AUTH="$(printf "%s:%s" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d "\n")"'
+    - mkdir -p /kaniko/.docker
+    - 'printf "{\"auths\":{\"%s\":{\"auth\":\"%s\"},\"%s\":{\"auth\":\"%s\"}}}" "$CI_REGISTRY" "$AUTH" "$REGISTRY_PUSH_HOST" "$AUTH" > /kaniko/.docker/config.json'
+    - >
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR/docker"
+      --dockerfile "$CI_PROJECT_DIR/docker/Dockerfile"
+      --destination "$PUSH_REPO/build-env:$BUILD_IMAGE_TAG"
+      --cache=true
+      --cache-repo "$PUSH_REPO/build-env/cache"
+      $KANIKO_PUSH_ARGS
 
 clangformat-job:
   tags: ['us-east-2b']
   stage: format
-  image: ubuntu:24.04
+  image: $BUILD_IMAGE
   variables:
     GIT_SUBMODULE_STRATEGY: none
-  before_script:
-    - apt-get update && apt-get install -y --no-install-recommends git wget gnupg lsb-release software-properties-common
-    - wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-    - add-apt-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main"
-    - apt-get update && apt-get install -y --no-install-recommends clang-format-20
-    - ln -sf /usr/bin/clang-format-20 /usr/bin/clang-format
   script:
     - echo "Linting code...."
     - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
@@ -30,11 +81,9 @@ clangformat-job:
 verify-license-job:
   tags: ['us-east-2b']
   stage: format
-  image: ubuntu:24.04
+  image: $BUILD_IMAGE
   variables:
     GIT_SUBMODULE_STRATEGY: none
-  before_script:
-    - apt-get update && apt-get install -y --no-install-recommends git perl
   script:
     - echo "Checking for files not including LICENSE header..."
     - perl scripts/addlicenses.pl
@@ -43,7 +92,7 @@ verify-license-job:
 ctest-build-job:
   tags: ['us-east-2b']
   stage: build
-  image: ubuntu:24.04
+  image: $BUILD_IMAGE
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
     GIT_SUBMODULE_FORCE_CLEAN: "true"
@@ -55,17 +104,9 @@ ctest-build-job:
       - "mercury-build-$CI_DEFAULT_BRANCH"
     paths:
       - .ccache/
-      - .cargo/
-      - .rustup/
-      - bin/dxc/
-  before_script:
-    # setup_project.pl invokes 'sudo apt-get' and needs perl/ca-certificates to bootstrap
-    - apt-get update && apt-get install -y --no-install-recommends sudo perl ca-certificates
-    - export PATH="$CARGO_HOME/bin:$PATH"
   script:
-    - ./scripts/setup_project.pl
-    - export PATH="$CARGO_HOME/bin:$PATH"
     - ccache --zero-stats
+    - cargo fetch --manifest-path Cargo.toml --locked
     - cmake --preset release
     - cmake --build --preset check
     - ccache --show-stats

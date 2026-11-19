@@ -101,6 +101,9 @@ class Transform {
 
   std::vector<TransformationType> GetTransformations();
   void ClearTransformations();
+  // Adds a type to the pending list at most once, so it stays bounded even for
+  // transforms no physics body ever clears.
+  void MarkTransformation(TransformationType type);
 
   // The parent's interpolated values the interpolated state was last
   // derived from (MapScene's hierarchy); changing a local value forgets them.

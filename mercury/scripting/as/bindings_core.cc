@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <mutex>
 #include <random>
 #include <string>
 
@@ -36,6 +37,11 @@ namespace {
 std::mt19937& Rng() {
   static std::mt19937 rng{std::random_device{}()};
   return rng;
+}
+
+std::mutex& RngMutex() {
+  static std::mutex mutex;
+  return mutex;
 }
 
 MapScene* CurrentScene() {
@@ -519,15 +525,21 @@ float TimeScale() { return Time::GetTimeScale(); }
 void SetTimeScale(float scale) { Time::SetTimeScale(scale); }
 
 float RandomValue() {
+  std::lock_guard lock(RngMutex());
   return std::uniform_real_distribution<float>(0.0f, 1.0f)(Rng());
 }
 float RandomRange(float min, float max) {
+  std::lock_guard lock(RngMutex());
   return std::uniform_real_distribution<float>(min, max)(Rng());
 }
 int RandomRangeInt(int min, int max) {
+  std::lock_guard lock(RngMutex());
   return std::uniform_int_distribution<int>(min, max)(Rng());
 }
-void RandomSeed(int seed) { Rng().seed(static_cast<uint32_t>(seed)); }
+void RandomSeed(int seed) {
+  std::lock_guard lock(RngMutex());
+  Rng().seed(static_cast<uint32_t>(seed));
+}
 glm::vec2 RandomInsideUnitCircle() {
   const float angle = RandomRange(0.0f, 6.2831853f);
   const float radius = std::sqrt(RandomValue());

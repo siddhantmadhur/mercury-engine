@@ -22,30 +22,37 @@ uint64_t NextUid() {
   return next++;
 }
 
-// Applies fn to every value in a property list, descending into arrays.
+// Applies fn to every value in a property list, descending into arrays. The
+// cap matches the parser's so a hand-built Variant cannot recurse without
+// bound either.
+constexpr int kMaxValueDepth = 128;
+
 void ForEachValue(mtext::PropertyList& properties,
                   const std::function<void(mtext::Variant&)>& fn) {
-  std::function<void(mtext::Variant&)> visit = [&](mtext::Variant& value) {
-    if (auto array = value.Get<mtext::Array>()) {
-      for (auto& item : *array) visit(item);
+  std::function<void(mtext::Variant&, int)> visit = [&](mtext::Variant& value,
+                                                        int depth) {
+    if (auto array = value.Get<mtext::Array>();
+        array && depth < kMaxValueDepth) {
+      for (auto& item : *array) visit(item, depth + 1);
     } else {
       fn(value);
     }
   };
-  for (auto& property : properties) visit(property.value);
+  for (auto& property : properties) visit(property.value, 0);
 }
 
 void ForEachValue(const mtext::PropertyList& properties,
                   const std::function<void(const mtext::Variant&)>& fn) {
-  std::function<void(const mtext::Variant&)> visit =
-      [&](const mtext::Variant& value) {
-        if (auto array = value.Get<mtext::Array>()) {
-          for (const auto& item : *array) visit(item);
+  std::function<void(const mtext::Variant&, int)> visit =
+      [&](const mtext::Variant& value, int depth) {
+        if (auto array = value.Get<mtext::Array>();
+            array && depth < kMaxValueDepth) {
+          for (const auto& item : *array) visit(item, depth + 1);
         } else {
           fn(value);
         }
       };
-  for (const auto& property : properties) visit(property.value);
+  for (const auto& property : properties) visit(property.value, 0);
 }
 
 // The [ext_resource] type of a file, from its extension.
@@ -53,6 +60,15 @@ std::string GuessResourceType(const std::string& path) {
   std::string type = AssetDatabase::TypeFromExtension(path);
   return type.empty() ? "Resource" : type;
 }
+
+// Prefab loads recurse through the loader callback, so the depth has to live
+// outside LoadFromString.
+thread_local int g_prefab_nesting = 0;
+
+struct PrefabNestingGuard {
+  PrefabNestingGuard() { ++g_prefab_nesting; }
+  ~PrefabNestingGuard() { --g_prefab_nesting; }
+};
 
 }  // namespace
 
@@ -227,6 +243,12 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
   std::map<std::string, std::string> resource_types;
   std::unique_ptr<MapNode> root;
 
+  // A chain of distinct prefabs that each instance several copies of the next
+  // expands exponentially. Bound the work a single map can ask for.
+  constexpr size_t kMaxExpandedNodes = 100000;
+  constexpr int kMaxPrefabNesting = 32;
+  size_t expanded_nodes = 0;
+
   auto resolve_ext = [&](mtext::PropertyList& properties) -> std::string {
     std::string missing;
     ForEachValue(properties, [&](mtext::Variant& value) {
@@ -246,7 +268,16 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
   auto expand_prefab = [&](MapNode& node, const std::string& path,
                            int line) -> bool {
     node.prefab = path;
-    const Map* prefab = prefabs ? prefabs(path) : nullptr;
+    if (g_prefab_nesting >= kMaxPrefabNesting) {
+      return fail(line, "prefabs are nested too deeply");
+    }
+    const Map* prefab = nullptr;
+    {
+      // Nested prefab loads run inside the loader callback, so a thread-local
+      // counter sees the whole chain even across separate Map::Load calls.
+      PrefabNestingGuard guard;
+      prefab = prefabs ? prefabs(path) : nullptr;
+    }
     if (!prefab) {
       // Without the prefab the node stays empty but keeps its link, so the
       // file still saves back unchanged.
@@ -256,6 +287,12 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
       }
       return !prefabs;
     }
+    const size_t prefab_nodes = prefab->NodeCount() + 1;
+    if (prefab_nodes > kMaxExpandedNodes ||
+        expanded_nodes > kMaxExpandedNodes - prefab_nodes) {
+      return fail(line, "prefab expansion is too large");
+    }
+    expanded_nodes += prefab_nodes;
     const MapNode& source_root = *prefab->GetRoot();
     node.components = source_root.components;
     node.tag = source_root.tag;
