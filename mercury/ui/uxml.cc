@@ -160,7 +160,8 @@ mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
   switch (desc->type) {
     case FieldType::kBool: {
       std::string v(value);
-      std::transform(v.begin(), v.end(), v.begin(), ::tolower);
+      std::transform(v.begin(), v.end(), v.begin(),
+                     [](unsigned char c) { return std::tolower(c); });
       return v == "true" || v == "1";
     }
     case FieldType::kInt:
