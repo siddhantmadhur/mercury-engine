@@ -5,6 +5,7 @@
 #include "project.h"
 
 #include <algorithm>
+#include <cctype>
 #include <system_error>
 
 namespace Mercury {
@@ -112,6 +113,74 @@ std::string Project::GetBuildTarget() const {
 
 void Project::SetBuildTarget(std::string target) {
   GetOrAddSection("build").properties.Set("target", std::move(target));
+}
+
+std::string Project::GetRenderAntiAliasing() const {
+  auto section = document_.Find("render");
+  if (!section) return "taa";
+  const auto& p = section->properties;
+  if (p.Get("anti_aliasing")) {
+    std::string mode = p.GetString("anti_aliasing");
+    std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (mode == "none" || mode == "fxaa" || mode == "taa") return mode;
+    return "taa";
+  }
+  // Older projects only had the FXAA switch.
+  if (p.Get("fxaa")) return p.GetBool("fxaa", true) ? "fxaa" : "none";
+  return "taa";
+}
+
+void Project::SetRenderAntiAliasing(std::string mode) {
+  GetOrAddSection("render").properties.Set("anti_aliasing", std::move(mode));
+}
+
+bool Project::GetRenderFsr() const {
+  auto section = document_.Find("render");
+  return section && section->properties.GetBool("fsr", false);
+}
+
+void Project::SetRenderFsr(bool enabled) {
+  GetOrAddSection("render").properties.Set("fsr", enabled);
+}
+
+std::string Project::GetRenderFsrQuality() const {
+  auto section = document_.Find("render");
+  if (!section) return "ultra";
+  std::string quality = section->properties.GetString("fsr_quality");
+  std::transform(
+      quality.begin(), quality.end(), quality.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return quality == "high" ? "high" : "ultra";
+}
+
+void Project::SetRenderFsrQuality(std::string quality) {
+  GetOrAddSection("render").properties.Set("fsr_quality", std::move(quality));
+}
+
+float Project::GetRenderScale() const {
+  auto section = document_.Find("render");
+  const double scale =
+      section ? section->properties.GetFloat("render_scale", 0.75) : 0.75;
+  return std::clamp(static_cast<float>(scale), 0.5f, 1.0f);
+}
+
+void Project::SetRenderScale(float scale) {
+  GetOrAddSection("render").properties.Set("render_scale",
+                                           std::clamp(scale, 0.5f, 1.0f));
+}
+
+float Project::GetRenderFsrSharpness() const {
+  auto section = document_.Find("render");
+  const double sharpness =
+      section ? section->properties.GetFloat("fsr_sharpness", 0.9) : 0.9;
+  return std::clamp(static_cast<float>(sharpness), 0.0f, 1.0f);
+}
+
+void Project::SetRenderFsrSharpness(float sharpness) {
+  GetOrAddSection("render").properties.Set("fsr_sharpness",
+                                           std::clamp(sharpness, 0.0f, 1.0f));
 }
 
 glm::vec3 Project::GetGravity() const {

@@ -880,7 +880,6 @@ struct PostProcessProfile {
   // Screen-space ambient occlusion, darkening only indirect light.
   float ambient_occlusion = 0.8f;
   float ao_radius = 0.5f;
-  bool antialiasing = true;  // FXAA
   // Mirror and glossy surfaces reflect the rendered scene. Filament marches
   // the depth buffer; whatever is off screen comes from the IBL.
   bool screen_space_reflections = false;
@@ -909,8 +908,6 @@ struct PostProcessProfile {
             "off");
     r.Field("ao_radius", ao_radius)
         .Tooltip("World-space reach of the occlusion");
-    r.Field("antialiasing", antialiasing)
-        .Tooltip("Smooths jagged edges (FXAA)");
     r.Field("screen_space_reflections", screen_space_reflections)
         .Tooltip(
             "Mirror and glossy surfaces reflect the rendered scene; what is "

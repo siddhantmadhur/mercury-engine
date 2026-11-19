@@ -188,9 +188,22 @@ the Filament light components.
 ### Post-processing
 
 `RenderSettings`/`PostProcessProfile` are applied to each Filament `View`:
-tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO, FXAA,
+tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO,
 screen-space reflections (mirrors and glossy surfaces), and PCSS soft
-shadows. Refraction uses Filament's cubemap mode so it also works on
+shadows.
+
+Anti-aliasing and upscaling are project options in the `.mproj`'s `[render]`
+section (the editor's Build Game dialog writes them), not part of a profile:
+`anti_aliasing = "none" | "fxaa" | "taa"` (default `taa`; a legacy `fxaa`
+bool is read only when `anti_aliasing` is absent), and the optional AMD FSR 1
+upscaler, `fsr = true`, with `fsr_quality = "high" | "ultra"`,
+`render_scale` (0.5 to 1, default 0.75) and `fsr_sharpness` (0 to 1, default
+0.9). FSR applies to the window's scene view and the editor's scene viewport
+only; render textures, previews and the UI stay at native resolution. TAA
+adds Filament's motion vectors pass. FSR 1 expects a well anti-aliased image,
+so pair it with TAA.
+
+Refraction uses Filament's cubemap mode so it also works on
 MoltenVK, where the screen-space refraction pass currently draws nothing.
 
 ### Material notes

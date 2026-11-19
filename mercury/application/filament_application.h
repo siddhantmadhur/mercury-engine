@@ -95,9 +95,11 @@ class FilamentApplication : public Application {
                      std::vector<uint8_t>& rgba_out, uint64_t* frame_id);
   // Points `camera` at what `render` sees, with its sky color.
   void SetupCamera(filament::Camera* camera, const RenderCamera& render);
-  // Applies RenderSettings (tonemap, exposure, bloom, vignette, GTAO, FXAA).
+  // Applies RenderSettings (tonemap, exposure, bloom, vignette, GTAO, FXAA or
+  // TAA). `allow_fsr` is true only for the main scene views, which honour the
+  // FSR 1 upscaling options; every other view renders at native resolution.
   void ApplyPostProcess(filament::View* view, const RenderSettings& settings,
-                        const RenderCamera& camera);
+                        const RenderCamera& camera, bool allow_fsr = false);
   // The cameras this frame, like the Vulkan backend's FrameCameras.
   std::vector<RenderCamera> FrameCameras(float width, float height);
   // Reads `target`'s pixels into its CPU buffer (top-down RGBA).

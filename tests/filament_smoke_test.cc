@@ -24,6 +24,9 @@ namespace {
 
 class SmokeScene : public GameScene {
  public:
+  RenderSettings GetRenderSettings() const override { return settings_; }
+  RenderSettings settings_;
+
   void OnStart() override {
     SetClearColor(glm::vec4(0.05f, 0.1f, 0.25f, 1.0f));
     GetLighting().direction = glm::normalize(glm::vec3(-0.3f, -1.0f, -0.5f));
@@ -78,13 +81,15 @@ class SmokeScene : public GameScene {
   void OnDestroy() override {}
 };
 
-TEST(FilamentSmokeTest, HeadlessOffscreenRenderIsNonUniform) {
+void ExpectNonUniformFullSizeFrame(const RenderSettings& settings) {
   constexpr int kWidth = 128;
   constexpr int kHeight = 128;
 
   DefaultApplication app("Filament Smoke", kWidth, kHeight);
   app.EnableHeadlessMode(true);
-  app.SetGameScene(std::make_unique<SmokeScene>());
+  auto scene = std::make_unique<SmokeScene>();
+  scene->settings_ = settings;
+  app.SetGameScene(std::move(scene));
   ASSERT_TRUE(app.StartHosted());
 
   app.EnableSceneTexture(true);
@@ -120,6 +125,18 @@ TEST(FilamentSmokeTest, HeadlessOffscreenRenderIsNonUniform) {
   EXPECT_GT(static_cast<int>(max_rgb) - static_cast<int>(min_rgb), 10)
       << "Rendered frame appears uniform/blank (min=" << int(min_rgb)
       << ", max=" << int(max_rgb) << ")";
+}
+
+TEST(FilamentSmokeTest, HeadlessOffscreenRenderIsNonUniform) {
+  ExpectNonUniformFullSizeFrame(RenderSettings{});
+}
+
+TEST(FilamentSmokeTest, TaaWithFsrRendersFullSizeFrame) {
+  RenderSettings settings;
+  settings.anti_aliasing = RenderSettings::AntiAliasing::kTaa;
+  settings.fsr = true;
+  settings.render_scale = 0.5f;
+  ExpectNonUniformFullSizeFrame(settings);
 }
 
 }  // namespace

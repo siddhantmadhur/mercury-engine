@@ -4,13 +4,18 @@
 
 #include "dialogs.h"
 
+#include <wx/checkbox.h>
 #include <wx/choice.h>
 #include <wx/dirdlg.h>
 #include <wx/listctrl.h>
+#include <wx/msgdlg.h>
+#include <wx/slider.h>
+#include <wx/statbox.h>
 #include <wx/statline.h>
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <vector>
 
 #include "cmake_build.h"
@@ -187,6 +192,74 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   grid->Add(pack_choice, 1, wxEXPAND);
   root->Add(grid, 0, wxEXPAND | wxALL, 14);
 
+  // Rendering options, written to the project's [render] section.
+  auto* render_box = new wxStaticBoxSizer(wxVERTICAL, &dlg, "Rendering");
+  auto* render_grid = new wxFlexGridSizer(2, 10, 10);
+  render_grid->AddGrowableCol(1, 1);
+  wxWindow* box = render_box->GetStaticBox();
+
+  wxArrayString aa_choices;
+  aa_choices.Add("None");
+  aa_choices.Add("FXAA");
+  aa_choices.Add("TAA");
+  auto* aa_choice =
+      new wxChoice(box, wxID_ANY, wxDefaultPosition, wxDefaultSize, aa_choices);
+  const std::string aa_mode = project->GetRenderAntiAliasing();
+  aa_choice->SetSelection(aa_mode == "none" ? 0 : aa_mode == "fxaa" ? 1 : 2);
+
+  auto* fsr_check = new wxCheckBox(box, wxID_ANY, "FSR 1 upscaling");
+  fsr_check->SetValue(project->GetRenderFsr());
+  fsr_check->SetToolTip(
+      "Draws the scene smaller and upscales it with AMD FidelityFX Super "
+      "Resolution 1. Best together with TAA.");
+
+  wxArrayString quality_choices;
+  quality_choices.Add("High");
+  quality_choices.Add("Ultra");
+  auto* quality_choice = new wxChoice(box, wxID_ANY, wxDefaultPosition,
+                                      wxDefaultSize, quality_choices);
+  quality_choice->SetSelection(project->GetRenderFsrQuality() == "high" ? 0
+                                                                        : 1);
+
+  auto* scale_slider = new wxSlider(
+      box, wxID_ANY,
+      static_cast<int>(std::lround(project->GetRenderScale() * 100)), 50, 100,
+      wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+  auto* sharpness_slider = new wxSlider(
+      box, wxID_ANY,
+      static_cast<int>(std::lround(project->GetRenderFsrSharpness() * 100)), 0,
+      100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+
+  auto* quality_lbl = new wxStaticText(box, wxID_ANY, "FSR Quality:");
+  auto* scale_lbl = new wxStaticText(box, wxID_ANY, "Render Scale (%):");
+  auto* sharpness_lbl = new wxStaticText(box, wxID_ANY, "Sharpness (%):");
+  render_grid->Add(new wxStaticText(box, wxID_ANY, "Anti-aliasing:"), 0,
+                   wxALIGN_CENTER_VERTICAL);
+  render_grid->Add(aa_choice, 1, wxEXPAND);
+  render_grid->AddSpacer(0);
+  render_grid->Add(fsr_check, 0, wxALIGN_CENTER_VERTICAL);
+  render_grid->Add(quality_lbl, 0, wxALIGN_CENTER_VERTICAL);
+  render_grid->Add(quality_choice, 1, wxEXPAND);
+  render_grid->Add(scale_lbl, 0, wxALIGN_CENTER_VERTICAL);
+  render_grid->Add(scale_slider, 1, wxEXPAND);
+  render_grid->Add(sharpness_lbl, 0, wxALIGN_CENTER_VERTICAL);
+  render_grid->Add(sharpness_slider, 1, wxEXPAND);
+  render_box->Add(render_grid, 1, wxEXPAND | wxALL, 8);
+  root->Add(render_box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 14);
+
+  const auto update_fsr_controls = [=]() {
+    const bool on = fsr_check->GetValue();
+    quality_lbl->Enable(on);
+    quality_choice->Enable(on);
+    scale_lbl->Enable(on);
+    scale_slider->Enable(on);
+    sharpness_lbl->Enable(on);
+    sharpness_slider->Enable(on);
+  };
+  update_fsr_controls();
+  fsr_check->Bind(wxEVT_CHECKBOX,
+                  [=](wxCommandEvent&) { update_fsr_controls(); });
+
   browse->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
     fs::path initial = project->Resolve(out_ctrl->GetValue().ToStdString());
     if (!fs::exists(initial)) initial = project->GetRoot();
@@ -217,6 +290,21 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   if (idx >= 0 && static_cast<size_t>(idx) < EditorScene::kNumPackSizes) {
     scene.Settings().pack_size_mb = EditorScene::kPackSizes[idx].megabytes;
     scene.Settings().Save();
+  }
+  static constexpr const char* kAntiAliasing[] = {"none", "fxaa", "taa"};
+  const int aa_sel = aa_choice->GetSelection();
+  project->SetRenderAntiAliasing(
+      kAntiAliasing[aa_sel >= 0 && aa_sel < 3 ? aa_sel : 2]);
+  project->SetRenderFsr(fsr_check->GetValue());
+  project->SetRenderFsrQuality(quality_choice->GetSelection() == 0 ? "high"
+                                                                   : "ultra");
+  project->SetRenderScale(static_cast<float>(scale_slider->GetValue()) /
+                          100.0f);
+  project->SetRenderFsrSharpness(
+      static_cast<float>(sharpness_slider->GetValue()) / 100.0f);
+  if (!project->Save()) {
+    wxMessageBox("Could not save the rendering options to the project file.",
+                 "Build Game", wxOK | wxICON_WARNING, parent);
   }
   return scene.BuildGame(out_ctrl->GetValue().ToStdString());
 }

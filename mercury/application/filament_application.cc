@@ -151,7 +151,6 @@ bool FilamentApplication::OnLoad() {
                    .color({0.1f, 0.1f, 0.1f, 1.0f})
                    .build(*engine_);
   scene_renderer_.SetFallbackSkybox(scene_sky_);
-  scene_view_->setAntiAliasing(filament::View::AntiAliasing::FXAA);
 
   // The game's UI drawn over the scene.
   ui_camera_entity_ = utils::EntityManager::get().create();
@@ -220,10 +219,37 @@ void FilamentApplication::SetupCamera(filament::Camera* camera,
 
 void FilamentApplication::ApplyPostProcess(filament::View* view,
                                            const RenderSettings& settings,
-                                           const RenderCamera& camera) {
+                                           const RenderCamera& camera,
+                                           bool allow_fsr) {
   if (!view) return;
-  view->setAntiAliasing(settings.fxaa ? filament::View::AntiAliasing::FXAA
-                                      : filament::View::AntiAliasing::NONE);
+  // Anti-aliasing is a project option. TAA needs the motion vectors pass and
+  // runs inside Filament's post-processing, as does the FSR 1 upscaler.
+  const bool taa = settings.anti_aliasing == RenderSettings::AntiAliasing::kTaa;
+  view->setAntiAliasing(settings.anti_aliasing ==
+                                RenderSettings::AntiAliasing::kFxaa
+                            ? filament::View::AntiAliasing::FXAA
+                            : filament::View::AntiAliasing::NONE);
+  filament::TemporalAntiAliasingOptions taa_options;
+  taa_options.enabled = taa;
+  view->setTemporalAntiAliasingOptions(taa_options);
+  filament::MotionVectorsOptions motion_vectors;
+  motion_vectors.enabled = taa;
+  view->setMotionVectorsOptions(motion_vectors);
+
+  // FSR 1 draws the scene at a fixed fraction of the viewport (min == max, so
+  // the dynamic resolution controller never moves it) and upscales it. Only
+  // the main scene views; render textures, previews and the UI stay native.
+  filament::DynamicResolutionOptions resolution;
+  resolution.enabled = allow_fsr && settings.fsr;
+  const float scale = std::clamp(settings.render_scale, 0.5f, 1.0f);
+  resolution.minScale = {scale, scale};
+  resolution.maxScale = {scale, scale};
+  resolution.homogeneousScaling = true;
+  resolution.sharpness = std::clamp(settings.fsr_sharpness, 0.0f, 1.0f);
+  resolution.quality = settings.fsr_quality == RenderSettings::FsrQuality::kHigh
+                           ? filament::QualityLevel::HIGH
+                           : filament::QualityLevel::ULTRA;
+  view->setDynamicResolutionOptions(resolution);
 
   filament::AmbientOcclusionOptions ao;
   ao.aoType = filament::AmbientOcclusionOptions::AmbientOcclusionType::GTAO;
@@ -344,7 +370,6 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
   target.view->setCamera(target.camera);
   target.view->setRenderTarget(target.target);
   target.view->setViewport(filament::Viewport(0, 0, width, height));
-  target.view->setAntiAliasing(filament::View::AntiAliasing::FXAA);
   if (is_ui) {
     target.view->setBlendMode(filament::View::BlendMode::OPAQUE);
     target.view->setPostProcessingEnabled(false);
@@ -504,7 +529,7 @@ void FilamentApplication::Render() {
     scene_sky_->setColor(
         ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
     SetupCamera(scene_camera_, *main);
-    ApplyPostProcess(scene_view_, render_settings, *main);
+    ApplyPostProcess(scene_view_, render_settings, *main, true);
     scene_view_->setViewport(
         filament::Viewport(0, 0, window_width, window_height));
     scene_renderer_.SetSkyboxForClear(main->clear ==
@@ -527,7 +552,7 @@ void FilamentApplication::Render() {
       scene_sky_->setColor(
           ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
       SetupCamera(scene_target_.camera, *main);
-      ApplyPostProcess(scene_target_.view, render_settings, *main);
+      ApplyPostProcess(scene_target_.view, render_settings, *main, true);
       scene_renderer_.SetSkyboxForClear(main->clear ==
                                         static_cast<int>(CameraClear::kSkybox));
       scene_target_.view->setVisibleLayers(0xff, main->culling_mask & 0xff);

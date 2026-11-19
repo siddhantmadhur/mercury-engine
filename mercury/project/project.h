@@ -117,6 +117,23 @@ class Project {
   // shared mercury_player.
   std::string GetBuildTarget() const;
   void SetBuildTarget(std::string target);
+  // [render] anti_aliasing: "none", "fxaa" or "taa" (default). A project that
+  // only has the legacy `fxaa` bool maps it to "fxaa"/"none".
+  std::string GetRenderAntiAliasing() const;
+  void SetRenderAntiAliasing(std::string mode);
+  // [render] fsr: AMD FSR 1 upscaling of the window's scene (default off)
+  bool GetRenderFsr() const;
+  void SetRenderFsr(bool enabled);
+  // [render] fsr_quality: "high" or "ultra" (default)
+  std::string GetRenderFsrQuality() const;
+  void SetRenderFsrQuality(std::string quality);
+  // [render] render_scale: fraction of the window size drawn when FSR is on,
+  // clamped to 0.5-1 (default 0.75)
+  float GetRenderScale() const;
+  void SetRenderScale(float scale);
+  // [render] fsr_sharpness: RCAS sharpening, clamped to 0-1 (default 0.9)
+  float GetRenderFsrSharpness() const;
+  void SetRenderFsrSharpness(float sharpness);
   // [physics] gravity, in units per second squared
   glm::vec3 GetGravity() const;
   // [physics] tick_rate: fixed ticks (OnTick + physics steps) per second

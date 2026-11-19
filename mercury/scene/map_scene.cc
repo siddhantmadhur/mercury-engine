@@ -1208,7 +1208,18 @@ RenderSettings MapScene::GetRenderSettings() const {
         static_cast<float>(p.GetFloat("ssao_radius", settings.ssao_radius));
     settings.ssao_samples =
         static_cast<int>(p.GetInt("ssao_samples", settings.ssao_samples));
-    settings.fxaa = p.GetBool("fxaa", settings.fxaa);
+    // Rendering options the project owns (the editor's Build Game dialog).
+    const std::string aa = project_->GetRenderAntiAliasing();
+    settings.anti_aliasing = aa == "none" ? RenderSettings::AntiAliasing::kNone
+                             : aa == "fxaa"
+                                 ? RenderSettings::AntiAliasing::kFxaa
+                                 : RenderSettings::AntiAliasing::kTaa;
+    settings.fsr = project_->GetRenderFsr();
+    settings.fsr_quality = project_->GetRenderFsrQuality() == "high"
+                               ? RenderSettings::FsrQuality::kHigh
+                               : RenderSettings::FsrQuality::kUltra;
+    settings.render_scale = project_->GetRenderScale();
+    settings.fsr_sharpness = project_->GetRenderFsrSharpness();
     settings.screen_space_reflections = p.GetBool(
         "screen_space_reflections", settings.screen_space_reflections);
     settings.reflection_distance = static_cast<float>(
@@ -1250,7 +1261,6 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.vignette_center = profile.vignette_center;
     settings.ssao_intensity = profile.ambient_occlusion;
     settings.ssao_radius = profile.ao_radius;
-    settings.fxaa = profile.antialiasing;
     settings.screen_space_reflections = profile.screen_space_reflections;
     settings.reflection_distance = profile.reflection_distance;
     settings.reflection_thickness = profile.reflection_thickness;

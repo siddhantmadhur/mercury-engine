@@ -282,6 +282,7 @@ if (MERCURY_BUILD_TESTS)
             tests/primitives_test.cc
             tests/process_test.cc
             tests/reflection_test.cc
+            tests/render_settings_test.cc
             tests/rust_bridge_test.cc
             tests/script_behaviour_test.cc
             tests/script_runtime_test.cc
