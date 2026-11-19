@@ -586,6 +586,7 @@ void Panel::DispatchInput(const UIInputFrame& input) {
         pressed_buttons_ |= 1 << e.button;
         VisualElement* hit = Pick(point);
         VisualElement* target = capture_ ? capture_ : (hit ? hit : root_.get());
+        const auto target_alive = target->aliveToken();
         press_target_[e.button] = target;
         if (e.button == 0) {
           // Focus the clicked element (or its nearest focusable ancestor).
@@ -604,7 +605,11 @@ void Panel::DispatchInput(const UIInputFrame& input) {
         }
         PointerDownEvent down;
         FillPointer(down, point, e.button, e.modifiers);
-        Dispatch(down, capture_ ? capture_ : target, true);
+        // A focus handler may have removed the picked element; Dispatch only
+        // reaches the tree through live targets.
+        VisualElement* down_target =
+            capture_ ? capture_ : (*target_alive ? target : root_.get());
+        Dispatch(down, down_target, true);
         break;
       }
       case UIInputEvent::Type::kPointerUp: {
@@ -612,13 +617,17 @@ void Panel::DispatchInput(const UIInputFrame& input) {
         pressed_buttons_ &= ~(1 << e.button);
         VisualElement* hit = inside ? Pick(point) : nullptr;
         VisualElement* target = capture_ ? capture_ : (hit ? hit : root_.get());
+        // Both the hit element and the press target may be removed by the
+        // PointerUp handlers, so hold their tokens across the dispatch.
+        const auto hit_alive = hit ? hit->aliveToken() : nullptr;
+        VisualElement* pressed = press_target_[e.button];
+        const auto pressed_alive = pressed ? pressed->aliveToken() : nullptr;
+        press_target_[e.button] = nullptr;
         PointerUpEvent up;
         FillPointer(up, point, e.button, e.modifiers);
         Dispatch(up, target, true);
-        VisualElement* pressed = press_target_[e.button];
-        press_target_[e.button] = nullptr;
-        if (pressed && hit && pressed->Contains(hit) &&
-            pressed->panel() == this) {
+        if (pressed && *pressed_alive && hit && *hit_alive &&
+            pressed->Contains(hit) && pressed->panel() == this) {
           ClickEvent click;
           FillPointer(click, point, e.button, e.modifiers);
           Dispatch(click, pressed, true);
