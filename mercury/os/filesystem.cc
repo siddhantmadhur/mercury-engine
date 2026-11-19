@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <new>
 #include <atomic>
 #include <climits>
 #include <cstdlib>
@@ -101,12 +102,18 @@ std::optional<std::vector<uint8_t>> ReadBytes(const fs::path& path) {
   const auto size = static_cast<std::streamoff>(file.tellg());
   if (size < 0) return std::nullopt;
   if (static_cast<uint64_t>(size) > kMaxWholeFileSize) return std::nullopt;
-  std::vector<uint8_t> data(static_cast<size_t>(size));
-  file.seekg(0);
-  if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
+  // Callers include FFI boundaries that must not see an exception, and a big
+  // file on a small machine is an ordinary failure to read.
+  try {
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    file.seekg(0);
+    if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
+      return std::nullopt;
+    }
+    return data;
+  } catch (const std::bad_alloc&) {
     return std::nullopt;
   }
-  return data;
 }
 
 std::optional<std::string> ReadText(const fs::path& path) {

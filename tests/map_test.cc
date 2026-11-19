@@ -6,10 +6,13 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <sstream>
 
+#include "project/asset_database.h"
 #include "project/project.h"
 #include "scene/map_scene.h"
 
@@ -212,4 +215,45 @@ skybox = ExtResource("1")
   // Without a skybox the renderer falls back to the background color.
   scene.Instantiate(Map());
   EXPECT_EQ(scene.GetSkyboxPath(), "");
+}
+
+// Load() hands out a snapshot: reloading a changed file must not rewrite the
+// Asset a caller is still holding.
+TEST(AssetDatabase, ReloadLeavesEarlierSnapshotsUntouched) {
+  namespace fs = std::filesystem;
+  const fs::path dir = fs::temp_directory_path() /
+                       ("asset_db_test_" + std::to_string(std::random_device{}()));
+  fs::create_directories(dir / "assets");
+  {
+    std::ofstream(dir / "t.mproj") << "[project]\nname = \"t\"\n";
+  }
+  const auto write = [&](const char* value) {
+    std::ofstream(dir / "assets/a.masset")
+        << "[masset type=\"Thing\" format=1]\nvalue = \"" << value << "\"\n";
+  };
+  write("first");
+  std::string error;
+  auto project = Project::Load(dir / "t.mproj", &error);
+  ASSERT_TRUE(project) << error;
+  AssetDatabase assets(project);
+
+  auto before = assets.Load("res://assets/a.masset");
+  ASSERT_TRUE(before);
+  EXPECT_EQ(assets.Load("res://assets/a.masset"), before);  // cached
+  EXPECT_EQ(*before->properties.Get("value")->ToString(), "first");
+
+  write("second");
+  fs::last_write_time(dir / "assets/a.masset",
+                      fs::last_write_time(dir / "assets/a.masset") +
+                          std::chrono::seconds(5));
+  auto after = assets.Load("res://assets/a.masset");
+  ASSERT_TRUE(after);
+  EXPECT_NE(after, before);
+  EXPECT_EQ(*after->properties.Get("value")->ToString(), "second");
+  // The first snapshot is exactly as it was.
+  EXPECT_EQ(*before->properties.Get("value")->ToString(), "first");
+
+  // A path outside the project is refused rather than read.
+  EXPECT_FALSE(assets.Load("res://../../../etc/hosts"));
+  fs::remove_all(dir);
 }

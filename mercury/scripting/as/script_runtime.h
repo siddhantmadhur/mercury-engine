@@ -235,8 +235,17 @@ class ScriptRuntime {
   int RegisterBehaviour(ScriptBehaviour* behaviour);
   void UnregisterBehaviour(int id);
   ScriptBehaviour* FindBehaviour(int id) const;
-  // Keeps a data-asset instance alive for the lifetime of the runtime.
-  void OwnDataAsset(std::unique_ptr<ScriptBehaviour> asset);
+  // Data assets are shared: loading the same file as the same class again
+  // returns the instance already made, so a script that loads an asset every
+  // frame does not grow memory. `version` identifies the file contents the
+  // instance was built from (the AssetDatabase snapshot); a different one
+  // means the file changed and a new instance is needed.
+  asIScriptObject* FindDataAsset(const std::string& key,
+                                 const void* version) const;
+  // Keeps a data-asset instance alive for the lifetime of the runtime. An
+  // instance it replaces is kept too, because scripts may still hold it.
+  void OwnDataAsset(std::string key, std::shared_ptr<const void> version,
+                    std::unique_ptr<ScriptBehaviour> asset);
 
   // --- script classes -----------------------------------------------------
   bool AddScriptClass(std::unique_ptr<ScriptClass> script_class,
@@ -293,7 +302,14 @@ class ScriptRuntime {
   std::unordered_map<int, ScriptBehaviour*> behaviours_;
   int next_behaviour_id_ = 1;
   uint32_t current_scene_ = 0;
-  std::vector<std::unique_ptr<ScriptBehaviour>> data_assets_;
+  struct DataAssetEntry {
+    // Held, not just compared, so the address cannot be reused by a newer
+    // snapshot while this entry exists.
+    std::shared_ptr<const void> version;
+    std::unique_ptr<ScriptBehaviour> behaviour;
+  };
+  std::unordered_map<std::string, DataAssetEntry> data_assets_;
+  std::vector<std::unique_ptr<ScriptBehaviour>> replaced_data_assets_;
 
   std::unordered_map<int, Timer> timers_;
   int next_timer_id_ = 1;

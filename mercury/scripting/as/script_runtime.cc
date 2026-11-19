@@ -227,6 +227,7 @@ bool ScriptRuntime::Initialize() {
 void ScriptRuntime::Shutdown() {
   if (!engine_) return;
   data_assets_.clear();
+  replaced_data_assets_.clear();
   behaviours_.clear();
   timers_.clear();
   classes_.clear();
@@ -924,8 +925,25 @@ ScriptBehaviour* ScriptRuntime::FindBehaviour(int id) const {
   return it == behaviours_.end() ? nullptr : it->second;
 }
 
-void ScriptRuntime::OwnDataAsset(std::unique_ptr<ScriptBehaviour> asset) {
-  data_assets_.push_back(std::move(asset));
+asIScriptObject* ScriptRuntime::FindDataAsset(const std::string& key,
+                                              const void* version) const {
+  auto it = data_assets_.find(key);
+  if (it == data_assets_.end() || it->second.version.get() != version ||
+      !it->second.behaviour) {
+    return nullptr;
+  }
+  return it->second.behaviour->Instance();
+}
+
+void ScriptRuntime::OwnDataAsset(std::string key,
+                                 std::shared_ptr<const void> version,
+                                 std::unique_ptr<ScriptBehaviour> asset) {
+  auto& entry = data_assets_[std::move(key)];
+  if (entry.behaviour) {
+    replaced_data_assets_.push_back(std::move(entry.behaviour));
+  }
+  entry.version = std::move(version);
+  entry.behaviour = std::move(asset);
 }
 
 int ScriptRuntime::AddTimer(int behaviour, std::string method, double seconds,

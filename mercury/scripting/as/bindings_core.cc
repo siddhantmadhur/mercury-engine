@@ -593,6 +593,13 @@ asIScriptObject* LoadAsset(const std::string& path,
     Throw(("Could not load " + path).c_str());
     return nullptr;
   }
+  // One instance per (class, file): the same asset loaded again is the same
+  // object, and loading in a loop does not keep making new ones.
+  const std::string key = class_name + "|" + asset->path;
+  if (asIScriptObject* shared = Runtime().FindDataAsset(key, asset.get())) {
+    shared->AddRef();
+    return shared;
+  }
   auto holder = ScriptBehaviour::Create(*script_class, nullptr, entt::null);
   if (!holder) return nullptr;
   auto reflector = Reflector::Read(asset->properties);
@@ -600,7 +607,7 @@ asIScriptObject* LoadAsset(const std::string& path,
   LogReflectionWarnings(reflector, asset->path);
   asIScriptObject* instance = holder->Instance();
   if (instance) instance->AddRef();
-  Runtime().OwnDataAsset(std::move(holder));
+  Runtime().OwnDataAsset(key, asset, std::move(holder));
   return instance;
 }
 

@@ -52,8 +52,14 @@ bool OsReadBytes(::rust::Str path, ::rust::Vec<uint8_t>& out) {
   auto bytes = Mercury::os::ReadBytes(ToPath(path));
   if (!bytes) return false;
   out.clear();
-  out.reserve(bytes->size());
-  std::copy(bytes->begin(), bytes->end(), std::back_inserter(out));
+  // An exception must not unwind into Rust; report a failed read instead.
+  try {
+    out.reserve(bytes->size());
+    std::copy(bytes->begin(), bytes->end(), std::back_inserter(out));
+  } catch (const std::exception&) {
+    out.clear();
+    return false;
+  }
   return true;
 }
 
