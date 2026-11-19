@@ -639,11 +639,22 @@ bool ScriptEditorPanel::ConfirmCloseAll(const wxString& prompt) {
 
 void ScriptEditorPanel::RemoveTab(ScriptEditorTab* tab) {
   if (!tab) return;
-  const int page = tabs_->GetPageIndex(tab);
-  if (page != wxNOT_FOUND) tabs_->DeletePage(page);
-  auto it = tabs_by_path_.find(tab->ResPath());
+  // Forget the tab first and read what is needed from it now: closing can be
+  // asked for by the tab's own Vim handler (:q, Ctrl-W), which is still on
+  // the stack, so the tab must outlive this call.
+  const std::string res_path = tab->ResPath();
+  auto it = tabs_by_path_.find(res_path);
   if (it != tabs_by_path_.end() && it->second == tab) tabs_by_path_.erase(it);
   if (active_tab_ == tab) active_tab_ = nullptr;
+
+  const int page = tabs_->GetPageIndex(tab);
+  if (page != wxNOT_FOUND) {
+    // Detach without deleting, and delete once the handlers that called us
+    // have returned.
+    tabs_->RemovePage(page);
+    tab->Hide();
+    CallAfter([tab]() { tab->Destroy(); });
+  }
   active_tab_ = ActiveTab();
   ParseActiveIntoWorkspace();
   RebuildOutline();
