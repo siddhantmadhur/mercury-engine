@@ -23,9 +23,12 @@
 
 namespace Mercury {
 
-// Cores worth using.
+// Cores worth using. Capped so nested calls cannot exhaust the process's
+// thread limit.
 inline size_t WorkerThreadCount() {
-  return std::max<size_t>(1, std::thread::hardware_concurrency());
+  constexpr size_t kMaxWorkers = 32;
+  return std::min(kMaxWorkers,
+                  std::max<size_t>(1, std::thread::hardware_concurrency()));
 }
 
 /**
@@ -61,8 +64,13 @@ void ParallelFor(size_t count, Fn&& fn, size_t max_threads = 0) {
   };
 
   std::vector<std::thread> helpers;
-  helpers.reserve(threads - 1);
-  for (size_t i = 1; i < threads; i++) helpers.emplace_back(work);
+  try {
+    helpers.reserve(threads - 1);
+    for (size_t i = 1; i < threads; i++) helpers.emplace_back(work);
+  } catch (...) {
+    // Out of threads: run the rest on the calling thread. The helpers already
+    // started are joined below, so none is destroyed while joinable.
+  }
   work();
   for (auto& helper : helpers) helper.join();
   if (failure) std::rethrow_exception(failure);
