@@ -178,6 +178,10 @@ class Parser {
  public:
   explicit Parser(std::string_view source) : src_(source) {}
 
+  // Deeply nested arrays are not useful data, and recursing on every level
+  // would overflow the stack on a hostile file.
+  static constexpr int kMaxDepth = 128;
+
   bool ParseDocument(Document& out) {
     SkipSpace();
     while (!AtEnd()) {
@@ -493,6 +497,12 @@ class Parser {
   }
 
   bool ParseArray(Variant& out) {
+    if (depth_ >= kMaxDepth) return Fail("arrays are nested too deeply");
+    struct DepthGuard {
+      int& depth;
+      explicit DepthGuard(int& d) : depth(d) { ++depth; }
+      ~DepthGuard() { --depth; }
+    } guard(depth_);
     Advance();  // '['
     Array items;
     SkipSpace();
@@ -517,6 +527,7 @@ class Parser {
   size_t pos_ = 0;
   int line_ = 1;
   int column_ = 1;
+  int depth_ = 0;
   ParseError error_;
 };
 

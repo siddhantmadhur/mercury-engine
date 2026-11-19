@@ -22,30 +22,37 @@ uint64_t NextUid() {
   return next++;
 }
 
-// Applies fn to every value in a property list, descending into arrays.
+// Applies fn to every value in a property list, descending into arrays. The
+// cap matches the parser's so a hand-built Variant cannot recurse without
+// bound either.
+constexpr int kMaxValueDepth = 128;
+
 void ForEachValue(mtext::PropertyList& properties,
                   const std::function<void(mtext::Variant&)>& fn) {
-  std::function<void(mtext::Variant&)> visit = [&](mtext::Variant& value) {
-    if (auto array = value.Get<mtext::Array>()) {
-      for (auto& item : *array) visit(item);
+  std::function<void(mtext::Variant&, int)> visit = [&](mtext::Variant& value,
+                                                        int depth) {
+    if (auto array = value.Get<mtext::Array>();
+        array && depth < kMaxValueDepth) {
+      for (auto& item : *array) visit(item, depth + 1);
     } else {
       fn(value);
     }
   };
-  for (auto& property : properties) visit(property.value);
+  for (auto& property : properties) visit(property.value, 0);
 }
 
 void ForEachValue(const mtext::PropertyList& properties,
                   const std::function<void(const mtext::Variant&)>& fn) {
-  std::function<void(const mtext::Variant&)> visit =
-      [&](const mtext::Variant& value) {
-        if (auto array = value.Get<mtext::Array>()) {
-          for (const auto& item : *array) visit(item);
+  std::function<void(const mtext::Variant&, int)> visit =
+      [&](const mtext::Variant& value, int depth) {
+        if (auto array = value.Get<mtext::Array>();
+            array && depth < kMaxValueDepth) {
+          for (const auto& item : *array) visit(item, depth + 1);
         } else {
           fn(value);
         }
       };
-  for (const auto& property : properties) visit(property.value);
+  for (const auto& property : properties) visit(property.value, 0);
 }
 
 // The [ext_resource] type of a file, from its extension.
