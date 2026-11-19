@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
 #include <string>
 
 using namespace Mercury;
@@ -40,6 +41,30 @@ TEST(SparseSet, DeleteKeepsTheOthersReachable) {
   }
   set.Set(0, "again");
   EXPECT_EQ(*set.Get(0), "again");
+}
+
+TEST(SparseSet, DeletingTheLastSlotAndTheOnlyElement) {
+  SparseSet<std::string> set;
+  set.Set(1, "a");
+  set.Set(2, "b");
+  set.Delete(2);  // the last slot
+  EXPECT_EQ(*set.Get(1), "a");
+  EXPECT_EQ(set.Get(2), nullptr);
+  set.Delete(1);  // the only element
+  EXPECT_TRUE(set.Empty());
+  set.Set(1, "c");
+  EXPECT_EQ(*set.Get(1), "c");
+  // Storing a value that lives in the set under another id.
+  set.Set(7, *set.Get(1));
+  EXPECT_EQ(*set.Get(7), "c");
+}
+
+TEST(SparseSet, HoldsMoveOnlyValues) {
+  SparseSet<std::unique_ptr<int>> set;
+  set.Set(4, std::make_unique<int>(9));
+  set.Set(8, std::make_unique<int>(10));
+  set.Delete(4);
+  EXPECT_EQ(**set.Get(8), 10);
 }
 
 TEST(SparseSet, RefusesIdsThatWouldAllocateHugeTables) {

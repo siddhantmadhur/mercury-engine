@@ -22,6 +22,9 @@ namespace Mercury {
  * Values live packed in one array, so iterating and clearing are cheap, while
  * Get, Set and Delete by id are O(1). Ids above kMaxIndex are refused so a bad
  * id cannot make the id table allocate gigabytes.
+ *
+ * Pointers from Get() are invalidated by Set() of a new id and by Delete()
+ * (which moves another value into the freed slot).
  */
 template <class T>
 class SparseSet {
@@ -43,14 +46,18 @@ class SparseSet {
   // Stores `value` under `index`, replacing any earlier one. Returns false
   // (and stores nothing) if the id is above kMaxIndex.
   bool Set(Index index, const T& value) {
+    T copy(value);  // `value` may point into this set
+    return Set(index, std::move(copy));
+  }
+  bool Set(Index index, T&& value) {
     if (index > kMaxIndex) return false;
     if (Contains(index)) {
-      dense_[sparse_[index]] = value;
+      dense_[sparse_[index]] = std::move(value);
       return true;
     }
     if (index >= sparse_.size()) sparse_.resize(index + 1, kEmpty);
     sparse_[index] = static_cast<Index>(dense_.size());
-    dense_.push_back(value);
+    dense_.push_back(std::move(value));
     owners_.push_back(index);
     return true;
   }
@@ -61,9 +68,11 @@ class SparseSet {
     // Move the last value into the hole so the values stay packed.
     const Index slot = sparse_[index];
     const Index last_owner = owners_.back();
-    dense_[slot] = std::move(dense_.back());
-    owners_[slot] = last_owner;
-    sparse_[last_owner] = slot;
+    if (slot != dense_.size() - 1) {
+      dense_[slot] = std::move(dense_.back());
+      owners_[slot] = last_owner;
+      sparse_[last_owner] = slot;
+    }
     dense_.pop_back();
     owners_.pop_back();
     sparse_[index] = kEmpty;
@@ -75,7 +84,7 @@ class SparseSet {
     owners_.clear();
   }
 
-  size_t Size() const { return dense_.size(); }
+  std::size_t Size() const { return dense_.size(); }
   bool Empty() const { return dense_.empty(); }
 
  private:
