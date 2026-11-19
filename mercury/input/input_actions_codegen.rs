@@ -70,6 +70,14 @@ fn input_action_identifier(name: &str) -> String {
     out
 }
 
+// Keeps an arbitrary path from terminating a generated '//' comment and
+// injecting AngelScript statements after it.
+fn sanitize_comment(text: &str) -> String {
+    text.chars()
+        .map(|ch| if ch.is_control() { ' ' } else { ch })
+        .collect()
+}
+
 fn quote(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     out.push('"');
@@ -90,6 +98,7 @@ fn generate_input_actions_angel_script(
 ) -> ffi::InputActionsSource {
     let mut errors = Vec::new();
     let type_name = input_action_identifier(class_name);
+    let source_path = sanitize_comment(source_path);
 
     // Map identifier -> (raw map name, its actions in map order).
     let mut maps: Vec<(String, Vec<&ffi::InputActionDesc>)> = Vec::new();
