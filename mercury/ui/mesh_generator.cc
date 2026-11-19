@@ -8,6 +8,7 @@
 #include <cmath>
 #include <numbers>
 
+#include "debugger/debugger.h"
 #include "ui/panel.h"
 #include "ui/visual_element.h"
 
@@ -126,11 +127,24 @@ void MeshBuilder::AddTriangles(const UIVertex* vertices, size_t vertex_count,
                                const uint32_t* indices, size_t index_count,
                                uint32_t texture_id) {
   if (vertex_count == 0 || index_count == 0) return;
+  // Check every narrowing conversion in 64-bit arithmetic first, so a huge
+  // batch is rejected instead of wrapping the 32-bit vertex/index space.
+  const uint64_t base = out_.vertices.size();
+  const uint64_t total_vertices = base + vertex_count;
+  const uint64_t total_indices = out_.indices.size() + index_count;
+  if (total_vertices > UINT32_MAX || total_indices > UINT32_MAX) {
+    PDebug::error("UI: mesh batch exceeds 32-bit vertex or index limits");
+    return;
+  }
   UIDrawCommand& command = CommandFor(texture_id);
-  const uint32_t base = static_cast<uint32_t>(out_.vertices.size());
+  if (static_cast<uint64_t>(command.index_count) + index_count > UINT32_MAX) {
+    PDebug::error("UI: mesh batch exceeds 32-bit command index count");
+    return;
+  }
+  const uint32_t base_vertex = static_cast<uint32_t>(base);
   out_.vertices.insert(out_.vertices.end(), vertices, vertices + vertex_count);
   for (size_t i = 0; i < index_count; i++)
-    out_.indices.push_back(base + indices[i]);
+    out_.indices.push_back(base_vertex + indices[i]);
   command.index_count += static_cast<uint32_t>(index_count);
 }
 

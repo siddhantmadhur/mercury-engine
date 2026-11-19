@@ -22,13 +22,28 @@ constexpr int kMaxTextureDimension = 16384;
 }  // namespace
 
 void UIDrawData::Append(const UIDrawData& other) {
-  const uint32_t base_vertex = static_cast<uint32_t>(vertices.size());
-  const uint32_t base_index = static_cast<uint32_t>(indices.size());
+  const uint64_t base_vertex = vertices.size();
+  const uint64_t base_index = indices.size();
+  const uint64_t total_vertices = base_vertex + other.vertices.size();
+  const uint64_t total_indices = base_index + other.indices.size();
+  // UIDrawData stores 32-bit indices, so merging must not narrow silently.
+  if (total_vertices > UINT32_MAX || total_indices > UINT32_MAX) {
+    PDebug::error("UI: draw data exceeds 32-bit vertex or index limits");
+    return;
+  }
+  for (const UIDrawCommand& command : other.commands) {
+    if (base_index + command.index_offset > UINT32_MAX) {
+      PDebug::error("UI: draw command index offset overflows uint32_t");
+      return;
+    }
+  }
   vertices.insert(vertices.end(), other.vertices.begin(), other.vertices.end());
-  indices.reserve(indices.size() + other.indices.size());
-  for (uint32_t index : other.indices) indices.push_back(index + base_vertex);
+  indices.reserve(static_cast<size_t>(total_indices));
+  for (uint32_t index : other.indices) {
+    indices.push_back(static_cast<uint32_t>(base_vertex) + index);
+  }
   for (UIDrawCommand command : other.commands) {
-    command.index_offset += base_index;
+    command.index_offset += static_cast<uint32_t>(base_index);
     commands.push_back(command);
   }
   target_size = glm::max(target_size, other.target_size);
