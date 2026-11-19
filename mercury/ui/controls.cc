@@ -1684,6 +1684,7 @@ void ListView::RefreshItems() {
     item->style().height = Length::Px(item_height_);
     item->style().flexShrink = 0.0f;
     VisualElement* raw = scroll_->Add(std::move(item));
+    if (!raw) break;  // nested too deeply: the item was refused
     items_.push_back(raw);
     if (bindItem) {
       bindItem(raw, i);

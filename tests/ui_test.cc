@@ -743,3 +743,23 @@ TEST(Hierarchy, DepthLimitAppliesToSubtreesBuiltBottomUp) {
   EXPECT_LT(attached, 1000);  // stopped well before 5000 levels
   EXPECT_GT(attached, 100);   // but ordinary nesting is unaffected
 }
+
+// Each ScrollView adds several real levels, so a document nested well within
+// the UXML clone limit can still hit the hierarchy depth limit while being
+// built. The element that is refused is gone, so cloning must stop there
+// rather than carry on with a null parent.
+TEST(Uxml, CloneStopsWhereTheHierarchyIsTooDeep) {
+  for (int n : {126, 128, 130}) {
+    std::string xml = "<UXML>";
+    for (int i = 0; i < n; i++) xml += "<ScrollView>";
+    xml += "<Label/>";
+    for (int i = 0; i < n; i++) xml += "</ScrollView>";
+    xml += "</UXML>";
+    auto asset = VisualTreeAsset::Parse(xml);
+    ASSERT_TRUE(asset) << n;
+    UIResources resources;
+    auto root = std::make_unique<VisualElement>();
+    asset->CloneTree(root.get(), resources);  // must not crash
+    EXPECT_GT(root->hierarchy().childCount(), 0) << n;
+  }
+}
