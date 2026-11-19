@@ -15,6 +15,14 @@ variables:
 # Rebuilds the toolchain image and pushes it to the GitLab container registry.
 # Uses kaniko so the runner needs neither privileged mode nor a Docker socket.
 # Runs when docker/ changes, or manually from the pipeline page.
+#
+# Pushing through the public (Cloudflare) registry URL fails with 413 because
+# image layers are larger than Cloudflare's request size limit. Set the CI/CD
+# variable REGISTRY_PUSH_HOST (Settings > CI/CD > Variables) to an address the
+# runner can reach directly, e.g. "10.0.0.5:5050" or an internal hostname. If it
+# serves plain HTTP or a self-signed certificate, also set KANIKO_PUSH_ARGS to
+# "--insecure --skip-tls-verify". The pushed image is the same one that jobs pull
+# as $BUILD_IMAGE; only the route taken by the upload differs.
 build-image-job:
   tags: ['us-east-2b']
   stage: image
@@ -23,20 +31,26 @@ build-image-job:
     entrypoint: [""]
   variables:
     GIT_SUBMODULE_STRATEGY: none
+    REGISTRY_PUSH_HOST: "$CI_REGISTRY"
+    KANIKO_PUSH_ARGS: "--insecure --skip-tls-verify"
   rules:
     - changes:
         - docker/**/*
     - when: manual
       allow_failure: true
   script:
+    - 'PUSH_REPO="${REGISTRY_PUSH_HOST}${CI_REGISTRY_IMAGE#$CI_REGISTRY}"'
+    - 'AUTH="$(printf "%s:%s" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d "\n")"'
     - mkdir -p /kaniko/.docker
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
-    - /kaniko/executor
-        --context "$CI_PROJECT_DIR/docker"
-        --dockerfile "$CI_PROJECT_DIR/docker/Dockerfile"
-        --destination "$BUILD_IMAGE"
-        --cache=true
-        --cache-repo "$CI_REGISTRY_IMAGE/build-env/cache"
+    - 'printf "{\"auths\":{\"%s\":{\"auth\":\"%s\"},\"%s\":{\"auth\":\"%s\"}}}" "$CI_REGISTRY" "$AUTH" "$REGISTRY_PUSH_HOST" "$AUTH" > /kaniko/.docker/config.json'
+    - >
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR/docker"
+      --dockerfile "$CI_PROJECT_DIR/docker/Dockerfile"
+      --destination "$PUSH_REPO/build-env:latest"
+      --cache=true
+      --cache-repo "$PUSH_REPO/build-env/cache"
+      $KANIKO_PUSH_ARGS
 
 clangformat-job:
   tags: ['us-east-2b']
