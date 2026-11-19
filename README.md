@@ -8,6 +8,7 @@ Mercury is a game-engine built with C++ for performant games
 
 - [Mercury](#mercury)
   - [Table of Contents](#table-of-contents)
+  - [Showcase](#showcase)
   - [Goal](#goal)
   - [Support](#support)
   - [Architecture](#architecture)
@@ -19,6 +20,33 @@ Mercury is a game-engine built with C++ for performant games
   - [Contributing](#contributing)
   - [Documentation](#documentation)
   - [License](#license)
+
+## Showcase
+
+Rendered in Mercury's Vulkan/[Filament](https://github.com/google/filament) backend with PBR materials, multi-bounce room-capture light probes, area and directional lights, shadows, and post-processing:
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/screenshots/cornell_water.png" alt="Cornell Box Water and Glass Reflections" width="100%"><br>
+      <sub><b>Cornell Box — Water &amp; Reflections</b>: Rippled water, metallic and transmissive spheres, area light bloom, and room-capture light probes</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/screenshots/cornell_mirror.png" alt="Cornell Box Mirror Reflections and Area Lighting" width="100%"><br>
+      <sub><b>Cornell Box — Mirror &amp; Area Light</b>: Specular reflections, warm area lighting, soft shadows, and indirect color bounce</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/screenshots/sponza.png" alt="Crytek Sponza Sunlight and Shadows" width="100%"><br>
+      <sub><b>Crytek Sponza</b>: Directional sunlight, shadowed arcades, and indirect ambient fill</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/screenshots/breakfast_room.png" alt="Breakfast Room Directional Light Shafts" width="100%"><br>
+      <sub><b>Breakfast Room</b>: Slatted directional shadows, point lighting, and interior bounce</sub>
+    </td>
+  </tr>
+</table>
 
 ## Goal
 
