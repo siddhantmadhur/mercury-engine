@@ -47,6 +47,13 @@ TEST(ScriptRuntime, ReturnsANumber) {
   EXPECT_EQ(result, "42");
 }
 
+TEST(ScriptRuntime, ANegativeNumberKeepsItsSign) {
+  std::string result;
+  ASSERT_TRUE(ScriptRuntime::Instance().RunString(
+      "int main() { return -1; }", "negative", &result));
+  EXPECT_EQ(result, "-1");
+}
+
 TEST(ScriptRuntime, AThrownErrorIsCaughtNotFatal) {
   auto& runtime = ScriptRuntime::Instance();
   EXPECT_FALSE(runtime.RunString(
