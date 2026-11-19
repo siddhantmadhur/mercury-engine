@@ -476,7 +476,9 @@ void ScriptEditorPanel::OpenFile(const std::filesystem::path& file, int line) {
 
 void ScriptEditorPanel::OpenLocation(const std::string& res_path, int line) {
   if (res_path.empty()) return;
-  OpenFile(AbsolutePath(res_path), line);
+  const auto file = AbsolutePath(res_path);
+  if (file.empty()) return;  // outside the project
+  OpenFile(file, line);
 }
 
 void ScriptEditorPanel::SelectTab(ScriptEditorTab* tab) {
@@ -715,8 +717,8 @@ std::filesystem::path ScriptEditorPanel::AbsolutePath(
     const std::string& res_path) const {
   auto project = scene_.GetProject();
   if (!project) return res_path;
-  if (res_path.starts_with("res://")) return project->Resolve(res_path);
-  return project->GetRoot() / res_path;
+  // Resolve also takes plain relative paths, and keeps both inside the project.
+  return project->Resolve(res_path);
 }
 
 const std::vector<ScriptSymbol>& ScriptEditorPanel::NativeSymbols() const {
