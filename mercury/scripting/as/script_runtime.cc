@@ -499,26 +499,43 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
   if (!register_types) return;
 
   for (const auto& script_class : classes_) {
-    // C++ code linked into the executable wins over a script with the same
-    // name; the native type is the one the executable was built with.
     if (script_class->data_asset) {
-      if (const auto* existing =
-              TypeRegistry::Instance().FindAssetType(script_class->name);
-          existing && existing->native_asset) {
+      const auto* existing =
+          TypeRegistry::Instance().FindAssetType(script_class->name);
+      // A script may not take the name of a type the engine itself registers:
+      // it would replace the built-in in the TypeRegistry and ClearGameTypes
+      // would then remove the built-in when the runtime shuts down.
+      if (existing && !existing->from_game) {
+        PDebug::error(
+            "{}: a built-in asset type has this name; rename the class",
+            script_class->name);
+        continue;
+      }
+      // C++ code linked into the executable wins over a script with the same
+      // name; the native type is the one the executable was built with.
+      if (existing && existing->native_asset) {
         PDebug::warn(
             "{}: a C++ MERCURY_DATA_ASSET with this name is already "
             "registered; the AngelScript class is ignored",
             script_class->name);
         continue;
       }
-    } else if (const auto* existing =
-                   TypeRegistry::Instance().FindComponent(script_class->name);
-               existing && existing->native_script) {
-      PDebug::warn(
-          "{}: a C++ MERCURY_SCRIPT with this name is already registered; "
-          "the AngelScript class is ignored",
-          script_class->name);
-      continue;
+    } else {
+      const auto* existing =
+          TypeRegistry::Instance().FindComponent(script_class->name);
+      if (existing && !existing->is_script) {
+        PDebug::error(
+            "{}: a built-in component has this name; rename the class",
+            script_class->name);
+        continue;
+      }
+      if (existing && existing->native_script) {
+        PDebug::warn(
+            "{}: a C++ MERCURY_SCRIPT with this name is already registered; "
+            "the AngelScript class is ignored",
+            script_class->name);
+        continue;
+      }
     }
     std::vector<FieldInfo> fields;
     if (auto instance =
