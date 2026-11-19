@@ -1697,7 +1697,31 @@ void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
   auto transform = object_manager_->GetProperty<Transform>(entity);
   if (!node_info || !transform) return;
 
+  // A parent that no longer exists means "no parent".
+  if (new_parent != entt::null && !GetRegistry().valid(new_parent)) {
+    new_parent = entt::null;
+  }
   if (node_info->parent == new_parent) return;
+
+  // An object cannot become its own parent or a child of its own descendant:
+  // the hierarchy would loop, and every walk over it (paths, transforms)
+  // would recurse until the stack ran out. Walk up from the new parent; it
+  // is a loop if that reaches `entity`. The step limit stops at a loop that
+  // is already there.
+  size_t steps = 0;
+  for (kEntityId up = new_parent;
+       up != entt::null && GetRegistry().valid(up); ) {
+    if (up == entity || ++steps > GetRegistry().size()) {
+      PDebug::warn("Cannot make \"{}\" a child of \"{}\": that would put it "
+                   "inside itself",
+                   GameObject(this, entity).GetPath(),
+                   GameObject(this, new_parent).GetPath());
+      return;
+    }
+    auto up_info = object_manager_->GetProperty<NodeInfo>(up);
+    if (!up_info) break;
+    up = up_info->parent;
+  }
 
   // Remove from old parent's children
   if (node_info->parent != entt::null &&

@@ -252,6 +252,48 @@ TEST(Hierarchy, GameObjectGetParentAndChildren) {
   EXPECT_EQ(front.GetChildren()[0], back);
 }
 
+// Parenting an object to itself or to something below it would make the
+// hierarchy loop; it must be refused and leave everything as it was.
+TEST(Hierarchy, RefusesParentingThatWouldLoop) {
+  std::string error;
+  auto project = Project::Load(kPong / "pong.mproj", &error);
+  ASSERT_TRUE(project) << error;
+
+  Map map;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+
+[node name="Root"]
+
+[node name="A" parent="."]
+[node name="B" parent="A"]
+[node name="C" parent="A/B"]
+)",
+                                 &error))
+      << error;
+
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.Instantiate(map);
+  auto a = scene.Find("A");
+  auto b = scene.Find("A/B");
+  auto c = scene.Find("A/B/C");
+  ASSERT_TRUE(a.IsValid() && b.IsValid() && c.IsValid());
+  const auto root = a.GetParent();
+
+  a.SetParent(a, false);  // itself
+  EXPECT_EQ(a.GetParent(), root);
+  a.SetParent(c, true);  // a grandchild
+  EXPECT_EQ(a.GetParent(), root);
+  b.SetParent(c, false);  // a child
+  EXPECT_EQ(b.GetParent(), a);
+  EXPECT_EQ(c.GetParent(), b);
+  EXPECT_EQ(a.GetChildren().size(), 1u);
+  EXPECT_EQ(c.GetPath(), "A/B/C");  // still walks without recursing forever
+
+  // Moving to a non-descendant still works.
+  c.SetParent(a, false);
+  EXPECT_EQ(c.GetParent(), a);
+}
+
 TEST(Hierarchy, AddForceModes) {
   std::string error;
   auto project = Project::Load(std::filesystem::path(MERCURY_SOURCE_DIR) /
