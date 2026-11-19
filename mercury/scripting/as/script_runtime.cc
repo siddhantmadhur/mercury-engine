@@ -338,7 +338,14 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
         !custom.empty()) {
       script_class->name = custom;
     }
-    script_class->factory = type->GetFactoryByIndex(0);
+    // Only a constructor with no parameters can be called by the engine.
+    for (asUINT f = 0; f < type->GetFactoryCount(); f++) {
+      asIScriptFunction* factory = type->GetFactoryByIndex(f);
+      if (factory && factory->GetParamCount() == 0) {
+        script_class->factory = factory;
+        break;
+      }
+    }
 
     const char* section = nullptr;
     int row = 0;
@@ -805,6 +812,45 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
           *result = ScriptArg::Int(static_cast<int>(context->GetReturnDWord()));
         }
       }
+    }
+  } else if (timed_out_) {
+    PDebug::error("{}: script took too long (infinite loop?)", label);
+  } else {
+    PDebug::error("{}: {}", label, FormatException(context));
+  }
+  context->Release();
+  return ok;
+}
+
+bool ScriptRuntime::RunFactory(asIScriptFunction* factory,
+                               std::string_view label,
+                               asIScriptObject** instance) {
+  if (!engine_ || !factory || !instance) return false;
+  *instance = nullptr;
+  asIScriptContext* context = engine_->CreateContext();
+  if (!context) return false;
+  bool ok = false;
+  if (context->Prepare(factory) < 0) {
+    PDebug::error("{}: the constructor could not be prepared", label);
+    context->Release();
+    return false;
+  }
+  const bool outermost = call_depth_++ == 0;
+  if (outermost) {
+    call_start_ = std::chrono::steady_clock::now();
+    timed_out_ = false;
+  }
+  context->SetLineCallback(asFUNCTION(LineCallback), this, asCALL_CDECL);
+  const int r = context->Execute();
+  context->ClearLineCallback();
+  call_depth_--;
+  if (r == asEXECUTION_FINISHED) {
+    auto* object =
+        *static_cast<asIScriptObject**>(context->GetAddressOfReturnValue());
+    if (object) {
+      object->AddRef();
+      *instance = object;
+      ok = true;
     }
   } else if (timed_out_) {
     PDebug::error("{}: script took too long (infinite loop?)", label);
