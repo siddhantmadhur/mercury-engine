@@ -297,6 +297,9 @@ class ScriptRuntime {
   std::string module_name_ = "game";
   std::string loaded_project_;
   std::vector<std::unique_ptr<ScriptClass>> classes_;
+  // Tables replaced by a rebuild while behaviours still pointed at them.
+  std::vector<std::unique_ptr<ScriptClass>> retired_classes_;
+  int build_generation_ = 0;
 
   std::unordered_map<uint32_t, MapScene*> scenes_;
   std::unordered_map<int, ScriptBehaviour*> behaviours_;

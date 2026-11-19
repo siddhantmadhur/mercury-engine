@@ -232,6 +232,7 @@ void ScriptRuntime::Shutdown() {
   behaviours_.clear();
   timers_.clear();
   classes_.clear();
+  retired_classes_.clear();
   DiscardModule();
   engine_->ShutDownAndRelease();
   engine_ = nullptr;
@@ -285,20 +286,31 @@ bool ScriptRuntime::BuildFromSections(
   if (!engine_) return false;
   compile_failed_ = false;
 
+  // A module that will replace the current one is built under a name of its
+  // own. StartNewModule would otherwise discard the module that behaviours are
+  // using the moment it is called, so a build that then failed would have
+  // taken the working scripts with it.
+  const std::string build_name =
+      register_types ? module_name + "#" + std::to_string(++build_generation_)
+                     : module_name;
   CScriptBuilder builder;
-  if (builder.StartNewModule(engine_, module_name.c_str()) < 0) {
+  if (builder.StartNewModule(engine_, build_name.c_str()) < 0) {
     PDebug::error("Could not start the script module {}", module_name);
     return false;
   }
+  const auto abandon = [&] {
+    if (register_types) engine_->DiscardModule(build_name.c_str());
+    return false;
+  };
   builder.AddSectionFromMemory("<engine>", ApiPreludeSource());
   for (const auto& [name, text] : sections) {
     const int result = builder.AddSectionFromMemory(name.c_str(), text.c_str());
     if (result < 0) {
       PDebug::error("Could not add script section {}", name);
-      return false;
+      return abandon();
     }
   }
-  if (builder.BuildModule() < 0 || compile_failed_) return false;
+  if (builder.BuildModule() < 0 || compile_failed_) return abandon();
 
   asIScriptModule* module = builder.GetModule();
   if (register_types) {
@@ -307,10 +319,15 @@ bool ScriptRuntime::BuildFromSections(
     data_assets_.clear();
     replaced_data_assets_.clear();
     DiscardModule();
+    // Live behaviours point at their ScriptClass; keep the old table around
+    // (until Shutdown) rather than freeing it from under them.
+    if (!behaviours_.empty()) {
+      for (auto& old : classes_) retired_classes_.push_back(std::move(old));
+    }
     classes_.clear();
     TypeRegistry::Instance().ClearGameTypes();
     module_ = module;
-    module_name_ = module_name;
+    module_name_ = build_name;
     RegisterClasses(module, builder, true);
   }
   return true;

@@ -8,6 +8,9 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <random>
 #include <string>
 
 using namespace Mercury;
@@ -52,6 +55,24 @@ TEST(ScriptRuntime, ANegativeNumberKeepsItsSign) {
   ASSERT_TRUE(ScriptRuntime::Instance().RunString(
       "int main() { return -1; }", "negative", &result));
   EXPECT_EQ(result, "-1");
+}
+
+// A rebuild that fails must leave the working scripts alone: the module that
+// behaviours are using used to be discarded as soon as the build started.
+TEST(ScriptRuntime, AFailedRebuildKeepsTheCurrentModule) {
+  auto& runtime = ScriptRuntime::Instance();
+  const auto dir = std::filesystem::temp_directory_path() /
+                   ("rebuild_test_" + std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(dir);
+  const auto bad = dir / "bad.as";
+  std::ofstream(bad) << "class Broken { void f( }";
+
+  asIScriptModule* before = runtime.GetModule();
+  const size_t classes_before = runtime.ScriptClasses().size();
+  EXPECT_FALSE(runtime.LoadFiles({bad}, "game", true));
+  EXPECT_EQ(runtime.GetModule(), before);
+  EXPECT_EQ(runtime.ScriptClasses().size(), classes_before);
+  std::filesystem::remove_all(dir);
 }
 
 TEST(ScriptRuntime, AThrownErrorIsCaughtNotFatal) {
