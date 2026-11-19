@@ -1986,6 +1986,8 @@ std::shared_ptr<const MeshGeometry> MapScene::GetPrimitive(
     case MeshShape::kModel:
       return nullptr;
   }
+  // A MeshShape read from a file can hold a value no case above knows.
+  if (!mesh) return nullptr;
   std::vector<ModelVertex> vertices;
   vertices.reserve(mesh->vertices_.size());
   for (const auto& v : mesh->vertices_) {
