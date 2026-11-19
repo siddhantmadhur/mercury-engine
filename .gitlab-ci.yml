@@ -1,4 +1,5 @@
 stages:
+  - image
   - format
   - build
 
@@ -7,9 +8,35 @@ variables:
   GIT_CLEAN_FLAGS: -ffdxx -e .ccache/ -e .cargo/ -e .rustup/ -e bin/dxc/
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
-  # Prebuilt toolchain image (docker/Dockerfile; build and push it with scripts/build_ci_image.pl).
+  # Prebuilt toolchain image (see docker/Dockerfile and build-image-job below).
   BUILD_IMAGE: "$CI_REGISTRY_IMAGE/build-env:latest"
 
+
+# Rebuilds the toolchain image and pushes it to the GitLab container registry.
+# Uses kaniko so the runner needs neither privileged mode nor a Docker socket.
+# Runs when docker/ changes, or manually from the pipeline page.
+build-image-job:
+  tags: ['us-east-2b']
+  stage: image
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+  rules:
+    - changes:
+        - docker/**/*
+    - when: manual
+      allow_failure: true
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor
+        --context "$CI_PROJECT_DIR/docker"
+        --dockerfile "$CI_PROJECT_DIR/docker/Dockerfile"
+        --destination "$BUILD_IMAGE"
+        --cache=true
+        --cache-repo "$CI_REGISTRY_IMAGE/build-env/cache"
 
 clangformat-job:
   tags: ['us-east-2b']
