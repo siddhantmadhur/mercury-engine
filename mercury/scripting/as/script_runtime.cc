@@ -169,10 +169,10 @@ uint32_t ScriptRuntime::NextSceneSerial() {
 }
 
 void ScriptRuntime::Throw(const char* message) {
+  // The VM runs try/catch itself: the exception must always be raised, even
+  // when a catch block is active or one caught an earlier exception.
   if (asIScriptContext* context = asGetActiveContext()) {
-    if (!context->WillExceptionBeCaught()) {
-      context->SetException(message);
-    }
+    context->SetException(message);
   }
 }
 
