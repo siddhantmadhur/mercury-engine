@@ -109,7 +109,7 @@ A node's position is relative to its parent; maps are flattened to world positio
 | `DirectionalLight` | Sunlight along its -Z: `color`, `intensity`, `ambient`, `ground_ambient`, `cast_shadows` (see [Lighting](#lighting)) |
 | `PointLight` | Light in every direction: `color`, `intensity`, `range` (Unity's falloff; up to 16 per map). Soft shadows that widen with `radius`; `shadows = "hard"` or `"none"` changes that |
 | `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance. The Filament renderer approximates it with a spot light; up to 4 per map |
-| `LightProbeVolume` | Legacy global-illumination settings; the Filament renderer uses the skybox IBL instead (see [Lighting](#lighting)) |
+| `LightProbeVolume` | A room-capture light probe at the node: the renderer draws the scene from it into a cubemap and lights everything with it, so mirrors reflect the room and walls bleed color. `bounces` (captures), `intensity`, `capture_size` (see [Lighting](#lighting)) |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps without pushing |
 | `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |
@@ -179,18 +179,44 @@ image-based ambient). `SceneLighting` maps onto:
 - **Soft shadows** → Filament's PCSS (`View::setShadowType`); the light's
   physical size (`radius`, or the area light's rectangle) sets the penumbra.
 
-`LightProbeVolume` is a legacy component. Filament's global illumination is
-its distant IBL (the camera's skybox panorama) plus screen-space reflections;
-the renderer does not build a probe grid from the volume. Keep the component
-in old maps for compatibility, but author new lighting with the skybox and
-the Filament light components.
+- **`LightProbeVolume`** → a room-capture probe. The renderer draws the
+  scene from the node's position into the six faces of a cubemap (six
+  Filament `View`s at 90 degrees, rendered with `renderStandaloneView`),
+  filters it with `IBLPrefilterContext` (specular and irradiance) and sets
+  the result as the scene's `IndirectLight`. Each of `bounces` captures is
+  lit by the one before it. While a probe is in the map it replaces the
+  skybox's and the ambient's image-based light (a skybox can still be drawn
+  as the background); the ambient only reaches the final image through the
+  captured bounces, so raise the probe's `intensity` to compensate. It is
+  captured once the scene has been still for a few frames, and again after
+  the scene, its lights or the probe change.
 
 ### Post-processing
 
 `RenderSettings`/`PostProcessProfile` are applied to each Filament `View`:
-tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO, FXAA,
+tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO,
 screen-space reflections (mirrors and glossy surfaces), and PCSS soft
-shadows. Refraction uses Filament's cubemap mode so it also works on
+shadows.
+
+Anti-aliasing and upscaling are project options in the `.mproj`'s `[render]`
+section (the editor's Build Game dialog writes them), not part of a profile:
+`anti_aliasing = "none" | "fxaa" | "taa"` (default `taa`; a legacy `fxaa`
+bool is read only when `anti_aliasing` is absent), and the optional AMD FSR 1
+upscaler, `fsr = true`, with `fsr_quality = "high" | "ultra"`,
+`render_scale` (0.5 to 1, default 0.75) and `fsr_sharpness` (0 to 1, default
+0.9). FSR applies to the window's scene view and the editor's scene viewport
+only; render textures, previews and the UI stay at native resolution. TAA
+adds Filament's motion vectors pass and runs only on the main scene views;
+other views (render textures, previews) use FXAA when the project chose TAA.
+FSR 1 expects a well anti-aliased image, so pair it with TAA.
+
+The default anti-aliasing is now TAA (it used to be FXAA), and a
+`PostProcessProfile`'s `antialiasing` key is no longer read; anti-aliasing
+comes only from the project. Filament's motion vectors do not capture skinned
+meshes, so animated characters rely on TAA's neighbourhood clamping and may
+show slight smearing.
+
+Refraction uses Filament's cubemap mode so it also works on
 MoltenVK, where the screen-space refraction pass currently draws nothing.
 
 ### Material notes

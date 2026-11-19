@@ -19,6 +19,21 @@ inline std::filesystem::path CacheDir() {
   return std::filesystem::temp_directory_path() / "mercury_test_cache";
 }
 
+// The benchmark project (models and maps too big for this repo) lives beside
+// it by default; CMake's MERCURY_BENCHMARK_DIR cache variable, or the
+// environment variable of the same name, point elsewhere. Tests that need
+// its models skip when they are not there.
+inline std::filesystem::path BenchmarkDir() {
+  if (const char* dir = std::getenv("MERCURY_BENCHMARK_DIR"); dir && *dir) {
+    return dir;
+  }
+#ifdef MERCURY_BENCHMARK_DIR
+  return MERCURY_BENCHMARK_DIR;
+#else
+  return std::filesystem::path(MERCURY_SOURCE_DIR) / ".." / "benchmark";
+#endif
+}
+
 }  // namespace Mercury::test
 
 #endif  // MERCURY_TESTS_TEST_PATHS_H

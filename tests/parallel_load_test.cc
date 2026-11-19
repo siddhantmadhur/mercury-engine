@@ -19,6 +19,7 @@
 #include "algorithms/parallel_for.h"
 #include "properties/model.h"
 #include "properties/parallel_obj.h"
+#include "test_paths.h"
 
 using namespace Mercury;
 
@@ -26,8 +27,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-const fs::path kModels =
-    fs::path(MERCURY_SOURCE_DIR) / "examples/model_viewer/models";
+const fs::path kModels = Mercury::test::BenchmarkDir() / "models";
 
 ModelImportSettings Whole() {
   ModelImportSettings settings;

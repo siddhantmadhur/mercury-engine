@@ -153,6 +153,7 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
     result.ior = own->ior;
     result.transmission_color = own->transmission_color;
     result.thickness = own->thickness;
+    result.reflectance = own->reflectance;
     return result;
   };
 

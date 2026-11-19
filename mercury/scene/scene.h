@@ -112,6 +112,9 @@ struct AreaLightData {
  */
 struct ProbeVolumeData {
   bool enabled = false;
+  // A LightProbeVolume is in the map (the renderer captures a probe only for
+  // these; without one, `enabled` and `automatic` are the defaults).
+  bool placed = false;
   // The renderer fits the grid around the scene's still geometry (min, max
   // and counts are then ignored).
   bool automatic = false;
@@ -119,7 +122,8 @@ struct ProbeVolumeData {
   glm::vec3 max = glm::vec3(0.0f);
   glm::ivec3 counts = glm::ivec3(0);
   float intensity = 1.0f;
-  int bounces = 3;
+  int bounces = 2;
+  int capture_size = 256;
   bool include_emission = true;
   int probes_per_frame = 0;
 };
@@ -160,12 +164,22 @@ struct RenderSettings {
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;
   glm::vec2 vignette_center = glm::vec2(0.5f);
-  // Ambient occlusion (on indirect light only) and FXAA run with or without
-  // post_processing.
+  // Ambient occlusion (on indirect light only) and anti-aliasing run with or
+  // without post_processing.
   float ssao_intensity = 0.8f;
   float ssao_radius = 0.5f;
   int ssao_samples = 12;
-  bool fxaa = true;
+  // Chosen per project ([render] anti_aliasing); not part of a post-process
+  // profile.
+  enum class AntiAliasing { kNone, kFxaa, kTaa };
+  AntiAliasing anti_aliasing = AntiAliasing::kTaa;
+  // AMD FSR 1 (Filament's EASU + RCAS): the window's scene is rendered at
+  // render_scale of its size and upscaled. Works best with TAA.
+  enum class FsrQuality { kHigh, kUltra };
+  bool fsr = false;
+  FsrQuality fsr_quality = FsrQuality::kUltra;
+  float render_scale = 0.75f;  // 0.5 to 1
+  float fsr_sharpness = 0.9f;  // RCAS, 0 to 1
   // Filament screen-space reflections for mirrors and glossy surfaces.
   bool screen_space_reflections = false;
   float reflection_distance = 5.0f;

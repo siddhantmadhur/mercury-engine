@@ -60,6 +60,10 @@ class FilamentApplication : public Application {
                            uint64_t* frame_id = nullptr) override;
   void SetShowRenderStats(bool show) override { show_stats_ = show; }
 
+  // Test only: the dynamic resolution scale Filament applied to the editor
+  // scene viewport on its last frame ({1,1} when FSR is off).
+  filament::math::float2 SceneViewDynamicResolutionScaleForTest() const;
+
  protected:
   bool OnLoad() override;
   void Render() override;
@@ -95,9 +99,12 @@ class FilamentApplication : public Application {
                      std::vector<uint8_t>& rgba_out, uint64_t* frame_id);
   // Points `camera` at what `render` sees, with its sky color.
   void SetupCamera(filament::Camera* camera, const RenderCamera& render);
-  // Applies RenderSettings (tonemap, exposure, bloom, vignette, GTAO, FXAA).
+  // Applies RenderSettings (tonemap, exposure, bloom, vignette, GTAO, FXAA or
+  // TAA). `main_view` is true only for the main scene views, which honour TAA
+  // and the FSR 1 upscaling options; every other view renders at native
+  // resolution and uses FXAA in place of TAA.
   void ApplyPostProcess(filament::View* view, const RenderSettings& settings,
-                        const RenderCamera& camera);
+                        const RenderCamera& camera, bool main_view = false);
   // The cameras this frame, like the Vulkan backend's FrameCameras.
   std::vector<RenderCamera> FrameCameras(float width, float height);
   // Reads `target`'s pixels into its CPU buffer (top-down RGBA).

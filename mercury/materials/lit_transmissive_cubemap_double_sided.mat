@@ -1,0 +1,58 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+material {
+    name: MercuryLitTransmissiveCubemapDoubleSided,
+    shadingModel: lit,
+    blending: opaque,
+    refractionMode: cubemap,
+    refractionType: solid,
+    reflections: screenspace,
+    culling: none,
+    flipUV: false,
+    requires: [
+        position,
+        tangents,
+        uv0,
+        color
+    ],
+    parameters: [
+        { type: float4, name: baseColor },
+        { type: sampler2d, name: baseColorMap, precision: high },
+        { type: float2, name: tiling },
+        { type: float2, name: offset },
+        { type: float, name: metallic },
+        { type: float, name: roughness },
+        { type: float4, name: emissive },
+        { type: sampler2d, name: emissiveMap, precision: high },
+        { type: sampler2d, name: normalMap, precision: high },
+        { type: float, name: normalScale },
+        { type: float, name: transmission },
+        { type: float, name: ior },
+        { type: float, name: thickness },
+        { type: float3, name: absorption }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        vec2 uv = getUV0() * materialParams.tiling + materialParams.offset;
+        vec3 n = texture(materialParams_normalMap, uv).xyz * 2.0 - 1.0;
+        n.xy *= materialParams.normalScale;
+        material.normal = normalize(n + vec3(0.0, 0.0, 1e-5));
+        prepareMaterial(material);
+        material.baseColor = materialParams.baseColor * getColor() *
+                             texture(materialParams_baseColorMap, uv);
+        material.roughness = materialParams.roughness;
+        material.metallic = materialParams.metallic;
+        material.emissive = vec4(
+            materialParams.emissive.rgb *
+                texture(materialParams_emissiveMap, uv).rgb,
+            materialParams.emissive.a);
+        material.transmission = materialParams.transmission;
+        material.ior = materialParams.ior;
+        material.thickness = materialParams.thickness;
+        material.absorption = materialParams.absorption;
+    }
+}
