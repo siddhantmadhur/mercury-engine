@@ -11,6 +11,8 @@
 #ifndef MERCURY_OS_PROCESS_H
 #define MERCURY_OS_PROCESS_H
 
+#include <atomic>
+#include <cstddef>
 #include <filesystem>
 #include <mutex>
 #include <optional>
@@ -51,6 +53,9 @@ class Process {
   std::vector<std::string> TakeOutput();
 
  private:
+  // Keeps a runaway child from growing the editor's heap without bound.
+  static constexpr size_t kMaxBufferedOutputBytes = 1024 * 1024;
+
   void ReadLoop();
   void Append(const char* data, size_t size);
   void Reap(bool block);
@@ -62,13 +67,14 @@ class Process {
   int pid_ = -1;
   int read_fd_ = -1;
 #endif
-  bool running_ = false;
+  std::atomic<bool> running_{false};
   std::optional<int> exit_code_;
 
   std::thread reader_;
   std::mutex mutex_;
   std::string partial_line_;
   std::vector<std::string> lines_;
+  size_t buffered_bytes_ = 0;
 };
 
 // Starts a program that outlives this process (no output capture), e.g. the
