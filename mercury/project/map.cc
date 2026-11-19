@@ -61,6 +61,15 @@ std::string GuessResourceType(const std::string& path) {
   return type.empty() ? "Resource" : type;
 }
 
+// Prefab loads recurse through the loader callback, so the depth has to live
+// outside LoadFromString.
+thread_local int g_prefab_nesting = 0;
+
+struct PrefabNestingGuard {
+  PrefabNestingGuard() { ++g_prefab_nesting; }
+  ~PrefabNestingGuard() { --g_prefab_nesting; }
+};
+
 }  // namespace
 
 std::string SanitizeNodeName(std::string_view name) {
@@ -234,6 +243,12 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
   std::map<std::string, std::string> resource_types;
   std::unique_ptr<MapNode> root;
 
+  // A chain of distinct prefabs that each instance several copies of the next
+  // expands exponentially. Bound the work a single map can ask for.
+  constexpr size_t kMaxExpandedNodes = 100000;
+  constexpr int kMaxPrefabNesting = 32;
+  size_t expanded_nodes = 0;
+
   auto resolve_ext = [&](mtext::PropertyList& properties) -> std::string {
     std::string missing;
     ForEachValue(properties, [&](mtext::Variant& value) {
@@ -253,7 +268,16 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
   auto expand_prefab = [&](MapNode& node, const std::string& path,
                            int line) -> bool {
     node.prefab = path;
-    const Map* prefab = prefabs ? prefabs(path) : nullptr;
+    if (g_prefab_nesting >= kMaxPrefabNesting) {
+      return fail(line, "prefabs are nested too deeply");
+    }
+    const Map* prefab = nullptr;
+    {
+      // Nested prefab loads run inside the loader callback, so a thread-local
+      // counter sees the whole chain even across separate Map::Load calls.
+      PrefabNestingGuard guard;
+      prefab = prefabs ? prefabs(path) : nullptr;
+    }
     if (!prefab) {
       // Without the prefab the node stays empty but keeps its link, so the
       // file still saves back unchanged.
@@ -263,6 +287,12 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
       }
       return !prefabs;
     }
+    const size_t prefab_nodes = prefab->NodeCount() + 1;
+    if (prefab_nodes > kMaxExpandedNodes ||
+        expanded_nodes > kMaxExpandedNodes - prefab_nodes) {
+      return fail(line, "prefab expansion is too large");
+    }
+    expanded_nodes += prefab_nodes;
     const MapNode& source_root = *prefab->GetRoot();
     node.components = source_root.components;
     node.tag = source_root.tag;
