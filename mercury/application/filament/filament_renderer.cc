@@ -583,15 +583,29 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
             glm::clamp(material.transmission_color, 1e-4f, 1.0f);
         const bool tinted = trans_color != glm::vec3(1.0f);
         // Solid refraction needs a path length through the object. Without
-        // one from the material, take the object's thinnest world extent:
-        // a sphere's diameter, a slab's depth.
+        // one from the material, take the object's thinnest world extent
+        // (the bounding box's edges under the full world and draw matrix, so
+        // rotation, node scale and unit conversion count): a sphere's
+        // diameter, a slab's depth. A very flat shape is a pane, not a solid,
+        // and gets the minimum; the rest is capped so a large object cannot
+        // refract the screen by a huge offset. Colour does not depend on it,
+        // only the screenspace refraction offset.
         float thickness = material.thickness;
         if (thickness <= 0.0f) {
-          const glm::vec3 size =
-              glm::abs(transform.GetInterpolatedScale()) *
-              glm::vec3(box.halfExtent.x, box.halfExtent.y, box.halfExtent.z) *
-              2.0f;
-          thickness = std::max(std::min({size.x, size.y, size.z}), 0.001f);
+          const glm::mat4 box_world =
+              draw.skin >= 0 ? world : world * mesh.DrawMatrix(draw, pose);
+          const glm::vec3 half(box.halfExtent.x, box.halfExtent.y,
+                               box.halfExtent.z);
+          const glm::vec3 extent(
+              glm::length(glm::vec3(box_world[0]) * (half.x * 2.0f)),
+              glm::length(glm::vec3(box_world[1]) * (half.y * 2.0f)),
+              glm::length(glm::vec3(box_world[2]) * (half.z * 2.0f)));
+          const float smallest =
+              std::max(std::min({extent.x, extent.y, extent.z}), 1e-6f);
+          const float largest = std::max({extent.x, extent.y, extent.z});
+          thickness = largest / smallest > 10.0f
+                          ? 0.001f
+                          : std::clamp(smallest, 0.001f, 0.25f);
         }
         const filament::math::float3 absorption =
             tinted ? filament::Color::absorptionAtDistance(

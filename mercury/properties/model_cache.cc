@@ -25,7 +25,7 @@ namespace {
 namespace fs = std::filesystem;
 
 // Bump when what is written, or how Model::Import builds a model, changes.
-constexpr uint32_t kVersion = 3;
+constexpr uint32_t kVersion = 4;
 constexpr char kMagic[4] = {'M', 'M', 'C', 'F'};
 
 struct Hash {
@@ -238,7 +238,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   auto model = std::make_shared<Model>();
   model->path_ = path;
   model->root_on_object_ = in.Pod<uint8_t>() != 0;
-  // Smallest possible records: a node is 68 bytes, a material 112, a mesh 73,
+  // Smallest possible records: a node is 68 bytes, a material 116, a mesh 73,
   // a clip 20 and an animation channel 52.
   model->nodes_.resize(in.Count(68));
   for (auto& node : model->nodes_) {
