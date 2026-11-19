@@ -6,6 +6,7 @@ material {
     name: MercuryLitOpaqueDoubleSided,
     shadingModel: lit,
     blending: opaque,
+    reflections: screenspace,
     culling: none,
     flipUV: false,
     requires: [

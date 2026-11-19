@@ -8,6 +8,7 @@ material {
     blending: opaque,
     refractionMode: cubemap,
     refractionType: solid,
+    reflections: screenspace,
     culling: none,
     flipUV: false,
     requires: [

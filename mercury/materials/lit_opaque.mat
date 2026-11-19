@@ -11,6 +11,7 @@ material {
     name: MercuryLitOpaque,
     shadingModel: lit,
     blending: opaque,
+    reflections: screenspace,
     culling: back,
     flipUV: false,
     requires: [
