@@ -75,13 +75,14 @@ TEST(ObjMaterials, CornellSphereMirrorAndGlass) {
   auto model = LoadBenchmark("models/cornell_box/CornellBox-Sphere.obj");
   if (!model) GTEST_SKIP() << "missing benchmark fixture";
 
-  // illum 5, Ks 0.95, Ns 1024: a metal tinted by Ks, with Ns 1024's 0.044.
+  // illum 5, Kd 0.01, Ks 0.95, Ns 1024: a metal tinted by Kd + Ks, with
+  // Ns 1024's 0.044.
   const ModelMaterial* mirror = Find(*model, "leftSphere");
   ASSERT_TRUE(mirror);
   EXPECT_FLOAT_EQ(mirror->metallic, 1.0f);
   EXPECT_LT(Roughness(*mirror), 0.06f);
   EXPECT_FLOAT_EQ(mirror->transmission, 0.0f);
-  EXPECT_NEAR(Linear(mirror->color.r), 0.95f, 1e-3f);
+  EXPECT_NEAR(Linear(mirror->color.r), 0.96f, 1e-3f);
 
   // illum 7, Kd 0.01, Tf 0.1, Ni 2.5: clear glass. White base color (Kd 0.01
   // would turn everything black) and a white tint (Tf 0.1 is "mostly clear").
@@ -96,7 +97,8 @@ TEST(ObjMaterials, CornellSphereMirrorAndGlass) {
   EXPECT_NEAR(glass->transmission_color.g, 1.0f, 1e-3f);
   EXPECT_NEAR(glass->transmission_color.b, 1.0f, 1e-3f);
   EXPECT_FLOAT_EQ(glass->metallic, 0.0f);
-  EXPECT_LT(Roughness(*glass), 0.11f);
+  // Glass is polished whatever Ns says.
+  EXPECT_NEAR(Roughness(*glass), 0.0f, 1e-5f);
 
   // The light keeps its emission, and matte walls have no specular (Ks 0).
   const ModelMaterial* light = Find(*model, "light");
@@ -173,18 +175,19 @@ TEST(ObjMaterials, MoriKnobAmberGlassOverMetal) {
   EXPECT_NEAR(shell->ior, 1.01f, 1e-5f);
   EXPECT_FLOAT_EQ(shell->metallic, 0.0f);
 
-  // illum 3: the core is metal, tinted by the larger of Ks and Kd.
+  // illum 3: the core is metal, tinted by Kd + Ks (saturating at 1).
   for (const char* name : {"InnerMat", "LTELogo"}) {
     const ModelMaterial* metal = Find(*model, name);
     ASSERT_TRUE(metal) << name;
     EXPECT_FLOAT_EQ(metal->metallic, 1.0f) << name;
     EXPECT_FLOAT_EQ(metal->transmission, 0.0f) << name;
   }
-  EXPECT_NEAR(Linear(Find(*model, "InnerMat")->color.r), 0.3f, 1e-3f);
-  EXPECT_NEAR(Linear(Find(*model, "LTELogo")->color.r), 0.5f, 1e-3f);
-  // Ns 200 is polished, Ns 8 is satin.
+  EXPECT_NEAR(Linear(Find(*model, "InnerMat")->color.r), 0.5f, 1e-3f);
+  EXPECT_NEAR(Linear(Find(*model, "LTELogo")->color.r), 0.75f, 1e-3f);
+  // Ns 200 is sqrt(2 / 202); Ns 8 would be 0.447 but a metal is capped at a
+  // polished 0.1.
   EXPECT_NEAR(Roughness(*Find(*model, "LTELogo")), 0.0995f, 1e-3f);
-  EXPECT_NEAR(Roughness(*Find(*model, "InnerMat")), 0.447f, 1e-3f);
+  EXPECT_NEAR(Roughness(*Find(*model, "InnerMat")), 0.1f, 1e-3f);
 }
 
 TEST(ObjMaterials, BlenderIllum4IsNotGlass) {
@@ -254,6 +257,8 @@ TEST(ObjMaterials, SyntheticMtlMapping) {
        "illum 4\nKd 0.64 0.64 0.64\nTf 1 1 1\nNi 1.00\n"
        "Ks 0.5 0.5 0.5\nNs 96\n"},
       {"bare", "illum 2\nKd 0 0 0\nKs 0.8 0.8 0.8\nNs 100\n"},
+      {"satinmetal", "illum 3\nKd 0.2 0.2 0.2\nKs 0.3 0.3 0.3\nNs 8\n"},
+      {"brightmetal", "illum 5\nKd 0.8 0.8 0.8\nKs 0.9 0.9 0.9\nNs 1000\n"},
       {"weakmetal", "illum 3\nKd 0.5 0.5 0.5\nKs 0.1 0.1 0.1\nNs 100\n"},
   };
   // The second load comes from the model cache and must agree.
@@ -311,6 +316,17 @@ TEST(ObjMaterials, SyntheticMtlMapping) {
     ASSERT_TRUE(bare);
     EXPECT_FLOAT_EQ(bare->metallic, 1.0f);
     EXPECT_NEAR(Linear(bare->color.r), 0.8f, 1e-3f);
+
+    // illum 3/5 metals: Kd + Ks, saturated, never rougher than 0.1.
+    const ModelMaterial* satin = Find(*model, "satinmetal");
+    ASSERT_TRUE(satin);
+    EXPECT_FLOAT_EQ(satin->metallic, 1.0f);
+    EXPECT_NEAR(Linear(satin->color.r), 0.5f, 1e-3f);
+    EXPECT_NEAR(Roughness(*satin), 0.1f, 1e-3f);
+    const ModelMaterial* bright = Find(*model, "brightmetal");
+    ASSERT_TRUE(bright);
+    EXPECT_NEAR(Linear(bright->color.r), 1.0f, 1e-3f);
+    EXPECT_NEAR(Roughness(*bright), std::sqrt(2.0f / 1002.0f), 1e-3f);
 
     // illum 3 with a weak Ks is a dielectric, not a metal.
     const ModelMaterial* weak = Find(*model, "weakmetal");

@@ -579,8 +579,11 @@ void MapScene::GatherPointLights() {
     data.enabled = volume.intensity > 0.0f;
     data.placed = true;
     data.automatic = volume.fit_to_scene;
-    data.min = transform.GetPosition() - half;
-    data.max = transform.GetPosition() + half;
+    // World position (Transform's position already folds in the parents),
+    // like the lights around it.
+    const glm::vec3 center = transform.GetInterpolatedPosition();
+    data.min = center - half;
+    data.max = center + half;
     data.counts = glm::clamp(glm::ivec3(glm::round(volume.resolution)),
                              glm::ivec3(2), glm::ivec3(16));
     data.intensity = volume.intensity;

@@ -525,6 +525,8 @@ void FilamentApplication::Render() {
     }
   }
 
+  if (main) scene_renderer_.SetProbeBackground(main->background);
+
   // The window (when there is one) shows the main camera, with the game's
   // UI over it.
   if (!IsHeadless() && main) {

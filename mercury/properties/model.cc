@@ -791,14 +791,22 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
           material.transmission = 1.0f;
           material.transmission_color = tint;
           material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
-          // Glass is smooth whatever its exponent says.
-          material.smoothness = std::max(material.smoothness, 0.9f);
+          // Glass is polished: a clear sphere refracts a sharp image.
+          material.smoothness = 1.0f;
         } else if ((illum == 3 || illum == 5) && ks > 0.25f) {
-          // Reflective: a metal tinted by its specular color.
-          material.color = glm::vec4(
-              std::max(specular.r, color.r), std::max(specular.g, color.g),
-              std::max(specular.b, color.b), material.color.a);
+          // Reflective: a metal. Its color is the diffuse plus the specular
+          // (a metal's reflection is what it shows; Kd stands for its
+          // body), saturated at 1, and it is never rougher than a polished
+          // metal: the exponent only widens the highlight of a dielectric,
+          // while a mirror finish keeps the room sharp in it.
+          material.color =
+              glm::vec4(std::min(color.r + specular.r, 1.0f),
+                        std::min(color.g + specular.g, 1.0f),
+                        std::min(color.b + specular.b, 1.0f), material.color.a);
           material.metallic = 1.0f;
+          const float roughness = std::min(
+              std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f)), 0.1f);
+          material.smoothness = 1.0f - roughness;
         } else if (illum >= 2 && !textured && kd_max < 0.05f && ks > 0.25f) {
           // No diffuse but a strong specular is how exporters write a
           // mirror or chrome: a metal of that specular color.

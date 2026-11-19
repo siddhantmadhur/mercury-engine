@@ -44,8 +44,8 @@ namespace Mercury::fil {
 
 class FilamentRenderer {
  public:
-  FilamentRenderer() = default;
-  ~FilamentRenderer() { /* Shutdown() must have been called */ }
+  FilamentRenderer();
+  ~FilamentRenderer();  // Shutdown() must have been called
 
   bool Init(filament::Engine* engine);
   void Shutdown(filament::Engine* engine);
@@ -63,6 +63,10 @@ class FilamentRenderer {
   // creates/removes renderables, updates transforms, bones and visibility,
   // and rebuilds the lights when the scene's lighting values change.
   void SyncScene(GameScene& game);
+
+  // The colour the room probe's sky shows where nothing covers it (the main
+  // camera's background, sRGB). A change recaptures the probe.
+  void SetProbeBackground(const glm::vec4& srgb);
 
   // Marks the room probe's capture as stale so it is taken again once the
   // scene has been still for a few frames.
@@ -89,6 +93,8 @@ class FilamentRenderer {
     uint32_t layer = 0;
     uint32_t draw_index = 0;  // index into RenderMesh::draws
     bool skinned = false;
+    bool transmissive = false;
+    glm::vec3 emission = glm::vec3(0.0f);  // zero when the draw does not glow
     bool in_scene = false;
     std::string render_texture;
   };
@@ -119,7 +125,8 @@ class FilamentRenderer {
   // The room probe: a LightProbeVolume is captured into a cubemap, filtered
   // into reflections and irradiance, and becomes the scene's IndirectLight.
   void SyncProbe(filament::Engine* engine, GameScene& game);
-  void CaptureProbe(filament::Engine* engine, const ProbeVolumeData& probe,
+  // False when the probe's targets could not be allocated (nothing captured).
+  bool CaptureProbe(filament::Engine* engine, const ProbeVolumeData& probe,
                     bool soft_shadows);
   bool EnsureProbeTargets(filament::Engine* engine, uint32_t size);
   void DestroyProbeTargets(filament::Engine* engine);
@@ -128,11 +135,17 @@ class FilamentRenderer {
   void SweepGarbage(filament::Engine* engine, bool all);
   void DestroyLights(filament::Engine* engine);
 
+  struct Prefilter;
+  Prefilter& EnsurePrefilter(filament::Engine* engine);
+
   filament::Engine* engine_ = nullptr;
   filament::Scene* scene_ = nullptr;
+  std::unique_ptr<Prefilter> prefilter_;
 
   // [0=opaque, 1=transparent, 2=transmissive][double_sided]
   filament::Material* lit_[3][2] = {};
+  // Transmissive materials that refract the probe's cubemap: [double_sided]
+  filament::Material* lit_cubemap_[2] = {};
   filament::Material* unlit_ = nullptr;
   filament::Material* unlit_transparent_ = nullptr;
   filament::Material* sdf_ = nullptr;
@@ -187,6 +200,8 @@ class FilamentRenderer {
   filament::Texture* probe_irradiance_ = nullptr;
   ProbeVolumeData probe_values_;
   bool probe_wanted_ = false;
+  bool probe_refraction_ = false;  // glass refracts the probe cubemap
+  filament::math::float4 probe_background_ = {0.0f, 0.0f, 0.0f, 1.0f};
   uint32_t probe_captures_ = 0;
   uint64_t scene_revision_ = 1;  // bumps when the scene or its lights change
   uint64_t probe_revision_ = 0;  // the revision the current capture saw

@@ -46,6 +46,9 @@ constexpr uint64_t kSweepEvery = 30;
 // frames, and no more often than every kProbeMinInterval frames.
 constexpr uint64_t kProbeQuietFrames = 3;
 constexpr uint64_t kProbeMinInterval = 30;
+// Glass below this index of refraction hardly bends the view; it keeps
+// screen-space refraction (to show what is inside it) even with a probe.
+constexpr float kCubemapRefractionMinIor = 1.1f;
 
 // Uploads hand ownership of their buffer to Filament, which releases it
 // through this callback once the copy has been consumed.
@@ -137,6 +140,29 @@ std::vector<filament::math::quatf> PackTangents(const MeshGeometry& source) {
 
 }  // namespace
 
+// The IBL prefilter context and its filters, made once (each builds
+// materials and a kernel texture) and shared by the skybox and the probe.
+struct FilamentRenderer::Prefilter {
+  explicit Prefilter(filament::Engine& engine)
+      : context(engine),
+        to_cube(context),
+        specular(context),
+        irradiance(context) {}
+  IBLPrefilterContext context;
+  IBLPrefilterContext::EquirectangularToCubemap to_cube;
+  IBLPrefilterContext::SpecularFilter specular;
+  IBLPrefilterContext::IrradianceFilter irradiance;
+};
+
+FilamentRenderer::FilamentRenderer() = default;
+FilamentRenderer::~FilamentRenderer() = default;
+
+FilamentRenderer::Prefilter& FilamentRenderer::EnsurePrefilter(
+    filament::Engine* engine) {
+  if (!prefilter_) prefilter_ = std::make_unique<Prefilter>(*engine);
+  return *prefilter_;
+}
+
 bool FilamentRenderer::Init(filament::Engine* engine) {
   engine_ = engine;
   lit_[0][0] = LoadMaterial("lit_opaque");
@@ -145,6 +171,8 @@ bool FilamentRenderer::Init(filament::Engine* engine) {
   lit_[1][1] = LoadMaterial("lit_transparent_double_sided");
   lit_[2][0] = LoadMaterial("lit_transmissive");
   lit_[2][1] = LoadMaterial("lit_transmissive_double_sided");
+  lit_cubemap_[0] = LoadMaterial("lit_transmissive_cubemap");
+  lit_cubemap_[1] = LoadMaterial("lit_transmissive_cubemap_double_sided");
   unlit_ = LoadMaterial("unlit");
   unlit_transparent_ = LoadMaterial("unlit_transparent");
   sdf_ = LoadMaterial("text_sdf");
@@ -153,6 +181,7 @@ bool FilamentRenderer::Init(filament::Engine* engine) {
       if (!lit_[i][j]) return false;
     }
   }
+  if (!lit_cubemap_[0] || !lit_cubemap_[1]) return false;
   if (!unlit_ || !unlit_transparent_ || !sdf_) return false;
   scene_ = engine_->createScene();
 
@@ -273,6 +302,7 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
   RetireProbeLight();
   DestroyProbeTargets(engine);
   SweepGarbage(engine, true);
+  prefilter_.reset();
   fallback_sky_ = nullptr;
   for (auto& [id, entry] : meshes_) {
     engine->destroy(entry.vertices);
@@ -298,6 +328,10 @@ void FilamentRenderer::Shutdown(filament::Engine* engine) {
         lit_[i][j] = nullptr;
       }
     }
+  }
+  for (filament::Material*& cubemap : lit_cubemap_) {
+    if (cubemap) engine->destroy(cubemap);
+    cubemap = nullptr;
   }
   if (unlit_) {
     engine->destroy(unlit_);
@@ -535,11 +569,53 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     const bool is_unlit = material.sdf_text || material.unlit;
     const bool is_transmissive = !is_unlit && material.transmission > 0.0f;
     const int surface = is_transmissive ? 2 : (material.transparent ? 1 : 0);
+    // Solid refraction needs a path length through the object. Without one
+    // from the material, take the object's thinnest world extent (the
+    // bounding box's edges under the full world and draw matrix, so rotation,
+    // node scale and unit conversion count): a sphere's diameter, a slab's
+    // depth. A very flat shape is a pane (a slab), not a solid, and gets the
+    // minimum; the rest is capped so a large object cannot refract by a huge
+    // offset. Colour does not depend on it, only the refraction offset.
+    float thickness = material.thickness;
+    bool slab = false;
+    if (is_transmissive && thickness <= 0.0f) {
+      const glm::mat4 box_world =
+          draw.skin >= 0 ? world : world * mesh.DrawMatrix(draw, pose);
+      const glm::vec3 half(box.halfExtent.x, box.halfExtent.y,
+                           box.halfExtent.z);
+      const glm::vec3 extent(
+          glm::length(glm::vec3(box_world[0]) * (half.x * 2.0f)),
+          glm::length(glm::vec3(box_world[1]) * (half.y * 2.0f)),
+          glm::length(glm::vec3(box_world[2]) * (half.z * 2.0f)));
+      const float smallest =
+          std::max(std::min({extent.x, extent.y, extent.z}), 1e-6f);
+      const float largest = std::max({extent.x, extent.y, extent.z});
+      thickness = largest / smallest > 10.0f
+                      ? 0.001f
+                      : std::clamp(smallest, 0.001f, 2.0f);
+      // Flat-ish shapes (panes, a sheet of water) are no solid to look
+      // into; a sphere or a box is within a ratio of about 2 or 3.
+      slab = largest / smallest > 4.0f;
+    }
+
     filament::Material* base =
         material.sdf_text
             ? sdf_
             : (material.transparent ? unlit_transparent_ : unlit_);
-    if (!is_unlit) base = lit_[surface][material.double_sided ? 1 : 0];
+    if (!is_unlit) {
+      const int side = material.double_sided ? 1 : 0;
+      // With a room probe placed, solid glass refracts the probe's cubemap
+      // (the whole room, which the screen cannot show); without one, and for
+      // panes and water sheets that barely bend the view, it refracts what
+      // is on screen. The probe sees a pane from one side only, so a cubemap
+      // pane would refract its own capture and go dark. A shell with an ior
+      // near 1 does not bend the view at all: a cubemap would show the room
+      // behind it instead of what is inside, so it stays on screen too.
+      base = is_transmissive && probe_refraction_ && !slab &&
+                     material.ior > kCubemapRefractionMinIor
+                 ? lit_cubemap_[side]
+                 : lit_[surface][side];
+    }
 
     const filament::TextureSampler sampler(
         filament::TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
@@ -556,8 +632,9 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     if (!is_unlit) {
       instance->setParameter("metallic",
                              std::clamp(material.metallic, 0.0f, 1.0f));
-      instance->setParameter(
-          "roughness", std::clamp(1.0f - material.smoothness, 0.05f, 1.0f));
+      instance->setParameter("roughness",
+                             std::clamp(1.0f - material.smoothness,
+                                        is_transmissive ? 0.0f : 0.05f, 1.0f));
       // Not the exposure weight (w): emission is a plain linear radiance
       // added to the lit color, not nits scaled by the camera exposure.
       instance->setParameter("emissive",
@@ -593,34 +670,11 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         const glm::vec3 trans_color =
             glm::clamp(material.transmission_color, 1e-4f, 1.0f);
         const bool tinted = trans_color != glm::vec3(1.0f);
-        // Solid refraction needs a path length through the object. Without
-        // one from the material, take the object's thinnest world extent
-        // (the bounding box's edges under the full world and draw matrix, so
-        // rotation, node scale and unit conversion count): a sphere's
-        // diameter, a slab's depth. A very flat shape is a pane, not a solid,
-        // and gets the minimum; the rest is capped so a large object cannot
-        // refract the screen by a huge offset. Colour does not depend on it,
-        // only the screenspace refraction offset.
-        float thickness = material.thickness;
-        if (thickness <= 0.0f) {
-          const glm::mat4 box_world =
-              draw.skin >= 0 ? world : world * mesh.DrawMatrix(draw, pose);
-          const glm::vec3 half(box.halfExtent.x, box.halfExtent.y,
-                               box.halfExtent.z);
-          const glm::vec3 extent(
-              glm::length(glm::vec3(box_world[0]) * (half.x * 2.0f)),
-              glm::length(glm::vec3(box_world[1]) * (half.y * 2.0f)),
-              glm::length(glm::vec3(box_world[2]) * (half.z * 2.0f)));
-          const float smallest =
-              std::max(std::min({extent.x, extent.y, extent.z}), 1e-6f);
-          const float largest = std::max({extent.x, extent.y, extent.z});
-          thickness = largest / smallest > 10.0f
-                          ? 0.001f
-                          : std::clamp(smallest, 0.001f, 0.25f);
-        }
+        // The light crosses the volume twice (in and out), so the colour is
+        // the transmittance over the full path: sqrt(tint) at one crossing.
         const filament::math::float3 absorption =
             tinted ? filament::Color::absorptionAtDistance(
-                         ToFilament(trans_color), thickness)
+                         ToFilament(trans_color), thickness * 2.0f)
                    : filament::math::float3{0.0f, 0.0f, 0.0f};
         instance->setParameter("transmission",
                                std::clamp(material.transmission, 0.0f, 1.0f));
@@ -687,6 +741,9 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
     record_draw.material = instance;
     record_draw.layer = layer;
     record_draw.skinned = skinned;
+    record_draw.transmissive = is_transmissive;
+    if (!is_unlit && glm::length(material.emission) > 0.0f)
+      record_draw.emission = material.emission;
     record_draw.draw_index = static_cast<uint32_t>(draw_index);
     record_draw.in_scene = true;
     record_draw.render_texture = material.render_texture;
@@ -701,6 +758,22 @@ void FilamentRenderer::SyncScene(GameScene& game) {
   auto& renderables = engine->getRenderableManager();
   frame_++;
   SweepGarbage(engine, false);
+
+  // Glass refracts the probe's cubemap while a probe is placed and the
+  // screen otherwise; when that flips, transmissive draws change material.
+  const bool refract_probe =
+      game.GetLighting().probes.placed && game.GetLighting().probes.enabled;
+  if (refract_probe != probe_refraction_) {
+    probe_refraction_ = refract_probe;
+    for (auto& [entity, record] : proxies_) {
+      for (const DrawRecord& draw : record.draws) {
+        if (draw.transmissive) {
+          record.mesh = nullptr;  // rebuilt below
+          break;
+        }
+      }
+    }
+  }
 
   // Entities that went away.
   std::vector<entt::entity> gone;
@@ -749,7 +822,18 @@ void FilamentRenderer::SyncScene(GameScene& game) {
 
     if (!moved && !pose) continue;
     record.world = world;
-    if (moved) scene_revision_++;
+    // Only still scenery is worth a new capture: bodies under physics,
+    // skinned meshes and posed models move every frame and would never let
+    // the probe settle (or recapture continuously).
+    if (moved) {
+      bool dynamic = pose != nullptr;
+      if (const Rigidbody* body = registry.try_get<Rigidbody>(entity)) {
+        dynamic = dynamic || body->motion_type != MotionType::kStatic;
+      }
+      for (const DrawRecord& draw : record.draws)
+        dynamic = dynamic || draw.skinned;
+      if (!dynamic) scene_revision_++;
+    }
 
     // What moved: rigid draws shift with the entity (their node matrix is
     // folded into the transform), skinned ones carry their own bones.
@@ -935,6 +1019,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
     // textures when only the brightness changes.
     ambient_->setIntensity(lighting.environment_intensity);
     env_intensity_ = lighting.environment_intensity;
+    scene_revision_++;
   }
 
   // Ambient hemisphere light as band-1 spherical harmonics scaled to match the
@@ -959,6 +1044,7 @@ void FilamentRenderer::SyncLights(filament::Engine* engine, GameScene& game) {
                    .intensity(kSunLuxPerIntensity / glm::pi<float>())
                    .build(*engine);
     scene_->setIndirectLight(ambient_);
+    scene_revision_++;
     ambient_sky_ = lighting.ambient;
     ambient_ground_ = lighting.ambient_ground;
   }
@@ -969,6 +1055,7 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
   skybox_path_ = path;
   skybox_synced_ = true;
   env_intensity_ = intensity;
+  scene_revision_++;  // the probe's sky and first-bounce light change
 
   // Retire the current panorama resources (destroyed after 3 frames).
   if (scene_) scene_->setSkybox(fallback_sky_);
@@ -1099,22 +1186,20 @@ void FilamentRenderer::SyncSkybox(filament::Engine* engine,
     return;
   }
 
-  IBLPrefilterContext prefilter(*engine);
-  IBLPrefilterContext::EquirectangularToCubemap to_cube(prefilter);
-  IBLPrefilterContext::SpecularFilter specular(prefilter);
-  IBLPrefilterContext::IrradianceFilter irradiance(prefilter);
-
-  sky_cube_ = to_cube(equirect);
+  Prefilter& filters = EnsurePrefilter(engine);
+  sky_cube_ = filters.to_cube(equirect);
   garbage_textures_.emplace_back(frame_, equirect);
   if (!sky_cube_) return;
 
-  ibl_reflections_ = specular(sky_cube_);
+  ibl_reflections_ = filters.specular(sky_cube_);
   IBLPrefilterContext::IrradianceFilter::Options irr_options;
   irr_options.generateMipmap = false;
-  ibl_irradiance_ = irradiance(irr_options, sky_cube_);
+  ibl_irradiance_ = filters.irradiance(irr_options, sky_cube_);
 
-  panorama_sky_ =
-      filament::Skybox::Builder().environment(sky_cube_).build(*engine);
+  panorama_sky_ = filament::Skybox::Builder()
+                      .environment(sky_cube_)
+                      .intensity(intensity)
+                      .build(*engine);
   ambient_ = filament::IndirectLight::Builder()
                  .reflections(ibl_reflections_)
                  .irradiance(ibl_irradiance_)
@@ -1135,6 +1220,7 @@ void FilamentRenderer::SyncProbe(filament::Engine* engine, GameScene& game) {
       probe_wanted_ = false;
       RetireProbeLight();
       probe_revision_ = 0;
+      probe_capture_frame_ = 0;
       // The probe no longer overrides the scene's own image-based light.
       if (scene_) scene_->setIndirectLight(ambient_);
     }
@@ -1159,12 +1245,17 @@ void FilamentRenderer::SyncProbe(filament::Engine* engine, GameScene& game) {
   // frames), and not again until it has been still for a moment.
   const bool stale = !probe_light_ || probe_revision_ != scene_revision_;
   const bool settled = frame_ >= probe_change_frame_ + kProbeQuietFrames;
-  const bool rested =
-      !probe_light_ || frame_ >= probe_capture_frame_ + kProbeMinInterval;
+  // The first capture goes as soon as the scene has settled; later ones (and
+  // retries after a failed allocation) wait out the minimum interval.
+  const bool rested = probe_capture_frame_ == 0 ||
+                      frame_ >= probe_capture_frame_ + kProbeMinInterval;
   if (stale && settled && rested) {
-    probe_revision_ = scene_revision_;
+    const uint64_t revision = scene_revision_;
     probe_capture_frame_ = frame_;
-    CaptureProbe(engine, probe, game.GetRenderSettings().soft_shadows);
+    // Only a capture that happened counts as seeing this revision.
+    if (CaptureProbe(engine, probe, game.GetRenderSettings().soft_shadows)) {
+      probe_revision_ = revision;
+    }
   }
 
   // The probe's light replaces the skybox's (or the ambient hemisphere's).
@@ -1240,6 +1331,9 @@ bool FilamentRenderer::EnsureProbeTargets(filament::Engine* engine,
     // The raw lit radiance, before any tone mapping or grading: the filters
     // and the IndirectLight work in linear HDR.
     probe_view_->setPostProcessingEnabled(false);
+    // Every layer: the probe sees the whole room whatever the main camera's
+    // culling mask is.
+    probe_view_->setVisibleLayers(0xff, 0xff);
     probe_view_->setAntiAliasing(filament::View::AntiAliasing::NONE);
     probe_view_->setDithering(filament::View::Dithering::NONE);
     probe_view_->setBlendMode(filament::View::BlendMode::OPAQUE);
@@ -1254,6 +1348,7 @@ void FilamentRenderer::DestroyProbeTargets(filament::Engine* engine) {
   if (probe_view_) {
     engine->destroy(probe_view_);
     engine->destroyCameraComponent(probe_camera_entity_);
+    utils::EntityManager::get().destroy(probe_camera_entity_);
     probe_view_ = nullptr;
     probe_camera_ = nullptr;
     probe_camera_entity_ = {};
@@ -1295,14 +1390,14 @@ void FilamentRenderer::RetireProbeLight() {
   }
 }
 
-void FilamentRenderer::CaptureProbe(filament::Engine* engine,
+bool FilamentRenderer::CaptureProbe(filament::Engine* engine,
                                     const ProbeVolumeData& probe,
                                     bool soft_shadows) {
   const uint32_t size = std::bit_floor(
       static_cast<uint32_t>(std::clamp(probe.capture_size, 64, 1024)));
   if (!EnsureProbeTargets(engine, size)) {
     PDebug::warn("Filament: could not allocate the {}px light probe", size);
-    return;
+    return false;
   }
 
   // Start again from the scene's own light, not the previous capture's, so a
@@ -1311,6 +1406,21 @@ void FilamentRenderer::CaptureProbe(filament::Engine* engine,
   filament::Skybox* sky_before = scene_->getSkybox();
   scene_->setSkybox(panorama_sky_ ? panorama_sky_ : fallback_sky_);
   scene_->setIndirectLight(ambient_);
+  if (fallback_sky_) fallback_sky_->setColor(probe_background_);
+
+  // With include_emission off the room is captured without emissive
+  // surfaces' own glow (an AreaLight stands for it); put it back after.
+  auto set_emission = [&](bool on) {
+    for (auto& [entity, record] : proxies_) {
+      for (DrawRecord& draw : record.draws) {
+        if (!draw.material || glm::length(draw.emission) <= 0.0f) continue;
+        draw.material->setParameter(
+            "emissive",
+            ToFilament(glm::vec4(on ? draw.emission : glm::vec3(0.0f), 0.0f)));
+      }
+    }
+  };
+  if (!probe.include_emission) set_emission(false);
 
   probe_view_->setShadowType(soft_shadows ? filament::ShadowType::PCSS
                                           : filament::ShadowType::PCF);
@@ -1331,18 +1441,18 @@ void FilamentRenderer::CaptureProbe(filament::Engine* engine,
   const glm::vec3 center = (probe.min + probe.max) * 0.5f;
   const filament::math::double3 eye{center.x, center.y, center.z};
 
-  IBLPrefilterContext prefilter(*engine);
-  IBLPrefilterContext::SpecularFilter specular(prefilter);
-  IBLPrefilterContext::IrradianceFilter irradiance(prefilter);
+  Prefilter& filters = EnsurePrefilter(engine);
   IBLPrefilterContext::IrradianceFilter::Options irradiance_options;
   irradiance_options.generateMipmap = false;  // the specular pass makes them
 
   // The captured pixels are exposed (radiance times the camera's exposure);
   // the IndirectLight multiplies them by its intensity and the viewing
-  // camera's exposure, so cancel the capturing camera's.
+  // camera's exposure, so cancel the capturing camera's. The probe camera
+  // keeps Filament's default exposure, the same as the scene cameras (the
+  // exposure control is in the colour grading), so emissive surfaces read the
+  // same in the capture as on screen.
   const float exposure =
       std::max(filament::Exposure::exposure(*probe_camera_), 1e-9f);
-  const float intensity = std::max(probe.intensity, 0.0f) / exposure;
 
   const int bounces = std::clamp(probe.bounces, 1, 4);
   for (int bounce = 0; bounce < bounces; bounce++) {
@@ -1351,9 +1461,14 @@ void FilamentRenderer::CaptureProbe(filament::Engine* engine,
       probe_view_->setRenderTarget(probe_faces_[face]);
       probe_renderer_->renderStandaloneView(probe_view_);
     }
-    filament::Texture* reflections = specular(probe_cube_);
+    filament::Texture* reflections = filters.specular(probe_cube_);
     filament::Texture* irradiance_map =
-        irradiance(irradiance_options, probe_cube_);
+        filters.irradiance(irradiance_options, probe_cube_);
+    // The user's intensity scales only the light that ends up on screen; a
+    // bounce lights the next one at face value or the factor would compound.
+    const bool last = bounce == bounces - 1;
+    const float intensity =
+        (last ? std::max(probe.intensity, 0.0f) : 1.0f) / exposure;
     filament::IndirectLight* light = filament::IndirectLight::Builder()
                                          .reflections(reflections)
                                          .irradiance(irradiance_map)
@@ -1367,8 +1482,21 @@ void FilamentRenderer::CaptureProbe(filament::Engine* engine,
     probe_irradiance_ = irradiance_map;
   }
   probe_view_->setRenderTarget(nullptr);
+  if (!probe.include_emission) set_emission(true);
   scene_->setSkybox(sky_before);
   probe_captures_++;
+  return true;
+}
+
+void FilamentRenderer::SetProbeBackground(const glm::vec4& srgb) {
+  const glm::vec4 clamped = glm::clamp(srgb, 0.0f, 1.0f);
+  const filament::math::float4 linear =
+      ToFilament(glm::vec4(SrgbToLinear(glm::vec3(clamped)), 1.0f));
+  if (linear.x != probe_background_.x || linear.y != probe_background_.y ||
+      linear.z != probe_background_.z) {
+    probe_background_ = linear;
+    scene_revision_++;
+  }
 }
 
 void FilamentRenderer::DestroyLights(filament::Engine* engine) {

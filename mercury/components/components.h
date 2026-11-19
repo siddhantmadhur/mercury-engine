@@ -310,9 +310,13 @@ struct AreaLight {
  * Each bounce captures again with the previous result as the light.
  * It replaces the camera skybox's light while it is in the scene; the
  * skybox can still be drawn as the background. `size`, `resolution`,
- * `fit_to_scene`, `include_emission` and `probes_per_frame` come from the
- * old probe grid; they still parse and round-trip but do not change the
- * capture.
+ * `fit_to_scene` and `probes_per_frame` come from the old probe grid; they
+ * still parse and round-trip but do not change the capture.
+ * With `include_emission` off the capture leaves out the emissive surfaces'
+ * own glow. The capture sees every layer, whatever the camera's culling mask.
+ * Solid glass in the scene refracts the captured cubemap while a probe is in
+ * the map; thin panes and shells with an index of refraction near 1 keep
+ * screen-space refraction.
  */
 struct LightProbeVolume {
   bool fit_to_scene = false;
