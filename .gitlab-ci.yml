@@ -4,15 +4,17 @@ stages:
 
 variables:
   GIT_CLEAN_FLAGS: -ffdxx
-  # Store ccache inside the project directory so GitLab Runner can cache it
   CCACHE_DIR: "$CI_PROJECT_DIR/.ccache"
   CCACHE_MAXSIZE: "5G"
 
 clangformat-job:
   tags: ['us-east-2b']
   stage: format
+  image: ubuntu:24.04
   variables:
     GIT_SUBMODULE_STRATEGY: none
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git clang-format
   script:
     - echo "Linting code...."
     - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
@@ -21,8 +23,11 @@ clangformat-job:
 verify-license-job:
   tags: ['us-east-2b']
   stage: format
+  image: ubuntu:24.04
   variables:
     GIT_SUBMODULE_STRATEGY: none
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git perl
   script:
     - echo "Checking for files not including LICENSE header..."
     - perl scripts/addlicenses.pl
@@ -31,10 +36,10 @@ verify-license-job:
 ctest-build-job:
   tags: ['us-east-2b']
   stage: build
+  image: ubuntu:24.04
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
     GIT_SUBMODULE_FORCE_CLEAN: "true"
-    # Tell CMake to automatically route all C/C++ compiler calls through ccache
     CMAKE_C_COMPILER_LAUNCHER: ccache
     CMAKE_CXX_COMPILER_LAUNCHER: ccache
   cache:
@@ -43,6 +48,11 @@ ctest-build-job:
       - "ccache-$CI_DEFAULT_BRANCH"
     paths:
       - .ccache/
+  before_script:
+    # Install your C++ toolchain & libraries needed by Jolt, GLFW, Vulkan, Assimp, etc.
+    - apt-get update && apt-get install -y --no-install-recommends
+        build-essential cmake ninja-build git perl ccache pkg-config
+        libvulkan-dev libglfw3-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
   script:
     - ccache --zero-stats
     - ./scripts/setup_project.pl
