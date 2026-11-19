@@ -142,10 +142,25 @@ void ResolveStyles(VisualElement* root, UIResources& resources,
   static const ComputedStyle kDefault;
   static const std::unordered_map<std::string, TokenList> kNoVariables;
 
-  std::function<void(VisualElement*, bool)> visit = [&](VisualElement* e,
-                                                        bool forced) {
-    const bool need = forced || e->styleDirty();
-    if (!need && !e->subtreeStyleDirty()) return;
+  // Iterative pre-order walk: CustomStyleResolvedEvent handlers may remove
+  // elements, so a recursive walk could both overflow the stack on deep trees
+  // and invalidate the iteration. Each entry carries the element's alive
+  // token and is checked again before use.
+  struct Pending {
+    VisualElement* element;
+    std::shared_ptr<const bool> alive;
+    bool forced;
+  };
+  std::vector<Pending> stack;
+  stack.push_back({root, root->aliveToken(), false});
+  while (!stack.empty()) {
+    const Pending entry = std::move(stack.back());
+    stack.pop_back();
+    if (!*entry.alive) continue;
+    VisualElement* e = entry.element;
+
+    const bool need = entry.forced || e->styleDirty();
+    if (!need && !e->subtreeStyleDirty()) continue;
     if (need) {
       const VisualElement* parent = e->hierarchyParent();
       const ComputedStyle& parent_style =
@@ -182,12 +197,18 @@ void ResolveStyles(VisualElement* root, UIResources& resources,
         e->SendEvent(event);
       }
     }
+    // A handler above may have destroyed the element and its children.
+    if (!*entry.alive) continue;
     e->ClearStyleDirty();
     // A restyled element restyles its whole subtree: descendant selectors
-    // and inherited values may have changed.
-    for (const auto& child : e->hierarchyChildren()) visit(child.get(), need);
-  };
-  visit(root, false);
+    // and inherited values may have changed. Push a snapshot of the children,
+    // reversed so they are visited in tree order.
+    const auto& children = e->hierarchyChildren();
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+      VisualElement* child = it->get();
+      stack.push_back({child, child->aliveToken(), need});
+    }
+  }
 }
 
 }  // namespace Mercury::UI
