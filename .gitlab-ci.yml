@@ -2,13 +2,16 @@ stages:
   - format
   - build
 
+# Ensure all jobs wipe untracked files (like leftover build/ folders) before starting
+variables:
+  GIT_CLEAN_FLAGS: -ffdx
+
 clangformat-job:
   tags: ['us-east-2b']
   stage: format
   script:
     - echo "Linting code...."
-    # Exclude third_party/ and build/ from the file list using git pathspecs
-    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
+    - git ls-files | grep -E '\.([ch](pp)?|cc)$' | grep -vE '^(third_party|build)/' | xargs -r clang-format -i --style=Google
     - git diff --exit-code
 
 verify-license-job:
@@ -16,19 +19,17 @@ verify-license-job:
   stage: format
   script:
     - echo "Checking for files not including LICENSE header..."
-    - perl scripts/addlicenses.pl
-    # Discard any accidental modifications to third_party/ or build/ before checking diff
-    - git checkout -- third_party/ build/ 2>/dev/null || true
+    - mkdir -p /tmp/ci_excluded
+    - '[ -d third_party ] && mv third_party /tmp/ci_excluded/'
+    - perl scripts/addlicenses.pl; EXIT_CODE=$?
+    - '[ -d /tmp/ci_excluded/third_party ] && mv /tmp/ci_excluded/third_party .'
+    - '[ "$EXIT_CODE" -eq 0 ] || exit $EXIT_CODE'
     - git diff --exit-code
 
 ctest-build-job:
   tags: ['us-east-2b']
   stage: build
-  variables:
-    # Ensure git fetch/clean doesn't wipe out the cached build directory
-    GIT_CLEAN_FLAGS: -ffdx -e build/
   cache:
-    # Scope cache to the branch/ref, falling back to default branch so new MRs still get a warm cache
     key: "cmake-build-$CI_COMMIT_REF_SLUG"
     fallback_keys:
       - "cmake-build-$CI_DEFAULT_BRANCH"
