@@ -2,7 +2,7 @@
 
 Mercury is a game-engine built with C++ for performant games
 
-<img width="854" height="508" alt="mercury_engine_example" src="https://github.com/user-attachments/assets/dc234997-66ed-462a-9bb8-d86c7bafa2c5">
+<img width="854" height="508" alt="mercury_engine_example" src="assets/mercury_demo_rc1.gif">
 
 ## Table of Contents
 
@@ -60,7 +60,6 @@ written in [AngelScript](https://www.angelcode.com/angelscript/) (`.as`, compile
 EnTT scene and runs a fixed-step tick plus a per-frame render. Everything native (physics, audio,
 rendering) sits behind the engine, and scripts reach it only through a small checked native API.
 
-<img width="735" height="1328" alt="Architecture diagram for Mercury Engine showing how its constructed." src="assets/architecture_graph.png">
 
 | Layer | Dependency | Used for |
 |---|---|---|
