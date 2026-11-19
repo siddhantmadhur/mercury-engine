@@ -319,6 +319,17 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
   fs::create_directories(output_dir, ec);
   if (ec) return fail("could not create " + output_dir.string());
   const fs::path output = fs::weakly_canonical(output_dir, ec);
+  // The CMake build can take minutes after BuildGame checked the folder; make
+  // sure it still resolves inside the project before deleting anything in it.
+  {
+    std::error_code root_ec;
+    const fs::path real_root = fs::weakly_canonical(root, root_ec);
+    const fs::path relative = output.lexically_relative(real_root);
+    if (ec || root_ec || relative.empty() || relative == "." ||
+        *relative.begin() == "..") {
+      return fail("the output folder is not inside the project");
+    }
+  }
 
   // Archives from an earlier build would shadow or outlive the new ones.
   for (const auto& entry : fs::directory_iterator(output, ec)) {
