@@ -34,33 +34,51 @@ namespace Mercury {
 template <>
 auto PhysicsEngine::TriggerCollisionCallback<kCollisionPersisted>(
     kEntityId self, kEntityId other) -> void {
-  if (on_collision_persisted_.contains(self)) {
-    on_collision_persisted_[self](self, other);
+  // Copied first: a callback may register a new one for itself, which would
+  // reassign the function that is running.
+  if (auto it = on_collision_persisted_.find(self);
+      it != on_collision_persisted_.end()) {
+    const auto callback = it->second;
+    callback(self, other);
   }
-  if (on_collision_persisted_.contains(other)) {
-    on_collision_persisted_[other](other, self);
+  if (auto it = on_collision_persisted_.find(other);
+      it != on_collision_persisted_.end()) {
+    const auto callback = it->second;
+    callback(other, self);
   }
 }
 
 template <>
 void PhysicsEngine::TriggerCollisionCallback<kCollisionEnter>(kEntityId self,
                                                               kEntityId other) {
-  if (on_collision_enter_.contains(self)) {
-    on_collision_enter_[self](self, other);
+  // Copied first: a callback may register a new one for itself, which would
+  // reassign the function that is running.
+  if (auto it = on_collision_enter_.find(self);
+      it != on_collision_enter_.end()) {
+    const auto callback = it->second;
+    callback(self, other);
   }
-  if (on_collision_enter_.contains(other)) {
-    on_collision_enter_[other](other, self);
+  if (auto it = on_collision_enter_.find(other);
+      it != on_collision_enter_.end()) {
+    const auto callback = it->second;
+    callback(other, self);
   }
 }
 
 template <>
 void PhysicsEngine::TriggerCollisionCallback<kCollisionLeave>(kEntityId self,
                                                               kEntityId other) {
-  if (on_collision_leave_.contains(self)) {
-    on_collision_leave_[self](self, other);
+  // Copied first: a callback may register a new one for itself, which would
+  // reassign the function that is running.
+  if (auto it = on_collision_leave_.find(self);
+      it != on_collision_leave_.end()) {
+    const auto callback = it->second;
+    callback(self, other);
   }
-  if (on_collision_leave_.contains(other)) {
-    on_collision_leave_[other](other, self);
+  if (auto it = on_collision_leave_.find(other);
+      it != on_collision_leave_.end()) {
+    const auto callback = it->second;
+    callback(other, self);
   }
 }
 
@@ -507,7 +525,9 @@ void PhysicsEngine::Compute(int steps) {
   this->SynchronizePObjects();
   const float step = 1.0f / static_cast<float>(tick_rate_);
   for (int i = 0; i < steps; i++) {
+    in_step_ = true;
     physics_system_.Update(step, 1, temp_allocator_, job_system_thread_pool_);
+    in_step_ = false;
   }
 
   auto& body_interface = physics_system_.GetBodyInterface();
@@ -611,6 +631,9 @@ void PhysicsEngine::RemoveBodyNow(kEntityId id) {
     sensor_bodies_.erase(sensor);
   }
   disabled_.erase(id);
+  on_collision_enter_.erase(id);
+  on_collision_persisted_.erase(id);
+  on_collision_leave_.erase(id);
   std::erase_if(trigger_pairs_, [&](const auto& pair) {
     return pair.first == id || pair.second == id;
   });
@@ -1260,7 +1283,13 @@ void PhysicsEngine::UpdateContacts() {
     std::lock_guard lock(contact_mutex_);
     callbacks.swap(pending_callbacks_);
   }
+  // An earlier callback (or the deletion queue above) may have removed an
+  // entity that a later event names; a removed one gets no callback.
+  const auto exists = [this](kEntityId id) {
+    return id == entt::null || entity_bodies_ref_.contains(id);
+  };
   for (const auto& callback : callbacks) {
+    if (!exists(callback.self) || !exists(callback.other)) continue;
     switch (callback.type) {
       case kCollisionEnter:
         TriggerCollisionCallback<kCollisionEnter>(callback.self,

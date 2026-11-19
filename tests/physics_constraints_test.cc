@@ -326,13 +326,18 @@ mass = 1.0
   const auto stepping_thread = std::this_thread::get_id();
   int enters = 0;
   bool wrong_thread = false;
+  bool during_step = false;
   scene.Physics().AddCollisionCallback<kCollisionEnter>(
       ball.GetEntity(), [&](kEntityId, kEntityId) {
         enters++;
         if (std::this_thread::get_id() != stepping_thread) wrong_thread = true;
+        // Jolt's own threads can be the stepping thread, so also ask whether
+        // a step is in progress: it must not be.
+        if (scene.Physics().IsStepping()) during_step = true;
       });
   for (int i = 0; i < 60; ++i) scene.SimulatePhysics(1);
 
   EXPECT_GT(enters, 0);
   EXPECT_FALSE(wrong_thread);
+  EXPECT_FALSE(during_step);
 }

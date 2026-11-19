@@ -24,6 +24,7 @@
 #include <optional>
 #include <set>
 #include <stack>
+#include <atomic>
 #include <vector>
 
 #include "Jolt/Core/Core.h"
@@ -383,6 +384,9 @@ class PhysicsEngine {
   }
   // Called by the contact listener from Jolt's threads.
   void RecordContact(kEntityId a, kEntityId b, bool added);
+  // True only while Jolt is stepping (its threads are running the contact
+  // listener); false everywhere callbacks and scene code run.
+  bool IsStepping() const { return in_step_; }
   // Also from Jolt's threads: remembers that the per-entity collision callback
   // of `type` (AddCollisionCallback) is due. It runs later, on the thread that
   // steps the physics, so it can safely change bodies and the scene.
@@ -421,7 +425,7 @@ class PhysicsEngine {
   void DisableBody(kEntityId id);
 
   // Destroys an entity's bodies (and character) immediately. Only call
-  // between steps, never from a collision callback.
+  // between steps; collision callbacks run between steps, so they may.
   void RemoveBodyNow(kEntityId id);
 
   /**
@@ -531,6 +535,7 @@ class PhysicsEngine {
     kEntityId other;
   };
   std::vector<PendingCollisionCallback> pending_callbacks_;  // contact_mutex_
+  std::atomic<bool> in_step_{false};
   std::set<std::pair<kEntityId, kEntityId>> contact_pairs_;
   ContactCallback contact_callback_;
   void UpdateContacts();
