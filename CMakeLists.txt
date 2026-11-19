@@ -193,6 +193,10 @@ foreach (MATERIAL ${MERCURY_MATERIAL_SOURCES})
 endforeach ()
 add_custom_target(mercury_materials ALL DEPENDS ${MERCURY_MATERIAL_OUTPUTS})
 add_dependencies(mercury_materials filament_ext)
+# Every consumer of the engine library runs with the .filamat files, so a
+# targeted build (--target mercury_player, an editor or an example) must
+# rebuild them when a .mat changes; the ALL target alone is not enough.
+add_dependencies(mercury mercury_materials)
 
 # --------------------------------------------------------------------------
 # Player and tools
