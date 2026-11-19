@@ -376,6 +376,11 @@ bool PhysicsEngine::CreatePlane(
   plane_shape_settings.SetEmbedded();
 
   JPH::ShapeSettings::ShapeResult shape_result = plane_shape_settings.Create();
+  if (shape_result.HasError()) {
+    PDebug::error("Physics: could not create plane shape: {}",
+                  shape_result.GetError().c_str());
+    return false;
+  }
   auto shape_ref = shape_result.Get();
 
   auto creation_settings = JPH::BodyCreationSettings(
@@ -389,6 +394,10 @@ bool PhysicsEngine::CreatePlane(
   // Registering a second body would orphan the first one.
   RemoveBodyNow(self);
   auto body = body_interface.CreateBody(creation_settings);
+  if (body == nullptr) {
+    PDebug::error("Physics: out of bodies");
+    return false;
+  }
 
   auto body_id = body->GetID();
   this->jolt_bodies_ref_[body_id] = self;
