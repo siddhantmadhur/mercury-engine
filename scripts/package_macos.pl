@@ -303,7 +303,7 @@ if ($opt{target} eq 'editor') {
 # Bundle skeleton
 # --------------------------------------------------------------------------
 
-remove_tree($app_dir) if -e $app_dir;
+remove_tree($app_dir) if -e $app_dir || -l $app_dir;
 my $contents = File::Spec->catdir($app_dir, 'Contents');
 my $macos    = File::Spec->catdir($contents, 'MacOS');
 my $res      = File::Spec->catdir($contents, 'Resources');

@@ -295,7 +295,7 @@ sub verify_sha256 {
     if (lc($actual) ne lc($expected)) {
         die "SHA-256 mismatch for $file\n  expected $expected\n  got      $actual\n";
     }
-    print "SHA-256 verified: " . File::Spec->abs2rel($file) . "\n";
+    print "SHA-256 verified: " . (File::Spec->splitpath($file))[2] . "\n";
 }
 
 sub command_exists {
