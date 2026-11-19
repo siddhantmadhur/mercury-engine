@@ -687,7 +687,10 @@ sub collect_game_files {
             my $entry = length($rel) ? "$rel/$name" : $name;
             # A symlink can lead anywhere (an SSH key, a folder that loops back
             # on itself); only what really lives in the project is shipped.
-            next if -l $path;
+            if (-l $path) {
+                log_line("  skipped symlink (not packed): $entry");
+                next;
+            }
             if (-d $path) {
                 my $canonical = abs_path($path) // $path;
                 next if $canonical eq $output;

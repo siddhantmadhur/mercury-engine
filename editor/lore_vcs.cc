@@ -416,7 +416,7 @@ void LoreVcs::Discard(const Change& change) {
         ProjectFileFromLore(project_->GetRoot(), change.path);
     if (file.empty()) {
       console_.Error("Refusing to delete \"" + change.path +
-                     "\": it is not a file inside the project");
+                     "\": it is not inside the project");
       return;
     }
     std::error_code ec;
@@ -635,7 +635,11 @@ void LoreVcs::ParseStatus(const std::vector<std::string>& lines) {
       Change change;
       change.code = line[0];
       change.section = section;
-      if (const auto arrow = text.find(" -> "); arrow != std::string::npos) {
+      // Only a move is written "old -> new"; in any other entry the arrow is
+      // part of the file's name (an untracked "a -> b.txt").
+      const auto arrow = change.code == 'V' ? text.find(" -> ")
+                                            : std::string::npos;
+      if (arrow != std::string::npos) {
         change.from = text.substr(0, arrow);
         change.path = text.substr(arrow + 4);
       } else {
