@@ -11,7 +11,9 @@
  */
 #include "scripting/as/bindings_ui.h"
 
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "scripting/as/bindings.h"
@@ -24,13 +26,36 @@
 namespace Mercury {
 
 namespace {
-std::vector<UI::VisualElement*> g_elements;
+
+// One live UI element. The weak token is the element's own alive_ flag, so a
+// handle to an element that was removed (not only a whole document) is
+// detected instead of dereferencing freed memory. Slots are keyed by a
+// never-reused id, so a handle cannot silently name a different element.
+struct ElementSlot {
+  UI::VisualElement* element = nullptr;
+  std::weak_ptr<const bool> alive;
+};
+
+std::unordered_map<uint32_t, ElementSlot> g_elements;
+uint32_t g_next_slot = 1;
 uint32_t g_generation = 1;
+
+bool SlotAlive(const ElementSlot& slot) {
+  const std::shared_ptr<const bool> alive = slot.alive.lock();
+  return alive && *alive;
+}
+
+int64_t EncodeHandle(uint32_t slot) {
+  return static_cast<int64_t>((uint64_t{g_generation} << 32) | slot);
+}
+
 }  // namespace
 
 void InvalidateUiHandles() {
   g_elements.clear();
-  g_generation++;
+  g_next_slot = 1;
+  // Generation 0 is never handed out; skip it if the counter wraps.
+  if (++g_generation == 0) g_generation = 1;
 }
 
 namespace as {
@@ -39,24 +64,58 @@ namespace {
 
 int64_t MakeHandle(UI::VisualElement* element) {
   if (!element) return -1;
-  for (size_t i = 0; i < g_elements.size(); i++) {
-    if (g_elements[i] == element)
-      return static_cast<int64_t>(uint64_t{g_generation} << 20 | i);
+  for (auto it = g_elements.begin(); it != g_elements.end();) {
+    // Drop the rows of elements that have been destroyed, so the table stays
+    // as small as the live elements.
+    if (!SlotAlive(it->second)) {
+      it = g_elements.erase(it);
+      continue;
+    }
+    if (it->second.element == element) return EncodeHandle(it->first);
+    ++it;
   }
-  g_elements.push_back(element);
-  return static_cast<int64_t>(uint64_t{g_generation} << 20 |
-                              (g_elements.size() - 1));
+  if (g_next_slot == 0) {
+    // The 32-bit slot id wrapped; start a new generation so no live handle
+    // can match a new slot.
+    g_elements.clear();
+    if (++g_generation == 0) g_generation = 1;
+    g_next_slot = 1;
+  }
+  const uint32_t slot = g_next_slot++;
+  g_elements.emplace(slot, ElementSlot{element, element->aliveToken()});
+  return EncodeHandle(slot);
 }
 
 UI::VisualElement* ArgElement(const ScriptUiHandle& handle) {
   const uint64_t raw = static_cast<uint64_t>(handle.value);
-  const uint32_t generation = static_cast<uint32_t>(raw >> 20);
-  const size_t index = static_cast<size_t>(raw & 0xFFFFF);
-  if (generation != g_generation || index >= g_elements.size()) {
+  const uint32_t generation = static_cast<uint32_t>(raw >> 32);
+  const auto it = g_elements.find(static_cast<uint32_t>(raw));
+  if (generation != g_generation || it == g_elements.end() ||
+      !SlotAlive(it->second)) {
     Throw("UI element was destroyed");
     return nullptr;
   }
-  return g_elements[index];
+  return it->second.element;
+}
+
+// Keeps the script object that registered a UI listener alive while the
+// listener exists, and releases it when the element is destroyed.
+struct ScriptOwner {
+  explicit ScriptOwner(asIScriptObject* instance) : object(instance) {
+    if (object) object->AddRef();
+  }
+  ~ScriptOwner() {
+    if (object) object->Release();
+  }
+  asIScriptObject* object = nullptr;
+};
+
+// Listeners stay on the element after their behaviour is destroyed, so they
+// must not call into it.
+void CallOwner(asIScriptObject* owner, const std::string& method,
+               std::span<const ScriptArg> args, std::string_view label) {
+  if (!owner || !ScriptRuntime::Instance().BehaviourOf(owner)) return;
+  ScriptRuntime::Instance().CallMethod(owner, method, args, label);
 }
 
 ScriptUiHandle Root() {
@@ -126,9 +185,9 @@ void OnClick(const ScriptUiHandle& handle, const std::string& method) {
     Throw("OnClick must be called from a script method");
     return;
   }
-  owner->AddRef();
-  button->clicked += [owner, method] {
-    ScriptRuntime::Instance().CallMethod(owner, method, {}, "Button." + method);
+  auto holder = std::make_shared<ScriptOwner>(owner);
+  button->clicked += [holder, method] {
+    CallOwner(holder->object, method, {}, "Button." + method);
   };
 }
 
@@ -149,11 +208,10 @@ void OnClickArg(const ScriptUiHandle& handle, const std::string& method,
     Throw("OnClick must be called from a script method");
     return;
   }
-  owner->AddRef();
-  button->clicked += [owner, method, argument] {
+  auto holder = std::make_shared<ScriptOwner>(owner);
+  button->clicked += [holder, method, argument] {
     const ScriptArg args[] = {ScriptArg::String(argument)};
-    ScriptRuntime::Instance().CallMethod(owner, method, args,
-                                         "Button." + method);
+    CallOwner(holder->object, method, args, "Button." + method);
   };
 }
 
@@ -173,12 +231,11 @@ void OnToggleChanged(const ScriptUiHandle& handle, const std::string& method) {
     Throw("OnToggleChanged must be called from a script method");
     return;
   }
-  owner->AddRef();
+  auto holder = std::make_shared<ScriptOwner>(owner);
   toggle->RegisterValueChangedCallback<bool>(
-      [owner, method](UI::ChangeEvent<bool>& event) {
+      [holder, method](UI::ChangeEvent<bool>& event) {
         const ScriptArg args[] = {ScriptArg::Bool(event.newValue)};
-        ScriptRuntime::Instance().CallMethod(owner, method, args,
-                                             "Toggle." + method);
+        CallOwner(holder->object, method, args, "Toggle." + method);
       });
 }
 
@@ -234,9 +291,10 @@ void SetDisplay(const ScriptUiHandle& handle, bool visible) {
 
 bool IsValid(const ScriptUiHandle& handle) {
   const uint64_t raw = static_cast<uint64_t>(handle.value);
-  const uint32_t generation = static_cast<uint32_t>(raw >> 20);
-  const size_t index = static_cast<size_t>(raw & 0xFFFFF);
-  return generation == g_generation && index < g_elements.size();
+  const uint32_t generation = static_cast<uint32_t>(raw >> 32);
+  const auto it = g_elements.find(static_cast<uint32_t>(raw));
+  return generation == g_generation && it != g_elements.end() &&
+         SlotAlive(it->second);
 }
 
 void SetDataSource(const ScriptUiHandle& handle) {
