@@ -101,6 +101,7 @@ TEST_F(ModelCacheTest, ReadBackIsTheImportedModel) {
     EXPECT_EQ(a.name, b.name);
     EXPECT_EQ(a.color, b.color);
     EXPECT_EQ(a.smoothness, b.smoothness);
+    EXPECT_EQ(a.double_sided, b.double_sided);
     EXPECT_EQ(a.transmission, b.transmission);
     EXPECT_EQ(a.ior, b.ior);
     EXPECT_EQ(a.transmission_color, b.transmission_color);

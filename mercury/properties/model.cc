@@ -269,6 +269,8 @@ ModelImportSettings ModelImportSettings::ForFile(
     }
     if (p.Has("thickness"))
       entry.thickness = static_cast<float>(p.GetFloat("thickness"));
+    if (p.Has("double_sided"))
+      entry.double_sided = p.GetBool("double_sided", false);
     settings.materials.push_back(std::move(entry));
   }
   return settings;
@@ -730,6 +732,9 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
       source->Get(AI_MATKEY_OPACITY, opacity);
       material.color = glm::vec4(color.r, color.g, color.b, color.a * opacity);
       material.transparent = material.color.a < 0.999f;
+      bool two_sided = false;
+      source->Get(AI_MATKEY_TWOSIDED, two_sided);
+      material.double_sided = two_sided;
       float metallic = 0.0f;
       if (source->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
         material.metallic = metallic;
@@ -915,6 +920,7 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
           material.transmission_color = *entry.transmission_color;
         if (entry.thickness)
           material.thickness = std::max(*entry.thickness, 0.0f);
+        if (entry.double_sided) material.double_sided = *entry.double_sided;
       }
       model->materials_.push_back(std::move(material));
       if (!collecting) model->material_sources_.push_back(std::move(sources));

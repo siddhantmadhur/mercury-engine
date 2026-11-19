@@ -25,7 +25,7 @@ namespace {
 namespace fs = std::filesystem;
 
 // Bump when what is written, or how Model::Import builds a model, changes.
-constexpr uint32_t kVersion = 6;
+constexpr uint32_t kVersion = 7;
 constexpr char kMagic[4] = {'M', 'M', 'C', 'F'};
 
 struct Hash {
@@ -100,6 +100,8 @@ uint64_t CacheKey(const std::string& path,
     hash.Add(entry.transmission_color.has_value());
     if (entry.transmission_color) hash.Add(*entry.transmission_color);
     hash.Add(entry.thickness.value_or(-1.0f));
+    hash.Add(entry.double_sided.has_value());
+    if (entry.double_sided) hash.Add(*entry.double_sided);
   }
   return hash.value;
 }
@@ -238,7 +240,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   auto model = std::make_shared<Model>();
   model->path_ = path;
   model->root_on_object_ = in.Pod<uint8_t>() != 0;
-  // Smallest possible records: a node is 68 bytes, a material 116, a mesh 73,
+  // Smallest possible records: a node is 68 bytes, a material 117, a mesh 73,
   // a clip 20 and an animation channel 52.
   model->nodes_.resize(in.Count(68));
   for (auto& node : model->nodes_) {
@@ -251,7 +253,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     node.rotation = in.Pod<glm::quat>();
     node.scale = in.Pod<glm::vec3>();
   }
-  const uint64_t material_count = in.Count(116);
+  const uint64_t material_count = in.Count(117);
   if (in.ok()) {
     model->materials_.resize(material_count);
     model->material_sources_.resize(material_count);
@@ -265,6 +267,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     material.emission = in.Pod<glm::vec3>();
     material.normal_scale = in.Pod<float>();
     material.transparent = in.Pod<uint8_t>() != 0;
+    material.double_sided = in.Pod<uint8_t>() != 0;
     material.transmission = in.Pod<float>();
     material.ior = in.Pod<float>();
     material.transmission_color = in.Pod<glm::vec3>();
@@ -436,6 +439,7 @@ void ModelCache::Write(const Model& model, const std::string& path,
     out.Pod(material.emission);
     out.Pod(material.normal_scale);
     out.Pod<uint8_t>(material.transparent ? 1 : 0);
+    out.Pod<uint8_t>(material.double_sided ? 1 : 0);
     out.Pod(material.transmission);
     out.Pod(material.ior);
     out.Pod(material.transmission_color);
