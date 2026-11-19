@@ -284,6 +284,7 @@ if (MERCURY_BUILD_TESTS)
             tests/rust_bridge_test.cc
             tests/script_behaviour_test.cc
             tests/script_runtime_test.cc
+            tests/sparse_set_test.cc
             tests/test_paths.h
             tests/test_scripts.h
             tests/ui_test.cc
