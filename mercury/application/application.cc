@@ -310,6 +310,10 @@ int Application::Run() {
 
 Application::~Application() {
   PDebug::info("Application shutting down...");
+  // Destroy the scene first: script OnDestroy callbacks can still reach the
+  // input manager, which is declared after game_scene_ and would otherwise
+  // already be gone by the time ~GameScene runs.
+  game_scene_.reset();
   if (!headless_) {
     if (cursor_) {
       glfwDestroyCursor(cursor_);
