@@ -535,6 +535,7 @@ std::unique_ptr<aiScene> JoinScenes(
     for (aiNode* child : children) {
       for (unsigned i = 0; i < child->mNumMeshes; i++) {
         const unsigned old_index = child->mMeshes[i];
+        if (old_index >= meshes.size()) return nullptr;
         child->mMeshes[i] = static_cast<unsigned>(ordered.size());
         ordered.push_back(meshes[old_index]);
         meshes[old_index] = nullptr;
@@ -582,7 +583,11 @@ std::unique_ptr<aiScene> ImportObjInParallel(
       std::clamp<size_t>(size / (1024 * 1024), 1, WorkerThreadCount() * 4);
   std::vector<size_t> bounds{0};
   for (size_t i = 1; i < range_count; i++) {
-    size_t at = std::max(bounds.back(), size * i / range_count);
+    // 64-bit math so the multiplication cannot wrap on a very large file.
+    size_t at =
+        static_cast<size_t>(static_cast<uint64_t>(size) * i / range_count);
+    at = std::max(bounds.back(), at);
+    if (at >= size) break;
     // Move to just after a real line break.
     while (at < size) {
       const char* newline =
@@ -593,7 +598,8 @@ std::unique_ptr<aiScene> ImportObjInParallel(
       }
       const char* last = newline;
       if (last > base && last[-1] == '\r') last--;
-      at = newline - base + 1;
+      at = static_cast<size_t>(newline - base) + 1;
+      if (at > size) at = size;
       if (!(last > base && last[-1] == '\\')) break;
     }
     if (at > bounds.back() && at < size) bounds.push_back(at);

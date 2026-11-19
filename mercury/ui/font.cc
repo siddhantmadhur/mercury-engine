@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
@@ -26,6 +27,113 @@ constexpr int kInitialAtlasHeight = 512;
 constexpr int kMaxAtlasHeight = 4096;
 
 uint64_t g_atlas_resizes = 0;
+
+uint16_t BeU16(const std::vector<uint8_t>& data, size_t at) {
+  return static_cast<uint16_t>((data[at] << 8) | data[at + 1]);
+}
+
+uint32_t BeU32(const std::vector<uint8_t>& data, size_t at) {
+  return (static_cast<uint32_t>(data[at]) << 24) |
+         (static_cast<uint32_t>(data[at + 1]) << 16) |
+         (static_cast<uint32_t>(data[at + 2]) << 8) |
+         static_cast<uint32_t>(data[at + 3]);
+}
+
+// stb_truetype takes no buffer length, so check the sfnt table directory and
+// the loca/glyf extents it walks before handing it the data. This keeps a
+// truncated file from turning into an out-of-bounds read.
+bool ValidSfnt(const std::vector<uint8_t>& data, size_t base) {
+  const size_t size = data.size();
+  if (base > size || size - base < 12) return false;
+  const uint32_t version = BeU32(data, base);
+  if (version != 0x00010000u && version != 0x74727565u &&  // 'true'
+      version != 0x4F54544Fu) {                            // 'OTTO'
+    return false;
+  }
+  const uint16_t table_count = BeU16(data, base + 4);
+  if (table_count == 0) return false;
+  const uint64_t directory_end = static_cast<uint64_t>(base) + 12 +
+                                 static_cast<uint64_t>(table_count) * 16;
+  if (directory_end > size) return false;
+
+  uint64_t glyf_offset = 0, glyf_length = 0, loca_offset = 0, loca_length = 0;
+  uint64_t head_offset = 0;
+  bool has_cmap = false, has_head = false, has_hhea = false, has_hmtx = false,
+       has_glyf = false, has_loca = false, has_cff = false;
+  for (uint16_t i = 0; i < table_count; i++) {
+    const size_t record = base + 12 + static_cast<size_t>(i) * 16;
+    const uint32_t tag = BeU32(data, record);
+    const uint64_t offset = BeU32(data, record + 8);
+    const uint64_t length = BeU32(data, record + 12);
+    if (offset + length > size) return false;
+    switch (tag) {
+      case 0x636D6170u:  // cmap
+        has_cmap = true;
+        break;
+      case 0x68656164u:  // head
+        has_head = true;
+        head_offset = offset;
+        break;
+      case 0x68686561u:  // hhea
+        has_hhea = true;
+        break;
+      case 0x686D7478u:  // hmtx
+        has_hmtx = true;
+        break;
+      case 0x676C7966u:  // glyf
+        has_glyf = true;
+        glyf_offset = offset;
+        glyf_length = length;
+        break;
+      case 0x6C6F6361u:  // loca
+        has_loca = true;
+        loca_offset = offset;
+        loca_length = length;
+        break;
+      case 0x43464620u:  // 'CFF '
+      case 0x43464632u:  // 'CFF2'
+        has_cff = true;
+        break;
+      default:
+        break;
+    }
+  }
+  if (!has_cmap || !has_head || !has_hhea || !has_hmtx) return false;
+  if (has_cff) return true;
+  if (!has_glyf || !has_loca) return false;
+
+  // loca holds one more entry than the glyph count, and each entry has to
+  // point inside glyf. indexToLocFormat lives at head+50.
+  if (head_offset + 54 > size) return false;
+  const uint16_t long_offsets = BeU16(data, head_offset + 50) != 0;
+  const size_t entry_size = long_offsets ? 4 : 2;
+  if (loca_length < entry_size || loca_length % entry_size != 0) return false;
+  const size_t entries = loca_length / entry_size;
+  for (size_t i = 0; i < entries; i++) {
+    const uint64_t at = loca_offset + i * entry_size;
+    const uint64_t glyph = long_offsets
+                               ? BeU32(data, at)
+                               : static_cast<uint64_t>(BeU16(data, at)) * 2;
+    if (glyph > glyf_length) return false;
+  }
+  return true;
+}
+
+bool ValidFontData(const std::vector<uint8_t>& data) {
+  const size_t size = data.size();
+  if (size < 4) return false;
+  if (size >= 12 && BeU32(data, 0) == 0x74746366u) {  // 'ttcf' collection
+    const uint32_t font_count = BeU32(data, 8);
+    if (font_count == 0 || font_count > 4096) return false;
+    if (static_cast<uint64_t>(12) + static_cast<uint64_t>(font_count) * 4 >
+        size) {
+      return false;
+    }
+    // Init only uses the first font.
+    return ValidSfnt(data, BeU32(data, 12));
+  }
+  return ValidSfnt(data, 0);
+}
 
 }  // namespace
 
@@ -57,6 +165,7 @@ std::shared_ptr<Font> Font::FromMemory(std::vector<uint8_t> data) {
 
 bool Font::Init(std::vector<uint8_t> data) {
   data_ = std::move(data);
+  if (!ValidFontData(data_)) return false;
   info_ = std::make_unique<stbtt_fontinfo>();
   const int offset = stbtt_GetFontOffsetForIndex(data_.data(), 0);
   if (offset < 0 || !stbtt_InitFont(info_.get(), data_.data(), offset)) {
