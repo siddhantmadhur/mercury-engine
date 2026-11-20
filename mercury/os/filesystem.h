@@ -161,6 +161,17 @@ fs::path EnsureProjectCacheSubdir(const fs::path& cache_dir,
                                   std::string* error = nullptr);
 
 /**
+ * @brief A project content folder ("src", "system", "scripts")
+ *
+ * Created when missing. A symlink or non-directory is refused, and the
+ * resolved path must stay inside the project root, so New Script can never
+ * write through a link a cloned project supplied.
+ */
+fs::path EnsureProjectContentDir(const fs::path& project_root,
+                                 std::string_view name,
+                                 std::string* error = nullptr);
+
+/**
  * @brief The project's own CMake build folder, marked as editor-created
  *
  * An existing `<cache>/build/<config>` without the `.mercury-build` marker is

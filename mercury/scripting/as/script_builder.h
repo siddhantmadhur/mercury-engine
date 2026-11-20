@@ -23,8 +23,6 @@ struct BuildOptions {
   // Kept for callers that build a release: AngelScript sources are small, and
   // the engine has no minifier to run.
   bool release = false;
-  // Folder (relative to the project) the editor uses for generated files.
-  std::filesystem::path output_dir = ".mercury/scripts";
   // Called with each line of compiler output as it arrives.
   std::function<void(const std::string&)> on_line;
 };

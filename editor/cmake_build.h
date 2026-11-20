@@ -54,12 +54,6 @@ inline std::filesystem::path SdkCmakeDir() {
   return sdk.cmake_dir;
 }
 
-// <project>/.mercury/build/<config>, where config is "debug" or "release".
-inline std::filesystem::path ProjectBuildDir(
-    const std::filesystem::path& root, std::string_view config = "debug") {
-  return root / ".mercury" / "build" / std::string(config);
-}
-
 inline std::filesystem::path ProjectExecutable(
     const std::filesystem::path& build_dir, const std::string& target) {
   if (build_dir.empty()) return {};

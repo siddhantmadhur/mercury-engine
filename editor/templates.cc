@@ -97,14 +97,136 @@ ScriptPaths GetScriptPaths(const fs::path& project_root, ScriptKind kind,
 }
 
 bool IsValidIdentifier(const std::string& name) {
-  if (name.empty()) return false;
+  return ValidateScriptName(name, ScriptKind::kAngelScript).empty();
+}
+
+std::string ValidateScriptName(const std::string& name, ScriptKind /*kind*/) {
+  if (name.empty()) return "enter a class name";
+  if (name.size() > 64) return "names are limited to 64 characters";
   if (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_') {
-    return false;
+    return "the name must start with a letter or underscore";
   }
   for (char c : name) {
-    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') return false;
+    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') {
+      return "only letters, digits and underscores are allowed";
+    }
   }
-  return true;
+  if (name[0] == '_') return "names may not start with an underscore";
+  if (name.find("__") != std::string::npos) {
+    return "names may not contain two consecutive underscores";
+  }
+  static constexpr std::string_view kCppKeywords[] = {"alignas",
+                                                      "alignof",
+                                                      "and",
+                                                      "and_eq",
+                                                      "asm",
+                                                      "auto",
+                                                      "bitand",
+                                                      "bitor",
+                                                      "bool",
+                                                      "break",
+                                                      "case",
+                                                      "catch",
+                                                      "char",
+                                                      "char8_t",
+                                                      "char16_t",
+                                                      "char32_t",
+                                                      "class",
+                                                      "co_await",
+                                                      "co_return",
+                                                      "co_yield",
+                                                      "compl",
+                                                      "concept",
+                                                      "const",
+                                                      "consteval",
+                                                      "constexpr",
+                                                      "constinit",
+                                                      "const_cast",
+                                                      "continue",
+                                                      "decltype",
+                                                      "default",
+                                                      "delete",
+                                                      "do",
+                                                      "double",
+                                                      "dynamic_cast",
+                                                      "else",
+                                                      "enum",
+                                                      "explicit",
+                                                      "export",
+                                                      "extern",
+                                                      "false",
+                                                      "float",
+                                                      "for",
+                                                      "friend",
+                                                      "goto",
+                                                      "if",
+                                                      "inline",
+                                                      "int",
+                                                      "long",
+                                                      "mutable",
+                                                      "namespace",
+                                                      "new",
+                                                      "noexcept",
+                                                      "not",
+                                                      "not_eq",
+                                                      "nullptr",
+                                                      "operator",
+                                                      "or",
+                                                      "or_eq",
+                                                      "private",
+                                                      "protected",
+                                                      "public",
+                                                      "register",
+                                                      "reinterpret_cast",
+                                                      "requires",
+                                                      "return",
+                                                      "short",
+                                                      "signed",
+                                                      "sizeof",
+                                                      "static",
+                                                      "static_assert",
+                                                      "static_cast",
+                                                      "struct",
+                                                      "switch",
+                                                      "template",
+                                                      "this",
+                                                      "thread_local",
+                                                      "throw",
+                                                      "true",
+                                                      "try",
+                                                      "typedef",
+                                                      "typeid",
+                                                      "typename",
+                                                      "union",
+                                                      "unsigned",
+                                                      "using",
+                                                      "virtual",
+                                                      "void",
+                                                      "volatile",
+                                                      "wchar_t",
+                                                      "while",
+                                                      "xor",
+                                                      "xor_eq",
+                                                      "Behaviour",
+                                                      "System",
+                                                      "EditorExtension",
+                                                      "AppHook"};
+  for (std::string_view keyword : kCppKeywords) {
+    if (name == keyword) {
+      if (keyword == "Behaviour" || keyword == "System" ||
+          keyword == "EditorExtension" || keyword == "AppHook") {
+        return "\"" + name + "\" is a Mercury base type; choose another name";
+      }
+      return "\"" + name + "\" is a C++ keyword";
+    }
+  }
+  return {};
+}
+
+const char* ScriptKindFolder(ScriptKind kind) {
+  if (kind == ScriptKind::kAngelScript) return "scripts";
+  if (kind == ScriptKind::kCppEditorSystem) return "system";
+  return "src";
 }
 
 std::string ToSnakeCase(const std::string& name) {
@@ -366,11 +488,21 @@ fs::path CreateScript(const fs::path& project_root,
 fs::path CreateScript(const fs::path& project_root,
                       const std::string& class_name, ScriptKind kind,
                       std::string* error) {
-  if (!IsValidIdentifier(class_name)) {
+  const std::string reason = ValidateScriptName(class_name, kind);
+  if (!reason.empty()) {
     if (error) {
       *error = "\"" + class_name + "\" is not a valid " +
-               (IsCppScript(kind) ? "C++" : "AngelScript") + " class name";
+               (IsCppScript(kind) ? "C++" : "AngelScript") +
+               " class name: " + reason;
     }
+    return {};
+  }
+
+  std::string folder_error;
+  if (os::EnsureProjectContentDir(project_root, ScriptKindFolder(kind),
+                                  &folder_error)
+          .empty()) {
+    if (error) *error = folder_error;
     return {};
   }
 

@@ -667,6 +667,42 @@ bool IsEditorProjectBuildDir(const fs::path& dir) {
   return !ec && fs::is_regular_file(status);
 }
 
+fs::path EnsureProjectContentDir(const fs::path& project_root,
+                                 std::string_view name, std::string* error) {
+  if (name.empty() || name == "." || name == ".." ||
+      name.find('/') != std::string_view::npos ||
+      name.find('\\') != std::string_view::npos) {
+    if (error) *error = "invalid project folder name";
+    return {};
+  }
+  const fs::path dir = EnsureRealDirectory(project_root / std::string(name),
+                                           "content folder", error);
+  if (dir.empty()) return {};
+
+  // The folder itself is not a symlink; also prove the resolved path is
+  // under the project root (a symlinked root is fine, escaping is not).
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(project_root, ec);
+  if (ec) {
+    if (error) *error = "could not resolve " + project_root.string();
+    return {};
+  }
+  const fs::path real_dir = fs::weakly_canonical(dir, ec);
+  if (ec) {
+    if (error) *error = "could not resolve " + dir.string();
+    return {};
+  }
+  const fs::path relative = real_dir.lexically_relative(real_root);
+  if (relative.empty() || relative == "." ||
+      (!relative.empty() && *relative.begin() == "..")) {
+    if (error) {
+      *error = dir.string() + " resolves outside the project folder";
+    }
+    return {};
+  }
+  return dir;
+}
+
 fs::path EnsureProjectBuildDir(const fs::path& project_root,
                                std::string_view config, std::string* error) {
   if (config.empty() || config == "." || config == ".." ||

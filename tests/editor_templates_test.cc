@@ -285,7 +285,12 @@ TEST(EditorTemplates, CppScriptNamesAreValidated) {
   ASSERT_FALSE(mproj.empty()) << error;
   const fs::path root = mproj.parent_path();
 
-  for (const char* name : {"1Bad", "bad name", "bad-name", ""}) {
+  const std::string too_long(65, 'A');
+  std::vector<std::string> names = {
+      "1Bad", "bad name", "bad-name",  "",        "class",
+      "and",  "System",   "Behaviour", "_hidden", "has__two"};
+  names.push_back(too_long);
+  for (const std::string& name : names) {
     error.clear();
     EXPECT_TRUE(Templates::CreateScript(
                     root, name, Templates::ScriptKind::kCppSystem, &error)
@@ -294,6 +299,49 @@ TEST(EditorTemplates, CppScriptNamesAreValidated) {
     EXPECT_NE(error.find("C++ class name"), std::string::npos) << error;
   }
   EXPECT_TRUE(fs::is_empty(root / "src"));
+}
+
+TEST(EditorTemplates, RefusesSymlinkedContentFolders) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "the test uses symlinks";
+#else
+  const fs::path parent = WorkDir("editor_script_symlink");
+  std::string error;
+  const fs::path mproj =
+      Templates::CreateProject(parent, "Symlink", false, &error);
+  ASSERT_FALSE(mproj.empty()) << error;
+  const fs::path root = mproj.parent_path();
+  const fs::path outside = WorkDir("editor_script_symlink_outside");
+
+  fs::remove_all(root / "src");
+  fs::create_symlink(outside, root / "src");
+  error.clear();
+  EXPECT_TRUE(Templates::CreateScript(root, "PlayerController",
+                                      Templates::ScriptKind::kCppBehaviour,
+                                      &error)
+                  .empty());
+  EXPECT_NE(error.find("symlink"), std::string::npos) << error;
+  EXPECT_TRUE(fs::is_empty(outside));
+
+  fs::remove_all(root / "system");
+  fs::create_symlink(outside, root / "system");
+  error.clear();
+  EXPECT_TRUE(Templates::CreateScript(root, "MyTool",
+                                      Templates::ScriptKind::kCppEditorSystem,
+                                      &error)
+                  .empty());
+  EXPECT_NE(error.find("symlink"), std::string::npos) << error;
+  EXPECT_TRUE(fs::is_empty(outside));
+
+  fs::remove_all(root / "scripts");
+  fs::create_symlink(outside, root / "scripts");
+  error.clear();
+  EXPECT_TRUE(Templates::CreateScript(root, "PlayerMover",
+                                      Templates::ScriptKind::kAngelScript,
+                                      &error)
+                  .empty());
+  EXPECT_TRUE(fs::is_empty(outside));
+#endif
 }
 
 TEST(EditorSettings, OpenScriptAfterCreateRoundTrips) {
@@ -381,7 +429,10 @@ TEST(EditorTemplates, GeneratedCppTemplatesCompileAgainstTheDevSdk) {
         << error;
   }
 
-  const fs::path build_dir = cmake_build::ProjectBuildDir(root);
+  std::string build_error;
+  const fs::path build_dir =
+      os::EnsureProjectBuildDir(root, "debug", &build_error);
+  ASSERT_FALSE(build_dir.empty()) << build_error;
   std::string log;
   ASSERT_TRUE(RunProcess(
       cmake_build::ConfigureArguments(root, build_dir, sdk.cmake_dir), root,

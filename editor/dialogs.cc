@@ -20,6 +20,7 @@
 
 #include "cmake_build.h"
 #include "editor_icons.h"
+#include "os/filesystem.h"
 #include "project_trust.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
@@ -203,14 +204,26 @@ std::optional<NewScriptRequest> ShowNewScriptDialog(
       show_message("Enter a valid C++/AngelScript class name", false);
       return;
     }
-    if (!Templates::IsValidIdentifier(name)) {
+    const std::string reason = Templates::ValidateScriptName(name, chosen);
+    if (!reason.empty()) {
       ok->Enable(false);
-      show_message(
-          "Invalid identifier (letters, digits, underscores; cannot "
-          "start with a digit)",
-          true);
+      show_message(wxString::FromUTF8(reason), true);
       return;
     }
+    std::string folder_error;
+    if (os::EnsureProjectContentDir(root, Templates::ScriptKindFolder(chosen),
+                                    &folder_error)
+            .empty()) {
+      ok->Enable(false);
+      show_message(wxString::FromUTF8(folder_error), true);
+      return;
+    }
+
+    auto relative = [&](const fs::path& file) {
+      std::error_code rel_ec;
+      const fs::path rel = fs::relative(file, root, rel_ec);
+      return (rel_ec ? file.filename() : rel).generic_string();
+    };
 
     const Templates::ScriptPaths paths =
         Templates::GetScriptPaths(root, chosen, name);
@@ -219,11 +232,9 @@ std::optional<NewScriptRequest> ShowNewScriptDialog(
       if (file.empty()) continue;
       if (fs::symlink_status(file, ec).type() != fs::file_type::not_found) {
         ok->Enable(false);
-        show_message(
-            wxString::FromUTF8(
-                "Already exists: " + fs::relative(file, root).generic_string() +
-                " (choose another name)"),
-            true);
+        show_message(wxString::FromUTF8("Already exists: " + relative(file) +
+                                        " (choose another name)"),
+                     true);
         return;
       }
     }
@@ -231,8 +242,7 @@ std::optional<NewScriptRequest> ShowNewScriptDialog(
     wxString text = "Will create:";
     for (const fs::path& file : {paths.header, paths.source}) {
       if (file.empty()) continue;
-      text += "\n  " +
-              wxString::FromUTF8(fs::relative(file, root).generic_string());
+      text += "\n  " + wxString::FromUTF8(relative(file));
     }
     if (cpp && project->GetBuildTarget().empty()) {
       text += "\n\nWill set [build] target = " +

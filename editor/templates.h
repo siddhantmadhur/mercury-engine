@@ -90,6 +90,18 @@ std::string ToSnakeCase(const std::string& name);
 // a leading digit. Used for the C++ build target default.
 std::string ToTargetName(const std::string& name);
 
+/**
+ * @brief Why `name` cannot name a script of `kind` (empty when it can)
+ *
+ * Rejects C++ keywords and alternative tokens, leading '_' and "__", names
+ * longer than 64 characters, and the base types users normally derive from
+ * (Behaviour, System, EditorExtension, AppHook).
+ */
+std::string ValidateScriptName(const std::string& name, ScriptKind kind);
+
+// The folder a script kind lives in: "scripts", "src" or "system".
+const char* ScriptKindFolder(ScriptKind kind);
+
 }  // namespace Mercury::Templates
 
 #endif  // MERCURY_EDITOR_TEMPLATES_H
