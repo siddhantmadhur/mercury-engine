@@ -369,6 +369,7 @@ void EditorFrame::BuildToolbar() {
 
   build_scripts_btn_ = new wxButton(toolbar_, wxID_ANY, "Build Scripts");
   build_scripts_btn_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (!EnsureNativeProjectTrusted(this, scene_)) return;
     if (script_editor_panel_ && !script_editor_panel_->SaveAllDirty()) return;
     if (auto p = scene_.GetProject()) scene_.PlayRef().Build(*p);
   });

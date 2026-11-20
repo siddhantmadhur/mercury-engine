@@ -324,7 +324,7 @@ class EditorScene : public MapScene {
   EditorSettings settings_;
   Console console_;
   PlaySession play_;
-  ReleaseBuild release_{console_};
+  ReleaseBuild release_{console_, settings_};
   UIBuilder ui_builder_{console_};
   InputActionsWindow input_actions_{console_};
   LoreVcs lore_{console_, settings_};

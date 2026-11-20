@@ -30,6 +30,19 @@ std::shared_ptr<Project> Project::Load(const fs::path& mproj_file,
   }
   project->file_ = file;
   project->root_ = file.parent_path();
+  if (auto build = project->document_.Find("build")) {
+    for (const char* key : {"target", "systems_target"}) {
+      const std::string value = build->properties.GetString(key);
+      if (!value.empty() && !IsValidTargetName(value)) {
+        if (error) {
+          *error = file.string() + ": invalid [build] " + key + " \"" + value +
+                   "\" (allowed: letters, digits, '_', '.', '+', '-'; cannot "
+                   "start with '-')";
+        }
+        return nullptr;
+      }
+    }
+  }
   return project;
 }
 
@@ -110,11 +123,26 @@ void Project::SetBuildOutput(std::string path) {
 
 std::string Project::GetBuildTarget() const {
   auto section = document_.Find("build");
-  return section ? section->properties.GetString("target") : "";
+  if (!section) return "";
+  const std::string target = section->properties.GetString("target");
+  return IsValidTargetName(target) ? target : "";
 }
 
-void Project::SetBuildTarget(std::string target) {
+bool Project::SetBuildTarget(std::string target) {
+  if (!target.empty() && !IsValidTargetName(target)) return false;
   GetOrAddSection("build").properties.Set("target", std::move(target));
+  return true;
+}
+
+bool Project::IsValidTargetName(std::string_view name) {
+  if (name.empty() || name.front() == '-') return false;
+  for (char c : name) {
+    const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                         (c >= '0' && c <= '9') || c == '_' || c == '.' ||
+                         c == '+' || c == '-';
+    if (!allowed) return false;
+  }
+  return true;
 }
 
 std::string Project::GetBuildSystemsTarget() const {
@@ -122,7 +150,11 @@ std::string Project::GetBuildSystemsTarget() const {
   if (section) {
     const std::string explicit_target =
         section->properties.GetString("systems_target");
-    if (!explicit_target.empty()) return explicit_target;
+    if (!explicit_target.empty()) {
+      // Reject rather than fall back: a malformed explicit target must not
+      // silently turn into the default one.
+      return IsValidTargetName(explicit_target) ? explicit_target : "";
+    }
   }
   const std::string target = GetBuildTarget();
   return target.empty() ? "" : target + "_systems";

@@ -382,6 +382,10 @@ if (MERCURY_BUILD_TESTS)
                 tests/test_paths.h)
         target_link_libraries(editor_test PRIVATE mercury_editor_lib)
 
+        mercury_add_test(project_trust_test
+                tests/project_trust_test.cc)
+        target_link_libraries(project_trust_test PRIVATE mercury_editor_lib)
+
         mercury_add_test(script_editor_test
                 tests/script_editor_test.cc
                 tests/test_paths.h)

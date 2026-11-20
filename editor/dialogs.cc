@@ -20,6 +20,7 @@
 
 #include "cmake_build.h"
 #include "editor_icons.h"
+#include "project_trust.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
 #include "wx_theme.h"
@@ -157,8 +158,7 @@ bool EnsureNativeProjectTrusted(wxWindow* parent, EditorScene& scene) {
         "Trust Project?", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
     dialog.SetYesNoLabels("Trust and Continue", "Cancel");
     if (dialog.ShowModal() != wxID_YES) return false;
-    settings.SetProjectTrusted(root, true);
-    settings.Save();
+    SetProjectTrust(settings, root, true, scene.ConsoleRef());
   }
   if (!settings.IsProjectTrusted(root)) {
     wxMessageBox(

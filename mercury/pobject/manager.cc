@@ -11,11 +11,12 @@ namespace Mercury {
 namespace {
 
 // Ids are unique for the life of the process, across every scene and every
-// PObjectManager. Map entities override theirs with the MapNode uid in
-// MapScene::CreateNodeEntity.
+// PObjectManager. The high bit keeps a temporary runtime id from colliding
+// with the MapNode uids that loaded entities adopt (they use a separate,
+// low counter); MapScene::CreateNodeEntity replaces the temporary one.
 uint64_t NextGuid() {
   static std::atomic<uint64_t> next{1};
-  return next.fetch_add(1, std::memory_order_relaxed);
+  return (uint64_t{1} << 63) | next.fetch_add(1, std::memory_order_relaxed);
 }
 
 }  // namespace

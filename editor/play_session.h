@@ -88,6 +88,9 @@ class PlaySession {
   std::string map_;
   std::string build_target_;
   bool native_ = false;
+  // Set when this session's configure+build succeeded, so a pre-existing
+  // bin/<target> is never executed.
+  bool built_this_session_ = false;
   // The next process is `cmake -S ... -B ...` rather than `cmake --build`.
   bool configuring_ = false;
   bool holds_build_lock_ = false;

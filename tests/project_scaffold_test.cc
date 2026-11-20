@@ -115,3 +115,22 @@ TEST(ProjectScaffold, LinksTheCompileDatabaseWhenItExists) {
 
   fs::remove_all(root);
 }
+
+TEST(ProjectScaffold, NeverInterpolatesAMalformedTarget) {
+  const fs::path root = MakeProject();
+  auto project = Project::Load(root / "scaffold.mproj");
+  ASSERT_TRUE(project);
+
+  // A document edited in memory (Project::Load would reject this file) must
+  // not reach the generated CMakeLists.
+  project->GetDocument().Add("build").properties.Set(
+      "target", "game)\nexecute_process(COMMAND echo pwned)\n#");
+  ASSERT_FALSE(fs::exists(root / "CMakeLists.txt"));
+  EditorUI::ScaffoldProject(*project);
+  EXPECT_FALSE(fs::exists(root / "CMakeLists.txt"));
+  // The LSP files still describe the project safely.
+  EXPECT_TRUE(fs::exists(root / ".clangd"));
+  EXPECT_TRUE(fs::exists(root / "CMakePresets.json"));
+
+  fs::remove_all(root);
+}

@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "console.h"
+#include "editor_settings.h"
 #include "os/process.h"
 #include "project/project.h"
 
@@ -52,7 +53,8 @@ class ReleaseBuild {
  public:
   enum class State { kIdle, kBuilding, kPacking };
 
-  explicit ReleaseBuild(Console& console) : console_(console) {}
+  explicit ReleaseBuild(Console& console, const EditorSettings& settings)
+      : console_(console), settings_(settings) {}
   ~ReleaseBuild();
 
   // max_archive_bytes: size at which game.mpack rolls over into game_001.mpack
@@ -115,6 +117,7 @@ class ReleaseBuild {
   void Finish(const std::string& message, bool error);
 
   Console& console_;
+  const EditorSettings& settings_;
   std::unique_ptr<os::Process> process_;
   std::future<PackResult> packing_;
   State state_ = State::kIdle;

@@ -726,7 +726,12 @@ kEntityId MapScene::CreateNodeEntity(const MapNode& node, kEntityId parent,
   // keeps the uid of its source, which is not unique across instances, so
   // those entities keep the counter id NewObject assigned.
   if (!cloning_runtime_node_ && node.uid != 0) {
-    object_manager_->SetGuid(entity, node.uid);
+    if (!object_manager_->SetGuid(entity, node.uid)) {
+      PDebug::warn(
+          "entity {}: map uid {} is already used by another live entity; "
+          "keeping its temporary guid",
+          path, node.uid);
+    }
   }
   {
     NodeInfo info;

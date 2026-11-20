@@ -205,7 +205,26 @@ void ScaffoldProject(const Project& project) {
   const fs::path root = project.GetRoot();
   std::error_code ec;
   fs::create_directories(root, ec);
-  WriteIfMissing(root / "CMakeLists.txt", CMakeListsText(project));
+
+  // Targets are interpolated into the generated CMakeLists. Normally Project
+  // load already rejected a malformed one; check here too so a document
+  // edited in memory can never inject CMake syntax.
+  bool targets_valid = true;
+  if (auto build = project.GetDocument().Find("build")) {
+    for (const char* key : {"target", "systems_target"}) {
+      const std::string value = build->properties.GetString(key);
+      if (!value.empty() && !Project::IsValidTargetName(value)) {
+        targets_valid = false;
+      }
+    }
+  }
+  const std::string preset_name = Slug(project.GetName());
+  targets_valid = targets_valid && Project::IsValidTargetName(preset_name) &&
+                  Project::IsValidTargetName(GameTarget(project)) &&
+                  Project::IsValidTargetName(SystemsTarget(project));
+  if (targets_valid) {
+    WriteIfMissing(root / "CMakeLists.txt", CMakeListsText(project));
+  }
   WriteIfMissing(root / "CMakePresets.json", PresetsText());
   // The editor owns .clangd, so rewrite it every time; WriteFileAtomic never
   // follows a link someone put in its place.

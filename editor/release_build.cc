@@ -148,6 +148,15 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
   build_dir_.clear();
   configuring_ = false;
   if (!build_target_.empty()) {
+    // A native build runs the project's CMake code; fail closed unless the
+    // workspace was trusted (the UI prompts before calling this).
+    if (!settings_.IsProjectTrusted(project_root_)) {
+      Finish(
+          "This project is not trusted, so its C++ build was not run. Use "
+          "Project > Trust Editor Systems and accept the prompt first.",
+          true);
+      return;
+    }
     if (cmake_build::SdkCmakeDir().empty()) {
       Finish(
           "This project names a C++ build target, but the editor's SDK has no "

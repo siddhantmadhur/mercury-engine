@@ -117,6 +117,9 @@ class EditorExtensionLoader {
   int load_serial_ = 0;
   // True while UnloadAll is processing wx events; Update must not re-enter.
   bool unloading_ = false;
+  // Deferred CallAfter callbacks hold this token, so they do not run against
+  // a loader that has been destroyed (e.g. while the editor exits).
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 };
 
 }  // namespace Mercury::EditorUI

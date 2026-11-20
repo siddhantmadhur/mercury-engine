@@ -57,8 +57,19 @@ void PlaySession::Begin(const Project& project, bool run) {
   working_dir_ = project_root_;
   build_target_ = project.GetBuildTarget();
   native_ = !build_target_.empty();
+  built_this_session_ = false;
   run_after_build_ = run;
   if (native_) {
+    // Building the project's CMake tree runs project code at configure time.
+    // The UI asks for trust first; this gate makes a caller that skipped the
+    // prompt fail closed.
+    if (!settings_.IsProjectTrusted(project_root_)) {
+      Finish(
+          "This project is not trusted, so its C++ build was not run. Use "
+          "Project > Trust Editor Systems and accept the prompt first.",
+          true);
+      return;
+    }
     const fs::path sdk_cmake = cmake_build::SdkCmakeDir();
     if (sdk_cmake.empty()) {
       Finish(
@@ -131,6 +142,12 @@ bool PlaySession::StartBuild() {
 }
 
 bool PlaySession::DumpSchema() {
+  if (native_ && !built_this_session_) {
+    console_.Error(
+        "Refusing to run a game executable that this Play session did not "
+        "build.");
+    return false;
+  }
   std::vector<std::string> args;
   if (native_) {
     args = {cmake_build::ProjectExecutable(build_dir_, build_target_).string(),
@@ -163,6 +180,12 @@ bool PlaySession::DumpSchema() {
 }
 
 bool PlaySession::StartGame() {
+  if (native_ && !built_this_session_) {
+    console_.Error(
+        "Refusing to run a game executable that this Play session did not "
+        "build.");
+    return false;
+  }
   std::vector<std::string> args;
   if (native_) {
     args = {cmake_build::ProjectExecutable(build_dir_, build_target_).string(),
@@ -202,6 +225,10 @@ void PlaySession::Finish(const std::string& message, bool error) {
 
 void PlaySession::Stop() {
   if (!process_) {
+    if (holds_build_lock_) {
+      cmake_build::ReleaseProjectBuild(project_root_);
+      holds_build_lock_ = false;
+    }
     state_ = State::kIdle;
     return;
   }
@@ -244,6 +271,7 @@ void PlaySession::Update() {
         cmake_build::ReleaseProjectBuild(project_root_);
         holds_build_lock_ = false;
       }
+      built_this_session_ = true;
       DumpSchema();
       if (run_after_build_) {
         console_.Info("Build succeeded; starting the game");

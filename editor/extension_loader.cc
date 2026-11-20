@@ -33,6 +33,7 @@
 #include "os/process.h"
 #include "play_session.h"
 #include "project/project.h"
+#include "project_trust.h"
 #include "project_scaffold.h"
 
 namespace Mercury::EditorUI {
@@ -134,6 +135,12 @@ std::filesystem::path FindSystemModule(const std::filesystem::path& dir,
     if (error) *error = "the project has no systems target";
     return {};
   }
+  // A target is used as a file name below `dir`; reject path separators and
+  // anything CMake would not accept, so it cannot escape the folder.
+  if (!Project::IsValidTargetName(target)) {
+    if (error) *error = "invalid systems target \"" + target + "\"";
+    return {};
+  }
   for (const char* suffix : {".so", ".dylib", ".dll"}) {
     const std::filesystem::path candidate = dir / (target + suffix);
     std::error_code ec;
@@ -172,6 +179,7 @@ EditorExtensionLoader::EditorExtensionLoader(EditorScene& scene,
 }
 
 EditorExtensionLoader::~EditorExtensionLoader() {
+  *alive_ = false;
   UnloadAllNow();
   EditorExtensionRegistry::Instance().SetErrorSink({});
 }
@@ -283,7 +291,11 @@ bool EditorExtensionLoader::Reload() {
     // A module callback (or a modal dialog's nested loop) asked for a reload.
     // Defer it so the module whose code is running is not unloaded under it.
     if (wxTheApp) {
-      wxTheApp->CallAfter([this]() { Reload(); });
+      std::weak_ptr<bool> alive = alive_;
+      wxTheApp->CallAfter([this, alive]() {
+        auto token = alive.lock();
+        if (token && *token) Reload();
+      });
     }
     return true;
   }
@@ -318,8 +330,7 @@ bool EditorExtensionLoader::Reload() {
           "Trust Editor Systems)");
       return true;
     }
-    Settings().SetProjectTrusted(root, *trusted);
-    Settings().Save();
+    SetProjectTrust(Settings(), root, *trusted, console_);
   }
   if (!Settings().IsProjectTrusted(root)) {
     console_.Info("Editor systems: skipped (this project is not trusted)");
@@ -332,6 +343,15 @@ bool EditorExtensionLoader::Reload() {
 bool EditorExtensionLoader::StartSystemsBuild() {
   auto project = scene_.GetProject();
   if (!project || !frame_) return true;
+  // Defense in depth: Reload prompts and checks, but the build itself must
+  // never run project CMake code for an untrusted workspace.
+  if (!Settings().IsProjectTrusted(project->GetRoot())) {
+    const std::string error =
+        "the project is not trusted, so its editor systems were not built";
+    console_.Error("Editor systems: " + error);
+    errors_.push_back(error);
+    return false;
+  }
   const std::string target = project->GetBuildSystemsTarget();
   if (target.empty()) {
     const std::string error =
@@ -655,8 +675,7 @@ bool EditorExtensionLoader::IsProjectTrusted() const {
 void EditorExtensionLoader::SetProjectTrusted(bool trusted) {
   auto project = scene_.GetProject();
   if (!project) return;
-  Settings().SetProjectTrusted(project->GetRoot(), trusted);
-  Settings().Save();
+  SetProjectTrust(Settings(), project->GetRoot(), trusted, console_);
 }
 
 void EditorExtensionLoader::UnloadAll() {
@@ -664,7 +683,11 @@ void EditorExtensionLoader::UnloadAll() {
     // Do not unload the module whose code is running (or whose modal dialog
     // is executing). The deferred call runs from the event loop.
     if (wxTheApp) {
-      wxTheApp->CallAfter([this]() { UnloadAll(); });
+      std::weak_ptr<bool> alive = alive_;
+      wxTheApp->CallAfter([this, alive]() {
+        auto token = alive.lock();
+        if (token && *token) UnloadAll();
+      });
     }
     return;
   }

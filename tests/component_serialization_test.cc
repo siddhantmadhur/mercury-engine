@@ -67,7 +67,7 @@ ComponentInfo MakeSnapshotInfo(const char* name, bool runtime_writable) {
     if (!value) return false;
     auto reflector = Reflector::Set(field, in);
     value->Reflect(reflector);
-    return reflector.Found();
+    return reflector.Applied();
   };
   return info;
 }
@@ -262,6 +262,16 @@ TEST(ComponentSerialization, ASnapshotThatAppliesNothingIsAFailure) {
   unknown.Set("not_a_field", 1);
   EXPECT_FALSE(
       registry.DeserializeComponent(scene, entity, "SnapshotTest", unknown));
+
+  // A known field whose value cannot be converted did not apply: it must not
+  // turn an otherwise empty snapshot into a success.
+  mtext::PropertyList wrong_type;
+  wrong_type.Set("count", std::string("not a number"));
+  EXPECT_FALSE(
+      registry.DeserializeComponent(scene, entity, "SnapshotTest", wrong_type));
+  SnapshotData* value = scene.Objects().GetProperty<SnapshotData>(entity);
+  ASSERT_NE(value, nullptr);
+  EXPECT_EQ(value->count, 42);
 }
 
 TEST(ComponentSerialization, RejectsNonFiniteValues) {
