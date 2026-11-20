@@ -11,7 +11,6 @@
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
-
 #include "version.h"
 
 #ifndef MERCURY_ENGINE_VERSION

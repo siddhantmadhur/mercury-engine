@@ -12,13 +12,13 @@
 #include <cstdint>
 #include <string_view>
 
+#include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
 #include "extension.h"
-#include "dialogs.h"
-#include "project/asset_importer.h"
 #include "os/filesystem.h"
 #include "os/process.h"
+#include "project/asset_importer.h"
 #include "project/project.h"
 #include "wx_theme.h"
 

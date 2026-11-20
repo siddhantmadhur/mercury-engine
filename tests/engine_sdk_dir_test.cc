@@ -5,14 +5,14 @@
 // Tests of the engine SDK resolver: bundle, next to the executable, next to
 // the executable's parent, then the development checkout.
 
-#include "os/filesystem.h"
-
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <string>
+
+#include "os/filesystem.h"
 
 namespace fs = std::filesystem;
 using namespace Mercury;

@@ -5,8 +5,6 @@
 // Tests of the C++ System registry: phase/order sorting, and the lifecycle a
 // MapScene drives.
 
-#include "scripting/system.h"
-
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -16,6 +14,7 @@
 
 #include "project/project.h"
 #include "scene/map_scene.h"
+#include "scripting/system.h"
 
 using namespace Mercury;
 

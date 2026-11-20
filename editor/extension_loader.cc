@@ -4,6 +4,8 @@
 
 #include "extension_loader.h"
 
+#include <wx/app.h>
+
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -14,8 +16,6 @@
 #include <optional>
 #include <system_error>
 #include <utility>
-
-#include <wx/app.h>
 
 #if !defined(_WIN32)
 #include <fcntl.h>
@@ -33,8 +33,8 @@
 #include "os/process.h"
 #include "play_session.h"
 #include "project/project.h"
-#include "project_trust.h"
 #include "project_scaffold.h"
+#include "project_trust.h"
 
 namespace Mercury::EditorUI {
 

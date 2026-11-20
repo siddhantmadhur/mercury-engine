@@ -7,8 +7,8 @@
 // directly, the pattern a network or replication system would use.
 
 #include <debugger/debugger.h>
-#include <scripting/event_bus.h>
 #include <scene/map_scene.h>
+#include <scripting/event_bus.h>
 #include <scripting/system.h>
 
 namespace {

@@ -5,14 +5,14 @@
 // Tests of the player command line, in particular the hand-off of unknown
 // options to a game's app hooks.
 
-#include "player/player.h"
-
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <initializer_list>
 #include <string>
 #include <vector>
+
+#include "player/player.h"
 
 using namespace Mercury;
 

@@ -12,7 +12,6 @@
 #define MERCURY_POBJECT_MANAGER_H
 #define ENTT_USE_STL 1
 #include <entt/entt.hpp>
-
 #include <unordered_map>
 
 #include "globals.h"

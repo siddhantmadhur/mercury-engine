@@ -5,8 +5,6 @@
 // Tests of the editor extension registry and loader: per-module ownership,
 // automatic unregistration, and ABI rejection.
 
-#include "extension.h"
-
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -17,6 +15,7 @@
 
 #include "editor_scene.h"
 #include "editor_settings.h"
+#include "extension.h"
 #include "extension_loader.h"
 
 using namespace Mercury;

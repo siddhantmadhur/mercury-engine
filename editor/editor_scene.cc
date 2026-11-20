@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <format>
 
+#include "cmake_build.h"
 #include "debugger/debugger.h"
 #include "debugger/profiler.h"
-#include "cmake_build.h"
 #include "os/process.h"
 #include "project_scaffold.h"
 #include "properties/camera.h"

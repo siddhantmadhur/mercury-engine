@@ -4,8 +4,6 @@
 
 // Tests of the build settings the editor derives from a project.
 
-#include "project/project.h"
-
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -13,6 +11,7 @@
 #include <random>
 #include <string>
 
+#include "project/project.h"
 #include "serialization/mtext.h"
 
 using namespace Mercury;

@@ -11,8 +11,8 @@
 // wxWidgets frame, so it is a standalone smoke executable rather than a
 // gtest case.
 
-#include <wx/wx.h>
 #include <wx/weakref.h>
+#include <wx/wx.h>
 
 #include <cstdlib>
 #include <memory>
