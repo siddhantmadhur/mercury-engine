@@ -9,6 +9,10 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <random>
+#include <stdexcept>
 #include <string>
 
 #include "editor_scene.h"
@@ -34,7 +38,7 @@ TEST(EditorExtensionRegistry, RemoveModuleOnlyRemovesItsEntries) {
   EXPECT_EQ(registry.Count(), 1u);
   ASSERT_EQ(registry.Panels().size(), 1u);
   EXPECT_EQ(registry.Panels()[0].module, "b");
-  EXPECT_EQ(registry.FindInspector("Transform"), nullptr);
+  EXPECT_FALSE(registry.CopyInspector("Transform").has_value());
 
   registry.Clear();
 }
@@ -88,6 +92,101 @@ TEST(EditorSettingsTrust, RemembersDecisionsByCanonicalPath) {
   EXPECT_EQ(settings.distrusted_projects.size(), 1u);
   EXPECT_TRUE(settings.trusted_projects.empty());
   std::filesystem::remove_all(root);
+}
+
+TEST(EditorExtensionRegistry, IterationSnapshotsEntries) {
+  auto& registry = EditorExtensionRegistry::Instance();
+  registry.Clear();
+  EditorContext context("module", nullptr, nullptr, nullptr, nullptr, nullptr);
+  context.AddPanel({"first", "First", {}});
+
+  int seen = 0;
+  registry.ForEachPanel([&](const EditorExtensionRegistry::PanelEntry&) {
+    seen++;
+    context.AddPanel({"second", "Second", {}});
+  });
+  // The entry added during the callback is not seen by this pass, and the
+  // original loop is not invalidated.
+  EXPECT_EQ(seen, 1);
+  EXPECT_EQ(registry.Panels().size(), 2u);
+  registry.Clear();
+}
+
+TEST(EditorExtensionCallbacks, ExceptionsAreContainedAndFaultedModulesStop) {
+  auto& registry = EditorExtensionRegistry::Instance();
+  registry.Clear();
+  registry.SetErrorSink([](std::string_view, std::string_view) {});
+
+  int calls = 0;
+  const int value = RunExtensionCallback(
+      "module", "test",
+      [&]() -> int {
+        calls++;
+        throw std::runtime_error("boom");
+      },
+      [] { return 7; });
+  EXPECT_EQ(calls, 1);
+  EXPECT_EQ(value, 7);
+
+  for (int i = 0; i < 8; i++) {
+    RunExtensionCallback("module", "test",
+                         [] { throw std::runtime_error("boom"); });
+  }
+  EXPECT_TRUE(registry.IsModuleFaulted("module"));
+  calls = 0;
+  RunExtensionCallback("module", "test", [&] { calls++; });
+  EXPECT_EQ(calls, 0);
+
+  registry.SetErrorSink({});
+  registry.Clear();
+}
+
+TEST(EditorMenuIdPool, RecyclesIdsAndReportsExhaustion) {
+  EditorMenuIdPool pool(3);
+  EXPECT_EQ(pool.Acquire(), 0);
+  EXPECT_EQ(pool.Acquire(), 1);
+  EXPECT_EQ(pool.Acquire(), 2);
+  EXPECT_EQ(pool.Acquire(), -1);
+
+  pool.Release(1);
+  EXPECT_EQ(pool.Acquire(), 1);
+  EXPECT_EQ(pool.Acquire(), -1);
+
+  pool.Release(0);
+  pool.Release(0);  // double release is ignored
+  pool.Release(2);
+  pool.Release(1);
+  // Released slots are reused last-in, first-out.
+  EXPECT_EQ(pool.Acquire(), 1);
+  EXPECT_EQ(pool.Acquire(), 2);
+  EXPECT_EQ(pool.Acquire(), 0);
+
+  pool.Reset();
+  EXPECT_EQ(pool.Acquire(), 0);
+}
+
+TEST(EditorExtensionLoader, FindsOnlyTheTargetModule) {
+  const std::filesystem::path dir =
+      std::filesystem::temp_directory_path() /
+      ("mercury_systems_" + std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(dir);
+  const std::filesystem::path module = dir / "game_systems.so";
+  std::ofstream(module) << "not really a library";
+  std::ofstream(dir / "stray.so") << "stray";
+
+  std::string error;
+  EXPECT_EQ(FindSystemModule(dir, "game_systems", &error), module);
+
+  // A symlink is never accepted, even when it points at the expected name.
+  std::filesystem::remove(module);
+  std::filesystem::create_symlink(dir / "stray.so", module);
+  EXPECT_TRUE(FindSystemModule(dir, "game_systems", &error).empty());
+  EXPECT_FALSE(error.empty());
+
+  std::filesystem::remove(module);
+  EXPECT_TRUE(FindSystemModule(dir, "game_systems", &error).empty());
+
+  std::filesystem::remove_all(dir);
 }
 
 TEST(EditorExtensionLoader, RejectsAModuleBuiltForAnotherAbi) {

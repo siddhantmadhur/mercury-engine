@@ -43,7 +43,6 @@ class EditorExtensionLoader {
   ~EditorExtensionLoader();
   EditorExtensionLoader(const EditorExtensionLoader&) = delete;
   EditorExtensionLoader& operator=(const EditorExtensionLoader&) = delete;
-
   // The editor frame extension UI is created in. Setting a different frame
   // unloads the current modules; the next Update loads them for the new one.
   void SetFrame(EditorFrame* frame);
@@ -79,8 +78,12 @@ class EditorExtensionLoader {
  private:
   struct LoadedExtension;
 
+  void UnloadAllNow();
   bool BuildProjectSystems(std::string* error);
   std::filesystem::path SystemsDir() const;
+  // The per-project cache folder for reload copies (0700, never a symlink).
+  std::filesystem::path TempDirForProject() const;
+  void CleanStaleTempCopies() const;
   EditorSettings& Settings() const;
 
   EditorFrame* frame_ = nullptr;
@@ -96,6 +99,21 @@ class EditorExtensionLoader {
   // True while UnloadAll is processing wx events; Update must not re-enter.
   bool unloading_ = false;
 };
+
+}  // namespace Mercury::EditorUI
+
+namespace Mercury::EditorUI {
+
+/**
+ * @brief Finds the module a project's systems target built
+ *
+ * Only `<target>.so`, `<target>.dylib` or `<target>.dll` is accepted, and only
+ * as a regular file: a symlink is refused, and libraries left over from other
+ * builds are never loaded.
+ */
+std::filesystem::path FindSystemModule(const std::filesystem::path& dir,
+                                       const std::string& target,
+                                       std::string* error = nullptr);
 
 }  // namespace Mercury::EditorUI
 

@@ -4,9 +4,11 @@
 
 #include "extension.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "console.h"
+#include "debugger/debugger.h"
 #include "editor_frame.h"
 #include "editor_scene.h"
 #include "editor_settings.h"
@@ -34,6 +36,9 @@ bool ParseMajorMinor(std::string_view version, int& major, int& minor) {
   i++;
   return parse_int(minor);
 }
+
+// A module is not called again after this many caught exceptions.
+constexpr int kMaxModuleFailures = 8;
 
 }  // namespace
 
@@ -95,19 +100,100 @@ void EditorExtensionRegistry::Clear() {
   inspectors_.clear();
   project_menu_items_.clear();
   viewport_tools_.clear();
+  failures_.clear();
+  callback_depth_ = 0;
 }
 
-const EditorInspectorInfo* EditorExtensionRegistry::FindInspector(
-    std::string_view component) const {
+std::optional<EditorExtensionRegistry::InspectorEntry>
+EditorExtensionRegistry::CopyInspector(std::string_view component) const {
   for (const InspectorEntry& entry : inspectors_) {
-    if (entry.info.component == component) return &entry.info;
+    if (entry.info.component == component) return entry;
   }
-  return nullptr;
+  return std::nullopt;
 }
 
 size_t EditorExtensionRegistry::Count() const {
   return panels_.size() + menu_items_.size() + inspectors_.size() +
          project_menu_items_.size() + viewport_tools_.size();
+}
+
+void EditorExtensionRegistry::ForEachPanel(
+    const std::function<void(const PanelEntry&)>& fn) const {
+  // Copy the entries (including their std::functions) first: a callback may
+  // register or remove entries.
+  const std::vector<PanelEntry> snapshot = panels_;
+  for (const PanelEntry& entry : snapshot) fn(entry);
+}
+
+void EditorExtensionRegistry::ForEachMenuItem(
+    const std::function<void(const MenuItemEntry&)>& fn) const {
+  const std::vector<MenuItemEntry> snapshot = menu_items_;
+  for (const MenuItemEntry& entry : snapshot) fn(entry);
+}
+
+void EditorExtensionRegistry::ForEachProjectMenuItem(
+    const std::function<void(const ProjectMenuItemEntry&)>& fn) const {
+  const std::vector<ProjectMenuItemEntry> snapshot = project_menu_items_;
+  for (const ProjectMenuItemEntry& entry : snapshot) fn(entry);
+}
+
+void EditorExtensionRegistry::ForEachViewportTool(
+    const std::function<void(const ViewportToolEntry&)>& fn) const {
+  const std::vector<ViewportToolEntry> snapshot = viewport_tools_;
+  for (const ViewportToolEntry& entry : snapshot) fn(entry);
+}
+
+void EditorExtensionRegistry::BeginCallback() { callback_depth_++; }
+
+void EditorExtensionRegistry::EndCallback() {
+  if (callback_depth_ > 0) callback_depth_--;
+}
+
+void EditorExtensionRegistry::SetErrorSink(ErrorSink sink) {
+  error_sink_ = std::move(sink);
+}
+
+void EditorExtensionRegistry::ReportFailure(std::string_view module,
+                                            const char* what,
+                                            std::string_view detail) {
+  const std::string name(module);
+  int& failures = failures_[name];
+  failures++;
+  std::string message = name + ": " + what + ": " + std::string(detail);
+  if (failures == kMaxModuleFailures) {
+    message += " (further callbacks from this module are disabled)";
+  }
+  if (error_sink_) {
+    error_sink_(module, message);
+  } else {
+    PDebug::error("{}", message);
+  }
+}
+
+bool EditorExtensionRegistry::IsModuleFaulted(std::string_view module) const {
+  auto it = failures_.find(std::string(module));
+  return it != failures_.end() && it->second >= kMaxModuleFailures;
+}
+
+int EditorMenuIdPool::Acquire() {
+  if (!free_.empty()) {
+    const int slot = free_.back();
+    free_.pop_back();
+    return slot;
+  }
+  if (next_ >= capacity_) return -1;
+  return next_++;
+}
+
+void EditorMenuIdPool::Release(int slot) {
+  if (slot < 0 || slot >= capacity_) return;
+  if (std::find(free_.begin(), free_.end(), slot) != free_.end()) return;
+  free_.push_back(slot);
+}
+
+void EditorMenuIdPool::Reset() {
+  next_ = 0;
+  free_.clear();
 }
 
 EditorContext::EditorContext(std::string module_id, EditorFrame* frame,
@@ -122,8 +208,25 @@ EditorContext::EditorContext(std::string module_id, EditorFrame* frame,
       aui_manager_(aui_manager) {}
 
 EditorContext::~EditorContext() {
+  UnbindAll();
   if (registry_) registry_->RemoveModule(module_id_);
   AssetImporterRegistry::Instance().UnregisterOwner(module_id_);
+}
+
+void EditorContext::UnbindAll() {
+  for (const std::function<void()>& unbind : bound_unbinders_) {
+    if (unbind) unbind();
+  }
+  bound_unbinders_.clear();
+  bound_callbacks_.clear();
+}
+
+void EditorContext::OnBoundEvent(wxEvent& event) {
+  auto it = bound_callbacks_.find(event.GetId());
+  if (it == bound_callbacks_.end() || !it->second) return;
+  // Copy: the callback may call Bind/UnbindAll.
+  std::function<void(wxEvent&)> callback = it->second;
+  RunExtensionCallback(module_id_, "event handler", [&] { callback(event); });
 }
 
 wxAuiManager& EditorContext::GetAuiManager() {

@@ -521,11 +521,15 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
   WxOverlayCanvas overlay(gc.get(), overlay_font_);
   scene_.RenderOverlays(overlay, local_mouse_, hovered_, alt_down_,
                         right_down_);
-  // Extensions draw on top of the editor's own gizmos.
-  for (const auto& entry :
-       EditorExtensionRegistry::Instance().ViewportTools()) {
-    if (entry.info.draw) entry.info.draw(overlay, scene_, local_mouse_);
-  }
+  // Extensions draw on top of the editor's own gizmos. The registry snapshots
+  // its entries, so a draw callback may register or remove tools.
+  EditorExtensionRegistry::Instance().ForEachViewportTool(
+      [&](const EditorExtensionRegistry::ViewportToolEntry& entry) {
+        if (!entry.info.draw) return;
+        RunExtensionCallback(entry.module, "viewport draw", [&] {
+          entry.info.draw(overlay, scene_, local_mouse_);
+        });
+      });
 
   // Bottom-left navigation hint pill
   if (const char* hint = scene_.GetHintText(); hint && *hint) {
@@ -819,19 +823,29 @@ void SceneViewportPanel::OnCanvasKeyUp(wxKeyEvent& evt) {
 
 bool SceneViewportPanel::RouteViewportMouse(
     const EditorViewportMouseEvent& event) {
-  for (const auto& entry :
-       EditorExtensionRegistry::Instance().ViewportTools()) {
-    if (entry.info.on_mouse && entry.info.on_mouse(event, scene_)) return true;
-  }
-  return false;
+  bool consumed = false;
+  EditorExtensionRegistry::Instance().ForEachViewportTool(
+      [&](const EditorExtensionRegistry::ViewportToolEntry& entry) {
+        if (consumed || !entry.info.on_mouse) return;
+        consumed = RunExtensionCallback(
+            entry.module, "viewport mouse",
+            [&] { return entry.info.on_mouse(event, scene_); },
+            [] { return false; });
+      });
+  return consumed;
 }
 
 bool SceneViewportPanel::RouteViewportKey(const EditorViewportKeyEvent& event) {
-  for (const auto& entry :
-       EditorExtensionRegistry::Instance().ViewportTools()) {
-    if (entry.info.on_key && entry.info.on_key(event, scene_)) return true;
-  }
-  return false;
+  bool consumed = false;
+  EditorExtensionRegistry::Instance().ForEachViewportTool(
+      [&](const EditorExtensionRegistry::ViewportToolEntry& entry) {
+        if (consumed || !entry.info.on_key) return;
+        consumed = RunExtensionCallback(
+            entry.module, "viewport key",
+            [&] { return entry.info.on_key(event, scene_); },
+            [] { return false; });
+      });
+  return consumed;
 }
 
 }  // namespace Mercury::EditorUI

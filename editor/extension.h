@@ -32,13 +32,17 @@
 #define MERCURY_EDITOR_EXTENSION_H
 
 #include <wx/aui/aui.h>
+#include <wx/weakref.h>
 #include <wx/wx.h>
 
 #include <cstdint>
+#include <exception>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 #include "globals.h"
@@ -196,9 +200,38 @@ class EditorExtensionRegistry {
   const std::vector<ViewportToolEntry>& ViewportTools() const {
     return viewport_tools_;
   }
-  // The custom inspector for a component type, or null.
-  const EditorInspectorInfo* FindInspector(std::string_view component) const;
+  // A copy of the custom inspector for a component type, if there is one. The
+  // copy also carries the module id for failure reporting.
+  std::optional<InspectorEntry> CopyInspector(std::string_view component) const;
   size_t Count() const;
+
+  // Safe iteration: the entries (and the std::functions in them) are copied
+  // first, so a callback may register or unregister without invalidating the
+  // loop.
+  void ForEachPanel(const std::function<void(const PanelEntry&)>& fn) const;
+  void ForEachMenuItem(
+      const std::function<void(const MenuItemEntry&)>& fn) const;
+  void ForEachProjectMenuItem(
+      const std::function<void(const ProjectMenuItemEntry&)>& fn) const;
+  void ForEachViewportTool(
+      const std::function<void(const ViewportToolEntry&)>& fn) const;
+
+  // --- callback safety ----------------------------------------------------
+  // A callback runs while the depth is > 0. The loader defers Reload/UnloadAll
+  // while this is true, so a callback (or a modal dialog it opens) cannot
+  // unload the module whose code is running.
+  void BeginCallback();
+  void EndCallback();
+  bool InCallback() const { return callback_depth_ > 0; }
+
+  // Module failures are reported here (the loader points it at the Console).
+  using ErrorSink =
+      std::function<void(std::string_view module, std::string_view message)>;
+  void SetErrorSink(ErrorSink sink);
+  void ReportFailure(std::string_view module, const char* what,
+                     std::string_view detail);
+  // After too many failures a module is no longer called.
+  bool IsModuleFaulted(std::string_view module) const;
 
  private:
   EditorExtensionRegistry() = default;
@@ -208,6 +241,9 @@ class EditorExtensionRegistry {
   std::vector<InspectorEntry> inspectors_;
   std::vector<ProjectMenuItemEntry> project_menu_items_;
   std::vector<ViewportToolEntry> viewport_tools_;
+  ErrorSink error_sink_;
+  std::unordered_map<std::string, int> failures_;
+  int callback_depth_ = 0;
 };
 
 /**
@@ -244,14 +280,14 @@ class EditorExtension {
  * (no wrappers); registrations are owned by the module and removed when the
  * context is destroyed during unload.
  */
-class EditorContext {
+class EditorContext : public wxEvtHandler {
  public:
   // Created by EditorExtensionLoader; public so a host or a test can build a
   // context without going through a module.
   EditorContext(std::string module_id, EditorFrame* frame, EditorScene* scene,
                 EditorSettings* settings, Console* console,
                 wxAuiManager* aui_manager);
-  ~EditorContext();
+  ~EditorContext() override;
   EditorContext(const EditorContext&) = delete;
   EditorContext& operator=(const EditorContext&) = delete;
 
@@ -275,6 +311,36 @@ class EditorContext {
   // Registers an asset importer owned by this module. Unloading the module
   // unregisters exactly its importers and restores the earlier mapping.
   void AddAssetImporter(AssetImporterInfo info);
+
+  /**
+   * @brief Binds an event handler that is unbound when the module unloads
+   *
+   * Never call `handler.Bind(...)` directly on an editor-owned wx object: the
+   * lambda would point into the module after its library is unmapped. Use this
+   * method for editor- and module-owned handlers alike; the binding is
+   * removed by UnbindAll (the loader calls it before destroying the module's
+   * windows) and by the context destructor.
+   * @param id the event/menu id, or wxID_ANY for a generated one
+   */
+  template <typename EventTag>
+  void Bind(wxEvtHandler& handler, const EventTag& event_type,
+            std::function<void(wxEvent&)> callback, int id = wxID_ANY) {
+    if (id == wxID_ANY) id = wxWindow::NewControlId();
+    bound_callbacks_[id] = std::move(callback);
+    handler.Bind(event_type, &EditorContext::OnBoundEvent, this, id);
+    // A weak reference keeps UnbindAll safe if the module destroyed its own
+    // handler before unloading.
+    wxWeakRef<wxEvtHandler> weak(&handler);
+    bound_unbinders_.push_back([weak, event_type, id, this]() mutable {
+      if (wxEvtHandler* target = weak.get()) {
+        target->Unbind(event_type, &EditorContext::OnBoundEvent, this, id);
+      }
+    });
+  }
+
+  // Removes every Bind() before the module's wx objects are destroyed. Safe to
+  // call more than once.
+  void UnbindAll();
 
  private:
   friend class EditorExtensionLoader;
@@ -300,6 +366,12 @@ class EditorContext {
   const std::vector<wxWindow*>& GetTrackedWindows() const {
     return tracked_windows_;
   }
+
+ private:
+  void OnBoundEvent(wxEvent& event);
+
+  std::vector<std::function<void()>> bound_unbinders_;
+  std::unordered_map<int, std::function<void(wxEvent&)>> bound_callbacks_;
 };
 
 /**
@@ -312,8 +384,7 @@ bool IsExtensionVersionCompatible(std::string_view module_version,
                                   std::string_view engine_version);
 
 /**
- * @brief The table a module exports under `mercury_editor_extension_v1`
- *
+ * @brief The table a module exports under `mercury_editor_extension_v1` *
  * Returned by the entry point MERCURY_EDITOR_EXTENSION defines. The loader
  * checks the ABI and engine version before calling `create`.
  */
@@ -323,6 +394,70 @@ struct EditorExtensionEntry {
   EditorExtension* (*create)() = nullptr;
   void (*destroy)(EditorExtension*) = nullptr;
 };
+
+/**
+ * @brief A reusable pool of menu ids for extensions
+ *
+ * Release returns the slot for reuse, so repeated reloads never exhaust the
+ * block the editor reserves.
+ */
+class EditorMenuIdPool {
+ public:
+  explicit EditorMenuIdPool(int capacity = 1000) : capacity_(capacity) {}
+
+  // A free slot in [0, capacity), or -1 when the pool is exhausted.
+  int Acquire();
+  void Release(int slot);
+  void Reset();
+
+  int GetCapacity() const { return capacity_; }
+
+ private:
+  int capacity_;
+  int next_ = 0;
+  std::vector<int> free_;
+};
+
+// Runs a module callback with the re-entrancy guard and exception boundary.
+template <typename Fn>
+void RunExtensionCallback(std::string_view module, const char* what, Fn&& fn) {
+  EditorExtensionRegistry& registry = EditorExtensionRegistry::Instance();
+  if (registry.IsModuleFaulted(module)) return;
+  registry.BeginCallback();
+  struct Scope {
+    EditorExtensionRegistry& registry;
+    ~Scope() { registry.EndCallback(); }
+  } scope{registry};
+  try {
+    fn();
+  } catch (const std::exception& e) {
+    registry.ReportFailure(module, what, e.what());
+  } catch (...) {
+    registry.ReportFailure(module, what, "unknown exception");
+  }
+}
+
+// The same for a callback with a return value; `fallback` is used when the
+// module is faulted or throws.
+template <typename Fn, typename Fallback>
+auto RunExtensionCallback(std::string_view module, const char* what, Fn&& fn,
+                          Fallback&& fallback) -> decltype(fn()) {
+  EditorExtensionRegistry& registry = EditorExtensionRegistry::Instance();
+  if (registry.IsModuleFaulted(module)) return fallback();
+  registry.BeginCallback();
+  struct Scope {
+    EditorExtensionRegistry& registry;
+    ~Scope() { registry.EndCallback(); }
+  } scope{registry};
+  try {
+    return fn();
+  } catch (const std::exception& e) {
+    registry.ReportFailure(module, what, e.what());
+  } catch (...) {
+    registry.ReportFailure(module, what, "unknown exception");
+  }
+  return fallback();
+}
 
 }  // namespace Mercury::EditorUI
 

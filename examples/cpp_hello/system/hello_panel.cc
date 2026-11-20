@@ -18,7 +18,8 @@
 
 namespace Mercury::EditorUI {
 
-HelloPanel::HelloPanel(wxWindow* parent, EditorScene& scene)
+HelloPanel::HelloPanel(wxWindow* parent, EditorScene& scene,
+                       EditorContext& context)
     : wxPanel(parent), scene_(scene) {
   auto* sizer = new wxBoxSizer(wxVERTICAL);
 
@@ -29,7 +30,9 @@ HelloPanel::HelloPanel(wxWindow* parent, EditorScene& scene)
   sizer->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT, 8);
 
   auto* refresh = new wxButton(this, wxID_ANY, "Refresh");
-  refresh->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { RefreshEntities(); });
+  // Bind through the context, not wx directly: the handler is removed while
+  // this module is still mapped.
+  context.Bind(*refresh, wxEVT_BUTTON, [this](wxEvent&) { RefreshEntities(); });
   sizer->Add(refresh, 0, wxALL, 8);
 
   SetSizer(sizer);
@@ -50,10 +53,11 @@ class HelloExtension : public EditorExtension {
   void OnLoad(EditorContext& context) override {
     scene_ = context.GetScene();
     console_ = &context.GetConsole();
+    context_ = &context;
     context.AddPanel({.id = "hello.panel",
                       .title = "Hello",
                       .create = [this](wxWindow* parent) {
-                        return new HelloPanel(parent, *scene_);
+                        return new HelloPanel(parent, *scene_, *context_);
                       }});
     context.AddMenuItem({.menu = "Extensions",
                          .label = "Hello: Log Entity Count",
@@ -63,6 +67,7 @@ class HelloExtension : public EditorExtension {
   void OnUnload() override {
     scene_ = nullptr;
     console_ = nullptr;
+    context_ = nullptr;
   }
 
  private:
@@ -75,6 +80,7 @@ class HelloExtension : public EditorExtension {
 
   EditorScene* scene_ = nullptr;
   Console* console_ = nullptr;
+  EditorContext* context_ = nullptr;
 };
 
 }  // namespace

@@ -467,12 +467,19 @@ bool ProjectBrowserPanel::CopyExternalFilesInto(const fs::path& dest_dir,
                                project->ToResPath(dst));
       // A registered importer turns the source into a .masset the editor can
       // inspect. Built-in formats have no callback and are read directly.
-      if (const AssetImporterInfo* importer =
+      if (const AssetImporterInfo* found =
               AssetImporterRegistry::Instance().Find(dst.extension().string());
-          importer && importer->import) {
+          found && found->import) {
+        // Copy: the importer callback is module code and may mutate the
+        // registry (and thus the object `found` points at).
+        const AssetImporterInfo importer = *found;
         mtext::PropertyList properties;
         std::string import_error;
-        if (importer->import(dst, properties, &import_error)) {
+        const bool imported = RunExtensionCallback(
+            importer.type, "asset import",
+            [&] { return importer.import(dst, properties, &import_error); },
+            [] { return false; });
+        if (imported) {
           std::error_code asset_ec;
           fs::path asset_file =
               dst.parent_path() /
@@ -483,7 +490,7 @@ bool ProjectBrowserPanel::CopyExternalFilesInto(const fs::path& dest_dir,
                                      std::string(kAssetExtension));
           }
           Asset asset;
-          asset.type = importer->type;
+          asset.type = importer.type;
           asset.path = project->ToResPath(asset_file);
           asset.properties = std::move(properties);
           if (SaveAssetFile(asset_file, asset)) {
@@ -693,20 +700,24 @@ void ProjectBrowserPanel::ShowFileContextMenu(const fs::path& file,
 void ProjectBrowserPanel::AppendExtensionMenuItems(wxMenu& menu,
                                                    const std::string& res_path,
                                                    bool is_directory) {
-  const auto& items = EditorExtensionRegistry::Instance().ProjectMenuItems();
-  if (items.empty()) return;
+  auto& registry = EditorExtensionRegistry::Instance();
+  if (registry.ProjectMenuItems().empty()) return;
   menu.AppendSeparator();
-  for (const auto& entry : items) {
-    wxMenuItem* item =
-        menu.Append(wxID_ANY, wxString::FromUTF8(entry.info.label));
-    auto callback = entry.info.callback;
-    menu.Bind(
-        wxEVT_MENU,
-        [callback, res_path, is_directory](wxCommandEvent&) {
-          if (callback) callback(res_path, is_directory);
-        },
-        item->GetId());
-  }
+  registry.ForEachProjectMenuItem(
+      [&](const EditorExtensionRegistry::ProjectMenuItemEntry& entry) {
+        wxMenuItem* item =
+            menu.Append(wxID_ANY, wxString::FromUTF8(entry.info.label));
+        const std::string module = entry.module;
+        auto callback = entry.info.callback;
+        menu.Bind(
+            wxEVT_MENU,
+            [module, callback, res_path, is_directory](wxCommandEvent&) {
+              if (!callback) return;
+              RunExtensionCallback(module, "project menu callback",
+                                   [&] { callback(res_path, is_directory); });
+            },
+            item->GetId());
+      });
 }
 
 void ProjectBrowserPanel::HandleCreateScript() {

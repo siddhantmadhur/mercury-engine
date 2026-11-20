@@ -27,6 +27,7 @@
 
 #include "console_panel.h"
 #include "editor_scene.h"
+#include "extension.h"
 #include "hierarchy_panel.h"
 #include "input_actions_panel.h"
 #include "inspector_panel.h"
@@ -135,6 +136,7 @@ class EditorFrame : public wxFrame {
                               std::function<void()> callback);
   void ToggleExtensionPane(int toggle_id);
   int NextExtensionMenuId();
+  void ReleaseExtensionMenuId(int id);
 
   struct ExtensionPane {
     std::string module;
@@ -152,7 +154,7 @@ class EditorFrame : public wxFrame {
   std::vector<ExtensionMenuEntry> extension_menu_items_;
   std::vector<wxMenu*> extension_owned_menus_;
   std::unordered_map<int, std::function<void()>> extension_callbacks_;
-  int next_extension_id_ = 0;
+  EditorMenuIdPool extension_ids_;
   std::function<void()> on_reload_systems_;
   std::function<void()> on_trust_systems_;
 

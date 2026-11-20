@@ -6,13 +6,23 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <chrono>
+#include <cstring>
+#include <format>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <system_error>
 #include <thread>
 #include <utility>
 
 #include <wx/app.h>
+
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #include "cmake_build.h"
 #include "console.h"
@@ -21,6 +31,7 @@
 #include "extension.h"
 #include "globals.h"
 #include "os/dynamic_library.h"
+#include "os/filesystem.h"
 #include "os/process.h"
 #include "play_session.h"
 #include "project/project.h"
@@ -55,7 +66,92 @@ bool HasSystemSources(const std::filesystem::path& system_dir) {
   return false;
 }
 
+// A stable folder name for a project's reload copies.
+std::string ProjectKey(const std::filesystem::path& root) {
+  std::error_code ec;
+  const std::filesystem::path canonical =
+      std::filesystem::weakly_canonical(root, ec);
+  const std::string text = (ec ? root : canonical).lexically_normal().string();
+  uint64_t hash = 1469598103934665603ull;  // FNV-1a
+  for (unsigned char c : text) {
+    hash ^= c;
+    hash *= 1099511628211ull;
+  }
+  return std::format("{:016x}", hash);
+}
+
+// Creates `dest` exclusively (O_EXCL on POSIX) and copies `source` into it.
+bool CopyExclusive(const std::filesystem::path& source,
+                   const std::filesystem::path& dest, std::string* error) {
+  std::ifstream in(source, std::ios::binary);
+  if (!in) {
+    if (error) *error = "cannot read " + source.string();
+    return false;
+  }
+  const std::string bytes((std::istreambuf_iterator<char>(in)),
+                          std::istreambuf_iterator<char>());
+#if defined(_WIN32)
+  std::error_code ec;
+  std::filesystem::copy_file(source, dest, std::filesystem::copy_options::none,
+                             ec);
+  if (ec) {
+    if (error) *error = dest.string() + ": " + ec.message();
+    return false;
+  }
+  std::filesystem::permissions(
+      dest,
+      std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+      std::filesystem::perm_options::replace, ec);
+#else
+  const int fd = ::open(dest.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600);
+  if (fd < 0) {
+    if (error) *error = dest.string() + ": " + std::strerror(errno);
+    return false;
+  }
+  size_t written = 0;
+  while (written < bytes.size()) {
+    const ssize_t count =
+        ::write(fd, bytes.data() + written, bytes.size() - written);
+    if (count < 0) {
+      if (errno == EINTR) continue;
+      if (error) *error = dest.string() + ": " + std::strerror(errno);
+      ::close(fd);
+      ::unlink(dest.c_str());
+      return false;
+    }
+    written += static_cast<size_t>(count);
+  }
+  ::close(fd);
+#endif
+  return true;
+}
+
 }  // namespace
+
+std::filesystem::path FindSystemModule(const std::filesystem::path& dir,
+                                       const std::string& target,
+                                       std::string* error) {
+  if (target.empty()) {
+    if (error) *error = "the project has no systems target";
+    return {};
+  }
+  for (const char* suffix : {".so", ".dylib", ".dll"}) {
+    const std::filesystem::path candidate = dir / (target + suffix);
+    std::error_code ec;
+    const std::filesystem::file_status status =
+        std::filesystem::symlink_status(candidate, ec);
+    if (ec || !std::filesystem::exists(status)) continue;
+    if (std::filesystem::is_symlink(status)) {
+      if (error) *error = "refusing symlinked module " + candidate.string();
+      continue;
+    }
+    if (std::filesystem::is_regular_file(status)) return candidate;
+  }
+  if (error) {
+    *error = "no built module " + target + " in " + dir.string();
+  }
+  return {};
+}
 
 struct EditorExtensionLoader::LoadedExtension {
   std::string module_id;
@@ -69,9 +165,17 @@ struct EditorExtensionLoader::LoadedExtension {
 
 EditorExtensionLoader::EditorExtensionLoader(EditorScene& scene,
                                              Console& console)
-    : scene_(scene), console_(console) {}
+    : scene_(scene), console_(console) {
+  EditorExtensionRegistry::Instance().SetErrorSink(
+      [this](std::string_view module, std::string_view message) {
+        console_.Error(std::string(module) + ": " + std::string(message));
+      });
+}
 
-EditorExtensionLoader::~EditorExtensionLoader() { UnloadAll(); }
+EditorExtensionLoader::~EditorExtensionLoader() {
+  UnloadAllNow();
+  EditorExtensionRegistry::Instance().SetErrorSink({});
+}
 
 EditorSettings& EditorExtensionLoader::Settings() const {
   return scene_.Settings();
@@ -83,6 +187,37 @@ std::filesystem::path EditorExtensionLoader::SystemsDir() const {
   return project->GetRoot() / ".mercury" / "systems";
 }
 
+std::filesystem::path EditorExtensionLoader::TempDirForProject() const {
+  auto project = scene_.GetProject();
+  const fs::path cache = os::CacheDir();
+  if (cache.empty()) return {};
+  // Tests and hosts without a project still get an isolated folder.
+  const std::string key =
+      project ? ProjectKey(project->GetRoot()) : std::string("no-project");
+  // os::CacheDir() already ends in "mercury".
+  const fs::path dir = cache / "systems" / key;
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  if (ec) return {};
+  // Never follow a symlink planted in the cache location.
+  const fs::file_status status = fs::symlink_status(dir, ec);
+  if (ec || fs::is_symlink(status) || !fs::is_directory(status)) return {};
+  fs::permissions(dir, fs::perms::owner_all, fs::perm_options::replace, ec);
+  return dir;
+}
+
+void EditorExtensionLoader::CleanStaleTempCopies() const {
+  const fs::path dir = TempDirForProject();
+  if (dir.empty()) return;
+  std::error_code ec;
+  for (fs::directory_iterator it(dir, ec);
+       !ec && it != fs::directory_iterator(); it.increment(ec)) {
+    const fs::file_status status = it->symlink_status(ec);
+    if (ec) break;
+    if (fs::is_regular_file(status)) fs::remove(it->path(), ec);
+  }
+}
+
 void EditorExtensionLoader::SetFrame(EditorFrame* frame) {
   if (frame == frame_) return;
   if (frame_ && !frame) UnloadAll();
@@ -92,12 +227,15 @@ void EditorExtensionLoader::SetFrame(EditorFrame* frame) {
 }
 
 void EditorExtensionLoader::Update() {
-  if (!frame_ || unloading_) return;
+  if (!frame_ || unloading_ ||
+      EditorExtensionRegistry::Instance().InCallback()) {
+    return;
+  }
 
   auto project = scene_.GetProject();
   const std::filesystem::path root = project ? project->GetRoot() : fs::path();
   if (root != project_root_) {
-    UnloadAll();
+    UnloadAllNow();
     project_root_ = root;
     last_selection_revision_ = scene_.SelectionRevision();
     last_play_state_ = static_cast<int>(scene_.PlayRef().GetState());
@@ -109,7 +247,10 @@ void EditorExtensionLoader::Update() {
   if (selection != last_selection_revision_) {
     last_selection_revision_ = selection;
     for (auto& loaded : loaded_) {
-      if (loaded->extension) loaded->extension->OnSelectionChanged(scene_);
+      if (!loaded->extension) continue;
+      RunExtensionCallback(loaded->module_id, "selection changed", [&] {
+        loaded->extension->OnSelectionChanged(scene_);
+      });
     }
   }
 
@@ -120,11 +261,15 @@ void EditorExtensionLoader::Update() {
     const bool is_running = play_state == running;
     if (is_running && !was_running) {
       for (auto& loaded : loaded_) {
-        if (loaded->extension) loaded->extension->OnPlayStarted();
+        if (!loaded->extension) continue;
+        RunExtensionCallback(loaded->module_id, "play started",
+                             [&] { loaded->extension->OnPlayStarted(); });
       }
     } else if (was_running && !is_running) {
       for (auto& loaded : loaded_) {
-        if (loaded->extension) loaded->extension->OnPlayStopped();
+        if (!loaded->extension) continue;
+        RunExtensionCallback(loaded->module_id, "play stopped",
+                             [&] { loaded->extension->OnPlayStopped(); });
       }
     }
     last_play_state_ = play_state;
@@ -132,8 +277,18 @@ void EditorExtensionLoader::Update() {
 }
 
 bool EditorExtensionLoader::Reload() {
-  UnloadAll();
+  if (EditorExtensionRegistry::Instance().InCallback()) {
+    // A module callback (or a modal dialog's nested loop) asked for a reload.
+    // Defer it so the module whose code is running is not unloaded under it.
+    if (wxTheApp) {
+      wxTheApp->CallAfter([this]() { Reload(); });
+    }
+    return true;
+  }
+
+  UnloadAllNow();
   errors_.clear();
+  CleanStaleTempCopies();
   auto project = scene_.GetProject();
   if (!project || !frame_) return true;
 
@@ -182,27 +337,29 @@ bool EditorExtensionLoader::Reload() {
     return true;
   }
 
-  size_t attempted = 0;
-  size_t loaded = 0;
-  for (const auto& entry : fs::directory_iterator(dir, ec)) {
-    if (ec) break;
-    if (!entry.is_regular_file()) continue;
-    if (!IsDynamicLibrary(entry.path())) continue;
-    attempted++;
-    error.clear();
-    if (LoadFile(entry.path(), &error)) {
-      loaded++;
-    } else {
-      const std::string message =
-          entry.path().filename().string() + ": " + error;
-      console_.Error("Editor system " + message);
-      errors_.push_back(message);
-    }
+  // Load only the output of the project's systems target. Anything else in the
+  // folder (a prebuilt library, an old build, a symlink) is ignored.
+  const std::string target = project->GetBuildSystemsTarget();
+  const fs::path module = FindSystemModule(dir, target, &error);
+  for (fs::directory_iterator it(dir, ec);
+       !ec && it != fs::directory_iterator(); it.increment(ec)) {
+    if (!IsDynamicLibrary(it->path())) continue;
+    if (!module.empty() && it->path() == module) continue;
+    console_.Warn("Editor systems: ignoring " + it->path().filename().string() +
+                  " (not the " + target + " output)");
+  }
+  if (module.empty()) {
+    console_.Warn("Editor systems: " + error);
+    return true;
   }
 
-  if (loaded > 0) frame_->ApplyExtensions();
-  console_.Info("Editor systems: loaded " + std::to_string(loaded) + " of " +
-                std::to_string(attempted));
+  if (!LoadFile(module, &error)) {
+    const std::string message = module.filename().string() + ": " + error;
+    console_.Error("Editor system " + message);
+    errors_.push_back(message);
+    return false;
+  }
+  if (frame_) frame_->ApplyExtensions();
   return true;
 }
 
@@ -228,9 +385,7 @@ bool EditorExtensionLoader::BuildProjectSystems(std::string* error) {
     return false;
   }
 
-  const std::string target_name = target;
-  const std::vector<std::string> args =
-      cmake_build::BuildArguments(target_name);
+  const std::vector<std::string> args = cmake_build::BuildArguments(target);
   os::Process process;
   std::string start_error;
   if (!process.Start(args, build_dir, &start_error)) {
@@ -238,7 +393,7 @@ bool EditorExtensionLoader::BuildProjectSystems(std::string* error) {
     return false;
   }
 
-  console_.Info("Building editor systems (target " + target_name + ")...");
+  console_.Info("Building editor systems (target " + target + ")...");
   while (process.IsRunning()) {
     for (const std::string& line : process.TakeOutput()) {
       console_.AddProcessOutput(Console::Source::kBuild, line);
@@ -250,7 +405,7 @@ bool EditorExtensionLoader::BuildProjectSystems(std::string* error) {
   }
   const std::optional<int> code = process.GetExitCode();
   if (!code || *code != 0) {
-    *error = "building target " + target_name + " failed";
+    *error = "building target " + target + " failed";
     return false;
   }
   return true;
@@ -258,6 +413,14 @@ bool EditorExtensionLoader::BuildProjectSystems(std::string* error) {
 
 bool EditorExtensionLoader::LoadFile(const std::filesystem::path& file,
                                      std::string* error) {
+  std::error_code status_ec;
+  const fs::file_status file_status = fs::symlink_status(file, status_ec);
+  if (status_ec || fs::is_symlink(file_status) ||
+      !fs::is_regular_file(file_status)) {
+    if (error) *error = "not a regular file: " + file.string();
+    return false;
+  }
+
   const int serial = ++load_serial_;
   const std::string module_id =
       file.stem().string() + "#" + std::to_string(serial);
@@ -266,24 +429,28 @@ bool EditorExtensionLoader::LoadFile(const std::filesystem::path& file,
   bool temporary_copy = false;
 #if defined(__APPLE__)
   // dlopen returns the already-loaded image for the same path, so a reload
-  // would keep running the old code. Copy under a new name first.
-  const fs::path loaded_dir = file.parent_path() / ".loaded";
-  std::error_code copy_ec;
-  fs::create_directories(loaded_dir, copy_ec);
-  if (!copy_ec) {
+  // would keep running the old code. Copy to the user cache under a new,
+  // exclusively created name first.
+  const fs::path dir = TempDirForProject();
+  if (dir.empty()) {
+    if (error) *error = "no writable cache directory for module copies";
+    return false;
+  }
+  for (int attempt = 0; attempt < 50 && !temporary_copy; attempt++) {
     const fs::path copy =
-        loaded_dir / (file.stem().string() + "-" + std::to_string(serial) +
-                      file.extension().string());
-    fs::copy_file(file, copy, fs::copy_options::overwrite_existing, copy_ec);
-    if (!copy_ec) {
+        dir / (file.stem().string() + "-" + std::to_string(serial) + "-" +
+               std::to_string(attempt) + file.extension().string());
+    std::string copy_error;
+    if (CopyExclusive(file, copy, &copy_error)) {
       load_path = copy;
       temporary_copy = true;
+    } else if (!fs::exists(copy)) {
+      if (error) *error = copy_error;
+      return false;
     }
   }
   if (!temporary_copy) {
-    if (error) {
-      *error = "could not make a reloadable copy of " + file.string();
-    }
+    if (error) *error = "could not create a reloadable module copy";
     return false;
   }
 #endif
@@ -308,10 +475,6 @@ bool EditorExtensionLoader::LoadFile(const std::filesystem::path& file,
   std::string load_error;
   if (!loaded->library.Load(load_path, &load_error)) {
     if (error) *error = load_error;
-    if (temporary_copy) {
-      std::error_code ec;
-      fs::remove(load_path, ec);
-    }
     return false;
   }
 
@@ -360,8 +523,19 @@ bool EditorExtensionLoader::LoadFile(const std::filesystem::path& file,
   loaded->context = std::unique_ptr<EditorContext>(
       new EditorContext(module_id, frame_, &scene_, &Settings(), &console_,
                         frame_ ? &frame_->GetAuiManager() : nullptr));
-  loaded->extension->OnLoad(*loaded->context);
-  loaded->extension->OnProjectOpened(scene_);
+
+  // OnLoad is the one call whose failure aborts the load.
+  try {
+    loaded->extension->OnLoad(*loaded->context);
+  } catch (const std::exception& e) {
+    if (error) *error = "OnLoad: " + std::string(e.what());
+    return false;
+  } catch (...) {
+    if (error) *error = "OnLoad: unknown exception";
+    return false;
+  }
+  RunExtensionCallback(module_id, "project opened",
+                       [&] { loaded->extension->OnProjectOpened(scene_); });
 
   console_.Info("Editor system loaded: " + file.filename().string());
   temp_guard.active = false;
@@ -386,6 +560,18 @@ void EditorExtensionLoader::SetProjectTrusted(bool trusted) {
 }
 
 void EditorExtensionLoader::UnloadAll() {
+  if (EditorExtensionRegistry::Instance().InCallback()) {
+    // Do not unload the module whose code is running (or whose modal dialog
+    // is executing). The deferred call runs from the event loop.
+    if (wxTheApp) {
+      wxTheApp->CallAfter([this]() { UnloadAll(); });
+    }
+    return;
+  }
+  UnloadAllNow();
+}
+
+void EditorExtensionLoader::UnloadAllNow() {
   if (unloading_) return;
   unloading_ = true;
   auto process_wx_deletes = [] {
@@ -399,9 +585,15 @@ void EditorExtensionLoader::UnloadAll() {
   for (auto it = loaded_.rbegin(); it != loaded_.rend(); ++it) {
     LoadedExtension& loaded = **it;
     if (loaded.extension) {
-      loaded.extension->OnProjectClosed();
-      loaded.extension->OnUnload();
+      RunExtensionCallback(loaded.module_id, "project closed",
+                           [&] { loaded.extension->OnProjectClosed(); });
+      RunExtensionCallback(loaded.module_id, "unload",
+                           [&] { loaded.extension->OnUnload(); });
     }
+
+    // Remove module event handlers before any wx object they are attached to
+    // is destroyed.
+    if (loaded.context) loaded.context->UnbindAll();
 
     // Top-level windows the module created itself. Destroy() defers the
     // deletion, so process the queue while its code is still mapped.

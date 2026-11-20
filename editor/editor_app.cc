@@ -154,16 +154,20 @@ void MercuryEditorApp::ShowEditorFrame() {
       if (!extensions_ || !scene_ || !editor_frame_) return;
       auto project = scene_->GetProject();
       if (!project) return;
-      const std::optional<bool> choice =
-          ShowTrustSystemsDialog(editor_frame_, project->GetRoot(),
-                                 extensions_->IsProjectTrusted(), false);
+      const std::optional<bool> choice = ShowTrustSystemsDialog(
+          editor_frame_, project->GetRoot(), project->GetBuildSystemsTarget(),
+          project->GetRoot() / "system", extensions_->IsProjectTrusted(),
+          false);
       if (!choice) return;
       extensions_->SetProjectTrusted(*choice);
       extensions_->Reload();
     });
     extensions_->SetTrustPrompt([this](const std::filesystem::path& root) {
+      auto project = scene_ ? scene_->GetProject() : nullptr;
       return ShowTrustSystemsDialog(
           editor_frame_, root,
+          project ? project->GetBuildSystemsTarget() : std::string(),
+          root / "system",
           extensions_ ? extensions_->IsProjectTrusted() : false, true);
     });
     // Builds and loads the project's system/ modules for this frame after the

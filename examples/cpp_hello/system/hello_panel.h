@@ -13,11 +13,13 @@ class EditorScene;
 
 namespace Mercury::EditorUI {
 
+class EditorContext;
+
 // A dockable editor panel listing the nodes of the open map. It is created by
 // the Hello system module (hello_panel.cc).
 class HelloPanel : public wxPanel {
  public:
-  HelloPanel(wxWindow* parent, EditorScene& scene);
+  HelloPanel(wxWindow* parent, EditorScene& scene, EditorContext& context);
 
   void RefreshEntities();
 

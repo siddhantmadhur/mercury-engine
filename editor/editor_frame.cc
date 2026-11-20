@@ -1370,18 +1370,30 @@ std::string NormalizeMenuLabel(std::string label) {
 }  // namespace
 
 int EditorFrame::NextExtensionMenuId() {
-  if (next_extension_id_ >= kExtensionMenuIdCount) return -1;
-  return kExtensionMenuIdBase + next_extension_id_++;
+  const int slot = extension_ids_.Acquire();
+  if (slot < 0) {
+    PDebug::error("Editor extension menu id range is exhausted");
+    return -1;
+  }
+  return kExtensionMenuIdBase + slot;
+}
+
+void EditorFrame::ReleaseExtensionMenuId(int id) {
+  if (id >= kExtensionMenuIdBase) {
+    extension_ids_.Release(id - kExtensionMenuIdBase);
+  }
 }
 
 void EditorFrame::ApplyExtensions() {
   auto& registry = EditorExtensionRegistry::Instance();
 
-  for (const auto& entry : registry.Panels()) {
+  registry.ForEachPanel([&](const EditorExtensionRegistry::PanelEntry& entry) {
     const EditorPanelInfo& info = entry.info;
-    if (!info.create || info.id.empty()) continue;
-    wxWindow* window = info.create(this);
-    if (!window) continue;
+    if (!info.create || info.id.empty()) return;
+    wxWindow* window = RunExtensionCallback(
+        entry.module, "panel factory", [&] { return info.create(this); },
+        [] { return static_cast<wxWindow*>(nullptr); });
+    if (!window) return;
     window->SetName(wxString::FromUTF8(info.id));
 
     const int toggle_id = NextExtensionMenuId();
@@ -1401,13 +1413,14 @@ void EditorFrame::ApplyExtensions() {
                              .CloseButton(true)
                              .Floatable(true)
                              .Resizable(true));
-  }
+  });
   if (!extension_panes_.empty()) aui_.Update();
 
-  for (const auto& entry : registry.MenuItems()) {
-    ApplyExtensionMenuItem(entry.module, entry.info.menu, entry.info.label,
-                           entry.info.accelerator, entry.info.callback);
-  }
+  registry.ForEachMenuItem(
+      [&](const EditorExtensionRegistry::MenuItemEntry& entry) {
+        ApplyExtensionMenuItem(entry.module, entry.info.menu, entry.info.label,
+                               entry.info.accelerator, entry.info.callback);
+      });
 
   // The custom inspectors and viewport overlays may have changed too.
   if (inspector_panel_) inspector_panel_->RequestRebuild();
@@ -1441,7 +1454,10 @@ void EditorFrame::ApplyExtensionMenuItem(std::string module,
   wxString text = wxString::FromUTF8(label);
   if (!accelerator.empty()) text += "\t" + wxString::FromUTF8(accelerator);
   menu->Append(id, text);
-  extension_callbacks_[id] = std::move(callback);
+  // Wrap the module callback with the re-entrancy and exception boundary.
+  extension_callbacks_[id] = [module, callback = std::move(callback)]() {
+    if (callback) RunExtensionCallback(module, "menu callback", callback);
+  };
   extension_menu_items_.push_back({std::move(module), id, menu});
 }
 
@@ -1455,6 +1471,7 @@ void EditorFrame::RemoveExtensionUI(std::string_view module) {
       continue;
     }
     if (it->menu) it->menu->Delete(it->id);
+    ReleaseExtensionMenuId(it->id);
     extension_callbacks_.erase(it->id);
     it = extension_menu_items_.erase(it);
   }
@@ -1466,6 +1483,7 @@ void EditorFrame::RemoveExtensionUI(std::string_view module) {
     }
     if (window_menu_ && it->toggle_id >= 0) {
       window_menu_->Delete(it->toggle_id);
+      ReleaseExtensionMenuId(it->toggle_id);
     }
     extension_callbacks_.erase(it->toggle_id);
     if (it->window) {
@@ -1500,6 +1518,9 @@ void EditorFrame::RemoveExtensionUI(std::string_view module) {
   // rebuild now so its custom inspector window is destroyed while the
   // module's library is still mapped.
   if (inspector_panel_) inspector_panel_->RebuildFromExtensions();
+
+  // When the last module is gone, the whole id block is free again.
+  if (EditorExtensionRegistry::Instance().Count() == 0) extension_ids_.Reset();
 
   aui_.Update();
 }

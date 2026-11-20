@@ -39,10 +39,10 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene);
 // Trust prompt for a project whose system/ folder contains native editor
 // code. Returns true (trust), false (do not trust) or std::nullopt (cancel /
 // decide later; the caller should not save a decision).
-std::optional<bool> ShowTrustSystemsDialog(wxWindow* parent,
-                                           const std::filesystem::path& root,
-                                           bool currently_trusted,
-                                           bool first_time);
+std::optional<bool> ShowTrustSystemsDialog(
+    wxWindow* parent, const std::filesystem::path& root,
+    const std::string& systems_target, const std::filesystem::path& source_dir,
+    bool currently_trusted, bool first_time);
 
 // Confirm Save / Don't Save / Cancel before closing project or quitting.
 enum class UnsavedChoice { kSave, kDontSave, kCancel };

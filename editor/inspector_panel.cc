@@ -365,10 +365,14 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
     }
 
     // An extension may replace this component's field rows with its own UI.
-    if (const EditorInspectorInfo* custom =
-            EditorExtensionRegistry::Instance().FindInspector(component.type)) {
-      if (custom->create) {
-        if (wxWindow* view = custom->create(body, scene_, node)) {
+    if (std::optional<EditorExtensionRegistry::InspectorEntry> custom =
+            EditorExtensionRegistry::Instance().CopyInspector(component.type)) {
+      if (custom->info.create) {
+        wxWindow* view = RunExtensionCallback(
+            custom->module, "inspector factory",
+            [&] { return custom->info.create(body, scene_, node); },
+            [] { return static_cast<wxWindow*>(nullptr); });
+        if (view) {
           bs->Add(view, 0, wxEXPAND);
           section->FinishBuild();
           content_sizer_->Add(section, 0,
