@@ -195,7 +195,7 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
 
 ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
   Config config;
-  config.source_dir = fs::path(MERCURY_ENGINE_DIR).string();
+  config.source_dir = os::EngineSdkDir().root.string();
   config.build_target = build_target_;
   config.build_dir = build_dir_.string();
   config.native = !build_target_.empty();

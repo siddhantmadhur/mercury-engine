@@ -12,16 +12,14 @@
 #include <string>
 #include <vector>
 
+#include "os/filesystem.h"
+
 namespace Mercury::cmake_build {
 
-// The build directory CMake configured this checkout into.
-inline std::filesystem::path BuildDir() {
-#ifdef MERCURY_BUILD_DIR
-  return std::filesystem::path(MERCURY_BUILD_DIR);
-#else
-  return {};
-#endif
-}
+// The build directory CMake configured this checkout into. A development
+// editor finds it through the engine SDK resolver; a packaged editor has no
+// build tree and returns an empty path.
+inline std::filesystem::path BuildDir() { return os::EngineSdkDir().build_dir; }
 
 // The profile CMake used for this build. Ninja is single-config, but
 // `--config` is harmless there and required for multi-config generators.

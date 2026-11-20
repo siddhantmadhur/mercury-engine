@@ -57,6 +57,17 @@ TEST(EditorContext, RemovesItsRegistrationsWhenDestroyed) {
   registry.Clear();
 }
 
+TEST(EditorExtensionVersion, ComparesMajorMinor) {
+  EXPECT_TRUE(IsExtensionVersionCompatible("1.0.0", "1.0.0"));
+  EXPECT_TRUE(IsExtensionVersionCompatible("1.0.0-dev", "1.0.3"));
+  EXPECT_TRUE(IsExtensionVersionCompatible("1.0.3", "1.0.0-dev"));
+  EXPECT_TRUE(IsExtensionVersionCompatible("1.0.0-rc.1", "1.0.2"));
+  EXPECT_FALSE(IsExtensionVersionCompatible("1.0.0", "1.1.0"));
+  EXPECT_FALSE(IsExtensionVersionCompatible("2.0.0", "1.0.0"));
+  EXPECT_FALSE(IsExtensionVersionCompatible("dev", "1.0.0"));
+  EXPECT_TRUE(IsExtensionVersionCompatible("dev", "dev"));
+}
+
 TEST(EditorSettingsTrust, RemembersDecisionsByCanonicalPath) {
   EditorSettings settings;
   const std::filesystem::path root =

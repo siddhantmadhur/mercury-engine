@@ -8,6 +8,8 @@
 #include <cctype>
 #include <system_error>
 
+#include "version.h"
+
 namespace Mercury {
 
 bool IsResPath(std::string_view path) { return path.starts_with(kResPrefix); }
@@ -40,7 +42,7 @@ std::shared_ptr<Project> Project::Create(const fs::path& mproj_file,
   auto& section = project->GetOrAddSection("project");
   section.properties.Set("name", name);
   section.properties.Set("main_map", "res://maps/main.mmap");
-  section.properties.Set("engine_version", "dev");
+  section.properties.Set("engine_version", MERCURY_VERSION_STRING);
   auto& window = project->GetOrAddSection("window");
   window.properties.Set("title", name);
   window.properties.Set("width", 1280);

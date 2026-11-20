@@ -14,7 +14,7 @@
  *     -> mercury_player <project.mproj> --map <current map>      (Play only)
  *
  * A project with C++ scripts names a CMake target in `[build] target`. Its
- * build runs `cmake --build <MERCURY_BUILD_DIR> --target <target>` and then
+ * build runs `cmake --build <engine build dir> --target <target>` and then
  * executes <build>/bin/<target> with the same arguments, so the native scripts
  * linked into that executable provide the schema and run the game. The build's
  * output (compiler messages) streams to the Console.

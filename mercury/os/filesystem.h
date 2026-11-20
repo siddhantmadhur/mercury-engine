@@ -97,6 +97,35 @@ fs::path EngineUiResourceDir();
 // a packaged editor. A shipped game mounts engine.mpack at this path instead.
 fs::path EngineMaterialDir();
 
+/**
+ * @brief Where the Mercury SDK (headers, archives, CMake package) lives
+ *
+ * A packaged editor ships it in Contents/Resources/sdk. A development build
+ * falls back to the checkout: `mercury/` and `third_party/` for headers,
+ * `cmake/` for the package files, and the build tree's `lib/` and `generated/`.
+ */
+struct EngineSdkPaths {
+  std::filesystem::path root;
+  std::vector<std::filesystem::path> include_dirs;
+  std::filesystem::path cmake_dir;
+  std::filesystem::path lib_dir;
+  // The engine's build directory (development fallback only).
+  std::filesystem::path build_dir;
+  bool development = false;
+
+  bool IsValid() const { return !root.empty(); }
+};
+
+// Resolves the SDK the running program belongs to.
+EngineSdkPaths EngineSdkDir();
+
+// The same resolution with explicit locations, for tests. `engine_dir` and
+// `build_dir` are the development fallback (either may be empty).
+EngineSdkPaths MakeEngineSdkPaths(const std::filesystem::path& exe_dir,
+                                  const std::filesystem::path& bundle_resources,
+                                  const std::filesystem::path& engine_dir,
+                                  const std::filesystem::path& build_dir);
+
 // Points the Vulkan loader at the MoltenVK ICD shipped next to the program (in
 // a .app bundle's Resources, or in the game folder that Build Game wrote).
 // Does nothing when the caller already chose driver files.

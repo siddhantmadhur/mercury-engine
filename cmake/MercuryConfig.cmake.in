@@ -1,0 +1,41 @@
+# MercuryConfig.cmake.in
+#
+# Package config for an installed Mercury SDK. It is configured with
+# configure_package_config_file, so PACKAGE_PREFIX_DIR is relative to wherever
+# it was installed (a CMake prefix or a macOS .app's Contents/Resources).
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+find_dependency(Vulkan)
+
+set(Mercury_SDK_DIR "${PACKAGE_PREFIX_DIR}/sdk")
+if (NOT EXISTS "${Mercury_SDK_DIR}/include/mercury/scripting/behaviour.h")
+    # The macOS app ships the SDK at Contents/Resources/sdk.
+    set(Mercury_SDK_DIR "${PACKAGE_PREFIX_DIR}")
+endif ()
+
+set(Mercury_INCLUDE_DIRS
+        "${Mercury_SDK_DIR}/include/mercury"
+        "${Mercury_SDK_DIR}/include/editor"
+        "${Mercury_SDK_DIR}/include")
+
+# The archives in the order the in-tree build links them. A flat alphabetical
+# list cannot resolve static-library dependencies or would force-load duplicate
+# copies of zlib/meshoptimizer/tinyexr.
+set(Mercury_LIBRARIES "")
+foreach (LIBRARY_NAME @MERCURY_SDK_LIBRARY_NAMES@)
+    set(LIBRARY_PATH "${Mercury_SDK_DIR}/lib/${LIBRARY_NAME}")
+    if (NOT EXISTS "${LIBRARY_PATH}")
+        set(Mercury_FOUND FALSE)
+        set(Mercury_NOT_FOUND_MESSAGE
+                "the Mercury SDK is missing ${LIBRARY_PATH}")
+        return()
+    endif ()
+    list(APPEND Mercury_LIBRARIES "${LIBRARY_PATH}")
+endforeach ()
+
+include("${CMAKE_CURRENT_LIST_DIR}/MercuryGame.cmake")
+
+check_required_components(Mercury)

@@ -408,6 +408,73 @@ fs::path EngineMaterialDir() {
   return FirstExistingDir(ResourceCandidates("materials", compiled));
 }
 
+namespace {
+
+bool IsSdkRoot(const fs::path& root) {
+  std::error_code ec;
+  return fs::is_directory(root / "include" / "mercury", ec) &&
+         fs::is_directory(root / "cmake", ec);
+}
+
+EngineSdkPaths InstalledSdkPaths(const fs::path& root) {
+  EngineSdkPaths paths;
+  paths.root = root;
+  paths.include_dirs = {root / "include" / "mercury",
+                        root / "include" / "editor", root / "include"};
+  paths.cmake_dir = root / "cmake";
+  paths.lib_dir = root / "lib";
+  return paths;
+}
+
+EngineSdkPaths DevelopmentSdkPaths(const fs::path& engine_dir,
+                                   const fs::path& build_dir) {
+  EngineSdkPaths paths;
+  if (engine_dir.empty()) return paths;
+  paths.root = engine_dir;
+  paths.include_dirs = {engine_dir / "mercury", engine_dir / "editor",
+                        engine_dir / "third_party"};
+  if (!build_dir.empty()) {
+    paths.include_dirs.push_back(build_dir / "generated");
+    paths.include_dirs.push_back(build_dir / "generated" / "mercury");
+  }
+  paths.cmake_dir = engine_dir / "cmake";
+  paths.lib_dir = build_dir.empty() ? fs::path() : build_dir / "lib";
+  paths.build_dir = build_dir;
+  paths.development = true;
+  return paths;
+}
+
+}  // namespace
+
+EngineSdkPaths MakeEngineSdkPaths(const fs::path& exe_dir,
+                                  const fs::path& bundle_resources,
+                                  const fs::path& engine_dir,
+                                  const fs::path& build_dir) {
+  std::vector<fs::path> candidates;
+  if (!bundle_resources.empty()) candidates.push_back(bundle_resources / "sdk");
+  if (!exe_dir.empty()) {
+    candidates.push_back(exe_dir / "sdk");
+    candidates.push_back(exe_dir.parent_path() / "sdk");
+  }
+  for (const fs::path& candidate : candidates) {
+    if (IsSdkRoot(candidate)) return InstalledSdkPaths(candidate);
+  }
+  return DevelopmentSdkPaths(engine_dir, build_dir);
+}
+
+EngineSdkPaths EngineSdkDir() {
+  fs::path engine_dir;
+  fs::path build_dir;
+#ifdef MERCURY_ENGINE_DIR
+  engine_dir = MERCURY_ENGINE_DIR;
+#endif
+#ifdef MERCURY_BUILD_DIR
+  build_dir = MERCURY_BUILD_DIR;
+#endif
+  return MakeEngineSdkPaths(ExecutableDir(), BundleResourcesDir(), engine_dir,
+                            build_dir);
+}
+
 void UseBundledVulkanDriver() {
 #if defined(__APPLE__)
   if (std::getenv("VK_DRIVER_FILES") || std::getenv("VK_ICD_FILENAMES")) return;

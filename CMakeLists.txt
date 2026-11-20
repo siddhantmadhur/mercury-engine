@@ -21,7 +21,19 @@ if (APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
             "Minimum supported macOS version")
 endif ()
 
-project(MercuryEngine LANGUAGES C CXX ASM)
+project(MercuryEngine VERSION 1.0.0 LANGUAGES C CXX ASM)
+
+# One version source. The generated version.h is what every engine component,
+# the extension ABI check and the SDK's package version use. A non-release
+# build carries a -dev suffix; extension compatibility is compared on
+# major.minor, so that suffix (and a patch release) never rejects a module.
+set(MERCURY_VERSION_STRING "${PROJECT_VERSION}")
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(MERCURY_VERSION_STRING "${PROJECT_VERSION}-dev")
+endif ()
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/mercury")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in"
+        "${CMAKE_BINARY_DIR}/generated/mercury/version.h" @ONLY)
 
 # The engine may be built as the top-level project or added to a game with
 # add_subdirectory(); this stays the engine checkout either way.
@@ -333,6 +345,7 @@ if (MERCURY_BUILD_TESTS)
             tests/user_path_test.cc
             tests/asset_importer_test.cc
             tests/component_serialization_test.cc
+            tests/engine_sdk_dir_test.cc
             tests/event_bus_test.cc
             tests/system_registry_test.cc)
 
@@ -416,6 +429,147 @@ if (MERCURY_BUILD_TESTS)
             USES_TERMINAL)
     add_dependencies(check mercury_materials)
 endif ()
+
+# --------------------------------------------------------------------------
+# SDK: headers, static archives and a relocatable CMake package
+#
+#   cmake --install <build> --prefix <prefix> --component sdk
+#
+# produces <prefix>/sdk/{include,lib,cmake}. scripts/package_macos.pl copies
+# the same tree into <app>/Contents/Resources/sdk.
+# --------------------------------------------------------------------------
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mercury/"
+        DESTINATION sdk/include/mercury
+        COMPONENT sdk
+        FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/editor/"
+        DESTINATION sdk/include/editor
+        COMPONENT sdk
+        FILES_MATCHING PATTERN "*.h")
+# wxWidgets headers, so editor systems build without a wx development install.
+# (The module still resolves wx symbols against the running editor.)
+# wxWidgets_INCLUDE_DIRS only has the setup.h directory on macOS; the headers
+# themselves come from the -I flags in wxWidgets_CXX_FLAGS.
+if (MERCURY_BUILD_EDITOR)
+    set(MERCURY_SDK_WX_INCLUDE_DIRS ${wxWidgets_INCLUDE_DIRS})
+    foreach (FLAG ${WX_CXX_FLAGS})
+        if (FLAG MATCHES "^-I(.+)$")
+            list(APPEND MERCURY_SDK_WX_INCLUDE_DIRS "${CMAKE_MATCH_1}")
+        endif ()
+    endforeach ()
+    list(REMOVE_DUPLICATES MERCURY_SDK_WX_INCLUDE_DIRS)
+    foreach (WX_INCLUDE ${MERCURY_SDK_WX_INCLUDE_DIRS})
+        if (EXISTS "${WX_INCLUDE}/wx/wx.h" OR EXISTS "${WX_INCLUDE}/wx/setup.h")
+            # Homebrew's wx header directory is a symlink; resolve it so the
+            # install rule copies the headers instead of failing on the link.
+            file(REAL_PATH "${WX_INCLUDE}" WX_INCLUDE_REAL)
+            install(DIRECTORY "${WX_INCLUDE_REAL}/"
+                    DESTINATION sdk/include COMPONENT sdk
+                    FILES_MATCHING PATTERN "*.h")
+        endif ()
+    endforeach ()
+endif ()
+install(DIRECTORY "${MERCURY_GENERATED_DIR}/"
+        DESTINATION sdk/include
+        COMPONENT sdk
+        FILES_MATCHING PATTERN "*.h")
+if (MERCURY_CXX_INCLUDE_DIR)
+    install(FILES "${MERCURY_CXX_INCLUDE_DIR}/cxx.h"
+            DESTINATION sdk/include COMPONENT sdk)
+endif ()
+
+# Only the third-party headers reachable from Mercury's public headers.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glfw/include/"
+        DESTINATION sdk/include COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/JoltPhysics/Jolt/"
+        DESTINATION sdk/include/Jolt COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/assimp/include/"
+        DESTINATION sdk/include COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/entt/src/entt/"
+        DESTINATION sdk/include/entt COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm/glm/"
+        DESTINATION sdk/include/glm COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/"
+        DESTINATION sdk/include/stb COMPONENT sdk)
+install(DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/angelscript/include/"
+        DESTINATION sdk/include COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/add_on/"
+        DESTINATION sdk/include COMPONENT sdk)
+# Filament's headers (filament/, backend/, utils/, ...).
+foreach (INCLUDE_DIR
+        third_party/filament/filament/include
+        third_party/filament/filament/backend/include
+        third_party/filament/libs/utils/include
+        third_party/filament/libs/filabridge/include
+        third_party/filament/libs/filaflat/include
+        third_party/filament/libs/geometry/include
+        third_party/filament/libs/ibl/include
+        third_party/filament/libs/image/include
+        third_party/filament/libs/iblprefilter/include
+        third_party/filament/libs/math/include
+        third_party/filament/third_party/robin-map/include)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${INCLUDE_DIR}/"
+            DESTINATION sdk/include COMPONENT sdk)
+endforeach ()
+
+# Static archives. Filament builds in its own tree.
+install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/"
+        DESTINATION sdk/lib COMPONENT sdk
+        FILES_MATCHING PATTERN "*.a"
+        PATTERN "libmercury_editor_lib.a" EXCLUDE
+        PATTERN "libgtest.a" EXCLUDE
+        PATTERN "libgtest_main.a" EXCLUDE
+        PATTERN "libgmock.a" EXCLUDE
+        PATTERN "libgmock_main.a" EXCLUDE)
+if (EXISTS "${CMAKE_BINARY_DIR}/_deps/filament/out/lib")
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/_deps/filament/out/lib/"
+            DESTINATION sdk/lib COMPONENT sdk
+            FILES_MATCHING PATTERN "*.a")
+endif ()
+
+include(CMakePackageConfigHelpers)
+set(MERCURY_SDK_CONFIG_DIR "${CMAKE_BINARY_DIR}/sdk-config")
+# The in-tree link order; see cmake/MercuryConfig.cmake.in.
+set(MERCURY_SDK_LIBRARY_NAMES
+        libmercury.a
+        libmercury_angelscript.a
+        libmercury_jolt.a
+        libmercury_meshoptimizer.a
+        libmercury_miniaudio.a
+        libtinyxml2.a
+        libmercury_yoga.a
+        libassimp.a
+        libzlibstatic.a
+        libglfw3.a
+        libfilament.a
+        libbackend.a
+        libbluevk.a
+        libfilaflat.a
+        libfilabridge.a
+        libfilament-iblprefilter.a
+        libgeometry.a
+        libibl.a
+        libimage.a
+        libsmol-v.a
+        libutils.a
+        libzstd.a
+        libmercury_rust.a)
+configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryConfig.cmake.in"
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfig.cmake"
+        INSTALL_DESTINATION sdk/cmake)
+write_basic_package_version_file(
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfigVersion.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion)
+install(FILES
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfig.cmake"
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfigVersion.cmake"
+        DESTINATION sdk/cmake COMPONENT sdk)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGameSdk.cmake"
+        DESTINATION sdk/cmake RENAME MercuryGame.cmake COMPONENT sdk)
 
 # --------------------------------------------------------------------------
 # Developer convenience

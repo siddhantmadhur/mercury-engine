@@ -6,11 +6,6 @@
 // Created by smadhur on 4/10/2026.
 //
 
-#ifndef MERCURY_ENGINE_VERSION
-#define MERCURY_ENGINE_VERSION "dev"
-#include "entt/entt.hpp"
-#endif
-
 #ifndef MERCURYENGINE_GLOBALS_H
 #define MERCURYENGINE_GLOBALS_H
 
@@ -21,6 +16,12 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
+
+#include "version.h"
+
+#ifndef MERCURY_ENGINE_VERSION
+#define MERCURY_ENGINE_VERSION MERCURY_VERSION_STRING
+#endif
 
 using entity_id = uint16_t;
 using kEntityId = entt::entity;

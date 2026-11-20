@@ -336,7 +336,8 @@ bool EditorExtensionLoader::LoadFile(const std::filesystem::path& file,
     return false;
   }
   if (!entry->engine_version ||
-      std::string_view(entry->engine_version) != MERCURY_ENGINE_VERSION) {
+      !IsExtensionVersionCompatible(entry->engine_version,
+                                    MERCURY_ENGINE_VERSION)) {
     if (error) {
       *error = "extension built for engine " +
                std::string(entry->engine_version ? entry->engine_version

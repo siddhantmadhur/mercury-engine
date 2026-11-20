@@ -303,6 +303,15 @@ class EditorContext {
 };
 
 /**
+ * @brief Whether a module built for `module_version` can run on this engine
+ *
+ * Compares major.minor only, so a patch release or a `-dev`/`-rc` suffix does
+ * not reject modules. Unparseable versions must match exactly.
+ */
+bool IsExtensionVersionCompatible(std::string_view module_version,
+                                  std::string_view engine_version);
+
+/**
  * @brief The table a module exports under `mercury_editor_extension_v1`
  *
  * Returned by the entry point MERCURY_EDITOR_EXTENSION defines. The loader

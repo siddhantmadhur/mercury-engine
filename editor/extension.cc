@@ -13,6 +13,43 @@
 
 namespace Mercury::EditorUI {
 
+namespace {
+
+// Parses the leading "major.minor" of a version string. Returns false when the
+// string does not start with two dot-separated integers.
+bool ParseMajorMinor(std::string_view version, int& major, int& minor) {
+  size_t i = 0;
+  auto parse_int = [&](int& out) {
+    const size_t start = i;
+    while (i < version.size() && version[i] >= '0' && version[i] <= '9') {
+      out = out * 10 + (version[i] - '0');
+      i++;
+    }
+    return i > start;
+  };
+  major = 0;
+  minor = 0;
+  if (!parse_int(major)) return false;
+  if (i >= version.size() || version[i] != '.') return false;
+  i++;
+  return parse_int(minor);
+}
+
+}  // namespace
+
+bool IsExtensionVersionCompatible(std::string_view module_version,
+                                  std::string_view engine_version) {
+  int module_major = 0;
+  int module_minor = 0;
+  int engine_major = 0;
+  int engine_minor = 0;
+  if (!ParseMajorMinor(module_version, module_major, module_minor) ||
+      !ParseMajorMinor(engine_version, engine_major, engine_minor)) {
+    return module_version == engine_version;
+  }
+  return module_major == engine_major && module_minor == engine_minor;
+}
+
 EditorExtensionRegistry& EditorExtensionRegistry::Instance() {
   static EditorExtensionRegistry registry;
   return registry;
