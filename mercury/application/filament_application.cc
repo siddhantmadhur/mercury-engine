@@ -21,6 +21,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb/stb_image_write.h>
 
+#include "application/render_hooks.h"
 #include "components/components.h"
 #include "debugger/debugger.h"
 #include "filament/metal_layer.h"
@@ -506,6 +507,10 @@ void FilamentApplication::Render() {
 
   if (!renderer_->beginFrame(frame_swap)) return;
 
+  // The view the frame's render hooks see: the window's scene view, or the
+  // editor's offscreen view in a headless application.
+  filament::View* hook_view = nullptr;
+
   for (const RenderCamera& camera : cameras) {
     if (camera.target_texture.empty()) continue;
     auto it = render_texture_targets_.find(camera.target_texture);
@@ -545,6 +550,8 @@ void FilamentApplication::Render() {
     scene_renderer_.SetSkyboxForClear(main->clear ==
                                       static_cast<int>(CameraClear::kSkybox));
     scene_view_->setVisibleLayers(0xff, main->culling_mask & 0xff);
+    RenderHooks::Instance().InvokePreRender(*engine_, *scene_view_);
+    hook_view = scene_view_;
     renderer_->render(scene_view_);
     if (game_ui) {
       // The UI scene's skybox belongs to the UI Builder canvas; over the
@@ -566,6 +573,10 @@ void FilamentApplication::Render() {
       scene_renderer_.SetSkyboxForClear(main->clear ==
                                         static_cast<int>(CameraClear::kSkybox));
       scene_target_.view->setVisibleLayers(0xff, main->culling_mask & 0xff);
+      if (!hook_view) {
+        RenderHooks::Instance().InvokePreRender(*engine_, *scene_target_.view);
+        hook_view = scene_target_.view;
+      }
       renderer_->render(scene_target_.view);
       ReadOffscreen(scene_target_);
     }
@@ -644,6 +655,10 @@ void FilamentApplication::Render() {
   }
 
   renderer_->endFrame();
+
+  if (hook_view) {
+    RenderHooks::Instance().InvokePostRender(*engine_, *hook_view);
+  }
 
   if (capturing) {
     engine_->flushAndWait();

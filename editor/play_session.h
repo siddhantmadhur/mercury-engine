@@ -13,11 +13,12 @@
  *     -> mercury_player <project.mproj> --dump-schema .mercury/scripts.mschema
  *     -> mercury_player <project.mproj> --map <current map>      (Play only)
  *
- * A project with C++ scripts names a CMake target in `[build] target`. Its
- * build runs `cmake --build <MERCURY_BUILD_DIR> --target <target>` and then
- * executes <build>/bin/<target> with the same arguments, so the native scripts
- * linked into that executable provide the schema and run the game. The build's
- * output (compiler messages) streams to the Console.
+ * A project with C++ scripts names a CMake target in `[build] target`. Play
+ * configures and builds the project's own CMake tree in
+ * <project>/.mercury/build/debug against the SDK the editor is running from,
+ * then executes <build>/bin/<target>. The configure and build run as child
+ * processes whose output streams to the Console, so the editor stays
+ * responsive. (See project_scaffold.h for the generated CMakeLists.txt.)
  */
 #ifndef MERCURY_EDITOR_PLAY_SESSION_H
 #define MERCURY_EDITOR_PLAY_SESSION_H
@@ -83,9 +84,16 @@ class PlaySession {
   std::filesystem::path project_file_;
   std::filesystem::path schema_path_;
   std::filesystem::path working_dir_;
+  std::filesystem::path build_dir_;
   std::string map_;
   std::string build_target_;
   bool native_ = false;
+  // Set when this session's configure+build succeeded, so a pre-existing
+  // bin/<target> is never executed.
+  bool built_this_session_ = false;
+  // The next process is `cmake -S ... -B ...` rather than `cmake --build`.
+  bool configuring_ = false;
+  bool holds_build_lock_ = false;
 };
 
 }  // namespace Mercury

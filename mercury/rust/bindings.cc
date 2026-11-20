@@ -11,9 +11,10 @@
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
+#include "version.h"
 
 #ifndef MERCURY_ENGINE_VERSION
-#define MERCURY_ENGINE_VERSION "dev"
+#define MERCURY_ENGINE_VERSION MERCURY_VERSION_STRING
 #endif
 
 namespace Mercury::rust {

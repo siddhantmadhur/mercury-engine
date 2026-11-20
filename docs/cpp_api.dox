@@ -166,6 +166,383 @@ target = "my_game"
 Projects with only `.as` scripts keep using `mercury_player`; both languages
 can coexist in one project. `examples/cpp_hello` is a complete native example.
 
+
+@section cpp_api_depths Two depths of C++
+
+C++ gameplay has two scopes, and they use different extension points:
+
+| Depth | Use it for | Base class / registration |
+|---|---|---|
+| A faster AngelScript | A component with fields and callbacks, ported line by line from an `.as` script | @ref Mercury::Behaviour + `MERCURY_SCRIPT` |
+| Whole features | Networking, replication, streaming, custom rendering, process setup | @ref Mercury::System, @ref Mercury::AppHook, @ref Mercury::EventBus, @ref Mercury::RenderHooks |
+
+Both write the same `.mmap` components and reflect the same fields. They can
+coexist in one project and on one node.
+
+@section cpp_api_behaviour C++ as a faster AngelScript
+
+This is the smallest script. The AngelScript version:
+
+@code{.cpp}
+// scripts/player_mover.as
+[script]
+class PlayerMover : Behaviour
+{
+    [field tooltip="Units per second"]
+    float speed = 8.0f;
+
+    void onStart() { Debug::Log("PlayerMover ready"); }
+
+    void onTick(double dt)
+    {
+        GameObject self = GetGameObject();
+        self.position = self.position + Vector3(speed * dt, 0.0f, 0.0f);
+    }
+}
+@endcode
+
+The C++ version writes the same class name in `src/`:
+
+@code{.cpp}
+// src/player_mover.h
+#pragma once
+
+#include <scripting/behaviour.h>
+
+class PlayerMover : public Mercury::Behaviour {
+ public:
+  // The counterpart of [field tooltip="..."].
+  void Reflect(Mercury::Reflector& r) override {
+    r.Field("speed", speed_).Tooltip("Units per second");
+  }
+
+  void OnStart() override { PDebug::info("PlayerMover ready"); }
+
+  void OnTick(double dt) override {
+    const glm::vec3 position = GetTransform().GetPosition();
+    GetTransform().SetPosition(
+        position + glm::vec3(speed_ * static_cast<float>(dt), 0.0f, 0.0f));
+  }
+
+ private:
+  float speed_ = 8.0f;
+};
+@endcode
+
+@code{.cpp}
+// src/player_mover.cc
+#include "player_mover.h"
+
+// Registers the class as a component named "PlayerMover".
+MERCURY_SCRIPT(PlayerMover);
+@endcode
+
+The callback names are the C++ spellings of the AngelScript ones:
+`Awake`, `OnEnable`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
+`OnCollisionEnter`, `OnTriggerEnter`, `OnDestroy`. `Reflect` supports the same
+field types as `[field]` (`bool`, `int`, `float`, `std::string`, `glm::vec2`,
+`glm::vec3`, a `glm::vec4` Color, `NodeRef`, `AssetRef`, their arrays, and
+`Enum`), plus `ReflectData` for computed UI bindings and `ReflectMethods` for
+Event targets. `MERCURY_DATA_ASSET(Type)` registers a reflected struct as a
+`.masset` type.
+
+The collision/trigger callbacks take a `GameObject`; `GetGameObject()`,
+`GetTransform()`, `GetComponent<T>()`, `Find`, `Instantiate`, `Physics()` and
+the input helpers work the same way as in AngelScript. Events saved in a map
+can call a method registered with `ReflectMethods`.
+
+@section cpp_api_layout Project layout
+
+@code{.text}
+my_game/
+  my_game.mproj        project settings; [build] target names the executable
+  maps/*.mmap          maps and their components
+  assets/*.masset      materials, physics materials, data assets
+  scripts/*.as         AngelScript gameplay (optional)
+  src/*.cc, *.h        C++ gameplay and runtime systems (optional, static)
+  system/*.cc, *.h     editor extension modules (optional, dynamic)
+  CMakeLists.txt       generated once, then owned by the project
+  CMakePresets.json    generated once, then owned by the project
+  .clangd              generated on every project open
+  .mercury/            generated: schema, stamp, build trees (never committed)
+  .gitignore           ignores the generated files
+@endcode
+
+`src/` is linked into the game executable; `system/` is built as a dynamic
+module the editor loads. Use the editor's **New Script** dialog (**Create >
+Script...**, **Add Component > New Script...**, or **Create > C++ System...**
+/ **Editor System...**) to create the right pair of files in the right folder.
+The dialog previews the paths, refuses to overwrite, and "Open after creating"
+opens the `.cc`/`.as`.
+
+@section cpp_api_systems Whole features: systems, app hooks and the event bus
+
+A @ref Mercury::Behaviour is one instance per component. When a feature is
+one instance per *scene* — networking, replication, replay, streaming — derive
+from @ref Mercury::System and register it with `MERCURY_SYSTEM`:
+
+@code{.cpp}
+#include <scripting/system.h>
+#include <scene/map_scene.h>
+
+struct PeerConnected { int peer = 0; };
+
+class NetworkSystem : public Mercury::System {
+ public:
+  // kPreTick receives before gameplay; kPostPhysics sends after physics.
+  Phase GetPhase() const override { return Phase::kPostPhysics; }
+
+  void OnRegister(Mercury::MapScene& scene) override {
+    events_ = scene.GetEventBus().Subscribe<PeerConnected>(
+        [this](const PeerConnected& event) { peers_.push_back(event.peer); });
+  }
+  void OnMapLoaded(Mercury::MapScene& scene) override {
+    // The scene has entities; initialise replication state here.
+  }
+  void OnTick(Mercury::MapScene& scene, double dt) override { Send(dt); }
+
+ private:
+  void Send(double) {}
+  Mercury::EventBus::Subscription events_;
+  std::vector<int> peers_;
+};
+
+MERCURY_SYSTEM(NetworkSystem);
+@endcode
+
+Phases run in this order inside a fixed tick: `kPreTick` (before collision
+dispatch and behaviours, e.g. network receive), `kTick` (after behaviours),
+`kPostTick` (after script timers, before physics), `kPostPhysics` (after the
+physics step, e.g. network send). `GetOrder()` breaks ties inside a phase.
+Lifecycle: `OnRegister` once, `OnMapLoaded`/`OnMapUnloading` per map, the
+frame callbacks every frame, `OnTick` every fixed tick, `OnShutdown` once.
+
+**EventBus** is the scene-wide typed publish/subscribe bus used above:
+`scene.GetEventBus().Publish(event)` and
+`Subscribe<E>(callback)`. A `Subscription` is a move-only RAII handle; destroying
+it unsubscribes, and a handle that outlives the bus is harmless. The bus is
+not thread-safe; publish from the scene thread.
+
+**AppHook** is process-wide setup: parse game arguments, open sockets, start
+services. It runs only for a real game run, never for the editor's script
+build or `--dump-schema`:
+
+@code{.cpp}
+#include <scripting/app_hook.h>
+
+class ServerHook : public Mercury::AppHook {
+ public:
+  bool OnPreInit(std::span<const std::string_view> args) override {
+    for (size_t i = 0; i < args.size(); i++) {
+      if (args[i] == "--server") server_ = true;
+      if (args[i] == "--port" && i + 1 < args.size()) port_ = args[i + 1];
+    }
+    return true;
+  }
+  bool OnInit() override { return !server_ || listener_.Listen(port_); }
+  void OnShutdown() override { listener_.Close(); }
+
+ private:
+  bool server_ = false;
+  std::string port_ = "7777";
+  Listener listener_;
+};
+
+MERCURY_APP_HOOK(ServerHook);
+@endcode
+
+Unknown `--options` are accepted by the player only when at least one
+`AppHook` is registered; the hook sees the raw arguments. Put the project
+path before game-specific options:
+`./my_game my_game.mproj --server --port 9000`.
+
+**Asset importers.** @ref Mercury::AssetImporterRegistry maps file extensions
+to asset types. Register an importer owned by an editor module with
+`RegisterOwned(module_id, info)` (the loader removes it on unload) or globally
+with `Register(info)`. `Import(source, properties, &error)` runs the importer
+callback; the editor writes a `.masset` with the resulting type.
+
+**Component snapshots and stable ids.** @ref Mercury::TypeRegistry serializes
+a component for replication/save:
+`SerializeComponent(scene, entity, "Transform", properties)` and
+`DeserializeComponent(..., properties, ComponentDeserializeOptions{})`.
+The byte-buffer overload is the network form; it rejects non-finite values and
+read-only fields by default. Entities have a stable id:
+`scene.Objects().GetGuid(entity)` and `FindByGuid(guid)`. Map entities adopt
+their `MapNode` uid (so ids survive reloads); runtime-created entities use a
+separate high-range counter. `SetGuid` refuses an id already owned by another
+live entity.
+
+**RenderHooks and Filament.** @ref Mercury::RenderHooks receives the live
+`filament::Engine` and `filament::View` just before the frame is submitted:
+
+@code{.cpp}
+#include <filament/View.h>
+#include "application/render_hooks.h"
+
+const int hook = Mercury::RenderHooks::Instance().AddPreRender(
+    [](filament::Engine&, filament::View& view) {
+      auto bloom = view.getBloomOptions();
+      bloom.enabled = true;
+      bloom.strength = 0.3f;
+      view.setBloomOptions(bloom);
+    });
+// Remove(hook) when the feature goes away.
+@endcode
+
+For engine/renderer/scene/camera access outside a hook, a scene running on
+@ref Mercury::FilamentApplication can use `GetEngine()`, `GetRenderer()`,
+`GetScene()`, `GetView()` and `GetCamera()`. Hook on the render thread.
+
+**Linking other libraries.** A project's CMakeLists is ordinary CMake. Link a
+library you ship with the game after `mercury_add_game`:
+
+@code{.cmake}
+mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
+find_package(enet CONFIG REQUIRED)          # or add_subdirectory(third_party/enet)
+target_link_libraries(my_game PRIVATE enet::enet)
+@endcode
+
+The same pattern works for a vendored library with
+`add_subdirectory(third_party/mylib)` and
+`target_link_libraries(my_game PRIVATE mylib)`.
+
+@section cpp_api_editor_systems Editor extensions
+
+Editor tools are C++ modules the editor loads while a project is open; they
+get the real wxWidgets objects. Put them in `system/`; `mercury_add_editor_system`
+builds a MODULE that resolves engine/editor/wx symbols from the running editor.
+
+@code{.cpp}
+// system/my_tool.h
+#pragma once
+#include <extension.h>
+
+class MyTool : public Mercury::EditorUI::EditorExtension {
+ public:
+  void OnLoad(Mercury::EditorUI::EditorContext& context) override;
+};
+@endcode
+
+@code{.cpp}
+// system/my_tool.cc
+#include "my_tool.h"
+#include <console.h>
+
+MERCURY_EDITOR_EXTENSION(MyTool);
+
+void MyTool::OnLoad(Mercury::EditorUI::EditorContext& context) {
+  auto* console = &context.GetConsole();
+  context.AddMenuItem({.menu = "Extensions", .label = "My Tool",
+                       .callback = [console] { console->Info("Hello"); }});
+}
+@endcode
+
+`EditorContext` registers every kind of extension:
+`AddPanel` (dockable panel with a factory),
+`AddMenuItem` (top-level menu entry),
+`AddInspector` (custom Inspector for a component type),
+`AddProjectMenuItem` (Project Browser context menu),
+`AddViewportTool` (mouse/key input plus an overlay in the Scene view), and
+`AddAssetImporter` (owned by the module). Everything is removed when the
+module unloads.
+
+**The Bind rule.** Never call `wxEvtHandler::Bind` directly on an
+editor-owned wx object with a lambda from the module: after a reload the
+handler would point into an unmapped library. Use `context.Bind(handler,
+event, callback)`; the loader unbinds before destroying the module's windows.
+For a top-level window the module creates (a frame or dialog), call
+`context.TrackWindow(window)` so the editor destroys it while the module is
+still mapped.
+
+**Reload and versions.** `Project > Reload Systems` (or the project's
+`system/` changing) unloads, rebuilds and reloads the module. The build runs in
+the background. The module exports `mercury_editor_extension_v1` with an ABI
+version and the engine version; the loader rejects an incompatible ABI or a
+different major.minor version. Exceptions from a module callback are caught
+and logged; after repeated failures the module is faulted and no longer
+called. Reload/unload requests made from inside a callback are deferred until
+the callback returns.
+
+@section cpp_api_trust Workspace trust
+
+Native builds and editor modules execute project-supplied code (CMake
+configure scripts, compiled executables), so they are gated by a persisted
+workspace trust decision:
+
+- Opening a project, reading its data and writing the generated LSP/CMake
+  files is always allowed. Configuring/building the project tree, running its
+  executable, and building `system/` modules require trust.
+- The first time a project needs a native build the editor asks. The decision
+  is stored per canonical project path in `~/.config/mercury/editor.cfg`
+  (or `%APPDATA%\Mercury\editor.cfg`) under `[trust] trusted` / `distrusted`.
+- Granting trust for the first time deletes any shipped `.mercury/build` and
+  `.mercury/systems` before the first build. After that, a build folder must
+  carry the editor's marker; unknown build output is refused.
+- Change or revoke a decision with **Project > Trust Editor Systems**.
+  Play/Build ask again for an untrusted project, and the build layer itself
+  refuses to run.
+
+A command-line run (`./my_game project.mproj`) is an explicit user action and
+is not gated.
+
+@section cpp_api_sdk SDK and language server
+
+A packaged editor carries a relocatable SDK in
+`Mercury.app/Contents/Resources/sdk` (or the install prefix):
+`include/mercury`, `include/editor`, third-party headers under `include/`,
+static archives under `lib/`, and `cmake/MercuryConfig.cmake`.
+`find_package(Mercury CONFIG REQUIRED)` provides `mercury_add_game` and
+`mercury_add_editor_system`.
+
+The editor generates the project's build files (once) and LSP files (every
+open):
+- `.clangd` sets `CompilationDatabase: .mercury/build/debug` and adds the SDK
+  include dirs, `src/`, `system/` and the public defines. If the database does
+  not exist yet, clangd falls back to these flags.
+- `compile_commands.json` at the project root is a link to
+  `.mercury/build/debug/compile_commands.json`, created/refreshed only after a
+  configure this editor ran.
+- The editor configures/builds the project's own tree in
+  `.mercury/build/debug` (Debug) or `.mercury/build/release` (Build Game),
+  passing `-DMercury_DIR=<running SDK>/cmake`. Configure only reruns when the
+  cache is missing or `CMakeLists.txt`/`CMakePresets.json` changed.
+
+For a command-line build of a project against a packaged SDK:
+
+@code{.sh}
+export MERCURY_SDK=/Applications/Mercury.app/Contents/Resources/sdk
+cd my_game
+cmake --preset debug -DMercury_DIR="$MERCURY_SDK/cmake"
+cmake --build --preset debug
+@endcode
+
+The `Mercury_DIR` cache variable in the generated presets reads
+`$env{MERCURY_SDK}/cmake`; pass `-DMercury_DIR` to override it. A Vulkan SDK
+(headers and loader) is required at configure time; the packaged editor ships
+the MoltenVK runtime, but C++ builds still need `find_package(Vulkan)` to
+succeed. `scripts/setup_project.pl` installs it on a development machine.
+
+@section cpp_api_new_script The New Script dialog
+
+**Create > Script...** offers four kinds (the Project Browser also has direct
+**C++ System...** and **Editor System...** entries, and **Add Component > New
+Script...** limits the choice to gameplay components):
+
+| Kind | Files | Registered by |
+|---|---|---|
+| AngelScript Behaviour | `scripts/<snake>.as` | `[script]` |
+| C++ Behaviour | `src/<snake>.h`, `src/<snake>.cc` | `MERCURY_SCRIPT` |
+| C++ System | `src/<snake>.h`, `src/<snake>.cc` | `MERCURY_SYSTEM` |
+| C++ Editor System | `system/<snake>.h`, `system/<snake>.cc` | `MERCURY_EDITOR_EXTENSION` |
+
+The dialog shows the exact files, validates the class name, and disables
+Create if either file exists. **Open after creating** opens the `.cc` (or the
+`.as` in the built-in editor); the choice and the last kind are remembered.
+Creating C++ files gives the project a default `[build] target` when it has
+none, and (for trusted projects) reconfigures the build tree in the background
+so clangd sees the new file immediately. The next Play/Build compiles it.
+
 @section cpp_api_editor The editor
 
 The editor is also C++. @ref Mercury::EditorUI::MercuryEditorApp is the

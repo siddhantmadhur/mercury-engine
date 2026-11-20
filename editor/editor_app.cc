@@ -9,6 +9,8 @@
 #include <filesystem>
 #include <string>
 
+#include "dialogs.h"
+#include "extension_loader.h"
 #include "os/filesystem.h"
 
 namespace Mercury::EditorUI {
@@ -19,6 +21,9 @@ namespace {
 constexpr int kFrameIntervalMs = 16;
 constexpr int kViewportIntervalMs = 4;
 }  // namespace
+
+MercuryEditorApp::MercuryEditorApp() = default;
+MercuryEditorApp::~MercuryEditorApp() = default;
 
 bool MercuryEditorApp::OnInit() {
   wxInitAllImageHandlers();
@@ -54,6 +59,9 @@ bool MercuryEditorApp::OnInit() {
     return false;
   }
 
+  extensions_ =
+      std::make_unique<EditorExtensionLoader>(*scene_, scene_->ConsoleRef());
+
   if (scene_->GetProject() != nullptr) {
     ShowEditorFrame();
   } else {
@@ -74,6 +82,10 @@ int MercuryEditorApp::OnExit() {
   shutting_down_ = true;
   frame_timer_.Stop();
   viewport_timer_.Stop();
+  if (extensions_) {
+    extensions_->SetFrame(nullptr);
+    extensions_.reset();
+  }
   launcher_frame_ = nullptr;
   editor_frame_ = nullptr;
   scene_ = nullptr;
@@ -89,6 +101,8 @@ int MercuryEditorApp::FilterEvent(wxEvent& evt) {
 }
 
 void MercuryEditorApp::ShowLauncherFrame() {
+  // The editor frame (and with it the extension panels) is about to go away.
+  if (extensions_) extensions_->SetFrame(nullptr);
   auto* old_editor = editor_frame_;
   editor_frame_ = nullptr;
 
@@ -131,6 +145,39 @@ void MercuryEditorApp::ShowEditorFrame() {
   editor_frame_->Show(true);
   SetTopWindow(editor_frame_);
 
+  if (extensions_) {
+    extensions_->SetFrame(editor_frame_);
+    editor_frame_->SetOnReloadSystems([this]() {
+      if (extensions_) extensions_->Reload();
+    });
+    editor_frame_->SetOnTrustSystems([this]() {
+      if (!extensions_ || !scene_ || !editor_frame_) return;
+      auto project = scene_->GetProject();
+      if (!project) return;
+      const std::optional<bool> choice = ShowTrustSystemsDialog(
+          editor_frame_, project->GetRoot(), project->GetBuildSystemsTarget(),
+          project->GetRoot() / "system", extensions_->IsProjectTrusted(),
+          false);
+      if (!choice) return;
+      extensions_->SetProjectTrusted(*choice);
+      extensions_->Reload();
+    });
+    extensions_->SetTrustPrompt([this](const std::filesystem::path& root) {
+      auto project = scene_ ? scene_->GetProject() : nullptr;
+      return ShowTrustSystemsDialog(
+          editor_frame_, root,
+          project ? project->GetBuildSystemsTarget() : std::string(),
+          root / "system",
+          extensions_ ? extensions_->IsProjectTrusted() : false, true);
+    });
+    // Builds and loads the project's system/ modules for this frame after the
+    // event loop starts (the trust prompt is modal). The timer's Update also
+    // picks this up on its first tick.
+    CallAfter([this]() {
+      if (extensions_) extensions_->Update();
+    });
+  }
+
   if (old_launcher) {
     old_launcher->Destroy();
   }
@@ -171,6 +218,9 @@ void MercuryEditorApp::OnTimer(wxTimerEvent& /*evt*/) {
 
   application_->StepFrame();
 
+  if (extensions_) {
+    extensions_->Update();
+  }
   if (editor_frame_) {
     editor_frame_->SyncFromController(dt);
   }

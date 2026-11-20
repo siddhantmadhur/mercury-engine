@@ -127,6 +127,9 @@ class Reflector {
     return r;
   }
   bool Found() const { return found_; }
+  // In kSet mode: the field was found and its value converted successfully.
+  // Found() alone is true even when the value had the wrong type.
+  bool Applied() const { return applied_; }
 
   Mode GetMode() const { return mode_; }
 
@@ -212,6 +215,7 @@ class Reflector {
   mtext::Variant* out_ = nullptr;
   const mtext::Variant* in_ = nullptr;
   bool found_ = false;
+  bool applied_ = false;
   std::function<void(Event&)> event_fn_;
 };
 

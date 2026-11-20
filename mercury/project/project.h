@@ -99,6 +99,14 @@ class Project {
   const fs::path& GetFile() const { return file_; }
   const fs::path& GetRoot() const { return root_; }
   fs::path GetCacheDir() const { return root_ / kProjectCacheDir; }
+  /**
+   * @brief The project's .mercury folder, created if missing
+   *
+   * Refuses (returns empty with `error`) if .mercury is a symlink or any
+   * non-directory, so generated files can never be redirected outside the
+   * project.
+   */
+  fs::path EnsureCacheDir(std::string* error = nullptr) const;
 
   std::string GetName() const;
   void SetName(std::string name);
@@ -116,7 +124,22 @@ class Project {
   // e.g. "cpp_hello". Empty for AngelScript-only projects, which run the
   // shared mercury_player.
   std::string GetBuildTarget() const;
-  void SetBuildTarget(std::string target);
+  // Rejects a name that could inject CMake syntax (validated with
+  // IsValidTargetName); returns false and leaves the file unchanged.
+  bool SetBuildTarget(std::string target);
+  // [build] systems_target: the CMake target that builds the project's editor
+  // modules. Defaults to "<build target>_systems"; empty when there is no
+  // build target.
+  std::string GetBuildSystemsTarget() const;
+
+  /**
+   * @brief A safe CMake target name: [A-Za-z0-9_.+-]+, not starting with '-'
+   *
+   * Targets end up in generated CMakeLists.txt, so a name with quotes,
+   * parentheses, newlines or a path separator is rejected instead of being
+   * written into a CMake command.
+   */
+  static bool IsValidTargetName(std::string_view name);
   // [render] anti_aliasing: "none", "fxaa" or "taa" (default). A project that
   // only has the legacy `fxaa` bool maps it to "fxaa"/"none".
   std::string GetRenderAntiAliasing() const;

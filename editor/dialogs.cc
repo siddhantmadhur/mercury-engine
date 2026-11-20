@@ -20,6 +20,8 @@
 
 #include "cmake_build.h"
 #include "editor_icons.h"
+#include "os/filesystem.h"
+#include "project_trust.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
 #include "wx_theme.h"
@@ -79,23 +81,89 @@ std::optional<std::string> PromptTextDialog(wxWindow* parent,
   return val.ToStdString();
 }
 
-std::optional<std::string> ShowNewScriptDialog(wxWindow* parent) {
-  wxDialog dlg(parent, wxID_ANY, "New Script", wxDefaultPosition,
-               wxSize(440, -1));
-  auto* root = new wxBoxSizer(wxVERTICAL);
+namespace {
 
-  auto* lbl = new wxStaticText(&dlg, wxID_ANY, "Class Name (AngelScript):");
-  root->Add(lbl, 0, wxLEFT | wxRIGHT | wxTOP, 14);
+const char* ScriptKindLabel(Templates::ScriptKind kind) {
+  switch (kind) {
+    case Templates::ScriptKind::kAngelScript:
+      return "AngelScript Behaviour";
+    case Templates::ScriptKind::kCppBehaviour:
+      return "C++ Behaviour";
+    case Templates::ScriptKind::kCppSystem:
+      return "C++ System";
+    case Templates::ScriptKind::kCppEditorSystem:
+      return "C++ Editor System";
+  }
+  return "AngelScript Behaviour";
+}
+
+}  // namespace
+
+std::optional<NewScriptRequest> ShowNewScriptDialog(
+    wxWindow* parent, EditorScene& scene,
+    const std::vector<Templates::ScriptKind>& allowed_kinds) {
+  auto project = scene.GetProject();
+  if (!project) return std::nullopt;
+  const fs::path root = project->GetRoot();
+  const EditorSettings& settings = scene.Settings();
+
+  std::vector<Templates::ScriptKind> choices;
+  if (allowed_kinds.empty()) {
+    choices = {Templates::ScriptKind::kAngelScript,
+               Templates::ScriptKind::kCppBehaviour,
+               Templates::ScriptKind::kCppSystem,
+               Templates::ScriptKind::kCppEditorSystem};
+  } else {
+    choices = allowed_kinds;
+  }
+  if (choices.empty()) return std::nullopt;
+
+  int initial = 0;
+  for (size_t i = 0; i < choices.size(); i++) {
+    if (choices[i] == settings.new_script_kind) {
+      initial = static_cast<int>(i);
+      break;
+    }
+  }
+
+  wxDialog dlg(parent, wxID_ANY, "New Script", wxDefaultPosition,
+               wxSize(500, -1));
+  dlg.SetName("new_script_dialog");
+  auto* root_sizer = new wxBoxSizer(wxVERTICAL);
+
+  root_sizer->Add(new wxStaticText(&dlg, wxID_ANY, "Kind:"), 0,
+                  wxLEFT | wxRIGHT | wxTOP, 14);
+  auto* kind = new wxChoice(&dlg, wxID_ANY);
+  kind->SetName("script_kind");
+  for (Templates::ScriptKind choice : choices) {
+    kind->Append(wxString::FromUTF8(ScriptKindLabel(choice)));
+  }
+  kind->SetSelection(initial);
+  if (choices.size() == 1) kind->Disable();
+  root_sizer->Add(kind, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
+
+  auto* name_lbl =
+      new wxStaticText(&dlg, wxID_ANY, "Class Name (AngelScript):");
+  root_sizer->Add(name_lbl, 0, wxLEFT | wxRIGHT | wxTOP, 14);
 
   auto* input = new wxTextCtrl(&dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
                                wxDefaultSize, wxTE_PROCESS_ENTER);
-  root->Add(input, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
+  input->SetName("script_class_name");
+  root_sizer->Add(input, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
 
   auto* preview = new wxStaticText(&dlg, wxID_ANY,
                                    "Enter a valid C++/AngelScript class name");
+  // Room for "Will create:" plus a header and a source path, so the live
+  // preview does not grow the dialog line by line.
+  preview->SetMinSize(wxSize(-1, 62));
   preview->SetForegroundColour(
       wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
-  root->Add(preview, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  root_sizer->Add(preview, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+
+  auto* open_after = new wxCheckBox(&dlg, wxID_ANY, "Open after creating");
+  open_after->SetName("script_open_after");
+  open_after->SetValue(settings.open_script_after_create);
+  root_sizer->Add(open_after, 0, wxLEFT | wxRIGHT | wxTOP, 10);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* ok = new wxButton(&dlg, wxID_OK, "Create");
@@ -105,48 +173,135 @@ std::optional<std::string> ShowNewScriptDialog(wxWindow* parent) {
   btns->AddStretchSpacer();
   btns->Add(cancel, 0, wxRIGHT, 8);
   btns->Add(ok, 0);
-  root->Add(btns, 0, wxEXPAND | wxALL, 14);
+  root_sizer->Add(btns, 0, wxEXPAND | wxALL, 14);
+
+  auto selected_kind = [&]() {
+    const int sel = kind->GetSelection();
+    if (sel < 0 || static_cast<size_t>(sel) >= choices.size()) {
+      return choices.front();
+    }
+    return choices[static_cast<size_t>(sel)];
+  };
 
   auto update = [&]() {
+    const Templates::ScriptKind chosen = selected_kind();
+    const bool cpp = Templates::IsCppScript(chosen);
+    name_lbl->SetLabel(cpp ? "Class Name (C++):" : "Class Name (AngelScript):");
+    name_lbl->GetParent()->Layout();
+
     const std::string name = input->GetValue().ToStdString();
-    const bool valid = Templates::IsValidIdentifier(name);
-    ok->Enable(valid);
-    if (name.empty()) {
-      preview->SetLabel("Enter a valid C++/AngelScript class name");
+    auto show_message = [&](const wxString& text, bool error) {
+      preview->SetLabel(text);
       preview->SetForegroundColour(
-          wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
-      preview->SetFont(dlg.GetFont());
-    } else if (valid) {
-      preview->SetLabel(wxString::FromUTF8(
-          "Will create: scripts/" + Templates::ToSnakeCase(name) + ".as"));
-      preview->SetForegroundColour(wxNullColour);
-      preview->SetFont(dlg.GetFont());
-    } else {
-      preview->SetLabel(
-          "Invalid identifier (letters, digits, underscores; cannot start with "
-          "digit)");
-      preview->SetForegroundColour(wxNullColour);
-      preview->SetFont(dlg.GetFont().Bold());
+          error ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+                : wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+      preview->SetFont(error ? dlg.GetFont().Bold() : dlg.GetFont());
+      preview->GetParent()->Layout();
+    };
+
+    if (name.empty()) {
+      ok->Enable(false);
+      show_message("Enter a valid C++/AngelScript class name", false);
+      return;
     }
+    const std::string reason = Templates::ValidateScriptName(name, chosen);
+    if (!reason.empty()) {
+      ok->Enable(false);
+      show_message(wxString::FromUTF8(reason), true);
+      return;
+    }
+    std::string folder_error;
+    if (os::EnsureProjectContentDir(root, Templates::ScriptKindFolder(chosen),
+                                    &folder_error)
+            .empty()) {
+      ok->Enable(false);
+      show_message(wxString::FromUTF8(folder_error), true);
+      return;
+    }
+
+    auto relative = [&](const fs::path& file) {
+      std::error_code rel_ec;
+      const fs::path rel = fs::relative(file, root, rel_ec);
+      return (rel_ec ? file.filename() : rel).generic_string();
+    };
+
+    const Templates::ScriptPaths paths =
+        Templates::GetScriptPaths(root, chosen, name);
+    std::error_code ec;
+    for (const fs::path& file : {paths.header, paths.source}) {
+      if (file.empty()) continue;
+      if (fs::symlink_status(file, ec).type() != fs::file_type::not_found) {
+        ok->Enable(false);
+        show_message(wxString::FromUTF8("Already exists: " + relative(file) +
+                                        " (choose another name)"),
+                     true);
+        return;
+      }
+    }
+
+    wxString text = "Will create:";
+    for (const fs::path& file : {paths.header, paths.source}) {
+      if (file.empty()) continue;
+      text += "\n  " + wxString::FromUTF8(relative(file));
+    }
+    if (cpp && project->GetBuildTarget().empty()) {
+      text += "\n\nWill set [build] target = " +
+              wxString::FromUTF8(Templates::ToTargetName(project->GetName())) +
+              " so Play builds this project.";
+    }
+    ok->Enable(true);
+    show_message(text, false);
   };
+
+  kind->Bind(wxEVT_CHOICE, [&](wxCommandEvent&) { update(); });
   input->Bind(wxEVT_TEXT, [&](wxCommandEvent&) { update(); });
   input->Bind(wxEVT_TEXT_ENTER, [&](wxCommandEvent&) {
-    if (Templates::IsValidIdentifier(input->GetValue().ToStdString())) {
-      dlg.EndModal(wxID_OK);
-    }
+    if (ok->IsEnabled()) dlg.EndModal(wxID_OK);
   });
+  update();
   input->SetFocus();
 
-  dlg.SetSizerAndFit(root);
-  dlg.SetSize(wxSize(440, dlg.GetSize().y));
+  dlg.SetSizerAndFit(root_sizer);
+  dlg.SetSize(wxSize(500, dlg.GetSize().y));
   dlg.CenterOnParent();
   if (dlg.ShowModal() != wxID_OK) return std::nullopt;
-  return input->GetValue().ToStdString();
+
+  NewScriptRequest request;
+  request.kind = selected_kind();
+  request.class_name = input->GetValue().Strip(wxString::both).ToStdString();
+  request.open_after_create = open_after->GetValue();
+  return request;
+}
+
+bool EnsureNativeProjectTrusted(wxWindow* parent, EditorScene& scene) {
+  auto project = scene.GetProject();
+  if (!project || project->GetBuildTarget().empty()) return true;
+  const fs::path root = project->GetRoot();
+  EditorSettings& settings = scene.Settings();
+  if (!settings.HasProjectTrustDecision(root)) {
+    wxMessageDialog dialog(
+        parent,
+        "This project builds and runs C++ code from its own folder. Only "
+        "trust projects you wrote or obtained from a source you trust.",
+        "Trust Project?", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    dialog.SetYesNoLabels("Trust and Continue", "Cancel");
+    if (dialog.ShowModal() != wxID_YES) return false;
+    SetProjectTrust(settings, root, true, scene.ConsoleRef());
+  }
+  if (!settings.IsProjectTrusted(root)) {
+    wxMessageBox(
+        "This project is marked as not trusted. Change the decision in "
+        "Project > Trust Editor Systems.",
+        "Mercury", wxOK | wxICON_WARNING, parent);
+    return false;
+  }
+  return true;
 }
 
 bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   auto project = scene.GetProject();
   if (!project) return false;
+  if (!EnsureNativeProjectTrusted(parent, scene)) return false;
 
   wxDialog dlg(parent, wxID_ANY, "Build Game (Release)", wxDefaultPosition,
                wxSize(520, -1));
@@ -428,6 +583,69 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   scene.Settings().lore_server = lore_srv_ctrl->GetValue().ToStdString();
   scene.Settings().Save();
   return true;
+}
+
+std::optional<bool> ShowTrustSystemsDialog(
+    wxWindow* parent, const std::filesystem::path& root,
+    const std::string& systems_target, const std::filesystem::path& source_dir,
+    bool currently_trusted, bool first_time) {
+  wxDialog dlg(parent, wxID_ANY,
+               first_time ? "Trust Editor Systems?" : "Editor System Trust",
+               wxDefaultPosition, wxSize(600, -1));
+  auto* sizer = new wxBoxSizer(wxVERTICAL);
+
+  wxString message =
+      "This project contains editor systems (native code). Building and "
+      "loading them runs arbitrary code with your user permissions.\n\n"
+      "Only trust projects you trust. The decision is remembered for future "
+      "changes to this project; you can change it later with Project > Trust "
+      "Editor Systems.";
+  if (!first_time) {
+    message += currently_trusted ? "\n\nThis project is currently trusted."
+                                 : "\n\nThis project is currently not trusted.";
+  }
+  auto* label = new wxStaticText(&dlg, wxID_ANY, message);
+  label->Wrap(560);
+  sizer->Add(label, 0, wxALL, 16);
+
+  auto* path =
+      new wxStaticText(&dlg, wxID_ANY, wxString::FromUTF8(root.string()),
+                       wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
+  path->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  sizer->Add(path, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+
+  const wxString build_info = wxString::Format(
+      "Systems target: %s\nSource: %s",
+      systems_target.empty() ? "(none)" : systems_target.c_str(),
+      source_dir.string().c_str());
+  auto* build_label = new wxStaticText(&dlg, wxID_ANY, build_info);
+  build_label->SetForegroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  sizer->Add(build_label, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+
+  auto* buttons = new wxBoxSizer(wxHORIZONTAL);
+  auto* trust = new wxButton(&dlg, wxID_YES, "Trust");
+  auto* distrust = new wxButton(&dlg, wxID_NO, "Don't Trust");
+  auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
+  cancel->SetDefault();
+  buttons->AddStretchSpacer();
+  buttons->Add(cancel, 0, wxRIGHT, 8);
+  buttons->Add(distrust, 0, wxRIGHT, 8);
+  buttons->Add(trust, 0);
+  sizer->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+
+  dlg.SetSizerAndFit(sizer);
+  dlg.SetSize(wxSize(560, dlg.GetSize().y));
+  dlg.CenterOnParent();
+
+  switch (dlg.ShowModal()) {
+    case wxID_YES:
+      return true;
+    case wxID_NO:
+      return false;
+    default:
+      return std::nullopt;
+  }
 }
 
 UnsavedChoice ShowUnsavedChangesDialog(wxWindow* parent,

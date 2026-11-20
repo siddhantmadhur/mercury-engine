@@ -51,7 +51,7 @@ ComponentInfo MakeInfo(const char* name, const char* category,
     for (const auto& warning : reflector.GetWarnings()) {
       PDebug::warn("{}", warning);
     }
-    return reflector.Found();
+    return reflector.Applied();
   };
   return info;
 }

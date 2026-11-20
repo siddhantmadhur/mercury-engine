@@ -17,6 +17,7 @@
 #include "properties/primitives.h"
 #include "scripting/as/script_runtime.h"
 #include "scripting/behaviour.h"
+#include "scripting/system.h"
 #include "scripting/type_registry.h"
 #include "ui/ui_document.h"
 
@@ -41,6 +42,20 @@ void CollectModelPaths(const MapNode& node, std::vector<std::string>& paths) {
   }
   for (const auto& child : node.children) CollectModelPaths(*child, paths);
 }
+
+// Marks the subtree being built as a clone of an existing node. Clones keep
+// their source uids, which are not unique per instance, so they must not
+// become entity GUIDs.
+class CloningScope {
+ public:
+  explicit CloningScope(bool& flag) : flag_(flag) { flag_ = true; }
+  ~CloningScope() { flag_ = false; }
+  CloningScope(const CloningScope&) = delete;
+  CloningScope& operator=(const CloningScope&) = delete;
+
+ private:
+  bool& flag_;
+};
 
 }  // namespace
 
@@ -324,6 +339,7 @@ MapScene::~MapScene() {
   physics_engine_->SetContactCallback({});
   // Behaviours may touch the scene from OnDestroy, so tear them down first.
   CallbackScope callback_scope(this);
+  StopSystems();
   std::vector<Behaviour*> behaviours;
   behaviours.reserve(behaviours_.size());
   for (const auto& behaviour : behaviours_)
@@ -383,7 +399,11 @@ void MapScene::Instantiate(const Map& map) {
     }
   }
   ApplyEnvironment();
-  if (running_) StartPendingBehaviours();
+  if (running_) {
+    StartPendingBehaviours();
+    StartSystems();
+    NotifyMapLoaded();
+  }
 }
 
 void MapScene::BeginInstantiate(Map map, bool fresh_assets) {
@@ -630,6 +650,7 @@ void MapScene::ClearMap() {
         "cleared while it is running");
     return;
   }
+  if (systems_started_ && root_entity_ != entt::null) NotifyMapUnloading();
   pending_destroy_.clear();
   // OnDestroy may instantiate a prefab, which appends to behaviours_ and can
   // reallocate it; iterate over a snapshot instead.
@@ -700,6 +721,18 @@ kEntityId MapScene::CreateNodeEntity(const MapNode& node, kEntityId parent,
                                      const std::string& path) {
   auto& registry = TypeRegistry::Instance();
   kEntityId entity = object_manager_->NewObject();
+  // The map node's uid is the entity's stable id, so it survives reloading the
+  // map and can be used for replication or save games. A cloned prefab node
+  // keeps the uid of its source, which is not unique across instances, so
+  // those entities keep the counter id NewObject assigned.
+  if (!cloning_runtime_node_ && node.uid != 0) {
+    if (!object_manager_->SetGuid(entity, node.uid)) {
+      PDebug::warn(
+          "entity {}: map uid {} is already used by another live entity; "
+          "keeping its temporary guid",
+          path, node.uid);
+    }
+  }
   {
     NodeInfo info;
     info.name = path == "." ? node.name : path.substr(path.rfind('/') + 1);
@@ -1016,6 +1049,9 @@ void MapScene::OnStart() {
   PlayAudioOnAwake();
   AwakeBehaviours();
   StartPendingBehaviours();
+  StartSystems();
+  // A map may already be loaded when the application starts the scene.
+  if (root_entity_ != entt::null) NotifyMapLoaded();
 }
 
 void MapScene::LoadPendingMap() {
@@ -1060,10 +1096,17 @@ void MapScene::OnFrame(double delta_t) {
   if (ui && input_manager_) ui_.ProcessInput(*input_manager_);
   const float dt =
       mode_ == Mode::kPlay ? Time::GetDeltaTime() : static_cast<float>(seconds);
+  const bool systems = mode_ == Mode::kPlay && systems_started_;
+  if (systems) {
+    for (auto& system : systems_) system->OnPreFrame(*this, dt);
+  }
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnFrame(dt);
+  }
+  if (systems) {
+    for (auto& system : systems_) system->OnFrame(*this, dt);
   }
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
@@ -1072,7 +1115,12 @@ void MapScene::OnFrame(double delta_t) {
     }
   }
   DestroyPending();
-  if (mode_ == Mode::kPlay) UpdateFrameSystems(dt);
+  if (mode_ == Mode::kPlay) {
+    UpdateFrameSystems(dt);
+    // Systems' late frame runs after the engine's own frame systems (animation,
+    // audio), so a renderer system sees the final pose for this frame.
+    for (auto& system : systems_) system->OnLateFrame(*this, dt);
+  }
   // Lights may have moved.
   GatherPointLights();
   // ...and bindings pick up what the scripts changed before drawing.
@@ -1087,6 +1135,16 @@ void MapScene::OnTick(double delta_t) {
   CallbackScope callback_scope(this);
   Time::BeginTick();
   StartPendingBehaviours();
+  // Pre-tick systems run before collision callbacks, which may change the
+  // time scale, so they read the tick delta at their own point in the tick.
+  const float pre_tick_dt = Time::GetDeltaTime();
+  if (systems_started_) {
+    for (auto& system : systems_) {
+      if (system->GetPhase() == System::Phase::kPreTick) {
+        system->OnTick(*this, pre_tick_dt);
+      }
+    }
+  }
   DispatchCollisions();
   const float dt = Time::GetDeltaTime();
   for (size_t i = 0; i < behaviours_.size(); i++) {
@@ -1094,13 +1152,34 @@ void MapScene::OnTick(double delta_t) {
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnTick(dt);
   }
+  if (systems_started_) {
+    for (auto& system : systems_) {
+      if (system->GetPhase() == System::Phase::kTick) {
+        system->OnTick(*this, dt);
+      }
+    }
+  }
   ScriptRuntime::Instance().SetCurrentScene(serial_);
   ScriptRuntime::Instance().PumpTimers();
+  if (systems_started_) {
+    for (auto& system : systems_) {
+      if (system->GetPhase() == System::Phase::kPostTick) {
+        system->OnTick(*this, dt);
+      }
+    }
+  }
   DestroyPending();
   Time::EndTick();
 }
 
 void MapScene::OnDestroy() {
+  if (running_callbacks_ > 0) {
+    // A system or behaviour callback asked to destroy the scene it is running
+    // in. Tearing systems down under that loop would free the object whose
+    // callback is executing.
+    PDebug::error("MapScene::OnDestroy was called from a callback; ignored");
+    return;
+  }
   CallbackScope callback_scope(this);
   // OnDestroy may instantiate a prefab, which appends to behaviours_.
   std::vector<Behaviour*> behaviours;
@@ -1112,7 +1191,64 @@ void MapScene::OnDestroy() {
   }
   behaviours_.clear();
   behaviours_by_entity_.clear();
+  StopSystems();
   running_ = false;
+}
+
+void MapScene::StartSystems() {
+  if (systems_started_ || mode_ != Mode::kPlay) return;
+  systems_started_ = true;
+  for (const SystemInfo& info : SystemRegistry::Instance().Systems()) {
+    if (!info.create) continue;
+    std::unique_ptr<System> system = info.create();
+    if (!system) continue;
+    system->OnRegister(*this);
+    // OnRegister may have triggered a teardown; do not add to a dead list.
+    if (!systems_started_) return;
+    systems_.push_back(std::move(system));
+  }
+}
+
+void MapScene::StopSystems() {
+  if (!systems_started_) return;
+  // Clear the flag first so a nested StopSystems is a no-op, and move the list
+  // out so a callback cannot invalidate the loop (or the caller's snapshot).
+  systems_started_ = false;
+  std::vector<std::unique_ptr<System>> systems = std::move(systems_);
+  // Reverse registration order, so a system that depends on another is torn
+  // down first.
+  for (auto it = systems.rbegin(); it != systems.rend(); ++it) {
+    (*it)->OnShutdown(*this);
+  }
+}
+
+void MapScene::NotifyMapLoaded() {
+  if (!systems_started_) return;
+  CallbackScope callback_scope(this);
+  for (auto& system : systems_) system->OnMapLoaded(*this);
+}
+
+void MapScene::NotifyMapUnloading() {
+  if (!systems_started_) return;
+  CallbackScope callback_scope(this);
+  for (auto& system : systems_) system->OnMapUnloading(*this);
+}
+
+void MapScene::SimulatePhysics(int steps) {
+  GameScene::SimulatePhysics(steps);
+  if (mode_ != Mode::kPlay || !systems_started_) return;
+  // Post-physics runs outside OnTick, so it needs its own callback scope:
+  // ClearMap/SetProject/Instantiate must defer here too.
+  CallbackScope callback_scope(this);
+  // The tick has ended, so GetDeltaTime is the frame delta again; a
+  // post-physics system wants the fixed tick delta the behaviours saw.
+  const float dt = Time::GetFixedDeltaTime() * Time::GetTimeScale();
+  for (auto& system : systems_) {
+    if (system->GetPhase() == System::Phase::kPostPhysics) {
+      system->OnTick(*this, dt);
+    }
+  }
+  DestroyPending();
 }
 
 void MapScene::SetupAnimator(kEntityId entity) {
@@ -1404,7 +1540,11 @@ GameObject MapScene::InstantiateNode(const MapNode& node, GameObject parent,
   auto copy = Map::CloneTree(node);
   Map::RebaseNodePaths(*copy, path);
   std::vector<kEntityId> created;
-  kEntityId entity = BuildSubtree(*copy, parent_entity, path, created);
+  kEntityId entity = entt::null;
+  {
+    CloningScope cloning(cloning_runtime_node_);
+    entity = BuildSubtree(*copy, parent_entity, path, created);
+  }
   FinishCreated(created);
   return {this, entity};
 }
@@ -1429,7 +1569,11 @@ GameObject MapScene::InstantiatePrefab(std::string_view res_path,
     }
   }
   std::vector<kEntityId> created;
-  kEntityId entity = BuildSubtree(*copy, parent_entity, path, created);
+  kEntityId entity = entt::null;
+  {
+    CloningScope cloning(cloning_runtime_node_);
+    entity = BuildSubtree(*copy, parent_entity, path, created);
+  }
   if (world_space) {
     if (auto transform = object_manager_->GetProperty<Transform>(entity)) {
       transform->SetPosition(position);

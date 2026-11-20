@@ -23,8 +23,11 @@
 #include "input/input_manager.h"
 #include "physics_engine/physics_engine.h"
 #include "pobject/manager.h"
+#include "scripting/event_bus.h"
 
 namespace Mercury {
+
+class RenderHooks;
 
 namespace UI {
 struct UIDrawData;
@@ -322,13 +325,23 @@ class GameScene {
     return object_manager_->GetRegistry();
   }
 
+  // Typed publish/subscribe bus shared by this scene's behaviours and
+  // systems (see scripting/event_bus.h).
+  EventBus& GetEventBus() { return event_bus_; }
+  const EventBus& GetEventBus() const { return event_bus_; }
+  // Callbacks around the renderer's main frame, reachable from game code
+  // without the scene depending on the renderer (application/render_hooks.h).
+  RenderHooks& GetRenderHooks();
+
   void SetInputManager(InputManager*);
   void SetRenderHost(RenderHost* host) { render_host_ = host; }
 
   void QuitScene();
   bool ShouldQuit() const;
 
-  void SimulatePhysics(int steps);
+  // Steps the physics world. MapScene overrides it to run kPostPhysics systems
+  // after the step.
+  virtual void SimulatePhysics(int steps);
 
   virtual void ProcessOnFrame(float alpha);
   void OnTickBegin();
@@ -342,6 +355,7 @@ class GameScene {
   SceneLighting lighting_;
   glm::vec4 clear_color_ = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
   std::string skybox_path_;
+  EventBus event_bus_;
 
  private:
   float width_ = 0.0;

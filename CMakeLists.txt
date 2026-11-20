@@ -21,7 +21,19 @@ if (APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
             "Minimum supported macOS version")
 endif ()
 
-project(MercuryEngine LANGUAGES C CXX ASM)
+project(MercuryEngine VERSION 1.0.0 LANGUAGES C CXX ASM)
+
+# One version source. The generated version.h is what every engine component,
+# the extension ABI check and the SDK's package version use. A non-release
+# build carries a -dev suffix; extension compatibility is compared on
+# major.minor, so that suffix (and a patch release) never rejects a module.
+set(MERCURY_VERSION_STRING "${PROJECT_VERSION}")
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(MERCURY_VERSION_STRING "${PROJECT_VERSION}-dev")
+endif ()
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/mercury")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in"
+        "${CMAKE_BINARY_DIR}/generated/mercury/version.h" @ONLY)
 
 # The engine may be built as the top-level project or added to a game with
 # add_subdirectory(); this stays the engine checkout either way.
@@ -116,7 +128,6 @@ target_compile_definitions(mercury PUBLIC
         MERCURY_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         MERCURY_BUILD_DIR="${CMAKE_BINARY_DIR}"
-        MERCURY_BUILD_CONFIG="$<CONFIG>"
         MERCURY_MATERIAL_PATH="${CMAKE_BINARY_DIR}/materials"
         MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
         MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
@@ -223,6 +234,18 @@ if (MERCURY_BUILD_EDITOR)
     endif ()
     target_link_libraries(mercury_wx INTERFACE ${wxWidgets_LIBRARIES})
 
+    # The same include paths and flags without the wx libraries. Editor system
+    # modules use this: they resolve wx symbols against the running editor
+    # instead of linking a second copy of wxWidgets.
+    add_library(mercury_wx_headers INTERFACE)
+    target_include_directories(mercury_wx_headers INTERFACE
+            ${wxWidgets_INCLUDE_DIRS})
+    target_compile_definitions(mercury_wx_headers INTERFACE
+            ${wxWidgets_DEFINITIONS})
+    if (wxWidgets_CXX_FLAGS)
+        target_compile_options(mercury_wx_headers INTERFACE ${WX_CXX_FLAGS})
+    endif ()
+
     file(GLOB MERCURY_EDITOR_SOURCES CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/editor/*.cc")
     list(REMOVE_ITEM MERCURY_EDITOR_SOURCES
@@ -235,6 +258,21 @@ if (MERCURY_BUILD_EDITOR)
 
     add_executable(mercury_editor editor/main.cc)
     target_link_libraries(mercury_editor PRIVATE mercury_editor_lib)
+    # Editor systems are modules loaded at run time; their engine, editor and
+    # wx symbols resolve against this executable, so it exports them. Forcing
+    # the archives in also exports symbols the editor itself does not call.
+    if (APPLE)
+        target_link_options(mercury_editor PRIVATE "-Wl,-export_dynamic")
+        target_link_options(mercury_editor PRIVATE
+                "LINKER:-force_load,$<TARGET_FILE:mercury_editor_lib>"
+                "LINKER:-force_load,$<TARGET_FILE:mercury>")
+    elseif (UNIX)
+        target_link_options(mercury_editor PRIVATE "-rdynamic")
+        target_link_options(mercury_editor PRIVATE
+                "LINKER:--whole-archive"
+                "$<TARGET_FILE:mercury_editor_lib>"
+                "LINKER:--no-whole-archive")
+    endif ()
 endif ()
 
 # --------------------------------------------------------------------------
@@ -290,8 +328,10 @@ if (MERCURY_BUILD_TESTS)
             tests/obj_material_test.cc
             tests/parallel_load_test.cc
             tests/physics_constraints_test.cc
+            tests/player_args_test.cc
             tests/primitives_test.cc
             tests/process_test.cc
+            tests/project_settings_test.cc
             tests/reflection_test.cc
             tests/render_settings_test.cc
             tests/rust_bridge_test.cc
@@ -301,7 +341,12 @@ if (MERCURY_BUILD_TESTS)
             tests/test_paths.h
             tests/test_scripts.h
             tests/ui_test.cc
-            tests/user_path_test.cc)
+            tests/user_path_test.cc
+            tests/asset_importer_test.cc
+            tests/component_serialization_test.cc
+            tests/engine_sdk_dir_test.cc
+            tests/event_bus_test.cc
+            tests/system_registry_test.cc)
 
     mercury_add_test(example_projects_test
             tests/example_projects_test.cc
@@ -317,15 +362,79 @@ if (MERCURY_BUILD_TESTS)
         set_target_properties(editor_smoke PROPERTIES EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} editor_smoke)
 
+        # Unload-order regression: a module's custom inspector must be gone
+        # before its library would be unloaded. Needs a real wx frame, so it
+        # is a smoke executable like editor_smoke.
+        add_executable(editor_extension_unload_smoke
+                tests/editor_extension_unload_smoke.cc)
+        target_link_libraries(editor_extension_unload_smoke
+                PRIVATE mercury_editor_lib)
+        target_compile_definitions(editor_extension_unload_smoke PRIVATE
+                MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        set_target_properties(editor_extension_unload_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                editor_extension_unload_smoke)
+
+        # The New Script dialog is modal; this smoke drives it with CallAfter
+        # and creates all four kinds through EditorScene.
+        add_executable(new_script_dialog_smoke
+                tests/new_script_dialog_smoke.cc)
+        target_link_libraries(new_script_dialog_smoke
+                PRIVATE mercury_editor_lib)
+        set_target_properties(new_script_dialog_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                new_script_dialog_smoke)
+
         mercury_add_test(editor_test
                 tests/editor_templates_test.cc
+                tests/project_scaffold_test.cc
                 tests/test_paths.h)
         target_link_libraries(editor_test PRIVATE mercury_editor_lib)
+
+        mercury_add_test(project_trust_test
+                tests/project_trust_test.cc)
+        target_link_libraries(project_trust_test PRIVATE mercury_editor_lib)
 
         mercury_add_test(script_editor_test
                 tests/script_editor_test.cc
                 tests/test_paths.h)
         target_link_libraries(script_editor_test PRIVATE mercury_editor_lib)
+
+        # Tiny modules for editor_extension_test: one valid, one with a
+        # deliberately wrong ABI. They call no editor symbols.
+        function(mercury_add_test_extension TARGET)
+            add_library(${TARGET} MODULE
+                    tests/extensions/editor_test_extension.cc)
+            target_compile_features(${TARGET} PRIVATE cxx_std_20)
+            target_include_directories(${TARGET} PRIVATE
+                    "${CMAKE_CURRENT_SOURCE_DIR}/editor"
+                    $<TARGET_PROPERTY:mercury,INTERFACE_INCLUDE_DIRECTORIES>)
+            target_compile_definitions(${TARGET} PRIVATE
+                    $<TARGET_PROPERTY:mercury,INTERFACE_COMPILE_DEFINITIONS>)
+            target_link_libraries(${TARGET} PRIVATE mercury_wx_headers)
+            if (APPLE)
+                target_link_options(${TARGET} PRIVATE
+                        "-Wl,-undefined,dynamic_lookup")
+            endif ()
+            set_target_properties(${TARGET} PROPERTIES
+                    PREFIX "" SUFFIX ".mercury-extension")
+        endfunction()
+
+        mercury_add_test_extension(editor_test_extension)
+        mercury_add_test_extension(editor_test_extension_bad_abi)
+        target_compile_definitions(editor_test_extension_bad_abi PRIVATE
+                MERCURY_TEST_EXTENSION_ABI=999)
+
+        mercury_add_test(editor_extension_test
+                tests/editor_extension_test.cc)
+        target_link_libraries(editor_extension_test PRIVATE mercury_editor_lib)
+        target_compile_definitions(editor_extension_test PRIVATE
+                MERCURY_TEST_EXTENSION_PATH="$<TARGET_FILE:editor_test_extension>"
+                MERCURY_TEST_EXTENSION_BAD_ABI_PATH="$<TARGET_FILE:editor_test_extension_bad_abi>")
+        add_dependencies(editor_extension_test
+                editor_test_extension editor_test_extension_bad_abi)
     endif ()
 
     add_custom_target(check
@@ -335,6 +444,233 @@ if (MERCURY_BUILD_TESTS)
             USES_TERMINAL)
     add_dependencies(check mercury_materials)
 endif ()
+
+# --------------------------------------------------------------------------
+# SDK: headers, static archives and a relocatable CMake package
+#
+#   cmake --install <build> --prefix <prefix> --component sdk
+#
+# produces <prefix>/sdk/{include,lib,cmake}. scripts/package_macos.pl copies
+# the same tree into <app>/Contents/Resources/sdk.
+# --------------------------------------------------------------------------
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mercury/"
+        DESTINATION sdk/include/mercury
+        COMPONENT sdk
+        FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/editor/"
+        DESTINATION sdk/include/editor
+        COMPONENT sdk
+        FILES_MATCHING PATTERN "*.h")
+# wxWidgets headers, so editor systems build without a wx development install.
+# (The module still resolves wx symbols against the running editor.)
+# wxWidgets_INCLUDE_DIRS only has the setup.h directory on macOS; the headers
+# themselves come from the -I flags in wxWidgets_CXX_FLAGS.
+if (MERCURY_BUILD_EDITOR)
+    set(MERCURY_SDK_WX_INCLUDE_DIRS ${wxWidgets_INCLUDE_DIRS})
+    foreach (FLAG ${WX_CXX_FLAGS})
+        if (FLAG MATCHES "^-I(.+)$")
+            list(APPEND MERCURY_SDK_WX_INCLUDE_DIRS "${CMAKE_MATCH_1}")
+        endif ()
+    endforeach ()
+    list(REMOVE_DUPLICATES MERCURY_SDK_WX_INCLUDE_DIRS)
+    foreach (WX_INCLUDE ${MERCURY_SDK_WX_INCLUDE_DIRS})
+        if (EXISTS "${WX_INCLUDE}/wx/wx.h" OR EXISTS "${WX_INCLUDE}/wx/setup.h")
+            # Homebrew's wx header directory is a symlink; resolve it so the
+            # install rule copies the headers instead of failing on the link.
+            file(REAL_PATH "${WX_INCLUDE}" WX_INCLUDE_REAL)
+            install(DIRECTORY "${WX_INCLUDE_REAL}/"
+                    DESTINATION sdk/include COMPONENT sdk
+                    FILES_MATCHING PATTERN "*.h")
+        endif ()
+    endforeach ()
+endif ()
+install(DIRECTORY "${MERCURY_GENERATED_DIR}/"
+        DESTINATION sdk/include
+        COMPONENT sdk
+        FILES_MATCHING PATTERN "*.h")
+if (MERCURY_CXX_INCLUDE_DIR)
+    install(FILES "${MERCURY_CXX_INCLUDE_DIR}/cxx.h"
+            DESTINATION sdk/include COMPONENT sdk)
+endif ()
+
+# Only the third-party headers reachable from Mercury's public headers.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glfw/include/"
+        DESTINATION sdk/include COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/JoltPhysics/Jolt/"
+        DESTINATION sdk/include/Jolt COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/assimp/include/"
+        DESTINATION sdk/include COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/entt/src/entt/"
+        DESTINATION sdk/include/entt COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm/glm/"
+        DESTINATION sdk/include/glm COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/"
+        DESTINATION sdk/include/stb COMPONENT sdk)
+install(DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/angelscript/include/"
+        DESTINATION sdk/include COMPONENT sdk)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/add_on/"
+        DESTINATION sdk/include COMPONENT sdk)
+# Filament's headers (filament/, backend/, utils/, ...).
+foreach (INCLUDE_DIR
+        third_party/filament/filament/include
+        third_party/filament/filament/backend/include
+        third_party/filament/libs/utils/include
+        third_party/filament/libs/filabridge/include
+        third_party/filament/libs/filaflat/include
+        third_party/filament/libs/geometry/include
+        third_party/filament/libs/ibl/include
+        third_party/filament/libs/image/include
+        third_party/filament/libs/iblprefilter/include
+        third_party/filament/libs/math/include
+        third_party/filament/third_party/robin-map/include)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${INCLUDE_DIR}/"
+            DESTINATION sdk/include COMPONENT sdk)
+endforeach ()
+
+# Static archives. Filament builds in its own tree.
+install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/"
+        DESTINATION sdk/lib COMPONENT sdk
+        FILES_MATCHING PATTERN "*.a"
+        PATTERN "libmercury_editor_lib.a" EXCLUDE
+        PATTERN "libgtest.a" EXCLUDE
+        PATTERN "libgtest_main.a" EXCLUDE
+        PATTERN "libgmock.a" EXCLUDE
+        PATTERN "libgmock_main.a" EXCLUDE)
+if (EXISTS "${CMAKE_BINARY_DIR}/_deps/filament/out/lib")
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/_deps/filament/out/lib/"
+            DESTINATION sdk/lib COMPONENT sdk
+            FILES_MATCHING PATTERN "*.a")
+endif ()
+
+include(CMakePackageConfigHelpers)
+set(MERCURY_SDK_CONFIG_DIR "${CMAKE_BINARY_DIR}/sdk-config")
+# The in-tree link order; see cmake/MercuryConfig.cmake.in.
+set(MERCURY_SDK_LIBRARY_NAMES
+        libmercury.a
+        libmercury_angelscript.a
+        libmercury_jolt.a
+        libmercury_meshoptimizer.a
+        libmercury_miniaudio.a
+        libtinyxml2.a
+        libmercury_yoga.a
+        libassimp.a
+        libzlibstatic.a
+        libglfw3.a
+        libfilament.a
+        libbackend.a
+        libbluevk.a
+        libfilaflat.a
+        libfilabridge.a
+        libfilament-iblprefilter.a
+        libgeometry.a
+        libibl.a
+        libimage.a
+        libsmol-v.a
+        libutils.a
+        libzstd.a
+        libmercury_rust.a)
+configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryConfig.cmake.in"
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfig.cmake"
+        INSTALL_DESTINATION sdk/cmake)
+write_basic_package_version_file(
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfigVersion.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion)
+install(FILES
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfig.cmake"
+        "${MERCURY_SDK_CONFIG_DIR}/MercuryConfigVersion.cmake"
+        DESTINATION sdk/cmake COMPONENT sdk)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGameSdk.cmake"
+        DESTINATION sdk/cmake RENAME MercuryGame.cmake COMPONENT sdk)
+
+# A development editor configures and builds each project's own tree the same
+# way a packaged one does. Generate the package that points at this build tree
+# so `find_package(Mercury CONFIG)` works before anything is installed.
+set(MERCURY_DEV_SDK_DIR "${CMAKE_BINARY_DIR}/dev-sdk")
+file(MAKE_DIRECTORY "${MERCURY_DEV_SDK_DIR}")
+set(MERCURY_DEV_SDK_INCLUDE_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/mercury"
+        "${CMAKE_CURRENT_SOURCE_DIR}/editor"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glfw/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/JoltPhysics"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/assimp/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/entt/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/angelscript/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/add_on"
+        "${MERCURY_GENERATED_DIR}"
+        "${MERCURY_GENERATED_DIR}/mercury")
+if (MERCURY_CXX_INCLUDE_DIR)
+    list(APPEND MERCURY_DEV_SDK_INCLUDE_DIRS "${MERCURY_CXX_INCLUDE_DIR}")
+endif ()
+if (MERCURY_BUILD_EDITOR)
+    list(APPEND MERCURY_DEV_SDK_INCLUDE_DIRS ${MERCURY_SDK_WX_INCLUDE_DIRS})
+endif ()
+foreach (INCLUDE_DIR
+        third_party/filament/filament/include
+        third_party/filament/filament/backend/include
+        third_party/filament/libs/utils/include
+        third_party/filament/libs/filabridge/include
+        third_party/filament/libs/filaflat/include
+        third_party/filament/libs/geometry/include
+        third_party/filament/libs/ibl/include
+        third_party/filament/libs/image/include
+        third_party/filament/libs/iblprefilter/include
+        third_party/filament/libs/math/include
+        third_party/filament/third_party/robin-map/include)
+    list(APPEND MERCURY_DEV_SDK_INCLUDE_DIRS
+            "${CMAKE_CURRENT_SOURCE_DIR}/${INCLUDE_DIR}")
+endforeach ()
+
+# Archives that Filament builds in its own tree; everything else is in
+# ${CMAKE_BINARY_DIR}/lib.
+set(MERCURY_FILAMENT_SDK_ARCHIVES
+        libfilament.a
+        libbackend.a
+        libbluevk.a
+        libfilaflat.a
+        libfilabridge.a
+        libfilament-iblprefilter.a
+        libgeometry.a
+        libibl.a
+        libimage.a
+        libsmol-v.a
+        libutils.a
+        libzstd.a)
+set(MERCURY_DEV_SDK_LIBRARIES "")
+foreach (NAME ${MERCURY_SDK_LIBRARY_NAMES})
+    if (NAME IN_LIST MERCURY_FILAMENT_SDK_ARCHIVES)
+        set(ARCHIVE "${CMAKE_BINARY_DIR}/_deps/filament/out/lib/${NAME}")
+    else ()
+        set(ARCHIVE "${CMAKE_BINARY_DIR}/lib/${NAME}")
+    endif ()
+    list(APPEND MERCURY_DEV_SDK_LIBRARIES "${ARCHIVE}")
+endforeach ()
+
+file(WRITE "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        "# Generated for this engine build tree; do not edit.\n"
+        "# The editor passes -DMercury_DIR=<this folder> to project builds.\n")
+file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        "set(Mercury_INCLUDE_DIRS\n")
+foreach (DIR ${MERCURY_DEV_SDK_INCLUDE_DIRS})
+    file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake" "  \"${DIR}\"\n")
+endforeach ()
+file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        ")\nset(Mercury_LIBRARIES\n")
+foreach (LIB ${MERCURY_DEV_SDK_LIBRARIES})
+    file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake" "  \"${LIB}\"\n")
+endforeach ()
+file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        ")\n"
+        "include(CMakeFindDependencyMacro)\n"
+        "find_dependency(Threads)\n"
+        "find_dependency(Vulkan)\n"
+        "include(\"${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGameSdk.cmake\")\n")
 
 # --------------------------------------------------------------------------
 # Developer convenience

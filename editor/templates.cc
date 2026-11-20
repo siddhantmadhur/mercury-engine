@@ -13,6 +13,7 @@
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
+#include "project_scaffold.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury::Templates {
@@ -34,7 +35,7 @@ bool WriteText(const fs::path& file, const std::string& text,
   return true;
 }
 
-std::string ToTargetName(const std::string& name) {
+std::string ToTargetSlug(const std::string& name) {
   std::string out;
   for (char c : name) {
     if (std::isalnum(static_cast<unsigned char>(c))) {
@@ -53,15 +54,179 @@ std::string ToTargetName(const std::string& name) {
 
 }  // namespace
 
+const char* ScriptKindName(ScriptKind kind) {
+  switch (kind) {
+    case ScriptKind::kAngelScript:
+      return "angel_script";
+    case ScriptKind::kCppBehaviour:
+      return "cpp_behaviour";
+    case ScriptKind::kCppSystem:
+      return "cpp_system";
+    case ScriptKind::kCppEditorSystem:
+      return "cpp_editor_system";
+  }
+  return "angel_script";
+}
+
+ScriptKind ScriptKindFromName(std::string_view name) {
+  if (name == "cpp_behaviour") return ScriptKind::kCppBehaviour;
+  if (name == "cpp_system") return ScriptKind::kCppSystem;
+  if (name == "cpp_editor_system") return ScriptKind::kCppEditorSystem;
+  return ScriptKind::kAngelScript;
+}
+
+bool IsCppScript(ScriptKind kind) { return kind != ScriptKind::kAngelScript; }
+
+bool IsEditorSystem(ScriptKind kind) {
+  return kind == ScriptKind::kCppEditorSystem;
+}
+
+ScriptPaths GetScriptPaths(const fs::path& project_root, ScriptKind kind,
+                           const std::string& class_name) {
+  const std::string snake = ToSnakeCase(class_name);
+  ScriptPaths paths;
+  if (kind == ScriptKind::kAngelScript) {
+    paths.source = project_root / "scripts" / (snake + ".as");
+    return paths;
+  }
+  const fs::path dir =
+      project_root / (kind == ScriptKind::kCppEditorSystem ? "system" : "src");
+  paths.header = dir / (snake + ".h");
+  paths.source = dir / (snake + ".cc");
+  return paths;
+}
+
 bool IsValidIdentifier(const std::string& name) {
-  if (name.empty()) return false;
+  return ValidateScriptName(name, ScriptKind::kAngelScript).empty();
+}
+
+std::string ValidateScriptName(const std::string& name, ScriptKind /*kind*/) {
+  if (name.empty()) return "enter a class name";
+  if (name.size() > 64) return "names are limited to 64 characters";
   if (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_') {
-    return false;
+    return "the name must start with a letter or underscore";
   }
   for (char c : name) {
-    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') return false;
+    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') {
+      return "only letters, digits and underscores are allowed";
+    }
   }
-  return true;
+  if (name[0] == '_') return "names may not start with an underscore";
+  if (name.find("__") != std::string::npos) {
+    return "names may not contain two consecutive underscores";
+  }
+  static constexpr std::string_view kCppKeywords[] = {"alignas",
+                                                      "alignof",
+                                                      "and",
+                                                      "and_eq",
+                                                      "asm",
+                                                      "auto",
+                                                      "bitand",
+                                                      "bitor",
+                                                      "bool",
+                                                      "break",
+                                                      "case",
+                                                      "catch",
+                                                      "char",
+                                                      "char8_t",
+                                                      "char16_t",
+                                                      "char32_t",
+                                                      "class",
+                                                      "co_await",
+                                                      "co_return",
+                                                      "co_yield",
+                                                      "compl",
+                                                      "concept",
+                                                      "const",
+                                                      "consteval",
+                                                      "constexpr",
+                                                      "constinit",
+                                                      "const_cast",
+                                                      "continue",
+                                                      "decltype",
+                                                      "default",
+                                                      "delete",
+                                                      "do",
+                                                      "double",
+                                                      "dynamic_cast",
+                                                      "else",
+                                                      "enum",
+                                                      "explicit",
+                                                      "export",
+                                                      "extern",
+                                                      "false",
+                                                      "float",
+                                                      "for",
+                                                      "friend",
+                                                      "goto",
+                                                      "if",
+                                                      "inline",
+                                                      "int",
+                                                      "long",
+                                                      "mutable",
+                                                      "namespace",
+                                                      "new",
+                                                      "noexcept",
+                                                      "not",
+                                                      "not_eq",
+                                                      "nullptr",
+                                                      "operator",
+                                                      "or",
+                                                      "or_eq",
+                                                      "private",
+                                                      "protected",
+                                                      "public",
+                                                      "register",
+                                                      "reinterpret_cast",
+                                                      "requires",
+                                                      "return",
+                                                      "short",
+                                                      "signed",
+                                                      "sizeof",
+                                                      "static",
+                                                      "static_assert",
+                                                      "static_cast",
+                                                      "struct",
+                                                      "switch",
+                                                      "template",
+                                                      "this",
+                                                      "thread_local",
+                                                      "throw",
+                                                      "true",
+                                                      "try",
+                                                      "typedef",
+                                                      "typeid",
+                                                      "typename",
+                                                      "union",
+                                                      "unsigned",
+                                                      "using",
+                                                      "virtual",
+                                                      "void",
+                                                      "volatile",
+                                                      "wchar_t",
+                                                      "while",
+                                                      "xor",
+                                                      "xor_eq",
+                                                      "Behaviour",
+                                                      "System",
+                                                      "EditorExtension",
+                                                      "AppHook"};
+  for (std::string_view keyword : kCppKeywords) {
+    if (name == keyword) {
+      if (keyword == "Behaviour" || keyword == "System" ||
+          keyword == "EditorExtension" || keyword == "AppHook") {
+        return "\"" + name + "\" is a Mercury base type; choose another name";
+      }
+      return "\"" + name + "\" is a C++ keyword";
+    }
+  }
+  return {};
+}
+
+const char* ScriptKindFolder(ScriptKind kind) {
+  if (kind == ScriptKind::kAngelScript) return "scripts";
+  if (kind == ScriptKind::kCppEditorSystem) return "system";
+  return "src";
 }
 
 std::string ToSnakeCase(const std::string& name) {
@@ -86,6 +251,8 @@ std::string ToSnakeCase(const std::string& name) {
   }
   return out;
 }
+
+std::string ToTargetName(const std::string& name) { return ToTargetSlug(name); }
 
 std::string NewMapText(const std::string& root_name, bool is_3d) {
   Map map;
@@ -149,6 +316,8 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
     return {};
   }
   fs::create_directories(root / "scripts", ec);
+  fs::create_directories(root / "src", ec);
+  fs::create_directories(root / "system", ec);
   fs::create_directories(root / "assets", ec);
   fs::create_directories(root / "maps", ec);
   if (ec) {
@@ -165,10 +334,17 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
   }
 
   // Build output and editor caches are generated, so keep them out of git.
+  // .clangd tracks the editor that last opened the project, and the compile
+  // database link is regenerated after each configure.
   if (!WriteText(root / ".gitignore",
-                 "# Build output and editor caches\n.mercury/\n", error)) {
+                 "# Build output and editor caches\n"
+                 ".mercury/\n"
+                 ".clangd\n"
+                 "compile_commands.json\n",
+                 error)) {
     return {};
   }
+  EditorUI::ScaffoldProject(*project);
   if (!WriteText(root / "maps" / "main.mmap", NewMapText(name, is_3d), error)) {
     return {};
   }
@@ -179,21 +355,167 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
   return mproj;
 }
 
+namespace {
+
+std::string CppBehaviourHeader(const std::string& name) {
+  return std::format(
+      R"(#pragma once
+
+#include <scripting/behaviour.h>
+
+// A C++ gameplay component. MERCURY_SCRIPT in the .cc registers it; the
+// editor lists it under Add Component after the project builds.
+class {0} : public Mercury::Behaviour {{
+ public:
+  void OnStart() override;
+  void OnFrame(double dt) override;
+
+  // Fields the Inspector shows and the map saves (see scripting/reflection.h):
+  // float speed_ = 1.0f;
+  //
+  // void Reflect(Mercury::Reflector& r) override {{
+  //   r.Field("speed", speed_).Tooltip("World units per second");
+  // }}
+}};
+)",
+      name);
+}
+
+std::string CppBehaviourSource(const std::string& name,
+                               const std::string& snake) {
+  return std::format(
+      R"(#include "{1}.h"
+
+// Makes the class available to maps as [component type="{0}"].
+MERCURY_SCRIPT({0});
+
+void {0}::OnStart() {{}}
+
+void {0}::OnFrame(double dt) {{
+  (void)dt;
+}}
+)",
+      name, snake);
+}
+
+std::string CppSystemHeader(const std::string& name) {
+  return std::format(
+      R"(#pragma once
+
+#include <scripting/system.h>
+
+// A scene-wide subsystem: one instance per scene, created when the scene
+// starts. MERCURY_SYSTEM in the .cc registers it.
+class {0} : public Mercury::System {{
+ public:
+  // Network receive runs before the behaviours; network send after physics:
+  // Phase GetPhase() const override {{ return Phase::kPostPhysics; }}
+
+  void OnRegister(Mercury::MapScene& scene) override;
+  void OnTick(Mercury::MapScene& scene, double dt) override;
+}};
+)",
+      name);
+}
+
+std::string CppSystemSource(const std::string& name, const std::string& snake) {
+  return std::format(
+      R"(#include "{1}.h"
+
+// Makes the system available to every scene.
+MERCURY_SYSTEM({0});
+
+void {0}::OnRegister(Mercury::MapScene& scene) {{
+  (void)scene;
+}}
+
+void {0}::OnTick(Mercury::MapScene& scene, double dt) {{
+  (void)scene;
+  (void)dt;
+}}
+)",
+      name, snake);
+}
+
+std::string CppEditorSystemHeader(const std::string& name) {
+  return std::format(
+      R"(#pragma once
+
+#include <extension.h>
+
+// The editor loads this module while the project is open. Everything it
+// registers through EditorContext is removed when the module unloads.
+class {0} : public Mercury::EditorUI::EditorExtension {{
+ public:
+  void OnLoad(Mercury::EditorUI::EditorContext& context) override;
+}};
+)",
+      name);
+}
+
+std::string CppEditorSystemSource(const std::string& name,
+                                  const std::string& snake) {
+  return std::format(
+      R"(#include "{1}.h"
+
+#include <console.h>
+
+// Makes the editor create this extension from the system/ module.
+MERCURY_EDITOR_EXTENSION({0});
+
+void {0}::OnLoad(Mercury::EditorUI::EditorContext& context) {{
+  auto* console = &context.GetConsole();
+  // Register UI through the context, never by binding wx handlers directly:
+  // the context removes this menu item while the module is still mapped.
+  context.AddMenuItem({{.menu = "Extensions",
+                        .label = "{0}",
+                        .callback = [console]() {{
+                          console->Info("Hello from {0}");
+                        }}}});
+}}
+)",
+      name, snake);
+}
+
+}  // namespace
+
 fs::path CreateScript(const fs::path& project_root,
                       const std::string& class_name, std::string* error) {
-  if (!IsValidIdentifier(class_name)) {
-    if (error)
-      *error = "\"" + class_name + "\" is not a valid AngelScript class name";
+  return CreateScript(project_root, class_name, ScriptKind::kAngelScript,
+                      error);
+}
+
+fs::path CreateScript(const fs::path& project_root,
+                      const std::string& class_name, ScriptKind kind,
+                      std::string* error) {
+  const std::string reason = ValidateScriptName(class_name, kind);
+  if (!reason.empty()) {
+    if (error) {
+      *error = "\"" + class_name + "\" is not a valid " +
+               (IsCppScript(kind) ? "C++" : "AngelScript") +
+               " class name: " + reason;
+    }
     return {};
   }
-  const fs::path source =
-      project_root / "scripts" / (ToSnakeCase(class_name) + ".as");
-  if (fs::exists(source)) {
-    if (error) *error = source.filename().string() + " already exists";
+
+  std::string folder_error;
+  if (os::EnsureProjectContentDir(project_root, ScriptKindFolder(kind),
+                                  &folder_error)
+          .empty()) {
+    if (error) *error = folder_error;
     return {};
   }
-  const std::string text = std::format(
-      R"([script]
+
+  const ScriptPaths paths = GetScriptPaths(project_root, kind, class_name);
+  if (kind == ScriptKind::kAngelScript) {
+    std::error_code ec;
+    if (fs::symlink_status(paths.source, ec).type() !=
+        fs::file_type::not_found) {
+      if (error) *error = paths.source.filename().string() + " already exists";
+      return {};
+    }
+    const std::string text = std::format(
+        R"([script]
 class {0} : Behaviour
 {{
     [field tooltip="Shown in the Inspector and saved in the map."]
@@ -203,9 +525,47 @@ class {0} : Behaviour
     void onTick(double dt) {{}}
 }}
 )",
-      class_name);
-  if (!WriteText(source, text, error)) return {};
-  return source;
+        class_name);
+    if (!WriteText(paths.source, text, error)) return {};
+    return paths.source;
+  }
+
+  // Never overwrite: a cloned project could contain either file already.
+  std::error_code ec;
+  for (const fs::path& file : {paths.header, paths.source}) {
+    if (fs::symlink_status(file, ec).type() != fs::file_type::not_found) {
+      if (error) *error = file.filename().string() + " already exists";
+      return {};
+    }
+  }
+
+  const std::string snake = ToSnakeCase(class_name);
+  std::string header;
+  std::string source;
+  switch (kind) {
+    case ScriptKind::kCppBehaviour:
+      header = CppBehaviourHeader(class_name);
+      source = CppBehaviourSource(class_name, snake);
+      break;
+    case ScriptKind::kCppSystem:
+      header = CppSystemHeader(class_name);
+      source = CppSystemSource(class_name, snake);
+      break;
+    case ScriptKind::kCppEditorSystem:
+      header = CppEditorSystemHeader(class_name);
+      source = CppEditorSystemSource(class_name, snake);
+      break;
+    case ScriptKind::kAngelScript:
+      break;
+  }
+  if (!WriteText(paths.header, header, error)) return {};
+  if (!WriteText(paths.source, source, error)) {
+    // Do not leave half a component behind.
+    std::error_code remove_ec;
+    fs::remove(paths.header, remove_ec);
+    return {};
+  }
+  return paths.source;
 }
 
 bool CreateUxml(const fs::path& file) {

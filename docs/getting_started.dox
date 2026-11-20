@@ -125,14 +125,22 @@ my_game/
   my_game.mproj          project settings: name, main map, window size, ...
   maps/main.mmap         the main map: nodes and their components
   scripts/spinner.as     AngelScript gameplay code (optional)
-  scripts/spinner.cc     C++ gameplay code (optional, needs a build target)
+  src/spinner.h          C++ gameplay code (optional; compiled into the game)
+  src/spinner.cc
+  system/my_tool.h       editor extension modules (optional; loaded by the editor)
+  system/my_tool.cc
   assets/white.masset    materials, physics materials and other assets
   ui/hud.uxml            optional UI Toolkit documents
-  .mercury/              generated (scripts schema and build caches)
+  CMakeLists.txt         generated once, then owned by the project
+  CMakePresets.json      generated once, then owned by the project
+  .clangd                generated on every project open
+  .mercury/              generated (schema, directory stamp, build trees)
 @endcode
 
-`.mercury/` and `Builds/` are generated. Do not commit them; new projects
-include a `.gitignore` that ignores `.mercury/`.
+`.mercury/`, `.clangd`, `compile_commands.json` and `Builds/` are generated.
+Do not commit them; new projects include a `.gitignore` that ignores them.
+`src/` is linked into the game executable; `system/` is a dynamic module the
+editor loads.
 
 A minimal `.mproj` is:
 
@@ -197,9 +205,11 @@ exist yet. Use `onStart()` or `awake()` instead.
 
 @section getting_started_add_script Add the script in the editor
 
-1. Create `scripts/spinner.as` in the Project Browser (**Create > Script...**
-   also writes a template) and press **F7** (**Project > Build Scripts**) so
-   the new class appears in the Inspector's component list.
+1. In the Project Browser, **Create > Script...** opens the New Script dialog
+   (or write `scripts/spinner.as` by hand). It can create an AngelScript
+   Behaviour, a C++ Behaviour, a C++ System or a C++ Editor System, previews
+   the files, and refuses to overwrite. Then press **F7** (**Project > Build
+   Scripts**) so the new class appears in the Inspector's component list.
 2. Open the project and select the object that should spin in the
    **Hierarchy**; the new 3D template already has a **Cube**.
 3. In the **Inspector**, press **Add Component** and choose **Spinner**.
@@ -253,16 +263,19 @@ aborted as an infinite loop.
 @section getting_started_cpp Writing gameplay in C++
 
 AngelScript is optional. A project can link C++ gameplay into its own
-executable, and a project may mix C++ and AngelScript components. A C++ script
-is a class deriving from @ref Mercury::Behaviour, registered with
-`MERCURY_SCRIPT`:
+executable, and a project may mix C++ and AngelScript components. C++ scripts
+live in `src/`; the editor's **New Script** dialog creates the pair of files
+from a template. The C++ counterpart of the .as script above is:
 
 @code{.cpp}
-// scripts/spinner.h
-#include "scripting/behaviour.h"
+// src/spinner.h
+#pragma once
+
+#include <scripting/behaviour.h>
 
 class Spinner : public Mercury::Behaviour {
  public:
+  // The counterpart of [field tooltip="..."].
   void Reflect(Mercury::Reflector& r) override {
     r.Field("speed", speed).Tooltip("Degrees per second");
   }
@@ -276,43 +289,68 @@ class Spinner : public Mercury::Behaviour {
 @endcode
 
 @code{.cpp}
-// scripts/spinner.cc
+// src/spinner.cc
 #include "spinner.h"
 
 MERCURY_SCRIPT(Spinner);
 @endcode
 
-`Reflect` works exactly like `[field]` in AngelScript: it describes the
-Inspector fields and the values saved in the map. The callbacks are the C++
+The class name is the component name in maps and the Inspector, exactly as in
+AngelScript; `Reflect` replaces `[field]`, and the callbacks are the C++
 names (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
 `OnCollisionEnter`, ...). A reflected struct registered with
 `MERCURY_DATA_ASSET(Type)` is the C++ equivalent of `[dataAsset]`.
 
-A C++ project builds its own player with the `mercury_add_game` CMake function:
+A C++ project builds its own player. The editor writes a `CMakeLists.txt` the
+first time the project opens (and only then, so you can edit it):
 
 @code{.cmake}
 # my_game/CMakeLists.txt
+cmake_minimum_required(VERSION 3.25)
+project(my_game CXX)
+
+find_package(Mercury CONFIG REQUIRED)
 mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
+mercury_add_editor_system(my_game_systems PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
 @endcode
 
-The function compiles every `.cc`/`.cpp` under the package's `scripts/`
-folder, links the engine, and generates a `main()` that calls
-@ref Mercury::RunPlayer. Name the executable in the project file so the editor
-knows how to build and run it:
+Name the executable in the project file so the editor knows what to build:
 
 @code{.ini}
 [build]
 target = "my_game"
 @endcode
 
-The editor's **Build Scripts** and **Play** then run `cmake --build` for the
-target, ask the executable for its script list (`--dump-schema`), and launch
-it. Without `[build] target`, the shared `mercury_player` compiles `.as`
-scripts at run time as before. To run the C++ example:
+**Build Scripts** and **Play** configure and build the project's own tree in
+`.mercury/build/debug` against the SDK the editor is running from. The first
+native build asks for trust (see @ref cpp_api_trust); a trusted background
+reconfigure keeps `compile_commands.json` and clangd current when you add
+files. Without `[build] target`, the project keeps using the shared
+`mercury_player` and its AngelScript runtime. The generated `.clangd` and the
+LSP setup are described in @ref cpp_api_sdk.
+
+C++ is not limited to components. Scenes can run **Systems** (one instance per
+scene, with `kPreTick`/`kTick`/`kPostTick`/`kPostPhysics` phases),
+process-wide **AppHooks** can read custom command-line options, and
+**RenderHooks** can change Filament view options. `examples/cpp_hello` shows
+all three:
 
 @code{.sh}
-./build/release/bin/cpp_hello
+./build/release/bin/cpp_hello examples/cpp_hello/cpp_hello.mproj
+# read a custom game argument and toggle bloom with F2
+./build/release/bin/cpp_hello examples/cpp_hello/cpp_hello.mproj --greeting "hi"
 @endcode
+
+`src/hello_system.cc` publishes and subscribes through the scene's EventBus,
+`src/hello_app_hook.cc` reads `--greeting`, and `src/hello_render.cc` installs
+a render hook and toggles Filament bloom when you press **F2** in-game. See
+@ref cpp_api_systems for the APIs and the rest of the C++ surface.
+
+Editor tools are C++ too: **Create > Editor System...** writes a module into
+`system/` using @ref Mercury::EditorUI::EditorExtension. It is built as part of
+the project and loaded by the editor while the project is open; see
+@ref cpp_api_editor_systems. The `examples/cpp_hello/system/hello_panel.cc`
+panel and menu item are a complete example.
 
 @section getting_started_next Where to go next
 

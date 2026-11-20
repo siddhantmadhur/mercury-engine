@@ -8,6 +8,9 @@
 #include <cctype>
 #include <system_error>
 
+#include "os/filesystem.h"
+#include "version.h"
+
 namespace Mercury {
 
 bool IsResPath(std::string_view path) { return path.starts_with(kResPrefix); }
@@ -28,6 +31,19 @@ std::shared_ptr<Project> Project::Load(const fs::path& mproj_file,
   }
   project->file_ = file;
   project->root_ = file.parent_path();
+  if (auto build = project->document_.Find("build")) {
+    for (const char* key : {"target", "systems_target"}) {
+      const std::string value = build->properties.GetString(key);
+      if (!value.empty() && !IsValidTargetName(value)) {
+        if (error) {
+          *error = file.string() + ": invalid [build] " + key + " \"" + value +
+                   "\" (allowed: letters, digits, '_', '.', '+', '-'; cannot "
+                   "start with '-')";
+        }
+        return nullptr;
+      }
+    }
+  }
   return project;
 }
 
@@ -40,7 +56,7 @@ std::shared_ptr<Project> Project::Create(const fs::path& mproj_file,
   auto& section = project->GetOrAddSection("project");
   section.properties.Set("name", name);
   section.properties.Set("main_map", "res://maps/main.mmap");
-  section.properties.Set("engine_version", "dev");
+  section.properties.Set("engine_version", MERCURY_VERSION_STRING);
   auto& window = project->GetOrAddSection("window");
   window.properties.Set("title", name);
   window.properties.Set("width", 1280);
@@ -49,6 +65,10 @@ std::shared_ptr<Project> Project::Create(const fs::path& mproj_file,
 }
 
 bool Project::Save() const { return mtext::SaveFile(file_, document_); }
+
+fs::path Project::EnsureCacheDir(std::string* error) const {
+  return os::EnsureProjectCacheDir(root_, error);
+}
 
 mtext::Section& Project::GetOrAddSection(std::string_view tag) {
   if (auto section = document_.Find(tag)) return *section;
@@ -108,11 +128,44 @@ void Project::SetBuildOutput(std::string path) {
 
 std::string Project::GetBuildTarget() const {
   auto section = document_.Find("build");
-  return section ? section->properties.GetString("target") : "";
+  if (!section) return "";
+  const std::string target = section->properties.GetString("target");
+  return IsValidTargetName(target) ? target : "";
 }
 
-void Project::SetBuildTarget(std::string target) {
+bool Project::SetBuildTarget(std::string target) {
+  if (!target.empty() && !IsValidTargetName(target)) return false;
   GetOrAddSection("build").properties.Set("target", std::move(target));
+  return true;
+}
+
+bool Project::IsValidTargetName(std::string_view name) {
+  if (name.empty() || name.size() > 128 || name == "." || name == ".." ||
+      name.front() == '-') {
+    return false;
+  }
+  for (char c : name) {
+    const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                         (c >= '0' && c <= '9') || c == '_' || c == '.' ||
+                         c == '+' || c == '-';
+    if (!allowed) return false;
+  }
+  return true;
+}
+
+std::string Project::GetBuildSystemsTarget() const {
+  auto section = document_.Find("build");
+  if (section) {
+    const std::string explicit_target =
+        section->properties.GetString("systems_target");
+    if (!explicit_target.empty()) {
+      // Reject rather than fall back: a malformed explicit target must not
+      // silently turn into the default one.
+      return IsValidTargetName(explicit_target) ? explicit_target : "";
+    }
+  }
+  const std::string target = GetBuildTarget();
+  return target.empty() ? "" : target + "_systems";
 }
 
 std::string Project::GetRenderAntiAliasing() const {

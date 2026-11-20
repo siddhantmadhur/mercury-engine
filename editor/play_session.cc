@@ -11,6 +11,7 @@
 #include "cmake_build.h"
 #include "editor_settings.h"
 #include "os/filesystem.h"
+#include "project_scaffold.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury {
@@ -18,7 +19,9 @@ namespace Mercury {
 namespace fs = std::filesystem;
 
 fs::path PlaySession::SchemaPath(const Project& project) {
-  return project.GetCacheDir() / "scripts.mschema";
+  const fs::path cache = project.EnsureCacheDir();
+  if (cache.empty()) return {};
+  return cache / "scripts.mschema";
 }
 
 void PlaySession::Play(const Project& project,
@@ -52,22 +55,68 @@ void PlaySession::Begin(const Project& project, bool run) {
   if (IsBusy()) return;
   project_root_ = project.GetRoot();
   project_file_ = project.GetFile();
-  schema_path_ = SchemaPath(project);
   working_dir_ = project_root_;
   build_target_ = project.GetBuildTarget();
   native_ = !build_target_.empty();
+  built_this_session_ = false;
   run_after_build_ = run;
   if (native_) {
-    working_dir_ = cmake_build::BuildDir();
-    std::error_code ec;
-    if (working_dir_.empty() ||
-        !fs::exists(working_dir_ / "CMakeCache.txt", ec)) {
+    // Building the project's CMake tree runs project code at configure time.
+    // The UI asks for trust first; this gate makes a caller that skipped the
+    // prompt fail closed.
+    if (!settings_.IsProjectTrusted(project_root_)) {
       Finish(
-          "This project names a C++ build target, but the engine has no "
-          "configured CMake build directory. Run `cmake --preset release` in "
-          "the engine checkout first.",
+          "This project is not trusted, so its C++ build was not run. Use "
+          "Project > Trust Editor Systems and accept the prompt first.",
           true);
       return;
+    }
+  }
+
+  // The schema and script build output live under .mercury. Refuse a symlink
+  // there so nothing is written outside the project.
+  std::string cache_error;
+  const fs::path cache = project.EnsureCacheDir(&cache_error);
+  if (cache.empty()) {
+    Finish("Project cache: " + cache_error, true);
+    return;
+  }
+  schema_path_ = cache / "scripts.mschema";
+  std::error_code cache_ec;
+  if (fs::is_symlink(fs::symlink_status(schema_path_, cache_ec))) {
+    fs::remove(schema_path_, cache_ec);
+    console_.Warn("Removed a symlink at " + schema_path_.string());
+  }
+
+  if (native_) {
+    const fs::path sdk_cmake = cmake_build::SdkCmakeDir();
+    if (sdk_cmake.empty()) {
+      Finish(
+          "This project names a C++ build target, but the editor's SDK has no "
+          "CMake package. A development checkout must be configured (and "
+          "built) once; a packaged editor should include Contents/Resources/"
+          "sdk.",
+          true);
+      return;
+    }
+    std::string build_error;
+    build_dir_ =
+        os::EnsureProjectBuildDir(project_root_, "debug", &build_error);
+    if (build_dir_.empty()) {
+      Finish("Project build: " + build_error, true);
+      return;
+    }
+    working_dir_ = build_dir_;
+    if (!cmake_build::TryAcquireProjectBuild(project_root_)) {
+      Finish(
+          "A project build is already running. Wait for it to finish before "
+          "pressing Play.",
+          true);
+      return;
+    }
+    holds_build_lock_ = true;
+    if (cmake_build::NeedsConfigure(project_root_, build_dir_)) {
+      console_.Info("Configuring the project build in " + build_dir_.string());
     }
   } else if (PlayerPath().empty()) {
     Finish(
@@ -100,8 +149,15 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
 
 bool PlaySession::StartBuild() {
   std::vector<std::string> args;
+  configuring_ = false;
   if (native_) {
-    args = cmake_build::BuildArguments(build_target_);
+    if (cmake_build::NeedsConfigure(project_root_, build_dir_)) {
+      configuring_ = true;
+      args = cmake_build::ConfigureArguments(project_root_, build_dir_,
+                                             cmake_build::SdkCmakeDir());
+    } else {
+      args = cmake_build::BuildArguments(build_dir_, build_target_);
+    }
   } else {
     args = {PlayerPath().string(), project_file_.string(), "--build-scripts"};
   }
@@ -111,9 +167,15 @@ bool PlaySession::StartBuild() {
 }
 
 bool PlaySession::DumpSchema() {
+  if (native_ && !built_this_session_) {
+    console_.Error(
+        "Refusing to run a game executable that this Play session did not "
+        "build.");
+    return false;
+  }
   std::vector<std::string> args;
   if (native_) {
-    args = {cmake_build::Executable(build_target_).string(),
+    args = {cmake_build::ProjectExecutable(build_dir_, build_target_).string(),
             project_file_.string(), "--dump-schema", schema_path_.string()};
   } else {
     args = {PlayerPath().string(), project_file_.string(), "--dump-schema",
@@ -143,9 +205,15 @@ bool PlaySession::DumpSchema() {
 }
 
 bool PlaySession::StartGame() {
+  if (native_ && !built_this_session_) {
+    console_.Error(
+        "Refusing to run a game executable that this Play session did not "
+        "build.");
+    return false;
+  }
   std::vector<std::string> args;
   if (native_) {
-    args = {cmake_build::Executable(build_target_).string(),
+    args = {cmake_build::ProjectExecutable(build_dir_, build_target_).string(),
             project_file_.string()};
   } else {
     args = {PlayerPath().string(), project_file_.string()};
@@ -166,6 +234,10 @@ bool PlaySession::StartGame() {
 }
 
 void PlaySession::Finish(const std::string& message, bool error) {
+  if (holds_build_lock_) {
+    cmake_build::ReleaseProjectBuild(project_root_);
+    holds_build_lock_ = false;
+  }
   if (!message.empty()) {
     if (error) {
       console_.Error(message);
@@ -178,6 +250,10 @@ void PlaySession::Finish(const std::string& message, bool error) {
 
 void PlaySession::Stop() {
   if (!process_) {
+    if (holds_build_lock_) {
+      cmake_build::ReleaseProjectBuild(project_root_);
+      holds_build_lock_ = false;
+    }
     state_ = State::kIdle;
     return;
   }
@@ -203,7 +279,24 @@ void PlaySession::Update() {
 
   switch (state_) {
     case State::kBuilding:
+      if (configuring_) {
+        if (code != 0) {
+          return Finish("Build configuration failed: fix the errors above",
+                        true);
+        }
+        configuring_ = false;
+        EditorUI::RefreshProjectCompileCommands(project_root_);
+        // The project's CMakeLists and presets are current now; the build
+        // step follows as its own child process.
+        StartBuild();
+        break;
+      }
       if (code != 0) return Finish("Build failed: fix the errors above", true);
+      if (holds_build_lock_) {
+        cmake_build::ReleaseProjectBuild(project_root_);
+        holds_build_lock_ = false;
+      }
+      built_this_session_ = true;
       DumpSchema();
       if (run_after_build_) {
         console_.Info("Build succeeded; starting the game");

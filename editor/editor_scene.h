@@ -34,6 +34,7 @@
 #include "project/project.h"
 #include "release_build.h"
 #include "scene/map_scene.h"
+#include "templates.h"
 #include "ui_builder.h"
 
 namespace Mercury {
@@ -205,6 +206,11 @@ class EditorScene : public MapScene {
       const std::vector<std::string>& extensions) const;
   void CreateAsset(const std::filesystem::path& dir, const std::string& type);
   bool CreateScript(const std::string& class_name);
+  // Creates a script of `kind`, writing src/, system/ or scripts/. C++ kinds
+  // get a default [build] target when the project has none. Opens the .cc/.as
+  // only when `open_after_create` is set.
+  bool CreateScript(Templates::ScriptKind kind, const std::string& class_name,
+                    bool open_after_create);
   bool CreateFolder(const std::filesystem::path& dir, const std::string& name);
   bool DeleteProjectPath(const std::filesystem::path& target);
   void OpenInExternalEditor(const std::filesystem::path& file);
@@ -282,6 +288,12 @@ class EditorScene : public MapScene {
   };
 
   void FinishModelImport();
+  // A background `cmake -S ... -B ...` after creating C++ files, so
+  // compile_commands.json (and clangd) sees them without waiting for Play.
+  // Only trusted projects are configured; it shares the project-build lock.
+  void StartScriptReconfigure();
+  void PollScriptReconfigure();
+  void CancelScriptReconfigure();
 
   // Scene view math & overlay drawing
   void UpdateEditorCamera();
@@ -324,7 +336,9 @@ class EditorScene : public MapScene {
   EditorSettings settings_;
   Console console_;
   PlaySession play_;
-  ReleaseBuild release_{console_};
+  ReleaseBuild release_{console_, settings_};
+  std::unique_ptr<os::Process> reconfigure_;
+  std::filesystem::path reconfigure_root_;
   UIBuilder ui_builder_{console_};
   InputActionsWindow input_actions_{console_};
   LoreVcs lore_{console_, settings_};

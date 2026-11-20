@@ -15,6 +15,7 @@
 #include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "extension.h"
 #include "project/asset_database.h"
 #include "scripting/event.h"
 #include "scripting/type_registry.h"
@@ -363,6 +364,24 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
       bs->Add(msg, 0, wxEXPAND | wxBOTTOM, 6);
     }
 
+    // An extension may replace this component's field rows with its own UI.
+    if (std::optional<EditorExtensionRegistry::InspectorEntry> custom =
+            EditorExtensionRegistry::Instance().CopyInspector(component.type)) {
+      if (custom->info.create) {
+        wxWindow* view = RunExtensionCallback(
+            custom->module, "inspector factory",
+            [&] { return custom->info.create(body, scene_, node); },
+            [] { return static_cast<wxWindow*>(nullptr); });
+        if (view) {
+          bs->Add(view, 0, wxEXPAND);
+          section->FinishBuild();
+          content_sizer_->Add(section, 0,
+                              wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+          continue;
+        }
+      }
+    }
+
     auto on_comp_changed = [this, node_uid,
                             comp_type = component.type](bool coalesced) {
       if (comp_type == "Transform") {
@@ -471,8 +490,16 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
     auto picked = ShowAddComponentDialog(this, *target);
     if (!picked) return;
     if (*picked == "__NEW_SCRIPT__") {
-      if (auto cls = ShowNewScriptDialog(this)) {
-        scene_.CreateScript(*cls);
+      auto request =
+          ShowNewScriptDialog(this, scene_,
+                              {Templates::ScriptKind::kAngelScript,
+                               Templates::ScriptKind::kCppBehaviour});
+      if (request &&
+          scene_.CreateScript(request->kind, request->class_name,
+                              request->open_after_create) &&
+          request->kind == Templates::ScriptKind::kCppBehaviour) {
+        scene_.ConsoleRef().Info(
+            "The component appears in Add Component after the next build.");
       }
       return;
     }

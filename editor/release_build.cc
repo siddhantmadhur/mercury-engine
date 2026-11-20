@@ -15,6 +15,7 @@
 #include "os/filesystem.h"
 #include "pack/mpack.h"
 #include "play_session.h"
+#include "project_scaffold.h"
 #include "scripting/as/script_builder.h"
 
 namespace Mercury {
@@ -145,17 +146,40 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
   project_name_ = project.GetName();
   build_target_ = project.GetBuildTarget();
   build_dir_.clear();
+  configuring_ = false;
   if (!build_target_.empty()) {
-    build_dir_ = cmake_build::BuildDir();
-    std::error_code ec;
-    if (build_dir_.empty() || !fs::exists(build_dir_ / "CMakeCache.txt", ec)) {
+    // A native build runs the project's CMake code; fail closed unless the
+    // workspace was trusted (the UI prompts before calling this).
+    if (!settings_.IsProjectTrusted(project_root_)) {
       Finish(
-          "This project names a C++ build target, but the engine has no "
-          "configured CMake build directory. Run `cmake --preset release` in "
-          "the engine checkout first.",
+          "This project is not trusted, so its C++ build was not run. Use "
+          "Project > Trust Editor Systems and accept the prompt first.",
           true);
       return;
     }
+    if (cmake_build::SdkCmakeDir().empty()) {
+      Finish(
+          "This project names a C++ build target, but the editor's SDK has no "
+          "CMake package. A development checkout must be configured once; a "
+          "packaged editor should include Contents/Resources/sdk.",
+          true);
+      return;
+    }
+    std::string build_error;
+    build_dir_ =
+        os::EnsureProjectBuildDir(project_root_, "release", &build_error);
+    if (build_dir_.empty()) {
+      Finish("Project build: " + build_error, true);
+      return;
+    }
+    if (!cmake_build::TryAcquireProjectBuild(project_root_)) {
+      Finish(
+          "A project build is already running. Wait for it to finish before "
+          "building the game.",
+          true);
+      return;
+    }
+    holds_build_lock_ = true;
   }
   output_dir_ = output_dir;
   cancelled_ = false;
@@ -195,7 +219,7 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
 
 ReleaseBuild::Config ReleaseBuild::MakeConfig() const {
   Config config;
-  config.source_dir = fs::path(MERCURY_ENGINE_DIR).string();
+  config.source_dir = os::EngineSdkDir().root.string();
   config.build_target = build_target_;
   config.build_dir = build_dir_.string();
   config.native = !build_target_.empty();
@@ -231,7 +255,8 @@ void ReleaseBuild::LocateExecutable() {
   if (config_->native) {
     // CMake writes every executable to <build>/bin; the target name is the
     // executable name.
-    const fs::path candidate = cmake_build::Executable(config_->build_target);
+    const fs::path candidate =
+        cmake_build::ProjectExecutable(build_dir_, config_->build_target);
     if (fs::is_regular_file(candidate, ec)) {
       config_->executable = candidate.string();
       return;
@@ -246,7 +271,8 @@ void ReleaseBuild::LocateExecutable() {
     config_->executable = bundled.string();
     return;
   }
-  const fs::path built = cmake_build::Executable("mercury_player");
+  const fs::path built =
+      cmake_build::ProjectExecutable(cmake_build::BuildDir(), "mercury_player");
   if (!built.empty() && fs::is_regular_file(built, ec)) {
     config_->executable = built.string();
     return;
@@ -281,8 +307,22 @@ bool ReleaseBuild::StartBuild() {
                "takes a while."
              : "Building a Release mercury_player with CMake; the first one "
                "takes a while.");
-  const std::vector<std::string> args = cmake_build::BuildArguments(
-      native ? config_->build_target : "mercury_player");
+  std::vector<std::string> args;
+  configuring_ = false;
+  if (native) {
+    if (cmake_build::NeedsConfigure(project_root_, build_dir_)) {
+      configuring_ = true;
+      args = cmake_build::ConfigureArguments(
+          project_root_, build_dir_, cmake_build::SdkCmakeDir(), "Release");
+      // Shipping does not need the editor extension module.
+      args.push_back("-DMERCURY_BUILD_EDITOR_SYSTEMS=OFF");
+    } else {
+      args = cmake_build::BuildArguments(build_dir_, config_->build_target);
+    }
+  } else {
+    args =
+        cmake_build::BuildArguments(cmake_build::BuildDir(), "mercury_player");
+  }
   if (!Launch(args)) return false;
   state_ = State::kBuilding;
   return true;
@@ -435,6 +475,10 @@ ReleaseBuild::PackResult ReleaseBuild::Pack(Config config, fs::path root,
 }
 
 void ReleaseBuild::Finish(const std::string& message, bool error) {
+  if (holds_build_lock_) {
+    cmake_build::ReleaseProjectBuild(project_root_);
+    holds_build_lock_ = false;
+  }
   console_.Add(error ? Console::Level::kError : Console::Level::kInfo,
                Console::Source::kBuild, message);
   state_ = State::kIdle;
@@ -449,6 +493,10 @@ void ReleaseBuild::Cancel() {
     return;
   }
   if (!process_) {
+    if (holds_build_lock_) {
+      cmake_build::ReleaseProjectBuild(project_root_);
+      holds_build_lock_ = false;
+    }
     state_ = State::kIdle;
     return;
   }
@@ -491,6 +539,14 @@ void ReleaseBuild::Update() {
 
   switch (state_) {
     case State::kBuilding:
+      if (configuring_) {
+        configuring_ = false;
+        if (code != 0)
+          return Finish("Release build configuration failed", true);
+        EditorUI::RefreshProjectCompileCommands(project_root_);
+        StartBuild();
+        break;
+      }
       if (code != 0) return Finish("Release build failed", true);
       LocateExecutable();
       if (config_->executable.empty()) {
@@ -499,6 +555,10 @@ void ReleaseBuild::Update() {
                             "executable"
                           : "The Release build did not produce mercury_player",
                       true);
+      }
+      if (holds_build_lock_) {
+        cmake_build::ReleaseProjectBuild(project_root_);
+        holds_build_lock_ = false;
       }
       StartPacking();
       break;

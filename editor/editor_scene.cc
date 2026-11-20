@@ -7,9 +7,11 @@
 #include <algorithm>
 #include <format>
 
+#include "cmake_build.h"
 #include "debugger/debugger.h"
 #include "debugger/profiler.h"
 #include "os/process.h"
+#include "project_scaffold.h"
 #include "properties/camera.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
@@ -69,6 +71,7 @@ void EditorScene::OnStart() {
 void EditorScene::OnDestroy() {
   play_.Stop();
   release_.Cancel();
+  CancelScriptReconfigure();
   MapScene::OnDestroy();
 }
 
@@ -81,6 +84,7 @@ bool EditorScene::OnCloseRequested() { return !HasUnsavedChanges(); }
 void EditorScene::OnFrame(double /*delta_t*/) {
   play_.Update();
   release_.Update();
+  PollScriptReconfigure();
   lore_.Update();
   if (play_.TakeSchemaUpdated()) LoadScriptSchema();
 
@@ -136,7 +140,11 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   }
   play_.Stop();
   release_.Cancel();
+  CancelScriptReconfigure();
   SetProject(project);
+  // Refresh the generated build/LSP files on every open. This never runs the
+  // project's code and is safe before the trust decision.
+  EditorUI::ScaffoldProject(*project);
   ui_builder_.SetProject(project);
   input_actions_.SetProject(project);
   lore_.SetProject(project);
@@ -175,6 +183,7 @@ bool EditorScene::OpenProjectOrDirectory(const fs::path& input) {
 void EditorScene::CloseProject() {
   play_.Stop();
   release_.Cancel();
+  CancelScriptReconfigure();
   SetProject(nullptr);
   ui_builder_.SetProject(nullptr);
   input_actions_.SetProject(nullptr);
@@ -227,6 +236,22 @@ void EditorScene::LoadScriptSchema() {
   if (!project) return;
   const fs::path schema = PlaySession::SchemaPath(*project);
   auto& registry = TypeRegistry::Instance();
+  if (schema.empty()) {
+    registry.ClearSchemaScripts();
+    console_.Error(
+        "The project cache folder (.mercury) is a symlink or not a real "
+        "folder; scripts will not be listed.");
+    ++schema_revision_;
+    return;
+  }
+  std::error_code ec;
+  if (fs::is_symlink(fs::symlink_status(schema, ec))) {
+    fs::remove(schema, ec);
+    registry.ClearSchemaScripts();
+    console_.Error("Removed a symlinked script list at " + schema.string());
+    ++schema_revision_;
+    return;
+  }
   if (!fs::exists(schema)) {
     registry.ClearSchemaScripts();
     console_.Info(
@@ -754,19 +779,127 @@ void EditorScene::CreateAsset(const fs::path& dir, const std::string& type) {
 }
 
 bool EditorScene::CreateScript(const std::string& class_name) {
+  return CreateScript(Templates::ScriptKind::kAngelScript, class_name,
+                      settings_.open_script_after_create);
+}
+
+bool EditorScene::CreateScript(Templates::ScriptKind kind,
+                               const std::string& class_name,
+                               bool open_after_create) {
   auto project = GetProject();
   if (!project) return false;
+  // The LSP/build files must exist before sources do, so clangd can resolve
+  // the new files straight away.
+  EditorUI::ScaffoldProject(*project);
+
   std::string error;
-  auto file = Templates::CreateScript(project->GetRoot(), class_name, &error);
+  auto file =
+      Templates::CreateScript(project->GetRoot(), class_name, kind, &error);
   if (file.empty()) {
     console_.Error("Could not create script: " + error);
     return false;
   }
-  console_.Info("Created " + file.string() +
-                ". Build to add it to the Add Component menu.");
+
+  settings_.new_script_kind = kind;
+  settings_.open_script_after_create = open_after_create;
+  settings_.Save();
+
+  const bool cpp = Templates::IsCppScript(kind);
+  if (cpp && project->GetBuildTarget().empty()) {
+    const std::string target = Templates::ToTargetName(project->GetName());
+    if (!project->SetBuildTarget(target)) {
+      console_.Warn(
+          "Could not set a valid [build] target; set it in Project "
+          "Settings.");
+    } else if (project->Save()) {
+      console_.Info("Set [build] target = " + target +
+                    " so the project builds C++ scripts.");
+    } else {
+      console_.Warn(
+          "Created the script files, but could not save [build] target; set "
+          "it in Project Settings.");
+    }
+  }
+
+  if (kind == Templates::ScriptKind::kCppSystem) {
+    console_.Info("Created " + file.string() + ". Play to run the system.");
+  } else if (kind == Templates::ScriptKind::kCppEditorSystem) {
+    console_.Info("Created " + file.string() +
+                  ". Project > Reload Systems builds and loads it.");
+  } else {
+    console_.Info("Created " + file.string() +
+                  ". Build to add it to the Add Component menu.");
+  }
+  if (cpp) StartScriptReconfigure();
+
   ++script_files_revision_;
-  OpenScriptFile(file);
+  if (open_after_create) OpenScriptFile(file);
   return true;
+}
+
+void EditorScene::StartScriptReconfigure() {
+  if (reconfigure_) return;
+  auto project = GetProject();
+  if (!project) return;
+  const fs::path root = project->GetRoot();
+  // Native code from an untrusted project is never executed, and a configure
+  // runs its CMake code.
+  if (!settings_.IsProjectTrusted(root)) return;
+  const fs::path sdk_cmake = cmake_build::SdkCmakeDir();
+  if (sdk_cmake.empty() || project->GetBuildTarget().empty()) return;
+  std::string build_error;
+  const fs::path build_dir =
+      os::EnsureProjectBuildDir(root, "debug", &build_error);
+  if (build_dir.empty()) {
+    console_.Warn("Could not refresh the C++ file list: " + build_error);
+    return;
+  }
+  if (!cmake_build::TryAcquireProjectBuild(root)) return;
+
+  auto process = std::make_unique<os::Process>();
+  std::string error;
+  if (!process->Start(
+          cmake_build::ConfigureArguments(root, build_dir, sdk_cmake), root,
+          &error)) {
+    cmake_build::ReleaseProjectBuild(root);
+    console_.Warn("Could not refresh the C++ file list: " + error);
+    return;
+  }
+  reconfigure_ = std::move(process);
+  reconfigure_root_ = root;
+}
+
+void EditorScene::PollScriptReconfigure() {
+  if (!reconfigure_) return;
+  for (std::string& line : reconfigure_->TakeOutput()) {
+    console_.AddProcessOutput(Console::Source::kBuild, std::move(line));
+  }
+  if (reconfigure_->IsRunning()) return;
+  for (std::string& line : reconfigure_->TakeOutput()) {
+    console_.AddProcessOutput(Console::Source::kBuild, std::move(line));
+  }
+  const int code = reconfigure_->GetExitCode().value_or(-1);
+  reconfigure_.reset();
+  cmake_build::ReleaseProjectBuild(reconfigure_root_);
+  if (code == 0) {
+    EditorUI::RefreshProjectCompileCommands(reconfigure_root_);
+  } else {
+    console_.Warn(
+        "CMake could not refresh the project; clangd may not see the new "
+        "files until the next build (see the output above).");
+  }
+  reconfigure_root_.clear();
+}
+
+void EditorScene::CancelScriptReconfigure() {
+  if (!reconfigure_) return;
+  reconfigure_->Kill();
+  for (std::string& line : reconfigure_->TakeOutput()) {
+    console_.AddProcessOutput(Console::Source::kBuild, std::move(line));
+  }
+  reconfigure_.reset();
+  cmake_build::ReleaseProjectBuild(reconfigure_root_);
+  reconfigure_root_.clear();
 }
 
 bool EditorScene::CreateFolder(const fs::path& dir, const std::string& name) {

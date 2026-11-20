@@ -28,8 +28,9 @@ is documented at the C++ level starting at
 
 The launcher shows recent projects, an **Open** button for a `.mproj` or a
 folder, drag-and-drop from the OS, and a **New Project** card. A new project
-gets a `.mproj`, a main map, `scripts/`, `assets/` and a `.gitignore` that
-keeps `.mercury/` out of version control. Pick **2D** for sprites and
+gets a `.mproj`, a main map, `scripts/`, `src/`, `system/`, `assets/`, a
+`CMakeLists.txt`/`CMakePresets.json` pair and a `.gitignore` that keeps the
+generated files out of version control. Pick **2D** for sprites and
 orthographic play, or **3D** for a camera, sun, ground plane and cube.
 
 The menus are:
@@ -39,7 +40,7 @@ The menus are:
 | **File** | New Map, Open Map, Save, Save Map As, Set Current Map as Main Map, Build Game, Preferences, Close Project, Exit |
 | **Edit** | Undo, Redo, Duplicate, Delete |
 | **GameObject** | Empty Node, 3D Object, Light, 2D Sprite, Camera |
-| **Project** | Build Scripts (F7), Play / Stop (F5) |
+| **Project** | Build Scripts (F7), Play / Stop (F5), Reload Systems, Trust Editor Systems |
 | **Script** | Go to Method, Find, Replace |
 | **Window** | Toggle every panel, pop out the UI Builder and Input Actions, camera preview, reset layout |
 
@@ -100,7 +101,12 @@ to open it in the script editor, a `.uxml` file to open the UI Builder, a
 
 The **Create** button creates:
 
-- **Script...** -- a new `[script] class Name : Behaviour` in `scripts/`;
+- **Script...** -- the New Script dialog: AngelScript Behaviour in `scripts/`,
+  C++ Behaviour or C++ System in `src/`, or C++ Editor System in `system/`.
+  It previews both files, refuses to overwrite, and has an **Open after
+  creating** checkbox (remembered along with the last kind);
+- **C++ System...** / **Editor System...** -- the same dialog restricted to
+  those kinds;
 - **Map...** -- a new map in `maps/`;
 - **Material**, **Physics Material** and **Input Actions**;
 - **UI Toolkit > UI Document** (`.uxml`), **Style Sheet** (`.uss`) and

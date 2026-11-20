@@ -14,6 +14,7 @@
 #include "os/filesystem.h"
 #include "rust/bridge.h"
 #include "test_paths.h"
+#include "version.h"
 
 namespace fs = std::filesystem;
 
@@ -24,12 +25,13 @@ TEST(RustBridgeTest, InitializesAndReportsVersion) {
   EXPECT_TRUE(Mercury::rust::IsEnabled());
   const ::rust::Str version = Mercury::rust::Version();
   EXPECT_FALSE(version.empty());
-  EXPECT_EQ(std::string(version), "dev");
+  EXPECT_EQ(std::string(version), MERCURY_VERSION_STRING);
 }
 
 TEST(RustBridgeTest, RoundTripsThroughCxxBridge) {
   const ::rust::String result = Mercury::rust::RoundTripSelfTest("hello");
-  EXPECT_EQ(std::string(result), "rust:hello:engine=dev");
+  EXPECT_EQ(std::string(result),
+            std::string("rust:hello:engine=") + MERCURY_VERSION_STRING);
 }
 
 TEST(RustBridgeTest, RoutesRustLogsToPDebug) {

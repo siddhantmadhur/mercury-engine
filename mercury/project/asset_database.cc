@@ -4,13 +4,11 @@
 
 #include "asset_database.h"
 
-#include <algorithm>
-#include <cctype>
-#include <map>
 #include <system_error>
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
+#include "project/asset_importer.h"
 
 namespace Mercury {
 
@@ -91,36 +89,8 @@ bool AssetDatabase::Save(const Asset& asset) {
 }
 
 std::string AssetDatabase::TypeFromExtension(std::string_view res_path) {
-  std::string ext(fs::path(res_path).extension().string());
-  std::transform(ext.begin(), ext.end(), ext.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  static const std::map<std::string, std::string, std::less<>> kTypes = {
-      {std::string(kMapExtension), "Map"},
-      {std::string(kUxmlExtension), "UXML"},
-      {std::string(kUssExtension), "StyleSheet"},
-      {".ttf", "Font"},
-      {".otf", "Font"},
-      {".mprefab", "Prefab"},
-      {".manim", "AnimatorController"},
-      {".minput", "InputActions"},
-      {".wav", "AudioClip"},
-      {".ogg", "AudioClip"},
-      {".mp3", "AudioClip"},
-      {".flac", "AudioClip"},
-      {".fbx", "Model"},
-      {".obj", "Model"},
-      {".gltf", "Model"},
-      {".glb", "Model"},
-      {".dae", "Model"},
-      {".png", "Texture"},
-      {".jpg", "Texture"},
-      {".jpeg", "Texture"},
-      {".bmp", "Texture"},
-      {".tga", "Texture"},
-      {".svg", "Texture"},
-  };
-  auto it = kTypes.find(ext);
-  return it == kTypes.end() ? "" : it->second;
+  // The registry holds the engine's built-ins plus any the game registered.
+  return AssetImporterRegistry::Instance().TypeFromExtension(res_path);
 }
 
 std::string AssetDatabase::TypeOf(std::string_view res_path) {
