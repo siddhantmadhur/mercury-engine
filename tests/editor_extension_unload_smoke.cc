@@ -11,8 +11,14 @@
 // wxWidgets frame, so it is a standalone smoke executable rather than a
 // gtest case.
 
-#include <wx/weakref.h>
+// wx/wx.h must come first: wx/weakref.h (through wx/meta/convertible.h) needs
+// wx/defs.h and the wxWindow/wxTrackable declarations. Keep the order through
+// both the repository and Google clang-format styles.
+// clang-format off
 #include <wx/wx.h>
+
+#include <wx/weakref.h>
+// clang-format on
 
 #include <cstdlib>
 #include <memory>

@@ -31,9 +31,15 @@
 #ifndef MERCURY_EDITOR_EXTENSION_H
 #define MERCURY_EDITOR_EXTENSION_H
 
+// wx/wx.h must come first: wx/weakref.h (through wx/meta/convertible.h) needs
+// wx/defs.h and the wxWindow/wxTrackable declarations. Keep the order through
+// both the repository and Google clang-format styles.
+// clang-format off
+#include <wx/wx.h>
+
 #include <wx/aui/aui.h>
 #include <wx/weakref.h>
-#include <wx/wx.h>
+// clang-format on
 
 #include <cstdint>
 #include <exception>
