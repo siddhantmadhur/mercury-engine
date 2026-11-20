@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
 #include <string>
 
 using namespace Mercury;
@@ -94,6 +95,17 @@ TEST(EventBus, RemoveDuringPublishSkipsTheRemovedListener) {
 
   bus.Publish(Ping{});
   EXPECT_EQ(calls, 1);
+}
+
+TEST(EventBus, SubscriptionCanOutliveItsBus) {
+  auto bus = std::make_unique<EventBus>();
+  auto subscription = bus->Subscribe<Ping>([](const Ping&) {});
+  EXPECT_TRUE(subscription.IsValid());
+  bus.reset();
+  // Destroying the bus makes the handle inert instead of touching freed
+  // memory (ASAN catches a regression here).
+  subscription.Unsubscribe();
+  EXPECT_FALSE(subscription.IsValid());
 }
 
 TEST(EventBus, ClearDropsEveryListener) {

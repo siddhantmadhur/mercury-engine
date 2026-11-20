@@ -5,6 +5,7 @@
 #include "type_registry.h"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <utility>
 
@@ -39,6 +40,43 @@ bool DecodeProperties(std::span<const uint8_t> bytes,
   if (!section) return false;
   out = section->properties;
   return true;
+}
+
+// Rejects NaN and infinity in the numeric field types a snapshot can carry,
+// including lists. Vector3(1e300, ...) narrows to inf, and a bare `inf` is a
+// valid scalar literal, so both must be checked.
+bool IsFiniteValue(const mtext::Variant& value) {
+  switch (value.GetType()) {
+    case mtext::Variant::Type::kFloat: {
+      const double* number = value.Get<double>();
+      return number && std::isfinite(*number);
+    }
+    case mtext::Variant::Type::kVector2: {
+      const glm::vec2* vector = value.Get<glm::vec2>();
+      return vector && std::isfinite(vector->x) && std::isfinite(vector->y);
+    }
+    case mtext::Variant::Type::kVector3: {
+      const glm::vec3* vector = value.Get<glm::vec3>();
+      return vector && std::isfinite(vector->x) && std::isfinite(vector->y) &&
+             std::isfinite(vector->z);
+    }
+    case mtext::Variant::Type::kColor: {
+      const mtext::Color* color = value.Get<mtext::Color>();
+      if (!color) return true;
+      return std::isfinite(color->rgba.r) && std::isfinite(color->rgba.g) &&
+             std::isfinite(color->rgba.b) && std::isfinite(color->rgba.a);
+    }
+    case mtext::Variant::Type::kArray: {
+      const mtext::Array* array = value.Get<mtext::Array>();
+      if (!array) return true;
+      for (const mtext::Variant& item : *array) {
+        if (!IsFiniteValue(item)) return false;
+      }
+      return true;
+    }
+    default:
+      return true;
+  }
 }
 
 }  // namespace
@@ -145,15 +183,28 @@ bool TypeRegistry::SerializeComponent(MapScene& scene, kEntityId entity,
   return true;
 }
 
-bool TypeRegistry::DeserializeComponent(MapScene& scene, kEntityId entity,
-                                        std::string_view type,
-                                        const mtext::PropertyList& in) const {
+bool TypeRegistry::DeserializeComponent(
+    MapScene& scene, kEntityId entity, std::string_view type,
+    const mtext::PropertyList& in,
+    const ComponentDeserializeOptions& options) const {
   const ComponentInfo* info = FindComponent(type);
   if (!info || !info->set_field) return false;
+
+  size_t applied = 0;
   for (const auto& property : in) {
-    info->set_field(scene, entity, property.key, property.value);
+    const FieldInfo* field = info->FindField(property.key);
+    if (!field) continue;
+    if (options.require_runtime_writable && !field->runtime_writable) continue;
+    if (options.reject_non_finite && !IsFiniteValue(property.value)) {
+      PDebug::warn("{} . {}: rejected a non-finite value", type, property.key);
+      continue;
+    }
+    if (info->set_field(scene, entity, property.key, property.value)) {
+      applied++;
+    }
   }
-  return true;
+  // A snapshot that changed nothing is a failed apply, not a silent success.
+  return applied > 0;
 }
 
 bool TypeRegistry::SerializeComponent(MapScene& scene, kEntityId entity,
@@ -169,7 +220,8 @@ bool TypeRegistry::DeserializeComponent(MapScene& scene, kEntityId entity,
                                         std::span<const uint8_t> in) const {
   mtext::PropertyList properties;
   if (!DecodeProperties(in, properties)) return false;
-  return DeserializeComponent(scene, entity, type, properties);
+  return DeserializeComponent(scene, entity, type, properties,
+                              ComponentDeserializeOptions{});
 }
 
 bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {

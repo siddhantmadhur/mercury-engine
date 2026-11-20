@@ -32,6 +32,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <type_traits>
 #include <typeindex>
 #include <unordered_map>
@@ -43,6 +44,11 @@ namespace Mercury {
 class EventBus {
  public:
   using SubscriptionId = uint64_t;
+
+  EventBus() = default;
+  ~EventBus() { *alive_ = false; }
+  EventBus(const EventBus&) = delete;
+  EventBus& operator=(const EventBus&) = delete;
 
   /**
    * @brief Owning handle to one subscription (RAII)
@@ -56,7 +62,7 @@ class EventBus {
     Subscription(const Subscription&) = delete;
     Subscription& operator=(const Subscription&) = delete;
     Subscription(Subscription&& other) noexcept
-        : bus_(other.bus_), id_(other.id_) {
+        : bus_(other.bus_), id_(other.id_), alive_(std::move(other.alive_)) {
       other.bus_ = nullptr;
       other.id_ = 0;
     }
@@ -65,6 +71,7 @@ class EventBus {
         Reset();
         bus_ = other.bus_;
         id_ = other.id_;
+        alive_ = std::move(other.alive_);
         other.bus_ = nullptr;
         other.id_ = 0;
       }
@@ -76,21 +83,31 @@ class EventBus {
     explicit operator bool() const { return IsValid(); }
     SubscriptionId GetId() const { return id_; }
 
-    // Removes the listener now; safe to call more than once.
+    // Removes the listener now; safe to call more than once, and safe after
+    // the bus itself is gone.
     void Unsubscribe() { Reset(); }
 
    private:
     friend class EventBus;
-    Subscription(EventBus* bus, SubscriptionId id) : bus_(bus), id_(id) {}
+    Subscription(EventBus* bus, SubscriptionId id, std::weak_ptr<bool> alive)
+        : bus_(bus), id_(id), alive_(std::move(alive)) {}
 
     void Reset() {
-      if (bus_ && id_ != 0) bus_->Unsubscribe(id_);
+      if (id_ != 0) {
+        // The weak token outlives the bus and turns null when it is gone, so
+        // a handle that outlives its bus never dereferences freed memory.
+        if (auto alive = alive_.lock(); alive && *alive && bus_) {
+          bus_->Unsubscribe(id_);
+        }
+      }
       bus_ = nullptr;
       id_ = 0;
+      alive_.reset();
     }
 
     EventBus* bus_ = nullptr;
     SubscriptionId id_ = 0;
+    std::weak_ptr<bool> alive_;
   };
 
   /**
@@ -105,7 +122,7 @@ class EventBus {
         {id, [callback = std::forward<F>(listener)](const void* event) mutable {
            callback(*static_cast<const E*>(event));
          }});
-    return Subscription(this, id);
+    return Subscription(this, id, alive_);
   }
 
   // Calls every current listener of E. Order is subscription order.
@@ -165,6 +182,8 @@ class EventBus {
 
   mutable std::unordered_map<std::type_index, std::vector<Entry>> subscribers_;
   SubscriptionId next_id_ = 1;
+  // Shared with subscriptions so a handle can tell whether the bus is alive.
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 };
 
 }  // namespace Mercury

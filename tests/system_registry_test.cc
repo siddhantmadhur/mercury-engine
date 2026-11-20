@@ -78,6 +78,28 @@ class MapAwareSystem : public System {
   void OnMapUnloading(MapScene&) override { g_log.push_back("map_unloading"); }
 };
 
+class SelfDestroyingSystem : public System {
+ public:
+  void OnTick(MapScene& scene, double) override {
+    scene.OnDestroy();  // refused: a callback cannot tear down its own scene
+    continued_ = true;
+  }
+  void OnShutdown(MapScene&) override { g_log.push_back("shutdown:self"); }
+
+  bool continued_ = false;
+};
+
+class PostPhysicsClearer : public System {
+ public:
+  Phase GetPhase() const override { return Phase::kPostPhysics; }
+  void OnTick(MapScene& scene, double) override { scene.ClearMap(); }
+};
+
+class RegisterDestroyer : public System {
+ public:
+  void OnRegister(MapScene& scene) override { scene.OnDestroy(); }
+};
+
 std::shared_ptr<Project> MakeProject() {
   const auto dir =
       std::filesystem::temp_directory_path() /
@@ -162,6 +184,49 @@ TEST_F(SystemRegistryTest, MapSceneDrivesSystemsInPhaseOrder) {
   g_log.clear();
   scene.OnDestroy();
   EXPECT_EQ(g_log, (std::vector<std::string>{"shutdown:Pre"}));
+}
+
+TEST_F(SystemRegistryTest, ASceneCannotBeDestroyedFromASystemCallback) {
+  ASSERT_TRUE(RegisterSystem<SelfDestroyingSystem>("SelfDestroying"));
+  auto project = MakeProject();
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.OnStart();
+  g_log.clear();
+
+  scene.OnTick(16.0);
+  // The callback kept running and no system was shut down under it.
+  ASSERT_EQ(scene.GetSystems().size(), 1u);
+  EXPECT_TRUE(static_cast<SelfDestroyingSystem*>(scene.GetSystems()[0].get())
+                  ->continued_);
+  EXPECT_TRUE(g_log.empty());
+
+  // A normal shutdown still works.
+  scene.OnDestroy();
+  EXPECT_EQ(g_log, (std::vector<std::string>{"shutdown:self"}));
+}
+
+TEST_F(SystemRegistryTest, ASceneCannotBeDestroyedFromOnRegister) {
+  ASSERT_TRUE(RegisterSystem<RegisterDestroyer>("RegisterDestroyer"));
+  auto project = MakeProject();
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.OnStart();
+  EXPECT_EQ(scene.GetSystems().size(), 1u);
+  scene.OnDestroy();
+}
+
+TEST_F(SystemRegistryTest, PostPhysicsRunsInsideACallbackScope) {
+  ASSERT_TRUE(RegisterSystem<PostPhysicsClearer>("PostPhysicsClearer"));
+  auto project = MakeProject();
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.OnStart();
+  Map map;  // the default map has a single root node
+  scene.Instantiate(map);
+  ASSERT_TRUE(scene.Find("Root").IsValid());
+
+  // ClearMap from a post-physics system is refused while that loop is running.
+  scene.SimulatePhysics(1);
+  EXPECT_TRUE(scene.Find("Root").IsValid());
+  EXPECT_EQ(scene.GetSystems().size(), 1u);
 }
 
 TEST_F(SystemRegistryTest, SystemsSeeMapLoadsAndUnloads) {

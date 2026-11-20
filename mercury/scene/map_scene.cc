@@ -1168,6 +1168,13 @@ void MapScene::OnTick(double delta_t) {
 }
 
 void MapScene::OnDestroy() {
+  if (running_callbacks_ > 0) {
+    // A system or behaviour callback asked to destroy the scene it is running
+    // in. Tearing systems down under that loop would free the object whose
+    // callback is executing.
+    PDebug::error("MapScene::OnDestroy was called from a callback; ignored");
+    return;
+  }
   CallbackScope callback_scope(this);
   // OnDestroy may instantiate a prefab, which appends to behaviours_.
   std::vector<Behaviour*> behaviours;
@@ -1191,32 +1198,43 @@ void MapScene::StartSystems() {
     std::unique_ptr<System> system = info.create();
     if (!system) continue;
     system->OnRegister(*this);
+    // OnRegister may have triggered a teardown; do not add to a dead list.
+    if (!systems_started_) return;
     systems_.push_back(std::move(system));
   }
 }
 
 void MapScene::StopSystems() {
   if (!systems_started_) return;
+  // Clear the flag first so a nested StopSystems is a no-op, and move the list
+  // out so a callback cannot invalidate the loop (or the caller's snapshot).
+  systems_started_ = false;
+  std::vector<std::unique_ptr<System>> systems = std::move(systems_);
   // Reverse registration order, so a system that depends on another is torn
   // down first.
-  for (auto it = systems_.rbegin(); it != systems_.rend(); ++it) {
+  for (auto it = systems.rbegin(); it != systems.rend(); ++it) {
     (*it)->OnShutdown(*this);
   }
-  systems_.clear();
-  systems_started_ = false;
 }
 
 void MapScene::NotifyMapLoaded() {
+  if (!systems_started_) return;
+  CallbackScope callback_scope(this);
   for (auto& system : systems_) system->OnMapLoaded(*this);
 }
 
 void MapScene::NotifyMapUnloading() {
+  if (!systems_started_) return;
+  CallbackScope callback_scope(this);
   for (auto& system : systems_) system->OnMapUnloading(*this);
 }
 
 void MapScene::SimulatePhysics(int steps) {
   GameScene::SimulatePhysics(steps);
   if (mode_ != Mode::kPlay || !systems_started_) return;
+  // Post-physics runs outside OnTick, so it needs its own callback scope:
+  // ClearMap/SetProject/Instantiate must defer here too.
+  CallbackScope callback_scope(this);
   // The tick has ended, so GetDeltaTime is the frame delta again; a
   // post-physics system wants the fixed tick delta the behaviours saw.
   const float dt = Time::GetFixedDeltaTime() * Time::GetTimeScale();
@@ -1225,6 +1243,7 @@ void MapScene::SimulatePhysics(int steps) {
       system->OnTick(*this, dt);
     }
   }
+  DestroyPending();
 }
 
 void MapScene::SetupAnimator(kEntityId entity) {

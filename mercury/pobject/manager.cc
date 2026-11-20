@@ -66,13 +66,21 @@ uint64_t PObjectManager::GetGuid(kEntityId id) const {
   return guid ? guid->value : 0;
 }
 
-void PObjectManager::SetGuid(kEntityId id, uint64_t guid) {
-  if (!registry_.valid(id)) return;
+bool PObjectManager::SetGuid(kEntityId id, uint64_t guid) {
+  if (!registry_.valid(id)) return false;
+  if (guid != 0) {
+    auto existing = guid_index_.find(guid);
+    if (existing != guid_index_.end() && existing->second != id &&
+        registry_.valid(existing->second)) {
+      return false;
+    }
+  }
   if (const EntityGuid* current = registry_.try_get<EntityGuid>(id)) {
     guid_index_.erase(current->value);
   }
   registry_.emplace_or_replace<EntityGuid>(id, EntityGuid{guid});
   if (guid != 0) guid_index_[guid] = id;
+  return true;
 }
 
 kEntityId PObjectManager::FindByGuid(uint64_t guid) const {

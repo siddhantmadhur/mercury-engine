@@ -90,6 +90,19 @@ struct AssetTypeInfo {
   const FieldInfo* FindField(std::string_view field) const;
 };
 
+/**
+ * @brief Options for applying a component snapshot
+ */
+struct ComponentDeserializeOptions {
+  // Reject NaN/infinite floats and vectors (network-facing byte snapshots use
+  // this by default).
+  bool reject_non_finite = true;
+  // Only apply fields marked runtime_writable, like the script API. Pass false
+  // for a trusted local snapshot (save games, undo) that restores every
+  // reflected field.
+  bool require_runtime_writable = true;
+};
+
 class TypeRegistry {
  public:
   static TypeRegistry& Instance();
@@ -128,15 +141,21 @@ class TypeRegistry {
   bool SerializeComponent(MapScene& scene, kEntityId entity,
                           std::string_view type,
                           mtext::PropertyList& out) const;
-  // Applies values from `in`. False if the type is unknown or cannot write
-  // its fields.
-  bool DeserializeComponent(MapScene& scene, kEntityId entity,
-                            std::string_view type,
-                            const mtext::PropertyList& in) const;
   // The same in the engine's text format, as a UTF-8 byte buffer.
   bool SerializeComponent(MapScene& scene, kEntityId entity,
                           std::string_view type,
                           std::vector<uint8_t>& out) const;
+  // Applies values from `in`, skipping fields that are unknown, read-only at
+  // run time (unless `options.require_runtime_writable` is false), or
+  // non-finite (when `options.reject_non_finite` is true). Returns false when
+  // no field was applied, including an unknown/unsettable type.
+  bool DeserializeComponent(MapScene& scene, kEntityId entity,
+                            std::string_view type,
+                            const mtext::PropertyList& in,
+                            const ComponentDeserializeOptions& options =
+                                ComponentDeserializeOptions{}) const;
+  // The same in the engine's text format, as a UTF-8 byte buffer. This is the
+  // network-facing form, so it uses the safe defaults above.
   bool DeserializeComponent(MapScene& scene, kEntityId entity,
                             std::string_view type,
                             std::span<const uint8_t> in) const;

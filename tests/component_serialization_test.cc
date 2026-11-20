@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -39,13 +40,16 @@ struct SnapshotData {
   }
 };
 
-void RegisterSnapshotType() {
+ComponentInfo MakeSnapshotInfo(const char* name, bool runtime_writable) {
   ComponentInfo info;
-  info.name = "SnapshotTest";
+  info.name = name;
   info.category = "Tests";
   info.description = "Component used by the serialization tests";
   info.from_game = true;
   info.fields = DescribeFields<SnapshotData>();
+  for (FieldInfo& field : info.fields) {
+    field.runtime_writable = runtime_writable;
+  }
   info.has = [](MapScene& scene, kEntityId entity) {
     return scene.Objects().GetProperty<SnapshotData>(entity) != nullptr;
   };
@@ -65,7 +69,12 @@ void RegisterSnapshotType() {
     value->Reflect(reflector);
     return reflector.Found();
   };
-  TypeRegistry::Instance().RegisterComponent(std::move(info));
+  return info;
+}
+
+void RegisterSnapshotType() {
+  TypeRegistry::Instance().RegisterComponent(
+      MakeSnapshotInfo("SnapshotTest", true));
 }
 
 std::shared_ptr<Project> MakeProject() {
@@ -191,12 +200,12 @@ TEST(ComponentSerialization, EntityGuidsAreStableAndUnique) {
   EXPECT_NE(first_guid, second_guid);
 
   EXPECT_EQ(scene.Objects().FindByGuid(first_guid), first);
-  scene.Objects().SetGuid(second, 123456);
+  EXPECT_TRUE(scene.Objects().SetGuid(second, 123456));
   EXPECT_EQ(scene.Objects().GetGuid(second), 123456u);
   EXPECT_EQ(scene.Objects().FindByGuid(123456), second);
 
   // Changing an id drops the old index entry.
-  scene.Objects().SetGuid(second, 654321);
+  EXPECT_TRUE(scene.Objects().SetGuid(second, 654321));
   EXPECT_TRUE(scene.Objects().FindByGuid(123456) == entt::null);
   EXPECT_EQ(scene.Objects().FindByGuid(654321), second);
 
@@ -204,6 +213,10 @@ TEST(ComponentSerialization, EntityGuidsAreStableAndUnique) {
   // the index entry, through the registry's on_destroy signal.
   const kEntityId third = scene.Objects().NewObject();
   const uint64_t third_guid = scene.Objects().GetGuid(third);
+  // A live entity's id cannot be taken by another entity.
+  EXPECT_FALSE(scene.Objects().SetGuid(third, 654321));
+  EXPECT_EQ(scene.Objects().GetGuid(third), third_guid);
+  EXPECT_EQ(scene.Objects().FindByGuid(654321), second);
   scene.Objects().GetRegistry().destroy(third);
   EXPECT_TRUE(scene.Objects().FindByGuid(third_guid) == entt::null);
 
@@ -231,6 +244,76 @@ TEST(ComponentSerialization, ClonedNodesGetUniqueGuids) {
   EXPECT_NE(first_guid, 0u);
   EXPECT_NE(first_guid, 777777u);
   EXPECT_NE(first_guid, second_guid);
+}
+
+TEST(ComponentSerialization, ASnapshotThatAppliesNothingIsAFailure) {
+  RegisterSnapshotType();
+  auto project = MakeProject();
+  MapScene scene(project, MapScene::Mode::kEdit);
+  auto& registry = TypeRegistry::Instance();
+  const kEntityId entity = scene.Objects().NewObject();
+  scene.Objects().AddProperty(entity, MakeData());
+
+  mtext::PropertyList empty;
+  EXPECT_FALSE(
+      registry.DeserializeComponent(scene, entity, "SnapshotTest", empty));
+
+  mtext::PropertyList unknown;
+  unknown.Set("not_a_field", 1);
+  EXPECT_FALSE(
+      registry.DeserializeComponent(scene, entity, "SnapshotTest", unknown));
+}
+
+TEST(ComponentSerialization, RejectsNonFiniteValues) {
+  RegisterSnapshotType();
+  auto project = MakeProject();
+  MapScene scene(project, MapScene::Mode::kEdit);
+  auto& registry = TypeRegistry::Instance();
+  const kEntityId entity = scene.Objects().NewObject();
+  scene.Objects().AddProperty(entity, MakeData());
+
+  mtext::PropertyList bad;
+  bad.Set("speed", std::numeric_limits<double>::infinity());
+  bad.Set("position", glm::vec3(std::numeric_limits<float>::quiet_NaN(), 0, 0));
+  EXPECT_FALSE(
+      registry.DeserializeComponent(scene, entity, "SnapshotTest", bad));
+  SnapshotData* value = scene.Objects().GetProperty<SnapshotData>(entity);
+  ASSERT_NE(value, nullptr);
+  EXPECT_FLOAT_EQ(value->speed, 2.5f);
+  EXPECT_EQ(value->position, glm::vec3(1.0f, 2.0f, 3.0f));
+
+  // A finite field in the same snapshot still applies.
+  mtext::PropertyList mixed;
+  mixed.Set("speed", std::numeric_limits<double>::infinity());
+  mixed.Set("count", 9);
+  EXPECT_TRUE(
+      registry.DeserializeComponent(scene, entity, "SnapshotTest", mixed));
+  EXPECT_EQ(value->count, 9);
+  EXPECT_FLOAT_EQ(value->speed, 2.5f);
+}
+
+TEST(ComponentSerialization, ReadOnlyFieldsNeedAnExplicitOption) {
+  TypeRegistry::Instance().RegisterComponent(
+      MakeSnapshotInfo("ReadOnlySnapshot", false));
+  auto project = MakeProject();
+  MapScene scene(project, MapScene::Mode::kEdit);
+  auto& registry = TypeRegistry::Instance();
+  const kEntityId entity = scene.Objects().NewObject();
+  scene.Objects().AddProperty(entity, MakeData());
+
+  mtext::PropertyList properties;
+  properties.Set("count", 5);
+  EXPECT_FALSE(registry.DeserializeComponent(scene, entity, "ReadOnlySnapshot",
+                                             properties));
+  SnapshotData* value = scene.Objects().GetProperty<SnapshotData>(entity);
+  ASSERT_NE(value, nullptr);
+  EXPECT_EQ(value->count, 42);
+
+  ComponentDeserializeOptions trusted;
+  trusted.require_runtime_writable = false;
+  EXPECT_TRUE(registry.DeserializeComponent(scene, entity, "ReadOnlySnapshot",
+                                            properties, trusted));
+  EXPECT_EQ(value->count, 5);
 }
 
 TEST(ComponentSerialization, SchemaExportsNonScriptComponents) {

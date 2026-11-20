@@ -79,8 +79,10 @@ class PObjectManager {
 
   // The entity's stable id, or 0 when it has none.
   uint64_t GetGuid(kEntityId id) const;
-  // Overrides the id, e.g. with the MapNode uid of a map entity.
-  void SetGuid(kEntityId id, uint64_t guid);
+  // Overrides the id, e.g. with the MapNode uid of a map entity. Returns false
+  // when `guid` (other than 0) already belongs to a different live entity, so
+  // two entities can never share a lookup id. 0 clears the id.
+  bool SetGuid(kEntityId id, uint64_t guid);
   // The entity with this id, or entt::null.
   kEntityId FindByGuid(uint64_t guid) const;
 

@@ -32,10 +32,18 @@ void RenderHooks::Remove(int id) {
 
 void RenderHooks::InvokePreRender(filament::Engine& engine,
                                   filament::View& view) const {
-  // Copy so a callback may register or remove hooks safely.
+  // Copy so a callback may register or remove hooks safely, and check the live
+  // list each time: a hook removed by an earlier callback must not run.
   const std::vector<Entry> hooks = pre_render_;
   for (const Entry& hook : hooks) {
-    if (hook.callback) hook.callback(engine, view);
+    bool registered = false;
+    for (const Entry& live : pre_render_) {
+      if (live.id == hook.id) {
+        registered = true;
+        break;
+      }
+    }
+    if (registered && hook.callback) hook.callback(engine, view);
   }
 }
 
@@ -43,7 +51,14 @@ void RenderHooks::InvokePostRender(filament::Engine& engine,
                                    filament::View& view) const {
   const std::vector<Entry> hooks = post_render_;
   for (const Entry& hook : hooks) {
-    if (hook.callback) hook.callback(engine, view);
+    bool registered = false;
+    for (const Entry& live : post_render_) {
+      if (live.id == hook.id) {
+        registered = true;
+        break;
+      }
+    }
+    if (registered && hook.callback) hook.callback(engine, view);
   }
 }
 
