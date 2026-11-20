@@ -14,6 +14,7 @@
 
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "extension.h"
 #include "os/filesystem.h"
 #include "scene/scene.h"
 #include "wx_theme.h"
@@ -520,6 +521,11 @@ void SceneViewportPanel::OnPaintCanvas(wxPaintEvent&) {
   WxOverlayCanvas overlay(gc.get(), overlay_font_);
   scene_.RenderOverlays(overlay, local_mouse_, hovered_, alt_down_,
                         right_down_);
+  // Extensions draw on top of the editor's own gizmos.
+  for (const auto& entry :
+       EditorExtensionRegistry::Instance().ViewportTools()) {
+    if (entry.info.draw) entry.info.draw(overlay, scene_, local_mouse_);
+  }
 
   // Bottom-left navigation hint pill
   if (const char* hint = scene_.GetHintText(); hint && *hint) {
@@ -611,6 +617,13 @@ void SceneViewportPanel::OnCanvasMouseDown(wxMouseEvent& evt) {
   prev_mouse_ = local_mouse_;
   mouse_pos_valid_ = true;
 
+  EditorViewportMouseEvent tool_event;
+  tool_event.action = EditorViewportMouseEvent::Action::kDown;
+  tool_event.position = local_mouse_;
+  tool_event.button = evt.GetButton();
+  tool_event.modifiers = evt.GetModifiers();
+  if (RouteViewportMouse(tool_event)) return;
+
   if (evt.LeftDown()) {
     if (!pip_popout_rect_.IsEmpty() && pip_popout_rect_.Contains(p)) {
       if (on_popout_preview_) on_popout_preview_(true);
@@ -635,6 +648,16 @@ void SceneViewportPanel::OnCanvasMouseUp(wxMouseEvent& evt) {
   shift_down_ = evt.ShiftDown();
   alt_down_ = evt.AltDown();
   ctrl_down_ = evt.ControlDown();
+
+  const wxPoint p = evt.GetPosition();
+  local_mouse_ = {static_cast<float>(p.x), static_cast<float>(p.y)};
+
+  EditorViewportMouseEvent tool_event;
+  tool_event.action = EditorViewportMouseEvent::Action::kUp;
+  tool_event.position = local_mouse_;
+  tool_event.button = evt.GetButton();
+  tool_event.modifiers = evt.GetModifiers();
+  if (RouteViewportMouse(tool_event)) return;
 
   if (evt.LeftUp()) {
     left_down_ = false;
@@ -663,6 +686,12 @@ void SceneViewportPanel::OnCanvasMouseMove(wxMouseEvent& evt) {
   }
   hovered_ = true;
 
+  EditorViewportMouseEvent tool_event;
+  tool_event.action = EditorViewportMouseEvent::Action::kMove;
+  tool_event.position = local_mouse_;
+  tool_event.modifiers = evt.GetModifiers();
+  if (RouteViewportMouse(tool_event)) return;
+
   if (left_down_ && scene_.IsDragging()) {
     scene_.OnViewportMouseDrag(local_mouse_, evt.ControlDown());
   }
@@ -680,6 +709,13 @@ void SceneViewportPanel::OnCanvasWheel(wxMouseEvent& evt) {
   const float steps =
       delta > 0 ? static_cast<float>(evt.GetWheelRotation()) / delta : 0.0f;
   if (steps != 0.0f) {
+    EditorViewportMouseEvent tool_event;
+    tool_event.action = EditorViewportMouseEvent::Action::kWheel;
+    tool_event.position = local_mouse_;
+    tool_event.wheel_steps = steps;
+    tool_event.modifiers = evt.GetModifiers();
+    if (RouteViewportMouse(tool_event)) return;
+
     scene_.OnViewportWheel(steps, local_mouse_);
   }
 }
@@ -759,14 +795,43 @@ void SceneViewportPanel::HandleKeyUp(wxKeyEvent& evt) {
 }
 
 void SceneViewportPanel::OnCanvasKeyDown(wxKeyEvent& evt) {
+  EditorViewportKeyEvent tool_event;
+  tool_event.key_code = evt.GetKeyCode();
+  tool_event.down = true;
+  tool_event.modifiers = evt.GetModifiers();
+  if (RouteViewportKey(tool_event)) return;
+
   if (!HandleKeyDown(evt)) {
     evt.Skip();
   }
 }
 
 void SceneViewportPanel::OnCanvasKeyUp(wxKeyEvent& evt) {
+  EditorViewportKeyEvent tool_event;
+  tool_event.key_code = evt.GetKeyCode();
+  tool_event.down = false;
+  tool_event.modifiers = evt.GetModifiers();
+  if (RouteViewportKey(tool_event)) return;
+
   HandleKeyUp(evt);
   evt.Skip();
+}
+
+bool SceneViewportPanel::RouteViewportMouse(
+    const EditorViewportMouseEvent& event) {
+  for (const auto& entry :
+       EditorExtensionRegistry::Instance().ViewportTools()) {
+    if (entry.info.on_mouse && entry.info.on_mouse(event, scene_)) return true;
+  }
+  return false;
+}
+
+bool SceneViewportPanel::RouteViewportKey(const EditorViewportKeyEvent& event) {
+  for (const auto& entry :
+       EditorExtensionRegistry::Instance().ViewportTools()) {
+    if (entry.info.on_key && entry.info.on_key(event, scene_)) return true;
+  }
+  return false;
 }
 
 }  // namespace Mercury::EditorUI

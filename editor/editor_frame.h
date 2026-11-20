@@ -20,6 +20,10 @@
 #include <chrono>
 #include <functional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "console_panel.h"
 #include "editor_scene.h"
@@ -81,6 +85,21 @@ class EditorFrame : public wxFrame {
   void DockAllFloatingPanels();
   void NotifyGlobalKeyUp(wxKeyEvent& evt);
 
+  // --- extensions (editor/extension.h) -----------------------------------
+  //
+  // Applies the panels and menu items loaded project systems registered, and
+  // removes one module's UI before its library is unloaded. A reload calls
+  // RemoveExtensionUI, unloads, then ApplyExtensions.
+  void ApplyExtensions();
+  void RemoveExtensionUI(std::string_view module);
+  void SetOnReloadSystems(std::function<void()> callback) {
+    on_reload_systems_ = std::move(callback);
+  }
+  void SetOnTrustSystems(std::function<void()> callback) {
+    on_trust_systems_ = std::move(callback);
+  }
+  wxAuiManager& GetAuiManager() { return aui_; }
+
  private:
   void BuildMenuBar();
   void BuildToolbar();
@@ -107,6 +126,35 @@ class EditorFrame : public wxFrame {
   void OnClose(wxCloseEvent& evt);
   void OnAuiPaneClose(wxAuiManagerEvent& evt);
   void OnAuiPaneButton(wxAuiManagerEvent& evt);
+
+  // Extension UI bookkeeping.
+  void OnExtensionMenu(wxCommandEvent& evt);
+  void ApplyExtensionMenuItem(std::string module, const std::string& menu,
+                              const std::string& label,
+                              const std::string& accelerator,
+                              std::function<void()> callback);
+  void ToggleExtensionPane(int toggle_id);
+  int NextExtensionMenuId();
+
+  struct ExtensionPane {
+    std::string module;
+    std::string id;
+    wxWindow* window = nullptr;
+    int toggle_id = 0;
+    wxMenuItem* menu_item = nullptr;
+  };
+  struct ExtensionMenuEntry {
+    std::string module;
+    int id = 0;
+    wxMenu* menu = nullptr;
+  };
+  std::vector<ExtensionPane> extension_panes_;
+  std::vector<ExtensionMenuEntry> extension_menu_items_;
+  std::vector<wxMenu*> extension_owned_menus_;
+  std::unordered_map<int, std::function<void()>> extension_callbacks_;
+  int next_extension_id_ = 0;
+  std::function<void()> on_reload_systems_;
+  std::function<void()> on_trust_systems_;
 
   EditorScene& scene_;
   std::function<void()> on_close_project_;

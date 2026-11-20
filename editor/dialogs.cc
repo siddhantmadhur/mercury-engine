@@ -430,6 +430,59 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   return true;
 }
 
+std::optional<bool> ShowTrustSystemsDialog(wxWindow* parent,
+                                           const std::filesystem::path& root,
+                                           bool currently_trusted,
+                                           bool first_time) {
+  wxDialog dlg(parent, wxID_ANY,
+               first_time ? "Trust Editor Systems?" : "Editor System Trust",
+               wxDefaultPosition, wxSize(560, -1));
+  auto* sizer = new wxBoxSizer(wxVERTICAL);
+
+  wxString message =
+      "This project contains editor systems (native code). Building and "
+      "loading them runs arbitrary code with your user permissions.\n\n"
+      "Only trust projects you trust. You can change this later with "
+      "Project > Trust Editor Systems.";
+  if (!first_time) {
+    message += currently_trusted ? "\n\nThis project is currently trusted."
+                                 : "\n\nThis project is currently not trusted.";
+  }
+  auto* label = new wxStaticText(&dlg, wxID_ANY, message);
+  label->Wrap(520);
+  sizer->Add(label, 0, wxALL, 16);
+
+  auto* path =
+      new wxStaticText(&dlg, wxID_ANY, wxString::FromUTF8(root.string()),
+                       wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
+  path->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+  sizer->Add(path, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+
+  auto* buttons = new wxBoxSizer(wxHORIZONTAL);
+  auto* trust = new wxButton(&dlg, wxID_YES, "Trust");
+  auto* distrust = new wxButton(&dlg, wxID_NO, "Don't Trust");
+  auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
+  cancel->SetDefault();
+  buttons->AddStretchSpacer();
+  buttons->Add(cancel, 0, wxRIGHT, 8);
+  buttons->Add(distrust, 0, wxRIGHT, 8);
+  buttons->Add(trust, 0);
+  sizer->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+
+  dlg.SetSizerAndFit(sizer);
+  dlg.SetSize(wxSize(560, dlg.GetSize().y));
+  dlg.CenterOnParent();
+
+  switch (dlg.ShowModal()) {
+    case wxID_YES:
+      return true;
+    case wxID_NO:
+      return false;
+    default:
+      return std::nullopt;
+  }
+}
+
 UnsavedChoice ShowUnsavedChangesDialog(wxWindow* parent,
                                        const wxString& message) {
   wxDialog dlg(parent, wxID_ANY, "Unsaved Changes", wxDefaultPosition,

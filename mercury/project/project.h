@@ -117,6 +117,10 @@ class Project {
   // shared mercury_player.
   std::string GetBuildTarget() const;
   void SetBuildTarget(std::string target);
+  // [build] systems_target: the CMake target that builds the project's editor
+  // modules. Defaults to "<build target>_systems"; empty when there is no
+  // build target.
+  std::string GetBuildSystemsTarget() const;
   // [render] anti_aliasing: "none", "fxaa" or "taa" (default). A project that
   // only has the legacy `fxaa` bool maps it to "fxaa"/"none".
   std::string GetRenderAntiAliasing() const;

@@ -15,6 +15,7 @@
 #include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "extension.h"
 #include "project/asset_database.h"
 #include "scripting/event.h"
 #include "scripting/type_registry.h"
@@ -361,6 +362,20 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
           wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
       msg->Wrap(260);
       bs->Add(msg, 0, wxEXPAND | wxBOTTOM, 6);
+    }
+
+    // An extension may replace this component's field rows with its own UI.
+    if (const EditorInspectorInfo* custom =
+            EditorExtensionRegistry::Instance().FindInspector(component.type)) {
+      if (custom->create) {
+        if (wxWindow* view = custom->create(body, scene_, node)) {
+          bs->Add(view, 0, wxEXPAND);
+          section->FinishBuild();
+          content_sizer_->Add(section, 0,
+                              wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+          continue;
+        }
+      }
     }
 
     auto on_comp_changed = [this, node_uid,

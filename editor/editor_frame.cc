@@ -27,6 +27,7 @@
 #include "create_menu.h"
 #include "dialogs.h"
 #include "editor_icons.h"
+#include "extension.h"
 #include "script_editor_panel.h"
 #include "wx_theme.h"
 
@@ -54,6 +55,8 @@ enum MenuId {
 
   kIdProjectBuildScripts,
   kIdProjectTogglePlay,
+  kIdProjectReloadSystems,
+  kIdProjectTrustSystems,
 
   kIdScriptGoToMethod,
   kIdScriptFind,
@@ -76,6 +79,11 @@ enum MenuId {
 
   kIdCreateBase = wxID_HIGHEST + 300,
 };
+
+// Extensions allocate menu ids from this block so one wxEVT_MENU binding can
+// handle all of them.
+constexpr int kExtensionMenuIdBase = wxID_HIGHEST + 1000;
+constexpr int kExtensionMenuIdCount = 1000;
 
 struct PresetMenuItem {
   int offset;
@@ -202,6 +210,10 @@ EditorFrame::EditorFrame(EditorScene& scene,
   BuildToolbar();
   BuildAuiPanes();
   SetupMenuBindings();
+  // Items and panel toggles extensions add at run time use ids from one
+  // contiguous block, so a single handler covers them.
+  Bind(wxEVT_MENU, &EditorFrame::OnExtensionMenu, this, kExtensionMenuIdBase,
+       kExtensionMenuIdBase + kExtensionMenuIdCount - 1);
 
   // Status bar for live hints & path info
   CreateStatusBar(2);
@@ -310,6 +322,9 @@ void EditorFrame::BuildMenuBar() {
   auto* proj_menu = new wxMenu();
   proj_menu->Append(kIdProjectBuildScripts, "Build Scripts\tF7");
   proj_menu->Append(kIdProjectTogglePlay, "Play / Stop\tF5");
+  proj_menu->AppendSeparator();
+  proj_menu->Append(kIdProjectReloadSystems, "Reload Systems");
+  proj_menu->Append(kIdProjectTrustSystems, "Trust Editor Systems...");
   mb->Append(proj_menu, "&Project");
 
   auto* script_menu = new wxMenu();
@@ -639,6 +654,18 @@ void EditorFrame::SetupMenuBindings() {
   Bind(
       wxEVT_MENU, [this](wxCommandEvent&) { HandleTogglePlay(); },
       kIdProjectTogglePlay);
+  Bind(
+      wxEVT_MENU,
+      [this](wxCommandEvent&) {
+        if (on_reload_systems_) on_reload_systems_();
+      },
+      kIdProjectReloadSystems);
+  Bind(
+      wxEVT_MENU,
+      [this](wxCommandEvent&) {
+        if (on_trust_systems_) on_trust_systems_();
+      },
+      kIdProjectTrustSystems);
   Bind(
       wxEVT_MENU,
       [this](wxCommandEvent&) {
@@ -1326,6 +1353,178 @@ bool EditorFrame::WantsUnlockedViewportFps() const {
     return false;
   }
   return scene_panel_->WantsUnlockedFps();
+}
+
+// ---------------------------------------------------------- extensions ---
+
+namespace {
+
+std::string NormalizeMenuLabel(std::string label) {
+  label.erase(std::remove(label.begin(), label.end(), '&'), label.end());
+  for (char& c : label) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return label;
+}
+
+}  // namespace
+
+int EditorFrame::NextExtensionMenuId() {
+  if (next_extension_id_ >= kExtensionMenuIdCount) return -1;
+  return kExtensionMenuIdBase + next_extension_id_++;
+}
+
+void EditorFrame::ApplyExtensions() {
+  auto& registry = EditorExtensionRegistry::Instance();
+
+  for (const auto& entry : registry.Panels()) {
+    const EditorPanelInfo& info = entry.info;
+    if (!info.create || info.id.empty()) continue;
+    wxWindow* window = info.create(this);
+    if (!window) continue;
+    window->SetName(wxString::FromUTF8(info.id));
+
+    const int toggle_id = NextExtensionMenuId();
+    wxMenuItem* toggle = nullptr;
+    if (toggle_id >= 0 && window_menu_) {
+      toggle = window_menu_->AppendCheckItem(toggle_id,
+                                             wxString::FromUTF8(info.title));
+      toggle->Check(true);
+    }
+
+    extension_panes_.push_back(
+        {entry.module, info.id, window, toggle_id, toggle});
+    aui_.AddPane(window, wxAuiPaneInfo()
+                             .Name(wxString::FromUTF8(info.id))
+                             .Caption(wxString::FromUTF8(info.title))
+                             .Right()
+                             .CloseButton(true)
+                             .Floatable(true)
+                             .Resizable(true));
+  }
+  if (!extension_panes_.empty()) aui_.Update();
+
+  for (const auto& entry : registry.MenuItems()) {
+    ApplyExtensionMenuItem(entry.module, entry.info.menu, entry.info.label,
+                           entry.info.accelerator, entry.info.callback);
+  }
+
+  // The custom inspectors and viewport overlays may have changed too.
+  if (inspector_panel_) inspector_panel_->RequestRebuild();
+  if (scene_panel_) scene_panel_->Refresh();
+}
+
+void EditorFrame::ApplyExtensionMenuItem(std::string module,
+                                         const std::string& menu_name,
+                                         const std::string& label,
+                                         const std::string& accelerator,
+                                         std::function<void()> callback) {
+  wxMenuBar* bar = GetMenuBar();
+  if (!bar) return;
+
+  const std::string wanted = NormalizeMenuLabel(menu_name);
+  wxMenu* menu = nullptr;
+  for (size_t i = 0; i < bar->GetMenuCount(); i++) {
+    if (NormalizeMenuLabel(bar->GetMenuLabelText(i).ToStdString()) == wanted) {
+      menu = bar->GetMenu(i);
+      break;
+    }
+  }
+  if (!menu) {
+    menu = new wxMenu();
+    bar->Append(menu, wxString::FromUTF8(menu_name));
+    extension_owned_menus_.push_back(menu);
+  }
+
+  const int id = NextExtensionMenuId();
+  if (id < 0) return;
+  wxString text = wxString::FromUTF8(label);
+  if (!accelerator.empty()) text += "\t" + wxString::FromUTF8(accelerator);
+  menu->Append(id, text);
+  extension_callbacks_[id] = std::move(callback);
+  extension_menu_items_.push_back({std::move(module), id, menu});
+}
+
+void EditorFrame::RemoveExtensionUI(std::string_view module) {
+  // Menu items first: their callbacks point into the module that is about to
+  // be unloaded.
+  for (auto it = extension_menu_items_.begin();
+       it != extension_menu_items_.end();) {
+    if (it->module != module) {
+      ++it;
+      continue;
+    }
+    if (it->menu) it->menu->Delete(it->id);
+    extension_callbacks_.erase(it->id);
+    it = extension_menu_items_.erase(it);
+  }
+
+  for (auto it = extension_panes_.begin(); it != extension_panes_.end();) {
+    if (it->module != module) {
+      ++it;
+      continue;
+    }
+    if (window_menu_ && it->toggle_id >= 0) {
+      window_menu_->Delete(it->toggle_id);
+    }
+    extension_callbacks_.erase(it->toggle_id);
+    if (it->window) {
+      aui_.DetachPane(it->window);
+      it->window->Destroy();
+    }
+    it = extension_panes_.erase(it);
+  }
+
+  // Menus the extensions created disappear once their last item is gone.
+  wxMenuBar* bar = GetMenuBar();
+  for (auto it = extension_owned_menus_.begin();
+       it != extension_owned_menus_.end();) {
+    wxMenu* menu = *it;
+    if (menu->GetMenuItemCount() != 0) {
+      ++it;
+      continue;
+    }
+    if (bar) {
+      for (size_t i = 0; i < bar->GetMenuCount(); i++) {
+        if (bar->GetMenu(i) == menu) {
+          bar->Remove(i);
+          break;
+        }
+      }
+    }
+    delete menu;
+    it = extension_owned_menus_.erase(it);
+  }
+
+  // The module's inspector entry has already been removed from the registry;
+  // rebuild now so its custom inspector window is destroyed while the
+  // module's library is still mapped.
+  if (inspector_panel_) inspector_panel_->RebuildFromExtensions();
+
+  aui_.Update();
+}
+
+void EditorFrame::ToggleExtensionPane(int toggle_id) {
+  for (ExtensionPane& entry : extension_panes_) {
+    if (entry.toggle_id != toggle_id || !entry.window) continue;
+    wxAuiPaneInfo& pane = aui_.GetPane(entry.window);
+    pane.Show(!pane.IsShown());
+    if (entry.menu_item) entry.menu_item->Check(pane.IsShown());
+    aui_.Update();
+    return;
+  }
+}
+
+void EditorFrame::OnExtensionMenu(wxCommandEvent& evt) {
+  const int id = evt.GetId();
+  for (const ExtensionPane& entry : extension_panes_) {
+    if (entry.toggle_id == id) {
+      ToggleExtensionPane(id);
+      return;
+    }
+  }
+  auto it = extension_callbacks_.find(id);
+  if (it != extension_callbacks_.end() && it->second) it->second();
 }
 
 }  // namespace Mercury::EditorUI

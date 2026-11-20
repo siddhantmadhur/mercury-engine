@@ -61,6 +61,13 @@ class AssetImporterRegistry {
 
   // Adds an importer. Its extensions start using the new type immediately.
   void Register(AssetImporterInfo info);
+  // Adds an importer owned by `owner` (an editor module id). UnregisterOwner
+  // removes exactly that module's importers, restoring the earlier mapping.
+  void RegisterOwned(std::string owner, AssetImporterInfo info);
+  // Removes every importer registered for `type`. False when there was none.
+  bool Unregister(std::string_view type);
+  // Removes every importer registered by `owner`. False when there was none.
+  bool UnregisterOwner(std::string_view owner);
 
   // The asset type for a path or bare extension; "" when unknown.
   std::string TypeFromExtension(std::string_view path) const;
@@ -84,9 +91,13 @@ class AssetImporterRegistry {
   AssetImporterRegistry();
 
   void RegisterBuiltins();
+  void RebuildIndex();
   static std::string NormalizeExtension(std::string_view extension);
 
   std::vector<AssetImporterInfo> importers_;
+  // Parallel to importers_; empty for importers registered by the engine or a
+  // game without an editor module.
+  std::vector<std::string> owners_;
   std::map<std::string, size_t, std::less<>> by_extension_;
 };
 

@@ -12,9 +12,11 @@
 #include <cstdint>
 #include <string_view>
 
-#include "dialogs.h"
 #include "dnd_payloads.h"
 #include "editor_icons.h"
+#include "extension.h"
+#include "dialogs.h"
+#include "project/asset_importer.h"
 #include "os/filesystem.h"
 #include "os/process.h"
 #include "project/project.h"
@@ -463,6 +465,37 @@ bool ProjectBrowserPanel::CopyExternalFilesInto(const fs::path& dest_dir,
       copied_any = true;
       scene_.ConsoleRef().Info("Imported file into project: " +
                                project->ToResPath(dst));
+      // A registered importer turns the source into a .masset the editor can
+      // inspect. Built-in formats have no callback and are read directly.
+      if (const AssetImporterInfo* importer =
+              AssetImporterRegistry::Instance().Find(dst.extension().string());
+          importer && importer->import) {
+        mtext::PropertyList properties;
+        std::string import_error;
+        if (importer->import(dst, properties, &import_error)) {
+          std::error_code asset_ec;
+          fs::path asset_file =
+              dst.parent_path() /
+              (dst.stem().string() + std::string(kAssetExtension));
+          for (int n = 2; fs::exists(asset_file, asset_ec); n++) {
+            asset_file =
+                dst.parent_path() / (dst.stem().string() + std::to_string(n) +
+                                     std::string(kAssetExtension));
+          }
+          Asset asset;
+          asset.type = importer->type;
+          asset.path = project->ToResPath(asset_file);
+          asset.properties = std::move(properties);
+          if (SaveAssetFile(asset_file, asset)) {
+            scene_.ConsoleRef().Info("Imported " + asset.path + " as " +
+                                     asset.type);
+          } else {
+            scene_.ConsoleRef().Error("Could not write " + asset_file.string());
+          }
+        } else if (!import_error.empty()) {
+          scene_.ConsoleRef().Error("Import failed: " + import_error);
+        }
+      }
       if (ToLower(dst.extension().string()) == ".obj") {
         single_obj_res = project->ToResPath(dst);
       }
@@ -587,6 +620,7 @@ void ProjectBrowserPanel::ShowFolderContextMenu(const fs::path& dir,
     menu.AppendSeparator();
     bind("Delete...", [this, dir]() { HandleDeletePath(dir); });
   }
+  AppendExtensionMenuItems(menu, project->ToResPath(dir), true);
   PopupMenu(&menu, ScreenToClient(screen_pos));
 }
 
@@ -652,7 +686,27 @@ void ProjectBrowserPanel::ShowFileContextMenu(const fs::path& file,
       "Delete...", [this, file]() { HandleDeletePath(file); },
       res_path != scene_.GetMapPath());
 
+  AppendExtensionMenuItems(menu, res_path, false);
   PopupMenu(&menu, ScreenToClient(screen_pos));
+}
+
+void ProjectBrowserPanel::AppendExtensionMenuItems(wxMenu& menu,
+                                                   const std::string& res_path,
+                                                   bool is_directory) {
+  const auto& items = EditorExtensionRegistry::Instance().ProjectMenuItems();
+  if (items.empty()) return;
+  menu.AppendSeparator();
+  for (const auto& entry : items) {
+    wxMenuItem* item =
+        menu.Append(wxID_ANY, wxString::FromUTF8(entry.info.label));
+    auto callback = entry.info.callback;
+    menu.Bind(
+        wxEVT_MENU,
+        [callback, res_path, is_directory](wxCommandEvent&) {
+          if (callback) callback(res_path, is_directory);
+        },
+        item->GetId());
+  }
 }
 
 void ProjectBrowserPanel::HandleCreateScript() {

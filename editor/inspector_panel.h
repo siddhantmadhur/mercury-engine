@@ -31,6 +31,12 @@ class InspectorPanel : public wxPanel {
   InspectorPanel(wxWindow* parent, EditorScene& scene);
 
   void SyncFromController();
+  // Rebuilds on the next tick (extensions reloading their custom inspectors).
+  void RequestRebuild() { ScheduleRebuild(); }
+  // Rebuilds immediately. The extension loader calls this after removing a
+  // module's inspector entry, so its window is destroyed while the module's
+  // code is still mapped.
+  void RebuildFromExtensions() { RebuildNow(); }
 
  private:
   struct TransformBinding {

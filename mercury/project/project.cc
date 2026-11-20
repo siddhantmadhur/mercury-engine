@@ -115,6 +115,17 @@ void Project::SetBuildTarget(std::string target) {
   GetOrAddSection("build").properties.Set("target", std::move(target));
 }
 
+std::string Project::GetBuildSystemsTarget() const {
+  auto section = document_.Find("build");
+  if (section) {
+    const std::string explicit_target =
+        section->properties.GetString("systems_target");
+    if (!explicit_target.empty()) return explicit_target;
+  }
+  const std::string target = GetBuildTarget();
+  return target.empty() ? "" : target + "_systems";
+}
+
 std::string Project::GetRenderAntiAliasing() const {
   auto section = document_.Find("render");
   if (!section) return "taa";

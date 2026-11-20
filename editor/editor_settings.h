@@ -63,6 +63,20 @@ struct EditorSettings {
   std::string lore_executable;
   // Server new Lore repositories are created on.
   std::string lore_server = "lore://127.0.0.1:41337";
+  // Canonical project roots whose editor systems the user trusted or refused.
+  // A project in neither list has not been asked about yet.
+  std::vector<std::string> trusted_projects;
+  std::vector<std::string> distrusted_projects;
+
+  // Whether the user already answered the trust prompt for this project.
+  bool HasProjectTrustDecision(const std::filesystem::path& root) const;
+  // True only when the user explicitly trusted the project. An unknown
+  // project is not trusted.
+  bool IsProjectTrusted(const std::filesystem::path& root) const;
+  // Records (and replaces) the decision for a project.
+  void SetProjectTrusted(const std::filesystem::path& root, bool trusted);
+  // The path key used in the config: weak canonical form when it exists.
+  static std::string CanonicalProjectPath(const std::filesystem::path& root);
 
   static std::filesystem::path ConfigDir();
   static std::filesystem::path HomeDir();

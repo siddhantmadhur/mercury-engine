@@ -72,6 +72,20 @@ TEST_F(AssetImporterTest, RegisteringAnExtensionAgainReplacesItsType) {
   EXPECT_EQ(registry.TypeFromExtension("coin.png"), "Texture");
 }
 
+TEST_F(AssetImporterTest, UnregisterOwnerRestoresTheEarlierImporter) {
+  auto& registry = AssetImporterRegistry::Instance();
+  registry.RegisterOwned("module-a", {{".png"}, "PngFromA", "", {}});
+  registry.RegisterOwned("module-b", {{".foo"}, "FooFromB", "", {}});
+  EXPECT_EQ(registry.TypeFromExtension("coin.png"), "PngFromA");
+  EXPECT_EQ(registry.TypeFromExtension("x.foo"), "FooFromB");
+
+  EXPECT_TRUE(registry.UnregisterOwner("module-a"));
+  // The built-in Texture mapping is back; the other module is untouched.
+  EXPECT_EQ(registry.TypeFromExtension("coin.png"), "Texture");
+  EXPECT_EQ(registry.TypeFromExtension("x.foo"), "FooFromB");
+  EXPECT_FALSE(registry.UnregisterOwner("module-a"));
+}
+
 TEST_F(AssetImporterTest, ImportCallbackFillsProperties) {
   auto& registry = AssetImporterRegistry::Instance();
   registry.Register({{".zed"},

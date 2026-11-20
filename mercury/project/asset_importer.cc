@@ -30,11 +30,51 @@ std::string AssetImporterRegistry::NormalizeExtension(
 }
 
 void AssetImporterRegistry::Register(AssetImporterInfo info) {
+  RegisterOwned({}, std::move(info));
+}
+
+void AssetImporterRegistry::RegisterOwned(std::string owner,
+                                          AssetImporterInfo info) {
   const size_t index = importers_.size();
   importers_.push_back(std::move(info));
+  owners_.push_back(std::move(owner));
   for (const std::string& extension : importers_.back().extensions) {
     const std::string normalized = NormalizeExtension(extension);
     if (!normalized.empty()) by_extension_[normalized] = index;
+  }
+}
+
+bool AssetImporterRegistry::Unregister(std::string_view type) {
+  const size_t before = importers_.size();
+  for (size_t i = importers_.size(); i-- > 0;) {
+    if (importers_[i].type != type) continue;
+    importers_.erase(importers_.begin() + static_cast<ptrdiff_t>(i));
+    owners_.erase(owners_.begin() + static_cast<ptrdiff_t>(i));
+  }
+  if (importers_.size() == before) return false;
+  RebuildIndex();
+  return true;
+}
+
+bool AssetImporterRegistry::UnregisterOwner(std::string_view owner) {
+  const size_t before = importers_.size();
+  for (size_t i = importers_.size(); i-- > 0;) {
+    if (owners_[i] != owner) continue;
+    importers_.erase(importers_.begin() + static_cast<ptrdiff_t>(i));
+    owners_.erase(owners_.begin() + static_cast<ptrdiff_t>(i));
+  }
+  if (importers_.size() == before) return false;
+  RebuildIndex();
+  return true;
+}
+
+void AssetImporterRegistry::RebuildIndex() {
+  by_extension_.clear();
+  for (size_t i = 0; i < importers_.size(); i++) {
+    for (const std::string& extension : importers_[i].extensions) {
+      const std::string normalized = NormalizeExtension(extension);
+      if (!normalized.empty()) by_extension_[normalized] = i;
+    }
   }
 }
 
@@ -74,6 +114,7 @@ bool AssetImporterRegistry::Import(const std::filesystem::path& source,
 
 void AssetImporterRegistry::Reset() {
   importers_.clear();
+  owners_.clear();
   by_extension_.clear();
   RegisterBuiltins();
 }

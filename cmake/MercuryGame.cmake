@@ -43,3 +43,63 @@ function(mercury_add_game TARGET)
             EXPORT_COMPILE_COMMANDS ON
             CXX_SCAN_FOR_MODULES OFF)
 endfunction()
+
+# mercury_add_editor_system(<target> PROJECT <dir> [SOURCES <extra.cc>...])
+#
+# Builds the project's editor extensions from <dir>/system into a MODULE
+# library the editor loads when the project opens. The module is not linked
+# against the engine or the editor: its symbols (engine, editor and wxWidgets)
+# resolve against the running editor at load time. Because of that the editor
+# executable must be built in the same tree, and the target is added only when
+# MERCURY_BUILD_EDITOR is on.
+#
+# The library is written to <dir>/.mercury/systems, where
+# EditorExtensionLoader looks for it. The editor derives the target name from
+# the project's [build] target: for [build] target = "my_game" it builds
+# "my_game_systems".
+function(mercury_add_editor_system TARGET)
+    cmake_parse_arguments(SYSTEM "" "PROJECT" "SOURCES" ${ARGN})
+    if (NOT SYSTEM_PROJECT)
+        message(FATAL_ERROR
+                "mercury_add_editor_system(${TARGET}) needs PROJECT <dir>")
+    endif ()
+    if (NOT TARGET mercury_wx_headers)
+        message(FATAL_ERROR
+                "mercury_add_editor_system(${TARGET}) needs an editor build "
+                "(configure the engine with MERCURY_BUILD_EDITOR=ON)")
+    endif ()
+    get_filename_component(SYSTEM_PROJECT "${SYSTEM_PROJECT}" ABSOLUTE)
+
+    file(GLOB_RECURSE SYSTEM_GLOB_SOURCES CONFIGURE_DEPENDS
+            "${SYSTEM_PROJECT}/system/*.cc"
+            "${SYSTEM_PROJECT}/system/*.cpp")
+
+    add_library(${TARGET} MODULE ${SYSTEM_GLOB_SOURCES} ${SYSTEM_SOURCES})
+    target_compile_features(${TARGET} PRIVATE cxx_std_20)
+    target_include_directories(${TARGET} PRIVATE
+            "${SYSTEM_PROJECT}/system"
+            "${MERCURY_ENGINE_SOURCE_DIR}/editor"
+            $<TARGET_PROPERTY:mercury,INTERFACE_INCLUDE_DIRECTORIES>)
+    target_compile_definitions(${TARGET} PRIVATE
+            $<TARGET_PROPERTY:mercury,INTERFACE_COMPILE_DEFINITIONS>)
+    target_link_libraries(${TARGET} PRIVATE mercury_wx_headers)
+    if (APPLE)
+        # Resolve engine/editor/wx symbols from the executable that loads us.
+        target_link_options(${TARGET} PRIVATE "-Wl,-undefined,dynamic_lookup")
+    endif ()
+    set_target_properties(${TARGET} PROPERTIES
+            PREFIX ""
+            LIBRARY_OUTPUT_DIRECTORY "${SYSTEM_PROJECT}/.mercury/systems"
+            RUNTIME_OUTPUT_DIRECTORY "${SYSTEM_PROJECT}/.mercury/systems"
+            CXX_SCAN_FOR_MODULES OFF)
+    # The top-level project sets CMAKE_LIBRARY_OUTPUT_DIRECTORY_<CONFIG> for
+    # every target, and a per-config value wins over the generic property.
+    foreach (CONFIG Debug Release RelWithDebInfo MinSizeRel)
+        string(TOUPPER "${CONFIG}" CONFIG_UPPER)
+        set_target_properties(${TARGET} PROPERTIES
+                "LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER}"
+                "${SYSTEM_PROJECT}/.mercury/systems"
+                "RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER}"
+                "${SYSTEM_PROJECT}/.mercury/systems")
+    endforeach ()
+endfunction()

@@ -25,6 +25,8 @@
 
 namespace Mercury::EditorUI {
 
+class EditorExtensionLoader;
+
 /**
  * @brief wxWidgets entry point for the Mercury Editor
  *
@@ -43,6 +45,8 @@ namespace Mercury::EditorUI {
  */
 class MercuryEditorApp : public wxApp {
  public:
+  MercuryEditorApp();
+  ~MercuryEditorApp();
   bool OnInit() override;
   int OnExit() override;
   int FilterEvent(wxEvent& evt) override;
@@ -57,6 +61,8 @@ class MercuryEditorApp : public wxApp {
 
   std::unique_ptr<DefaultApplication> application_;
   EditorScene* scene_ = nullptr;
+  // Builds, loads and unloads the project's system/ modules.
+  std::unique_ptr<EditorExtensionLoader> extensions_;
 
   LauncherFrame* launcher_frame_ = nullptr;
   EditorFrame* editor_frame_ = nullptr;

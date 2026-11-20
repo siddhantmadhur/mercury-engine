@@ -66,6 +66,19 @@ void EditorSettings::Load() {
     const std::string server = lore->properties.GetString("server");
     if (!server.empty()) lore_server = server;
   }
+  if (auto trust = document.Find("trust")) {
+    auto read_list = [&](const char* key, std::vector<std::string>& out) {
+      const mtext::Variant* list = trust->properties.Get(key);
+      if (!list) return;
+      if (auto array = list->Get<mtext::Array>()) {
+        for (const auto& item : *array) {
+          if (auto path = item.ToString()) out.push_back(*path);
+        }
+      }
+    };
+    read_list("trusted", trusted_projects);
+    read_list("distrusted", distrusted_projects);
+  }
   if (auto recent = document.Find("recent")) {
     if (auto list = recent->properties.Get("projects")) {
       if (auto array = list->Get<mtext::Array>()) {
@@ -90,6 +103,15 @@ void EditorSettings::Save() const {
   mtext::Array projects;
   for (const auto& path : recent_projects) projects.emplace_back(path);
   document.Add("recent").properties.Set("projects", projects);
+  auto& trust = document.Add("trust").properties;
+  mtext::Array trusted;
+  for (const std::string& path : trusted_projects) trusted.emplace_back(path);
+  mtext::Array distrusted;
+  for (const std::string& path : distrusted_projects) {
+    distrusted.emplace_back(path);
+  }
+  trust.Set("trusted", trusted);
+  trust.Set("distrusted", distrusted);
   auto& windows = document.Add("windows").properties;
   windows.Set("ui_builder", show_ui_builder);
   windows.Set("input_actions", show_input_actions);
@@ -106,6 +128,39 @@ void EditorSettings::AddRecentProject(const fs::path& mproj) {
   recent_projects.insert(recent_projects.begin(), path);
   if (recent_projects.size() > kMaxRecentProjects) {
     recent_projects.resize(kMaxRecentProjects);
+  }
+}
+
+std::string EditorSettings::CanonicalProjectPath(const fs::path& root) {
+  std::error_code ec;
+  const fs::path canonical = fs::weakly_canonical(root, ec);
+  if (!ec) return canonical.lexically_normal().string();
+  const fs::path absolute = fs::absolute(root, ec);
+  return (ec ? root : absolute).lexically_normal().string();
+}
+
+bool EditorSettings::HasProjectTrustDecision(const fs::path& root) const {
+  const std::string path = CanonicalProjectPath(root);
+  return std::find(trusted_projects.begin(), trusted_projects.end(), path) !=
+             trusted_projects.end() ||
+         std::find(distrusted_projects.begin(), distrusted_projects.end(),
+                   path) != distrusted_projects.end();
+}
+
+bool EditorSettings::IsProjectTrusted(const fs::path& root) const {
+  const std::string path = CanonicalProjectPath(root);
+  return std::find(trusted_projects.begin(), trusted_projects.end(), path) !=
+         trusted_projects.end();
+}
+
+void EditorSettings::SetProjectTrusted(const fs::path& root, bool trusted) {
+  const std::string path = CanonicalProjectPath(root);
+  std::erase(trusted_projects, path);
+  std::erase(distrusted_projects, path);
+  if (trusted) {
+    trusted_projects.push_back(path);
+  } else {
+    distrusted_projects.push_back(path);
   }
 }
 

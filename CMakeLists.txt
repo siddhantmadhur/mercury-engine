@@ -223,6 +223,18 @@ if (MERCURY_BUILD_EDITOR)
     endif ()
     target_link_libraries(mercury_wx INTERFACE ${wxWidgets_LIBRARIES})
 
+    # The same include paths and flags without the wx libraries. Editor system
+    # modules use this: they resolve wx symbols against the running editor
+    # instead of linking a second copy of wxWidgets.
+    add_library(mercury_wx_headers INTERFACE)
+    target_include_directories(mercury_wx_headers INTERFACE
+            ${wxWidgets_INCLUDE_DIRS})
+    target_compile_definitions(mercury_wx_headers INTERFACE
+            ${wxWidgets_DEFINITIONS})
+    if (wxWidgets_CXX_FLAGS)
+        target_compile_options(mercury_wx_headers INTERFACE ${WX_CXX_FLAGS})
+    endif ()
+
     file(GLOB MERCURY_EDITOR_SOURCES CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/editor/*.cc")
     list(REMOVE_ITEM MERCURY_EDITOR_SOURCES
@@ -235,6 +247,21 @@ if (MERCURY_BUILD_EDITOR)
 
     add_executable(mercury_editor editor/main.cc)
     target_link_libraries(mercury_editor PRIVATE mercury_editor_lib)
+    # Editor systems are modules loaded at run time; their engine, editor and
+    # wx symbols resolve against this executable, so it exports them. Forcing
+    # the archives in also exports symbols the editor itself does not call.
+    if (APPLE)
+        target_link_options(mercury_editor PRIVATE "-Wl,-export_dynamic")
+        target_link_options(mercury_editor PRIVATE
+                "LINKER:-force_load,$<TARGET_FILE:mercury_editor_lib>"
+                "LINKER:-force_load,$<TARGET_FILE:mercury>")
+    elseif (UNIX)
+        target_link_options(mercury_editor PRIVATE "-rdynamic")
+        target_link_options(mercury_editor PRIVATE
+                "LINKER:--whole-archive"
+                "$<TARGET_FILE:mercury_editor_lib>"
+                "LINKER:--no-whole-archive")
+    endif ()
 endif ()
 
 # --------------------------------------------------------------------------
@@ -293,6 +320,7 @@ if (MERCURY_BUILD_TESTS)
             tests/player_args_test.cc
             tests/primitives_test.cc
             tests/process_test.cc
+            tests/project_settings_test.cc
             tests/reflection_test.cc
             tests/render_settings_test.cc
             tests/rust_bridge_test.cc
@@ -322,6 +350,20 @@ if (MERCURY_BUILD_TESTS)
         set_target_properties(editor_smoke PROPERTIES EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} editor_smoke)
 
+        # Unload-order regression: a module's custom inspector must be gone
+        # before its library would be unloaded. Needs a real wx frame, so it
+        # is a smoke executable like editor_smoke.
+        add_executable(editor_extension_unload_smoke
+                tests/editor_extension_unload_smoke.cc)
+        target_link_libraries(editor_extension_unload_smoke
+                PRIVATE mercury_editor_lib)
+        target_compile_definitions(editor_extension_unload_smoke PRIVATE
+                MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        set_target_properties(editor_extension_unload_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                editor_extension_unload_smoke)
+
         mercury_add_test(editor_test
                 tests/editor_templates_test.cc
                 tests/test_paths.h)
@@ -331,6 +373,40 @@ if (MERCURY_BUILD_TESTS)
                 tests/script_editor_test.cc
                 tests/test_paths.h)
         target_link_libraries(script_editor_test PRIVATE mercury_editor_lib)
+
+        # Tiny modules for editor_extension_test: one valid, one with a
+        # deliberately wrong ABI. They call no editor symbols.
+        function(mercury_add_test_extension TARGET)
+            add_library(${TARGET} MODULE
+                    tests/extensions/editor_test_extension.cc)
+            target_compile_features(${TARGET} PRIVATE cxx_std_20)
+            target_include_directories(${TARGET} PRIVATE
+                    "${CMAKE_CURRENT_SOURCE_DIR}/editor"
+                    $<TARGET_PROPERTY:mercury,INTERFACE_INCLUDE_DIRECTORIES>)
+            target_compile_definitions(${TARGET} PRIVATE
+                    $<TARGET_PROPERTY:mercury,INTERFACE_COMPILE_DEFINITIONS>)
+            target_link_libraries(${TARGET} PRIVATE mercury_wx_headers)
+            if (APPLE)
+                target_link_options(${TARGET} PRIVATE
+                        "-Wl,-undefined,dynamic_lookup")
+            endif ()
+            set_target_properties(${TARGET} PROPERTIES
+                    PREFIX "" SUFFIX ".mercury-extension")
+        endfunction()
+
+        mercury_add_test_extension(editor_test_extension)
+        mercury_add_test_extension(editor_test_extension_bad_abi)
+        target_compile_definitions(editor_test_extension_bad_abi PRIVATE
+                MERCURY_TEST_EXTENSION_ABI=999)
+
+        mercury_add_test(editor_extension_test
+                tests/editor_extension_test.cc)
+        target_link_libraries(editor_extension_test PRIVATE mercury_editor_lib)
+        target_compile_definitions(editor_extension_test PRIVATE
+                MERCURY_TEST_EXTENSION_PATH="$<TARGET_FILE:editor_test_extension>"
+                MERCURY_TEST_EXTENSION_BAD_ABI_PATH="$<TARGET_FILE:editor_test_extension_bad_abi>")
+        add_dependencies(editor_extension_test
+                editor_test_extension editor_test_extension_bad_abi)
     endif ()
 
     add_custom_target(check
