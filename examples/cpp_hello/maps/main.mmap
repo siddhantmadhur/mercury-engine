@@ -29,3 +29,5 @@ position = Vector3(0, 0.5, 0)
 
 [component type="Spinner" node="Cube"]
 speed = 45.0
+
+[component type="BloomToggle" node="Cube"]

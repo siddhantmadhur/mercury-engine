@@ -36,7 +36,7 @@ namespace Mercury::EditorUI {
 void ScaffoldProject(const Project& project);
 
 /**
- * @brief Points <root>/compile_commands.json at the debug build's database
+ * @brief Points the project's compile_commands.json at the debug database
  *
  * A no-op when the database does not exist yet. Called after every project
  * configure (including the ones Play and the systems loader run).

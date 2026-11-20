@@ -25,8 +25,8 @@ namespace EditorUI {
 /**
  * @brief Records a trust decision and purges stale build output on first trust
  *
- * When `trusted` is newly granted, <root>/.mercury/build and
- * <root>/.mercury/systems are removed (symlinks are removed as links, never
+ * When `trusted` is newly granted, the project's .mercury/build and
+ * .mercury/systems folders are removed (symlinks are removed as links, never
  * followed) and a line is logged. Repeating the decision is cheap.
  */
 void SetProjectTrust(EditorSettings& settings,

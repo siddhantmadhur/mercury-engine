@@ -359,9 +359,15 @@ of every script. That generated folder is not committed.
 @section scripting_cpp C++ scripts
 
 A C++ script derives from @ref Mercury::Behaviour, describes its fields in
-`Reflect`, and registers itself with `MERCURY_SCRIPT`:
+`Reflect`, and registers itself with `MERCURY_SCRIPT`. The files live in the
+project's `src/` folder (the Project Browser's **Create > Script...** dialog
+can write the pair for you):
 
 @code{.cpp}
+// src/spinner.h
+#pragma once
+#include <scripting/behaviour.h>
+
 class Spinner : public Mercury::Behaviour {
  public:
   void Reflect(Mercury::Reflector& r) override {
@@ -373,7 +379,11 @@ class Spinner : public Mercury::Behaviour {
   }
   float speed = 45.0f;
 };
+@endcode
 
+@code{.cpp}
+// src/spinner.cc
+#include "spinner.h"
 MERCURY_SCRIPT(Spinner);
 @endcode
 
@@ -384,6 +394,11 @@ The class can be used from a map exactly like an AngelScript `[script]` class:
 speed = 45.0
 @endcode
 
+The callback names are the C++ spellings of the AngelScript ones, and
+`Reflect` supports the same field types as `[field]`. `MERCURY_DATA_ASSET(Type)`
+registers a reflected struct as a `.masset` type. Both languages can be used
+in one project, and a node can mix a C++ component with an `.as` one.
+
 C++ code is linked into the executable, so a C++ project names its own CMake
 target in the `.mproj`:
 
@@ -392,11 +407,32 @@ target in the `.mproj`:
 target = "my_game"
 @endcode
 
-The target is built with the `mercury_add_game` function in
-`cmake/MercuryGame.cmake`. The editor's Build/Play uses `cmake --build` and
-runs that executable, so its native scripts provide the schema. Both languages can be used in one project;
-`MERCURY_DATA_ASSET(Type)` registers a reflected struct as a `.masset` type.
-See @ref getting_started_cpp and `examples/cpp_hello`.
+The editor generates a `CMakeLists.txt` (using `mercury_add_game`) the first
+time the project opens if it does not have one. Play/Build configure and build
+the project's own tree in `.mercury/build/debug`; the first native build asks
+for workspace trust, and an untrusted project is never configured. Passing
+`--greeting` and other custom options to a game works only when an
+`AppHook` is registered (see @ref cpp_api_systems).
+
+The **New Script** dialog has four kinds:
+
+| Kind | Files | Base |
+|---|---|---|
+| AngelScript Behaviour | `scripts/<snake>.as` | `[script] class ... : Behaviour` |
+| C++ Behaviour | `src/<snake>.h`, `.cc` | @ref Mercury::Behaviour + `MERCURY_SCRIPT` |
+| C++ System | `src/<snake>.h`, `.cc` | @ref Mercury::System + `MERCURY_SYSTEM` |
+| C++ Editor System | `system/<snake>.h`, `.cc` | @ref Mercury::EditorUI::EditorExtension + `MERCURY_EDITOR_EXTENSION` |
+
+The dialog previews the exact paths, refuses to overwrite, and **Open after
+creating** opens the `.cc`/`.as` (the choice and last kind are remembered).
+C++ Systems are scene-wide subsystems with `kPreTick`/`kTick`/`kPostTick`/
+`kPostPhysics` phases; contact sheets, app hooks, the EventBus, render hooks
+and the editor-extension lifecycle are documented in @ref cpp_api_systems and
+@ref cpp_api_editor_systems.
+
+See @ref getting_started_cpp and `examples/cpp_hello`, whose `src/` files add
+a System, an AppHook reading `--greeting`, and a render hook that toggles
+Filament bloom with **F2**.
 
 @section scripting_examples Learn from the examples
 

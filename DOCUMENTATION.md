@@ -33,12 +33,18 @@ Games are projects, like in Unity and Godot, rather than hand-written `GameScene
 pong.mproj              project settings (name, main map, window size)
 maps/main.mmap          the map: nodes and their components
 assets/*.masset         materials and physics materials
-scripts/*.as            game logic in AngelScript (optional when scripts are C++)
-scripts/*.cc            game logic in C++ (optional; see C++ scripts)
-.mercury/               generated: scripts.mschema and build caches (not committed)
+scripts/*.as            game logic in AngelScript (optional)
+src/*.cc, src/*.h       C++ gameplay and runtime systems (optional)
+system/*.cc, *.h        editor extension modules (optional, loaded by the editor)
+CMakeLists.txt          generated once by the editor, then owned by the project
+CMakePresets.json       generated once by the editor, then owned by the project
+.clangd                 generated on every project open
+.mercury/               generated: schema, stamp, build trees (not committed)
 ```
 
-There is no per-game build file: every project runs with the same executable, `mercury_player`.
+AngelScript-only projects run with the shared executable, `mercury_player`. A
+project with C++ gameplay names its own CMake target in `[build] target` and
+builds into `.mercury/build/<config>` against the editor's SDK.
 
 Open a project with the editor:
 
@@ -94,7 +100,7 @@ Other files:
 
 Models bring their own materials: base color and texture, opacity, emission (`Ke`, `map_Ke`), normal maps (or `bump` height maps, converted to normal maps on import) and, for OBJ, glossiness from `Ns`/`Ks`. Texture names are matched case-insensitively.
 
-`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]` (game output folder, and `target = "//pkg:game"` when the gameplay is C++).
+`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]` (game output folder, and `target = "my_game"` when the gameplay is C++).
 
 ## Components
 
@@ -355,11 +361,15 @@ stamps and should not be committed. The editor never runs game code: after each 
 
 ### C++ scripts
 
-A project can also compile C++ gameplay into its own executable. Derive from `Mercury::Behaviour`,
-describe fields in `Reflect`, and register the class with `MERCURY_SCRIPT` in its `.cc` file:
+A project can also compile C++ gameplay into its own executable. C++ scripts
+live in `src/`; the editor's **New Script** dialog writes a template pair.
+Derive from `Mercury::Behaviour`, describe fields in `Reflect`, and register
+the class with `MERCURY_SCRIPT` in its `.cc` file:
 
 ```cpp
-#include "scripting/behaviour.h"
+// src/spinner.h
+#pragma once
+#include <scripting/behaviour.h>
 
 class Spinner : public Mercury::Behaviour {
  public:
@@ -371,43 +381,106 @@ class Spinner : public Mercury::Behaviour {
   }
   float speed = 90.0f;
 };
+```
 
+```cpp
+// src/spinner.cc
+#include "spinner.h"
 MERCURY_SCRIPT(Spinner);
 ```
 
-The callback names are the C++ ones (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
-`OnCollisionEnter`, ...). `MERCURY_SCRIPT` runs at static initialization, before the player loads a
-map. A reflected struct can be registered as a `.masset` type with `MERCURY_DATA_ASSET(T)` and loaded
-with `Assets().LoadAs<T>(path)`.
+The callback names are the C++ ones (`Awake`, `OnStart`, `OnFrame`,
+`OnLateFrame`, `OnTick`, `OnCollisionEnter`, ...). `Reflect` replaces
+`[field]` and uses the same field types. `MERCURY_DATA_ASSET(T)` registers a
+reflected struct as a `.masset` type. C++ components and AngelScript classes
+use the same map names and field names, so a node can mix them.
 
-C++ scripts and AngelScript classes use the same map component name and field names, so a node can
-mix them. Unlike AngelScript, C++ code is linked into the executable: the shared `mercury_player`
-cannot load it. Build a game executable with the `mercury_add_game` CMake function:
-
-```cmake
-# my_game/CMakeLists.txt
-mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
-```
-
-`mercury_add_game` compiles every `.cc`/`.cpp` under `scripts/` and generates a `main()` that calls
-`Mercury::RunPlayer`. Name the target in the project file:
+A project with C++ gameplay names its executable target:
 
 ```ini
 [build]
 target = "my_game"
 ```
 
-Projects in the engine checkout add their directory from the top-level `CMakeLists.txt` (as
-`examples/cpp_hello` does); an external project can `add_subdirectory` the engine checkout and call
-the function from its own `CMakeLists.txt`. The editor's **Build Scripts** and **Play** then run
-`cmake --build <build-dir> --target <target>`, ask the executable for its script list with
-`--dump-schema`, and launch it. Projects without `[build] target` keep using the shared player and
-its AngelScript runtime. `examples/cpp_hello` is a complete C++ project; build and run it with
-`cmake --build --preset release` and `./build/release/bin/cpp_hello`.
+The editor generates a `CMakeLists.txt` on first open (only if missing) with
+`mercury_add_game` and `mercury_add_editor_system`, plus a `CMakePresets.json`.
+Play/Build configure and build the project's own tree in
+`.mercury/build/debug` against the editor's SDK (`-DMercury_DIR=...`), and
+configure again only when the cache is missing or the CMake files changed.
+C++ sources must be under `src/`; files left under `scripts/` are not compiled.
+Projects without `[build] target` keep using `mercury_player`.
+
+**New Script.** The Project Browser's **Create > Script...** dialog creates
+one of four kinds, previews the exact files, validates the class name and
+refuses to overwrite; **Create > C++ System...**/**Editor System...** jump
+straight to those kinds, and **Add Component > New Script...** offers the two
+gameplay kinds. "Open after creating" opens the `.cc` (or the `.as` in the
+built-in editor), and the choice plus the last kind are remembered.
+
+| Kind | Files | Registration |
+|---|---|---|
+| AngelScript Behaviour | `scripts/<snake>.as` | `[script]` |
+| C++ Behaviour | `src/<snake>.h`, `src/<snake>.cc` | `MERCURY_SCRIPT` |
+| C++ System | `src/<snake>.h`, `src/<snake>.cc` | `MERCURY_SYSTEM` |
+| C++ Editor System | `system/<snake>.h`, `system/<snake>.cc` | `MERCURY_EDITOR_EXTENSION` |
+
+**Systems and hooks.** A component is one instance per node; a feature such as
+networking is one instance per scene. Derive from `Mercury::System`, register
+with `MERCURY_SYSTEM`, and choose a tick phase: `kPreTick` (receive, before
+gameplay), `kTick`, `kPostTick` (before physics) or `kPostPhysics` (send,
+after physics). `OnRegister`/`OnMapLoaded`/`OnTick`/`OnShutdown` receive the
+`MapScene`. `Mercury::AppHook` (registered with `MERCURY_APP_HOOK`) runs
+process-wide setup and reads custom game options; the player accepts unknown
+`--options` only when a hook exists. `scene.GetEventBus()` is a typed
+publish/subscribe bus with RAII subscriptions. `Mercury::RenderHooks` receives
+Filament's `Engine` and `View` around the main render, and a
+`FilamentApplication` exposes `GetEngine`/`GetRenderer`/`GetScene`/`GetView`/
+`GetCamera`. `AssetImporterRegistry` maps extensions to asset types;
+`TypeRegistry::SerializeComponent`/`DeserializeComponent` snapshot a component
+(for replication or saves), and `scene.Objects().GetGuid(entity)` /
+`FindByGuid(guid)` give stable entity ids. See `docs/cpp_api.dox` for examples,
+including linking a library such as ENet with `target_link_libraries`.
+
+**Editor extensions.** Put an `EditorExtension` (registered with
+`MERCURY_EDITOR_EXTENSION`) in `system/`; the editor builds it as a dynamic
+MODULE and loads it while the project is open. `EditorContext` registers
+panels, menu entries, custom inspectors, Project Browser menu entries, viewport
+tools and asset importers. Always bind wx handlers through
+`context.Bind(...)` (never directly) and call `context.TrackWindow(...)` for
+windows the module creates. `Project > Reload Systems` rebuilds and reloads
+the module; the ABI and engine version (major.minor) are checked at load, and
+exceptions from module callbacks are logged and eventually fault the module.
+
+**Workspace trust.** Configuring/building a project's CMake tree and loading
+its editor modules execute project-supplied code, so both are gated. The first
+native build asks; the answer is stored per canonical path in
+`~/.config/mercury/editor.cfg` (`[trust] trusted` / `distrusted`) and can be
+changed with **Project > Trust Editor Systems**. First trust removes shipped
+`.mercury/build` and `.mercury/systems`; after that a build folder must carry
+the editor's marker. Opening a project, reading data and generating `.clangd`
+do not require trust; the build layer itself also refuses an untrusted project.
+
+**SDK and language server.** A packaged editor ships the SDK in
+`Contents/Resources/sdk` (`include/mercury`, `include/editor`, third-party
+headers, `lib/` archives and `cmake/MercuryConfig.cmake`). The editor writes
+`.clangd` (pointing clangd at `.mercury/build/debug` with fallback include
+flags) on every open, and links `compile_commands.json` at the project root
+only after a configure it ran. For a command-line build:
+
+```sh
+export MERCURY_SDK=/Applications/Mercury.app/Contents/Resources/sdk
+cmake --preset debug -DMercury_DIR="$MERCURY_SDK/cmake"
+cmake --build --preset debug
+```
+
+A Vulkan SDK is required at configure time; the packaged app carries the
+MoltenVK runtime, not the headers. `examples/cpp_hello` is a complete C++
+project: its `src/hello_system.cc` uses the EventBus, `hello_app_hook.cc` reads
+`--greeting`, and `hello_render.cc` toggles Filament bloom with **F2**.
 
 ## UI Toolkit
 
-In-game UI (HUDs, menus, inventories) uses Mercury's UI Toolkit, a copy of Unity's: layouts in **UXML**, styles in **USS**, a tree of `VisualElement`s laid out with flexbox (Yoga) and drawn by the engine's renderer with SDF text. Dear ImGui is for the editor and developer/debug windows only, not for what players see.
+In-game UI (HUDs, menus, inventories) uses Mercury's UI Toolkit, a copy of Unity's: layouts in **UXML**, styles in **USS**, a tree of `VisualElement`s laid out with flexbox (Yoga) and drawn by the engine's renderer with SDF text. The editor itself and its tool windows are wxWidgets, not UI Toolkit and not Dear ImGui; UI Toolkit is what players see.
 
 ```xml
 <!-- ui/hud.uxml -->

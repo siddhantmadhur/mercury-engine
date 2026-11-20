@@ -143,7 +143,8 @@ fs::path UserPath(const fs::path& path);
 fs::path CacheDir();
 
 /**
- * @brief Ensures <project>/.mercury is a real directory, never a symlink
+ * @brief Ensures the project's .mercury folder is a real directory, never a
+ * symlink
  *
  * Every generated project file lives below this folder. If the entry exists
  * as a symlink (or any non-directory), it is refused, so a cloned project

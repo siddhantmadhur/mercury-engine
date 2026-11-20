@@ -40,6 +40,8 @@ struct NewScriptRequest {
 
 /**
  * @brief New Script dialog: choose a kind, class name and files to create
+ * @param parent Parent window for the modal dialog.
+ * @param scene Project whose settings and root the dialog uses.
  * @param allowed_kinds Restricts the Kind choices (empty means all four). The
  *        last used kind is preselected when it is allowed.
  */

@@ -63,7 +63,8 @@ class EditorExtensionLoader {
   void SetProjectTrusted(bool trusted);
 
   /**
-   * @brief Unloads everything, then builds <project>/system and loads it
+   * @brief Unloads everything, then builds the project's system folder and
+   * loads it
    *
    * The configure/build runs as a child process and the module is loaded when
    * it finishes, from Update(); the editor stays responsive meanwhile. Returns
