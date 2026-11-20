@@ -18,10 +18,10 @@ mercury_add_game(cpp_hello
         PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # The editor loads this module while the project is open. Its target name is
-# the project's [build] target ("cpp_hello") plus "_systems". Only an in-tree
-# build with the editor available adds it here; an installed SDK project can
-# call mercury_add_editor_system too.
-if (TARGET mercury_wx_headers)
+# the project's [build] target ("cpp_hello") plus "_systems". An installed-SDK
+# build provides mercury_add_editor_system itself (there is no mercury target
+# or in-tree wx headers then).
+if (TARGET mercury_wx_headers OR NOT TARGET mercury)
     mercury_add_editor_system(cpp_hello_systems
             PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
 endif ()

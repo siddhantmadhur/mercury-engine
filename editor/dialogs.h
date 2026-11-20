@@ -33,6 +33,12 @@ std::optional<std::string> ShowNewScriptDialog(wxWindow* parent);
 // Build Game (Release) modal dialog.
 bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene);
 
+/**
+ * @brief Asks (once) before building/running a project's C++ code
+ * @return false when the user cancelled or the project is marked untrusted
+ */
+bool EnsureNativeProjectTrusted(wxWindow* parent, EditorScene& scene);
+
 // Preferences: external script editor & Lore VCS settings.
 bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene);
 

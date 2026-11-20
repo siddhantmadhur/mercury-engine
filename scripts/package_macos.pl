@@ -785,6 +785,13 @@ sub copy_tree {
     for my $name (@names) {
         my $from = File::Spec->catfile($src, $name);
         my $to = File::Spec->catfile($dst, $name);
+        # Never follow a link out of the tree being staged: the SDK and the UI
+        # resources come from a build machine, and a link there must not pull
+        # in (or write through to) something outside it.
+        if (-l $from) {
+            log_line("WARNING: skipping symlink $from");
+            next;
+        }
         if (-d $from) {
             $count += copy_tree($from, $to);
         } elsif (-f $from) {

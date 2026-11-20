@@ -11,6 +11,7 @@
 #include "cmake_build.h"
 #include "editor_settings.h"
 #include "os/filesystem.h"
+#include "project_scaffold.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury {
@@ -58,16 +59,28 @@ void PlaySession::Begin(const Project& project, bool run) {
   native_ = !build_target_.empty();
   run_after_build_ = run;
   if (native_) {
-    working_dir_ = cmake_build::BuildDir();
-    std::error_code ec;
-    if (working_dir_.empty() ||
-        !fs::exists(working_dir_ / "CMakeCache.txt", ec)) {
+    const fs::path sdk_cmake = cmake_build::SdkCmakeDir();
+    if (sdk_cmake.empty()) {
       Finish(
-          "This project names a C++ build target, but the engine has no "
-          "configured CMake build directory. Run `cmake --preset release` in "
-          "the engine checkout first.",
+          "This project names a C++ build target, but the editor's SDK has no "
+          "CMake package. A development checkout must be configured (and "
+          "built) once; a packaged editor should include Contents/Resources/"
+          "sdk.",
           true);
       return;
+    }
+    build_dir_ = cmake_build::ProjectBuildDir(project_root_);
+    working_dir_ = build_dir_;
+    if (!cmake_build::TryAcquireProjectBuild(project_root_)) {
+      Finish(
+          "A project build is already running. Wait for it to finish before "
+          "pressing Play.",
+          true);
+      return;
+    }
+    holds_build_lock_ = true;
+    if (cmake_build::NeedsConfigure(project_root_, build_dir_)) {
+      console_.Info("Configuring the project build in " + build_dir_.string());
     }
   } else if (PlayerPath().empty()) {
     Finish(
@@ -100,8 +113,15 @@ bool PlaySession::Launch(const std::vector<std::string>& args,
 
 bool PlaySession::StartBuild() {
   std::vector<std::string> args;
+  configuring_ = false;
   if (native_) {
-    args = cmake_build::BuildArguments(build_target_);
+    if (cmake_build::NeedsConfigure(project_root_, build_dir_)) {
+      configuring_ = true;
+      args = cmake_build::ConfigureArguments(project_root_, build_dir_,
+                                             cmake_build::SdkCmakeDir());
+    } else {
+      args = cmake_build::BuildArguments(build_dir_, build_target_);
+    }
   } else {
     args = {PlayerPath().string(), project_file_.string(), "--build-scripts"};
   }
@@ -113,7 +133,7 @@ bool PlaySession::StartBuild() {
 bool PlaySession::DumpSchema() {
   std::vector<std::string> args;
   if (native_) {
-    args = {cmake_build::Executable(build_target_).string(),
+    args = {cmake_build::ProjectExecutable(build_dir_, build_target_).string(),
             project_file_.string(), "--dump-schema", schema_path_.string()};
   } else {
     args = {PlayerPath().string(), project_file_.string(), "--dump-schema",
@@ -145,7 +165,7 @@ bool PlaySession::DumpSchema() {
 bool PlaySession::StartGame() {
   std::vector<std::string> args;
   if (native_) {
-    args = {cmake_build::Executable(build_target_).string(),
+    args = {cmake_build::ProjectExecutable(build_dir_, build_target_).string(),
             project_file_.string()};
   } else {
     args = {PlayerPath().string(), project_file_.string()};
@@ -166,6 +186,10 @@ bool PlaySession::StartGame() {
 }
 
 void PlaySession::Finish(const std::string& message, bool error) {
+  if (holds_build_lock_) {
+    cmake_build::ReleaseProjectBuild(project_root_);
+    holds_build_lock_ = false;
+  }
   if (!message.empty()) {
     if (error) {
       console_.Error(message);
@@ -203,7 +227,23 @@ void PlaySession::Update() {
 
   switch (state_) {
     case State::kBuilding:
+      if (configuring_) {
+        if (code != 0) {
+          return Finish("Build configuration failed: fix the errors above",
+                        true);
+        }
+        configuring_ = false;
+        EditorUI::RefreshProjectCompileCommands(project_root_);
+        // The project's CMakeLists and presets are current now; the build
+        // step follows as its own child process.
+        StartBuild();
+        break;
+      }
       if (code != 0) return Finish("Build failed: fix the errors above", true);
+      if (holds_build_lock_) {
+        cmake_build::ReleaseProjectBuild(project_root_);
+        holds_build_lock_ = false;
+      }
       DumpSchema();
       if (run_after_build_) {
         console_.Info("Build succeeded; starting the game");

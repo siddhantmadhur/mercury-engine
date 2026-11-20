@@ -37,7 +37,7 @@ std::string Read(const fs::path& path) {
 }
 }  // namespace
 
-TEST(EditorTemplates, NewProjectHasScriptsAndNoCMake) {
+TEST(EditorTemplates, NewProjectHasScriptsAndGeneratedBuildFiles) {
   const fs::path parent = WorkDir("editor_new_project");
   std::string error;
   const fs::path mproj =
@@ -45,9 +45,24 @@ TEST(EditorTemplates, NewProjectHasScriptsAndNoCMake) {
   ASSERT_FALSE(mproj.empty()) << error;
   const fs::path root = mproj.parent_path();
   EXPECT_TRUE(fs::is_directory(root / "scripts"));
-  EXPECT_FALSE(fs::exists(root / "CMakeLists.txt"));
-  EXPECT_FALSE(fs::exists(root / ".clangd"));
-  EXPECT_NE(Read(root / ".gitignore").find(".mercury/"), std::string::npos);
+  EXPECT_TRUE(fs::is_directory(root / "src"));
+  EXPECT_TRUE(fs::is_directory(root / "system"));
+
+  // Phase 4: every project gets its own CMake tree and LSP files. The editor
+  // owns these only until they exist; CMakeLists.txt and the presets are then
+  // the project's.
+  const std::string cmake = Read(root / "CMakeLists.txt");
+  EXPECT_NE(cmake.find("mercury_add_game(my_game"), std::string::npos) << cmake;
+  EXPECT_TRUE(fs::exists(root / "CMakePresets.json"));
+  const std::string clangd = Read(root / ".clangd");
+  EXPECT_NE(clangd.find("CompilationDatabase: .mercury/build/debug"),
+            std::string::npos)
+      << clangd;
+
+  const std::string ignores = Read(root / ".gitignore");
+  EXPECT_NE(ignores.find(".mercury/"), std::string::npos);
+  EXPECT_NE(ignores.find(".clangd"), std::string::npos);
+  EXPECT_NE(ignores.find("compile_commands.json"), std::string::npos);
 }
 
 TEST(EditorTemplates, CreateScriptWritesAnAngelScriptClassThatBuilds) {

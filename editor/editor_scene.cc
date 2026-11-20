@@ -10,6 +10,7 @@
 #include "debugger/debugger.h"
 #include "debugger/profiler.h"
 #include "os/process.h"
+#include "project_scaffold.h"
 #include "properties/camera.h"
 #include "scripting/type_registry.h"
 #include "templates.h"
@@ -137,6 +138,9 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   play_.Stop();
   release_.Cancel();
   SetProject(project);
+  // Refresh the generated build/LSP files on every open. This never runs the
+  // project's code and is safe before the trust decision.
+  EditorUI::ScaffoldProject(*project);
   ui_builder_.SetProject(project);
   input_actions_.SetProject(project);
   lore_.SetProject(project);

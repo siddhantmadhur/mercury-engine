@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+#include "os/process.h"
+
 namespace Mercury {
 
 class Console;
@@ -61,9 +63,12 @@ class EditorExtensionLoader {
   void SetProjectTrusted(bool trusted);
 
   /**
-   * @brief Unloads everything, builds <project>/system and loads its modules
-   * @return false when the build failed or the project has no build target;
-   * errors are also logged to the console.
+   * @brief Unloads everything, then builds <project>/system and loads it
+   *
+   * The configure/build runs as a child process and the module is loaded when
+   * it finishes, from Update(); the editor stays responsive meanwhile. Returns
+   * false when the build could not be started (no target, no SDK, or a start
+   * failure); errors are also logged to the console.
    */
   bool Reload();
   void UnloadAll();
@@ -79,7 +84,15 @@ class EditorExtensionLoader {
   struct LoadedExtension;
 
   void UnloadAllNow();
-  bool BuildProjectSystems(std::string* error);
+  // The project's systems build runs as a child process between Update calls
+  // so the editor stays responsive; the module is loaded when it finishes.
+  bool StartSystemsBuild();
+  bool LaunchSystemsProcess(const std::vector<std::string>& args,
+                            bool configure, std::string* error);
+  void PollSystemsBuild();
+  void LoadBuiltSystems();
+  void CancelSystemsBuild();
+  void ReleaseProjectBuild();
   std::filesystem::path SystemsDir() const;
   // The per-project cache folder for reload copies (0700, never a symlink).
   std::filesystem::path TempDirForProject() const;
@@ -92,6 +105,12 @@ class EditorExtensionLoader {
   std::vector<std::unique_ptr<LoadedExtension>> loaded_;
   std::vector<std::string> errors_;
   std::filesystem::path project_root_;
+  std::filesystem::path build_dir_;
+  std::filesystem::path build_project_root_;
+  std::string build_target_;
+  std::unique_ptr<os::Process> build_process_;
+  bool build_configuring_ = false;
+  bool holds_build_lock_ = false;
   TrustPrompt trust_prompt_;
   uint64_t last_selection_revision_ = 0;
   int last_play_state_ = -1;

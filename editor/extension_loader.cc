@@ -7,14 +7,12 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
-#include <chrono>
 #include <cstring>
 #include <format>
 #include <fstream>
 #include <iterator>
 #include <optional>
 #include <system_error>
-#include <thread>
 #include <utility>
 
 #include <wx/app.h>
@@ -35,6 +33,7 @@
 #include "os/process.h"
 #include "play_session.h"
 #include "project/project.h"
+#include "project_scaffold.h"
 
 namespace Mercury::EditorUI {
 
@@ -232,9 +231,12 @@ void EditorExtensionLoader::Update() {
     return;
   }
 
+  PollSystemsBuild();
+
   auto project = scene_.GetProject();
   const std::filesystem::path root = project ? project->GetRoot() : fs::path();
   if (root != project_root_) {
+    CancelSystemsBuild();
     UnloadAllNow();
     project_root_ = root;
     last_selection_revision_ = scene_.SelectionRevision();
@@ -324,91 +326,189 @@ bool EditorExtensionLoader::Reload() {
     return true;
   }
 
-  std::string error;
-  if (!BuildProjectSystems(&error)) {
+  return StartSystemsBuild();
+}
+
+bool EditorExtensionLoader::StartSystemsBuild() {
+  auto project = scene_.GetProject();
+  if (!project || !frame_) return true;
+  const std::string target = project->GetBuildSystemsTarget();
+  if (target.empty()) {
+    const std::string error =
+        "the project has a system/ folder but no [build] target, so the "
+        "editor cannot build it";
+    console_.Error("Editor systems: " + error);
+    errors_.push_back(error);
+    return false;
+  }
+  const fs::path sdk_cmake = cmake_build::SdkCmakeDir();
+  if (sdk_cmake.empty()) {
+    const std::string error =
+        "the editor's SDK has no CMake package. A development checkout must "
+        "be configured once; a packaged editor should include Contents/"
+        "Resources/sdk.";
     console_.Error("Editor systems: " + error);
     errors_.push_back(error);
     return false;
   }
 
+  CancelSystemsBuild();
+  build_project_root_ = project->GetRoot();
+  build_target_ = target;
+  build_dir_ = cmake_build::ProjectBuildDir(build_project_root_);
+  if (!cmake_build::TryAcquireProjectBuild(build_project_root_)) {
+    console_.Warn(
+        "Editor systems: another project build is running; the systems module "
+        "will be built on the next reload");
+    return true;
+  }
+  holds_build_lock_ = true;
+  std::string error;
+  if (cmake_build::NeedsConfigure(build_project_root_, build_dir_)) {
+    console_.Info("Configuring the project build in " + build_dir_.string());
+    const std::vector<std::string> args = cmake_build::ConfigureArguments(
+        build_project_root_, build_dir_, sdk_cmake);
+    if (!LaunchSystemsProcess(args, true, &error)) {
+      ReleaseProjectBuild();
+      console_.Error("Editor systems: " + error);
+      errors_.push_back(error);
+      return false;
+    }
+  } else {
+    const std::vector<std::string> args =
+        cmake_build::BuildArguments(build_dir_, target);
+    if (!LaunchSystemsProcess(args, false, &error)) {
+      ReleaseProjectBuild();
+      console_.Error("Editor systems: " + error);
+      errors_.push_back(error);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool EditorExtensionLoader::LaunchSystemsProcess(
+    const std::vector<std::string>& args, bool configure, std::string* error) {
+  std::string command;
+  for (const std::string& arg : args) {
+    command += (command.empty() ? "" : " ") + arg;
+  }
+  console_.Add(Console::Level::kInfo, Console::Source::kBuild, "> " + command);
+
+  auto process = std::make_unique<os::Process>();
+  std::string start_error;
+  if (!process->Start(args, build_project_root_, &start_error)) {
+    if (error) *error = start_error;
+    return false;
+  }
+  build_process_ = std::move(process);
+  build_configuring_ = configure;
+  if (!configure) {
+    console_.Info("Building editor systems (target " + build_target_ + ")...");
+  }
+  return true;
+}
+
+void EditorExtensionLoader::PollSystemsBuild() {
+  if (!build_process_) return;
+  for (std::string& line : build_process_->TakeOutput()) {
+    console_.AddProcessOutput(Console::Source::kBuild, std::move(line));
+  }
+  if (build_process_->IsRunning()) return;
+  for (std::string& line : build_process_->TakeOutput()) {
+    console_.AddProcessOutput(Console::Source::kBuild, std::move(line));
+  }
+  const int code = build_process_->GetExitCode().value_or(-1);
+  build_process_.reset();
+
+  if (build_configuring_) {
+    build_configuring_ = false;
+    if (code != 0) {
+      ReleaseProjectBuild();
+      const std::string error = "configuring the project build failed";
+      console_.Error("Editor systems: " + error + " (see the build output)");
+      errors_.push_back(error);
+      return;
+    }
+    RefreshProjectCompileCommands(build_project_root_);
+    std::string error;
+    const std::vector<std::string> args =
+        cmake_build::BuildArguments(build_dir_, build_target_);
+    if (!LaunchSystemsProcess(args, false, &error)) {
+      ReleaseProjectBuild();
+      console_.Error("Editor systems: " + error);
+      errors_.push_back(error);
+    }
+    return;
+  }
+
+  ReleaseProjectBuild();
+  if (code != 0) {
+    const std::string error = "building target " + build_target_ + " failed";
+    console_.Error("Editor systems: " + error + " (see the build output)");
+    errors_.push_back(error);
+    return;
+  }
+  LoadBuiltSystems();
+}
+
+void EditorExtensionLoader::CancelSystemsBuild() {
+  if (build_process_) {
+    build_process_->Kill();
+    for (std::string& line : build_process_->TakeOutput()) {
+      console_.AddProcessOutput(Console::Source::kBuild, std::move(line));
+    }
+    build_process_.reset();
+  }
+  build_configuring_ = false;
+  ReleaseProjectBuild();
+}
+
+void EditorExtensionLoader::ReleaseProjectBuild() {
+  if (!holds_build_lock_) return;
+  cmake_build::ReleaseProjectBuild(build_project_root_);
+  holds_build_lock_ = false;
+}
+
+void EditorExtensionLoader::LoadBuiltSystems() {
+  auto project = scene_.GetProject();
+  if (!project || !frame_) return;
+  // The project may have changed while the build ran.
+  if (project->GetRoot() != build_project_root_ ||
+      project->GetBuildSystemsTarget() != build_target_) {
+    return;
+  }
+
+  std::error_code ec;
   const fs::path dir = SystemsDir();
   if (!fs::is_directory(dir, ec)) {
     console_.Info("Editor systems: the system/ module built no library");
-    return true;
+    return;
   }
 
   // Load only the output of the project's systems target. Anything else in the
   // folder (a prebuilt library, an old build, a symlink) is ignored.
-  const std::string target = project->GetBuildSystemsTarget();
-  const fs::path module = FindSystemModule(dir, target, &error);
+  std::string error;
+  const fs::path module = FindSystemModule(dir, build_target_, &error);
   for (fs::directory_iterator it(dir, ec);
        !ec && it != fs::directory_iterator(); it.increment(ec)) {
     if (!IsDynamicLibrary(it->path())) continue;
     if (!module.empty() && it->path() == module) continue;
     console_.Warn("Editor systems: ignoring " + it->path().filename().string() +
-                  " (not the " + target + " output)");
+                  " (not the " + build_target_ + " output)");
   }
   if (module.empty()) {
     console_.Warn("Editor systems: " + error);
-    return true;
+    return;
   }
 
   if (!LoadFile(module, &error)) {
     const std::string message = module.filename().string() + ": " + error;
     console_.Error("Editor system " + message);
     errors_.push_back(message);
-    return false;
+    return;
   }
   if (frame_) frame_->ApplyExtensions();
-  return true;
-}
-
-bool EditorExtensionLoader::BuildProjectSystems(std::string* error) {
-  auto project = scene_.GetProject();
-  if (!project) {
-    *error = "no project is open";
-    return false;
-  }
-  const std::string target = project->GetBuildSystemsTarget();
-  if (target.empty()) {
-    *error =
-        "the project has a system/ folder but no [build] target, so the"
-        " editor cannot build it";
-    return false;
-  }
-  const fs::path build_dir = cmake_build::BuildDir();
-  std::error_code ec;
-  if (build_dir.empty() || !fs::exists(build_dir / "CMakeCache.txt", ec)) {
-    *error =
-        "the editor has no configured CMake build directory; run"
-        " `cmake --preset release` in the engine checkout first";
-    return false;
-  }
-
-  const std::vector<std::string> args = cmake_build::BuildArguments(target);
-  os::Process process;
-  std::string start_error;
-  if (!process.Start(args, build_dir, &start_error)) {
-    *error = start_error;
-    return false;
-  }
-
-  console_.Info("Building editor systems (target " + target + ")...");
-  while (process.IsRunning()) {
-    for (const std::string& line : process.TakeOutput()) {
-      console_.AddProcessOutput(Console::Source::kBuild, line);
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  for (const std::string& line : process.TakeOutput()) {
-    console_.AddProcessOutput(Console::Source::kBuild, line);
-  }
-  const std::optional<int> code = process.GetExitCode();
-  if (!code || *code != 0) {
-    *error = "building target " + target + " failed";
-    return false;
-  }
-  return true;
 }
 
 bool EditorExtensionLoader::LoadFile(const std::filesystem::path& file,
@@ -572,6 +672,7 @@ void EditorExtensionLoader::UnloadAll() {
 }
 
 void EditorExtensionLoader::UnloadAllNow() {
+  CancelSystemsBuild();
   if (unloading_) return;
   unloading_ = true;
   auto process_wx_deletes = [] {

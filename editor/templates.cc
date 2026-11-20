@@ -13,6 +13,7 @@
 #include "project/asset_database.h"
 #include "project/map.h"
 #include "project/project.h"
+#include "project_scaffold.h"
 #include "scripting/type_registry.h"
 
 namespace Mercury::Templates {
@@ -149,6 +150,8 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
     return {};
   }
   fs::create_directories(root / "scripts", ec);
+  fs::create_directories(root / "src", ec);
+  fs::create_directories(root / "system", ec);
   fs::create_directories(root / "assets", ec);
   fs::create_directories(root / "maps", ec);
   if (ec) {
@@ -165,10 +168,17 @@ fs::path CreateProject(const fs::path& parent, const std::string& name,
   }
 
   // Build output and editor caches are generated, so keep them out of git.
+  // .clangd tracks the editor that last opened the project, and the compile
+  // database link is regenerated after each configure.
   if (!WriteText(root / ".gitignore",
-                 "# Build output and editor caches\n.mercury/\n", error)) {
+                 "# Build output and editor caches\n"
+                 ".mercury/\n"
+                 ".clangd\n"
+                 "compile_commands.json\n",
+                 error)) {
     return {};
   }
+  EditorUI::ScaffoldProject(*project);
   if (!WriteText(root / "maps" / "main.mmap", NewMapText(name, is_3d), error)) {
     return {};
   }

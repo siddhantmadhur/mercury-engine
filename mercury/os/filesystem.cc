@@ -29,6 +29,7 @@
 #include <windows.h>
 #else
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -416,6 +417,31 @@ bool IsSdkRoot(const fs::path& root) {
          fs::is_directory(root / "cmake", ec);
 }
 
+// An SDK found outside the .app is used to compile project code, so it must
+// not be something another account can change: accept only a directory owned
+// by this user (or root) with no group/other write permission. The check is
+// on the directory entries themselves, so a symlink planted at either path is
+// refused rather than followed.
+bool IsTrustedSdkPath(const fs::path& path) {
+#if defined(_WIN32)
+  // Windows has no uid/mode in stat; the packaged SDK lives under Program
+  // Files, and checks there need ACL inspection.
+  std::error_code ec;
+  return fs::is_directory(path, ec);
+#else
+  struct stat info{};
+  if (lstat(path.c_str(), &info) != 0) return false;
+  if (!S_ISDIR(info.st_mode)) return false;
+  if (info.st_uid != getuid() && info.st_uid != 0) return false;
+  if ((info.st_mode & (S_IWGRP | S_IWOTH)) != 0) return false;
+  return true;
+#endif
+}
+
+bool IsTrustedSdkRoot(const fs::path& root) {
+  return IsTrustedSdkPath(root) && IsTrustedSdkPath(root / "cmake");
+}
+
 EngineSdkPaths InstalledSdkPaths(const fs::path& root) {
   EngineSdkPaths paths;
   paths.root = root;
@@ -438,6 +464,14 @@ EngineSdkPaths DevelopmentSdkPaths(const fs::path& engine_dir,
     paths.include_dirs.push_back(build_dir / "generated" / "mercury");
   }
   paths.cmake_dir = engine_dir / "cmake";
+  if (!build_dir.empty()) {
+    // A configured development tree writes a package for project builds.
+    std::error_code ec;
+    const fs::path dev_cmake = build_dir / "dev-sdk";
+    if (fs::is_regular_file(dev_cmake / "MercuryConfig.cmake", ec)) {
+      paths.cmake_dir = dev_cmake;
+    }
+  }
   paths.lib_dir = build_dir.empty() ? fs::path() : build_dir / "lib";
   paths.build_dir = build_dir;
   paths.development = true;
@@ -457,7 +491,14 @@ EngineSdkPaths MakeEngineSdkPaths(const fs::path& exe_dir,
     candidates.push_back(exe_dir.parent_path() / "sdk");
   }
   for (const fs::path& candidate : candidates) {
-    if (IsSdkRoot(candidate)) return InstalledSdkPaths(candidate);
+    if (!IsSdkRoot(candidate) || !IsTrustedSdkRoot(candidate)) continue;
+    EngineSdkPaths paths = InstalledSdkPaths(candidate);
+    // An SDK tree staged next to a development editor must not hide the build
+    // tree the editor itself was built in; Play and Build Game still need it.
+    if (!build_dir.empty() && fs::is_directory(build_dir)) {
+      paths.build_dir = build_dir;
+    }
+    return paths;
   }
   return DevelopmentSdkPaths(engine_dir, build_dir);
 }

@@ -646,6 +646,7 @@ void EditorFrame::SetupMenuBindings() {
   Bind(
       wxEVT_MENU,
       [this](wxCommandEvent&) {
+        if (!EnsureNativeProjectTrusted(this, scene_)) return;
         if (script_editor_panel_ && !script_editor_panel_->SaveAllDirty())
           return;
         if (auto p = scene_.GetProject()) scene_.PlayRef().Build(*p);
@@ -1009,6 +1010,7 @@ void EditorFrame::HandleTogglePlay() {
   if (!proj) return;
   auto& play = scene_.PlayRef();
   if (play.GetState() == PlaySession::State::kIdle) {
+    if (!EnsureNativeProjectTrusted(this, scene_)) return;
     if (script_editor_panel_ && !script_editor_panel_->SaveAllDirty()) return;
     if (scene_.IsDirty()) scene_.SaveMap();
     play.Play(*proj, scene_.GetMapPath());

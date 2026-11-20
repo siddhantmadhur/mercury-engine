@@ -128,7 +128,6 @@ target_compile_definitions(mercury PUBLIC
         MERCURY_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         MERCURY_BUILD_DIR="${CMAKE_BINARY_DIR}"
-        MERCURY_BUILD_CONFIG="$<CONFIG>"
         MERCURY_MATERIAL_PATH="${CMAKE_BINARY_DIR}/materials"
         MERCURY_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
         MERCURY_UI_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/mercury/ui/resources"
@@ -379,6 +378,7 @@ if (MERCURY_BUILD_TESTS)
 
         mercury_add_test(editor_test
                 tests/editor_templates_test.cc
+                tests/project_scaffold_test.cc
                 tests/test_paths.h)
         target_link_libraries(editor_test PRIVATE mercury_editor_lib)
 
@@ -570,6 +570,92 @@ install(FILES
         DESTINATION sdk/cmake COMPONENT sdk)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGameSdk.cmake"
         DESTINATION sdk/cmake RENAME MercuryGame.cmake COMPONENT sdk)
+
+# A development editor configures and builds each project's own tree the same
+# way a packaged one does. Generate the package that points at this build tree
+# so `find_package(Mercury CONFIG)` works before anything is installed.
+set(MERCURY_DEV_SDK_DIR "${CMAKE_BINARY_DIR}/dev-sdk")
+file(MAKE_DIRECTORY "${MERCURY_DEV_SDK_DIR}")
+set(MERCURY_DEV_SDK_INCLUDE_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/mercury"
+        "${CMAKE_CURRENT_SOURCE_DIR}/editor"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glfw/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/JoltPhysics"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/assimp/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/entt/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glm"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/angelscript/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/angelscript/sdk/add_on"
+        "${MERCURY_GENERATED_DIR}"
+        "${MERCURY_GENERATED_DIR}/mercury")
+if (MERCURY_CXX_INCLUDE_DIR)
+    list(APPEND MERCURY_DEV_SDK_INCLUDE_DIRS "${MERCURY_CXX_INCLUDE_DIR}")
+endif ()
+if (MERCURY_BUILD_EDITOR)
+    list(APPEND MERCURY_DEV_SDK_INCLUDE_DIRS ${MERCURY_SDK_WX_INCLUDE_DIRS})
+endif ()
+foreach (INCLUDE_DIR
+        third_party/filament/filament/include
+        third_party/filament/filament/backend/include
+        third_party/filament/libs/utils/include
+        third_party/filament/libs/filabridge/include
+        third_party/filament/libs/filaflat/include
+        third_party/filament/libs/geometry/include
+        third_party/filament/libs/ibl/include
+        third_party/filament/libs/image/include
+        third_party/filament/libs/iblprefilter/include
+        third_party/filament/libs/math/include
+        third_party/filament/third_party/robin-map/include)
+    list(APPEND MERCURY_DEV_SDK_INCLUDE_DIRS
+            "${CMAKE_CURRENT_SOURCE_DIR}/${INCLUDE_DIR}")
+endforeach ()
+
+# Archives that Filament builds in its own tree; everything else is in
+# ${CMAKE_BINARY_DIR}/lib.
+set(MERCURY_FILAMENT_SDK_ARCHIVES
+        libfilament.a
+        libbackend.a
+        libbluevk.a
+        libfilaflat.a
+        libfilabridge.a
+        libfilament-iblprefilter.a
+        libgeometry.a
+        libibl.a
+        libimage.a
+        libsmol-v.a
+        libutils.a
+        libzstd.a)
+set(MERCURY_DEV_SDK_LIBRARIES "")
+foreach (NAME ${MERCURY_SDK_LIBRARY_NAMES})
+    if (NAME IN_LIST MERCURY_FILAMENT_SDK_ARCHIVES)
+        set(ARCHIVE "${CMAKE_BINARY_DIR}/_deps/filament/out/lib/${NAME}")
+    else ()
+        set(ARCHIVE "${CMAKE_BINARY_DIR}/lib/${NAME}")
+    endif ()
+    list(APPEND MERCURY_DEV_SDK_LIBRARIES "${ARCHIVE}")
+endforeach ()
+
+file(WRITE "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        "# Generated for this engine build tree; do not edit.\n"
+        "# The editor passes -DMercury_DIR=<this folder> to project builds.\n")
+file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        "set(Mercury_INCLUDE_DIRS\n")
+foreach (DIR ${MERCURY_DEV_SDK_INCLUDE_DIRS})
+    file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake" "  \"${DIR}\"\n")
+endforeach ()
+file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        ")\nset(Mercury_LIBRARIES\n")
+foreach (LIB ${MERCURY_DEV_SDK_LIBRARIES})
+    file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake" "  \"${LIB}\"\n")
+endforeach ()
+file(APPEND "${MERCURY_DEV_SDK_DIR}/MercuryConfig.cmake"
+        ")\n"
+        "include(CMakeFindDependencyMacro)\n"
+        "find_dependency(Threads)\n"
+        "find_dependency(Vulkan)\n"
+        "include(\"${CMAKE_CURRENT_SOURCE_DIR}/cmake/MercuryGameSdk.cmake\")\n")
 
 # --------------------------------------------------------------------------
 # Developer convenience

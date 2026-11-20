@@ -144,9 +144,36 @@ std::optional<std::string> ShowNewScriptDialog(wxWindow* parent) {
   return input->GetValue().ToStdString();
 }
 
+bool EnsureNativeProjectTrusted(wxWindow* parent, EditorScene& scene) {
+  auto project = scene.GetProject();
+  if (!project || project->GetBuildTarget().empty()) return true;
+  const fs::path root = project->GetRoot();
+  EditorSettings& settings = scene.Settings();
+  if (!settings.HasProjectTrustDecision(root)) {
+    wxMessageDialog dialog(
+        parent,
+        "This project builds and runs C++ code from its own folder. Only "
+        "trust projects you wrote or obtained from a source you trust.",
+        "Trust Project?", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    dialog.SetYesNoLabels("Trust and Continue", "Cancel");
+    if (dialog.ShowModal() != wxID_YES) return false;
+    settings.SetProjectTrusted(root, true);
+    settings.Save();
+  }
+  if (!settings.IsProjectTrusted(root)) {
+    wxMessageBox(
+        "This project is marked as not trusted. Change the decision in "
+        "Project > Trust Editor Systems.",
+        "Mercury", wxOK | wxICON_WARNING, parent);
+    return false;
+  }
+  return true;
+}
+
 bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
   auto project = scene.GetProject();
   if (!project) return false;
+  if (!EnsureNativeProjectTrusted(parent, scene)) return false;
 
   wxDialog dlg(parent, wxID_ANY, "Build Game (Release)", wxDefaultPosition,
                wxSize(520, -1));

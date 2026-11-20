@@ -119,6 +119,10 @@ class ReleaseBuild {
   std::future<PackResult> packing_;
   State state_ = State::kIdle;
   bool cancelled_ = false;
+  // The native project build starts with a configure step when its cache is
+  // missing or stale.
+  bool configuring_ = false;
+  bool holds_build_lock_ = false;
 
   std::filesystem::path project_root_;
   std::string project_name_;
