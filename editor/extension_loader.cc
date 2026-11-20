@@ -191,7 +191,10 @@ EditorSettings& EditorExtensionLoader::Settings() const {
 std::filesystem::path EditorExtensionLoader::SystemsDir() const {
   auto project = scene_.GetProject();
   if (!project) return {};
-  return project->GetRoot() / ".mercury" / "systems";
+  std::string error;
+  const fs::path cache = project->EnsureCacheDir(&error);
+  if (cache.empty()) return {};
+  return os::EnsureProjectCacheSubdir(cache, "systems", &error);
 }
 
 std::filesystem::path EditorExtensionLoader::TempDirForProject() const {
@@ -375,7 +378,24 @@ bool EditorExtensionLoader::StartSystemsBuild() {
   CancelSystemsBuild();
   build_project_root_ = project->GetRoot();
   build_target_ = target;
-  build_dir_ = cmake_build::ProjectBuildDir(build_project_root_);
+  std::string cache_error;
+  const fs::path cache = project->EnsureCacheDir(&cache_error);
+  if (cache.empty() ||
+      os::EnsureProjectCacheSubdir(cache, "systems", &cache_error).empty()) {
+    const std::string error = "the project cache is unusable: " + cache_error;
+    console_.Error("Editor systems: " + error);
+    errors_.push_back(error);
+    return false;
+  }
+  build_dir_ =
+      os::EnsureProjectBuildDir(build_project_root_, "debug", &cache_error);
+  if (build_dir_.empty()) {
+    const std::string error =
+        "the project build folder is unusable: " + cache_error;
+    console_.Error("Editor systems: " + error);
+    errors_.push_back(error);
+    return false;
+  }
   if (!cmake_build::TryAcquireProjectBuild(build_project_root_)) {
     console_.Warn(
         "Editor systems: another project build is running; the systems module "
@@ -501,6 +521,12 @@ void EditorExtensionLoader::LoadBuiltSystems() {
 
   std::error_code ec;
   const fs::path dir = SystemsDir();
+  if (dir.empty()) {
+    console_.Error(
+        "Editor systems: the project cache (.mercury) is a symlink or not a "
+        "real folder; nothing was loaded.");
+    return;
+  }
   if (!fs::is_directory(dir, ec)) {
     console_.Info("Editor systems: the system/ module built no library");
     return;

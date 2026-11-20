@@ -142,6 +142,38 @@ fs::path UserPath(const fs::path& path);
 // Created on first use; empty when there is none (the web).
 fs::path CacheDir();
 
+/**
+ * @brief Ensures <project>/.mercury is a real directory, never a symlink
+ *
+ * Every generated project file lives below this folder. If the entry exists
+ * as a symlink (or any non-directory), it is refused, so a cloned project
+ * cannot redirect editor writes outside itself. Creates the folder when
+ * missing. Returns an empty path with `error` filled on failure.
+ */
+fs::path EnsureProjectCacheDir(const fs::path& project_root,
+                               std::string* error = nullptr);
+
+// A direct child of the project cache ("scripts", "systems"): created when
+// missing, refused when it is a symlink or not a directory.
+fs::path EnsureProjectCacheSubdir(const fs::path& cache_dir,
+                                  std::string_view name,
+                                  std::string* error = nullptr);
+
+/**
+ * @brief The project's own CMake build folder, marked as editor-created
+ *
+ * An existing `<cache>/build/<config>` without the `.mercury-build` marker is
+ * shipped build output (CMakeCache + build.ninja): it is refused rather than
+ * executed, because a configure/build would run the shipped rules. The folder
+ * is created with the marker when missing.
+ */
+fs::path EnsureProjectBuildDir(const fs::path& project_root,
+                               std::string_view config,
+                               std::string* error = nullptr);
+
+// True when `dir` carries the editor's marker (see EnsureProjectBuildDir).
+bool IsEditorProjectBuildDir(const fs::path& dir);
+
 }  // namespace Mercury::os
 
 #endif  // MERCURYENGINE_FILESYSTEM_H

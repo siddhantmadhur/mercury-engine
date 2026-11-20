@@ -49,6 +49,10 @@ void EditorSettings::Load() {
     external_editor = editor->properties.GetString("external_editor");
     open_scripts_in_editor =
         editor->properties.GetBool("open_scripts_in_editor", true);
+    open_script_after_create =
+        editor->properties.GetBool("open_script_after_create", true);
+    new_script_kind = Templates::ScriptKindFromName(
+        editor->properties.GetString("new_script_kind", "angel_script"));
     vim_mode = editor->properties.GetBool("vim_mode", false);
 #if defined(__APPLE__)
     show_metal_hud = editor->properties.GetBool("show_metal_hud", false);
@@ -95,6 +99,8 @@ void EditorSettings::Save() const {
   auto& editor = document.Add("editor").properties;
   editor.Set("external_editor", external_editor);
   editor.Set("open_scripts_in_editor", open_scripts_in_editor);
+  editor.Set("open_script_after_create", open_script_after_create);
+  editor.Set("new_script_kind", Templates::ScriptKindName(new_script_kind));
   editor.Set("vim_mode", vim_mode);
 #if defined(__APPLE__)
   editor.Set("show_metal_hud", show_metal_hud);

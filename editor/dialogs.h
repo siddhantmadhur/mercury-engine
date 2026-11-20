@@ -16,8 +16,10 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "editor_scene.h"
+#include "templates.h"
 
 namespace Mercury::EditorUI {
 
@@ -28,7 +30,22 @@ std::optional<std::string> PromptTextDialog(
     const wxString& confirm_label = "Create");
 
 // Script class name dialog with identifier check and snake_case path preview.
-std::optional<std::string> ShowNewScriptDialog(wxWindow* parent);
+struct NewScriptRequest {
+  Templates::ScriptKind kind = Templates::ScriptKind::kAngelScript;
+  std::string class_name;
+  // Initialized from EditorSettings::open_script_after_create; the caller
+  // persists both this and the chosen kind when the user accepts.
+  bool open_after_create = true;
+};
+
+/**
+ * @brief New Script dialog: choose a kind, class name and files to create
+ * @param allowed_kinds Restricts the Kind choices (empty means all four). The
+ *        last used kind is preselected when it is allowed.
+ */
+std::optional<NewScriptRequest> ShowNewScriptDialog(
+    wxWindow* parent, EditorScene& scene,
+    const std::vector<Templates::ScriptKind>& allowed_kinds = {});
 
 // Build Game (Release) modal dialog.
 bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene);

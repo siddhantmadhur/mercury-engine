@@ -490,8 +490,16 @@ void InspectorPanel::BuildNodeInspector(MapNode& node) {
     auto picked = ShowAddComponentDialog(this, *target);
     if (!picked) return;
     if (*picked == "__NEW_SCRIPT__") {
-      if (auto cls = ShowNewScriptDialog(this)) {
-        scene_.CreateScript(*cls);
+      auto request =
+          ShowNewScriptDialog(this, scene_,
+                              {Templates::ScriptKind::kAngelScript,
+                               Templates::ScriptKind::kCppBehaviour});
+      if (request &&
+          scene_.CreateScript(request->kind, request->class_name,
+                              request->open_after_create) &&
+          request->kind == Templates::ScriptKind::kCppBehaviour) {
+        scene_.ConsoleRef().Info(
+            "The component appears in Add Component after the next build.");
       }
       return;
     }

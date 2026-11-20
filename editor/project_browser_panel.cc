@@ -542,6 +542,11 @@ void ProjectBrowserPanel::ShowCreateMenu(const fs::path& target_dir,
   };
 
   bind("Script...", [this]() { HandleCreateScript(); });
+  bind("C++ System...",
+       [this]() { HandleCreateScript(Templates::ScriptKind::kCppSystem); });
+  bind("Editor System...", [this]() {
+    HandleCreateScript(Templates::ScriptKind::kCppEditorSystem);
+  });
   bind("Map...", [this, map_dir]() { HandleCreateMap(map_dir); });
   bind("Folder...", [this, target_dir]() { HandleCreateFolder(target_dir); });
   menu.AppendSeparator();
@@ -720,9 +725,14 @@ void ProjectBrowserPanel::AppendExtensionMenuItems(wxMenu& menu,
       });
 }
 
-void ProjectBrowserPanel::HandleCreateScript() {
-  if (auto cls = ShowNewScriptDialog(this)) {
-    scene_.CreateScript(*cls);
+void ProjectBrowserPanel::HandleCreateScript(
+    std::optional<Templates::ScriptKind> kind) {
+  std::vector<Templates::ScriptKind> allowed;
+  if (kind) allowed.push_back(*kind);
+  auto request = ShowNewScriptDialog(this, scene_, allowed);
+  if (!request) return;
+  if (scene_.CreateScript(request->kind, request->class_name,
+                          request->open_after_create)) {
     RefreshAll(true);
   }
 }

@@ -165,7 +165,13 @@ void ReleaseBuild::Start(const Project& project, const fs::path& output_dir,
           true);
       return;
     }
-    build_dir_ = cmake_build::ProjectBuildDir(project_root_, "release");
+    std::string build_error;
+    build_dir_ =
+        os::EnsureProjectBuildDir(project_root_, "release", &build_error);
+    if (build_dir_.empty()) {
+      Finish("Project build: " + build_error, true);
+      return;
+    }
     if (!cmake_build::TryAcquireProjectBuild(project_root_)) {
       Finish(
           "A project build is already running. Wait for it to finish before "

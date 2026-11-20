@@ -19,9 +19,12 @@
 
 #include "console.h"
 #include "editor_settings.h"
+#include "os/filesystem.h"
 #include "play_session.h"
 #include "pobject/manager.h"
 #include "project/project.h"
+#include "project_scaffold.h"
+#include "scripting/as/script_builder.h"
 
 namespace fs = std::filesystem;
 using namespace Mercury;
@@ -135,4 +138,110 @@ TEST(ProjectTrust, RuntimeGuidsDoNotCollideWithMapUids) {
   EXPECT_NE(objects.GetGuid(camera), 1u);
   EXPECT_NE(objects.GetGuid(camera), 2u);
   EXPECT_EQ(objects.FindByGuid(objects.GetGuid(camera)), camera);
+}
+
+TEST(ProjectTrust, SymlinkedCacheRefusesTrustAndWritesNothingOutside) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "the test uses symlinks";
+#else
+  const fs::path config = TempDir("mercury_trust_link_config");
+  const fs::path root = TempDir("mercury_trust_link_project");
+  const fs::path outside = TempDir("mercury_trust_link_outside");
+  XdgConfigScope scope(config);
+
+  fs::create_symlink(outside, root / ".mercury");
+
+  std::string error;
+  EXPECT_TRUE(os::EnsureProjectCacheDir(root, &error).empty());
+  EXPECT_FALSE(error.empty());
+
+  Console console;
+  EditorSettings settings;
+  EditorUI::SetProjectTrust(settings, root, true, console);
+  EXPECT_FALSE(settings.IsProjectTrusted(root));
+  // Nothing was written into the link's target.
+  EXPECT_TRUE(fs::is_empty(outside));
+
+  // A Play build stops at the same check, even if trust was set externally.
+  settings.SetProjectTrusted(root, true);
+  settings.Save();
+  auto project = Project::Create(root / "game.mproj", "Game");
+  ASSERT_TRUE(project);
+  ASSERT_TRUE(project->SetBuildTarget("game"));
+  ASSERT_TRUE(project->Save());
+  PlaySession session(console, settings);
+  session.Build(*project);
+  EXPECT_FALSE(session.IsBusy());
+  EXPECT_TRUE(fs::is_empty(outside));
+
+  // The LSP files and script-build stamp use the same guarded cache.
+  EditorUI::ScaffoldProject(*project);
+  EXPECT_TRUE(PlaySession::SchemaPath(*project).empty());
+  EXPECT_TRUE(ScriptBuilder::StampPath(root).empty());
+  EXPECT_TRUE(fs::is_empty(outside));
+
+  fs::remove_all(root);
+  fs::remove_all(config);
+  fs::remove_all(outside);
+#endif
+}
+
+TEST(ProjectCache, BuildDirsNeedTheEditorMarker) {
+  const fs::path root = TempDir("mercury_build_marker");
+  std::string error;
+
+  const fs::path first = os::EnsureProjectBuildDir(root, "debug", &error);
+  ASSERT_FALSE(first.empty()) << error;
+  EXPECT_TRUE(os::IsEditorProjectBuildDir(first));
+  EXPECT_EQ(first, root / ".mercury" / "build" / "debug");
+  // A second call accepts our own marker.
+  EXPECT_FALSE(os::EnsureProjectBuildDir(root, "debug", &error).empty());
+
+  // Build output shipped without the marker is refused.
+  const fs::path ships = TempDir("mercury_build_shipped");
+  fs::create_directories(ships / ".mercury" / "build" / "debug");
+  std::ofstream(ships / ".mercury" / "build" / "debug" / "CMakeCache.txt")
+      << "// not ours\n";
+  error.clear();
+  EXPECT_TRUE(os::EnsureProjectBuildDir(ships, "debug", &error).empty());
+  EXPECT_NE(error.find("did not create"), std::string::npos) << error;
+
+  // A symlinked build folder is refused too.
+  const fs::path linked = TempDir("mercury_build_linked");
+  const fs::path target = TempDir("mercury_build_target");
+  fs::create_directories(linked / ".mercury");
+  fs::create_symlink(target, linked / ".mercury" / "build");
+  error.clear();
+  EXPECT_TRUE(os::EnsureProjectBuildDir(linked, "debug", &error).empty());
+  EXPECT_TRUE(fs::is_empty(target));
+
+  fs::remove_all(root);
+  fs::remove_all(ships);
+  fs::remove_all(linked);
+  fs::remove_all(target);
+}
+
+TEST(ProjectTrust, FailedWipeDoesNotPersistTrust) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "the test changes POSIX permissions";
+#else
+  const fs::path config = TempDir("mercury_trust_fail_config");
+  const fs::path root = TempDir("mercury_trust_fail_project");
+  XdgConfigScope scope(config);
+  fs::create_directories(root / ".mercury" / "build");
+  std::ofstream(root / ".mercury" / "build" / "CMakeCache.txt") << "// x\n";
+  fs::permissions(root / ".mercury",
+                  fs::perms::owner_read | fs::perms::owner_exec,
+                  fs::perm_options::replace);
+
+  Console console;
+  EditorSettings settings;
+  EditorUI::SetProjectTrust(settings, root, true, console);
+  EXPECT_FALSE(settings.IsProjectTrusted(root));
+
+  fs::permissions(root / ".mercury", fs::perms::owner_all,
+                  fs::perm_options::replace);
+  fs::remove_all(root);
+  fs::remove_all(config);
+#endif
 }

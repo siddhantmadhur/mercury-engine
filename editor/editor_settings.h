@@ -11,6 +11,8 @@
  *   [editor]
  *   external_editor = "code {project} {file}"
  *   open_scripts_in_editor = true
+ *   open_script_after_create = true
+ *   new_script_kind = "angel_script"
  *   vim_mode = false
  *   show_metal_hud = false
  *   pack_size_mb = 256
@@ -34,6 +36,8 @@
 #include <string>
 #include <vector>
 
+#include "templates.h"
+
 namespace Mercury {
 
 struct EditorSettings {
@@ -42,6 +46,10 @@ struct EditorSettings {
   std::string external_editor;
   // Open .as files in the built-in script editor instead of an external tool.
   bool open_scripts_in_editor = true;
+  // New Script dialog: open the created .as/.cc when the user clicks Create.
+  bool open_script_after_create = true;
+  // New Script dialog: the kind selected last time (remembered across runs).
+  Templates::ScriptKind new_script_kind = Templates::ScriptKind::kAngelScript;
   // Enable modal Vim keybindings in the built-in script editor.
   bool vim_mode = false;
 #if defined(__APPLE__)

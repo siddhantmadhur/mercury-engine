@@ -95,18 +95,27 @@ TEST(ProjectBuildLock, SerializesProjectBuilds) {
   EXPECT_FALSE(cmake_build::IsProjectBuildBusy());
 }
 
-TEST(ProjectScaffold, LinksTheCompileDatabaseWhenItExists) {
+TEST(ProjectScaffold, LinksOnlyADatabaseThisEditorConfigured) {
   const fs::path root = MakeProject();
   auto project = Project::Load(root / "scaffold.mproj");
   ASSERT_TRUE(project);
-  const fs::path db =
-      root / ".mercury" / "build" / "debug" / "compile_commands.json";
-  fs::create_directories(db.parent_path());
+  const fs::path build = root / ".mercury" / "build" / "debug";
+  const fs::path db = build / "compile_commands.json";
+  fs::create_directories(build);
   std::ofstream(db) << "[]\n";
 
-  EditorUI::ScaffoldProject(*project);
-
   const fs::path link = root / "compile_commands.json";
+  // Shipped build output has no editor marker: never expose it to clangd.
+  EditorUI::ScaffoldProject(*project);
+  EXPECT_FALSE(fs::exists(link));
+
+  // A database written after this editor configured the tree is linked.
+  fs::remove_all(root / ".mercury" / "build");
+  std::string error;
+  ASSERT_FALSE(os::EnsureProjectBuildDir(root, "debug", &error).empty())
+      << error;
+  std::ofstream(db) << "[]\n";
+  EditorUI::ScaffoldProject(*project);
   ASSERT_TRUE(fs::exists(link));
   EXPECT_EQ(Read(link), "[]\n");
 #if !defined(_WIN32)

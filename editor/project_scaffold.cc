@@ -5,7 +5,6 @@
 #include "project_scaffold.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -14,6 +13,7 @@
 
 #include "os/filesystem.h"
 #include "project/project.h"
+#include "templates.h"
 
 namespace Mercury::EditorUI {
 
@@ -21,22 +21,9 @@ namespace {
 
 namespace fs = std::filesystem;
 
-std::string Slug(std::string text) {
-  std::string slug;
-  for (unsigned char c : text) {
-    if (std::isalnum(c)) {
-      slug.push_back(static_cast<char>(std::tolower(c)));
-    } else if (!slug.empty() && slug.back() != '_') {
-      slug.push_back('_');
-    }
-  }
-  while (!slug.empty() && slug.back() == '_') slug.pop_back();
-  return slug.empty() ? "game" : slug;
-}
-
 std::string GameTarget(const Project& project) {
   const std::string target = project.GetBuildTarget();
-  return target.empty() ? Slug(project.GetName()) : target;
+  return target.empty() ? Templates::ToTargetName(project.GetName()) : target;
 }
 
 std::string SystemsTarget(const Project& project) {
@@ -86,7 +73,7 @@ endif ()
 # Link your own libraries here, e.g. the multiplayer path:
 # target_link_libraries({1} PRIVATE enet)
 )",
-      Slug(project.GetName()), target, systems);
+      Templates::ToTargetName(project.GetName()), target, systems);
 }
 
 std::string PresetsText() {
@@ -183,11 +170,34 @@ std::string ClangdText() {
 }  // namespace
 
 void RefreshProjectCompileCommands(const fs::path& root) {
-  const fs::path db =
-      root / ".mercury" / "build" / "debug" / "compile_commands.json";
-  std::error_code ec;
-  if (!fs::exists(db, ec)) return;
+  const fs::path cache = root / ".mercury";
+  const fs::path build = cache / "build";
+  const fs::path config = build / "debug";
+  const fs::path db = config / "compile_commands.json";
   const fs::path link = root / "compile_commands.json";
+  std::error_code ec;
+
+  auto is_real_directory = [](const fs::path& dir) {
+    std::error_code status_ec;
+    const fs::file_status status = fs::symlink_status(dir, status_ec);
+    return !status_ec && fs::is_directory(status) && !fs::is_symlink(status);
+  };
+  const fs::file_status db_status = fs::symlink_status(db, ec);
+  // Link only a database this editor configured. A project can ship
+  // .mercury/build with its own compile_commands.json (and flags for a
+  // clangd-based IDE); without our marker it is never exposed.
+  const bool editor_database =
+      !ec && fs::is_regular_file(db_status) && !fs::is_symlink(db_status) &&
+      is_real_directory(cache) && is_real_directory(build) &&
+      is_real_directory(config) && os::IsEditorProjectBuildDir(config);
+  if (!editor_database) {
+    // Remove a link a previous editor session left behind, but never a real
+    // file the user owns.
+    const fs::file_status link_status = fs::symlink_status(link, ec);
+    if (!ec && fs::is_symlink(link_status)) fs::remove(link, ec);
+    return;
+  }
+
   fs::remove(link, ec);
 #if defined(_WIN32)
   fs::copy_file(db, link, fs::copy_options::overwrite_existing, ec);
@@ -218,7 +228,7 @@ void ScaffoldProject(const Project& project) {
       }
     }
   }
-  const std::string preset_name = Slug(project.GetName());
+  const std::string preset_name = Templates::ToTargetName(project.GetName());
   targets_valid = targets_valid && Project::IsValidTargetName(preset_name) &&
                   Project::IsValidTargetName(GameTarget(project)) &&
                   Project::IsValidTargetName(SystemsTarget(project));

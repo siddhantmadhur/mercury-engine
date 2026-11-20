@@ -19,7 +19,9 @@ namespace Mercury {
 namespace fs = std::filesystem;
 
 fs::path PlaySession::SchemaPath(const Project& project) {
-  return project.GetCacheDir() / "scripts.mschema";
+  const fs::path cache = project.EnsureCacheDir();
+  if (cache.empty()) return {};
+  return cache / "scripts.mschema";
 }
 
 void PlaySession::Play(const Project& project,
@@ -53,7 +55,6 @@ void PlaySession::Begin(const Project& project, bool run) {
   if (IsBusy()) return;
   project_root_ = project.GetRoot();
   project_file_ = project.GetFile();
-  schema_path_ = SchemaPath(project);
   working_dir_ = project_root_;
   build_target_ = project.GetBuildTarget();
   native_ = !build_target_.empty();
@@ -70,6 +71,24 @@ void PlaySession::Begin(const Project& project, bool run) {
           true);
       return;
     }
+  }
+
+  // The schema and script build output live under .mercury. Refuse a symlink
+  // there so nothing is written outside the project.
+  std::string cache_error;
+  const fs::path cache = project.EnsureCacheDir(&cache_error);
+  if (cache.empty()) {
+    Finish("Project cache: " + cache_error, true);
+    return;
+  }
+  schema_path_ = cache / "scripts.mschema";
+  std::error_code cache_ec;
+  if (fs::is_symlink(fs::symlink_status(schema_path_, cache_ec))) {
+    fs::remove(schema_path_, cache_ec);
+    console_.Warn("Removed a symlink at " + schema_path_.string());
+  }
+
+  if (native_) {
     const fs::path sdk_cmake = cmake_build::SdkCmakeDir();
     if (sdk_cmake.empty()) {
       Finish(
@@ -80,7 +99,13 @@ void PlaySession::Begin(const Project& project, bool run) {
           true);
       return;
     }
-    build_dir_ = cmake_build::ProjectBuildDir(project_root_);
+    std::string build_error;
+    build_dir_ =
+        os::EnsureProjectBuildDir(project_root_, "debug", &build_error);
+    if (build_dir_.empty()) {
+      Finish("Project build: " + build_error, true);
+      return;
+    }
     working_dir_ = build_dir_;
     if (!cmake_build::TryAcquireProjectBuild(project_root_)) {
       Finish(

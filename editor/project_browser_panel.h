@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -49,7 +50,8 @@ class ProjectBrowserPanel : public wxPanel {
                                 bool is_directory);
   bool CopyExternalFilesInto(const std::filesystem::path& dest_dir,
                              const wxArrayString& files);
-  void HandleCreateScript();
+  void HandleCreateScript(
+      std::optional<Templates::ScriptKind> kind = std::nullopt);
   void HandleCreateMap(const std::filesystem::path& dir);
   void HandleCreateFolder(const std::filesystem::path& dir);
   void HandleDeletePath(const std::filesystem::path& target);

@@ -8,6 +8,7 @@
 
 #include "console.h"
 #include "editor_settings.h"
+#include "os/filesystem.h"
 
 namespace Mercury::EditorUI {
 
@@ -15,10 +16,17 @@ namespace {
 
 namespace fs = std::filesystem;
 
-bool RemoveEntry(const fs::path& path) {
+enum class WipeResult { kNothing, kRemoved, kFailed };
+
+WipeResult RemoveEntry(const fs::path& path, std::string* error) {
   std::error_code ec;
   const fs::file_status status = fs::symlink_status(path, ec);
-  if (ec || status.type() == fs::file_type::not_found) return false;
+  if (ec) {
+    if (error)
+      *error = "could not inspect " + path.string() + ": " + ec.message();
+    return WipeResult::kFailed;
+  }
+  if (status.type() == fs::file_type::not_found) return WipeResult::kNothing;
   if (fs::is_symlink(status)) {
     // Remove the link itself, never what it points at.
     fs::remove(path, ec);
@@ -28,7 +36,12 @@ bool RemoveEntry(const fs::path& path) {
   } else {
     fs::remove(path, ec);
   }
-  return !ec;
+  if (ec) {
+    if (error)
+      *error = "could not remove " + path.string() + ": " + ec.message();
+    return WipeResult::kFailed;
+  }
+  return WipeResult::kRemoved;
 }
 
 }  // namespace
@@ -36,26 +49,47 @@ bool RemoveEntry(const fs::path& path) {
 void SetProjectTrust(EditorSettings& settings, const fs::path& root,
                      bool trusted, Console& console) {
   const bool was_trusted = settings.IsProjectTrusted(root);
-  settings.SetProjectTrusted(root, trusted);
-  settings.Save();
-  if (!trusted || was_trusted) return;
-
-  std::error_code ec;
-  const fs::path cache = root / ".mercury";
-  const fs::file_status cache_status = fs::symlink_status(cache, ec);
-  if (fs::is_symlink(cache_status)) {
-    console.Warn(
-        "Not clearing .mercury: it is a symlink, so its contents are not part "
-        "of this project.");
+  if (!trusted || was_trusted) {
+    settings.SetProjectTrusted(root, trusted);
+    settings.Save();
     return;
   }
+
+  // First grant: the cache must be a real directory, and any build output
+  // shipped with the project is removed before it could be configured or run.
+  std::string error;
+  const fs::path cache = os::EnsureProjectCacheDir(root, &error);
+  if (cache.empty()) {
+    console.Error("Cannot trust this project: " + error);
+    console.Error(
+        "The trust decision was not saved; fix or remove .mercury and try "
+        "again.");
+    return;
+  }
+
   bool removed = false;
-  removed |= RemoveEntry(cache / "build");
-  removed |= RemoveEntry(cache / "systems");
+  for (const char* name : {"build", "systems"}) {
+    switch (RemoveEntry(cache / name, &error)) {
+      case WipeResult::kNothing:
+        break;
+      case WipeResult::kRemoved:
+        removed = true;
+        break;
+      case WipeResult::kFailed:
+        console.Error("Cannot trust this project: " + error);
+        console.Error(
+            "The trust decision was not saved; remove that folder and try "
+            "again.");
+        return;
+    }
+  }
   if (removed) {
     console.Info("Cleared pre-existing build output in " + cache.string() +
                  " before the first trusted build.");
   }
+
+  settings.SetProjectTrusted(root, true);
+  settings.Save();
 }
 
 }  // namespace Mercury::EditorUI

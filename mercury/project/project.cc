@@ -8,6 +8,7 @@
 #include <cctype>
 #include <system_error>
 
+#include "os/filesystem.h"
 #include "version.h"
 
 namespace Mercury {
@@ -64,6 +65,10 @@ std::shared_ptr<Project> Project::Create(const fs::path& mproj_file,
 }
 
 bool Project::Save() const { return mtext::SaveFile(file_, document_); }
+
+fs::path Project::EnsureCacheDir(std::string* error) const {
+  return os::EnsureProjectCacheDir(root_, error);
+}
 
 mtext::Section& Project::GetOrAddSection(std::string_view tag) {
   if (auto section = document_.Find(tag)) return *section;
@@ -135,7 +140,10 @@ bool Project::SetBuildTarget(std::string target) {
 }
 
 bool Project::IsValidTargetName(std::string_view name) {
-  if (name.empty() || name.front() == '-') return false;
+  if (name.empty() || name.size() > 128 || name == "." || name == ".." ||
+      name.front() == '-') {
+    return false;
+  }
   for (char c : name) {
     const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                          (c >= '0' && c <= '9') || c == '_' || c == '.' ||

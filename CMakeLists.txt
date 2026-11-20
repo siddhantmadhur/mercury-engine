@@ -376,6 +376,17 @@ if (MERCURY_BUILD_TESTS)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 editor_extension_unload_smoke)
 
+        # The New Script dialog is modal; this smoke drives it with CallAfter
+        # and creates all four kinds through EditorScene.
+        add_executable(new_script_dialog_smoke
+                tests/new_script_dialog_smoke.cc)
+        target_link_libraries(new_script_dialog_smoke
+                PRIVATE mercury_editor_lib)
+        set_target_properties(new_script_dialog_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                new_script_dialog_smoke)
+
         mercury_add_test(editor_test
                 tests/editor_templates_test.cc
                 tests/project_scaffold_test.cc

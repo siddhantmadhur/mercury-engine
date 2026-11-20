@@ -99,6 +99,14 @@ class Project {
   const fs::path& GetFile() const { return file_; }
   const fs::path& GetRoot() const { return root_; }
   fs::path GetCacheDir() const { return root_ / kProjectCacheDir; }
+  /**
+   * @brief The project's .mercury folder, created if missing
+   *
+   * Refuses (returns empty with `error`) if .mercury is a symlink or any
+   * non-directory, so generated files can never be redirected outside the
+   * project.
+   */
+  fs::path EnsureCacheDir(std::string* error = nullptr) const;
 
   std::string GetName() const;
   void SetName(std::string name);
