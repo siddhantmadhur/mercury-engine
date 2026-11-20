@@ -6,10 +6,42 @@
 
 #include <algorithm>
 #include <format>
+#include <utility>
 
 #include "debugger/debugger.h"
+#include "scene/map_scene.h"
 
 namespace Mercury {
+
+namespace {
+
+// A snapshot is the component's properties written as a one-section mtext
+// document. That keeps the byte form readable and lets a snapshot be edited
+// with the same tools as a map.
+bool EncodeProperties(const mtext::PropertyList& properties,
+                      std::vector<uint8_t>& out) {
+  mtext::Document document;
+  document.Add("component").properties = properties;
+  const std::string text = mtext::Write(document);
+  out.assign(text.begin(), text.end());
+  return true;
+}
+
+bool DecodeProperties(std::span<const uint8_t> bytes,
+                      mtext::PropertyList& out) {
+  if (bytes.empty()) return false;
+  const std::string text(reinterpret_cast<const char*>(bytes.data()),
+                         bytes.size());
+  mtext::Document document;
+  mtext::ParseError error;
+  if (!mtext::Parse(text, document, &error)) return false;
+  const mtext::Section* section = document.Find("component");
+  if (!section) return false;
+  out = section->properties;
+  return true;
+}
+
+}  // namespace
 
 const FieldInfo* ComponentInfo::FindField(std::string_view field) const {
   for (const auto& info : fields) {
@@ -98,11 +130,56 @@ void TypeRegistry::ClearGameTypes() {
   });
 }
 
+bool TypeRegistry::SerializeComponent(MapScene& scene, kEntityId entity,
+                                      std::string_view type,
+                                      mtext::PropertyList& out) const {
+  const ComponentInfo* info = FindComponent(type);
+  if (!info || !info->get_field) return false;
+  out.clear();
+  for (const FieldInfo& field : info->fields) {
+    mtext::Variant value;
+    if (info->get_field(scene, entity, field.name, &value)) {
+      out.Set(field.name, std::move(value));
+    }
+  }
+  return true;
+}
+
+bool TypeRegistry::DeserializeComponent(MapScene& scene, kEntityId entity,
+                                        std::string_view type,
+                                        const mtext::PropertyList& in) const {
+  const ComponentInfo* info = FindComponent(type);
+  if (!info || !info->set_field) return false;
+  for (const auto& property : in) {
+    info->set_field(scene, entity, property.key, property.value);
+  }
+  return true;
+}
+
+bool TypeRegistry::SerializeComponent(MapScene& scene, kEntityId entity,
+                                      std::string_view type,
+                                      std::vector<uint8_t>& out) const {
+  mtext::PropertyList properties;
+  if (!SerializeComponent(scene, entity, type, properties)) return false;
+  return EncodeProperties(properties, out);
+}
+
+bool TypeRegistry::DeserializeComponent(MapScene& scene, kEntityId entity,
+                                        std::string_view type,
+                                        std::span<const uint8_t> in) const {
+  mtext::PropertyList properties;
+  if (!DecodeProperties(in, properties)) return false;
+  return DeserializeComponent(scene, entity, type, properties);
+}
+
 bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {
   mtext::Document document;
   document.Add("mschema").attributes.Set("format", 1);
   for (const auto* info : Components()) {
-    if (!info->is_script) continue;
+    // Scripts and game-registered data components alike: the editor never runs
+    // game code, so this file is the only way a game's custom types reach it.
+    // Engine built-ins are left out; the editor already has them.
+    if (!info->is_script && !info->from_game) continue;
     auto& script = document.Add("script");
     script.attributes.Set("name", info->name);
     for (const auto& field : info->fields) {

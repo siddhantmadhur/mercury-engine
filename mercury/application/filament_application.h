@@ -10,6 +10,7 @@
 #include <filament/Engine.h>
 #include <filament/RenderTarget.h>
 #include <filament/Renderer.h>
+#include <filament/Scene.h>
 #include <filament/Skybox.h>
 #include <filament/SwapChain.h>
 #include <filament/Texture.h>
@@ -59,6 +60,16 @@ class FilamentApplication : public Application {
                            std::vector<uint8_t>& rgba_out,
                            uint64_t* frame_id = nullptr) override;
   void SetShowRenderStats(bool show) override { show_stats_ = show; }
+
+  // The live Filament objects behind the renderer. Game code, editor systems
+  // and systems use them to add their own renderables, materials or view
+  // settings without the engine wrapping Filament. Null until the application
+  // has loaded.
+  filament::Engine* GetEngine() const { return engine_; }
+  filament::Renderer* GetRenderer() const { return renderer_; }
+  filament::Scene* GetScene() const { return scene_renderer_.scene(); }
+  filament::View* GetView() const { return scene_view_; }
+  filament::Camera* GetCamera() const { return scene_camera_; }
 
   // Test only: the dynamic resolution scale Filament applied to the editor
   // scene viewport on its last frame ({1,1} when FSR is off).

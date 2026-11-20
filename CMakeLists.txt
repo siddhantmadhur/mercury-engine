@@ -290,6 +290,7 @@ if (MERCURY_BUILD_TESTS)
             tests/obj_material_test.cc
             tests/parallel_load_test.cc
             tests/physics_constraints_test.cc
+            tests/player_args_test.cc
             tests/primitives_test.cc
             tests/process_test.cc
             tests/reflection_test.cc
@@ -301,7 +302,11 @@ if (MERCURY_BUILD_TESTS)
             tests/test_paths.h
             tests/test_scripts.h
             tests/ui_test.cc
-            tests/user_path_test.cc)
+            tests/user_path_test.cc
+            tests/asset_importer_test.cc
+            tests/component_serialization_test.cc
+            tests/event_bus_test.cc
+            tests/system_registry_test.cc)
 
     mercury_add_test(example_projects_test
             tests/example_projects_test.cc

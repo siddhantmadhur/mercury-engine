@@ -19,7 +19,39 @@
 #ifndef MERCURY_PLAYER_PLAYER_H
 #define MERCURY_PLAYER_PLAYER_H
 
+#include <string>
+
 namespace Mercury {
+
+/**
+ * @brief The command line split into what the player itself understands
+ *
+ * Options a game registered an app hook for are left in `argv` and are not
+ * recorded here; see @ref ParsePlayerArgs.
+ */
+struct PlayerArgs {
+  std::string project_path;
+  std::string map_path;
+  std::string schema_path;
+  bool project_given = false;
+  bool build_scripts = false;
+  bool help = false;
+  // The first unrecognised option, when `allow_unknown` is false. Empty when
+  // the command line is valid.
+  std::string unknown_option;
+};
+
+/**
+ * @brief Parses the player's own options
+ *
+ * @param allow_unknown Accept `--options` the player does not know, so an app
+ *   hook can read them from the original `argv`. A token after an unknown
+ *   option is treated as that option's value, not as the project path, so put
+ *   the project path before any game-specific options.
+ * @return the parsed options; `unknown_option` is set when the command line has
+ *   an option the player does not know and `allow_unknown` is false.
+ */
+PlayerArgs ParsePlayerArgs(int argc, char** argv, bool allow_unknown);
 
 /**
  * @brief Run a Mercury project from a game executable
@@ -42,6 +74,8 @@ namespace Mercury {
  * - `--build-scripts` compiles the scripts, then exits.
  * - `--dump-schema` writes the fields of every script and exits (the editor
  *   uses it to build the Inspector).
+ * - Any other `--option` is passed to the game's app hooks (MERCURY_APP_HOOK).
+ *   When no hook is registered it is an error, as before.
  *
  * @param argc Argument count from `main`.
  * @param argv Argument vector from `main`.

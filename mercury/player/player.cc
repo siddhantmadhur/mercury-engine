@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "application/default_application.h"
 #include "debugger/debugger.h"
@@ -16,6 +17,7 @@
 #include "project/project.h"
 #include "rust/bridge.h"
 #include "scene/map_scene.h"
+#include "scripting/app_hook.h"
 #include "scripting/as/script_builder.h"
 #include "scripting/as/script_runtime.h"
 #include "scripting/type_registry.h"
@@ -86,36 +88,59 @@ bool MountShippedPacks(std::string& project_path) {
 
 }  // namespace
 
-int RunPlayer(int argc, char** argv, const char* default_project) {
-  std::string project_path = default_project ? default_project : "";
-  std::string map_path;
-  std::string schema_path;
-  bool project_given = false;
-  bool build_scripts = false;
-
+PlayerArgs ParsePlayerArgs(int argc, char** argv, bool allow_unknown) {
+  PlayerArgs args;
+  // Set after an option the player does not know: the tokens that follow are
+  // that option's values, not the project path.
+  bool after_unknown = false;
   for (int i = 1; i < argc; i++) {
     std::string_view arg = argv[i];
     auto next = [&]() -> const char* {
       return i + 1 < argc ? argv[++i] : nullptr;
     };
     if (arg == "--map") {
-      if (auto value = next()) map_path = value;
+      if (auto value = next()) args.map_path = value;
     } else if (arg == "--dump-schema") {
-      if (auto value = next()) schema_path = value;
+      if (auto value = next()) args.schema_path = value;
     } else if (arg == "--build-scripts") {
-      build_scripts = true;
+      args.build_scripts = true;
     } else if (arg == "--help" || arg == "-h") {
-      PrintUsage(argv[0]);
-      return 0;
+      args.help = true;
     } else if (!arg.starts_with("--")) {
-      project_path = os::UserPath(std::string(arg)).string();
-      project_given = true;
+      if (after_unknown) continue;
+      args.project_path = os::UserPath(std::string(arg)).string();
+      args.project_given = true;
+    } else if (!allow_unknown) {
+      args.unknown_option = std::string(arg);
+      return args;
     } else {
-      PDebug::error("Unknown option {}", arg);
-      PrintUsage(argv[0]);
-      return 2;
+      after_unknown = true;
     }
   }
+  return args;
+}
+
+int RunPlayer(int argc, char** argv, const char* default_project) {
+  // A game with an app hook owns the options the player does not know; the
+  // hook sees them in OnPreInit.
+  const bool has_app_hooks = !AppHookRegistry::Instance().Hooks().empty();
+  const PlayerArgs parsed = ParsePlayerArgs(argc, argv, has_app_hooks);
+  if (!parsed.unknown_option.empty()) {
+    PDebug::error("Unknown option {}", parsed.unknown_option);
+    PrintUsage(argv[0]);
+    return 2;
+  }
+  if (parsed.help) {
+    PrintUsage(argv[0]);
+    return 0;
+  }
+  std::string project_path = parsed.project_given
+                                 ? parsed.project_path
+                                 : (default_project ? default_project : "");
+  std::string map_path = parsed.map_path;
+  std::string schema_path = parsed.schema_path;
+  const bool project_given = parsed.project_given;
+  const bool build_scripts = parsed.build_scripts;
 
   RegisterBuiltinTypes();
   Mercury::rust::Init();
@@ -159,6 +184,37 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
       return 1;
     }
     return 0;
+  }
+
+  // Process-wide game hooks. They are created only for a real run: the
+  // script-build and schema-dump paths above must not start a game's
+  // subsystems.
+  std::vector<std::string_view> hook_args;
+  hook_args.reserve(static_cast<size_t>(argc > 1 ? argc - 1 : 0));
+  for (int i = 1; i < argc; i++) hook_args.emplace_back(argv[i]);
+  std::vector<std::unique_ptr<AppHook>> app_hooks =
+      AppHookRegistry::Instance().CreateAll();
+  // Every created hook gets OnShutdown, including when a later hook or the
+  // game setup fails.
+  struct AppHookGuard {
+    std::vector<std::unique_ptr<AppHook>>* hooks;
+    ~AppHookGuard() {
+      for (auto it = hooks->rbegin(); it != hooks->rend(); ++it) {
+        (*it)->OnShutdown();
+      }
+    }
+  } hook_guard{&app_hooks};
+  for (auto& hook : app_hooks) {
+    if (!hook->OnPreInit(hook_args)) {
+      PDebug::error("A game app hook rejected the command line");
+      return 1;
+    }
+  }
+  for (auto& hook : app_hooks) {
+    if (!hook->OnInit()) {
+      PDebug::error("A game app hook failed to initialize");
+      return 1;
+    }
   }
 
   if (map_path.empty()) map_path = project->GetMainMap();

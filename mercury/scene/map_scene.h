@@ -39,6 +39,7 @@ namespace Mercury {
 
 class Behaviour;
 class MapScene;
+class System;
 
 /**
  * @brief Lightweight handle to an entity created from a map node
@@ -250,6 +251,7 @@ class MapScene : public GameScene {
   void OnTick(double delta_t) override;
   void OnDestroy() override;
   void ProcessOnFrame(float alpha) override;
+  void SimulatePhysics(int steps) override;
 
   void UpdateEntityTransformHierarchy(kEntityId entity);
   void UpdateInterpolatedHierarchy();
@@ -344,6 +346,12 @@ class MapScene : public GameScene {
   // True while at least one script is running (started and enabled), so the
   // scene may change on its own every frame.
   bool HasActiveBehaviours() const;
+
+  // The scene's registered systems (see scripting/system.h), in phase/order.
+  // Empty in edit mode and before the scene starts.
+  const std::vector<std::unique_ptr<System>>& GetSystems() const {
+    return systems_;
+  }
 
   // Loads (once) a model with its hierarchy, materials and clips.
   std::shared_ptr<const Model> GetModelAsset(std::string_view res_path);
@@ -451,6 +459,18 @@ class MapScene : public GameScene {
   std::unordered_map<kEntityId, std::vector<Behaviour*>> behaviours_by_entity_;
   size_t awoken_behaviours_ = 0;
   bool running_ = false;
+  // Instances of every registered System, created when the scene starts and
+  // driven from OnFrame/OnTick. Shut down by OnDestroy.
+  std::vector<std::unique_ptr<System>> systems_;
+  bool systems_started_ = false;
+  // True while BuildSubtree creates entities for a prefab or a cloned node.
+  // Those copies keep their source node uids, so they must not become entity
+  // GUIDs (the same prefab may be instantiated more than once).
+  bool cloning_runtime_node_ = false;
+  void StartSystems();
+  void StopSystems();
+  void NotifyMapLoaded();
+  void NotifyMapUnloading();
   // Nonzero while behaviour callbacks are being run (OnFrame, OnTick, OnStart,
   // the OnDestroy pass). The scene cannot be replaced under them: a native
   // behaviour that calls Instantiate/BeginInstantiate then has the new map

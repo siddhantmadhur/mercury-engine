@@ -16,8 +16,10 @@
 #ifndef MERCURY_SCRIPTING_TYPE_REGISTRY_H
 #define MERCURY_SCRIPTING_TYPE_REGISTRY_H
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -68,6 +70,9 @@ struct ComponentInfo {
   // ScriptRuntime::Shutdown (which drops AngelScript classes); the script
   // runtime must not remove code that was linked into the game.
   bool native_script = false;
+  // Declared by game code (MERCURY_SCRIPT, or a data component registered by
+  // the game itself), so SaveSchema exports it for the editor.
+  bool from_game = false;
 
   const FieldInfo* FindField(std::string_view field) const;
 };
@@ -107,8 +112,37 @@ class TypeRegistry {
   // code linked into this executable, not data to reload.
   void ClearGameTypes();
 
+  // --- component snapshots (replication, save games, undo) ----------------
+  //
+  // Serializing writes every field the component's Reflect method describes,
+  // through the ComponentInfo's get/set functions. It works for components
+  // whose data lives in the entity's registry (the built-ins, and game
+  // components registered with get_field/set_field); scripts are Behaviour
+  // objects and have no field access here.
+  //
+  // Deserializing sets the fields present in `in`/`bytes` and leaves the rest
+  // alone, so a delta snapshot only needs the fields it changes.
+
+  // Fills `out` with the component's current values. False if the type is
+  // unknown or cannot read its fields.
+  bool SerializeComponent(MapScene& scene, kEntityId entity,
+                          std::string_view type,
+                          mtext::PropertyList& out) const;
+  // Applies values from `in`. False if the type is unknown or cannot write
+  // its fields.
+  bool DeserializeComponent(MapScene& scene, kEntityId entity,
+                            std::string_view type,
+                            const mtext::PropertyList& in) const;
+  // The same in the engine's text format, as a UTF-8 byte buffer.
+  bool SerializeComponent(MapScene& scene, kEntityId entity,
+                          std::string_view type,
+                          std::vector<uint8_t>& out) const;
+  bool DeserializeComponent(MapScene& scene, kEntityId entity,
+                            std::string_view type,
+                            std::span<const uint8_t> in) const;
+
   /**
-   * @brief Write every script component and its fields
+   * @brief Write every component (scripts and data types) and its fields
    *
    *   [mschema format=1]
    *

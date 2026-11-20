@@ -270,6 +270,7 @@ bool RegisterScript(const char* name) {
   info.category = "Scripts";
   info.is_script = true;
   info.native_script = true;
+  info.from_game = true;
   {
     T instance{};
     auto reflector = Reflector::Describe();

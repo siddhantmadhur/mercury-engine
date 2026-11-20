@@ -13,11 +13,25 @@
 #define ENTT_USE_STL 1
 #include <entt/entt.hpp>
 
+#include <unordered_map>
+
 #include "globals.h"
 #include "properties/camera.h"
 #include "properties/transform.h"
 
 namespace Mercury {
+
+/**
+ * @brief A stable, process-unique id for an entity
+ *
+ * A map node's id is its MapNode uid, so it survives reloading the map; an
+ * entity created at run time gets the next id from a counter. Systems use it
+ * instead of an entt::entity when the id has to survive a scene rebuild or
+ * travel over a network. 0 means "no id".
+ */
+struct EntityGuid {
+  uint64_t value = 0;
+};
 
 /**
  * @brief Manager to handle creating and deleting PObjects
@@ -27,7 +41,10 @@ namespace Mercury {
  */
 class PObjectManager {
  public:
-  PObjectManager() = default;
+  PObjectManager();
+  ~PObjectManager();
+  PObjectManager(const PObjectManager&) = delete;
+  PObjectManager& operator=(const PObjectManager&) = delete;
 
   kEntityId NewObject();
 
@@ -60,11 +77,23 @@ class PObjectManager {
   entt::registry& GetRegistry() { return registry_; }
   const entt::registry& GetRegistry() const { return registry_; }
 
+  // The entity's stable id, or 0 when it has none.
+  uint64_t GetGuid(kEntityId id) const;
+  // Overrides the id, e.g. with the MapNode uid of a map entity.
+  void SetGuid(kEntityId id, uint64_t guid);
+  // The entity with this id, or entt::null.
+  kEntityId FindByGuid(uint64_t guid) const;
+
   // Removes the entity and every property it has.
   void DestroyObject(kEntityId id);
 
  private:
+  void OnGuidDestroyed(entt::registry& registry, kEntityId entity);
+
   entt::registry registry_;
+  // guid -> entity, kept in sync by NewObject, SetGuid and OnGuidDestroyed so
+  // FindByGuid does not scan the registry.
+  std::unordered_map<uint64_t, kEntityId> guid_index_;
 };
 }  // namespace Mercury
 
