@@ -157,6 +157,11 @@ target_link_libraries(mercury PUBLIC
 # and consumers never see it.
 target_link_libraries(mercury PRIVATE mercury_tomlplusplus)
 
+# JSON for the introspection API (mercury/introspection): same arrangement —
+# built only inside the engine's implementation files, so the SDK surface
+# keeps plain std::string results.
+target_link_libraries(mercury PRIVATE nlohmann_json::nlohmann_json)
+
 if (APPLE)
     target_compile_options(mercury PRIVATE -Wno-deprecated-declarations)
     target_link_libraries(mercury PUBLIC
@@ -344,6 +349,7 @@ if (MERCURY_BUILD_TESTS)
             tests/hierarchy_test.cc
             tests/image_load_test.cc
             tests/input_actions_test.cc
+            tests/introspection_test.cc
             tests/map_test.cc
             tests/model_cache_test.cc
             tests/model_preloader_test.cc
@@ -371,6 +377,8 @@ if (MERCURY_BUILD_TESTS)
             tests/engine_sdk_dir_test.cc
             tests/event_bus_test.cc
             tests/system_registry_test.cc)
+    # The introspection tests read the schema JSON back with nlohmann/json.
+    target_link_libraries(mercury_test PRIVATE nlohmann_json::nlohmann_json)
 
     mercury_add_test(example_projects_test
             tests/example_projects_test.cc

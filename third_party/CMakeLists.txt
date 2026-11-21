@@ -37,8 +37,9 @@ target_include_directories(mercury_tomlplusplus INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/tomlplusplus/include")
 target_compile_definitions(mercury_tomlplusplus INTERFACE TOML_EXCEPTIONS=0)
 
-# JSON support for tooling (MCP infrastructure). nlohmann/json is header-only
-# and is not linked into any engine, editor or test target. Its own CMake
+# JSON support for tooling (the introspection API and MCP infrastructure).
+# nlohmann/json is header-only and is linked only PRIVATE into the engine
+# target — no public engine header includes it. Its own CMake
 # project provides the nlohmann_json::nlohmann_json target; keep that same
 # target available when the submodule is not checked out (CI sets
 # GIT_SUBMODULE_STRATEGY: none for jobs that do not need dependencies).
