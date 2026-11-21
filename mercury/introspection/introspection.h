@@ -26,8 +26,8 @@
  *                        model, dimensions for a texture, duration for an
  *                        audio clip, the fields of a .masset.
  *
- * JSON is built with nlohmann/json inside the engine's implementation files
- * (like toml++, it stays out of the public header surface), so the SDK
+ * The JSON library is a private dependency of the engine's implementation
+ * files (like toml++, it stays out of the public header surface), so the SDK
  * surface of this module is plain std::string results.
  */
 #ifndef MERCURY_INTROSPECTION_INTROSPECTION_H
@@ -50,8 +50,11 @@ namespace Mercury::introspection {
  *   name          the field name
  *   type          "bool", "int", "float", "string", "Vector2", "Vector3",
  *                 "Color", "NodePath", "Resource", "enum", "list", "event"
- *   default       the field's default value, in JSON form
- *                 ({ "vec3": [x, y, z] }, { "res": "res://..." }, ...)
+ *   default       the field's default value, in JSON form: bool, int,
+ *                 float and string as themselves; Vector2, Vector3 and
+ *                 Color as plain arrays ([x, y], [x, y, z], [r, g, b, a]);
+ *                 { "path": "A/B" } for a NodePath, { "res": "res://..." }
+ *                 for a Resource, an array for a list
  *   enum_values   the allowed strings for an "enum" field ([] otherwise)
  *   asset_type    the expected asset type for a "Resource" field ("" if any)
  *   tooltip       the editor tooltip, "" when there is none

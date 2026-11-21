@@ -126,10 +126,11 @@ pub struct PendingReply {
     sender: oneshot::Sender<Reply>,
 }
 
-/// How long a tool call may wait on the editor before the transport answers
-/// "editor did not respond". Tool calls queue onto the editor's UI thread, so
-/// this has to ride out a busy frame loop.
-const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a call may wait on the editor before the transport answers
+/// "editor did not respond", for the calls that have no tool spec (the
+/// reserved resource tools). A tool's own spec carries its timeout
+/// (`ToolSpec::timeout_secs`, this same value unless the tool asks for more).
+const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(tools::DEFAULT_TIMEOUT_SECS);
 
 /// Reserved tool names the transport answers through the same `Invoke`
 /// handshake but that no editor handler is registered for; they carry the
@@ -198,7 +199,9 @@ struct BridgeHandler {
     /// Filled in once the listener is bound (the port may be ephemeral); it
     /// is the URL `get_server_info` reports.
     url: String,
-    tool_timeout: Duration,
+    /// Test-only override: when set it replaces every timeout, the specs'
+    /// included. Production leaves it `None`.
+    tool_timeout: Option<Duration>,
     catalogue: Vec<ToolSpec>,
 }
 
@@ -207,7 +210,7 @@ impl BridgeHandler {
         host: Arc<dyn Host>,
         read_only: bool,
         editor_version: String,
-        tool_timeout: Duration,
+        tool_timeout: Option<Duration>,
     ) -> Self {
         BridgeHandler {
             host,
@@ -230,11 +233,16 @@ impl BridgeHandler {
     }
 
     /// Forward one invocation to the host and wait for its reply.
-    async fn invoke(&self, tool: &str, args_json: &str) -> Result<Reply, McpError> {
+    async fn invoke(
+        &self,
+        tool: &str,
+        args_json: &str,
+        timeout: Duration,
+    ) -> Result<Reply, McpError> {
         let (sender, receiver) = oneshot::channel();
         self.host
             .invoke(tool, args_json, Box::new(PendingReply { sender }));
-        match tokio::time::timeout(self.tool_timeout, receiver).await {
+        match tokio::time::timeout(self.tool_timeout.unwrap_or(timeout), receiver).await {
             Ok(Ok(reply)) => Ok(reply),
             // The editor timed out, or dropped the handle without completing
             // it (for example while the server is shutting down): one failure.
@@ -244,7 +252,7 @@ impl BridgeHandler {
 
     /// Forward one invocation and parse its successful result as JSON.
     async fn invoke_json(&self, tool: &str, args_json: &str) -> Result<Value, McpError> {
-        let reply = self.invoke(tool, args_json).await?;
+        let reply = self.invoke(tool, args_json, DEFAULT_TOOL_TIMEOUT).await?;
         if !reply.ok {
             return Err(McpError::internal_error(
                 format!("{tool} failed: {}", reply.result_json),
@@ -319,7 +327,8 @@ impl ServerHandler for BridgeHandler {
             );
         }
 
-        match self.invoke(spec.name, &args_json).await {
+        let timeout = Duration::from_secs(spec.timeout_secs);
+        match self.invoke(spec.name, &args_json, timeout).await {
             Ok(reply) => Ok(reply_to_result(reply).into()),
             Err(_) => Ok(
                 CallToolResult::error(vec![ContentBlock::text("editor did not respond")])
@@ -590,7 +599,7 @@ fn start_server(
         Arc::new(host),
         cfg.read_only,
         cfg.editor_version.clone(),
-        DEFAULT_TOOL_TIMEOUT,
+        None,
     );
     let transport = start_transport(cfg.port, cfg.token.clone(), handler)?;
     Ok(Box::new(Server { transport }))
@@ -850,6 +859,22 @@ mod tests {
         }
     }
 
+    /// A mock editor whose every reply arrives `delay` after the call, from
+    /// another thread: a tool whose editor-side work takes a while.
+    struct DelayedHost {
+        delay: Duration,
+    }
+
+    impl Host for DelayedHost {
+        fn invoke(&self, _tool: &str, _args_json: &str, reply: Box<PendingReply>) {
+            let delay = self.delay;
+            std::thread::spawn(move || {
+                std::thread::sleep(delay);
+                complete_reply(reply, true, "{\"done\":true}".to_owned(), vec![]);
+            });
+        }
+    }
+
     fn png(label: &str, data: Vec<u8>) -> ffi::ImagePng {
         ffi::ImagePng { data, label: label.to_owned() }
     }
@@ -872,7 +897,7 @@ mod tests {
         timeout: Duration,
         extra_tools: Vec<ToolSpec>,
     ) -> (Transport, u16) {
-        let mut handler = BridgeHandler::new(host, read_only, editor_version, timeout);
+        let mut handler = BridgeHandler::new(host, read_only, editor_version, Some(timeout));
         handler.catalogue.extend(extra_tools);
         let transport = start_transport(0, "test-token".to_owned(), handler)
             .expect("server starts");
@@ -1238,12 +1263,12 @@ mod tests {
     }
 
     fn write_spec() -> ToolSpec {
-        ToolSpec {
-            name: "write_thing",
-            description: "test-only write tool",
-            mode: Mode::Write,
-            input_schema: || tools::schema::<WriteThingArgs>(),
-        }
+        ToolSpec::new(
+            "write_thing",
+            "test-only write tool",
+            Mode::Write,
+            || tools::schema::<WriteThingArgs>(),
+        )
     }
 
     #[test]
@@ -1312,6 +1337,80 @@ mod tests {
             json!("editor did not respond"),
             "a timed-out call is a tool error"
         );
+    }
+
+    /// A test-only tool with its own timeout.
+    fn slow_spec(timeout_secs: u64) -> ToolSpec {
+        ToolSpec::new(
+            "slow_thing",
+            "test-only tool with its own timeout",
+            Mode::Read,
+            || tools::schema::<tools::core::PingArgs>(),
+        )
+        .with_timeout_secs(timeout_secs)
+    }
+
+    /// Calls `slow_thing` against a host that answers after `delay`, with no
+    /// test override: the spec's timeout is the only one in play.
+    fn call_slow_thing(delay: Duration, timeout_secs: u64) -> serde_json::Value {
+        let host: Arc<dyn Host> = Arc::new(DelayedHost { delay });
+        let mut handler = BridgeHandler::new(host, false, String::new(), None);
+        handler.catalogue.push(slow_spec(timeout_secs));
+        let mut transport =
+            start_transport(0, "test-token".to_owned(), handler).expect("server starts");
+        let port: u16 = transport
+            .url
+            .split(':')
+            .nth(2)
+            .and_then(|rest| rest.split('/').next())
+            .and_then(|port| port.parse().ok())
+            .expect("the URL carries the bound port");
+        let call = post(
+            port,
+            &format!("127.0.0.1:{port}"),
+            Some("test-token"),
+            None,
+            Some("2026-07-28"),
+            &rpc(1, "tools/call", json!({"name":"slow_thing","arguments":{},"_meta":meta_2026()})),
+        )
+        .expect("call runs");
+        transport.stop();
+        result(&call)
+    }
+
+    #[test]
+    fn a_spec_timeout_longer_than_the_reply_is_honoured() {
+        // The reply takes 1.5 s; a 4 s spec timeout waits for it.
+        let result = call_slow_thing(Duration::from_millis(1500), 4);
+        assert_eq!(result["isError"], false, "{result}");
+        assert_eq!(result["structuredContent"]["done"], true, "{result}");
+    }
+
+    #[test]
+    fn a_spec_timeout_shorter_than_the_reply_times_out() {
+        // The same 1.5 s reply with a 1 s spec timeout: the call fails at the
+        // spec's timeout, not the 30 s default.
+        let started = std::time::Instant::now();
+        let result = call_slow_thing(Duration::from_millis(1500), 1);
+        assert_eq!(result["isError"], true, "{result}");
+        assert_eq!(result["content"][0]["text"], json!("editor did not respond"));
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the call waited for the 30 s default, took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn specs_default_to_the_default_timeout() {
+        for spec in tools::all() {
+            assert_eq!(
+                spec.timeout_secs,
+                tools::DEFAULT_TIMEOUT_SECS,
+                "{} should use the default timeout",
+                spec.name
+            );
+        }
     }
 
     #[test]

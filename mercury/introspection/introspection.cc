@@ -26,6 +26,7 @@
 
 #include "animation/animator_controller.h"
 #include "input/input_actions.h"
+#include "introspection/variant_json.h"
 #include "os/filesystem.h"
 #include "project/asset_database.h"
 #include "project/map.h"
@@ -42,51 +43,6 @@ namespace {
 namespace fs = std::filesystem;
 
 // ------------------------------------------------------------- JSON helpers --
-
-// A Variant value in JSON form, mirroring the engine's text format tags:
-// { vec2 = [x, y] } -> {"vec2": [x, y]}, { res = "..." } -> {"res": "..."},
-// { nil = true } -> null.
-nlohmann::json VariantToJson(const mtext::Variant& value) {
-  using Type = mtext::Variant::Type;
-  switch (value.GetType()) {
-    case Type::kNil:
-      return nullptr;
-    case Type::kBool:
-      return *value.Get<bool>();
-    case Type::kInt:
-      return *value.Get<int64_t>();
-    case Type::kFloat:
-      return *value.Get<double>();
-    case Type::kString:
-      return *value.Get<std::string>();
-    case Type::kVector2: {
-      const glm::vec2 v = *value.Get<glm::vec2>();
-      return nlohmann::json::array({v.x, v.y});
-    }
-    case Type::kVector3: {
-      const glm::vec3 v = *value.Get<glm::vec3>();
-      return nlohmann::json::array({v.x, v.y, v.z});
-    }
-    case Type::kColor: {
-      const glm::vec4 v = value.Get<mtext::Color>()->rgba;
-      return nlohmann::json::array({v.r, v.g, v.b, v.a});
-    }
-    case Type::kNodePath:
-      return nlohmann::json{{"path", value.Get<mtext::NodePath>()->path}};
-    case Type::kExtResource:
-      return nlohmann::json{{"ext", value.Get<mtext::ExtResource>()->id}};
-    case Type::kResource:
-      return nlohmann::json{{"res", value.Get<mtext::Resource>()->path}};
-    case Type::kArray: {
-      nlohmann::json array = nlohmann::json::array();
-      for (const auto& item : *value.Get<mtext::Array>()) {
-        array.push_back(VariantToJson(item));
-      }
-      return array;
-    }
-  }
-  return nullptr;
-}
 
 nlohmann::json FieldsJson(const std::vector<FieldInfo>& fields) {
   nlohmann::json out = nlohmann::json::array();

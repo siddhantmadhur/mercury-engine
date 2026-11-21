@@ -4,7 +4,7 @@
 
 //! The core tool group: the handshake tools every client sees first.
 //!
-//! `ping`'s implementation arrives with the editor tool handlers (P2); it
+//! `ping` is implemented in the editor, in `editor/mcp/tools/core.cc`; it
 //! returns `{"pong":true,"editor_version":"<version>"}`. `get_server_info` is
 //! answered entirely in Rust by the transport.
 
@@ -26,21 +26,21 @@ pub(crate) fn tools() -> Vec<ToolSpec> {
 }
 
 fn ping() -> ToolSpec {
-    ToolSpec {
-        name: "ping",
-        description: "Checks that the Mercury editor is reachable. Returns \
-                      {\"pong\":true,\"editor_version\":\"<version>\"}.",
-        mode: Mode::Read,
-        input_schema: || schema::<PingArgs>(),
-    }
+    ToolSpec::new(
+        "ping",
+        "Checks that the Mercury editor is reachable. Returns \
+         {\"pong\":true,\"editor_version\":\"<version>\"}.",
+        Mode::Read,
+        || schema::<PingArgs>(),
+    )
 }
 
 fn get_server_info() -> ToolSpec {
-    ToolSpec {
-        name: "get_server_info",
-        description: "Returns the MCP server's version, URL, read-only flag \
-                      and tool count.",
-        mode: Mode::Read,
-        input_schema: || schema::<GetServerInfoArgs>(),
-    }
+    ToolSpec::new(
+        "get_server_info",
+        "Returns the MCP server's version, URL, read-only flag \
+         and tool count.",
+        Mode::Read,
+        || schema::<GetServerInfoArgs>(),
+    )
 }

@@ -69,8 +69,9 @@ rust::Vec<ImagePng> ToRustImages(const std::vector<Png>& images) {
 class ToolHostImpl final : public ToolHost,
                            public std::enable_shared_from_this<ToolHostImpl> {
  public:
-  ToolHostImpl(EditorScene& scene, std::shared_ptr<bool> alive)
-      : scene_(scene), alive_(std::move(alive)) {}
+  ToolHostImpl(EditorScene& scene, std::shared_ptr<bool> alive,
+               std::shared_ptr<CallTracker> tracker)
+      : scene_(scene), alive_(std::move(alive)), tracker_(std::move(tracker)) {}
 
   void Invoke(rust::Str tool, rust::Str args_json,
               rust::Box<PendingReply> reply) const override {
@@ -98,10 +99,26 @@ class ToolHostImpl final : public ToolHost,
       }
       // UI thread: the alive token guarantees the scene is still alive (the
       // host clears the token before the scene goes away, on this thread).
-      const ToolResult result =
-          ToolRegistry::Instance().Invoke(self->scene_, name, parsed);
-      CompleteReply(std::move(*pending), result.ok, result.result.dump(),
-                    ToRustImages(result.images));
+      //
+      // The reply is completed by `done`, exactly once: a sync tool calls it
+      // before InvokeAsync returns, an async tool whenever it finishes. If the
+      // host stops first, CallTracker::FailAll answers "editor shutting down"
+      // (the destructor clears the alive token, then stops, which fails every
+      // call still waiting) and a later `done` is a no-op. `done` only touches
+      // its own call state and the reply, so it is safe after the host is
+      // gone; the alive check also keeps a result computed against a dying
+      // scene from being sent.
+      ToolDone done = self->tracker_->Track(
+          [self, pending](ToolResult result) {
+            if (!*self->alive_) {
+              CompleteError(std::move(*pending), "editor shutting down");
+              return;
+            }
+            CompleteReply(std::move(*pending), result.ok,
+                          result.result.dump(), ToRustImages(result.images));
+          });
+      ToolRegistry::Instance().InvokeAsync(self->scene_, name, parsed,
+                                           std::move(done));
     };
 
     if (McpHost::Dispatcher dispatcher = DispatcherSlot()) {
@@ -120,6 +137,7 @@ class ToolHostImpl final : public ToolHost,
  private:
   EditorScene& scene_;
   std::shared_ptr<bool> alive_;
+  std::shared_ptr<CallTracker> tracker_;
 };
 
 }  // namespace mcp
@@ -135,6 +153,10 @@ struct McpHost::Impl {
   // queued call answers "editor shutting down" instead of touching it.
   std::shared_ptr<bool> alive = std::make_shared<bool>(true);
   std::shared_ptr<mcp::ToolHost> host_impl;
+  // Asynchronous tool calls still waiting for their `done`; failed when the
+  // server stops, so no client waits for a reply that can no longer come.
+  std::shared_ptr<mcp::CallTracker> tracker =
+      std::make_shared<mcp::CallTracker>();
   std::optional<rust::Box<mcp::Server>> server;
 
   bool running = false;
@@ -210,7 +232,7 @@ struct McpHost::Impl {
     config.token = settings.mcp_token;
     config.editor_version = MERCURY_VERSION_STRING;
 
-    host_impl = std::make_shared<mcp::ToolHostImpl>(scene, alive);
+    host_impl = std::make_shared<mcp::ToolHostImpl>(scene, alive, tracker);
     try {
       server.emplace(mcp::StartServer(config, host_impl));
     } catch (const std::exception& error) {
@@ -239,6 +261,16 @@ struct McpHost::Impl {
     // threads. In-flight calls hold the tool host alive and answer through
     // the dead alive token. This runs in the McpHost destructor too, so it
     // never touches the scene: the .mcp.json removal uses the recorded root.
+    //
+    // Calls an async tool has not completed yet are answered first, so the
+    // clients still connected get the error rather than a dropped connection.
+    if (tracker->FailAll(*alive ? "the MCP server stopped"
+                                : "editor shutting down") > 0) {
+      // The transport drops its tasks the moment the server is dropped, so
+      // give the answers a moment to reach their connections. Bounded, and
+      // only when a call was still open.
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
     server.reset();
     host_impl.reset();
     running = false;
@@ -414,19 +446,12 @@ bool McpHost::RemoveProjectMcpJson(const std::filesystem::path& root,
 
 // ----------------------------------------------------------------- Tools ---
 //
-// The built-in tools. They register here because the MERCURY_MCP_TOOL
-// registration only takes effect when the defining translation unit is linked
-// in, and editor_scene.cc references this one in every binary that hosts MCP
-// tools (the editor executable force-loads the whole editor library anyway).
+// The reserved __resources/* tools. They register here because editor_scene.cc
+// references this translation unit in every binary that hosts MCP tools. The
+// tool groups live in editor/mcp/tools/ (ping is in core.cc) and are linked in
+// by the mercury_mcp_tools object library.
 
 namespace {
-
-mcp::ToolResult PingTool(EditorScene&, const nlohmann::json&) {
-  return mcp::ToolResult{
-      true,
-      nlohmann::json{{"pong", true}, {"editor_version", MERCURY_VERSION_STRING}},
-      {}};
-}
 
 // P2 has no resources yet: the reserved list stays empty and every read is
 // "not found". Later packages fill these in.
@@ -446,7 +471,6 @@ mcp::ToolResult ReadResourceTool(EditorScene&, const nlohmann::json& args) {
 
 }  // namespace
 
-MERCURY_MCP_TOOL("ping", kRead, &PingTool);
 MERCURY_MCP_TOOL("__resources/list", kRead, &ListResourcesTool);
 MERCURY_MCP_TOOL("__resources/read", kRead, &ReadResourceTool);
 

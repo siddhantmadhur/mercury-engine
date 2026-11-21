@@ -9,10 +9,44 @@
 //! by feature: each group module exports one `tools() -> Vec<ToolSpec>`, and
 //! [`all`] concatenates them. A later work package adds its tools by adding
 //! one `mod` line here plus one concat line in [`all`].
+//!
+//! # Per-tool-group convention
+//!
+//! Every group follows the same layout, so packages can add tools in parallel
+//! without touching each other's files:
+//!
+//! - The Rust spec (name, description, mode, args schema) lives in
+//!   `mercury/mcp/src/tools/<group>.rs`, plus one `pub mod <group>;` line and
+//!   one concat line in [`all`] in this file.
+//! - The C++ handlers live in `editor/mcp/tools/<group>.cc`, registered with
+//!   `MERCURY_MCP_TOOL`. That folder is globbed by CMake and linked into the
+//!   editor and every editor-linked test, so a new file needs no CMake edit.
+//! - The tests live in `tests/mcp_tools_<group>_test.cc`: CMake globs
+//!   `tests/mcp_tools_*_test.cc` into the `mcp_tools_test` target, so a new
+//!   file needs no CMake edit. `tests/mcp_tools_fixture.h` opens a copy of a
+//!   real project and calls tools through the registry.
+//! - A tool that cannot answer in one UI-thread callback (it waits for a
+//!   rendered frame, a child process, ...) registers with
+//!   `MERCURY_MCP_TOOL_ASYNC` and its spec sets a longer timeout with
+//!   [`ToolSpec::with_timeout_secs`]; the default is
+//!   [`DEFAULT_TIMEOUT_SECS`].
+//! - Tool names are snake_case and identical on both sides. The args schema
+//!   comes from a schemars struct whose fields match what the C++ handler
+//!   reads from its `args`.
+//! - Errors are returned as `ok = false` with `{"error": "...", "suggestion"?:
+//!   "..."}`.
+//!
+//! `core.rs` / `editor/mcp/tools/core.cc` are the worked example.
 
 use serde_json::{Map, Value};
 
 pub mod core;
+
+/// How long a tool call may wait on the editor before the transport answers
+/// "editor did not respond", unless the tool's spec says otherwise. Tool calls
+/// queue onto the editor's UI thread, so this has to ride out a busy frame
+/// loop.
+pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 /// What a tool may do to the editor, used for the read-only gate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,9 +71,35 @@ pub struct ToolSpec {
     /// The JSON Schema of the tool's arguments, generated from a schemars
     /// type so it always matches what the C++ handler expects.
     pub input_schema: fn() -> Map<String, Value>,
+    /// How long the transport waits for the editor's reply to this tool.
+    pub timeout_secs: u64,
 }
 
 impl ToolSpec {
+    /// A spec with the default timeout ([`DEFAULT_TIMEOUT_SECS`]).
+    pub fn new(
+        name: &'static str,
+        description: &'static str,
+        mode: Mode,
+        input_schema: fn() -> Map<String, Value>,
+    ) -> Self {
+        ToolSpec {
+            name,
+            description,
+            mode,
+            input_schema,
+            timeout_secs: DEFAULT_TIMEOUT_SECS,
+        }
+    }
+
+    /// The same spec with its own reply timeout, for tools that legitimately
+    /// take long (a build, a capture).
+    #[allow(dead_code)] // used by the tool groups that need it
+    pub fn with_timeout_secs(mut self, timeout_secs: u64) -> Self {
+        self.timeout_secs = timeout_secs;
+        self
+    }
+
     /// Whether the read-only gate lets this tool through.
     pub fn is_read_only(&self) -> bool {
         self.mode == Mode::Read

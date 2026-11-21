@@ -16,11 +16,16 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -758,5 +763,171 @@ TEST(McpHostTest, E2eSecurityChecksRejectBadTokenOriginAndHost) {
 
   test.scene.Mcp().Stop();
   EXPECT_TRUE(ConnectRefused(port)) << "something still listens on " << port;
+}
+#endif  // !_WIN32
+
+// ------------------------------------------------- Asynchronous tool calls --
+//
+// The full stack over real HTTP with an asynchronous handler. The Rust
+// catalogue is the source of truth for tool names, so the test re-registers
+// `ping` (restored afterwards) as an async tool, and plays the UI thread
+// itself: the dispatcher queues the tool work, the test thread pumps it, and a
+// client thread blocks in the HTTP call until the reply completes.
+
+#if !defined(_WIN32)
+namespace {
+
+// The queue-onto-UI-thread step as a manual pump.
+class UiQueue {
+ public:
+  UiQueue() {
+    McpHost::SetDispatcherForTest([this](std::function<void()> work) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      queue_.push_back(std::move(work));
+    });
+  }
+  ~UiQueue() { McpHost::SetDispatcherForTest({}); }
+
+  // Runs what has been queued; false when nothing was.
+  bool Pump() {
+    std::vector<std::function<void()>> work;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      work.swap(queue_);
+    }
+    for (auto& item : work) item();
+    return !work.empty();
+  }
+
+ private:
+  std::mutex mutex_;
+  std::vector<std::function<void()>> queue_;
+};
+
+// Replaces the built-in `ping` with an async handler that parks its `done`
+// callback for the test, and puts the original back when the test ends.
+class AsyncPingGuard {
+ public:
+  AsyncPingGuard() {
+    const mcp::ToolEntry* original = ToolRegistry::Instance().Find("ping");
+    original_ = original->handler;
+    ToolRegistry::Instance().RegisterAsync(
+        "ping", mcp::ToolMode::kRead,
+        [this](EditorScene&, const nlohmann::json&, mcp::ToolDone done) {
+          std::lock_guard<std::mutex> lock(mutex_);
+          parked_ = std::move(done);
+          started_ = true;
+        });
+  }
+  ~AsyncPingGuard() {
+    ToolRegistry::Instance().Register("ping", mcp::ToolMode::kRead, original_);
+  }
+
+  bool Started() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return started_;
+  }
+  mcp::ToolDone TakeDone() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return std::move(parked_);
+  }
+
+ private:
+  mcp::ToolHandler original_;
+  std::mutex mutex_;
+  mcp::ToolDone parked_;
+  bool started_ = false;
+};
+
+// Pumps the UI queue until the async handler has started (the client's call
+// reached it), or ten seconds pass.
+bool PumpUntilStarted(UiQueue& ui, AsyncPingGuard& ping) {
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  while (!ping.Started()) {
+    if (std::chrono::steady_clock::now() > deadline) return false;
+    ui.Pump();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  }
+  return true;
+}
+
+std::string CallPingOverHttp(std::uint16_t port, const std::string& token) {
+  return HttpPost(
+      port, token,
+      JsonRpc(7, "tools/call",
+              nlohmann::json{{"name", "ping"},
+                             {"arguments", nlohmann::json::object()},
+                             {"_meta", StatelessMeta()}})
+          .dump());
+}
+
+}  // namespace
+
+TEST(McpHostTest, E2eAsyncToolCompletesLaterOnTheUiThread) {
+  auto test = std::make_unique<TestScene>(TempDir("mcp_e2e_async"));
+  UiQueue ui;
+  AsyncPingGuard ping;
+  const std::uint16_t port =
+      StartEphemeralServer(*test, /*allow_edits=*/true);
+  ASSERT_NE(port, 0) << "the server did not start";
+  const std::string token = "Bearer " + test->scene.Settings().mcp_token;
+
+  std::string response;
+  std::thread client([&] { response = CallPingOverHttp(port, token); });
+  ASSERT_TRUE(PumpUntilStarted(ui, ping)) << "the handler never ran";
+
+  // The handler returned without answering: the call is still open. Complete
+  // it a moment later, from "the UI thread" (this one).
+  std::this_thread::sleep_for(std::chrono::milliseconds(150));
+  mcp::ToolDone done = ping.TakeDone();
+  ASSERT_TRUE(static_cast<bool>(done));
+  done(ToolResult{true, nlohmann::json{{"pong", "later"}}, {}});
+  // A second done() is ignored: the first answer stands, nothing crashes.
+  mcp::CallTracker::SetAssertOnDoubleDone(false);
+  done(ToolResult{false, nlohmann::json{{"error", "second"}}, {}});
+  mcp::CallTracker::SetAssertOnDoubleDone(true);
+  client.join();
+
+  const nlohmann::json payload = ResponseJson(response);
+  ASSERT_TRUE(payload.contains("result")) << response;
+  EXPECT_EQ(payload["result"]["isError"], false) << payload.dump();
+  EXPECT_EQ(payload["result"]["structuredContent"]["pong"], "later")
+      << payload.dump();
+  test->scene.Mcp().Stop();
+}
+
+TEST(McpHostTest, E2eAsyncToolThatNeverCompletesIsAnsweredWhenTheHostDies) {
+  auto test = std::make_unique<TestScene>(TempDir("mcp_e2e_async_dies"));
+  UiQueue ui;
+  AsyncPingGuard ping;
+  const std::uint16_t port =
+      StartEphemeralServer(*test, /*allow_edits=*/true);
+  ASSERT_NE(port, 0) << "the server did not start";
+  const std::string token = "Bearer " + test->scene.Settings().mcp_token;
+
+  std::string response;
+  std::thread client([&] { response = CallPingOverHttp(port, token); });
+  ASSERT_TRUE(PumpUntilStarted(ui, ping)) << "the handler never ran";
+  mcp::ToolDone done = ping.TakeDone();
+
+  // The editor goes away with the call open: the client must not hang.
+  const auto started = std::chrono::steady_clock::now();
+  test.reset();
+  client.join();
+  EXPECT_LT(std::chrono::steady_clock::now() - started,
+            std::chrono::seconds(10));
+  // The host answers "editor shutting down" itself; when the transport had
+  // already closed the connection the client sees no response at all, which
+  // is just as final.
+  RecordProperty("client_saw_response", !response.empty());
+  if (!response.empty()) {
+    EXPECT_NE(response.find("editor shutting down"), std::string::npos)
+        << response;
+  }
+
+  // A done() after the host's death is a harmless no-op: no crash, and no
+  // assertion, because the host already answered the call.
+  done(ToolResult{true, nlohmann::json{{"pong", "too late"}}, {}});
 }
 #endif  // !_WIN32

@@ -280,8 +280,32 @@ if (MERCURY_BUILD_EDITOR)
     # to the editor (not installed as a link dependency), like toml++ above.
     target_link_libraries(mercury_editor_lib PRIVATE nlohmann_json::nlohmann_json)
 
+    # The MCP tool groups (editor/mcp/tools/<group>.cc). Each file registers its
+    # tools with a static initializer (MERCURY_MCP_TOOL), which a static
+    # archive drops when nothing references the file. So these are an OBJECT
+    # library whose objects are linked straight into the editor and into every
+    # editor-linked executable (mercury_link_mcp_tools), never through an
+    # archive; the glob means a new tool file needs no CMake or registration
+    # edit. Same include dirs and definitions as mercury_editor_lib, nlohmann
+    # PRIVATE (the tool headers are not installed in the SDK).
+    file(GLOB MERCURY_MCP_TOOL_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/tools/*.cc")
+    add_library(mercury_mcp_tools OBJECT ${MERCURY_MCP_TOOL_SOURCES})
+    target_include_directories(mercury_mcp_tools PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor")
+    target_link_libraries(mercury_mcp_tools PRIVATE
+            mercury mercury_wx nlohmann_json::nlohmann_json)
+
+    # mercury_link_mcp_tools(<target>): add the tool objects to an executable
+    # that links mercury_editor_lib. List them before the archives so the
+    # symbols they use from mercury_editor_lib are still pulled in.
+    function(mercury_link_mcp_tools TARGET)
+        target_sources(${TARGET} PRIVATE $<TARGET_OBJECTS:mercury_mcp_tools>)
+    endfunction()
+
     add_executable(mercury_editor editor/main.cc)
     target_link_libraries(mercury_editor PRIVATE mercury_editor_lib)
+    mercury_link_mcp_tools(mercury_editor)
     # The editor is the only binary with the MCP transport (tokio + rmcp).
     mercury_link_rust(mercury_editor EDITOR)
     # Editor systems are modules loaded at run time; their engine, editor and
@@ -345,6 +369,7 @@ if (MERCURY_BUILD_TESTS)
         gtest_discover_tests(${TARGET} DISCOVERY_MODE PRE_TEST)
         if (TEST_EDITOR)
             mercury_link_rust(${TARGET} EDITOR)
+            mercury_link_mcp_tools(${TARGET})
         else ()
             mercury_link_rust(${TARGET})
         endif ()
@@ -407,6 +432,7 @@ if (MERCURY_BUILD_TESTS)
         add_executable(editor_smoke tests/editor_smoke.cc)
         target_link_libraries(editor_smoke PRIVATE mercury_editor_lib)
         mercury_link_rust(editor_smoke EDITOR)
+        mercury_link_mcp_tools(editor_smoke)
         set_target_properties(editor_smoke PROPERTIES EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} editor_smoke)
 
@@ -424,6 +450,7 @@ if (MERCURY_BUILD_TESTS)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 editor_extension_unload_smoke)
         mercury_link_rust(editor_extension_unload_smoke EDITOR)
+        mercury_link_mcp_tools(editor_extension_unload_smoke)
 
         # The New Script dialog is modal; this smoke drives it with CallAfter
         # and creates all four kinds through EditorScene.
@@ -432,6 +459,7 @@ if (MERCURY_BUILD_TESTS)
         target_link_libraries(new_script_dialog_smoke
                 PRIVATE mercury_editor_lib)
         mercury_link_rust(new_script_dialog_smoke EDITOR)
+        mercury_link_mcp_tools(new_script_dialog_smoke)
         set_target_properties(new_script_dialog_smoke PROPERTIES
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
@@ -444,6 +472,7 @@ if (MERCURY_BUILD_TESTS)
         target_link_libraries(mcp_prefs_dialog_smoke
                 PRIVATE mercury_editor_lib)
         mercury_link_rust(mcp_prefs_dialog_smoke EDITOR)
+        mercury_link_mcp_tools(mcp_prefs_dialog_smoke)
         set_target_properties(mcp_prefs_dialog_smoke PROPERTIES
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
@@ -468,6 +497,19 @@ if (MERCURY_BUILD_TESTS)
         # The test includes <nlohmann/json.hpp> directly; mercury_editor_lib
         # links it PRIVATE, so the usage requirement does not propagate.
         target_link_libraries(mcp_host_test PRIVATE nlohmann_json::nlohmann_json)
+
+        # The MCP tool groups' tests: every tests/mcp_tools_*_test.cc joins one
+        # executable, so a new tool group needs no CMake edit. The glob is
+        # re-run on every build (CONFIGURE_DEPENDS); with no matching file no
+        # target is made (gtest discovery of an empty executable would fail).
+        file(GLOB MCP_TOOLS_TESTS CONFIGURE_DEPENDS
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/mcp_tools_*_test.cc")
+        if (MCP_TOOLS_TESTS)
+            mercury_add_test(mcp_tools_test EDITOR ${MCP_TOOLS_TESTS}
+                    tests/mcp_tools_fixture.h)
+            target_link_libraries(mcp_tools_test PRIVATE mercury_editor_lib
+                    nlohmann_json::nlohmann_json)
+        endif ()
 
         mercury_add_test(script_editor_test EDITOR
                 tests/script_editor_test.cc
@@ -542,7 +584,9 @@ endif ()
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mercury/"
         DESTINATION sdk/include/mercury
         COMPONENT sdk
-        FILES_MATCHING PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.h"
+        # Internal: includes nlohmann/json (see the header's comment).
+        PATTERN "introspection/variant_json.h" EXCLUDE)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/editor/"
         DESTINATION sdk/include/editor
         COMPONENT sdk
@@ -552,7 +596,9 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/editor/"
         # which stays plain C++ (the pimpl keeps the Rust side in mcp_host.cc).
         PATTERN "mcp/tool_registry.h" EXCLUDE
         PATTERN "mcp/json_util.h" EXCLUDE
-        PATTERN "mcp/tool_host.h" EXCLUDE)
+        PATTERN "mcp/tool_host.h" EXCLUDE
+        # The tool groups' headers (scene_json.h includes nlohmann/json).
+        PATTERN "mcp/tools" EXCLUDE)
 # wxWidgets headers, so editor systems build without a wx development install.
 # (The module still resolves wx symbols against the running editor.)
 # wxWidgets_INCLUDE_DIRS only has the setup.h directory on macOS; the headers
