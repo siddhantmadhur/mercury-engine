@@ -272,6 +272,13 @@ if (MERCURY_BUILD_EDITOR)
     # The MCP transport bridge's generated C++ side; its Rust counterpart is
     # in the editor Rust archive (mercury_rust_editor).
     target_sources(mercury_editor_lib PRIVATE ${MERCURY_MCP_BRIDGE_SOURCES})
+    # The MCP host: tool registry, settings plumbing and the .mcp.json writer.
+    file(GLOB MERCURY_MCP_HOST_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/*.cc")
+    target_sources(mercury_editor_lib PRIVATE ${MERCURY_MCP_HOST_SOURCES})
+    # Tool handlers pass nlohmann::json values around; the library is internal
+    # to the editor (not installed as a link dependency), like toml++ above.
+    target_link_libraries(mercury_editor_lib PRIVATE nlohmann_json::nlohmann_json)
 
     add_executable(mercury_editor editor/main.cc)
     target_link_libraries(mercury_editor PRIVATE mercury_editor_lib)
@@ -433,6 +440,15 @@ if (MERCURY_BUILD_TESTS)
                 tests/project_trust_test.cc)
         target_link_libraries(project_trust_test PRIVATE mercury_editor_lib)
 
+        # The MCP host: registry dispatch, mode re-check, .mcp.json handling,
+        # and the disabled-means-no-socket rule.
+        mercury_add_test(mcp_host_test EDITOR
+                tests/mcp_host_test.cc)
+        target_link_libraries(mcp_host_test PRIVATE mercury_editor_lib)
+        # The test includes <nlohmann/json.hpp> directly; mercury_editor_lib
+        # links it PRIVATE, so the usage requirement does not propagate.
+        target_link_libraries(mcp_host_test PRIVATE nlohmann_json::nlohmann_json)
+
         mercury_add_test(script_editor_test EDITOR
                 tests/script_editor_test.cc
                 tests/test_paths.h)
@@ -508,7 +524,13 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mercury/"
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/editor/"
         DESTINATION sdk/include/editor
         COMPONENT sdk
-        FILES_MATCHING PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.h"
+        # The MCP registry's headers pass nlohmann::json values around and
+        # tool_host.h is cxx-bridge-only; the SDK installs mcp/mcp_host.h,
+        # which stays plain C++ (the pimpl keeps the Rust side in mcp_host.cc).
+        PATTERN "mcp/tool_registry.h" EXCLUDE
+        PATTERN "mcp/json_util.h" EXCLUDE
+        PATTERN "mcp/tool_host.h" EXCLUDE)
 # wxWidgets headers, so editor systems build without a wx development install.
 # (The module still resolves wx symbols against the running editor.)
 # wxWidgets_INCLUDE_DIRS only has the setup.h directory on macOS; the headers

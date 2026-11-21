@@ -27,6 +27,7 @@
 #include "editor_settings.h"
 #include "input_actions_window.h"
 #include "lore_vcs.h"
+#include "mcp/mcp_host.h"
 #include "overlay_canvas.h"
 #include "play_session.h"
 #include "project/asset_database.h"
@@ -236,6 +237,8 @@ class EditorScene : public MapScene {
   UIBuilder& UIBuilderRef() { return ui_builder_; }
   InputActionsWindow& InputActionsRef() { return input_actions_; }
   LoreVcs& LoreRef() { return lore_; }
+  // The opt-in MCP server; see mcp/mcp_host.h.
+  McpHost& Mcp() { return mcp_; }
 
   // Scene Viewport & Camera API
   void SetSceneViewportSize(glm::vec2 size);
@@ -342,6 +345,8 @@ class EditorScene : public MapScene {
   UIBuilder ui_builder_{console_};
   InputActionsWindow input_actions_{console_};
   LoreVcs lore_{console_, settings_};
+  // The MCP server host; declared after console_ so its reference is valid.
+  McpHost mcp_{*this, console_};
 
   Map map_;
   std::string map_path_;
