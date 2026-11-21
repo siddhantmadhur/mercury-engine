@@ -58,7 +58,8 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene);
  */
 bool EnsureNativeProjectTrusted(wxWindow* parent, EditorScene& scene);
 
-// Preferences: external script editor & Lore VCS settings.
+// Preferences: General (external script editor & Lore VCS) and MCP (local
+// server for AI tools) tabs.
 bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene);
 
 // Trust prompt for a project whose system/ folder contains native editor

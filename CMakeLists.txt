@@ -437,6 +437,18 @@ if (MERCURY_BUILD_TESTS)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 new_script_dialog_smoke)
 
+        # The preferences dialog is modal; this smoke flips to its MCP tab,
+        # applies and cancels through EditorScene's MCP host.
+        add_executable(mcp_prefs_dialog_smoke
+                tests/mcp_prefs_dialog_smoke.cc)
+        target_link_libraries(mcp_prefs_dialog_smoke
+                PRIVATE mercury_editor_lib)
+        mercury_link_rust(mcp_prefs_dialog_smoke EDITOR)
+        set_target_properties(mcp_prefs_dialog_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                mcp_prefs_dialog_smoke)
+
         mercury_add_test(editor_test EDITOR
                 tests/editor_templates_test.cc
                 tests/lore_config_test.cc
