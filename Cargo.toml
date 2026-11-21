@@ -9,12 +9,16 @@ name = "mercury_rust"
 path = "mercury/rust_modules.rs"
 crate-type = ["staticlib"]
 
+[features]
+mcp = ["dep:mercury_mcp"]
+
 [dependencies]
 cxx = "=1.0.205"
 mercury_kernel = { path = "mercury/rust" }
 input_actions_codegen_rs = { path = "mercury/input" }
 mercury_uss = { path = "mercury/uss" }
+mercury_mcp = { path = "mercury/mcp", optional = true }
 
 [workspace]
-members = ["mercury/rust", "mercury/input", "mercury/uss"]
+members = ["mercury/rust", "mercury/input", "mercury/uss", "mercury/mcp"]
 resolver = "2"

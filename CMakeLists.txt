@@ -219,9 +219,11 @@ add_dependencies(mercury mercury_materials)
 
 add_executable(mercury_player mercury/player/main.cc)
 target_link_libraries(mercury_player PRIVATE mercury)
+mercury_link_rust(mercury_player)
 
 add_executable(mercury_model_info tools/model_info.cc)
 target_link_libraries(mercury_model_info PRIVATE mercury)
+mercury_link_rust(mercury_model_info)
 
 # --------------------------------------------------------------------------
 # Editor
@@ -262,9 +264,14 @@ if (MERCURY_BUILD_EDITOR)
     # lore_vcs.cc parses .lore/config.toml with toml++; the library is internal
     # (not installed), so the PRIVATE link keeps toml++ out of the SDK surface.
     target_link_libraries(mercury_editor_lib PRIVATE mercury_tomlplusplus)
+    # The MCP transport bridge's generated C++ side; its Rust counterpart is
+    # in the editor Rust archive (mercury_rust_editor).
+    target_sources(mercury_editor_lib PRIVATE ${MERCURY_MCP_BRIDGE_SOURCES})
 
     add_executable(mercury_editor editor/main.cc)
     target_link_libraries(mercury_editor PRIVATE mercury_editor_lib)
+    # The editor is the only binary with the MCP transport (tokio + rmcp).
+    mercury_link_rust(mercury_editor EDITOR)
     # Editor systems are modules loaded at run time; their engine, editor and
     # wx symbols resolve against this executable, so it exports them. Forcing
     # the archives in also exports symbols the editor itself does not call.
@@ -309,8 +316,13 @@ if (MERCURY_BUILD_TESTS)
             "Folder of the benchmark project (models and maps) used by tests")
     set(MERCURY_TEST_TARGETS "")
 
+    # mercury_add_test(<target> [EDITOR] <sources...>)
+    #
+    # EDITOR marks tests that link mercury_editor_lib and therefore need the
+    # editor Rust archive (with the MCP transport) instead of the plain one.
     function(mercury_add_test TARGET)
-        add_executable(${TARGET} ${ARGN})
+        cmake_parse_arguments(TEST "EDITOR" "" "" ${ARGN})
+        add_executable(${TARGET} ${TEST_UNPARSED_ARGUMENTS})
         target_link_libraries(${TARGET} PRIVATE mercury GTest::gtest_main)
         target_compile_definitions(${TARGET} PRIVATE
                 MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -319,6 +331,11 @@ if (MERCURY_BUILD_TESTS)
         # Keep the plain build fast: tests are built by the `check` target.
         set_target_properties(${TARGET} PROPERTIES EXCLUDE_FROM_ALL TRUE)
         gtest_discover_tests(${TARGET} DISCOVERY_MODE PRE_TEST)
+        if (TEST_EDITOR)
+            mercury_link_rust(${TARGET} EDITOR)
+        else ()
+            mercury_link_rust(${TARGET})
+        endif ()
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} ${TARGET} PARENT_SCOPE)
     endfunction()
 
@@ -366,6 +383,7 @@ if (MERCURY_BUILD_TESTS)
     if (MERCURY_BUILD_EDITOR)
         add_executable(editor_smoke tests/editor_smoke.cc)
         target_link_libraries(editor_smoke PRIVATE mercury_editor_lib)
+        mercury_link_rust(editor_smoke EDITOR)
         set_target_properties(editor_smoke PROPERTIES EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} editor_smoke)
 
@@ -382,6 +400,7 @@ if (MERCURY_BUILD_TESTS)
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 editor_extension_unload_smoke)
+        mercury_link_rust(editor_extension_unload_smoke EDITOR)
 
         # The New Script dialog is modal; this smoke drives it with CallAfter
         # and creates all four kinds through EditorScene.
@@ -389,23 +408,24 @@ if (MERCURY_BUILD_TESTS)
                 tests/new_script_dialog_smoke.cc)
         target_link_libraries(new_script_dialog_smoke
                 PRIVATE mercury_editor_lib)
+        mercury_link_rust(new_script_dialog_smoke EDITOR)
         set_target_properties(new_script_dialog_smoke PROPERTIES
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 new_script_dialog_smoke)
 
-        mercury_add_test(editor_test
+        mercury_add_test(editor_test EDITOR
                 tests/editor_templates_test.cc
                 tests/lore_config_test.cc
                 tests/project_scaffold_test.cc
                 tests/test_paths.h)
         target_link_libraries(editor_test PRIVATE mercury_editor_lib)
 
-        mercury_add_test(project_trust_test
+        mercury_add_test(project_trust_test EDITOR
                 tests/project_trust_test.cc)
         target_link_libraries(project_trust_test PRIVATE mercury_editor_lib)
 
-        mercury_add_test(script_editor_test
+        mercury_add_test(script_editor_test EDITOR
                 tests/script_editor_test.cc
                 tests/test_paths.h)
         target_link_libraries(script_editor_test PRIVATE mercury_editor_lib)
@@ -435,7 +455,7 @@ if (MERCURY_BUILD_TESTS)
         target_compile_definitions(editor_test_extension_bad_abi PRIVATE
                 MERCURY_TEST_EXTENSION_ABI=999)
 
-        mercury_add_test(editor_extension_test
+        mercury_add_test(editor_extension_test EDITOR
                 tests/editor_extension_test.cc)
         target_link_libraries(editor_extension_test PRIVATE mercury_editor_lib)
         target_compile_definitions(editor_extension_test PRIVATE
@@ -451,6 +471,17 @@ if (MERCURY_BUILD_TESTS)
             COMMENT "Running the Mercury tests"
             USES_TERMINAL)
     add_dependencies(check mercury_materials)
+
+    # The mercury_mcp crate's Rust unit tests (transport start/stop, reply
+    # plumbing). Same env handling as the CMake-driven cargo builds: a
+    # dedicated target dir and no MACOSX_DEPLOYMENT_TARGET, which would break
+    # proc-macro compilation (see cmake/Rust.cmake).
+    add_test(NAME mercury_mcp_cargo_test
+            COMMAND "${CMAKE_COMMAND}" -E env
+                    "CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo-test"
+                    "--unset=MACOSX_DEPLOYMENT_TARGET"
+                    "${CARGO_EXECUTABLE}" test -p mercury_mcp --locked
+                    --manifest-path "${MERCURY_ENGINE_SOURCE_DIR}/Cargo.toml")
 endif ()
 
 # --------------------------------------------------------------------------
@@ -537,11 +568,13 @@ foreach (INCLUDE_DIR
             DESTINATION sdk/include COMPONENT sdk)
 endforeach ()
 
-# Static archives. Filament builds in its own tree.
+# Static archives. Filament builds in its own tree. The editor Rust archive
+# (with the MCP transport) is never installed: SDK games link the plain one.
 install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/"
         DESTINATION sdk/lib COMPONENT sdk
         FILES_MATCHING PATTERN "*.a"
         PATTERN "libmercury_editor_lib.a" EXCLUDE
+        PATTERN "libmercury_rust_editor.a" EXCLUDE
         PATTERN "libgtest.a" EXCLUDE
         PATTERN "libgtest_main.a" EXCLUDE
         PATTERN "libgmock.a" EXCLUDE

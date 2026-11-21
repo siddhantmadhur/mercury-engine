@@ -52,6 +52,9 @@ function(mercury_add_game TARGET)
     add_executable(${TARGET} ${GAME_MAIN} ${GAME_SCRIPTS} ${GAME_SOURCES})
     target_include_directories(${TARGET} PRIVATE "${GAME_PROJECT}/src")
     target_link_libraries(${TARGET} PRIVATE mercury)
+    # Games always link the plain Rust archive; the MCP transport is
+    # editor-only (see cmake/Rust.cmake).
+    mercury_link_rust(${TARGET})
     set_target_properties(${TARGET} PROPERTIES
             OUTPUT_NAME "${TARGET}"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
