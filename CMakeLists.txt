@@ -259,6 +259,9 @@ if (MERCURY_BUILD_EDITOR)
     target_include_directories(mercury_editor_lib PUBLIC
             "${CMAKE_CURRENT_SOURCE_DIR}/editor")
     target_link_libraries(mercury_editor_lib PUBLIC mercury mercury_wx)
+    # lore_vcs.cc parses .lore/config.toml with toml++; the library is internal
+    # (not installed), so the PRIVATE link keeps toml++ out of the SDK surface.
+    target_link_libraries(mercury_editor_lib PRIVATE mercury_tomlplusplus)
 
     add_executable(mercury_editor editor/main.cc)
     target_link_libraries(mercury_editor PRIVATE mercury_editor_lib)
@@ -393,6 +396,7 @@ if (MERCURY_BUILD_TESTS)
 
         mercury_add_test(editor_test
                 tests/editor_templates_test.cc
+                tests/lore_config_test.cc
                 tests/project_scaffold_test.cc
                 tests/test_paths.h)
         target_link_libraries(editor_test PRIVATE mercury_editor_lib)

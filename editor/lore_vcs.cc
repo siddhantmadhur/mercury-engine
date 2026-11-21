@@ -4,11 +4,13 @@
 
 #include "lore_vcs.h"
 
+#include <toml++/toml.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <format>
-#include <fstream>
+#include <optional>
 
 #include "os/filesystem.h"
 
@@ -138,14 +140,30 @@ bool TomlQuote(const std::string& value, std::string* out) {
   return true;
 }
 
-// Reverses TomlQuote for the text between the outer quotes.
-std::string TomlUnescape(std::string_view text) {
-  std::string out;
-  for (size_t i = 0; i < text.size(); i++) {
-    if (text[i] == '\\' && i + 1 < text.size()) i++;
-    out += text[i];
+// Byte offset of a 1-based TOML source position in the parsed document.
+// Column numbers count codepoints, not bytes, so the walk down the target
+// line skips the continuation bytes of multi-byte characters (a byte whose
+// two top bits are 10 continues the character before it); running off the
+// line maps to no offset. Callers still check that the result actually
+// lands on the end of the value before they splice.
+std::optional<size_t> TomlSourceOffset(std::string_view text,
+                                       toml::source_position position) {
+  if (position.line == 0 || position.column == 0) return std::nullopt;
+  size_t offset = 0;
+  for (size_t line = 1; line < position.line; line++) {
+    const size_t eol = text.find('\n', offset);
+    if (eol == std::string_view::npos) return std::nullopt;
+    offset = eol + 1;
   }
-  return out;
+  const size_t line_end = text.find('\n', offset);
+  const size_t limit =
+      line_end == std::string_view::npos ? text.size() : line_end;
+  for (size_t column = 1; column < position.column; column++) {
+    if (offset >= limit) return std::nullopt;
+    offset++;  // the first byte of the codepoint
+    while (offset < limit && (text[offset] & 0xC0) == 0x80) offset++;
+  }
+  return offset;
 }
 
 // Lore colors its output when it thinks it's on a terminal.
@@ -550,29 +568,18 @@ bool LoreVcs::HasUnpushedCommit() const {
 
 std::string LoreVcs::ReadRemoteUrl() const {
   if (!project_) return "";
-  std::ifstream file(project_->GetRoot() / ".lore" / "config.toml");
-  std::string line;
-  while (std::getline(file, line)) {
-    if (!line.starts_with("remote_url")) continue;
-    const auto first = line.find('"');
-    const auto last = line.rfind('"');
-    if (first != std::string::npos && last > first) {
-      return TomlUnescape(
-          std::string_view(line).substr(first + 1, last - first - 1));
-    }
+  toml::parse_result parsed = toml::parse_file(
+      (project_->GetRoot() / ".lore" / "config.toml").string());
+  if (!parsed) return "";
+  const toml::node* value = parsed.table().get("remote_url");
+  if (const auto* str = value ? value->as<std::string>() : nullptr) {
+    return str->get();
   }
   return "";
 }
 
 bool LoreVcs::WriteRemoteUrl(const std::string& url) {
   if (!project_) return false;
-  const fs::path path = project_->GetRoot() / ".lore" / "config.toml";
-  std::vector<std::string> lines;
-  {
-    std::ifstream file(path);
-    std::string line;
-    while (std::getline(file, line)) lines.push_back(line);
-  }
   std::string quoted;
   if (!TomlQuote(url, &quoted)) {
     console_.Add(Console::Level::kError, Console::Source::kLore,
@@ -580,18 +587,42 @@ bool LoreVcs::WriteRemoteUrl(const std::string& url) {
                  "characters");
     return false;
   }
-  const std::string entry = "remote_url = " + quoted;
-  auto it = std::find_if(
-      lines.begin(), lines.end(),
-      [](const std::string& line) { return line.starts_with("remote_url"); });
-  if (it != lines.end()) {
-    *it = entry;
-  } else {
-    lines.insert(lines.begin(), entry);  // top-level keys come before tables
+  const fs::path path = project_->GetRoot() / ".lore" / "config.toml";
+  const std::string entry = "remote_url = " + quoted + "\n";
+
+  // Only the value of remote_url is rewritten: the rest of the file, which
+  // belongs to `lore`, is spliced together unchanged.
+  if (!os::Exists(path)) return os::WriteFileAtomic(path, entry);
+  const std::optional<std::string> text = os::ReadText(path);
+  if (!text) {
+    console_.Add(Console::Level::kError, Console::Source::kLore,
+                 "Could not read .lore/config.toml");
+    return false;
   }
-  std::string text;
-  for (const auto& line : lines) text += line + '\n';
-  return os::WriteFileAtomic(path, text);
+  if (text->empty()) return os::WriteFileAtomic(path, entry);
+
+  toml::parse_result parsed = toml::parse(*text, path.string());
+  if (!parsed) {
+    console_.Add(Console::Level::kError, Console::Source::kLore,
+                 std::format("Could not parse .lore/config.toml: {}",
+                             parsed.error().description()));
+    return false;
+  }
+  const toml::node* value = parsed.table().get("remote_url");
+  if (!value) return os::WriteFileAtomic(path, entry + *text);
+
+  // The value's source region runs from the opening to just past the closing
+  // quote; everything around it keeps its bytes.
+  const auto begin = TomlSourceOffset(*text, value->source().begin);
+  const auto end = TomlSourceOffset(*text, value->source().end);
+  if (!begin || !end || *end <= *begin ||
+      ((*text)[*end - 1] != '"' && (*text)[*end - 1] != '\'')) {
+    console_.Add(Console::Level::kError, Console::Source::kLore,
+                 "Could not locate the remote_url value in .lore/config.toml");
+    return false;
+  }
+  return os::WriteFileAtomic(
+      path, text->substr(0, *begin) + quoted + text->substr(*end));
 }
 
 // ----------------------------------------------------------------- Parsing ---
