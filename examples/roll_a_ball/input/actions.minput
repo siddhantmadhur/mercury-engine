@@ -1,10 +1,22 @@
-[minput format=1 class="GameInput" header="res://scripts/generated/game_input.ts"]
+[minput]
+format = 2
+editor_version = "1.0.0"
+class = "GameInput"
+header = "res://scripts/generated/game_input.ts"
 
-[map name="Player"]
-
-[action name="Player/Move" type="value" control="vector2"]
+[[action]]
+control = "vector2"
+name = "Player/Move"
+type = "value"
+[action.props]
 bindings = ["<Gamepad>/leftStick"]
 composites = [["2DVector", ["<Keyboard>/w", "<Keyboard>/upArrow"], ["<Keyboard>/s", "<Keyboard>/downArrow"], ["<Keyboard>/a", "<Keyboard>/leftArrow"], ["<Keyboard>/d", "<Keyboard>/rightArrow"]]]
 
-[action name="Player/Jump" type="button"]
+[[action]]
+name = "Player/Jump"
+type = "button"
+[action.props]
 bindings = ["<Keyboard>/space", "<Gamepad>/buttonSouth"]
+
+[[map]]
+name = "Player"

@@ -13,7 +13,8 @@ crate-type = ["staticlib"]
 cxx = "=1.0.205"
 mercury_kernel = { path = "mercury/rust" }
 input_actions_codegen_rs = { path = "mercury/input" }
+mercury_uss = { path = "mercury/uss" }
 
 [workspace]
-members = ["mercury/rust", "mercury/input"]
+members = ["mercury/rust", "mercury/input", "mercury/uss"]
 resolver = "2"

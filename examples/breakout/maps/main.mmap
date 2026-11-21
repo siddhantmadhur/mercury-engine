@@ -1,866 +1,1510 @@
-[mmap format=1]
+[mmap]
+format = 2
+editor_version = "1.0.0"
 
-[ext_resource type="Material" path="res://assets/white.masset" id="1"]
-[ext_resource type="PhysicsMaterial" path="res://assets/bouncy.masset" id="2"]
-[ext_resource type="PhysicsMaterial" path="res://assets/frictionless.masset" id="3"]
+[[component]]
+node = "."
+type = "Transform"
 
-[node name="Breakout"]
+[[component]]
+node = "."
+type = "BreakoutGame"
 
-[component type="Transform" node="."]
+[[component]]
+node = "Camera"
+type = "Transform"
 
-[component type="BreakoutGame" node="."]
-
-[node name="Camera" parent="."]
-
-[component type="Transform" node="Camera"]
-
-[component type="Camera" node="Camera"]
+[[component]]
+node = "Camera"
+type = "Camera"
+[component.props]
 fit_height = 360.0
 
-[node name="Paddle" parent="."]
+[[component]]
+node = "Paddle"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, -160.0, 0.0] }
+scale = { vec3 = [36.0, 6.0, 1.0] }
 
-[component type="Transform" node="Paddle"]
-position = Vector3(0, -160, 0)
-scale = Vector3(36, 6, 1)
+[[component]]
+node = "Paddle"
+type = "SpriteRenderer"
+[component.props]
+material = { ext = "1" }
 
-[component type="SpriteRenderer" node="Paddle"]
-material = ExtResource("1")
-
-[component type="Rigidbody" node="Paddle"]
-motion_type = "kinematic"
+[[component]]
+node = "Paddle"
+type = "Rigidbody"
+[component.props]
+allow_sleeping = false
 allowed_dofs = "translation_x"
-motion_quality = "linear_cast"
+angular_damping = 0.0
 gravity_factor = 0.0
 linear_damping = 0.0
-angular_damping = 0.0
-allow_sleeping = false
+motion_quality = "linear_cast"
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Paddle"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
+[[component]]
+node = "Paddle"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
 
-[component type="BreakoutPaddle" node="Paddle"]
-speed = 260.0
+[[component]]
+node = "Paddle"
+type = "BreakoutPaddle"
+[component.props]
 limit = 300.0
+speed = 260.0
 
+[[component]]
+node = "Ball"
+type = "Transform"
+[component.props]
+scale = { vec3 = [8.0, 8.0, 1.0] }
 
-[node name="Ball" parent="."]
+[[component]]
+node = "Ball"
+type = "SpriteRenderer"
+[component.props]
+material = { ext = "1" }
 
-[component type="Transform" node="Ball"]
-scale = Vector3(8, 8, 1)
-
-[component type="SpriteRenderer" node="Ball"]
-material = ExtResource("1")
-
-[component type="Rigidbody" node="Ball"]
-motion_type = "dynamic"
+[[component]]
+node = "Ball"
+type = "Rigidbody"
+[component.props]
+allow_sleeping = false
 allowed_dofs = "translation_xy"
-motion_quality = "linear_cast"
+angular_damping = 0.0
 gravity_factor = 0.0
 linear_damping = 0.0
-angular_damping = 0.0
-allow_sleeping = false
+motion_quality = "linear_cast"
+motion_type = "dynamic"
 
-[component type="BoxCollider" node="Ball"]
-size = Vector3(1, 1, 10)
-material = ExtResource("2")
+[[component]]
+node = "Ball"
+type = "BoxCollider"
+[component.props]
+material = { ext = "3" }
+size = { vec3 = [1.0, 1.0, 10.0] }
 
-[component type="BreakoutBall" node="Ball"]
-speed = 160.0
+[[component]]
+node = "Ball"
+type = "BreakoutBall"
+[component.props]
 minVertical = 0.35
+speed = 160.0
 startY = -136.0
 
-
-[node name="Walls" parent="."]
-
-[component type="Transform" node="Walls"]
-
-[node name="Left" parent="Walls"]
-
-[component type="Transform" node="Walls/Left"]
-position = Vector3(-320, 0, 0)
-
-[component type="PlaneCollider" node="Walls/Left"]
-normal = Vector3(1, 0, 0)
-
-
-[node name="Right" parent="Walls"]
-
-[component type="Transform" node="Walls/Right"]
-position = Vector3(320, 0, 0)
-
-[component type="PlaneCollider" node="Walls/Right"]
-normal = Vector3(-1, 0, 0)
-
-
-[node name="Top" parent="Walls"]
-
-[component type="Transform" node="Walls/Top"]
-position = Vector3(0, 180, 0)
-
-[component type="PlaneCollider" node="Walls/Top"]
-normal = Vector3(0, -1, 0)
-
-
-[node name="Floor" parent="Walls" tag="Floor"]
-
-[component type="Transform" node="Walls/Floor"]
-position = Vector3(0, -180, 0)
-
-[component type="PlaneCollider" node="Walls/Floor"]
-normal = Vector3(0, 1, 0)
-
-
-[node name="Bricks" parent="."]
-
-[component type="Transform" node="Bricks"]
-
-[node name="Brick_0_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_0_0"]
-position = Vector3(-288.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_0_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_0_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_0_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_0_1"]
-position = Vector3(-288.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_0_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_0_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_0_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_0_2"]
-position = Vector3(-288.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_0_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_0_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_0_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_0_3"]
-position = Vector3(-288.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_0_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_0_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_0_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_0_4"]
-position = Vector3(-288.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_0_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_0_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_1_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_1_0"]
-position = Vector3(-224.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_1_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_1_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_1_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_1_1"]
-position = Vector3(-224.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_1_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_1_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_1_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_1_2"]
-position = Vector3(-224.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_1_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_1_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_1_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_1_3"]
-position = Vector3(-224.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_1_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_1_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_1_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_1_4"]
-position = Vector3(-224.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_1_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_1_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_2_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_2_0"]
-position = Vector3(-160.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_2_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_2_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_2_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_2_1"]
-position = Vector3(-160.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_2_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_2_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_2_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_2_2"]
-position = Vector3(-160.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_2_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_2_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_2_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_2_3"]
-position = Vector3(-160.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_2_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_2_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_2_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_2_4"]
-position = Vector3(-160.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_2_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_2_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_3_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_3_0"]
-position = Vector3(-96.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_3_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_3_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_3_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_3_1"]
-position = Vector3(-96.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_3_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_3_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_3_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_3_2"]
-position = Vector3(-96.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_3_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_3_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_3_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_3_3"]
-position = Vector3(-96.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_3_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_3_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_3_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_3_4"]
-position = Vector3(-96.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_3_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_3_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_4_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_4_0"]
-position = Vector3(-32.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_4_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_4_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_4_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_4_1"]
-position = Vector3(-32.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_4_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_4_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_4_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_4_2"]
-position = Vector3(-32.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_4_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_4_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_4_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_4_3"]
-position = Vector3(-32.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_4_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_4_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_4_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_4_4"]
-position = Vector3(-32.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_4_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_4_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_5_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_5_0"]
-position = Vector3(32.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_5_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_5_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_5_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_5_1"]
-position = Vector3(32.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_5_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_5_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_5_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_5_2"]
-position = Vector3(32.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_5_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_5_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_5_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_5_3"]
-position = Vector3(32.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_5_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_5_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_5_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_5_4"]
-position = Vector3(32.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_5_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_5_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_6_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_6_0"]
-position = Vector3(96.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_6_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_6_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_6_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_6_1"]
-position = Vector3(96.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_6_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_6_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_6_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_6_2"]
-position = Vector3(96.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_6_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_6_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_6_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_6_3"]
-position = Vector3(96.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_6_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_6_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_6_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_6_4"]
-position = Vector3(96.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_6_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_6_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_7_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_7_0"]
-position = Vector3(160.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_7_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_7_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_7_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_7_1"]
-position = Vector3(160.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_7_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_7_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_7_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_7_2"]
-position = Vector3(160.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_7_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_7_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_7_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_7_3"]
-position = Vector3(160.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_7_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_7_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_7_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_7_4"]
-position = Vector3(160.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_7_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_7_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_8_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_8_0"]
-position = Vector3(224.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_8_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_8_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_8_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_8_1"]
-position = Vector3(224.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_8_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_8_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_8_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_8_2"]
-position = Vector3(224.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_8_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_8_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_8_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_8_3"]
-position = Vector3(224.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_8_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_8_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_8_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_8_4"]
-position = Vector3(224.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_8_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_8_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_9_0" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_9_0"]
-position = Vector3(288.0, 160.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_9_0"]
-material = ExtResource("1")
-color = Color(0.40, 0.80, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_9_0"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_9_1" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_9_1"]
-position = Vector3(288.0, 136.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_9_1"]
-material = ExtResource("1")
-color = Color(0.52, 0.68, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_9_1"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_9_2" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_9_2"]
-position = Vector3(288.0, 112.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_9_2"]
-material = ExtResource("1")
-color = Color(0.64, 0.56, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_9_2"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_9_3" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_9_3"]
-position = Vector3(288.0, 88.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_9_3"]
-material = ExtResource("1")
-color = Color(0.76, 0.44, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_9_3"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
-
-[node name="Brick_9_4" parent="Bricks" tag="Brick"]
-
-[component type="Transform" node="Bricks/Brick_9_4"]
-position = Vector3(288.0, 64.0, 0)
-scale = Vector3(32, 8, 1)
-
-[component type="SpriteRenderer" node="Bricks/Brick_9_4"]
-material = ExtResource("1")
-color = Color(0.88, 0.32, 0.9, 1)
-
-[component type="BoxCollider" node="Bricks/Brick_9_4"]
-size = Vector3(1, 1, 10)
-material = ExtResource("3")
-
+[[component]]
+node = "Walls"
+type = "Transform"
+
+[[component]]
+node = "Walls/Left"
+type = "Transform"
+[component.props]
+position = { vec3 = [-320.0, 0.0, 0.0] }
+
+[[component]]
+node = "Walls/Left"
+type = "PlaneCollider"
+[component.props]
+normal = { vec3 = [1.0, 0.0, 0.0] }
+
+[[component]]
+node = "Walls/Right"
+type = "Transform"
+[component.props]
+position = { vec3 = [320.0, 0.0, 0.0] }
+
+[[component]]
+node = "Walls/Right"
+type = "PlaneCollider"
+[component.props]
+normal = { vec3 = [-1.0, 0.0, 0.0] }
+
+[[component]]
+node = "Walls/Top"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 180.0, 0.0] }
+
+[[component]]
+node = "Walls/Top"
+type = "PlaneCollider"
+[component.props]
+normal = { vec3 = [0.0, -1.0, 0.0] }
+
+[[component]]
+node = "Walls/Floor"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, -180.0, 0.0] }
+
+[[component]]
+node = "Walls/Floor"
+type = "PlaneCollider"
+[component.props]
+normal = { vec3 = [0.0, 1.0, 0.0] }
+
+[[component]]
+node = "Bricks"
+type = "Transform"
+
+[[component]]
+node = "Bricks/Brick_0_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [-288.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_0_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_0_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_0_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [-288.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_0_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_0_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_0_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [-288.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_0_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_0_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_0_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [-288.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_0_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_0_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_0_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [-288.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_0_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_0_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_1_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [-224.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_1_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_1_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_1_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [-224.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_1_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_1_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_1_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [-224.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_1_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_1_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_1_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [-224.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_1_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_1_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_1_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [-224.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_1_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_1_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_2_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [-160.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_2_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_2_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_2_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [-160.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_2_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_2_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_2_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [-160.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_2_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_2_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_2_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [-160.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_2_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_2_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_2_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [-160.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_2_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_2_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_3_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [-96.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_3_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_3_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_3_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [-96.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_3_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_3_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_3_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [-96.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_3_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_3_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_3_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [-96.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_3_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_3_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_3_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [-96.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_3_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_3_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_4_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [-32.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_4_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_4_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_4_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [-32.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_4_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_4_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_4_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [-32.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_4_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_4_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_4_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [-32.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_4_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_4_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_4_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [-32.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_4_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_4_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_5_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [32.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_5_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_5_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_5_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [32.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_5_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_5_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_5_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [32.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_5_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_5_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_5_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [32.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_5_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_5_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_5_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [32.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_5_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_5_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_6_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [96.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_6_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_6_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_6_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [96.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_6_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_6_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_6_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [96.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_6_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_6_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_6_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [96.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_6_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_6_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_6_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [96.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_6_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_6_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_7_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [160.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_7_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_7_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_7_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [160.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_7_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_7_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_7_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [160.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_7_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_7_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_7_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [160.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_7_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_7_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_7_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [160.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_7_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_7_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_8_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [224.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_8_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_8_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_8_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [224.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_8_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_8_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_8_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [224.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_8_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_8_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_8_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [224.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_8_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_8_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_8_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [224.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_8_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_8_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_9_0"
+type = "Transform"
+[component.props]
+position = { vec3 = [288.0, 160.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_9_0"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.4, 0.8, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_9_0"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_9_1"
+type = "Transform"
+[component.props]
+position = { vec3 = [288.0, 136.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_9_1"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.52, 0.68, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_9_1"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_9_2"
+type = "Transform"
+[component.props]
+position = { vec3 = [288.0, 112.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_9_2"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.64, 0.56, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_9_2"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_9_3"
+type = "Transform"
+[component.props]
+position = { vec3 = [288.0, 88.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_9_3"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.76, 0.44, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_9_3"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[component]]
+node = "Bricks/Brick_9_4"
+type = "Transform"
+[component.props]
+position = { vec3 = [288.0, 64.0, 0.0] }
+scale = { vec3 = [32.0, 8.0, 1.0] }
+
+[[component]]
+node = "Bricks/Brick_9_4"
+type = "SpriteRenderer"
+[component.props]
+color = { color = [0.88, 0.32, 0.9, 1.0] }
+material = { ext = "1" }
+
+[[component]]
+node = "Bricks/Brick_9_4"
+type = "BoxCollider"
+[component.props]
+material = { ext = "2" }
+size = { vec3 = [1.0, 1.0, 10.0] }
+
+[[ext_resource]]
+id = "1"
+path = "res://assets/white.masset"
+type = "Material"
+
+[[ext_resource]]
+id = "2"
+path = "res://assets/frictionless.masset"
+type = "PhysicsMaterial"
+
+[[ext_resource]]
+id = "3"
+path = "res://assets/bouncy.masset"
+type = "PhysicsMaterial"
+
+[[node]]
+name = "Breakout"
+
+[[node]]
+name = "Camera"
+parent = "."
+
+[[node]]
+name = "Paddle"
+parent = "."
+
+[[node]]
+name = "Ball"
+parent = "."
+
+[[node]]
+name = "Walls"
+parent = "."
+
+[[node]]
+name = "Left"
+parent = "Walls"
+
+[[node]]
+name = "Right"
+parent = "Walls"
+
+[[node]]
+name = "Top"
+parent = "Walls"
+
+[[node]]
+name = "Floor"
+parent = "Walls"
+tag = "Floor"
+
+[[node]]
+name = "Bricks"
+parent = "."
+
+[[node]]
+name = "Brick_0_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_0_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_0_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_0_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_0_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_1_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_1_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_1_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_1_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_1_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_2_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_2_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_2_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_2_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_2_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_3_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_3_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_3_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_3_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_3_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_4_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_4_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_4_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_4_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_4_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_5_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_5_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_5_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_5_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_5_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_6_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_6_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_6_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_6_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_6_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_7_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_7_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_7_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_7_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_7_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_8_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_8_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_8_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_8_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_8_4"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_9_0"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_9_1"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_9_2"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_9_3"
+parent = "Bricks"
+tag = "Brick"
+
+[[node]]
+name = "Brick_9_4"
+parent = "Bricks"
+tag = "Brick"

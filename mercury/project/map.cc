@@ -231,9 +231,10 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
   }
   if (document.sections.empty() || (document.sections[0].tag != "mmap" &&
                                     document.sections[0].tag != "mprefab")) {
-    return fail(1, "a map must start with an [mmap format=1] header");
+    return fail(1, "a map must start with an [mmap] format header");
   }
-  const auto format = document.sections[0].attributes.GetInt("format", 1);
+  const auto format =
+      document.sections[0].attributes.GetInt("format", kMapFormatVersion);
   if (format > kMapFormatVersion) {
     return fail(1, std::format("map format {} is newer than this engine ({})",
                                format, kMapFormatVersion));
@@ -307,112 +308,118 @@ bool Map::LoadFromString(std::string_view source, std::string* error,
     return true;
   };
 
-  for (size_t i = 1; i < document.sections.size(); i++) {
-    auto& section = document.sections[i];
-    if (section.tag == "ext_resource") {
-      auto id = section.attributes.GetString("id");
-      auto path = section.attributes.GetString("path");
-      if (id.empty()) return fail(section.line, "ext_resource needs an id");
-      ext_paths[id] = path;
-      resource_types[path] = section.attributes.GetString("type", "Resource");
-    } else if (section.tag == "node") {
-      auto name = section.attributes.GetString("name");
-      if (name.empty()) return fail(section.line, "node needs a name");
-      std::string instance;
-      if (auto value = section.attributes.Get("instance")) {
-        if (auto ext = value->Get<mtext::ExtResource>()) {
-          auto it = ext_paths.find(ext->id);
-          if (it == ext_paths.end()) {
-            return fail(
-                section.line,
-                std::format("ExtResource(\"{}\") is not declared", ext->id));
-          }
-          instance = it->second;
-        } else if (auto res = value->Get<mtext::Resource>()) {
-          instance = res->path;
-        } else if (auto text = value->Get<std::string>()) {
-          instance = *text;
+  // The TOML format groups sections by tag, so ext_resource, node and
+  // component sections no longer arrive in a fixed relative order. Read them
+  // in three passes: resources first (nodes and components refer to them),
+  // then nodes (file order keeps parents before children), then components
+  // (they refer to nodes).
+  for (auto& section : document.sections) {
+    if (section.tag != "ext_resource") continue;
+    auto id = section.attributes.GetString("id");
+    auto path = section.attributes.GetString("path");
+    if (id.empty()) return fail(section.line, "ext_resource needs an id");
+    ext_paths[id] = path;
+    resource_types[path] = section.attributes.GetString("type", "Resource");
+  }
+
+  for (auto& section : document.sections) {
+    if (section.tag != "node") continue;
+    auto name = section.attributes.GetString("name");
+    if (name.empty()) return fail(section.line, "node needs a name");
+    std::string instance;
+    if (auto value = section.attributes.Get("instance")) {
+      if (auto ext = value->Get<mtext::ExtResource>()) {
+        auto it = ext_paths.find(ext->id);
+        if (it == ext_paths.end()) {
+          return fail(
+              section.line,
+              std::format("ExtResource(\"{}\") is not declared", ext->id));
         }
+        instance = it->second;
+      } else if (auto res = value->Get<mtext::Resource>()) {
+        instance = res->path;
+      } else if (auto text = value->Get<std::string>()) {
+        instance = *text;
       }
-      if (!section.attributes.Has("parent")) {
-        if (root) return fail(section.line, "only one node may omit parent");
-        root = std::make_unique<MapNode>();
-        root->name = name;
-        if (!instance.empty() &&
-            !expand_prefab(*root, instance, section.line)) {
-          return false;
-        }
-        ReadNodeAttributes(section.attributes, *root);
-        continue;
-      }
-      if (!root) return fail(section.line, "the root node must come first");
-      auto parent_path = section.attributes.GetString("parent");
-      MapNode* parent = const_cast<MapNode*>(FindFrom(root.get(), parent_path));
-      if (!parent) {
-        return fail(section.line,
-                    std::format("parent \"{}\" of node \"{}\" not found "
-                                "(parents must come before children)",
-                                parent_path, name));
-      }
-      MapNode* existing = nullptr;
-      for (const auto& sibling : parent->children) {
-        if (sibling->name == name) existing = sibling.get();
-      }
-      if (existing) {
-        // A node that came from a prefab can have its attributes overridden.
-        if (existing->from_prefab && instance.empty()) {
-          ReadNodeAttributes(section.attributes, *existing);
-          continue;
-        }
-        return fail(section.line,
-                    std::format("duplicate node name \"{}\"", name));
-      }
-      auto node = std::make_unique<MapNode>();
-      node->name = name;
-      node->parent = parent;
-      MapNode* raw = node.get();
-      parent->children.push_back(std::move(node));
-      if (!instance.empty() && !expand_prefab(*raw, instance, section.line)) {
+    }
+    if (!section.attributes.Has("parent")) {
+      if (root) return fail(section.line, "only one node may omit parent");
+      root = std::make_unique<MapNode>();
+      root->name = name;
+      if (!instance.empty() && !expand_prefab(*root, instance, section.line)) {
         return false;
       }
-      ReadNodeAttributes(section.attributes, *raw);
-    } else if (section.tag == "component") {
-      if (!root) return fail(section.line, "component before any node");
-      auto type = section.attributes.GetString("type");
-      if (type.empty()) return fail(section.line, "component needs a type");
-      auto node_path = section.attributes.GetString("node", ".");
-      MapNode* node = const_cast<MapNode*>(FindFrom(root.get(), node_path));
-      if (!node) {
-        return fail(section.line,
-                    std::format("component {} refers to missing node \"{}\"",
-                                type, node_path));
+      ReadNodeAttributes(section.attributes, *root);
+      continue;
+    }
+    if (!root) return fail(section.line, "the root node must come first");
+    auto parent_path = section.attributes.GetString("parent");
+    MapNode* parent = const_cast<MapNode*>(FindFrom(root.get(), parent_path));
+    if (!parent) {
+      return fail(section.line,
+                  std::format("parent \"{}\" of node \"{}\" not found "
+                              "(parents must come before children)",
+                              parent_path, name));
+    }
+    MapNode* existing = nullptr;
+    for (const auto& sibling : parent->children) {
+      if (sibling->name == name) existing = sibling.get();
+    }
+    if (existing) {
+      // A node that came from a prefab can have its attributes overridden.
+      if (existing->from_prefab && instance.empty()) {
+        ReadNodeAttributes(section.attributes, *existing);
+        continue;
       }
-      ComponentData component{type, section.properties};
-      if (auto missing = resolve_ext(component.properties); !missing.empty()) {
-        return fail(
-            section.line,
-            std::format("ExtResource(\"{}\") is not declared", missing));
-      }
-      // Inside a prefab instance a component section overrides the prefab's
-      // component of that type (the index-th one) instead of adding one.
-      if (HasPrefabBase(*node)) {
-        const int index =
-            static_cast<int>(section.attributes.GetInt("index", 0));
-        if (ComponentData* target = node->FindComponent(type, index)) {
-          if (section.attributes.GetBool("removed", false)) {
-            std::erase_if(node->components,
-                          [&](const ComponentData& c) { return &c == target; });
-            continue;
-          }
-          for (auto& property : component.properties) {
-            target->properties.Set(property.key, property.value);
-          }
+      return fail(section.line,
+                  std::format("duplicate node name \"{}\"", name));
+    }
+    auto node = std::make_unique<MapNode>();
+    node->name = name;
+    node->parent = parent;
+    MapNode* raw = node.get();
+    parent->children.push_back(std::move(node));
+    if (!instance.empty() && !expand_prefab(*raw, instance, section.line)) {
+      return false;
+    }
+    ReadNodeAttributes(section.attributes, *raw);
+  }
+
+  for (auto& section : document.sections) {
+    if (section.tag != "component") continue;
+    if (!root) return fail(section.line, "component before any node");
+    auto type = section.attributes.GetString("type");
+    if (type.empty()) return fail(section.line, "component needs a type");
+    auto node_path = section.attributes.GetString("node", ".");
+    MapNode* node = const_cast<MapNode*>(FindFrom(root.get(), node_path));
+    if (!node) {
+      return fail(section.line,
+                  std::format("component {} refers to missing node \"{}\"",
+                              type, node_path));
+    }
+    ComponentData component{type, section.properties};
+    if (auto missing = resolve_ext(component.properties); !missing.empty()) {
+      return fail(section.line,
+                  std::format("ExtResource(\"{}\") is not declared", missing));
+    }
+    // Inside a prefab instance a component section overrides the prefab's
+    // component of that type (the index-th one) instead of adding one.
+    if (HasPrefabBase(*node)) {
+      const int index = static_cast<int>(section.attributes.GetInt("index", 0));
+      if (ComponentData* target = node->FindComponent(type, index)) {
+        if (section.attributes.GetBool("removed", false)) {
+          std::erase_if(node->components,
+                        [&](const ComponentData& c) { return &c == target; });
           continue;
         }
-        if (section.attributes.GetBool("removed", false)) continue;
+        for (auto& property : component.properties) {
+          target->properties.Set(property.key, property.value);
+        }
+        continue;
       }
-      node->components.push_back(std::move(component));
+      if (section.attributes.GetBool("removed", false)) continue;
     }
+    node->components.push_back(std::move(component));
     // Unknown sections are ignored so newer files still open.
   }
 

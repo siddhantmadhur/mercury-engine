@@ -65,42 +65,61 @@ Run a project without the editor with `./build/release/bin/mercury_player exampl
 
 ## File formats
 
-`.mproj`, `.mmap` and `.masset` share one text format modeled on Godot's `.tscn`, so people and LLMs can read, diff and edit it by hand. A file is a list of `[sections]`, each followed by `key = value` lines:
+`.mproj`, `.mmap` and `.masset` share one text format: TOML, so people and LLMs can read, diff and edit it by hand. A file starts with a header table that names the file type and carries `format = 2` and `editor_version`; sections follow as `[[tag]]` array-of-tables, grouped by tag, with section attributes as scalar keys and section properties in a `[tag.props]` sub-table:
 
-```ini
-[mmap format=1]
+```toml
+[mmap]
+format = 2
+editor_version = "1.0.0"
 
-[ext_resource type="Material" path="res://assets/white.masset" id="1"]
+[[component]]
+node = "Ball"
+type = "Transform"
+[component.props]
+scale = { vec3 = [2.0, 2.0, 1.0] }
 
-[node name="Pong"]
+[[component]]
+node = "Ball"
+type = "SpriteRenderer"
+[component.props]
+material = { ext = "1" }
 
-[node name="Ball" parent="."]
-
-[component type="Transform" node="Ball"]
-scale = Vector3(2, 2, 1)
-
-[component type="SpriteRenderer" node="Ball"]
-material = ExtResource("1")
-
-[component type="Ball" node="Ball"]
+[[component]]
+node = "Ball"
+type = "Ball"
+[component.props]
 speed = 60.0
+
+[[ext_resource]]
+id = "1"
+path = "res://assets/white.masset"
+type = "Material"
+
+[[node]]
+name = "Pong"
+
+[[node]]
+name = "Ball"
+parent = "."
 ```
 
-- `parent=` and `node=` are paths from the root node: `.` is the root, `Ball` a child of the root, `Walls/Left` a grandchild. Parents come before their children.
-- Values are `true`, `3`, `1.5`, `"text"`, `Vector2(x, y)`, `Vector3(x, y, z)`, `Color(r, g, b, a)`, `NodePath("Walls/Left")`, `ExtResource("id")`, `Resource("res://...")` or `[arrays]`. Comments start with `;` but are not kept when the editor saves.
+- Sections are grouped by tag (`[[component]]` before `[[ext_resource]]` before `[[node]]`); within a tag the file's original order is kept, so parent nodes still come before their children.
+- `parent` and `node` are paths from the root node: `.` is the root, `Ball` a child of the root, `Walls/Left` a grandchild. Parents come before their children.
+- Values are `true`, `3`, `1.5`, `"text"`, `{ vec2 = [x, y] }`, `{ vec3 = [x, y, z] }`, `{ color = [r, g, b, a] }`, `{ path = "Walls/Left" }`, `{ ext = "1" }`, `{ res = "res://..." }` or plain arrays. Comments start with `#` but are not kept when the editor saves.
+- `format` and `editor_version` are written by the engine; a file whose `format` is newer than the engine's is rejected. The old format 1 layout is not supported (pre-1.0).
 - `res://` paths are relative to the folder holding the `.mproj`.
 - Fields left at their default value are omitted.
 
 Other files:
 
-- `.mprefab`: a node tree in the map format. A map node with `instance="res://gun.mprefab"` copies it; component sections for the instance (or its children) override single values, and `removed=true` drops a component. Scripts copy with `Instantiate(...)`.
-- `.manim`: an animator controller (`[parameter]`, `[layer]`, `[state]` with a clip or a 1D/2D blend tree, `[transition]` with conditions and exit time).
-- `.minput`: input actions (Unity's Input System): `[action name="Player/Jump" type="button"]` with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"`, and 2D vector `composites`. `[map name="Player"]` sections list the action maps, and the `[minput]` header's `class` and `header` name the generated AngelScript namespace and its file. The `.mproj` names it in `[input] actions`. Edit it in **Window > Input Actions**.
-- `.mimport` next to a model: `convention = "unity"` imports it the Unity way (180 degrees about Y, file units); `[import] model_convention` in the `.mproj` sets the default. `scale` resizes it and `max_texture_size` (default 8192) scales larger textures down.
+- `.mprefab`: a node tree in the map format. A map node with `instance = "res://gun.mprefab"` copies it (or `instance = { ext = "1" }` pointing at a `[[ext_resource]]`); component sections for the instance (or its children) override single values, and `removed = true` in `[component.props]` drops a component. Scripts copy with `Instantiate(...)`.
+- `.manim`: an animator controller (`[[parameter]]`, `[[layer]]`, `[[state]]` with a clip or a 1D/2D blend tree, `[[transition]]` with conditions and exit time).
+- `.minput`: input actions (Unity's Input System): `[[action]]` sections (attributes `name`, `type`, `control`) with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"` in `[action.props]`, and 2D vector `composites`. `[[map]]` sections list the action maps, and the `[minput]` header's `class` and `header` name the generated AngelScript namespace and its file. The `.mproj` names it in `[[input]]` (`[input.props]`).
+- `.mimport` next to a model: `convention = "unity"` imports it the Unity way (180 degrees about Y, file units); `[[import]]` (`[import.props]`) `model_convention` in the `.mproj` sets the default. `scale` resizes it and `max_texture_size` (default 8192) scales larger textures down.
 
 Models bring their own materials: base color and texture, opacity, emission (`Ke`, `map_Ke`), normal maps (or `bump` height maps, converted to normal maps on import) and, for OBJ, glossiness from `Ns`/`Ks`. Texture names are matched case-insensitively.
 
-`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]` (game output folder, and `target = "my_game"` when the gameplay is C++).
+`.mproj` sections: `[[physics]]` (`[physics.props]`: `gravity = { vec3 = [0.0, -9.81, 0.0] }`, `tick_rate = 50`), `[[layers]]`, `[[tags]]` (set on a node with `layer =` and `tag =`), `[[render]]` (SSAO and outline settings), `[[input]]`, `[[import]]` and `[[build]]` (`[build.props]`: game output folder, and `target = "my_game"` when the gameplay is C++).
 
 ## Components
 

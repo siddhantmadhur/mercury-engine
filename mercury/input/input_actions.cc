@@ -548,7 +548,7 @@ mtext::Variant StringArray(const std::vector<std::string>& strings) {
 mtext::Document ToDocument(const InputActionsDesc& desc) {
   mtext::Document document;
   auto& header = document.Add("minput").attributes;
-  header.Set("format", 1);
+  header.Set("format", 2);
   if (!desc.class_name.empty()) header.Set("class", desc.class_name);
   if (!desc.header.empty()) header.Set("header", desc.header);
   for (const auto& map : desc.maps)

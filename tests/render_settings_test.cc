@@ -24,9 +24,10 @@ RenderSettings SettingsFor(const std::string& render) {
   std::filesystem::create_directories(dir);
   {
     std::ofstream(dir / "test.mproj")
-        << "[project]\nname = \"Test\"\n"
-           "main_map = \"res://maps/a.mmap\"\n"
-        << (render.empty() ? "" : "[render]\n" + render);
+        << "[project]\nformat = 2\n\n"
+           "[project.props]\nmain_map = \"res://maps/a.mmap\"\n"
+           "name = \"Test\"\n"
+        << (render.empty() ? "" : "\n[[render]]\n[render.props]\n" + render);
   }
   std::string error;
   auto project = Project::Load(dir / "test.mproj", &error);
@@ -68,14 +69,14 @@ TEST(RenderSettings, LegacyFxaaBoolIsAFallback) {
             RenderSettings::AntiAliasing::kNone);
   // anti_aliasing wins when both are present.
   EXPECT_EQ(
-      SettingsFor("fxaa = false\nanti_aliasing = \"taa\"\n").anti_aliasing,
+      SettingsFor("anti_aliasing = \"taa\"\nfxaa = false\n").anti_aliasing,
       RenderSettings::AntiAliasing::kTaa);
 }
 
 TEST(RenderSettings, ParsesFsrKeys) {
   const RenderSettings s = SettingsFor(
-      "fsr = true\nfsr_quality = \"high\"\nrender_scale = 0.6\n"
-      "fsr_sharpness = 0.25\n");
+      "fsr = true\nfsr_quality = \"high\"\nfsr_sharpness = 0.25\n"
+      "render_scale = 0.6\n");
   EXPECT_TRUE(s.fsr);
   EXPECT_EQ(s.fsr_quality, RenderSettings::FsrQuality::kHigh);
   EXPECT_FLOAT_EQ(s.render_scale, 0.6f);
@@ -96,7 +97,8 @@ TEST(RenderSettings, ProjectAccessorsRoundTrip) {
       std::filesystem::temp_directory_path() / "mercury_render_roundtrip_test";
   std::filesystem::remove_all(dir);
   std::filesystem::create_directories(dir);
-  std::ofstream(dir / "test.mproj") << "[project]\nname = \"Test\"\n";
+  std::ofstream(dir / "test.mproj")
+      << "[project]\nformat = 2\n\n[project.props]\nname = \"Test\"\n";
   std::string error;
   auto project = Project::Load(dir / "test.mproj", &error);
   ASSERT_TRUE(project) << error;
@@ -123,7 +125,8 @@ TEST(RenderSettings, SettingAntiAliasingDropsLegacyFxaaKey) {
   std::filesystem::remove_all(dir);
   std::filesystem::create_directories(dir);
   std::ofstream(dir / "test.mproj")
-      << "[project]\nname = \"Test\"\n[render]\nfxaa = false\n";
+      << "[project]\nformat = 2\n\n[project.props]\nname = \"Test\"\n\n"
+         "[[render]]\n[render.props]\nfxaa = false\n";
   std::string error;
   auto project = Project::Load(dir / "test.mproj", &error);
   ASSERT_TRUE(project) << error;

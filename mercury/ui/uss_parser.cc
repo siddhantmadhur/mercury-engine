@@ -2,29 +2,30 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// USS tokenizer, selector and sheet parser, and value conversion.
+// USS parser front end. Tokenizing, rules, declarations and selectors are
+// parsed in Rust with the cssparser crate (mercury/uss/uss.rs) and cross the
+// cxx bridge as flat structs; this file rebuilds the engine's
+// StyleRule/ComplexSelector and StyleToken types from them, filters
+// declarations against the style property whitelist and keeps the parts that
+// are not parsing: value conversion (ParseStyleValue, ExpandDeclaration),
+// color parsing (ParseColor) and serialization (Write).
 
 #include <algorithm>
 #include <bit>
 #include <cctype>
-#include <charconv>
-#include <cmath>
 #include <format>
 #include <numbers>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "ui/style_sheet.h"
+#include "uss/uss.rs.h"
 
 namespace Mercury::UI {
 
 namespace {
-
-bool IsIdentStart(char c) {
-  return std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == '-' ||
-         static_cast<unsigned char>(c) >= 0x80;
-}
-bool IsIdentChar(char c) {
-  return IsIdentStart(c) || std::isdigit(static_cast<unsigned char>(c));
-}
 
 std::string_view Trim(std::string_view s) {
   while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {
@@ -43,151 +44,117 @@ std::string Lower(std::string_view s) {
   return out;
 }
 
-class ValueTokenizer {
- public:
-  explicit ValueTokenizer(std::string_view text) : text_(text) {}
+// Shorthand names ExpandDeclaration knows. A known shorthand with a value
+// that fails to expand is a value error, not an unknown property.
+bool IsShorthand(std::string_view property) {
+  static const char* kShorthands[] = {
+      "margin",        "padding", "border-width", "border-color",
+      "border-radius", "flex",    "transition",   "-unity-text-outline"};
+  return std::find(std::begin(kShorthands), std::end(kShorthands), property) !=
+         std::end(kShorthands);
+}
 
-  // A real value never nests this far; the cap keeps a hostile one such as
-  // a(a(a(...))) from recursing until the stack runs out.
-  static constexpr int kMaxNesting = 32;
-
-  TokenList ReadList(bool inside_function) {
-    if (depth_ >= kMaxNesting) {
-      // Skip the rest instead of trying to recover from a value this deep.
-      pos_ = text_.size();
-      return {};
-    }
-    struct DepthGuard {
-      int& depth;
-      explicit DepthGuard(int& d) : depth(d) { ++depth; }
-      ~DepthGuard() { --depth; }
-    } guard(depth_);
-    TokenList tokens;
-    while (true) {
-      SkipSpace();
-      if (pos_ >= text_.size()) break;
-      char c = text_[pos_];
-      if (c == ')') {
-        if (inside_function) {
-          pos_++;
-          break;
-        }
-        pos_++;  // stray ')'
-        continue;
-      }
-      if (c == ',') {
-        pos_++;
-        tokens.push_back({StyleToken::Type::kComma, ","});
-        continue;
-      }
-      if (c == '"' || c == '\'') {
-        tokens.push_back({StyleToken::Type::kString, ReadString(c)});
-        continue;
-      }
-      if (c == '#') {
-        pos_++;
-        size_t start = pos_;
-        while (pos_ < text_.size() && IsIdentChar(text_[pos_])) pos_++;
-        tokens.push_back({StyleToken::Type::kHash,
-                          std::string(text_.substr(start, pos_ - start))});
-        continue;
-      }
-      if (std::isdigit(static_cast<unsigned char>(c)) || c == '.' ||
-          ((c == '-' || c == '+') && pos_ + 1 < text_.size() &&
-           (std::isdigit(static_cast<unsigned char>(text_[pos_ + 1])) ||
-            text_[pos_ + 1] == '.'))) {
-        tokens.push_back(ReadNumber());
-        continue;
-      }
-      if (IsIdentStart(c)) {
-        size_t start = pos_;
-        while (pos_ < text_.size() && IsIdentChar(text_[pos_])) pos_++;
-        std::string ident(text_.substr(start, pos_ - start));
-        if (pos_ < text_.size() && text_[pos_] == '(') {
-          pos_++;
-          StyleToken fn{StyleToken::Type::kFunction, Lower(ident)};
-          if (fn.text == "url" || fn.text == "resource") {
-            // url(foo.png) may be unquoted.
-            SkipSpace();
-            if (pos_ < text_.size() && text_[pos_] != '"' &&
-                text_[pos_] != '\'') {
-              size_t s = pos_;
-              while (pos_ < text_.size() && text_[pos_] != ')') pos_++;
-              fn.args.push_back({StyleToken::Type::kString,
-                                 std::string(Trim(text_.substr(s, pos_ - s)))});
-              if (pos_ < text_.size()) pos_++;
-              tokens.push_back(std::move(fn));
-              continue;
-            }
-          }
-          fn.args = ReadList(true);
-          tokens.push_back(std::move(fn));
-        } else {
-          tokens.push_back({StyleToken::Type::kIdent, ident});
-        }
-        continue;
-      }
-      pos_++;  // unknown character (e.g. '/', '!important' bang)
-    }
-    return tokens;
-  }
-
- private:
-  void SkipSpace() {
-    while (pos_ < text_.size() &&
-           std::isspace(static_cast<unsigned char>(text_[pos_]))) {
-      pos_++;
-    }
-  }
-
-  std::string ReadString(char quote) {
-    pos_++;
-    std::string out;
-    while (pos_ < text_.size() && text_[pos_] != quote) {
-      if (text_[pos_] == '\\' && pos_ + 1 < text_.size()) pos_++;
-      out += text_[pos_++];
-    }
-    if (pos_ < text_.size()) pos_++;
-    return out;
-  }
-
-  StyleToken ReadNumber() {
-    size_t start = pos_;
-    if (text_[pos_] == '-' || text_[pos_] == '+') pos_++;
-    while (pos_ < text_.size() &&
-           (std::isdigit(static_cast<unsigned char>(text_[pos_])) ||
-            text_[pos_] == '.')) {
-      pos_++;
-    }
-    // Exponents (1e3) are rare in USS; not supported.
-    std::string number(text_.substr(start, pos_ - start));
-    StyleToken token;
-    token.number = std::strtof(number.c_str(), nullptr);
-    token.text = number;
-    if (pos_ < text_.size() && text_[pos_] == '%') {
-      pos_++;
-      token.type = StyleToken::Type::kPercentage;
-      token.text += "%";
-    } else if (pos_ < text_.size() &&
-               std::isalpha(static_cast<unsigned char>(text_[pos_]))) {
-      size_t u = pos_;
-      while (pos_ < text_.size() &&
-             std::isalpha(static_cast<unsigned char>(text_[pos_]))) {
-        pos_++;
-      }
-      token.type = StyleToken::Type::kDimension;
-      token.unit = Lower(text_.substr(u, pos_ - u));
-      token.text += token.unit;
-    } else {
+// Token kinds cross the bridge in StyleToken::Type order (mercury/uss/uss.rs).
+StyleToken ToStyleToken(const Mercury::uss::UssToken& raw) {
+  StyleToken token;
+  switch (raw.kind) {
+    case 1:
       token.type = StyleToken::Type::kNumber;
-    }
-    return token;
+      break;
+    case 2:
+      token.type = StyleToken::Type::kDimension;
+      break;
+    case 3:
+      token.type = StyleToken::Type::kPercentage;
+      break;
+    case 4:
+      token.type = StyleToken::Type::kHash;
+      break;
+    case 5:
+      token.type = StyleToken::Type::kString;
+      break;
+    case 6:
+      token.type = StyleToken::Type::kFunction;
+      break;
+    case 7:
+      token.type = StyleToken::Type::kComma;
+      break;
+    default:
+      token.type = StyleToken::Type::kIdent;
+      break;
   }
+  token.text = std::string(raw.text);
+  token.number = raw.number;
+  token.unit = std::string(raw.unit);
+  return token;
+}
 
-  std::string_view text_;
-  size_t pos_ = 0;
-  int depth_ = 0;
-};
+// Function arguments arrive flattened in DFS preorder with a depth per
+// token: a token's arguments follow it with depth + 1 until a token of the
+// same or lower depth ends them.
+TokenList ConvertTokens(const rust::Vec<Mercury::uss::UssToken>& flat) {
+  std::vector<TokenList> stack;
+  for (const auto& raw : flat) {
+    while (stack.size() > static_cast<size_t>(raw.depth) + 1) {
+      TokenList args = std::move(stack.back());
+      stack.pop_back();
+      if (!stack.empty() && !stack.back().empty()) {
+        stack.back().back().args = std::move(args);
+      }
+    }
+    while (stack.size() <= static_cast<size_t>(raw.depth)) {
+      stack.emplace_back();
+    }
+    stack.back().push_back(ToStyleToken(raw));
+  }
+  while (stack.size() > 1) {
+    TokenList args = std::move(stack.back());
+    stack.pop_back();
+    if (!stack.empty() && !stack.back().empty()) {
+      stack.back().back().args = std::move(args);
+    }
+  }
+  return stack.empty() ? TokenList{} : std::move(stack.front());
+}
+
+// The Rust parser takes raw bytes: a sheet saved with an encoding other
+// than UTF-8 must not throw when cxx would validate a rust::Str.
+rust::Slice<const std::uint8_t> AsRustBytes(std::string_view text) {
+  return rust::Slice<const std::uint8_t>(
+      reinterpret_cast<const std::uint8_t*>(text.data()), text.size());
+}
+
+ComplexSelector MapSelector(const Mercury::uss::UssSelector& raw) {
+  ComplexSelector selector;
+  selector.text = std::string(raw.text);
+  for (const auto& raw_part : raw.parts) {
+    SimpleSelector part;
+    part.type = std::string(raw_part.type_name);
+    part.name = std::string(raw_part.name);
+    for (const auto& class_name : raw_part.classes) {
+      part.classes.push_back(std::string(class_name));
+    }
+    part.pseudo = raw_part.pseudo;
+    part.not_pseudo = raw_part.not_pseudo;
+    selector.parts.push_back(std::move(part));
+  }
+  for (const auto& combinator : raw.combinators) {
+    selector.combinators.push_back(
+        combinator == 1 ? ComplexSelector::Combinator::kChild
+                        : ComplexSelector::Combinator::kDescendant);
+  }
+  // Unity's specificity: names count most, then classes and pseudo-classes,
+  // then types.
+  int ids = 0, classes = 0, types = 0;
+  for (const auto& part : selector.parts) {
+    if (!part.name.empty()) ids++;
+    classes += static_cast<int>(part.classes.size()) +
+               std::popcount(part.pseudo) + std::popcount(part.not_pseudo);
+    if (!part.type.empty() && part.type != "*") types++;
+  }
+  selector.specificity = ids * 10000 + classes * 100 + types;
+  return selector;
+}
 
 // Splits a token list at top-level commas.
 std::vector<TokenList> SplitCommas(const TokenList& tokens) {
@@ -499,13 +466,8 @@ constexpr NamedColor kNamedColors[] = {
     {"yellowgreen", 0x9ACD32},
 };
 
-int CountLines(std::string_view text, size_t end) {
-  return static_cast<int>(std::count(text.begin(), text.begin() + end, '\n')) +
-         1;
-}
-
 std::string TokensToStringImpl(const TokenList& tokens, int depth) {
-  if (depth >= ValueTokenizer::kMaxNesting) return "";
+  if (depth >= 32) return "";
   std::string out;
   for (const auto& t : tokens) {
     if (t.type == StyleToken::Type::kComma) {
@@ -534,7 +496,7 @@ std::string TokensToStringImpl(const TokenList& tokens, int depth) {
 }  // namespace
 
 TokenList TokenizeStyleValue(std::string_view text) {
-  return ValueTokenizer(text).ReadList(false);
+  return ConvertTokens(Mercury::uss::TokenizeValue(AsRustBytes(text)));
 }
 
 std::string TokensToString(const TokenList& tokens) {
@@ -637,109 +599,13 @@ std::string ResolveRelativePath(std::string_view base, std::string_view path) {
 
 std::optional<ComplexSelector> ParseSelector(std::string_view text,
                                              std::string* error) {
-  // Matching walks the parts recursively; a selector longer than this is not
-  // something a real sheet needs and would recurse until the stack ran out.
-  constexpr size_t kMaxParts = 32;
-  ComplexSelector selector;
-  selector.text = std::string(Trim(text));
-  std::string_view s = selector.text;
-  size_t i = 0;
-  auto fail = [&](std::string message) -> std::optional<ComplexSelector> {
-    if (error) *error = std::move(message);
+  const Mercury::uss::UssSelectorResult result =
+      Mercury::uss::ParseSelectorText(AsRustBytes(text));
+  if (!result.ok) {
+    if (error) *error = std::string(result.error);
     return std::nullopt;
-  };
-  auto read_ident = [&]() {
-    size_t start = i;
-    while (i < s.size() && IsIdentChar(s[i])) i++;
-    return std::string(s.substr(start, i - start));
-  };
-
-  bool pending_child = false;
-  while (i < s.size()) {
-    // Whitespace and '>' between parts.
-    bool had_space = false;
-    while (i < s.size() &&
-           (std::isspace(static_cast<unsigned char>(s[i])) || s[i] == '>')) {
-      if (s[i] == '>') pending_child = true;
-      had_space = true;
-      i++;
-    }
-    if (i >= s.size()) break;
-    if (!selector.parts.empty()) {
-      if (!had_space && !pending_child) return fail("unexpected character");
-      selector.combinators.push_back(
-          pending_child ? ComplexSelector::Combinator::kChild
-                        : ComplexSelector::Combinator::kDescendant);
-    }
-    pending_child = false;
-
-    SimpleSelector part;
-    bool any = false;
-    while (i < s.size() && !std::isspace(static_cast<unsigned char>(s[i])) &&
-           s[i] != '>') {
-      const char c = s[i];
-      if (c == '*') {
-        part.type = "*";
-        i++;
-      } else if (c == '.') {
-        i++;
-        std::string cls = read_ident();
-        if (cls.empty()) return fail("expected a class name after '.'");
-        part.classes.push_back(cls);
-      } else if (c == '#') {
-        i++;
-        part.name = read_ident();
-        if (part.name.empty()) return fail("expected a name after '#'");
-      } else if (c == ':') {
-        i++;
-        std::string pseudo = Lower(read_ident());
-        if (pseudo == "hover")
-          part.pseudo |= kPseudoHover;
-        else if (pseudo == "active")
-          part.pseudo |= kPseudoActive;
-        else if (pseudo == "inactive")
-          part.not_pseudo |= kPseudoActive;
-        else if (pseudo == "focus")
-          part.pseudo |= kPseudoFocus;
-        else if (pseudo == "checked")
-          part.pseudo |= kPseudoChecked;
-        else if (pseudo == "disabled")
-          part.pseudo |= kPseudoDisabled;
-        else if (pseudo == "enabled")
-          part.not_pseudo |= kPseudoDisabled;
-        else if (pseudo == "root")
-          part.pseudo |= kPseudoRoot;
-        else
-          return fail("unknown pseudo-class :" + pseudo);
-      } else if (IsIdentStart(c)) {
-        part.type = read_ident();
-      } else {
-        return fail(std::format("unexpected '{}' in selector", c));
-      }
-      any = true;
-    }
-    if (!any) return fail("empty selector");
-    if (selector.parts.size() >= kMaxParts) {
-      return fail("selector has too many parts");
-    }
-    selector.parts.push_back(std::move(part));
   }
-  if (selector.parts.empty()) return fail("empty selector");
-  if (selector.combinators.size() + 1 != selector.parts.size()) {
-    return fail("selector ends with a combinator");
-  }
-
-  // Unity's specificity: names count most, then classes and pseudo-classes,
-  // then types.
-  int ids = 0, classes = 0, types = 0;
-  for (const auto& part : selector.parts) {
-    if (!part.name.empty()) ids++;
-    classes += static_cast<int>(part.classes.size()) +
-               std::popcount(part.pseudo) + std::popcount(part.not_pseudo);
-    if (!part.type.empty() && part.type != "*") types++;
-  }
-  selector.specificity = ids * 10000 + classes * 100 + types;
-  return selector;
+  return MapSelector(result.selector);
 }
 
 std::string StyleRule::SelectorText() const {
@@ -775,42 +641,18 @@ void StyleRule::RemoveDeclaration(std::string_view property) {
 }
 
 std::vector<StyleDeclaration> ParseInlineStyle(std::string_view text) {
+  const rust::Vec<Mercury::uss::UssDeclaration> parsed =
+      Mercury::uss::ParseDeclarations(AsRustBytes(text));
   std::vector<StyleDeclaration> out;
-  size_t start = 0;
-  int depth = 0;
-  char quote = 0;
-  auto flush = [&](size_t end) {
-    std::string_view decl = Trim(text.substr(start, end - start));
-    const size_t colon = decl.find(':');
-    if (!decl.empty() && colon != std::string_view::npos) {
-      std::string_view value = Trim(decl.substr(colon + 1));
-      if (value.ends_with("!important")) {
-        value = Trim(value.substr(0, value.size() - 10));
-      }
-      out.push_back({Lower(Trim(decl.substr(0, colon))), std::string(value),
-                     TokenizeStyleValue(value), 0});
-      if (out.back().property.starts_with("--")) {
-        // Custom property names are case-sensitive.
-        out.back().property = std::string(Trim(decl.substr(0, colon)));
-      }
-    }
-    start = end + 1;
-  };
-  for (size_t i = 0; i < text.size(); i++) {
-    const char c = text[i];
-    if (quote) {
-      if (c == quote) quote = 0;
-    } else if (c == '"' || c == '\'') {
-      quote = c;
-    } else if (c == '(') {
-      depth++;
-    } else if (c == ')') {
-      depth--;
-    } else if (c == ';' && depth <= 0) {
-      flush(i);
+  for (const auto& raw : parsed) {
+    out.push_back({std::string(raw.name), std::string(raw.value),
+                   ConvertTokens(raw.tokens), 0});
+    // Property names are lowercased; custom property names are
+    // case-sensitive.
+    if (!out.back().property.starts_with("--")) {
+      out.back().property = Lower(out.back().property);
     }
   }
-  flush(text.size());
   return out;
 }
 
@@ -819,105 +661,79 @@ std::shared_ptr<StyleSheet> StyleSheet::Parse(
     std::vector<StyleParseError>* errors) {
   auto sheet = std::make_shared<StyleSheet>();
   sheet->path = std::move(path);
-  auto error = [&](size_t at, std::string message) {
-    if (errors) errors->push_back({CountLines(text, at), std::move(message)});
-  };
+  const Mercury::uss::UssSheet data =
+      Mercury::uss::ParseSheet(AsRustBytes(text));
 
-  // Strip comments first, keeping newlines so line numbers stay right.
-  std::string clean(text);
-  for (size_t i = 0; i + 1 < clean.size(); i++) {
-    if (clean[i] == '"' || clean[i] == '\'') {
-      const char q = clean[i];
-      for (i++; i < clean.size() && clean[i] != q; i++) {
-      }
-      continue;
-    }
-    if (clean[i] == '/' && clean[i + 1] == '*') {
-      size_t end = clean.find("*/", i + 2);
-      if (end == std::string::npos) end = clean.size() - 2;
-      for (size_t j = i; j < end + 2; j++) {
-        if (clean[j] != '\n') clean[j] = ' ';
-      }
-      i = end + 1;
+  // Errors raised here (bad imports, unknown properties) are merged with
+  // the parser's own by line, so the list stays in source order.
+  std::vector<StyleParseError> local_errors;
+  for (const auto& import : data.imports) {
+    const std::string import_text = std::string(import.text);
+    const TokenList tokens = TokenizeStyleValue(import_text);
+    if (tokens.empty()) continue;
+    if (auto resolved = ToPath(tokens[0], sheet->path)) {
+      sheet->imports.push_back(std::move(*resolved));
+    } else {
+      local_errors.push_back({static_cast<int>(import.line),
+                              "@import needs url(\"...\") or a string"});
     }
   }
-  std::string_view s = clean;
-
-  size_t i = 0;
-  while (i < s.size()) {
-    while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) i++;
-    if (i >= s.size()) break;
-
-    if (s[i] == '@') {
-      const size_t end = s.find(';', i);
-      const size_t stop = end == std::string_view::npos ? s.size() : end;
-      std::string_view rule = Trim(s.substr(i + 1, stop - i - 1));
-      if (rule.starts_with("import")) {
-        auto tokens = TokenizeStyleValue(rule.substr(6));
-        if (!tokens.empty()) {
-          if (auto p = ToPath(tokens[0], sheet->path)) {
-            sheet->imports.push_back(*p);
-          } else {
-            error(i, "@import needs url(\"...\") or a string");
-          }
-        }
-      } else {
-        error(i, "unsupported at-rule @" +
-                     std::string(rule.substr(0, rule.find(' '))));
-      }
-      i = stop + 1;
-      continue;
-    }
-
-    const size_t open = s.find('{', i);
-    if (open == std::string_view::npos) {
-      error(i, "expected '{'");
-      break;
-    }
-    const size_t close = s.find('}', open);
-    if (close == std::string_view::npos) {
-      error(open, "missing '}'");
-      break;
-    }
-
+  for (const auto& raw : data.rules) {
     StyleRule rule;
-    rule.line = CountLines(s, i);
-    std::string_view selector_text = s.substr(i, open - i);
-    size_t sel_start = 0;
-    while (sel_start <= selector_text.size()) {
-      size_t comma = selector_text.find(',', sel_start);
-      if (comma == std::string_view::npos) comma = selector_text.size();
-      std::string message;
-      auto selector = ParseSelector(
-          selector_text.substr(sel_start, comma - sel_start), &message);
-      if (selector) {
-        rule.selectors.push_back(std::move(*selector));
+    rule.line = static_cast<int>(raw.line);
+    for (const auto& selector : raw.selectors) {
+      rule.selectors.push_back(MapSelector(selector));
+    }
+    for (const auto& raw_declaration : raw.declarations) {
+      StyleDeclaration declaration;
+      declaration.property = std::string(raw_declaration.name);
+      declaration.value = std::string(raw_declaration.value);
+      declaration.tokens = ConvertTokens(raw_declaration.tokens);
+      declaration.line = static_cast<int>(raw_declaration.line);
+      // Custom property names are case-sensitive; the rest are lowercased.
+      if (!declaration.property.starts_with("--")) {
+        declaration.property = Lower(declaration.property);
+      }
+      // Unknown properties are dropped and recorded; parsing continues. A
+      // known shorthand whose value does not expand is kept, like the old
+      // parser did, but reported as a value error.
+      const bool custom = declaration.property.starts_with("--");
+      const bool shorthand = IsShorthand(declaration.property);
+      if (custom || FindStyleProperty(declaration.property) ||
+          (shorthand &&
+           !ExpandDeclaration(declaration.property, declaration.tokens)
+                .empty())) {
+        rule.declarations.push_back(std::move(declaration));
+      } else if (shorthand) {
+        const std::string property = declaration.property;
+        const int line = declaration.line;
+        rule.declarations.push_back(std::move(declaration));
+        local_errors.push_back(
+            {line, "invalid value for \"" + property + "\""});
       } else {
-        error(i, "bad selector \"" +
-                     std::string(Trim(
-                         selector_text.substr(sel_start, comma - sel_start))) +
-                     "\": " + message);
-      }
-      sel_start = comma + 1;
-    }
-
-    std::string_view body = s.substr(open + 1, close - open - 1);
-    auto declarations = ParseInlineStyle(body);
-    // Line numbers per declaration, found by searching the body in order.
-    size_t search = 0;
-    for (auto& d : declarations) {
-      size_t at = body.find(d.property, search);
-      if (at == std::string_view::npos) at = search;
-      d.line = CountLines(s, open + 1 + at);
-      search = at + d.property.size();
-      if (!d.property.starts_with("--") && !FindStyleProperty(d.property) &&
-          ExpandDeclaration(d.property, d.tokens).empty()) {
-        error(open + 1 + at, "unknown property \"" + d.property + "\"");
+        local_errors.push_back(
+            {declaration.line,
+             "unknown property \"" + declaration.property + "\""});
       }
     }
-    rule.declarations = std::move(declarations);
     if (!rule.selectors.empty()) sheet->rules.push_back(std::move(rule));
-    i = close + 1;
+  }
+  if (errors) {
+    size_t rust_at = 0;
+    size_t local_at = 0;
+    while (rust_at < data.errors.size() || local_at < local_errors.size()) {
+      const bool rust_first = local_at >= local_errors.size() ||
+                              (rust_at < data.errors.size() &&
+                               static_cast<int>(data.errors[rust_at].line) <=
+                                   local_errors[local_at].line);
+      if (rust_first) {
+        errors->push_back({static_cast<int>(data.errors[rust_at].line),
+                           std::string(data.errors[rust_at].message)});
+        rust_at++;
+      } else {
+        errors->push_back(std::move(local_errors[local_at++]));
+      }
+    }
   }
   return sheet;
 }
@@ -1206,7 +1022,7 @@ bool SubstituteVariablesImpl(
     int depth) {
   // var() chains and self-referencing custom properties would otherwise
   // recurse without bound.
-  if (depth >= ValueTokenizer::kMaxNesting) return false;
+  if (depth >= 32) return false;
   for (const auto& t : tokens) {
     if (t.type == StyleToken::Type::kFunction && t.text == "var" &&
         !t.args.empty() && t.args[0].type == StyleToken::Type::kIdent) {

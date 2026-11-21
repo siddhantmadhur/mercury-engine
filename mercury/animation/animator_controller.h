@@ -9,10 +9,12 @@
  * parameters set by scripts (Unity's Animator Controller). Stored in a
  * .manim file:
  *
- *   [manimator format=1]
+ *   [manimator]
+ *   format = 2
  *
- *   [model]
- *   model = Resource("res://characters/hero.fbx")
+ *   [[model]]
+ *   [model.props]
+ *   model = { res = "res://characters/hero.fbx" }
  *   loop_clips = ["Armature|Run", "Armature|Idle"]
  *   root_motion_node = "root"
  *

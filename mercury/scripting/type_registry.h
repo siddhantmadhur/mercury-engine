@@ -163,12 +163,26 @@ class TypeRegistry {
   /**
    * @brief Write every component (scripts and data types) and its fields
    *
-   *   [mschema format=1]
+   * Every field is one [[field]] entry carrying its name, default value and
+   * details; file order is declaration order (the inspector's order).
    *
-   *   [script name="Ball"]
-   *   speed = 60.0
+   *   [mschema]
+   *   format = 2
    *
-   *   [field script="Goal" name="scorer"]
+   *   [[script]]
+   *   name = "Ball"
+   *
+   *   [[field]]
+   *   script = "Ball"
+   *   name = "speed"
+   *   [field.props]
+   *   default = 60.0
+   *
+   *   [[field]]
+   *   script = "Goal"
+   *   name = "scorer"
+   *   [field.props]
+   *   default = { nil = true }
    *   enum = ["player", "enemy"]
    *   tooltip = "Who gets the point"
    */

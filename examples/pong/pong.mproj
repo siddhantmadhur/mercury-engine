@@ -1,9 +1,13 @@
 [project]
-name = "Pong"
-main_map = "res://maps/main.mmap"
+format = 2
+editor_version = "1.0.0"
+[project.props]
 engine_version = "dev"
+main_map = "res://maps/main.mmap"
+name = "Pong"
 
-[window]
+[[window]]
+[window.props]
+height = 720
 title = "Pong"
 width = 1280
-height = 720

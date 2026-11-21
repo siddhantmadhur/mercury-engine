@@ -226,7 +226,7 @@ bool TypeRegistry::DeserializeComponent(MapScene& scene, kEntityId entity,
 
 bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {
   mtext::Document document;
-  document.Add("mschema").attributes.Set("format", 1);
+  document.Add("mschema").attributes.Set("format", 2);
   for (const auto* info : Components()) {
     // Scripts and game-registered data components alike: the editor never runs
     // game code, so this file is the only way a game's custom types reach it.
@@ -234,31 +234,31 @@ bool TypeRegistry::SaveSchema(const std::filesystem::path& path) const {
     if (!info->is_script && !info->from_game) continue;
     auto& script = document.Add("script");
     script.attributes.Set("name", info->name);
+    // Every field is one [[field]] entry carrying its name, default value
+    // and details. One representation, and file order is declaration order:
+    // the reader sorts table keys, so fields cannot live in [script.props].
     for (const auto& field : info->fields) {
-      script.properties.Set(field.name, field.default_value);
-    }
-    // Details a default value cannot carry go in one [field] per field.
-    for (const auto& field : info->fields) {
-      mtext::PropertyList details;
-      if (field.type == FieldType::kEnum) {
-        mtext::Array values;
-        for (const auto& v : field.enum_values) values.emplace_back(v);
-        details.Set("enum", values);
-      }
-      if ((field.type == FieldType::kAsset || field.type == FieldType::kList) &&
-          !field.asset_type.empty()) {
-        details.Set("asset_type", field.asset_type);
-      }
-      if (field.type == FieldType::kList) {
-        details.Set("element", FieldTypeName(field.element_type));
-      }
-      if (field.type == FieldType::kEvent) details.Set("event", true);
-      if (!field.tooltip.empty()) details.Set("tooltip", field.tooltip);
-      if (details.empty()) continue;
       auto& section = document.Add("field");
       section.attributes.Set("script", info->name);
       section.attributes.Set("name", field.name);
-      section.properties = std::move(details);
+      section.properties.Set("default", field.default_value);
+      if (field.type == FieldType::kEnum) {
+        mtext::Array values;
+        for (const auto& v : field.enum_values) values.emplace_back(v);
+        section.properties.Set("enum", values);
+      }
+      if ((field.type == FieldType::kAsset || field.type == FieldType::kList) &&
+          !field.asset_type.empty()) {
+        section.properties.Set("asset_type", field.asset_type);
+      }
+      if (field.type == FieldType::kList) {
+        section.properties.Set("element", FieldTypeName(field.element_type));
+      }
+      if (field.type == FieldType::kEvent)
+        section.properties.Set("event", true);
+      if (!field.tooltip.empty()) {
+        section.properties.Set("tooltip", field.tooltip);
+      }
     }
     for (const auto& method : info->methods) {
       auto& section = document.Add("method");
@@ -290,61 +290,59 @@ bool TypeRegistry::LoadSchema(const std::filesystem::path& path,
     return false;
   }
   ClearSchemaScripts();
+  // First pass: [[script]] declares the component. Its fields are not read
+  // here: every field is a [[field]] entry below, in file order, and table
+  // keys are sorted so [script.props] could not keep declaration order.
   for (const auto& section : document.sections) {
-    if (section.tag == "script") {
-      auto name = section.attributes.GetString("name");
-      // A script compiled into this process wins over the schema.
-      if (auto existing = FindComponent(name); existing && existing->attach) {
-        continue;
-      }
-      ComponentInfo info;
-      info.name = name;
-      info.category = "Scripts";
-      info.is_script = true;
-      for (const auto& property : section.properties) {
-        FieldInfo field;
-        field.name = property.key;
-        field.type = FieldTypeOf(property.value);
-        field.default_value = property.value;
-        info.fields.push_back(std::move(field));
-      }
-      RegisterComponent(std::move(info));
+    if (section.tag != "script") continue;
+    auto name = section.attributes.GetString("name");
+    // A script compiled into this process wins over the schema.
+    if (auto existing = FindComponent(name); existing && existing->attach) {
+      continue;
     }
+    ComponentInfo info;
+    info.name = name;
+    info.category = "Scripts";
+    info.is_script = true;
+    RegisterComponent(std::move(info));
   }
-  // Second pass: [field] details refer to scripts declared above.
+  // Second pass: [[field]] entries, in file order, carry the name, the
+  // default value and the details of one field each.
   for (const auto& section : document.sections) {
     if (section.tag != "field") continue;
     auto script = section.attributes.GetString("script");
-    auto field_name = section.attributes.GetString("name");
     auto it = std::find_if(components_.begin(), components_.end(),
                            [&](auto& c) { return c.name == script; });
     if (it == components_.end() || it->attach) continue;
-    auto field = std::find_if(it->fields.begin(), it->fields.end(),
-                              [&](auto& f) { return f.name == field_name; });
-    if (field == it->fields.end()) continue;
+    FieldInfo field;
+    field.name = section.attributes.GetString("name");
+    if (auto value = section.properties.Get("default")) {
+      field.default_value = *value;
+    }
+    field.type = FieldTypeOf(field.default_value);
     if (auto values = section.properties.Get("enum")) {
-      field->type = FieldType::kEnum;
-      field->enum_values.clear();
+      field.type = FieldType::kEnum;
       if (auto array = values->Get<mtext::Array>()) {
         for (const auto& v : *array) {
-          if (auto s = v.ToString()) field->enum_values.push_back(*s);
+          if (auto s = v.ToString()) field.enum_values.push_back(*s);
         }
       }
     }
-    field->asset_type = section.properties.GetString("asset_type");
-    field->tooltip = section.properties.GetString("tooltip");
+    field.asset_type = section.properties.GetString("asset_type");
+    field.tooltip = section.properties.GetString("tooltip");
     if (section.properties.GetBool("event", false))
-      field->type = FieldType::kEvent;
+      field.type = FieldType::kEvent;
     if (auto element = section.properties.Get("element")) {
-      field->type = FieldType::kList;
+      field.type = FieldType::kList;
       const std::string name = element->ToString().value_or("");
       for (FieldType t :
            {FieldType::kBool, FieldType::kInt, FieldType::kFloat,
             FieldType::kString, FieldType::kVector2, FieldType::kVector3,
             FieldType::kColor, FieldType::kNodeRef, FieldType::kAsset}) {
-        if (name == FieldTypeName(t)) field->element_type = t;
+        if (name == FieldTypeName(t)) field.element_type = t;
       }
     }
+    it->fields.push_back(std::move(field));
   }
   for (const auto& section : document.sections) {
     if (section.tag == "method") {

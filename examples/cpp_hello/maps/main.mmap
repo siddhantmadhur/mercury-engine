@@ -1,33 +1,64 @@
-[mmap format=1]
+[mmap]
+format = 2
+editor_version = "1.0.0"
 
-[node name="CppHello"]
+[[component]]
+node = "."
+type = "Transform"
 
-[component type="Transform" node="."]
+[[component]]
+node = "Camera"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 3.0, 8.0] }
+rotation = { vec3 = [-15.0, 0.0, 0.0] }
 
-[node name="Camera" parent="."]
+[[component]]
+node = "Camera"
+type = "Camera"
 
-[component type="Transform" node="Camera"]
-position = Vector3(0, 3, 8)
-rotation = Vector3(-15, 0, 0)
+[[component]]
+node = "Sun"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 6.0, 0.0] }
+rotation = { vec3 = [-50.0, -30.0, 0.0] }
 
-[component type="Camera" node="Camera"]
+[[component]]
+node = "Sun"
+type = "DirectionalLight"
 
-[node name="Sun" parent="."]
+[[component]]
+node = "Cube"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.5, 0.0] }
 
-[component type="Transform" node="Sun"]
-position = Vector3(0, 6, 0)
-rotation = Vector3(-50, -30, 0)
+[[component]]
+node = "Cube"
+type = "MeshRenderer"
 
-[component type="DirectionalLight" node="Sun"]
-
-[node name="Cube" parent="."]
-
-[component type="Transform" node="Cube"]
-position = Vector3(0, 0.5, 0)
-
-[component type="MeshRenderer" node="Cube"]
-
-[component type="Spinner" node="Cube"]
+[[component]]
+node = "Cube"
+type = "Spinner"
+[component.props]
 speed = 45.0
 
-[component type="BloomToggle" node="Cube"]
+[[component]]
+node = "Cube"
+type = "BloomToggle"
+
+[[node]]
+name = "CppHello"
+
+[[node]]
+name = "Camera"
+parent = "."
+
+[[node]]
+name = "Sun"
+parent = "."
+
+[[node]]
+name = "Cube"
+parent = "."

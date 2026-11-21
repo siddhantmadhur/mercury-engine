@@ -9,10 +9,13 @@
  * keys, mouse and gamepad controls, read by value or through callbacks.
  * The project lists its actions file in [input] actions = "res://...".
  *
- *   [minput format=1 class="GameInput"
- * header="res://scripts/generated/game_input.as"]
+ *   [minput]
+ *   format = 2
+ *   class = "GameInput"
+ *   header = "res://scripts/generated/game_input.as"
  *
- *   [map name="Player"]
+ *   [[map]]
+ *   name = "Player"
  *
  *   [action name="Player/Jump" type="button"]
  *   bindings = ["<Keyboard>/space", "<Gamepad>/buttonSouth"]

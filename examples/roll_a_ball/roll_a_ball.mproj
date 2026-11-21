@@ -1,15 +1,21 @@
 [project]
-name = "Roll a Ball"
-main_map = "res://maps/main.mmap"
+format = 2
+editor_version = "1.0.0"
+[project.props]
 engine_version = "dev"
+main_map = "res://maps/main.mmap"
+name = "Roll a Ball"
 
-[window]
+[[input]]
+[input.props]
+actions = "res://input/actions.minput"
+
+[[physics]]
+[physics.props]
+gravity = { vec3 = [0.0, -9.81, 0.0] }
+
+[[window]]
+[window.props]
+height = 720
 title = "Roll a Ball"
 width = 1280
-height = 720
-
-[physics]
-gravity = Vector3(0, -9.81, 0)
-
-[input]
-actions = "res://input/actions.minput"

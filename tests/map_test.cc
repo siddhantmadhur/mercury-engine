@@ -32,6 +32,31 @@ const std::filesystem::path kPong =
 
 }  // namespace
 
+// Every map and prefab in the repo must be a fixed point of load -> save:
+// the files were written by SaveToString, so re-saving them reproduces them
+// byte for byte. Renumber files that fail here (write the engine's own
+// SaveToString output) instead of changing the writer.
+TEST(Map, EveryRepoMapRoundTripsByteForByte) {
+  const std::filesystem::path root = MERCURY_SOURCE_DIR;
+  int checked = 0;
+  for (auto it =
+           std::filesystem::recursive_directory_iterator(root / "examples");
+       it != std::filesystem::recursive_directory_iterator(); ++it) {
+    if (!it->is_regular_file()) continue;
+    const std::string ext = it->path().extension().string();
+    if (ext != ".mmap" && ext != ".mprefab") continue;
+    SCOPED_TRACE(it->path().string());
+    const std::string original = ReadFile(it->path());
+    ASSERT_FALSE(original.empty());
+    Map map;
+    std::string error;
+    ASSERT_TRUE(map.LoadFromString(original, &error)) << error;
+    EXPECT_EQ(map.SaveToString(), original);
+    checked++;
+  }
+  EXPECT_GE(checked, 6) << "expected the six example maps";
+}
+
 TEST(Map, PongMapRoundTripsByteForByte) {
   const auto path = kPong / "maps/main.mmap";
   const std::string original = ReadFile(path);
@@ -97,17 +122,20 @@ TEST(Map, PongMapStructure) {
 TEST(Map, RejectsBrokenFiles) {
   Map map;
   std::string error;
-  EXPECT_FALSE(map.LoadFromString("[node name=\"A\"]\n", &error));
+  EXPECT_FALSE(map.LoadFromString("[[node]]\nname = \"A\"\n", &error));
   EXPECT_FALSE(
-      map.LoadFromString("[mmap format=1]\n\n[node name=\"A\"]\n\n[node "
-                         "name=\"B\" parent=\"X\"]\n",
+      map.LoadFromString("[mmap]\nformat = 2\n\n[[node]]\n"
+                         "name = \"A\"\n\n[[node]]\n"
+                         "name = \"B\"\nparent = \"X\"\n",
                          &error));
   EXPECT_NE(error.find("parent"), std::string::npos);
   EXPECT_FALSE(
-      map.LoadFromString("[mmap format=1]\n\n[node name=\"A\"]\n\n[component "
-                         "type=\"T\" node=\".\"]\n"
-                         "m = ExtResource(\"9\")\n",
+      map.LoadFromString("[mmap]\nformat = 2\n\n[[node]]\n"
+                         "name = \"A\"\n\n[[component]]\n"
+                         "node = \".\"\ntype = \"T\"\n\n"
+                         "[component.props]\nm = { ext = \"9\" }\n",
                          &error));
+  EXPECT_NE(error.find("not declared"), std::string::npos);
 }
 
 TEST(Map, EditingKeepsNamesUniqueAndUpdatesNodePaths) {
@@ -192,18 +220,31 @@ TEST(MapScene, CurrentCameraSetsSkyboxPath) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[ext_resource type="Texture" path="res://assets/sky.png" id="1"]
+[[component]]
+node = "Camera"
+type = "Transform"
 
-[node name="Root"]
+[[component]]
+node = "Camera"
+type = "Camera"
 
-[node name="Camera" parent="."]
+[component.props]
+skybox = { ext = "1" }
 
-[component type="Transform" node="Camera"]
+[[ext_resource]]
+id = "1"
+path = "res://assets/sky.png"
+type = "Texture"
 
-[component type="Camera" node="Camera"]
-skybox = ExtResource("1")
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Camera"
+parent = "."
 )",
                                  &error))
       << error;
@@ -226,11 +267,14 @@ TEST(AssetDatabase, ReloadLeavesEarlierSnapshotsUntouched) {
       ("asset_db_test_" + std::to_string(std::random_device{}()));
   fs::create_directories(dir / "assets");
   {
-    std::ofstream(dir / "t.mproj") << "[project]\nname = \"t\"\n";
+    std::ofstream(dir / "t.mproj")
+        << "[project]\nformat = 2\n\n[project.props]\nname = \"t\"\n";
   }
   const auto write = [&](const char* value) {
     std::ofstream(dir / "assets/a.masset")
-        << "[masset type=\"Thing\" format=1]\nvalue = \"" << value << "\"\n";
+        << "[masset]\nformat = 2\n\ntype = \"Thing\"\n\n[masset.props]\n"
+           "value = \""
+        << value << "\"\n";
   };
   write("first");
   std::string error;

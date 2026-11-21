@@ -5,6 +5,8 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 
 #include "project/map.h"
 #include "project/project.h"
@@ -142,6 +144,142 @@ TEST(Uss, WriteRoundTrips) {
   ASSERT_EQ(again->rules.size(), 2u);
   EXPECT_EQ(again->rules[1].SelectorText(), "#b > .c:hover");
   EXPECT_EQ(again->Write(), sheet->Write());
+}
+
+TEST(Uss, FiltersUnknownPropertiesAndKeepsParsing) {
+  std::vector<StyleParseError> errors;
+  auto sheet = StyleSheet::Parse(
+      ".a { colr: red; width: 10px; }\n.b { color: green; }", "", &errors);
+  ASSERT_EQ(sheet->rules.size(), 2u);
+  ASSERT_EQ(sheet->rules[0].declarations.size(), 1u);
+  EXPECT_EQ(sheet->rules[0].declarations[0].property, "width");
+  EXPECT_EQ(sheet->rules[1].declarations[0].property, "color");
+  ASSERT_EQ(errors.size(), 1u);
+  EXPECT_EQ(errors[0].line, 1);
+  EXPECT_NE(errors[0].message.find("colr"), std::string::npos);
+}
+
+TEST(Uss, RejectsMediaQueries) {
+  std::vector<StyleParseError> errors;
+  auto sheet = StyleSheet::Parse(R"(
+@media (max-width: 600px) {
+    .a { width: 10px; }
+}
+.b { height: 20px; }
+)",
+                                 "", &errors);
+  ASSERT_EQ(sheet->rules.size(), 1u);
+  EXPECT_EQ(sheet->rules[0].selectors[0].text, ".b");
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(errors[0].message.find("@media"), std::string::npos);
+}
+
+TEST(Uss, AcceptsImportantWithAnySpacing) {
+  std::vector<StyleParseError> errors;
+  auto sheet = StyleSheet::Parse(
+      ".a { color: red ! IMPORTANT; width: 10px !important; }", "", &errors);
+  ASSERT_TRUE(errors.empty()) << errors[0].message;
+  ASSERT_EQ(sheet->rules[0].declarations.size(), 2u);
+  EXPECT_EQ(sheet->rules[0].declarations[0].value, "red");
+  EXPECT_EQ(sheet->rules[0].declarations[1].value, "10px");
+  // The same in an inline style attribute.
+  auto inline_style = ParseInlineStyle("color: red ! IMPORTANT");
+  ASSERT_EQ(inline_style.size(), 1u);
+  EXPECT_EQ(inline_style[0].property, "color");
+  EXPECT_EQ(inline_style[0].value, "red");
+}
+
+TEST(Uss, NamesTheUnsupportedUnit) {
+  std::vector<StyleParseError> errors;
+  auto sheet = StyleSheet::Parse(".a { margin: 4px 1em; }", "", &errors);
+  // The rule is skipped and the em unit is named, not the px one.
+  EXPECT_TRUE(sheet->rules.empty());
+  ASSERT_EQ(errors.size(), 1u);
+  EXPECT_NE(errors[0].message.find("\"em\""), std::string::npos);
+  EXPECT_EQ(errors[0].message.find("px"), std::string::npos);
+}
+
+TEST(Uss, ReportsBadShorthandValues) {
+  std::vector<StyleParseError> errors;
+  auto sheet =
+      StyleSheet::Parse(".a { margin: 1px 2px 3px 4px 5px; }", "", &errors);
+  // The declaration is kept; the error names the value, not the property.
+  ASSERT_EQ(sheet->rules[0].declarations.size(), 1u);
+  ASSERT_EQ(errors.size(), 1u);
+  EXPECT_NE(errors[0].message.find("invalid value for \"margin\""),
+            std::string::npos);
+  EXPECT_EQ(errors[0].message.find("unknown"), std::string::npos);
+}
+
+TEST(Uss, ToleratesInvalidUtf8) {
+  std::vector<StyleParseError> errors;
+  // A Latin-1 accent byte inside a string value: the sheet still parses
+  // (the byte is replaced) and one error is recorded.
+  auto sheet = StyleSheet::Parse(
+      ".a { --name: \"caf\xC3\xA9"
+      "\"; color: red; }",
+      "", &errors);
+  EXPECT_EQ(errors.size(), 0u);  // valid UTF-8 parses cleanly
+  errors.clear();
+  auto latin1 =
+      StyleSheet::Parse(".a { --name: \"caf\xE9\"; color: red; }", "", &errors);
+  ASSERT_EQ(latin1->rules.size(), 1u);
+  EXPECT_EQ(latin1->rules[0].declarations.size(), 2u);
+  ASSERT_EQ(errors.size(), 1u);
+  EXPECT_EQ(errors[0].line, 1);
+  EXPECT_NE(errors[0].message.find("UTF-8"), std::string::npos);
+}
+
+TEST(Uss, ParsesUnquotedUrlAndResourcePaths) {
+  using P = StylePropertyId;
+  auto parse = [](P id, const char* text) {
+    return ParseStyleValue(id, TokenizeStyleValue(text), "res://ui/a.uss");
+  };
+  EXPECT_EQ(
+      std::get<Background>(*parse(P::kBackgroundImage, "url(a/b.png)")).path,
+      "res://ui/a/b.png");
+  EXPECT_EQ(
+      std::get<FontDefinition>(*parse(P::kFont, "resource(Fonts/Inter)")).path,
+      "res://Fonts/Inter");
+  EXPECT_EQ(
+      std::get<FontDefinition>(*parse(P::kFont, "resource(\"Fonts/Inter\")"))
+          .path,
+      "res://Fonts/Inter");
+}
+
+namespace {
+
+std::string ReadUssFile(const std::filesystem::path& path) {
+  std::ifstream file(path, std::ios::binary);
+  return std::string((std::istreambuf_iterator<char>(file)),
+                     std::istreambuf_iterator<char>());
+}
+
+void ExpectSheetRoundTrips(const char* relative_path, size_t min_rules) {
+  const auto text =
+      ReadUssFile(std::filesystem::path(MERCURY_SOURCE_DIR) / relative_path);
+  std::vector<StyleParseError> errors;
+  auto sheet = StyleSheet::Parse(text, "res://theme.uss", &errors);
+  ASSERT_TRUE(errors.empty()) << (errors.empty() ? "" : errors[0].message);
+  ASSERT_GT(sheet->rules.size(), min_rules);
+  // Writing and parsing again is lossless.
+  std::vector<StyleParseError> again_errors;
+  auto again =
+      StyleSheet::Parse(sheet->Write(), "res://theme.uss", &again_errors);
+  EXPECT_TRUE(again_errors.empty())
+      << (again_errors.empty() ? "" : again_errors[0].message);
+  EXPECT_EQ(again->rules.size(), sheet->rules.size());
+  EXPECT_EQ(again->Write(), sheet->Write());
+}
+
+}  // namespace
+
+TEST(Uss, DefaultThemeRoundTripsWithNoErrors) {
+  ExpectSheetRoundTrips("mercury/ui/resources/default_theme.uss", 10u);
+}
+
+TEST(Uss, RollABallScoreRoundTripsWithNoErrors) {
+  ExpectSheetRoundTrips("examples/roll_a_ball/ui/score.uss", 0u);
 }
 
 // --------------------------------------------------------------- Cascade --
@@ -331,6 +469,46 @@ TEST(Uxml, TemplatesAndOverrides) {
   EXPECT_EQ(t.root()->Q("first")->Q<Label>("title")->text(), "Row 1");
   EXPECT_EQ(t.root()->Q("second")->Q<Label>("title")->text(), "default");
   EXPECT_TRUE(dynamic_cast<TemplateContainer*>(t.root()->Q("first")));
+}
+
+// Writing must survive a write/re-parse/write cycle unchanged: the UI Builder
+// saves documents on every edit, so the bytes on disk have to converge after
+// the first save. Covers the ui: prefix, <Style src>, <ui:Template>,
+// <ui:DataBinding>, <Bindings>, attribute order and entity escaping.
+TEST(Uxml, WriteRoundTripIsStable) {
+  const std::string xml = R"(<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="hud.uss" />
+    <ui:Template name="Row" src="row.uxml" />
+    <ui:VisualElement name="bar" text="a &amp; b &lt;c&gt; &quot;q&quot; &apos;s&apos;">
+      <Bindings>
+        <ui:DataBinding property="text" data-source-path="score" binding-mode="TwoWay" />
+        <ui:DataBinding property="value" data-source-path="" />
+      </Bindings>
+      <ui:Label name="score" text="0">
+        <Style src="inner.uss" />
+      </ui:Label>
+      <ui:Instance template="Row">
+        <ui:AttributeOverrides element-name="title" text="Row 1" />
+      </ui:Instance>
+      <UnknownElement name="mystery" tabindex="2" />
+      <ui:VisualElement name="empty" />
+    </ui:VisualElement>
+  </ui:UXML>)";
+  std::vector<UxmlError> errors;
+  auto asset = VisualTreeAsset::Parse(xml, "res://ui/rt.uxml", &errors);
+  ASSERT_TRUE(errors.empty()) << errors[0].message;
+
+  const std::string first = asset->Write();
+  EXPECT_EQ(first.substr(0, 29), "<ui:UXML xmlns:ui=\"Mercury.UI");
+  // Attribute order comes from the tree, not the alphabet: text follows name.
+  EXPECT_NE(first.find("name=\"bar\" text=\"a &amp; b"), std::string::npos);
+  EXPECT_NE(first.find("<Bindings>"), std::string::npos);
+  EXPECT_NE(first.find("binding-mode=\"TwoWay\""), std::string::npos);
+
+  auto again = VisualTreeAsset::Parse(first, "res://ui/rt.uxml", &errors);
+  ASSERT_TRUE(errors.empty()) << errors[0].message;
+  const std::string second = again->Write();
+  EXPECT_EQ(second, first);
 }
 
 // ---------------------------------------------------------------- Events --

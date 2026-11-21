@@ -1,3 +1,7 @@
-[masset type="LevelData" format=1]
+[masset]
+format = 2
+editor_version = "1.0.0"
+type = "LevelData"
+[masset.props]
 par = 7
 title = "Second"

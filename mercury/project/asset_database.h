@@ -8,8 +8,11 @@
  * Loads .masset files (Godot's .tres, Unity's .mat/.physicMaterial) by their
  * res:// path and caches them. A .masset is one section:
  *
- *   [masset type="Material" format=1]
- *   color = Color(1, 1, 1, 1)
+ *   [masset]
+ *   format = 2
+ *   type = "Material"
+ *   [masset.props]
+ *   color = { color = [1.0, 1.0, 1.0, 1.0] }
  *
  * Asset types and their fields are registered in TypeRegistry.
  */

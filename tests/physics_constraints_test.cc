@@ -133,25 +133,39 @@ TEST(PhysicsConstraints, CapsuleDoesNotRollOrTip) {
   // Setup a capsule collider with locked rotation X, Y, Z
   // This ensures the capsule can move straight without rolling or tipping over.
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "PlayerCapsule"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 2.0, 0.0] }
 
-[node name="PlayerCapsule" parent="."]
-[component type="Transform" node="PlayerCapsule"]
-position = Vector3(0, 2, 0)
-
-[component type="CapsuleCollider" node="PlayerCapsule"]
-radius = 0.5
+[[component]]
+node = "PlayerCapsule"
+type = "CapsuleCollider"
+[component.props]
 height = 2.0
+radius = 0.5
 
-[component type="Rigidbody" node="PlayerCapsule"]
-motion_type = "dynamic"
-mass = 5.0
+[[component]]
+node = "PlayerCapsule"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
 lock_rotation_x = true
 lock_rotation_y = true
 lock_rotation_z = true
+mass = 5.0
+motion_type = "dynamic"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "PlayerCapsule"
+parent = "."
 )",
                                  &error))
       << error;
@@ -190,24 +204,38 @@ TEST(PhysicsConstraints, CapsuleYawAllowedWhenOnlyXZLocked) {
 
   // Lock X and Z rotation (stays upright, but can turn/yaw around Y)
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "PlayerCapsule"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 2.0, 0.0] }
 
-[node name="PlayerCapsule" parent="."]
-[component type="Transform" node="PlayerCapsule"]
-position = Vector3(0, 2, 0)
-
-[component type="CapsuleCollider" node="PlayerCapsule"]
-radius = 0.5
+[[component]]
+node = "PlayerCapsule"
+type = "CapsuleCollider"
+[component.props]
 height = 2.0
+radius = 0.5
 
-[component type="Rigidbody" node="PlayerCapsule"]
-motion_type = "dynamic"
-mass = 5.0
+[[component]]
+node = "PlayerCapsule"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
 lock_rotation_x = true
 lock_rotation_z = true
+mass = 5.0
+motion_type = "dynamic"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "PlayerCapsule"
+parent = "."
 )",
                                  &error))
       << error;
@@ -248,25 +276,39 @@ TEST(PhysicsConstraints, AllLockedAxesDoNotCrash) {
 
   // Body with all 6 axes locked
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "LockedBody"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 2.0, 0.0] }
 
-[node name="LockedBody" parent="."]
-[component type="Transform" node="LockedBody"]
-position = Vector3(0, 2, 0)
+[[component]]
+node = "LockedBody"
+type = "BoxCollider"
+[component.props]
+size = { vec3 = [1.0, 1.0, 1.0] }
 
-[component type="BoxCollider" node="LockedBody"]
-size = Vector3(1, 1, 1)
-
-[component type="Rigidbody" node="LockedBody"]
-motion_type = "dynamic"
-lock_translation_x = true
-lock_translation_y = true
-lock_translation_z = true
+[[component]]
+node = "LockedBody"
+type = "Rigidbody"
+[component.props]
 lock_rotation_x = true
 lock_rotation_y = true
 lock_rotation_z = true
+lock_translation_x = true
+lock_translation_y = true
+lock_translation_z = true
+motion_type = "dynamic"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "LockedBody"
+parent = "."
 )",
                                  &error))
       << error;
@@ -296,24 +338,50 @@ TEST(PhysicsConstraints, CollisionCallbacksRunOnTheSteppingThread) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Floor"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, -0.5, 0.0] }
 
-[node name="Floor" parent="."]
-[component type="Transform" node="Floor"]
-position = Vector3(0, -0.5, 0)
-[component type="BoxCollider" node="Floor"]
-size = Vector3(40, 1, 40)
+[[component]]
+node = "Floor"
+type = "BoxCollider"
+[component.props]
+size = { vec3 = [40.0, 1.0, 40.0] }
 
-[node name="Ball" parent="."]
-[component type="Transform" node="Ball"]
-position = Vector3(0, 0.6, 0)
-[component type="SphereCollider" node="Ball"]
+[[component]]
+node = "Ball"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.6, 0.0] }
+
+[[component]]
+node = "Ball"
+type = "SphereCollider"
+[component.props]
 radius = 0.5
-[component type="Rigidbody" node="Ball"]
-motion_type = "dynamic"
+
+[[component]]
+node = "Ball"
+type = "Rigidbody"
+[component.props]
 mass = 1.0
+motion_type = "dynamic"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Floor"
+parent = "."
+
+[[node]]
+name = "Ball"
+parent = "."
 )",
                                  &error))
       << error;

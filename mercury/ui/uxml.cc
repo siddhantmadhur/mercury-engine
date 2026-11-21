@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <format>
 #include <set>
 #include <sstream>
 
@@ -31,32 +30,6 @@ std::string TypeNameOf(std::string_view tag) {
   std::string name = LocalName(tag);
   const size_t dot = name.rfind('.');
   return dot == std::string::npos ? name : name.substr(dot + 1);
-}
-
-std::string Escape(std::string_view s) {
-  std::string out;
-  for (char c : s) {
-    switch (c) {
-      case '&':
-        out += "&amp;";
-        break;
-      case '<':
-        out += "&lt;";
-        break;
-      case '>':
-        out += "&gt;";
-        break;
-      case '"':
-        out += "&quot;";
-        break;
-      case '\n':
-        out += "&#10;";
-        break;
-      default:
-        out += c;
-    }
-  }
-  return out;
 }
 
 void ParseElement(const tinyxml2::XMLElement* xml, UxmlNode& node,
@@ -110,48 +83,47 @@ void ParseElement(const tinyxml2::XMLElement* xml, UxmlNode& node,
   }
 }
 
-void WriteNode(const UxmlNode& node, int depth, std::string& out) {
-  const std::string indent(depth * 4, ' ');
+// Serializes one node of the tree into `doc`. tinyxml2 keeps attributes in
+// the order they are set, so the attribute order the tree holds is preserved.
+tinyxml2::XMLElement* WriteElement(tinyxml2::XMLDocument& doc,
+                                   const UxmlNode& node) {
   const bool known = node.type == "Instance" ||
                      UxmlFactoryRegistry::Instance().Find(node.type) != nullptr;
   const std::string tag = (known ? "ui:" : "") + node.type;
-  out += indent + "<" + tag;
+  tinyxml2::XMLElement* element = doc.NewElement(tag.c_str());
   for (const auto& a : node.attributes) {
-    out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
+    element->SetAttribute(a.name.c_str(), a.value.c_str());
   }
-  const bool empty = node.children.empty() && node.style_sheets.empty() &&
-                     node.bindings.empty() && node.overrides.empty();
-  if (empty) {
-    out += " />\n";
-    return;
-  }
-  out += ">\n";
   for (const auto& sheet : node.style_sheets) {
-    out += std::format("{}    <Style src=\"{}\" />\n", indent, Escape(sheet));
+    tinyxml2::XMLElement* style = doc.NewElement("Style");
+    style->SetAttribute("src", sheet.c_str());
+    element->InsertEndChild(style);
   }
   for (const auto& o : node.overrides) {
-    out += std::format("{}    <ui:AttributeOverrides element-name=\"{}\"",
-                       indent, Escape(o.element_name));
+    tinyxml2::XMLElement* overrides = doc.NewElement("ui:AttributeOverrides");
+    overrides->SetAttribute("element-name", o.element_name.c_str());
     for (const auto& a : o.attributes) {
-      out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
+      overrides->SetAttribute(a.name.c_str(), a.value.c_str());
     }
-    out += " />\n";
+    element->InsertEndChild(overrides);
   }
   if (!node.bindings.empty()) {
-    out += indent + "    <Bindings>\n";
+    tinyxml2::XMLElement* bindings = doc.NewElement("Bindings");
     for (const auto& b : node.bindings) {
-      out += std::format(
-          "{}        <ui:DataBinding property=\"{}\" data-source-path=\"{}\"",
-          indent, Escape(b.property), Escape(b.data_source_path));
+      tinyxml2::XMLElement* binding = doc.NewElement("ui:DataBinding");
+      binding->SetAttribute("property", b.property.c_str());
+      binding->SetAttribute("data-source-path", b.data_source_path.c_str());
       if (b.mode != BindingMode::kToTarget) {
-        out += std::format(" binding-mode=\"{}\"", BindingModeName(b.mode));
+        binding->SetAttribute("binding-mode", BindingModeName(b.mode));
       }
-      out += " />\n";
+      bindings->InsertEndChild(binding);
     }
-    out += indent + "    </Bindings>\n";
+    element->InsertEndChild(bindings);
   }
-  for (const auto& child : node.children) WriteNode(child, depth + 1, out);
-  out += indent + "</" + tag + ">\n";
+  for (const auto& child : node.children) {
+    element->InsertEndChild(WriteElement(doc, child));
+  }
+  return element;
 }
 
 mtext::Variant ConvertAttribute(const UxmlAttributeDescription* desc,
@@ -378,26 +350,32 @@ std::shared_ptr<VisualTreeAsset> VisualTreeAsset::Parse(
 }
 
 std::string VisualTreeAsset::Write() const {
-  std::string out = "<ui:UXML";
-  bool has_ns = false;
-  for (const auto& a : root.attributes) {
-    if (a.name == "xmlns:ui") has_ns = true;
+  tinyxml2::XMLDocument doc;
+  tinyxml2::XMLElement* xml_root = doc.NewElement("ui:UXML");
+  if (!root.FindAttribute("xmlns:ui")) {
+    xml_root->SetAttribute("xmlns:ui", "Mercury.UI");
   }
-  if (!has_ns) out += " xmlns:ui=\"Mercury.UI\"";
   for (const auto& a : root.attributes) {
-    out += std::format(" {}=\"{}\"", a.name, Escape(a.value));
+    xml_root->SetAttribute(a.name.c_str(), a.value.c_str());
   }
-  out += ">\n";
   for (const auto& sheet : root.style_sheets) {
-    out += std::format("    <Style src=\"{}\" />\n", Escape(sheet));
+    tinyxml2::XMLElement* style = doc.NewElement("Style");
+    style->SetAttribute("src", sheet.c_str());
+    xml_root->InsertEndChild(style);
   }
   for (const auto& t : templates) {
-    out += std::format("    <ui:Template name=\"{}\" src=\"{}\" />\n",
-                       Escape(t.name), Escape(t.src));
+    tinyxml2::XMLElement* template_element = doc.NewElement("ui:Template");
+    template_element->SetAttribute("name", t.name.c_str());
+    template_element->SetAttribute("src", t.src.c_str());
+    xml_root->InsertEndChild(template_element);
   }
-  for (const auto& child : root.children) WriteNode(child, 1, out);
-  out += "</ui:UXML>\n";
-  return out;
+  for (const auto& child : root.children) {
+    xml_root->InsertEndChild(WriteElement(doc, child));
+  }
+  doc.InsertEndChild(xml_root);
+  tinyxml2::XMLPrinter printer;
+  doc.Print(&printer);
+  return std::string(printer.CStr());
 }
 
 void VisualTreeAsset::CloneTree(VisualElement* target,

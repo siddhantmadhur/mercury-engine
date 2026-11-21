@@ -24,7 +24,9 @@ TEST(ProjectSettings, BuildSystemsTargetDefaultsToTheBuildTargetSuffix) {
   const auto file = dir / "test.mproj";
   {
     std::ofstream out(file);
-    out << "[project]\nname = \"Targets\"\n\n[build]\ntarget = \"game\"\n";
+    out << "[project]\nformat = 2\neditor_version = \"1.0.0\"\n"
+           "[project.props]\nname = \"Targets\"\n\n[[build]]\n[build.props]\n"
+           "target = \"game\"\n";
   }
 
   std::string error;
@@ -41,7 +43,8 @@ TEST(ProjectSettings, BuildSystemsTargetDefaultsToTheBuildTargetSuffix) {
   auto anascript = dir / "as.mproj";
   {
     std::ofstream out(anascript);
-    out << "[project]\nname = \"As\"\n";
+    out << "[project]\nformat = 2\neditor_version = \"1.0.0\"\n"
+           "[project.props]\nname = \"As\"\n";
   }
   auto as_project = Project::Load(anascript, &error);
   ASSERT_NE(as_project, nullptr) << error;
@@ -61,8 +64,10 @@ TEST(ProjectSettings, RejectsTargetsThatCouldInjectCMake) {
     const auto file = dir / "bad.mproj";
     {
       std::ofstream out(file);
-      out << "[project]\nname = \"Bad\"\n\n[build]\ntarget = \"" << bad
-          << "\"\n";
+      out << "[project]\nformat = 2\neditor_version = \"1.0.0\"\n"
+             "[project.props]\nname = \"Bad\"\n\n[[build]]\n[build.props]\n"
+             "target = "
+          << mtext::WriteValue(mtext::Variant(bad)) << "\n";
     }
     std::string error;
     EXPECT_EQ(Project::Load(file, &error), nullptr) << bad;
@@ -73,8 +78,9 @@ TEST(ProjectSettings, RejectsTargetsThatCouldInjectCMake) {
   const auto good = dir / "good.mproj";
   {
     std::ofstream out(good);
-    out << "[project]\nname = \"Good\"\n\n[build]\ntarget = "
-           "\"game_1.0+debug\"\n";
+    out << "[project]\nformat = 2\neditor_version = \"1.0.0\"\n"
+           "[project.props]\nname = \"Good\"\n\n[[build]]\n[build.props]\n"
+           "target = \"game_1.0+debug\"\n";
   }
   std::string error;
   auto project = Project::Load(good, &error);

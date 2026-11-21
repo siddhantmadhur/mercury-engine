@@ -22,7 +22,8 @@ bool LoadAssetFile(const std::filesystem::path& file, Asset& out,
   }
   auto header = document.Find("masset");
   if (!header) {
-    if (error) *error = file.string() + ": missing [masset type=...] header";
+    if (error)
+      *error = file.string() + ": missing [masset] header with format = 2";
     return false;
   }
   out.type = header->attributes.GetString("type");
@@ -34,7 +35,7 @@ bool SaveAssetFile(const std::filesystem::path& file, const Asset& asset) {
   mtext::Document document;
   auto& header = document.Add("masset");
   header.attributes.Set("type", asset.type);
-  header.attributes.Set("format", 1);
+  header.attributes.Set("format", 2);
   header.properties = asset.properties;
   return mtext::SaveFile(file, document);
 }

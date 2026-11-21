@@ -253,8 +253,11 @@ std::vector<B*> MapScene::FindObjectsOfType() {
  * @endcode
  *
  * The map uses the registered name:
- * @code{.ini}
- * [component type="Spinner" node="Cube"]
+ * @code{.toml}
+ * [[component]]
+ * node = "Cube"
+ * type = "Spinner"
+ * [component.props]
  * speed = 45.0
  * @endcode
  *
