@@ -22,7 +22,8 @@ bool LoadAssetFile(const std::filesystem::path& file, Asset& out,
   }
   auto header = document.Find("masset");
   if (!header) {
-    if (error) *error = file.string() + ": missing [masset type=...] header";
+    if (error)
+      *error = file.string() + ": missing [masset] header with format = 2";
     return false;
   }
   out.type = header->attributes.GetString("type");

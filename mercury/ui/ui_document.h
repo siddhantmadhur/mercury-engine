@@ -9,9 +9,12 @@
  * component. Documents that use the same PanelSettings asset share a panel
  * and are stacked by sort_order.
  *
- *   [component type="UIDocument" node="HUD"]
- *   source_asset = Resource("res://ui/hud.uxml")
- *   panel_settings = Resource("res://ui/hud_panel.masset")
+ *   [[component]]
+ *   node = "HUD"
+ *   type = "UIDocument"
+ *   [component.props]
+ *   source_asset = { res = "res://ui/hud.uxml" }
+ *   panel_settings = { res = "res://ui/hud_panel.masset" }
  *
  * In a script:
  *
