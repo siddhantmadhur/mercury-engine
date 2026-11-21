@@ -213,4 +213,9 @@ The output in `docs/doxygen/` is generated and is not committed.
 
 ## License
 
-[MPL 2.0](/LICENSE)
+[MPL 2.0](/LICENSE) applies to Mercury's own code. Bundled third-party
+components keep their own licenses; the MPL headers added by
+`scripts/addlicenses.pl` never apply to `third_party/`. In particular, the
+header-only `nlohmann/json` dependency in `third_party/nlohmann_json` is MIT
+licensed (Copyright (c) 2013-2025 Niels Lohmann) — see its `LICENSE.MIT` in
+that submodule.
