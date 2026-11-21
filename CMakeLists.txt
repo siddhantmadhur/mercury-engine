@@ -153,6 +153,10 @@ target_link_libraries(mercury PUBLIC
         Vulkan::Vulkan
         Threads::Threads)
 
+# toml++ stays private: no public engine header includes it, so SDK installs
+# and consumers never see it.
+target_link_libraries(mercury PRIVATE mercury_tomlplusplus)
+
 if (APPLE)
     target_compile_options(mercury PRIVATE -Wno-deprecated-declarations)
     target_link_libraries(mercury PUBLIC

@@ -28,6 +28,15 @@ add_library(mercury_entt INTERFACE)
 target_include_directories(mercury_entt INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/entt/src")
 
+# TOML parsing for Mercury's text formats (.mproj/.mmap/.masset/...). Kept out
+# of the public include surface: engine code includes <toml++/toml.hpp> from
+# implementation files only. TOML_EXCEPTIONS=0 makes toml::parse return a
+# parse_result instead of throwing, which maps onto mtext::ParseError.
+add_library(mercury_tomlplusplus INTERFACE)
+target_include_directories(mercury_tomlplusplus INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tomlplusplus/include")
+target_compile_definitions(mercury_tomlplusplus INTERFACE TOML_EXCEPTIONS=0)
+
 # --------------------------------------------------------------------------
 # AngelScript
 # --------------------------------------------------------------------------
