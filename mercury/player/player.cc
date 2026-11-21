@@ -4,6 +4,8 @@
 
 #include "player.h"
 
+#include <charconv>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -11,6 +13,7 @@
 
 #include "application/default_application.h"
 #include "debugger/debugger.h"
+#include "introspection/introspection.h"
 #include "os/filesystem.h"
 #include "pack/mpack.h"
 #include "project/map.h"
@@ -30,7 +33,9 @@ namespace {
 void PrintUsage(const char* program) {
   PDebug::info(
       "usage: {} [project.mproj] [--map res://maps/name.mmap] "
-      "[--dump-schema file] [--build-scripts]",
+      "[--dump-schema file] [--build-scripts] "
+      "[--dump-engine-schema [file|-]] [--validate [--json]] "
+      "[--inspect-asset res://asset] [--headless] [--frames N]",
       program);
 }
 
@@ -102,8 +107,46 @@ PlayerArgs ParsePlayerArgs(int argc, char** argv, bool allow_unknown) {
       if (auto value = next()) args.map_path = value;
     } else if (arg == "--dump-schema") {
       if (auto value = next()) args.schema_path = value;
+    } else if (arg == "--dump-engine-schema") {
+      // A file name has to be a bare token that is not another option;
+      // "-", nothing at all or a following --option all mean stdout. The
+      // token is consumed only when it is taken, unlike next().
+      if (i + 1 < argc && !std::string_view(argv[i + 1]).starts_with("--")) {
+        args.engine_schema_path = argv[++i];
+      } else {
+        args.engine_schema_path = "-";
+      }
+    } else if (arg == "--inspect-asset") {
+      if (auto value = next()) {
+        args.inspect_asset = value;
+      } else {
+        args.option_error = "--inspect-asset needs a res:// asset path";
+      }
+    } else if (arg == "--frames") {
+      const char* value = next();
+      if (value == nullptr) {
+        args.option_error = "--frames needs a frame count";
+      } else {
+        const std::string_view text = value;
+        int frames = 0;
+        const auto [end, ec] =
+            std::from_chars(text.data(), text.data() + text.size(), frames);
+        if (ec != std::errc{} || end != text.data() + text.size() ||
+            frames < 0) {
+          args.option_error = "--frames needs a frame count (got " +
+                              std::string(text) + ")";
+        } else {
+          args.frames = frames;
+        }
+      }
     } else if (arg == "--build-scripts") {
       args.build_scripts = true;
+    } else if (arg == "--validate") {
+      args.validate = true;
+    } else if (arg == "--json") {
+      args.json = true;
+    } else if (arg == "--headless") {
+      args.headless = true;
     } else if (arg == "--help" || arg == "-h") {
       args.help = true;
     } else if (!arg.starts_with("--")) {
@@ -130,6 +173,16 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
     PrintUsage(argv[0]);
     return 2;
   }
+  if (!parsed.option_error.empty()) {
+    PDebug::error("{}", parsed.option_error);
+    PrintUsage(argv[0]);
+    return 2;
+  }
+  if (parsed.json && !parsed.validate) {
+    PDebug::error("--json only applies to --validate");
+    PrintUsage(argv[0]);
+    return 2;
+  }
   if (parsed.help) {
     PrintUsage(argv[0]);
     return 0;
@@ -139,11 +192,31 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
                                  : (default_project ? default_project : "");
   std::string map_path = parsed.map_path;
   std::string schema_path = parsed.schema_path;
+  std::string engine_schema_path = parsed.engine_schema_path;
+  std::string inspect_asset = parsed.inspect_asset;
+  const int frames = parsed.frames;
   const bool project_given = parsed.project_given;
   const bool build_scripts = parsed.build_scripts;
+  const bool validate = parsed.validate;
+  const bool json = parsed.json;
+  const bool headless = parsed.headless;
 
   RegisterBuiltinTypes();
   Mercury::rust::Init();
+
+  // The engine's own component types as JSON, for MCP clients and tooling.
+  // They do not depend on the project, so this works without one.
+  if (!engine_schema_path.empty()) {
+    const std::string schema = introspection::EngineSchemaJson();
+    if (engine_schema_path == "-") {
+      std::cout << schema << "\n";
+    } else if (!os::WriteFileAtomic(engine_schema_path, schema)) {
+      PDebug::error("Could not write engine schema to {}",
+                    engine_schema_path);
+      return 1;
+    }
+    return 0;
+  }
 
   if (!project_given && !MountShippedPacks(project_path)) return 1;
   if (project_path.empty()) {
@@ -183,6 +256,24 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
       PDebug::error("Could not write schema to {}", schema_path);
       return 1;
     }
+    return 0;
+  }
+
+  if (validate) {
+    const introspection::ValidationReport report =
+        introspection::ValidateProject(*project);
+    std::cout << (json ? report.ToJson() : report.ToText()) << "\n";
+    return report.HasErrors() ? 1 : 0;
+  }
+  if (!inspect_asset.empty()) {
+    std::string asset_json;
+    std::string error;
+    if (!introspection::InspectAsset(*project, inspect_asset, &asset_json,
+                                     &error)) {
+      PDebug::error("{}", error);
+      return 1;
+    }
+    std::cout << asset_json << "\n";
     return 0;
   }
 
@@ -227,6 +318,9 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
   auto application = std::make_unique<DefaultApplication>(
       project->GetWindowTitle(), static_cast<float>(project->GetWindowWidth()),
       static_cast<float>(project->GetWindowHeight()));
+  // Offscreen rendering: no window or swapchain, frames still render (MCP
+  // clients and tests read screenshots back through the editor's hosted API).
+  if (headless) application->EnableHeadlessMode(true);
   auto scene = std::make_unique<MapScene>(project, MapScene::Mode::kPlay);
 
   Map map;
@@ -238,6 +332,18 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
   // Models load on background threads while the window shows black.
   scene->BeginInstantiate(std::move(map));
   application->SetGameScene(std::move(scene));
+  if (frames > 0) {
+    // The same machinery the benchmark and scripted input drive Run() with:
+    // StartHosted() is Run()'s setup and StepFrame() its loop body, without
+    // the window-close check, so the run ends after exactly N frames.
+    if (!application->StartHosted()) {
+      PDebug::error("Could not initialize application");
+      return 1;
+    }
+    for (int i = 0; i < frames; i++) application->StepFrame();
+    application.reset();
+    return 0;
+  }
   const int result = application->Run();
   // The scene (and so every script) goes before the script engine does.
   application.reset();

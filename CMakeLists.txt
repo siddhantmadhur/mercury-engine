@@ -395,6 +395,14 @@ if (MERCURY_BUILD_TESTS)
             tests/filament_smoke_test.cc
             tests/test_paths.h)
 
+    # The player running a whole example headlessly, the way the MCP server
+    # drives games: load the project, compile its scripts, step 30 frames and
+    # exit 0 (--headless --frames in mercury/player/player.cc).
+    add_test(NAME mercury_player_headless_frames
+            COMMAND mercury_player
+            ${CMAKE_CURRENT_SOURCE_DIR}/examples/roll_a_ball/roll_a_ball.mproj
+            --headless --frames 30)
+
     if (MERCURY_BUILD_EDITOR)
         add_executable(editor_smoke tests/editor_smoke.cc)
         target_link_libraries(editor_smoke PRIVATE mercury_editor_lib)
@@ -495,6 +503,8 @@ if (MERCURY_BUILD_TESTS)
             COMMENT "Running the Mercury tests"
             USES_TERMINAL)
     add_dependencies(check mercury_materials)
+    # The headless player CTest runs the whole mercury_player executable.
+    add_dependencies(check mercury_player)
 
     # The mercury_mcp crate's Rust unit tests (transport start/stop, reply
     # plumbing). Same env handling as the CMake-driven cargo builds: a
