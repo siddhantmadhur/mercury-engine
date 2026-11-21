@@ -471,6 +471,46 @@ TEST(Uxml, TemplatesAndOverrides) {
   EXPECT_TRUE(dynamic_cast<TemplateContainer*>(t.root()->Q("first")));
 }
 
+// Writing must survive a write/re-parse/write cycle unchanged: the UI Builder
+// saves documents on every edit, so the bytes on disk have to converge after
+// the first save. Covers the ui: prefix, <Style src>, <ui:Template>,
+// <ui:DataBinding>, <Bindings>, attribute order and entity escaping.
+TEST(Uxml, WriteRoundTripIsStable) {
+  const std::string xml = R"(<ui:UXML xmlns:ui="Mercury.UI">
+    <Style src="hud.uss" />
+    <ui:Template name="Row" src="row.uxml" />
+    <ui:VisualElement name="bar" text="a &amp; b &lt;c&gt; &quot;q&quot; &apos;s&apos;">
+      <Bindings>
+        <ui:DataBinding property="text" data-source-path="score" binding-mode="TwoWay" />
+        <ui:DataBinding property="value" data-source-path="" />
+      </Bindings>
+      <ui:Label name="score" text="0">
+        <Style src="inner.uss" />
+      </ui:Label>
+      <ui:Instance template="Row">
+        <ui:AttributeOverrides element-name="title" text="Row 1" />
+      </ui:Instance>
+      <UnknownElement name="mystery" tabindex="2" />
+      <ui:VisualElement name="empty" />
+    </ui:VisualElement>
+  </ui:UXML>)";
+  std::vector<UxmlError> errors;
+  auto asset = VisualTreeAsset::Parse(xml, "res://ui/rt.uxml", &errors);
+  ASSERT_TRUE(errors.empty()) << errors[0].message;
+
+  const std::string first = asset->Write();
+  EXPECT_EQ(first.substr(0, 29), "<ui:UXML xmlns:ui=\"Mercury.UI");
+  // Attribute order comes from the tree, not the alphabet: text follows name.
+  EXPECT_NE(first.find("name=\"bar\" text=\"a &amp; b"), std::string::npos);
+  EXPECT_NE(first.find("<Bindings>"), std::string::npos);
+  EXPECT_NE(first.find("binding-mode=\"TwoWay\""), std::string::npos);
+
+  auto again = VisualTreeAsset::Parse(first, "res://ui/rt.uxml", &errors);
+  ASSERT_TRUE(errors.empty()) << errors[0].message;
+  const std::string second = again->Write();
+  EXPECT_EQ(second, first);
+}
+
 // ---------------------------------------------------------------- Events --
 
 TEST(Events, TrickleDownTargetBubbleUpAndStop) {
