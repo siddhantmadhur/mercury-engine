@@ -34,7 +34,7 @@ bool SaveAssetFile(const std::filesystem::path& file, const Asset& asset) {
   mtext::Document document;
   auto& header = document.Add("masset");
   header.attributes.Set("type", asset.type);
-  header.attributes.Set("format", 1);
+  header.attributes.Set("format", 2);
   header.properties = asset.properties;
   return mtext::SaveFile(file, document);
 }

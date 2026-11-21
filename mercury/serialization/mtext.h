@@ -6,18 +6,30 @@
  * mtext.h
  *
  * Mercury's text format, shared by .mproj, .mmap, .masset and editor files.
- * It is modeled on Godot's .tscn/.tres files so it stays easy to read, diff
- * and edit by hand (or by an LLM):
+ * It is TOML (parsed with toml++) so it stays easy to read, diff and edit
+ * by hand (or by an LLM):
  *
- *   [node name="Ball" parent="."]     <- section header with attributes
- *   speed = 60.0                      <- properties of that section
- *   position = Vector3(0, 0, 0)
- *   ; a comment
+ *   [mmap]                            <- the file header, a plain table
+ *   format = 2
+ *   editor_version = "1.0.0"
  *
- * Values: null, true/false, integers, floats, "strings", Vector2(x, y),
- * Vector3(x, y, z), Color(r, g, b, a), NodePath("A/B"), ExtResource("id"),
- * Resource("res://path") and [arrays, of, values]. Comments are not kept
- * when a document is written back out.
+ *   [[node]]                          <- every other section: [[tag]]
+ *   name = "Ball"
+ *   parent = "."
+ *
+ *   [node.props]                      <- properties of that section
+ *   speed = 60.0
+ *   position = { vec3 = [0.0, 0.0, 0.0] }
+ *
+ * Variant values map to TOML natives where they exist (bool, int, float,
+ * string, array) and to tagged inline tables otherwise: Vector2 →
+ * { vec2 = [x, y] }, Vector3 → { vec3 = [x, y, z] }, Color →
+ * { color = [r, g, b, a] }, NodePath → { path = "…" },
+ * ExtResource → { ext = "…" }, Resource → { res = "…" } and
+ * null → { nil = true }. Tables are sorted, so the reader groups sections
+ * by tag; consumers must not rely on the order of different tags (or of
+ * keys within a section). The writer emits the same canonical order, so
+ * saving a freshly loaded file reproduces it byte for byte.
  */
 #ifndef MERCURY_SERIALIZATION_MTEXT_H
 #define MERCURY_SERIALIZATION_MTEXT_H
@@ -187,9 +199,12 @@ struct ParseError {
   std::string ToString() const;
 };
 
+// Parses the format described above: the plain `[tag]` table is the file
+// header, every other section is a `[[tag]]` array-of-tables entry. Files
+// with format < 2 fail with a clear error.
 bool Parse(std::string_view source, Document& out, ParseError* error = nullptr);
 
-// Parses a single value literal, e.g. "Vector3(1, 2, 3)".
+// Parses a single TOML value, e.g. "{ vec3 = [1.0, 2.0, 3.0] }" or "60".
 std::optional<Variant> ParseValue(std::string_view source);
 
 std::string Write(const Document& document);
@@ -201,6 +216,14 @@ bool LoadFile(const std::filesystem::path& path, Document& out,
 // Writes through a temporary file and renames it over `path`, so a crash
 // mid-save never leaves a truncated file behind.
 bool SaveFile(const std::filesystem::path& path, const Document& document);
+
+/**
+ * @brief Brings a freshly parsed document up to the current format version.
+ *
+ * A `switch (format)` over the version recorded in the header. No cases yet:
+ * the current format is 2, so this is a no-op. Future migrations go here.
+ */
+bool UpgradeDocument(Document& document);
 
 }  // namespace Mercury::mtext
 

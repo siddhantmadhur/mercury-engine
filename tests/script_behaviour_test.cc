@@ -92,10 +92,19 @@ class ScriptBehaviourTest : public ::testing::Test {
 
 TEST_F(ScriptBehaviourTest, CallbacksRunInOrder) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 1);
   EXPECT_EQ(scene.Find("A").GetTag(), "aest");
@@ -105,10 +114,19 @@ TEST_F(ScriptBehaviourTest, CallbacksRunInOrder) {
 
 TEST_F(ScriptBehaviourTest, DisablingStopsCallbacksAndEnablingResumesThem) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 1);
   Script(scene, "A", "Probe")->SetEnabled(false);
@@ -139,13 +157,23 @@ TEST_F(ScriptBehaviourTest, FieldDefaultsAreInTheSchema) {
 
 TEST_F(ScriptBehaviourTest, MapValuesOverrideTheDefaults) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
-speed = 9.0
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+[component.props]
 label = "map"
 mode = "b"
+speed = 9.0
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   auto fields = Fields(Script(scene, "A", "Probe"));
   EXPECT_FLOAT_EQ(fields["speed"].ToFloat().value_or(0.0), 9.0f);
@@ -155,11 +183,21 @@ mode = "b"
 
 TEST_F(ScriptBehaviourTest, SavedEventCallsReachCallableMethods) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
-fired = [[NodePath("A"), "Probe", "Add", 15.0]]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+[component.props]
+fired = [[{ path = "A" }, "Probe", "Add", 15.0]]
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 1);
   EXPECT_EQ(scene.Find("A").GetTag(), "aest+");
@@ -174,10 +212,19 @@ TEST_F(ScriptBehaviourTest, EventIdsStopResolvingWhenTheBehaviourIsDestroyed) {
   uint32_t id = 0;
   {
     MapScene scene(g_project, MapScene::Mode::kPlay);
-    Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
+    Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
     ScriptBehaviour* script = Script(scene, "A", "Probe");
     ASSERT_NE(script, nullptr);
@@ -198,10 +245,19 @@ TEST_F(ScriptBehaviourTest, EventIdsStopResolvingWhenTheBehaviourIsDestroyed) {
 
 TEST_F(ScriptBehaviourTest, AnExceptionIsLoggedAndTheNextTickStillRuns) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Thrower" node="A"]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Thrower"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 3);
   EXPECT_EQ(scene.Find("A").GetTag(), "ttt");

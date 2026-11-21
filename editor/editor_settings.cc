@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <system_error>
 
+#include "debugger/debugger.h"
 #include "serialization/mtext.h"
 
 namespace Mercury {
@@ -43,8 +45,23 @@ fs::path EditorSettings::HomeDir() {
 }
 
 void EditorSettings::Load() {
+  const fs::path path = ConfigDir() / "editor.cfg";
+  // A missing file is the first run, not an error.
+  std::error_code exists_ec;
+  if (!fs::exists(path, exists_ec)) return;
+
   mtext::Document document;
-  if (!mtext::LoadFile(ConfigDir() / "editor.cfg", document)) return;
+  mtext::ParseError error;
+  if (!mtext::LoadFile(path, document, &error)) {
+    // A config that does not parse is not fatal: the defaults apply and the
+    // next Save rewrites the file in the current format. Old format-1 files
+    // are not migrated.
+    PDebug::warn(
+        "{}: the editor settings could not be read ({}); using the defaults "
+        "(the next save rewrites the file)",
+        path.string(), error.ToString());
+    return;
+  }
   if (auto editor = document.Find("editor")) {
     external_editor = editor->properties.GetString("external_editor");
     open_scripts_in_editor =

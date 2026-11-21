@@ -1,4 +1,8 @@
-[masset type="PanelSettings" format=1]
-scale_mode = "ScaleWithScreenSize"
-reference_resolution = Vector2(1280, 720)
+[masset]
+format = 2
+editor_version = "1.0.0"
+type = "PanelSettings"
+[masset.props]
 match = 0.5
+reference_resolution = { vec2 = [1280.0, 720.0] }
+scale_mode = "ScaleWithScreenSize"

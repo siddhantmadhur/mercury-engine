@@ -141,13 +141,31 @@ TEST(Gameplay, EventCallsSavedMethodWithArgument) {
   ASSERT_TRUE(project);
   Map map;
   std::string error;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
-[node name="Root"]
-[node name="Target" parent="."]
-[component type="TestCounter" node="Target"]
-[node name="Source" parent="."]
-[component type="TestEmitter" node="Source"]
-fired = [[NodePath("Target"), "TestCounter", "Add", 2.5], [NodePath("Target"), "TestCounter", "Bump"]]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Target"
+parent = "."
+
+[[component]]
+node = "Target"
+type = "TestCounter"
+
+[[node]]
+name = "Source"
+parent = "."
+
+[[component]]
+node = "Source"
+type = "TestEmitter"
+
+[component.props]
+fired = [[{ path = "Target" }, "TestCounter", "Add", 2.5],
+         [{ path = "Target" }, "TestCounter", "Bump"]]
 )",
                                  &error))
       << error;
@@ -178,27 +196,75 @@ TEST(Gameplay, CharacterWalksThroughTrigger) {
   ASSERT_TRUE(project);
   Map map;
   std::string error;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
-[node name="Root"]
-[node name="Floor" parent="."]
-[component type="Transform" node="Floor"]
-position = Vector3(0, -0.5, 0)
-[component type="BoxCollider" node="Floor"]
-size = Vector3(40, 1, 40)
-[node name="Zone" parent="."]
-[component type="Transform" node="Zone"]
-position = Vector3(0, 1, -5)
-[component type="BoxCollider" node="Zone"]
-size = Vector3(4, 2, 2)
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Floor"
+parent = "."
+
+[[component]]
+node = "Floor"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, -0.5, 0.0] }
+
+[[component]]
+node = "Floor"
+type = "BoxCollider"
+
+[component.props]
+size = { vec3 = [40.0, 1.0, 40.0] }
+
+[[node]]
+name = "Zone"
+parent = "."
+
+[[component]]
+node = "Zone"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 1.0, -5.0] }
+
+[[component]]
+node = "Zone"
+type = "BoxCollider"
+
+[component.props]
 is_trigger = true
-[component type="TestCounter" node="Zone"]
-[node name="Player" parent="."]
-[component type="Transform" node="Player"]
-position = Vector3(0, 1, 0)
-[component type="CharacterController" node="Player"]
+size = { vec3 = [4.0, 2.0, 2.0] }
+
+[[component]]
+node = "Zone"
+type = "TestCounter"
+
+[[node]]
+name = "Player"
+parent = "."
+
+[[component]]
+node = "Player"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 1.0, 0.0] }
+
+[[component]]
+node = "Player"
+type = "CharacterController"
+
+[component.props]
 height = 1.8
 radius = 0.3
-[component type="TestWalker" node="Player"]
+
+[[component]]
+node = "Player"
+type = "TestWalker"
 )",
                                  &error))
       << error;
@@ -227,22 +293,61 @@ TEST(Gameplay, RaycastHonoursLayerMask) {
   ASSERT_TRUE(project);
   Map map;
   std::string error;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
-[node name="Root"]
-[node name="Near" parent="."]
-[component type="Transform" node="Near"]
-position = Vector3(0, 0, -3)
-[component type="BoxCollider" node="Near"]
-[node name="Far" parent="." layer=8]
-[component type="Transform" node="Far"]
-position = Vector3(0, 0, -6)
-[component type="BoxCollider" node="Far"]
-[node name="Ghost" parent="."]
-[component type="Transform" node="Ghost"]
-position = Vector3(0, 0, -1.5)
-[component type="BoxCollider" node="Ghost"]
-size = Vector3(0.5, 0.5, 0.5)
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Near"
+parent = "."
+
+[[component]]
+node = "Near"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 0.0, -3.0] }
+
+[[component]]
+node = "Near"
+type = "BoxCollider"
+
+[[node]]
+layer = 8
+name = "Far"
+parent = "."
+
+[[component]]
+node = "Far"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 0.0, -6.0] }
+
+[[component]]
+node = "Far"
+type = "BoxCollider"
+
+[[node]]
+name = "Ghost"
+parent = "."
+
+[[component]]
+node = "Ghost"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 0.0, -1.5] }
+
+[[component]]
+node = "Ghost"
+type = "BoxCollider"
+
+[component.props]
 is_trigger = true
+size = { vec3 = [0.5, 0.5, 0.5] }
 )",
                                  &error))
       << error;
@@ -277,14 +382,30 @@ TEST(Gameplay, PrefabInstanceKeepsChildrenAndOverrides) {
   ASSERT_TRUE(project);
   std::string error;
   Map prefab;
-  ASSERT_TRUE(prefab.LoadFromString(R"([mprefab format=1]
-[node name="Gun"]
-[component type="Transform" node="."]
-position = Vector3(1, 2, 3)
-scale = Vector3(2, 2, 2)
-[node name="Barrel" parent="."]
-[component type="Transform" node="Barrel"]
-position = Vector3(0, 0, -1)
+  ASSERT_TRUE(prefab.LoadFromString(R"([mprefab]
+format = 2
+
+[[node]]
+name = "Gun"
+
+[[component]]
+node = "."
+type = "Transform"
+
+[component.props]
+position = { vec3 = [1.0, 2.0, 3.0] }
+scale = { vec3 = [2.0, 2.0, 2.0] }
+
+[[node]]
+name = "Barrel"
+parent = "."
+
+[[component]]
+node = "Barrel"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 0.0, -1.0] }
 )",
                                     &error))
       << error;
@@ -292,11 +413,23 @@ position = Vector3(0, 0, -1)
     return path == "res://gun.mprefab" ? &prefab : nullptr;
   };
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
-[node name="Root"]
-[node name="Pistol" parent="." instance="res://gun.mprefab"]
-[component type="Transform" node="Pistol"]
-position = Vector3(5, 0, 0)
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+instance = "res://gun.mprefab"
+name = "Pistol"
+parent = "."
+
+[[component]]
+node = "Pistol"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [5.0, 0.0, 0.0] }
 )",
                                  &error, loader))
       << error;
@@ -374,9 +507,9 @@ TEST(Gameplay, ObjMaterialsImportTexturesEmissionAndGloss) {
   }
   {
     std::ofstream sidecar(dir / "scene.obj.mimport");
-    sidecar << "[mimport]\nmax_texture_size = 32\n\n"
-               "[material name=\"Lamp\"]\nsmoothness = 0.25\n"
-               "double_sided = true\n";
+    sidecar << "[mimport]\nformat = 2\n\n[mimport.props]\n"
+               "max_texture_size = 32\n\n[[material]]\nname = \"Lamp\"\n"
+               "[material.props]\ndouble_sided = true\nsmoothness = 0.25\n";
   }
   ModelImportSettings settings = ModelImportSettings::ForFile(
       (dir / "scene.obj").string(), ModelImportSettings{});
@@ -442,16 +575,31 @@ TEST(Gameplay, ReplacingTheSceneInACallbackWaitsForTheNextFrame) {
   ASSERT_TRUE(project);
   std::string error;
   Map first, second;
-  ASSERT_TRUE(first.LoadFromString(R"([mmap format=1]
-[node name="Root"]
-[node name="Replacer" parent="."]
-[component type="TestSceneReplacer" node="Replacer"]
+  ASSERT_TRUE(first.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Replacer"
+parent = "."
+
+[[component]]
+node = "Replacer"
+type = "TestSceneReplacer"
 )",
                                    &error))
       << error;
-  ASSERT_TRUE(second.LoadFromString(R"([mmap format=1]
-[node name="Other"]
-[node name="Survivor" parent="."]
+  ASSERT_TRUE(second.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Other"
+
+[[node]]
+name = "Survivor"
+parent = "."
 )",
                                     &error))
       << error;
@@ -477,16 +625,31 @@ TEST(Gameplay, ReplacingTheSceneFromOnStartWaitsForTheNextFrame) {
   ASSERT_TRUE(project);
   std::string error;
   Map first, second;
-  ASSERT_TRUE(first.LoadFromString(R"([mmap format=1]
-[node name="Root"]
-[node name="Starter" parent="."]
-[component type="TestStartReplacer" node="Starter"]
+  ASSERT_TRUE(first.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Starter"
+parent = "."
+
+[[component]]
+node = "Starter"
+type = "TestStartReplacer"
 )",
                                    &error))
       << error;
-  ASSERT_TRUE(second.LoadFromString(R"([mmap format=1]
-[node name="Other"]
-[node name="Survivor" parent="."]
+  ASSERT_TRUE(second.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Other"
+
+[[node]]
+name = "Survivor"
+parent = "."
 )",
                                     &error))
       << error;
@@ -509,20 +672,23 @@ TEST(Gameplay, LoadMapFromScriptReplacesTheScene) {
   std::filesystem::remove_all(dir);
   std::filesystem::create_directories(dir / "maps");
   {
-    std::ofstream(dir / "test.mproj") << "[project]\nname = \"Test\"\n"
-                                         "main_map = \"res://maps/a.mmap\"\n";
+    std::ofstream(dir / "test.mproj")
+        << "[project]\nformat = 2\n\n[project.props]\nname = \"Test\"\n"
+           "main_map = \"res://maps/a.mmap\"\n";
     std::ofstream(dir / "maps/a.mmap")
-        << "[mmap format=1]\n[node name=\"A\"]\n[node name=\"Switch\" "
-           "parent=\".\"]\n"
-           "[component type=\"TestMapSwitcher\" node=\"Switch\"]\n"
-           "next = \"res://maps/b.mmap\"\n";
+        << "[mmap]\nformat = 2\n\n"
+           "[[node]]\nname = \"A\"\n\n"
+           "[[node]]\nname = \"Switch\"\nparent = \".\"\n\n"
+           "[[component]]\nnode = \"Switch\"\ntype = \"TestMapSwitcher\"\n\n"
+           "[component.props]\nnext = \"res://maps/b.mmap\"\n";
     std::ofstream(dir / "maps/b.mmap")
-        << "[mmap format=1]\n[node name=\"B\"]\n[node name=\"Lamp\" "
-           "parent=\".\"]\n"
-           "[component type=\"Transform\" node=\"Lamp\"]\nposition = "
-           "Vector3(1, 2, 3)\n"
-           "[component type=\"PointLight\" node=\"Lamp\"]\nintensity = "
-           "2\nrange = 5\n";
+        << "[mmap]\nformat = 2\n\n"
+           "[[node]]\nname = \"B\"\n\n"
+           "[[node]]\nname = \"Lamp\"\nparent = \".\"\n\n"
+           "[[component]]\nnode = \"Lamp\"\ntype = \"Transform\"\n\n"
+           "[component.props]\nposition = { vec3 = [1.0, 2.0, 3.0] }\n\n"
+           "[[component]]\nnode = \"Lamp\"\ntype = \"PointLight\"\n\n"
+           "[component.props]\nintensity = 2\nrange = 5\n";
   }
   std::string error;
   auto project = Project::Load(dir / "test.mproj", &error);
@@ -554,28 +720,70 @@ TEST(Gameplay, AreaLightsAndProbeVolumeReachTheRenderer) {
   ASSERT_TRUE(project);
   Map map;
   std::string error;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
-[node name="Root"]
-[node name="Panel" parent="."]
-[component type="Transform" node="Panel"]
-position = Vector3(0, 2, 0)
-rotation = Vector3(-90, 0, 0)
-[component type="AreaLight" node="Panel"]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Panel"
+parent = "."
+
+[[component]]
+node = "Panel"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 2.0, 0.0] }
+rotation = { vec3 = [-90.0, 0.0, 0.0] }
+
+[[component]]
+node = "Panel"
+type = "AreaLight"
+
+[component.props]
 intensity = 17
-size = Vector2(0.4, 0.2)
-[node name="Bulb" parent="."]
-[component type="Transform" node="Bulb"]
-position = Vector3(1, 1, 1)
-[component type="PointLight" node="Bulb"]
-shadows = "soft"
+size = { vec2 = [0.4, 0.2] }
+
+[[node]]
+name = "Bulb"
+parent = "."
+
+[[component]]
+node = "Bulb"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [1.0, 1.0, 1.0] }
+
+[[component]]
+node = "Bulb"
+type = "PointLight"
+
+[component.props]
 radius = 0.3
-[node name="Probes" parent="."]
-[component type="Transform" node="Probes"]
-position = Vector3(0, 1, 0)
-[component type="LightProbeVolume" node="Probes"]
-size = Vector3(2, 2, 4)
-resolution = Vector3(4, 40, 1)
+shadows = "soft"
+
+[[node]]
+name = "Probes"
+parent = "."
+
+[[component]]
+node = "Probes"
+type = "Transform"
+
+[component.props]
+position = { vec3 = [0.0, 1.0, 0.0] }
+
+[[component]]
+node = "Probes"
+type = "LightProbeVolume"
+
+[component.props]
 include_emission = false
+resolution = { vec3 = [4.0, 40.0, 1.0] }
+size = { vec3 = [2.0, 2.0, 4.0] }
 )",
                                  &error))
       << error;
@@ -620,11 +828,23 @@ TEST(Gameplay, GlobalIlluminationIsOnByDefault) {
 
   // No volume: the renderer fits one around the scene; point lights cast
   // soft shadows unless told otherwise.
-  const SceneLighting plain = lighting_of(R"([mmap format=1]
-[node name="Root"]
-[node name="Bulb" parent="."]
-[component type="Transform" node="Bulb"]
-[component type="PointLight" node="Bulb"]
+  const SceneLighting plain = lighting_of(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Bulb"
+parent = "."
+
+[[component]]
+node = "Bulb"
+type = "Transform"
+
+[[component]]
+node = "Bulb"
+type = "PointLight"
 )");
   EXPECT_TRUE(plain.probes.enabled);
   EXPECT_TRUE(plain.probes.automatic);
@@ -632,22 +852,44 @@ TEST(Gameplay, GlobalIlluminationIsOnByDefault) {
   EXPECT_EQ(plain.point_lights[0].shadows, 2);
 
   // A fitted volume keeps its own settings.
-  const SceneLighting fitted = lighting_of(R"([mmap format=1]
-[node name="Root"]
-[component type="Transform" node="."]
-[component type="LightProbeVolume" node="."]
-fit_to_scene = true
+  const SceneLighting fitted = lighting_of(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[component]]
+node = "."
+type = "Transform"
+
+[[component]]
+node = "."
+type = "LightProbeVolume"
+
+[component.props]
 bounces = 5
+fit_to_scene = true
 )");
   EXPECT_TRUE(fitted.probes.enabled);
   EXPECT_TRUE(fitted.probes.automatic);
   EXPECT_EQ(fitted.probes.bounces, 5);
 
   // Intensity 0 turns it off.
-  const SceneLighting off = lighting_of(R"([mmap format=1]
-[node name="Root"]
-[component type="Transform" node="."]
-[component type="LightProbeVolume" node="."]
+  const SceneLighting off = lighting_of(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[component]]
+node = "."
+type = "Transform"
+
+[[component]]
+node = "."
+type = "LightProbeVolume"
+
+[component.props]
 intensity = 0
 )");
   EXPECT_FALSE(off.probes.enabled);
@@ -655,25 +897,60 @@ intensity = 0
 
 TEST(Gameplay, AnimatorControllerParses) {
   std::string error;
-  auto controller = AnimatorController::FromString(R"([manimator format=1]
-[model]
-model = Resource("res://hero.fbx")
+  auto controller = AnimatorController::FromString(R"([manimator]
+format = 2
+
+[[model]]
+
+[model.props]
 loop_clips = ["Idle", "Run"]
-[parameter name="Speed" type="float"]
-[parameter name="Jump" type="trigger"]
-[layer name="Base"]
-[state name="Locomotion" layer="Base" default=true]
+model = { res = "res://hero.fbx" }
+
+[[parameter]]
+name = "Speed"
+type = "float"
+
+[[parameter]]
+name = "Jump"
+type = "trigger"
+
+[[layer]]
+name = "Base"
+
+[[state]]
+default = true
+layer = "Base"
+name = "Locomotion"
+
+[state.props]
 blend = "1d"
-parameter = "Speed"
 motions = [["Idle", 0.0], ["Run", 1.0]]
-[state name="Jump" layer="Base"]
+parameter = "Speed"
+
+[[state]]
+layer = "Base"
+name = "Jump"
+
+[state.props]
 clip = "Jump"
-[transition from="Any State" to="Jump" layer="Base"]
+
+[[transition]]
+from = "Any State"
+layer = "Base"
+to = "Jump"
+
+[transition.props]
 conditions = [["Jump", "if"]]
 duration = 0.1
-[transition from="Jump" to="Locomotion" layer="Base"]
-has_exit_time = true
+
+[[transition]]
+from = "Jump"
+layer = "Base"
+to = "Locomotion"
+
+[transition.props]
 exit_time = 0.9
+has_exit_time = true
 )",
                                                    &error);
   ASSERT_TRUE(controller) << error;
@@ -692,10 +969,10 @@ exit_time = 0.9
   EXPECT_TRUE(controller->IsLooping("Run"));
   EXPECT_FALSE(controller->IsLooping("Jump"));
 
-  EXPECT_FALSE(
-      AnimatorController::FromString("[layer name=\"Base\"]\n[transition "
-                                     "from=\"A\" to=\"B\" layer=\"Base\"]\n",
-                                     &error));
+  EXPECT_FALSE(AnimatorController::FromString(
+      "[[layer]]\nname = \"Base\"\n\n[[transition]]\nfrom = \"A\"\n"
+      "to = \"B\"\nlayer = \"Base\"\n",
+      &error));
 }
 
 TEST(Gameplay, InputScriptPressesAndReleasesKeys) {

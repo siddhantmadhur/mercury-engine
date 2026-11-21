@@ -17,6 +17,7 @@
 
 #include "cmake_build.h"
 #include "console.h"
+#include "debugger/debugger.h"
 #include "editor_scene.h"
 #include "os/filesystem.h"
 #include "os/process.h"
@@ -26,6 +27,7 @@
 #include "scripting/as/script_runtime.h"
 #include "templates.h"
 #include "test_paths.h"
+#include "version.h"
 
 using namespace Mercury;
 namespace fs = std::filesystem;
@@ -48,6 +50,32 @@ std::string Read(const fs::path& path) {
 std::string Relative(const fs::path& root, const fs::path& file) {
   return fs::relative(file, root).generic_string();
 }
+
+// Points XDG_CONFIG_HOME at a test directory and restores the environment
+// and the PDebug sink afterwards, even when an assertion fails early.
+// setenv/unsetenv do not exist on Windows; the tests that use the guard
+// skip there.
+#if !defined(_WIN32)
+struct ConfigHomeGuard {
+  explicit ConfigHomeGuard(const fs::path& config_dir) : dir(config_dir) {
+    const char* previous = std::getenv("XDG_CONFIG_HOME");
+    previous_value = previous ? previous : "";
+    had_previous = previous != nullptr;
+    setenv("XDG_CONFIG_HOME", dir.c_str(), 1);
+  }
+  ~ConfigHomeGuard() {
+    PDebug::SetSink(nullptr);
+    if (had_previous) {
+      setenv("XDG_CONFIG_HOME", previous_value.c_str(), 1);
+    } else {
+      unsetenv("XDG_CONFIG_HOME");
+    }
+  }
+  const fs::path dir;
+  std::string previous_value;
+  bool had_previous = false;
+};
+#endif  // !_WIN32
 }  // namespace
 
 TEST(EditorTemplates, NewProjectHasScriptsAndGeneratedBuildFiles) {
@@ -370,6 +398,77 @@ TEST(EditorSettings, OpenScriptAfterCreateRoundTrips) {
   } else {
     unsetenv("XDG_CONFIG_HOME");
   }
+#endif
+}
+
+// A config that does not parse (a corrupted file, or one written by an old
+// editor) is not fatal: exactly one warning is logged and the defaults
+// apply. There is no migration; the next Save rewrites the file.
+TEST(EditorSettings, UnparsableConfigIsNotFatal) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "the test changes XDG_CONFIG_HOME";
+#else
+  const ConfigHomeGuard config(WorkDir("editor_settings_unparsable"));
+
+  int warnings = 0;
+  PDebug::SetSink([&warnings](PDebug::Level level, const std::string&) {
+    if (level == PDebug::Level::kWarn) warnings++;
+  });
+
+  fs::create_directories(EditorSettings::ConfigDir());
+  std::ofstream(EditorSettings::ConfigDir() / "editor.cfg")
+      << "[editor\nexternal_editor = \"oops\n";
+  EditorSettings loaded;
+  loaded.Load();
+  // The defaults survived the broken file.
+  EXPECT_TRUE(loaded.open_scripts_in_editor);
+  EXPECT_TRUE(loaded.open_script_after_create);
+  EXPECT_EQ(loaded.new_script_kind, Templates::ScriptKind::kAngelScript);
+  EXPECT_EQ(loaded.pack_size_mb, 256);
+  // One warning, not a flood and not a crash.
+  EXPECT_EQ(warnings, 1);
+
+  // No migration: the next Save rewrites the file so it reads back.
+  warnings = 0;
+  loaded.Save();
+  EditorSettings reloaded;
+  reloaded.Load();
+  EXPECT_EQ(warnings, 0);
+  EXPECT_TRUE(reloaded.open_scripts_in_editor);
+  EXPECT_EQ(reloaded.pack_size_mb, 256);
+#endif
+}
+
+// The saved config records the schema and the editor that wrote it: the
+// document's first section becomes the header, which carries format = 2 and
+// editor_version.
+TEST(EditorSettings, SaveWritesFormat2) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "the test changes XDG_CONFIG_HOME";
+#else
+  const ConfigHomeGuard config(WorkDir("editor_settings_format"));
+
+  EditorSettings saved;
+  saved.pack_size_mb = 512;
+  saved.SetProjectTrusted(fs::path("/games/pong"), true);
+  saved.AddRecentProject(fs::path("/games/pong/pong.mproj"));
+  saved.Save();
+
+  const std::string text = Read(EditorSettings::ConfigDir() / "editor.cfg");
+  EXPECT_NE(text.find("format = 2\n"), std::string::npos) << text;
+  EXPECT_NE(text.find("editor_version = \"" MERCURY_VERSION_STRING "\"\n"),
+            std::string::npos)
+      << text;
+
+  // Everything reads back, and saving the same settings again is stable.
+  EditorSettings loaded;
+  loaded.Load();
+  EXPECT_EQ(loaded.pack_size_mb, 512);
+  EXPECT_TRUE(loaded.IsProjectTrusted(fs::path("/games/pong")));
+  ASSERT_EQ(loaded.recent_projects.size(), 1u);
+  EXPECT_EQ(loaded.recent_projects.front(), "/games/pong/pong.mproj");
+  loaded.Save();
+  EXPECT_EQ(Read(EditorSettings::ConfigDir() / "editor.cfg"), text);
 #endif
 }
 

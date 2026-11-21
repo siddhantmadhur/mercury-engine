@@ -1,12 +1,17 @@
 [project]
-name = "Super Monkey Ball"
-main_map = "res://maps/main.mmap"
+format = 2
+editor_version = "1.0.0"
+[project.props]
 engine_version = "dev"
+main_map = "res://maps/main.mmap"
+name = "Super Monkey Ball"
 
-[window]
+[[physics]]
+[physics.props]
+gravity = { vec3 = [0.0, -15.0, 0.0] }
+
+[[window]]
+[window.props]
+height = 720
 title = "Super Monkey Ball"
 width = 1280
-height = 720
-
-[physics]
-gravity = Vector3(0, -15.0, 0)

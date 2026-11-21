@@ -5,10 +5,14 @@
 /*
  * editor_settings.h
  *
- * Per-user editor preferences, stored in the mtext format at
- * ~/.config/mercury/editor.cfg (%APPDATA%\Mercury\editor.cfg on Windows):
+ * Per-user editor preferences, stored in the mtext format (TOML, see
+ * serialization/mtext.h) at ~/.config/mercury/editor.cfg
+ * (%APPDATA%\Mercury\editor.cfg on Windows):
  *
  *   [editor]
+ *   format = 2
+ *   editor_version = "1.0.0"
+ *   [editor.props]
  *   external_editor = "code {project} {file}"
  *   open_scripts_in_editor = true
  *   open_script_after_create = true
@@ -17,15 +21,18 @@
  *   show_metal_hud = false
  *   pack_size_mb = 256
  *
- *   [recent]
+ *   [[recent]]
+ *   [recent.props]
  *   projects = ["/home/me/games/pong/pong.mproj"]
  *
- *   [windows]
+ *   [[windows]]
+ *   [windows.props]
  *   ui_builder = true
  *   input_actions = false
  *   lore = true
  *
- *   [lore]
+ *   [[lore]]
+ *   [lore.props]
  *   executable = "lore"
  *   server = "lore://127.0.0.1:41337"
  */

@@ -4,13 +4,19 @@
 
 #include "mtext.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <format>
+#include <optional>
 #include <sstream>
 #include <system_error>
+#include <vector>
+
+#include <toml++/toml.hpp>
 
 #include "os/filesystem.h"
+#include "version.h"
 
 namespace Mercury::mtext {
 
@@ -160,375 +166,7 @@ std::string ParseError::ToString() const {
   return std::format("{}:{}: {}", line, column, message);
 }
 
-// ----------------------------------------------------------------- Parser ---
-
 namespace {
-
-bool IsIdentStart(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-}
-
-bool IsIdentChar(char c) {
-  return IsIdentStart(c) || (c >= '0' && c <= '9') || c == '/' || c == '.' ||
-         c == '-';
-}
-
-class Parser {
- public:
-  explicit Parser(std::string_view source) : src_(source) {}
-
-  // Deeply nested arrays are not useful data, and recursing on every level
-  // would overflow the stack on a hostile file.
-  static constexpr int kMaxDepth = 128;
-
-  bool ParseDocument(Document& out) {
-    SkipSpace();
-    while (!AtEnd()) {
-      if (Peek() == '[') {
-        Section section;
-        if (!ParseHeader(section)) return false;
-        out.sections.push_back(std::move(section));
-      } else if (IsIdentStart(Peek())) {
-        if (out.sections.empty()) {
-          return Fail("property found before the first [section]");
-        }
-        Property property;
-        if (!ParseAssignment(property)) return false;
-        out.sections.back().properties.Set(property.key,
-                                           std::move(property.value));
-      } else {
-        return Fail(std::format("unexpected character '{}'", Peek()));
-      }
-      SkipSpace();
-    }
-    return true;
-  }
-
-  bool ParseSingleValue(Variant& out) {
-    SkipSpace();
-    if (!ParseValue(out)) return false;
-    SkipSpace();
-    if (!AtEnd()) return Fail("trailing characters after value");
-    return true;
-  }
-
-  const ParseError& Error() const { return error_; }
-
- private:
-  bool AtEnd() const { return pos_ >= src_.size(); }
-  char Peek() const { return AtEnd() ? '\0' : src_[pos_]; }
-
-  char Advance() {
-    char c = src_[pos_++];
-    if (c == '\n') {
-      line_++;
-      column_ = 1;
-    } else {
-      column_++;
-    }
-    return c;
-  }
-
-  // Skips whitespace (including newlines) and ';' comments.
-  void SkipSpace() {
-    while (!AtEnd()) {
-      char c = Peek();
-      if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
-        Advance();
-      } else if (c == ';') {
-        while (!AtEnd() && Peek() != '\n') Advance();
-      } else {
-        break;
-      }
-    }
-  }
-
-  // Skips spaces on the current line only.
-  void SkipInlineSpace() {
-    while (!AtEnd() && (Peek() == ' ' || Peek() == '\t' || Peek() == '\r')) {
-      Advance();
-    }
-  }
-
-  bool Fail(std::string message) {
-    if (error_.message.empty()) {
-      error_ = ParseError{line_, column_, std::move(message)};
-    }
-    return false;
-  }
-
-  bool Expect(char c) {
-    if (Peek() != c) {
-      return Fail(AtEnd()
-                      ? std::format("expected '{}' but reached the end", c)
-                      : std::format("expected '{}' but found '{}'", c, Peek()));
-    }
-    Advance();
-    return true;
-  }
-
-  bool ParseIdent(std::string& out) {
-    if (!IsIdentStart(Peek())) return Fail("expected a name");
-    size_t start = pos_;
-    while (!AtEnd() && IsIdentChar(Peek())) Advance();
-    out = std::string(src_.substr(start, pos_ - start));
-    return true;
-  }
-
-  bool ParseHeader(Section& section) {
-    section.line = line_;
-    Advance();  // '['
-    SkipInlineSpace();
-    if (!ParseIdent(section.tag)) return false;
-    while (true) {
-      SkipInlineSpace();
-      if (Peek() == ']') {
-        Advance();
-        break;
-      }
-      if (AtEnd() || Peek() == '\n') return Fail("unterminated section header");
-      Property attribute;
-      if (!ParseIdent(attribute.key)) return false;
-      SkipInlineSpace();
-      if (!Expect('=')) return false;
-      SkipInlineSpace();
-      if (!ParseValue(attribute.value)) return false;
-      section.attributes.Set(attribute.key, std::move(attribute.value));
-    }
-    // Nothing but a comment may follow the header on its line.
-    SkipInlineSpace();
-    if (!AtEnd() && Peek() != '\n' && Peek() != ';') {
-      return Fail("unexpected text after section header");
-    }
-    return true;
-  }
-
-  bool ParseAssignment(Property& property) {
-    if (!ParseIdent(property.key)) return false;
-    SkipInlineSpace();
-    if (!Expect('=')) return false;
-    SkipInlineSpace();
-    if (!ParseValue(property.value)) return false;
-    SkipInlineSpace();
-    if (!AtEnd() && Peek() != '\n' && Peek() != ';') {
-      return Fail("unexpected text after value");
-    }
-    return true;
-  }
-
-  bool ParseValue(Variant& out) {
-    char c = Peek();
-    if (c == '"') {
-      std::string s;
-      if (!ParseString(s)) return false;
-      out = Variant(std::move(s));
-      return true;
-    }
-    if (c == '[') return ParseArray(out);
-    if (c == '-' || c == '+' || c == '.' || (c >= '0' && c <= '9')) {
-      return ParseNumber(out);
-    }
-    if (IsIdentStart(c)) return ParseWord(out);
-    if (AtEnd()) return Fail("expected a value but reached the end");
-    return Fail(std::format("unexpected character '{}' in value", c));
-  }
-
-  bool ParseString(std::string& out) {
-    Advance();  // opening quote
-    while (true) {
-      if (AtEnd()) return Fail("unterminated string");
-      char c = Advance();
-      if (c == '"') return true;
-      if (c == '\\') {
-        if (AtEnd()) return Fail("unterminated string");
-        char e = Advance();
-        switch (e) {
-          case 'n':
-            out.push_back('\n');
-            break;
-          case 't':
-            out.push_back('\t');
-            break;
-          case 'r':
-            out.push_back('\r');
-            break;
-          case '"':
-            out.push_back('"');
-            break;
-          case '\\':
-            out.push_back('\\');
-            break;
-          default:
-            return Fail(std::format("unknown escape '\\{}'", e));
-        }
-      } else {
-        out.push_back(c);
-      }
-    }
-  }
-
-  bool ParseNumberText(std::string_view& text, bool& is_float) {
-    size_t start = pos_;
-    is_float = false;
-    if (Peek() == '-' || Peek() == '+') Advance();
-    while (!AtEnd()) {
-      char c = Peek();
-      if (c >= '0' && c <= '9') {
-        Advance();
-      } else if (c == '.' || c == 'e' || c == 'E') {
-        is_float = true;
-        Advance();
-        if ((c == 'e' || c == 'E') && (Peek() == '-' || Peek() == '+')) {
-          Advance();
-        }
-      } else {
-        break;
-      }
-    }
-    text = src_.substr(start, pos_ - start);
-    if (!text.empty() && text.front() == '+') text.remove_prefix(1);
-    if (text.empty() || text == "-") return Fail("malformed number");
-    return true;
-  }
-
-  bool ParseNumber(Variant& out) {
-    std::string_view text;
-    bool is_float = false;
-    if (!ParseNumberText(text, is_float)) return false;
-    const char* end = text.data() + text.size();
-    if (is_float) {
-      double value = 0.0;
-      auto [ptr, ec] = std::from_chars(text.data(), end, value);
-      if (ec != std::errc() || ptr != end) {
-        return Fail(std::format("malformed number '{}'", text));
-      }
-      out = Variant(value);
-    } else {
-      int64_t value = 0;
-      auto [ptr, ec] = std::from_chars(text.data(), end, value);
-      if (ec != std::errc() || ptr != end) {
-        return Fail(std::format("malformed number '{}'", text));
-      }
-      out = Variant(value);
-    }
-    return true;
-  }
-
-  // Parses "(n, n, ...)" of exactly `count` numbers.
-  bool ParseFloatArgs(int count, float* values) {
-    SkipSpace();
-    if (!Expect('(')) return false;
-    for (int i = 0; i < count; i++) {
-      SkipSpace();
-      Variant number;
-      if (!ParseNumber(number)) return false;
-      values[i] = static_cast<float>(*number.ToFloat());
-      SkipSpace();
-      if (i + 1 < count && !Expect(',')) return false;
-    }
-    SkipSpace();
-    return Expect(')');
-  }
-
-  bool ParseStringArg(std::string& out) {
-    SkipSpace();
-    if (!Expect('(')) return false;
-    SkipSpace();
-    if (Peek() != '"') return Fail("expected a string argument");
-    if (!ParseString(out)) return false;
-    SkipSpace();
-    return Expect(')');
-  }
-
-  bool ParseWord(Variant& out) {
-    std::string word;
-    if (!ParseIdent(word)) return false;
-    if (word == "true") {
-      out = Variant(true);
-    } else if (word == "false") {
-      out = Variant(false);
-    } else if (word == "null") {
-      out = Variant();
-    } else if (word == "inf") {
-      out = Variant(INFINITY);
-    } else if (word == "Vector2") {
-      glm::vec2 v;
-      if (!ParseFloatArgs(2, &v.x)) return false;
-      out = Variant(v);
-    } else if (word == "Vector3") {
-      glm::vec3 v;
-      if (!ParseFloatArgs(3, &v.x)) return false;
-      out = Variant(v);
-    } else if (word == "Color") {
-      // Color(r, g, b) or Color(r, g, b, a)
-      SkipSpace();
-      if (!Expect('(')) return false;
-      float c[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-      int i = 0;
-      for (; i < 4; i++) {
-        SkipSpace();
-        Variant number;
-        if (!ParseNumber(number)) return false;
-        c[i] = static_cast<float>(*number.ToFloat());
-        SkipSpace();
-        if (Peek() == ')') break;
-        if (!Expect(',')) return false;
-      }
-      if (i < 2) return Fail("Color needs 3 or 4 components");
-      if (!Expect(')')) return false;
-      out = Variant(Color{glm::vec4(c[0], c[1], c[2], c[3])});
-    } else if (word == "NodePath") {
-      std::string s;
-      if (!ParseStringArg(s)) return false;
-      out = Variant(NodePath{std::move(s)});
-    } else if (word == "ExtResource") {
-      std::string s;
-      if (!ParseStringArg(s)) return false;
-      out = Variant(ExtResource{std::move(s)});
-    } else if (word == "Resource") {
-      std::string s;
-      if (!ParseStringArg(s)) return false;
-      out = Variant(Resource{std::move(s)});
-    } else {
-      return Fail(std::format("unknown value '{}'", word));
-    }
-    return true;
-  }
-
-  bool ParseArray(Variant& out) {
-    if (depth_ >= kMaxDepth) return Fail("arrays are nested too deeply");
-    struct DepthGuard {
-      int& depth;
-      explicit DepthGuard(int& d) : depth(d) { ++depth; }
-      ~DepthGuard() { --depth; }
-    } guard(depth_);
-    Advance();  // '['
-    Array items;
-    SkipSpace();
-    while (Peek() != ']') {
-      Variant item;
-      if (!ParseValue(item)) return false;
-      items.push_back(std::move(item));
-      SkipSpace();
-      if (Peek() == ',') {
-        Advance();
-        SkipSpace();
-      } else if (Peek() != ']') {
-        return Fail("expected ',' or ']' in array");
-      }
-    }
-    Advance();  // ']'
-    out = Variant(std::move(items));
-    return true;
-  }
-
-  std::string_view src_;
-  size_t pos_ = 0;
-  int line_ = 1;
-  int column_ = 1;
-  int depth_ = 0;
-  ParseError error_;
-};
 
 // Shortest text that reads back as the same float. Values that came from a
 // float field are printed at float precision, so 0.45f stays "0.45".
@@ -554,7 +192,262 @@ std::string FormatFloat(double value) {
   return text;
 }
 
-std::string Quote(std::string_view s) {
+}  // namespace
+
+// ------------------------------------------------------------------- TOML ---
+//
+// Format 2 support. toml++ does the parsing; the mapping onto Document and
+// Variant follows the layout described in mtext.h. The writer emits TOML by
+// hand so section order stays stable and floats keep their decimal point.
+
+namespace {
+
+// The format version this reader/writer speaks. Future versions are
+// rejected here and migrate in UpgradeDocument once their reader exists.
+constexpr int kCurrentFormat = 2;
+
+ParseError TomlError(const toml::source_position& at, std::string message) {
+  return ParseError{static_cast<int>(at.line), static_cast<int>(at.column),
+                    std::move(message)};
+}
+
+ParseError TomlError(const toml::node& node, std::string message) {
+  return TomlError(node.source().begin, std::move(message));
+}
+
+bool TomlFloat(const toml::node& node, float& out) {
+  if (node.is_integer()) {
+    out = static_cast<float>(node.as_integer()->get());
+    return true;
+  }
+  if (node.is_floating_point()) {
+    out = static_cast<float>(node.as_floating_point()->get());
+    return true;
+  }
+  return false;
+}
+
+bool TomlValueToVariant(const toml::node& node, Variant& out,
+                        ParseError* error) {
+  auto fail = [&](std::string message) {
+    if (error && error->message.empty()) {
+      *error = TomlError(node, std::move(message));
+    }
+    return false;
+  };
+  switch (node.type()) {
+    case toml::node_type::boolean:
+      out = Variant(node.as_boolean()->get());
+      return true;
+    case toml::node_type::integer:
+      out = Variant(node.as_integer()->get());
+      return true;
+    case toml::node_type::floating_point:
+      out = Variant(node.as_floating_point()->get());
+      return true;
+    case toml::node_type::string:
+      out = Variant(std::string(node.as_string()->get()));
+      return true;
+    case toml::node_type::array: {
+      Array items;
+      for (const toml::node& element : *node.as_array()) {
+        Variant item;
+        if (!TomlValueToVariant(element, item, error)) return false;
+        items.push_back(std::move(item));
+      }
+      out = Variant(std::move(items));
+      return true;
+    }
+    case toml::node_type::table: {
+      // A tagged inline table carries exactly one key: { nil = true },
+      // { vec2 = [x, y] }, { color = [r, g, b, a] }, { path = "..." }, ...
+      const toml::table& table = *node.as_table();
+      if (table.empty()) {
+        return fail(
+            "empty table value; values are tagged inline tables "
+            "like { nil = true }");
+      }
+      if (table.size() != 1) {
+        return fail(
+            "inline table values carry exactly one tag, "
+            "like { vec2 = [x, y] }");
+      }
+      const auto& [key, value] = *table.begin();
+      const std::string_view tag = key.str();
+      if (tag == "nil") {
+        if (!value.is_boolean() || !value.as_boolean()->get()) {
+          return fail("{ nil = true } expected");
+        }
+        out = Variant();
+        return true;
+      }
+      if (tag == "vec2" || tag == "vec3") {
+        const size_t count = tag == "vec2" ? 2 : 3;
+        if (!value.is_array() || value.as_array()->size() != count) {
+          return fail(tag == "vec2" ? "vec2 needs two numbers"
+                                    : "vec3 needs three numbers");
+        }
+        const toml::array& array = *value.as_array();
+        float components[3] = {0.0f, 0.0f, 0.0f};
+        for (size_t i = 0; i < count; i++) {
+          if (!TomlFloat(array[i], components[i])) {
+            return fail(std::string(tag) + " needs numbers");
+          }
+        }
+        if (tag == "vec2") {
+          out = Variant(glm::vec2(components[0], components[1]));
+        } else {
+          out = Variant(glm::vec3(components[0], components[1], components[2]));
+        }
+        return true;
+      }
+      if (tag == "color") {
+        if (!value.is_array() ||
+            (value.as_array()->size() != 3 && value.as_array()->size() != 4)) {
+          return fail("color needs three or four numbers");
+        }
+        const toml::array& array = *value.as_array();
+        float components[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        for (size_t i = 0; i < array.size(); i++) {
+          if (!TomlFloat(array[i], components[i])) {
+            return fail("color needs numbers");
+          }
+        }
+        out = Variant(Color{glm::vec4(components[0], components[1],
+                                      components[2], components[3])});
+        return true;
+      }
+      if (tag == "path" || tag == "ext" || tag == "res") {
+        if (!value.is_string()) {
+          return fail(std::string("{ ") + std::string(tag) +
+                      " = \"...\" } expected");
+        }
+        std::string text(value.as_string()->get());
+        if (tag == "path") {
+          out = Variant(NodePath{std::move(text)});
+        } else if (tag == "ext") {
+          out = Variant(ExtResource{std::move(text)});
+        } else {
+          out = Variant(Resource{std::move(text)});
+        }
+        return true;
+      }
+      return fail(std::format("unsupported value tag '{}'", tag));
+    }
+    default:
+      return fail("unsupported value type");
+  }
+}
+
+bool TomlPropertyList(const toml::table& table, PropertyList& out,
+                      ParseError* error) {
+  for (auto&& [key, value] : table) {
+    Variant item;
+    if (!TomlValueToVariant(value, item, error)) return false;
+    out.Set(key.str(), std::move(item));
+  }
+  return true;
+}
+
+bool TomlSection(std::string tag, const toml::table& table, Section& section,
+                 ParseError* error) {
+  section.tag = std::move(tag);
+  const auto& begin = table.source().begin;
+  if (begin.line > 0) section.line = static_cast<int>(begin.line);
+  for (auto&& [key, value] : table) {
+    // The [tag.props] sub-table carries the section's properties; a scalar
+    // "props" key stays an attribute like any other.
+    if (key.str() == "props" && value.is_table()) {
+      if (!TomlPropertyList(*value.as_table(), section.properties, error)) {
+        return false;
+      }
+      continue;
+    }
+    Variant item;
+    if (!TomlValueToVariant(value, item, error)) return false;
+    section.attributes.Set(key.str(), std::move(item));
+  }
+  return true;
+}
+
+bool ParseTomlDocument(std::string_view source, Document& out,
+                       ParseError* error) {
+  auto fail = [&](ParseError e) {
+    if (error && error->message.empty()) *error = std::move(e);
+    return false;
+  };
+  toml::parse_result result = toml::parse(source);
+  if (!result.succeeded()) {
+    return fail(TomlError(result.error().source().begin,
+                          std::string(result.error().description())));
+  }
+  const toml::table& root = result.table();
+
+  Document document;
+  // The plain [tag] table is the file header; every other section is a
+  // [[tag]] array-of-tables entry. The header is kept in front so consumers
+  // that expect document.sections[0] to be the header keep working.
+  std::optional<Section> header;
+  for (auto&& [key, value] : root) {
+    const std::string tag(key.str());
+    if (value.is_table()) {
+      if (header) {
+        return fail(TomlError(*value.as_table(),
+                              std::format("expected [[{}]] but found a "
+                                          "second header table",
+                                          tag)));
+      }
+      header.emplace();
+      if (!TomlSection(tag, *value.as_table(), *header, error)) return false;
+      continue;
+    }
+    const toml::array* array = value.as_array();
+    if (!array || !array->is_array_of_tables()) {
+      return fail(
+          TomlError(value, std::format("expected a [[{}]] section", tag)));
+    }
+    for (const toml::node& element : *array) {
+      Section section;
+      if (!TomlSection(tag, *element.as_table(), section, error)) return false;
+      document.sections.push_back(std::move(section));
+    }
+  }
+  if (!header) {
+    return fail(TomlError(root.source().begin,
+                          "the file needs a [header] table with format = 2"));
+  }
+  // Version gate: the reader reads kCurrentFormat and rejects both older
+  // files and files from a newer editor.
+  const Variant* format = header->attributes.Get("format");
+  if (!format || format->GetType() != Variant::Type::kInt) {
+    return fail(TomlError(root.source().begin,
+                          std::format("the [{}] header needs format = {}",
+                                      header->tag, kCurrentFormat)));
+  }
+  if (format->ToInt().value_or(0) < kCurrentFormat) {
+    return fail(TomlError(
+        root.source().begin,
+        std::format("format {} is not supported; this editor reads format {}",
+                    *format->ToInt(), kCurrentFormat)));
+  }
+  if (format->ToInt().value_or(0) > kCurrentFormat) {
+    // An editor_version helps name the tool that wrote the future file.
+    const std::string version = header->attributes.GetString("editor_version");
+    return fail(TomlError(
+        root.source().begin,
+        std::format("format {} is newer than this editor, which reads "
+                    "format {}{}",
+                    *format->ToInt(), kCurrentFormat,
+                    version.empty()
+                        ? ""
+                        : std::format(" (written by editor {})", version))));
+  }
+  document.sections.insert(document.sections.begin(), std::move(*header));
+  out = std::move(document);
+  return true;
+}
+
+std::string TomlQuote(std::string_view s) {
   std::string out = "\"";
   for (char c : s) {
     switch (c) {
@@ -564,49 +457,56 @@ std::string Quote(std::string_view s) {
       case '\\':
         out += "\\\\";
         break;
-      case '\n':
-        out += "\\n";
+      case '\b':
+        out += "\\b";
         break;
       case '\t':
         out += "\\t";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\f':
+        out += "\\f";
         break;
       case '\r':
         out += "\\r";
         break;
       default:
-        out.push_back(c);
+        if (static_cast<unsigned char>(c) < 0x20 ||
+            static_cast<unsigned char>(c) == 0x7f) {
+          out +=
+              std::format("\\u{:04x}",
+                          static_cast<unsigned>(static_cast<unsigned char>(c)));
+        } else {
+          out.push_back(c);
+        }
     }
   }
   out += "\"";
   return out;
 }
 
-}  // namespace
-
-bool Parse(std::string_view source, Document& out, ParseError* error) {
-  Parser parser(source);
-  Document document;
-  if (!parser.ParseDocument(document)) {
-    if (error) *error = parser.Error();
-    return false;
+bool TomlBareKey(std::string_view key) {
+  if (key.empty()) return false;
+  for (char c : key) {
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+      return false;
+    }
   }
-  out = std::move(document);
   return true;
 }
 
-std::optional<Variant> ParseValue(std::string_view source) {
-  Parser parser(source);
-  Variant value;
-  if (!parser.ParseSingleValue(value)) return std::nullopt;
-  return value;
+std::string TomlKey(std::string_view key) {
+  if (TomlBareKey(key)) return std::string(key);
+  return TomlQuote(key);
 }
 
-// ----------------------------------------------------------------- Writer ---
-
-std::string WriteValue(const Variant& value) {
+std::string WriteTomlValue(const Variant& value) {
   switch (value.GetType()) {
     case Variant::Type::kNil:
-      return "null";
+      return "{ nil = true }";
     case Variant::Type::kBool:
       return *value.Get<bool>() ? "true" : "false";
     case Variant::Type::kInt:
@@ -614,66 +514,135 @@ std::string WriteValue(const Variant& value) {
     case Variant::Type::kFloat:
       return FormatFloat(*value.Get<double>());
     case Variant::Type::kString:
-      return Quote(*value.Get<std::string>());
+      return TomlQuote(*value.Get<std::string>());
     case Variant::Type::kVector2: {
       auto v = *value.Get<glm::vec2>();
-      return std::format("Vector2({}, {})", FormatNumber(v.x),
-                         FormatNumber(v.y));
+      return std::format("{{ vec2 = [{}, {}] }}", FormatFloat(v.x),
+                         FormatFloat(v.y));
     }
     case Variant::Type::kVector3: {
       auto v = *value.Get<glm::vec3>();
-      return std::format("Vector3({}, {}, {})", FormatNumber(v.x),
-                         FormatNumber(v.y), FormatNumber(v.z));
+      return std::format("{{ vec3 = [{}, {}, {}] }}", FormatFloat(v.x),
+                         FormatFloat(v.y), FormatFloat(v.z));
     }
     case Variant::Type::kColor: {
       auto c = value.Get<Color>()->rgba;
-      return std::format("Color({}, {}, {}, {})", FormatNumber(c.r),
-                         FormatNumber(c.g), FormatNumber(c.b),
-                         FormatNumber(c.a));
+      return std::format("{{ color = [{}, {}, {}, {}] }}", FormatFloat(c.r),
+                         FormatFloat(c.g), FormatFloat(c.b), FormatFloat(c.a));
     }
     case Variant::Type::kNodePath:
-      return std::format("NodePath({})", Quote(value.Get<NodePath>()->path));
+      return std::format("{{ path = {} }}",
+                         TomlQuote(value.Get<NodePath>()->path));
     case Variant::Type::kExtResource:
-      return std::format("ExtResource({})",
-                         Quote(value.Get<ExtResource>()->id));
+      return std::format("{{ ext = {} }}",
+                         TomlQuote(value.Get<ExtResource>()->id));
     case Variant::Type::kResource:
-      return std::format("Resource({})", Quote(value.Get<Resource>()->path));
+      return std::format("{{ res = {} }}",
+                         TomlQuote(value.Get<Resource>()->path));
     case Variant::Type::kArray: {
       std::string out = "[";
       const auto& items = *value.Get<Array>();
       for (size_t i = 0; i < items.size(); i++) {
         if (i > 0) out += ", ";
-        out += WriteValue(items[i]);
+        out += WriteTomlValue(items[i]);
       }
       return out + "]";
     }
   }
-  return "null";
+  return "{ nil = true }";
 }
 
-std::string Write(const Document& document) {
+std::string WriteTomlDocument(const Document& document) {
   std::string out;
-  for (size_t i = 0; i < document.sections.size(); i++) {
-    const Section& section = document.sections[i];
-    // A blank line separates sections, except within a run of [ext_resource]
-    // lines, which read best as one block (as in Godot files).
-    if (i > 0) {
-      const Section& previous = document.sections[i - 1];
-      const bool resource_run = section.tag == "ext_resource" &&
-                                previous.tag == "ext_resource" &&
-                                previous.properties.empty();
-      if (!resource_run) out += "\n";
+  if (document.sections.empty()) return out;
+  // Canonical output, so write(parse(write(doc))) == write(doc): the header
+  // first, then the remaining sections grouped by tag in alphabetical order
+  // (matching the reader, which walks a sorted table), each tag's sections in
+  // their original order, and keys sorted.
+  auto sorted = [](const PropertyList& list) {
+    std::vector<const Property*> items;
+    for (const auto& item : list) items.push_back(&item);
+    std::sort(
+        items.begin(), items.end(),
+        [](const Property* a, const Property* b) { return a->key < b->key; });
+    return items;
+  };
+  auto write_section = [&](const Section& section, bool header) {
+    out += header ? "[" + TomlKey(section.tag) + "]\n"
+                  : "[[" + TomlKey(section.tag) + "]]\n";
+    if (header) {
+      // Every file records its format version and the editor that wrote it.
+      out += "format = 2\n";
+      out += "editor_version = " + TomlQuote(MERCURY_VERSION_STRING) + "\n";
     }
-    out += "[" + section.tag;
-    for (const auto& attribute : section.attributes) {
-      out += " " + attribute.key + "=" + WriteValue(attribute.value);
+    for (const Property* attribute : sorted(section.attributes)) {
+      if (header &&
+          (attribute->key == "format" || attribute->key == "editor_version")) {
+        continue;  // rewritten above with the current values
+      }
+      out += TomlKey(attribute->key) + " = " +
+             WriteTomlValue(attribute->value) + "\n";
     }
-    out += "]\n";
-    for (const auto& property : section.properties) {
-      out += property.key + " = " + WriteValue(property.value) + "\n";
+    if (!section.properties.empty()) {
+      out += "[" + TomlKey(section.tag) + ".props]\n";
+      for (const Property* property : sorted(section.properties)) {
+        out += TomlKey(property->key) + " = " +
+               WriteTomlValue(property->value) + "\n";
+      }
     }
+  };
+  // The first section is the header ([tag]); the rest become [[tag]] entries.
+  write_section(document.sections.front(), true);
+  std::vector<const Section*> remaining;
+  for (size_t i = 1; i < document.sections.size(); i++) {
+    remaining.push_back(&document.sections[i]);
+  }
+  std::stable_sort(
+      remaining.begin(), remaining.end(),
+      [](const Section* a, const Section* b) { return a->tag < b->tag; });
+  for (const Section* section : remaining) {
+    out += "\n";
+    write_section(*section, false);
   }
   return out;
+}
+
+}  // namespace
+
+bool Parse(std::string_view source, Document& out, ParseError* error) {
+  if (error) *error = ParseError{};  // the caller may reuse the struct
+  Document document;
+  if (!ParseTomlDocument(source, document, error)) return false;
+  UpgradeDocument(document);
+  out = std::move(document);
+  return true;
+}
+
+std::optional<Variant> ParseValue(std::string_view source) {
+  // Format 2 literals are TOML values; parse them as a one-key document.
+  // The text comes from the inspector, so anything that adds keys or tables
+  // after the value ("1\nx = 2", "1\n[t]") is not a single value.
+  std::string text = "v = ";
+  text.append(source);
+  toml::parse_result result = toml::parse(text);
+  if (!result.succeeded()) return std::nullopt;
+  const toml::table& root = result.table();
+  if (root.size() != 1 || root.begin()->first.str() != "v") {
+    return std::nullopt;
+  }
+  Variant out;
+  if (!TomlValueToVariant(root.begin()->second, out, nullptr)) {
+    return std::nullopt;
+  }
+  return out;
+}
+
+// ----------------------------------------------------------------- Writer ---
+
+std::string WriteValue(const Variant& value) { return WriteTomlValue(value); }
+
+std::string Write(const Document& document) {
+  return WriteTomlDocument(document);
 }
 
 bool LoadFile(const std::filesystem::path& path, Document& out,
@@ -687,7 +656,19 @@ bool LoadFile(const std::filesystem::path& path, Document& out,
 }
 
 bool SaveFile(const std::filesystem::path& path, const Document& document) {
-  return os::WriteFileAtomic(path, Write(document));
+  return os::WriteFileAtomic(path, WriteTomlDocument(document));
+}
+
+bool UpgradeDocument(Document& document) {
+  const auto format =
+      document.sections.empty()
+          ? int64_t{0}
+          : document.sections.front().attributes.GetInt("format", 0);
+  switch (format) {
+    // Migrations for future format versions go here.
+    default:
+      return true;
+  }
 }
 
 }  // namespace Mercury::mtext

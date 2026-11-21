@@ -1,2 +1,6 @@
-[masset type="Material" format=1]
-color = Color(0.55, 0.6, 0.68, 1)
+[masset]
+format = 2
+editor_version = "1.0.0"
+type = "Material"
+[masset.props]
+color = { color = [0.55, 0.6, 0.68, 1.0] }

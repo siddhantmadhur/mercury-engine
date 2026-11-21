@@ -1,4 +1,8 @@
-[masset type="Material" format=1]
-color = Color(0.18, 0.92, 0.45, 1)
-roughness = 0.2
+[masset]
+format = 2
+editor_version = "1.0.0"
+type = "Material"
+[masset.props]
+color = { color = [0.18, 0.92, 0.45, 1.0] }
 metallic = 0.9
+roughness = 0.2

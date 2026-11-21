@@ -337,7 +337,7 @@ TEST(ComponentSerialization, SchemaExportsNonScriptComponents) {
   ASSERT_TRUE(in.good());
   const std::string text((std::istreambuf_iterator<char>(in)),
                          std::istreambuf_iterator<char>());
-  EXPECT_NE(text.find("name=\"SnapshotTest\""), std::string::npos);
+  EXPECT_NE(text.find("name = \"SnapshotTest\""), std::string::npos);
   EXPECT_NE(text.find("count"), std::string::npos);
   std::filesystem::remove(path);
 }

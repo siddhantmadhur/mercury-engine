@@ -15,11 +15,16 @@
  *
  * File layout (Godot .tscn style):
  *
- *   [mmap format=1]
+ *   [mmap]
+ *   format = 2
  *
- *   [ext_resource type="Material" path="res://assets/white.masset" id="1"]
+ *   [[ext_resource]]
+ *   type = "Material"
+ *   path = "res://assets/white.masset"
+ *   id = "1"
  *
- *   [node name="Pong"]
+ *   [[node]]
+ *   name = "Pong"
  *
  *   [node name="Ball" parent="."]
  *
@@ -50,7 +55,7 @@
 
 namespace Mercury {
 
-constexpr int kMapFormatVersion = 1;
+constexpr int kMapFormatVersion = 2;
 
 struct ComponentData {
   std::string type;
