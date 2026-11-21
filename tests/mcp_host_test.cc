@@ -31,6 +31,7 @@
 #include "mcp/tool_registry.h"
 #include "project/project.h"
 #include "templates.h"
+#include "version.h"
 
 namespace fs = std::filesystem;
 using namespace Mercury;
@@ -127,11 +128,18 @@ bool ConnectRefused(std::uint16_t port) {
   return refused;
 }
 
-// One raw HTTP POST against the running server; returns the HTTP status, or 0
-// when the request could not be completed.
-int HttpPostStatus(std::uint16_t port, const std::string& authorization) {
+// One raw HTTP POST with a JSON-RPC body; returns the whole response text, or
+// the empty string when the request could not be completed. Sends the headers
+// the 2026-07-28 protocol requires (SEP-2243): Mcp-Protocol-Version,
+// Mcp-Method and, for tools/call, Mcp-Name with the tool name.
+//
+// `host` overrides the Host header (default 127.0.0.1:<port>) and `origin`,
+// when non-empty, adds an Origin header: the security probes use them.
+std::string HttpPost(std::uint16_t port, const std::string& authorization,
+                     const std::string& body, const std::string& host = "",
+                     const std::string& origin = "") {
   int fd = ::socket(AF_INET, SOCK_STREAM, 0);
-  if (fd < 0) return 0;
+  if (fd < 0) return "";
   sockaddr_in address{};
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -139,29 +147,154 @@ int HttpPostStatus(std::uint16_t port, const std::string& authorization) {
   if (::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) !=
       0) {
     ::close(fd);
-    return 0;
+    return "";
   }
-  const std::string request =
-      "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: " +
-      authorization + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
+  nlohmann::json request_json;
+  std::string method;
+  std::string name;
+  // An empty body is a bare probe (status-line only); a JSON-RPC body must
+  // parse, because its method also drives the SEP-2243 headers.
+  if (!body.empty()) {
+    try {
+      request_json = nlohmann::json::parse(body);
+      method = request_json["method"].get<std::string>();
+      if (method == "tools/call") {
+        name = request_json["params"]["name"].get<std::string>();
+      }
+    } catch (const std::exception&) {
+      ::close(fd);
+      return "";
+    }
+  }
+
+  const std::string host_header =
+      host.empty() ? "127.0.0.1:" + std::to_string(port) : host;
+  std::string request = "POST /mcp HTTP/1.1\r\nHost: " + host_header +
+                        "\r\n"
+                        "Accept: application/json, text/event-stream\r\n"
+                        "Content-Type: application/json\r\n";
+  if (!origin.empty()) {
+    request += "Origin: " + origin + "\r\n";
+  }
+  if (!method.empty()) {
+    request += "Mcp-Protocol-Version: 2026-07-28\r\n";
+    request += "Mcp-Method: " + method + "\r\n";
+    if (!name.empty()) {
+      request += "Mcp-Name: " + name + "\r\n";
+    }
+  }
+  request += "Authorization: " + authorization + "\r\n";
+  request += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+  request += "Connection: close\r\n\r\n";
+  request += body;
   if (::write(fd, request.data(), request.size()) <
       static_cast<ssize_t>(request.size())) {
     ::close(fd);
-    return 0;
+    return "";
   }
+
+  // Read to EOF (Connection: close), so a multi-packet response arrives whole.
+  std::string response;
   std::vector<char> buffer(4096, 0);
-  const ssize_t received =
-      ::recv(fd, buffer.data(), buffer.size() - 1, /*flags=*/0);
+  for (;;) {
+    const ssize_t received =
+        ::recv(fd, buffer.data(), buffer.size(), /*flags=*/0);
+    if (received <= 0) break;
+    response.append(buffer.data(), static_cast<size_t>(received));
+  }
   ::close(fd);
-  if (received <= 0) return 0;
+  return response;
+}
+
+// The HTTP status of a raw response, or 0 when it has no parsable status line.
+int StatusOf(const std::string& response) {
+  if (response.empty()) return 0;
   // "HTTP/1.1 200 OK" -> "200"
-  const std::string head(buffer.data(), static_cast<size_t>(received));
-  const size_t first_space = head.find(' ');
+  const size_t first_space = response.find(' ');
   if (first_space == std::string::npos) return 0;
-  const size_t second_space = head.find(' ', first_space + 1);
+  const size_t second_space = response.find(' ', first_space + 1);
   if (second_space == std::string::npos) return 0;
   try {
-    return std::stoi(head.substr(first_space + 1, second_space - first_space - 1));
+    return std::stoi(
+        response.substr(first_space + 1, second_space - first_space - 1));
+  } catch (const std::exception&) {
+    return 0;
+  }
+}
+
+// One bare POST (no JSON-RPC body) against the running server; returns the
+// HTTP status, or 0 when the request could not be completed. `host` and
+// `origin` override the Host and Origin headers when non-empty.
+int HttpPostStatus(std::uint16_t port, const std::string& authorization,
+                   const std::string& host = "",
+                   const std::string& origin = "") {
+  return StatusOf(HttpPost(port, authorization, "", host, origin));
+}
+
+// The JSON-RPC payload of an HTTP response, whether the server answered with
+// a plain JSON body or an SSE stream (`data:` lines).
+nlohmann::json ResponseJson(const std::string& response) {
+  const size_t body_start = response.find("\r\n\r\n");
+  const std::string body = body_start == std::string::npos
+                               ? response
+                               : response.substr(body_start + 4);
+  if (body.starts_with('{')) return nlohmann::json::parse(body);
+  // SSE: each event carries its payload on a `data:` line.
+  for (size_t line = body.find("data:"); line != std::string::npos;
+       line = body.find("data:", line + 1)) {
+    const size_t end = body.find('\n', line);
+    try {
+      return nlohmann::json::parse(body.substr(line + 5, end - line - 5));
+    } catch (const std::exception&) {
+      // Not the first event payload; keep looking.
+    }
+  }
+  return nlohmann::json();
+}
+
+// A compliant MCP 2026-07-28 request: the SEP-1319 per-request `_meta` every
+// non-initialize request must carry.
+nlohmann::json StatelessMeta() {
+  return nlohmann::json{
+      {"io.modelcontextprotocol/protocolVersion", "2026-07-28"},
+      {"io.modelcontextprotocol/clientCapabilities",
+       nlohmann::json::object()}};
+}
+
+nlohmann::json JsonRpc(int id, const std::string& method,
+                       const nlohmann::json& params) {
+  return nlohmann::json{
+      {"jsonrpc", "2.0"}, {"id", id}, {"method", method}, {"params", params}};
+}
+
+// Installs the inline test dispatcher and restores the default (empty) one
+// when the test ends, however it ends.
+class InlineDispatcherGuard {
+ public:
+  InlineDispatcherGuard() {
+    McpHost::SetDispatcherForTest(
+        [](std::function<void()> work) { work(); });
+  }
+  ~InlineDispatcherGuard() { McpHost::SetDispatcherForTest({}); }
+};
+
+// Starts the scene's MCP server headlessly (ephemeral port, no .mcp.json) and
+// returns the port it listens on.
+std::uint16_t StartEphemeralServer(TestScene& test, bool allow_edits) {
+  EditorSettings& settings = test.scene.Settings();
+  settings.mcp_enabled = true;
+  settings.mcp_ephemeral = true;
+  settings.mcp_allow_edits = allow_edits;
+  settings.mcp_write_config = false;  // no project open; keep the test local
+  test.scene.Mcp().ApplySettings();
+  if (!test.scene.Mcp().Running()) return 0;
+  const std::string& url = test.scene.Mcp().Url();
+  const size_t colon = url.rfind(':');
+  if (colon == std::string::npos) return 0;
+  try {
+    return static_cast<std::uint16_t>(
+        std::stoi(url.substr(colon + 1, url.find("/mcp") - colon - 1)));
   } catch (const std::exception&) {
     return 0;
   }
@@ -438,6 +571,192 @@ TEST(McpHostTest, EphemeralServerListensAndStops) {
   settings.mcp_enabled = false;
   test.scene.Mcp().ApplySettings();
   EXPECT_FALSE(test.scene.Mcp().Running());
+  EXPECT_TRUE(ConnectRefused(port)) << "something still listens on " << port;
+}
+#endif  // !_WIN32
+
+// ------------------------------------------------------- End-to-end flows --
+//
+// The full stack over real HTTP: the MCP transport calls the tool host, the
+// inline test dispatcher runs the tool work in place (instead of queueing to
+// a UI thread), and the registry answers. The header dance follows the
+// 2026-07-28 protocol (stateless requests with the SEP-1319 `_meta`), like a
+// compliant client.
+
+#if !defined(_WIN32)
+TEST(McpHostTest, E2ePingAndServerInfoAnswerOverHttp) {
+  TestScene test(TempDir("mcp_e2e_ping"));
+  // Inline dispatcher: the queued work runs on the caller's thread.
+  InlineDispatcherGuard dispatcher;
+  const std::uint16_t port = StartEphemeralServer(test, /*allow_edits=*/true);
+  ASSERT_NE(port, 0) << "the server did not start";
+  const std::string token = "Bearer " + test.scene.Settings().mcp_token;
+
+  // initialize
+  const std::string init = HttpPost(
+      port, token,
+      JsonRpc(1, "initialize",
+              nlohmann::json{{"protocolVersion", "2026-07-28"},
+                             {"capabilities", nlohmann::json::object()},
+                             {"clientInfo", nlohmann::json{
+                                 {"name", "mcp_host_test"}, {"version", "0"}}}})
+          .dump());
+  ASSERT_FALSE(init.empty()) << "initialize did not answer";
+  nlohmann::json payload = ResponseJson(init);
+  ASSERT_TRUE(payload.contains("result")) << payload.dump();
+  EXPECT_EQ(payload["result"]["serverInfo"]["version"],
+            MERCURY_VERSION_STRING);
+
+  // tools/list includes ping
+  const std::string list = HttpPost(
+      port, token,
+      JsonRpc(2, "tools/list",
+              nlohmann::json{{"_meta", StatelessMeta()}})
+          .dump());
+  payload = ResponseJson(list);
+  ASSERT_TRUE(payload.contains("result")) << payload.dump();
+  bool has_ping = false;
+  bool has_server_info = false;
+  for (const auto& tool : payload["result"]["tools"]) {
+    has_ping = has_ping || tool["name"] == "ping";
+    has_server_info = has_server_info || tool["name"] == "get_server_info";
+  }
+  EXPECT_TRUE(has_ping) << payload.dump();
+  EXPECT_TRUE(has_server_info) << payload.dump();
+
+  // tools/call ping: the built-in answers through the registry.
+  const std::string ping = HttpPost(
+      port, token,
+      JsonRpc(3, "tools/call",
+              nlohmann::json{{"name", "ping"},
+                             {"arguments", nlohmann::json::object()},
+                             {"_meta", StatelessMeta()}})
+          .dump());
+  payload = ResponseJson(ping);
+  ASSERT_TRUE(payload.contains("result")) << payload.dump();
+  EXPECT_EQ(payload["result"]["isError"], false);
+  ASSERT_TRUE(payload["result"]["structuredContent"].contains("pong"))
+      << payload.dump();
+  EXPECT_EQ(payload["result"]["structuredContent"]["pong"], true);
+  EXPECT_EQ(payload["result"]["structuredContent"]["editor_version"],
+            MERCURY_VERSION_STRING);
+
+  // tools/call get_server_info: answered by the Rust transport with the
+  // editor's version.
+  const std::string info = HttpPost(
+      port, token,
+      JsonRpc(4, "tools/call",
+              nlohmann::json{{"name", "get_server_info"},
+                             {"arguments", nlohmann::json::object()},
+                             {"_meta", StatelessMeta()}})
+          .dump());
+  payload = ResponseJson(info);
+  ASSERT_TRUE(payload.contains("result")) << payload.dump();
+  EXPECT_EQ(payload["result"]["structuredContent"]["version"],
+            MERCURY_VERSION_STRING);
+  EXPECT_EQ(payload["result"]["structuredContent"]["read_only"], false);
+
+  test.scene.Mcp().Stop();
+  EXPECT_TRUE(ConnectRefused(port)) << "something still listens on " << port;
+}
+
+// The "Write tool rejected in read-only mode" case is NOT covered over HTTP
+// here: the tool catalogue lives in Rust (mercury/mcp/src/tools), the real
+// catalogue has no Write-mode tool until Wave 2 adds one, and the Rust-only
+// Write spec the transport's unit tests use is compiled out of the archive
+// this binary links. The gate itself is tested in mercury_mcp's cargo tests
+// (the read-only test with a test-only Write spec). The HTTP case moves to T3
+// (#535): its apply_scene_operations is the first real Write tool. What this
+// test covers is the read-only server's
+// observable behaviour: it answers Read tools, reports read_only, and a tool
+// that only exists in the C++ registry is not reachable (the Rust catalogue is
+// the source of truth for what a client may call).
+TEST(McpHostTest, E2eReadOnlyServerAnswersReadToolsAndReportsReadOnly) {
+  TestScene test(TempDir("mcp_e2e_readonly"));
+  InlineDispatcherGuard dispatcher;
+  const std::uint16_t port = StartEphemeralServer(test, /*allow_edits=*/false);
+  ASSERT_NE(port, 0) << "the server did not start";
+  const std::string token = "Bearer " + test.scene.Settings().mcp_token;
+
+  // A Read-mode tool works on a read-only server.
+  nlohmann::json payload = ResponseJson(HttpPost(
+      port, token,
+      JsonRpc(1, "tools/call",
+              nlohmann::json{{"name", "ping"},
+                             {"arguments", nlohmann::json::object()},
+                             {"_meta", StatelessMeta()}})
+          .dump()));
+  ASSERT_TRUE(payload.contains("result")) << payload.dump();
+  EXPECT_EQ(payload["result"]["isError"], false);
+  EXPECT_EQ(payload["result"]["structuredContent"]["pong"], true);
+
+  // get_server_info reports the read-only mode and the editor's version.
+  payload = ResponseJson(HttpPost(
+      port, token,
+      JsonRpc(2, "tools/call",
+              nlohmann::json{{"name", "get_server_info"},
+                             {"arguments", nlohmann::json::object()},
+                             {"_meta", StatelessMeta()}})
+          .dump()));
+  ASSERT_TRUE(payload.contains("result")) << payload.dump();
+  EXPECT_EQ(payload["result"]["structuredContent"]["read_only"], true);
+  EXPECT_EQ(payload["result"]["structuredContent"]["version"],
+            MERCURY_VERSION_STRING);
+
+  // A tool registered only in the C++ registry is not in the Rust catalogue,
+  // so a client cannot call it: an MCP error (-32602), not a tool result.
+  payload = ResponseJson(HttpPost(
+      port, token,
+      JsonRpc(3, "tools/call",
+              nlohmann::json{{"name", "mcp_test_write"},
+                             {"arguments", nlohmann::json::object()},
+                             {"_meta", StatelessMeta()}})
+          .dump()));
+  ASSERT_TRUE(payload.contains("error")) << payload.dump();
+  EXPECT_EQ(payload["error"]["code"], -32602);
+  EXPECT_FALSE(payload.contains("result"));
+
+  test.scene.Mcp().Stop();
+  EXPECT_TRUE(ConnectRefused(port)) << "something still listens on " << port;
+}
+
+TEST(McpHostTest, E2eSecurityChecksRejectBadTokenOriginAndHost) {
+  TestScene test(TempDir("mcp_e2e_security"));
+  InlineDispatcherGuard dispatcher;
+  const std::uint16_t port = StartEphemeralServer(test, /*allow_edits=*/false);
+  ASSERT_NE(port, 0) << "the server did not start";
+  const std::string good = "Bearer " + test.scene.Settings().mcp_token;
+  const std::string host = "127.0.0.1:" + std::to_string(port);
+
+  // Wrong or missing token: 401 (Host and Origin are fine).
+  EXPECT_EQ(HttpPostStatus(port, "Bearer not-the-token"), 401);
+  EXPECT_EQ(HttpPostStatus(port, ""), 401);
+  EXPECT_NE(HttpPostStatus(port, good), 401);
+
+  // A foreign Origin is refused with 403 even with the right token, so a web
+  // page cannot drive the editor through the user's browser.
+  EXPECT_EQ(HttpPostStatus(port, good, host, "https://evil.example"), 403);
+  EXPECT_EQ(HttpPostStatus(port, good, host, "http://127.0.0.1.evil.com"),
+            403);
+  // A loopback Origin, on any port, is allowed through.
+  EXPECT_NE(HttpPostStatus(port, good, host, "http://127.0.0.1:3000"), 403);
+  EXPECT_NE(HttpPostStatus(port, good, host, "http://localhost"), 403);
+
+  // A foreign Host is refused with 403 (DNS rebinding), again with the right
+  // token; `localhost:<port>` is accepted.
+  EXPECT_EQ(HttpPostStatus(port, good, "evil.example:" + std::to_string(port)),
+            403);
+  EXPECT_EQ(HttpPostStatus(port, good, "evil.example"), 403);
+  EXPECT_NE(HttpPostStatus(port, good, "localhost:" + std::to_string(port)),
+            403);
+
+  // Host and Origin are checked before the token: a foreign Origin with a
+  // wrong token is still 403, not 401.
+  EXPECT_EQ(HttpPostStatus(port, "Bearer not-the-token", host,
+                           "https://evil.example"),
+            403);
+
+  test.scene.Mcp().Stop();
   EXPECT_TRUE(ConnectRefused(port)) << "something still listens on " << port;
 }
 #endif  // !_WIN32

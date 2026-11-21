@@ -208,6 +208,7 @@ struct McpHost::Impl {
                       : static_cast<std::uint16_t>(settings.mcp_port);
     config.read_only = !settings.mcp_allow_edits;
     config.token = settings.mcp_token;
+    config.editor_version = MERCURY_VERSION_STRING;
 
     host_impl = std::make_shared<mcp::ToolHostImpl>(scene, alive);
     try {
