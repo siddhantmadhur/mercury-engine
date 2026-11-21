@@ -1,8 +1,12 @@
 [project]
-name = "ScriptFixture"
+format = 2
+editor_version = "1.0.0"
+[project.props]
 engine_version = "dev"
+name = "ScriptFixture"
 
-[window]
+[[window]]
+[window.props]
+height = 240
 title = "ScriptFixture"
 width = 320
-height = 240

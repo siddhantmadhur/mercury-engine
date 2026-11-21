@@ -273,6 +273,21 @@ VisualElement* VisualElement::HierarchyInsert(
   for (const VisualElement* p = this; p; p = p->hierarchy_parent_) {
     if (++depth >= kMaxHierarchyDepth) return nullptr;
   }
+  // The child may already carry a tree of its own (built bottom-up), so its
+  // height counts too, or a chain could grow without ever tripping the check
+  // above. Walked with a stack of our own: this is the depth we're guarding.
+  if (!child->children_.empty()) {
+    std::vector<std::pair<const VisualElement*, int>> pending;
+    pending.emplace_back(child.get(), depth + 1);
+    while (!pending.empty()) {
+      const auto [node, level] = pending.back();
+      pending.pop_back();
+      if (level >= kMaxHierarchyDepth) return nullptr;
+      for (const auto& grandchild : node->children_) {
+        pending.emplace_back(grandchild.get(), level + 1);
+      }
+    }
+  }
   index = std::clamp(index, 0, static_cast<int>(children_.size()));
   if (has_measure_func_) {
     // Yoga doesn't allow measured nodes to have children.

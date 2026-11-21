@@ -8,9 +8,12 @@
  * Loads .mprefab files once per project. A .mprefab is a map whose root node
  * is the prefab (Unity's .prefab); maps place copies of it with
  *
- *   [node name="Crate" parent="." instance=ExtResource("2")]
+ *   [[node]]
+ *   name = "Crate"
+ *   parent = "."
+ *   instance = "res://crate.mprefab"
  *
- * and override its values with ordinary [component] sections.
+ * and override its values with ordinary [[component]] sections.
  */
 #ifndef MERCURY_PROJECT_PREFAB_CACHE_H
 #define MERCURY_PROJECT_PREFAB_CACHE_H

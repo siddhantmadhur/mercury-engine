@@ -48,7 +48,10 @@ ComponentInfo MakeInfo(const char* name, const char* category,
     if (!value) return false;
     auto reflector = Reflector::Set(field, in);
     value->Reflect(reflector);
-    return reflector.Found();
+    for (const auto& warning : reflector.GetWarnings()) {
+      PDebug::warn("{}", warning);
+    }
+    return reflector.Applied();
   };
   return info;
 }
@@ -146,10 +149,12 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
     result.normal_texture = own->normal_texture;
     result.normal_scale = own->normal_scale;
     result.transparent = own->transparent;
+    result.double_sided = own->double_sided;
     result.transmission = own->transmission;
     result.ior = own->ior;
     result.transmission_color = own->transmission_color;
     result.thickness = own->thickness;
+    result.reflectance = own->reflectance;
     return result;
   };
 

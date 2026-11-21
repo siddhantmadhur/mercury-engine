@@ -70,6 +70,7 @@ function(mercury_add_cxx_bridge NAME SOURCE)
             COMMAND "${CMAKE_COMMAND}" -E make_directory
                     "${MERCURY_GENERATED_DIR}/mercury/rust"
                     "${MERCURY_GENERATED_DIR}/mercury/input"
+                    "${MERCURY_GENERATED_DIR}/mercury/uss"
             COMMAND "${CXXBRIDGE_EXECUTABLE}" "${SOURCE}" --header -o "${HEADER}"
             COMMAND "${CXXBRIDGE_EXECUTABLE}" "${SOURCE}" -o "${SOURCE_OUT}"
             DEPENDS "${SOURCE}"
@@ -85,6 +86,8 @@ mercury_add_cxx_bridge(rust/ffi
         "${MERCURY_ENGINE_SOURCE_DIR}/mercury/rust/ffi.rs")
 mercury_add_cxx_bridge(input/input_actions_codegen
         "${MERCURY_ENGINE_SOURCE_DIR}/mercury/input/input_actions_codegen.rs")
+mercury_add_cxx_bridge(uss/uss
+        "${MERCURY_ENGINE_SOURCE_DIR}/mercury/uss/uss.rs")
 
 target_sources(mercury PRIVATE ${MERCURY_CXX_BRIDGE_SOURCES})
 target_include_directories(mercury PUBLIC
@@ -112,7 +115,12 @@ add_custom_command(
         OUTPUT "${MERCURY_RUST_STATICLIB}"
         COMMAND "${CMAKE_COMMAND}" -E env
                 "CARGO_TARGET_DIR=${MERCURY_CARGO_TARGET_DIR}"
-                "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}"
+                # MACOSX_DEPLOYMENT_TARGET would leak into rustc and make
+                # freshly built proc-macro crates (phf_macros, and others
+                # pulled in by new dependencies) unloadable by rustc itself,
+                # so build the Rust code without it. The C++ link step that
+                # consumes the static library keeps the deployment target.
+                --unset=MACOSX_DEPLOYMENT_TARGET
                 "${CARGO_EXECUTABLE}" build ${MERCURY_CARGO_PROFILE_FLAG}
                 --manifest-path "${MERCURY_ENGINE_SOURCE_DIR}/Cargo.toml" --locked
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -123,6 +131,7 @@ add_custom_command(
                 "${MERCURY_ENGINE_SOURCE_DIR}/Cargo.lock"
                 "${MERCURY_ENGINE_SOURCE_DIR}/mercury/rust/Cargo.toml"
                 "${MERCURY_ENGINE_SOURCE_DIR}/mercury/input/Cargo.toml"
+                "${MERCURY_ENGINE_SOURCE_DIR}/mercury/uss/Cargo.toml"
         COMMENT "Building the Mercury Rust modules"
         VERBATIM)
 

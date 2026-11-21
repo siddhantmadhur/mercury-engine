@@ -19,6 +19,7 @@
 #include "properties/transform.h"
 #include "scene/map_scene.h"
 #include "scripting/as/script_builder.h"
+#include "scripting/as/script_event.h"
 #include "scripting/as/script_runtime.h"
 #include "scripting/type_registry.h"
 #include "test_paths.h"
@@ -91,10 +92,19 @@ class ScriptBehaviourTest : public ::testing::Test {
 
 TEST_F(ScriptBehaviourTest, CallbacksRunInOrder) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 1);
   EXPECT_EQ(scene.Find("A").GetTag(), "aest");
@@ -104,10 +114,19 @@ TEST_F(ScriptBehaviourTest, CallbacksRunInOrder) {
 
 TEST_F(ScriptBehaviourTest, DisablingStopsCallbacksAndEnablingResumesThem) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 1);
   Script(scene, "A", "Probe")->SetEnabled(false);
@@ -138,13 +157,23 @@ TEST_F(ScriptBehaviourTest, FieldDefaultsAreInTheSchema) {
 
 TEST_F(ScriptBehaviourTest, MapValuesOverrideTheDefaults) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
-speed = 9.0
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+[component.props]
 label = "map"
 mode = "b"
+speed = 9.0
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   auto fields = Fields(Script(scene, "A", "Probe"));
   EXPECT_FLOAT_EQ(fields["speed"].ToFloat().value_or(0.0), 9.0f);
@@ -154,22 +183,81 @@ mode = "b"
 
 TEST_F(ScriptBehaviourTest, SavedEventCallsReachCallableMethods) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Probe" node="A"]
-fired = [[NodePath("A"), "Probe", "Add", 15.0]]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+[component.props]
+fired = [[{ path = "A" }, "Probe", "Add", 15.0]]
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 1);
   EXPECT_EQ(scene.Find("A").GetTag(), "aest+");
 }
 
+// A script can copy its Event field and keep the copy. The copy refers to the
+// Event by id, and the id must stop resolving once the owning behaviour is
+// gone, so using it then reports an unbound Event instead of reading freed
+// memory.
+TEST_F(ScriptBehaviourTest, EventIdsStopResolvingWhenTheBehaviourIsDestroyed) {
+  auto& runtime = ScriptRuntime::Instance();
+  uint32_t id = 0;
+  {
+    MapScene scene(g_project, MapScene::Mode::kPlay);
+    Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
+)");
+    ScriptBehaviour* script = Script(scene, "A", "Probe");
+    ASSERT_NE(script, nullptr);
+    const ScriptClass* script_class = runtime.FindScriptClass("Probe");
+    ASSERT_NE(script_class, nullptr);
+    for (const ScriptField& field : script_class->fields) {
+      if (field.type != FieldType::kEvent) continue;
+      auto* value = static_cast<ScriptEvent*>(
+          script->Instance()->GetAddressOfProperty(field.property_index));
+      ASSERT_NE(value, nullptr);
+      id = value->id;
+    }
+    ASSERT_NE(id, 0u);
+    EXPECT_NE(runtime.FindEvent(id), nullptr);
+  }
+  EXPECT_EQ(runtime.FindEvent(id), nullptr);
+}
+
 TEST_F(ScriptBehaviourTest, AnExceptionIsLoggedAndTheNextTickStillRuns) {
   MapScene scene(g_project, MapScene::Mode::kPlay);
-  Load(scene, R"([mmap format=1]
-[node name="Root"]
-[node name="A" parent="."]
-[component type="Thrower" node="A"]
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Thrower"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
 )");
   Tick(scene, 3);
   EXPECT_EQ(scene.Find("A").GetTag(), "ttt");

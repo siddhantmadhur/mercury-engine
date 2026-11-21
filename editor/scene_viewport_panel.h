@@ -26,6 +26,8 @@
 namespace Mercury::EditorUI {
 
 class ViewportCanvas;
+struct EditorViewportKeyEvent;
+struct EditorViewportMouseEvent;
 
 class CameraPreviewFrame : public wxFrame {
  public:
@@ -84,6 +86,9 @@ class SceneViewportPanel : public wxPanel {
   void OnCanvasKeyUp(wxKeyEvent& evt);
   void ReleaseMouseIfCaptured();
   bool HandleDroppedResPath(const std::string& res_path);
+  // Sends an event to extension viewport tools; true when one consumed it.
+  bool RouteViewportMouse(const EditorViewportMouseEvent& event);
+  bool RouteViewportKey(const EditorViewportKeyEvent& event);
 
   EditorScene& scene_;
 

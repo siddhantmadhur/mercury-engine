@@ -8,7 +8,10 @@
 
 #include "texture2d.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
@@ -48,14 +51,34 @@ stbi_uc* RasterizeSvg(std::vector<uint8_t> text, int* width, int* height,
     nsvgDelete(image);
     return nullptr;
   }
+  // The file chooses its own size ("width=60000", "1e10", "inf"), so bound the
+  // output: the longer side never exceeds kMaxSvgSide pixels.
+  constexpr float kMaxSvgSide = 8192.0f;
+  const float longest = std::max(image->width, image->height);
+  if (!std::isfinite(longest) || !std::isfinite(image->width) ||
+      !std::isfinite(image->height)) {
+    nsvgDelete(image);
+    return nullptr;
+  }
   const float scale =
-      std::max(1.0f, kSvgSize / std::max(image->width, image->height));
-  const int w = std::max(1, static_cast<int>(std::ceil(image->width * scale)));
-  const int h = std::max(1, static_cast<int>(std::ceil(image->height * scale)));
+      std::min(std::max(1.0f, kSvgSize / longest), kMaxSvgSide / longest);
+  const int w = std::clamp(static_cast<int>(std::ceil(image->width * scale)), 1,
+                           static_cast<int>(kMaxSvgSide));
+  const int h = std::clamp(static_cast<int>(std::ceil(image->height * scale)),
+                           1, static_cast<int>(kMaxSvgSide));
   // stbi_image_free() is free(), so allocate with malloc.
   auto* pixels =
       static_cast<stbi_uc*>(std::malloc(static_cast<size_t>(w) * h * 4));
+  if (!pixels) {
+    nsvgDelete(image);
+    return nullptr;
+  }
   NSVGrasterizer* rasterizer = nsvgCreateRasterizer();
+  if (!rasterizer) {
+    std::free(pixels);
+    nsvgDelete(image);
+    return nullptr;
+  }
   nsvgRasterize(rasterizer, image, 0, 0, scale, pixels, w, h, w * 4);
   nsvgDeleteRasterizer(rasterizer);
   nsvgDelete(image);
@@ -84,7 +107,7 @@ Texture2D::Texture2D() {
   y = 1;
   channels = 4;
   raw_data = (stbi_uc*)malloc(4);
-  memset(raw_data, 255, 4);
+  if (raw_data) memset(raw_data, 255, 4);
 }
 
 Texture2D::Texture2D(const std::string& file_path, int depth) {

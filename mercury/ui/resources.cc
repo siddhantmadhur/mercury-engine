@@ -44,10 +44,19 @@ void UIResources::Error(const std::string& message) {
 
 std::filesystem::path UIResources::Resolve(std::string_view path) const {
   if (path.starts_with(kEnginePrefix)) {
-    return EngineResourceDir() / std::string(path.substr(kEnginePrefix.size()));
+    // Engine files only: "mercury://../../etc/passwd" must not climb out.
+    const std::filesystem::path relative(
+        std::string(path.substr(kEnginePrefix.size())));
+    if (relative.is_absolute() || relative.has_root_name()) return {};
+    for (const auto& part : relative) {
+      if (part == "..") return {};
+    }
+    return EngineResourceDir() / relative;
   }
+  // With a project every other path goes through its resolver, which keeps
+  // it inside the project folder.
+  if (resolver_) return resolver_(path);
   if (path.starts_with("res://")) {
-    if (resolver_) return resolver_(path);
     return std::filesystem::path(std::string(path.substr(6)));
   }
   return std::filesystem::path(std::string(path));

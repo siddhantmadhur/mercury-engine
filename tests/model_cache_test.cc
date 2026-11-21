@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <random>
 
 #include "properties/model.h"
@@ -32,8 +33,7 @@ const bool kTestCacheDir = [] {
 }();
 
 const fs::path kModel =
-    fs::path(MERCURY_SOURCE_DIR) /
-    "examples/model_viewer/models/breakfast_room/breakfast_room.obj";
+    Mercury::test::BenchmarkDir() / "models/breakfast_room/breakfast_room.obj";
 
 void SetCacheDir(const fs::path& dir) {
 #if defined(_WIN32)
@@ -101,6 +101,7 @@ TEST_F(ModelCacheTest, ReadBackIsTheImportedModel) {
     EXPECT_EQ(a.name, b.name);
     EXPECT_EQ(a.color, b.color);
     EXPECT_EQ(a.smoothness, b.smoothness);
+    EXPECT_EQ(a.double_sided, b.double_sided);
     EXPECT_EQ(a.transmission, b.transmission);
     EXPECT_EQ(a.ior, b.ior);
     EXPECT_EQ(a.transmission_color, b.transmission_color);
@@ -134,6 +135,50 @@ TEST_F(ModelCacheTest, ReadBackIsTheImportedModel) {
   EXPECT_EQ(imported->BoundsMax(), cached->BoundsMax());
 }
 
+// The cache file is read from disk like any other input: a count that the rest
+// of the file cannot hold must make the import run again, not allocate it.
+TEST_F(ModelCacheTest, DamagedCountsImportAgainWithoutAllocating) {
+  const fs::path obj = dir_ / "triangle.obj";
+  fs::create_directories(dir_);
+  {
+    std::ofstream out(obj);
+    out << "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+  }
+  std::string error;
+  auto imported = Model::Load(obj.string(), Settings(), &error);
+  ASSERT_TRUE(imported) << error;
+  fs::path cache_file;
+  for (const auto& entry : fs::recursive_directory_iterator(dir_ / "models")) {
+    if (entry.is_regular_file()) cache_file = entry.path();
+  }
+  ASSERT_FALSE(cache_file.empty());
+  const auto written = fs::last_write_time(cache_file);
+  auto cached = Model::Load(obj.string(), Settings(), &error);  // from cache
+  ASSERT_TRUE(cached) << error;
+  ASSERT_EQ(imported->Nodes().size(), cached->Nodes().size());
+  // A valid cache is accepted as is; an import would have rewritten it.
+  EXPECT_EQ(fs::last_write_time(cache_file), written);
+  // magic (4) + key (8) + root_on_object (1), then the node count.
+  const uint64_t huge = uint64_t{1} << 60;
+  {
+    std::fstream file(cache_file,
+                      std::ios::binary | std::ios::in | std::ios::out);
+    file.seekp(13);
+    file.write(reinterpret_cast<const char*>(&huge), sizeof(huge));
+  }
+  auto again = Model::Load(obj.string(), Settings(), &error);
+  ASSERT_TRUE(again) << error;
+  // The import wrote a good cache over the damaged one.
+  uint64_t count = 0;
+  {
+    std::ifstream file(cache_file, std::ios::binary);
+    file.seekg(13);
+    file.read(reinterpret_cast<char*>(&count), sizeof(count));
+  }
+  EXPECT_EQ(count, imported->Nodes().size());
+  EXPECT_EQ(again->Nodes().size(), imported->Nodes().size());
+}
+
 TEST_F(ModelCacheTest, OtherSettingsImportAgain) {
   if (!fs::exists(kModel)) GTEST_SKIP() << "missing fixture " << kModel;
   std::string error;
@@ -149,9 +194,8 @@ TEST_F(ModelCacheTest, OtherSettingsImportAgain) {
 // OBJ glass (illum 7 with a transmission filter) imports as transmissive,
 // with its index of refraction and tint, and the cache keeps them.
 TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
-  const fs::path model =
-      fs::path(MERCURY_SOURCE_DIR) /
-      "examples/model_viewer/models/cornell_box/CornellBox-Sphere.obj";
+  const fs::path model = Mercury::test::BenchmarkDir() /
+                         "models/cornell_box/CornellBox-Sphere.obj";
   if (!fs::exists(model)) GTEST_SKIP() << "missing fixture " << model;
   for (int pass = 0; pass < 2; pass++) {  // imported, then from the cache
     std::string error;
@@ -166,6 +210,9 @@ TEST_F(ModelCacheTest, ObjGlassIsTransmissive) {
     ASSERT_TRUE(glass && mirror);
     EXPECT_FLOAT_EQ(glass->transmission, 1.0f);
     EXPECT_FLOAT_EQ(glass->ior, 2.5f);
+    // Tf 0.1 gray is a 10% transmittance: the tint keeps its magnitude (the
+    // renderer turns it into absorption over the path) rather than being
+    // normalized to clear.
     EXPECT_NEAR(glass->transmission_color.r, 0.1f, 1e-5f);
     EXPECT_FALSE(glass->transparent);
     EXPECT_FLOAT_EQ(mirror->transmission, 0.0f);

@@ -1,287 +1,558 @@
-[mmap format=1]
+[mmap]
+format = 2
+editor_version = "1.0.0"
 
-[ext_resource type="UXML" path="res://ui/score.uxml" id="1"]
-[ext_resource type="Material" path="res://assets/ground.masset" id="2"]
-[ext_resource type="PhysicsMaterial" path="res://assets/grippy.masset" id="3"]
-[ext_resource type="Material" path="res://assets/wall.masset" id="4"]
-[ext_resource type="Material" path="res://assets/player.masset" id="5"]
-[ext_resource type="Material" path="res://assets/pickup.masset" id="6"]
+[[component]]
+node = "."
+type = "Transform"
 
-[node name="RollABall"]
+[[component]]
+node = "."
+type = "GameManager"
 
-[component type="Transform" node="."]
+[[component]]
+node = "."
+type = "UIDocument"
+[component.props]
+source_asset = { ext = "1" }
 
-[component type="GameManager" node="."]
+[[component]]
+node = "Camera"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 10.0, 10.0] }
+rotation = { vec3 = [-45.0, 0.0, 0.0] }
 
-[component type="UIDocument" node="."]
-source_asset = ExtResource("1")
+[[component]]
+node = "Camera"
+type = "Camera"
+[component.props]
+background = { color = [0.53, 0.68, 0.85, 1.0] }
 
-[node name="Camera" parent="."]
+[[component]]
+node = "Camera"
+type = "CameraFollow"
+[component.props]
+target = { path = "Player" }
 
-[component type="Transform" node="Camera"]
-position = Vector3(0, 10, 10)
-rotation = Vector3(-45, 0, 0)
+[[component]]
+node = "Sun"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 8.0, 0.0] }
+rotation = { vec3 = [-50.0, -30.0, 0.0] }
 
-[component type="Camera" node="Camera"]
-background = Color(0.53, 0.68, 0.85, 1)
+[[component]]
+node = "Sun"
+type = "DirectionalLight"
+[component.props]
+ambient = { color = [0.35, 0.38, 0.45, 1.0] }
 
-[component type="CameraFollow" node="Camera"]
-target = NodePath("Player")
+[[component]]
+node = "Ground"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, -0.5, 0.0] }
+scale = { vec3 = [20.0, 1.0, 20.0] }
 
-[node name="Sun" parent="."]
+[[component]]
+node = "Ground"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "2" }
 
-[component type="Transform" node="Sun"]
-position = Vector3(0, 8, 0)
-rotation = Vector3(-50, -30, 0)
+[[component]]
+node = "Ground"
+type = "BoxCollider"
+[component.props]
+material = { ext = "3" }
 
-[component type="DirectionalLight" node="Sun"]
-ambient = Color(0.35, 0.38, 0.45, 1)
+[[component]]
+node = "Walls"
+type = "Transform"
 
-[node name="Ground" parent="."]
+[[component]]
+node = "Walls/North"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.5, -10.25] }
+scale = { vec3 = [21.0, 1.0, 0.5] }
 
-[component type="Transform" node="Ground"]
-position = Vector3(0, -0.5, 0)
-scale = Vector3(20, 1, 20)
+[[component]]
+node = "Walls/North"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "4" }
 
-[component type="MeshRenderer" node="Ground"]
-material = ExtResource("2")
+[[component]]
+node = "Walls/North"
+type = "BoxCollider"
 
-[component type="BoxCollider" node="Ground"]
-material = ExtResource("3")
+[[component]]
+node = "Walls/South"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.5, 10.25] }
+scale = { vec3 = [21.0, 1.0, 0.5] }
 
-[node name="Walls" parent="."]
+[[component]]
+node = "Walls/South"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "4" }
 
-[component type="Transform" node="Walls"]
+[[component]]
+node = "Walls/South"
+type = "BoxCollider"
 
-[node name="North" parent="Walls"]
+[[component]]
+node = "Walls/East"
+type = "Transform"
+[component.props]
+position = { vec3 = [10.25, 0.5, 0.0] }
+scale = { vec3 = [0.5, 1.0, 20.0] }
 
-[component type="Transform" node="Walls/North"]
-position = Vector3(0, 0.5, -10.25)
-scale = Vector3(21, 1, 0.5)
+[[component]]
+node = "Walls/East"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "4" }
 
-[component type="MeshRenderer" node="Walls/North"]
-material = ExtResource("4")
+[[component]]
+node = "Walls/East"
+type = "BoxCollider"
 
-[component type="BoxCollider" node="Walls/North"]
+[[component]]
+node = "Walls/West"
+type = "Transform"
+[component.props]
+position = { vec3 = [-10.25, 0.5, 0.0] }
+scale = { vec3 = [0.5, 1.0, 20.0] }
 
-[node name="South" parent="Walls"]
+[[component]]
+node = "Walls/West"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "4" }
 
-[component type="Transform" node="Walls/South"]
-position = Vector3(0, 0.5, 10.25)
-scale = Vector3(21, 1, 0.5)
+[[component]]
+node = "Walls/West"
+type = "BoxCollider"
 
-[component type="MeshRenderer" node="Walls/South"]
-material = ExtResource("4")
+[[component]]
+node = "Player"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.5, 0.0] }
 
-[component type="BoxCollider" node="Walls/South"]
-
-[node name="East" parent="Walls"]
-
-[component type="Transform" node="Walls/East"]
-position = Vector3(10.25, 0.5, 0)
-scale = Vector3(0.5, 1, 20)
-
-[component type="MeshRenderer" node="Walls/East"]
-material = ExtResource("4")
-
-[component type="BoxCollider" node="Walls/East"]
-
-[node name="West" parent="Walls"]
-
-[component type="Transform" node="Walls/West"]
-position = Vector3(-10.25, 0.5, 0)
-scale = Vector3(0.5, 1, 20)
-
-[component type="MeshRenderer" node="Walls/West"]
-material = ExtResource("4")
-
-[component type="BoxCollider" node="Walls/West"]
-
-[node name="Player" parent="."]
-
-[component type="Transform" node="Player"]
-position = Vector3(0, 0.5, 0)
-
-[component type="MeshRenderer" node="Player"]
+[[component]]
+node = "Player"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "5" }
 mesh = "sphere"
-material = ExtResource("5")
 
-[component type="SphereCollider" node="Player"]
-material = ExtResource("3")
+[[component]]
+node = "Player"
+type = "SphereCollider"
+[component.props]
+material = { ext = "3" }
 
-[component type="Rigidbody" node="Player"]
+[[component]]
+node = "Player"
+type = "Rigidbody"
 
-[component type="PlayerController" node="Player"]
+[[component]]
+node = "Player"
+type = "PlayerController"
 
-[node name="Pickups" parent="."]
+[[component]]
+node = "Pickups"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.5, 0.0] }
 
-[component type="Transform" node="Pickups"]
-position = Vector3(0, 0.5, 0)
+[[component]]
+node = "Pickups/Pickup1"
+type = "Transform"
+[component.props]
+position = { vec3 = [6.0, 0.0, 0.0] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[node name="Pickup1" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup1"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="Transform" node="Pickups/Pickup1"]
-position = Vector3(6, 0, 0)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
-
-[component type="MeshRenderer" node="Pickups/Pickup1"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup1"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup1"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup1"]
+[[component]]
+node = "Pickups/Pickup1"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup1"]
+[[component]]
+node = "Pickups/Pickup1"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup1"]
+[[component]]
+node = "Pickups/Pickup1"
+type = "Pickup"
 
-[node name="Pickup2" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup2"
+type = "Transform"
+[component.props]
+position = { vec3 = [4.25, 0.0, 4.25] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[component type="Transform" node="Pickups/Pickup2"]
-position = Vector3(4.25, 0, 4.25)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
+[[component]]
+node = "Pickups/Pickup2"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="MeshRenderer" node="Pickups/Pickup2"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup2"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup2"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup2"]
+[[component]]
+node = "Pickups/Pickup2"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup2"]
+[[component]]
+node = "Pickups/Pickup2"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup2"]
+[[component]]
+node = "Pickups/Pickup2"
+type = "Pickup"
 
-[node name="Pickup3" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup3"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.0, 6.0] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[component type="Transform" node="Pickups/Pickup3"]
-position = Vector3(0, 0, 6)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
+[[component]]
+node = "Pickups/Pickup3"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="MeshRenderer" node="Pickups/Pickup3"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup3"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup3"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup3"]
+[[component]]
+node = "Pickups/Pickup3"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup3"]
+[[component]]
+node = "Pickups/Pickup3"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup3"]
+[[component]]
+node = "Pickups/Pickup3"
+type = "Pickup"
 
-[node name="Pickup4" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup4"
+type = "Transform"
+[component.props]
+position = { vec3 = [-4.25, 0.0, 4.25] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[component type="Transform" node="Pickups/Pickup4"]
-position = Vector3(-4.25, 0, 4.25)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
+[[component]]
+node = "Pickups/Pickup4"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="MeshRenderer" node="Pickups/Pickup4"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup4"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup4"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup4"]
+[[component]]
+node = "Pickups/Pickup4"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup4"]
+[[component]]
+node = "Pickups/Pickup4"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup4"]
+[[component]]
+node = "Pickups/Pickup4"
+type = "Pickup"
 
-[node name="Pickup5" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup5"
+type = "Transform"
+[component.props]
+position = { vec3 = [-6.0, 0.0, 0.0] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[component type="Transform" node="Pickups/Pickup5"]
-position = Vector3(-6, 0, 0)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
+[[component]]
+node = "Pickups/Pickup5"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="MeshRenderer" node="Pickups/Pickup5"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup5"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup5"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup5"]
+[[component]]
+node = "Pickups/Pickup5"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup5"]
+[[component]]
+node = "Pickups/Pickup5"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup5"]
+[[component]]
+node = "Pickups/Pickup5"
+type = "Pickup"
 
-[node name="Pickup6" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup6"
+type = "Transform"
+[component.props]
+position = { vec3 = [-4.25, 0.0, -4.25] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[component type="Transform" node="Pickups/Pickup6"]
-position = Vector3(-4.25, 0, -4.25)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
+[[component]]
+node = "Pickups/Pickup6"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="MeshRenderer" node="Pickups/Pickup6"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup6"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup6"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup6"]
+[[component]]
+node = "Pickups/Pickup6"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup6"]
+[[component]]
+node = "Pickups/Pickup6"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup6"]
+[[component]]
+node = "Pickups/Pickup6"
+type = "Pickup"
 
-[node name="Pickup7" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup7"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.0, -6.0] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[component type="Transform" node="Pickups/Pickup7"]
-position = Vector3(0, 0, -6)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
+[[component]]
+node = "Pickups/Pickup7"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="MeshRenderer" node="Pickups/Pickup7"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup7"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup7"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup7"]
+[[component]]
+node = "Pickups/Pickup7"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup7"]
+[[component]]
+node = "Pickups/Pickup7"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup7"]
+[[component]]
+node = "Pickups/Pickup7"
+type = "Pickup"
 
-[node name="Pickup8" parent="Pickups"]
+[[component]]
+node = "Pickups/Pickup8"
+type = "Transform"
+[component.props]
+position = { vec3 = [4.25, 0.0, -4.25] }
+rotation = { vec3 = [45.0, 0.0, 45.0] }
+scale = { vec3 = [0.5, 0.5, 0.5] }
 
-[component type="Transform" node="Pickups/Pickup8"]
-position = Vector3(4.25, 0, -4.25)
-rotation = Vector3(45, 0, 45)
-scale = Vector3(0.5, 0.5, 0.5)
+[[component]]
+node = "Pickups/Pickup8"
+type = "MeshRenderer"
+[component.props]
+material = { ext = "6" }
 
-[component type="MeshRenderer" node="Pickups/Pickup8"]
-material = ExtResource("6")
-
-[component type="Rigidbody" node="Pickups/Pickup8"]
-motion_type = "kinematic"
+[[component]]
+node = "Pickups/Pickup8"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+motion_type = "kinematic"
 
-[component type="BoxCollider" node="Pickups/Pickup8"]
+[[component]]
+node = "Pickups/Pickup8"
+type = "BoxCollider"
+[component.props]
 is_trigger = true
 
-[component type="Rotator" node="Pickups/Pickup8"]
+[[component]]
+node = "Pickups/Pickup8"
+type = "Rotator"
 
-[component type="Pickup" node="Pickups/Pickup8"]
+[[component]]
+node = "Pickups/Pickup8"
+type = "Pickup"
+
+[[ext_resource]]
+id = "1"
+path = "res://ui/score.uxml"
+type = "UXML"
+
+[[ext_resource]]
+id = "2"
+path = "res://assets/ground.masset"
+type = "Material"
+
+[[ext_resource]]
+id = "3"
+path = "res://assets/grippy.masset"
+type = "PhysicsMaterial"
+
+[[ext_resource]]
+id = "4"
+path = "res://assets/wall.masset"
+type = "Material"
+
+[[ext_resource]]
+id = "5"
+path = "res://assets/player.masset"
+type = "Material"
+
+[[ext_resource]]
+id = "6"
+path = "res://assets/pickup.masset"
+type = "Material"
+
+[[node]]
+name = "RollABall"
+
+[[node]]
+name = "Camera"
+parent = "."
+
+[[node]]
+name = "Sun"
+parent = "."
+
+[[node]]
+name = "Ground"
+parent = "."
+
+[[node]]
+name = "Walls"
+parent = "."
+
+[[node]]
+name = "North"
+parent = "Walls"
+
+[[node]]
+name = "South"
+parent = "Walls"
+
+[[node]]
+name = "East"
+parent = "Walls"
+
+[[node]]
+name = "West"
+parent = "Walls"
+
+[[node]]
+name = "Player"
+parent = "."
+
+[[node]]
+name = "Pickups"
+parent = "."
+
+[[node]]
+name = "Pickup1"
+parent = "Pickups"
+
+[[node]]
+name = "Pickup2"
+parent = "Pickups"
+
+[[node]]
+name = "Pickup3"
+parent = "Pickups"
+
+[[node]]
+name = "Pickup4"
+parent = "Pickups"
+
+[[node]]
+name = "Pickup5"
+parent = "Pickups"
+
+[[node]]
+name = "Pickup6"
+parent = "Pickups"
+
+[[node]]
+name = "Pickup7"
+parent = "Pickups"
+
+[[node]]
+name = "Pickup8"
+parent = "Pickups"

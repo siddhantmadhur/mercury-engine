@@ -5,7 +5,11 @@
 #include "project.h"
 
 #include <algorithm>
+#include <cctype>
 #include <system_error>
+
+#include "os/filesystem.h"
+#include "version.h"
 
 namespace Mercury {
 
@@ -27,6 +31,19 @@ std::shared_ptr<Project> Project::Load(const fs::path& mproj_file,
   }
   project->file_ = file;
   project->root_ = file.parent_path();
+  if (auto build = project->document_.Find("build")) {
+    for (const char* key : {"target", "systems_target"}) {
+      const std::string value = build->properties.GetString(key);
+      if (!value.empty() && !IsValidTargetName(value)) {
+        if (error) {
+          *error = file.string() + ": invalid [build] " + key + " \"" + value +
+                   "\" (allowed: letters, digits, '_', '.', '+', '-'; cannot "
+                   "start with '-')";
+        }
+        return nullptr;
+      }
+    }
+  }
   return project;
 }
 
@@ -39,7 +56,7 @@ std::shared_ptr<Project> Project::Create(const fs::path& mproj_file,
   auto& section = project->GetOrAddSection("project");
   section.properties.Set("name", name);
   section.properties.Set("main_map", "res://maps/main.mmap");
-  section.properties.Set("engine_version", "dev");
+  section.properties.Set("engine_version", MERCURY_VERSION_STRING);
   auto& window = project->GetOrAddSection("window");
   window.properties.Set("title", name);
   window.properties.Set("width", 1280);
@@ -48,6 +65,10 @@ std::shared_ptr<Project> Project::Create(const fs::path& mproj_file,
 }
 
 bool Project::Save() const { return mtext::SaveFile(file_, document_); }
+
+fs::path Project::EnsureCacheDir(std::string* error) const {
+  return os::EnsureProjectCacheDir(root_, error);
+}
 
 mtext::Section& Project::GetOrAddSection(std::string_view tag) {
   if (auto section = document_.Find(tag)) return *section;
@@ -107,11 +128,115 @@ void Project::SetBuildOutput(std::string path) {
 
 std::string Project::GetBuildTarget() const {
   auto section = document_.Find("build");
-  return section ? section->properties.GetString("target") : "";
+  if (!section) return "";
+  const std::string target = section->properties.GetString("target");
+  return IsValidTargetName(target) ? target : "";
 }
 
-void Project::SetBuildTarget(std::string target) {
+bool Project::SetBuildTarget(std::string target) {
+  if (!target.empty() && !IsValidTargetName(target)) return false;
   GetOrAddSection("build").properties.Set("target", std::move(target));
+  return true;
+}
+
+bool Project::IsValidTargetName(std::string_view name) {
+  if (name.empty() || name.size() > 128 || name == "." || name == ".." ||
+      name.front() == '-') {
+    return false;
+  }
+  for (char c : name) {
+    const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                         (c >= '0' && c <= '9') || c == '_' || c == '.' ||
+                         c == '+' || c == '-';
+    if (!allowed) return false;
+  }
+  return true;
+}
+
+std::string Project::GetBuildSystemsTarget() const {
+  auto section = document_.Find("build");
+  if (section) {
+    const std::string explicit_target =
+        section->properties.GetString("systems_target");
+    if (!explicit_target.empty()) {
+      // Reject rather than fall back: a malformed explicit target must not
+      // silently turn into the default one.
+      return IsValidTargetName(explicit_target) ? explicit_target : "";
+    }
+  }
+  const std::string target = GetBuildTarget();
+  return target.empty() ? "" : target + "_systems";
+}
+
+std::string Project::GetRenderAntiAliasing() const {
+  auto section = document_.Find("render");
+  if (!section) return "taa";
+  const auto& p = section->properties;
+  if (p.Get("anti_aliasing")) {
+    std::string mode = p.GetString("anti_aliasing");
+    std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (mode == "none" || mode == "fxaa" || mode == "taa") return mode;
+    return "taa";
+  }
+  // Older projects only had the FXAA switch.
+  if (p.Get("fxaa")) return p.GetBool("fxaa", true) ? "fxaa" : "none";
+  return "taa";
+}
+
+void Project::SetRenderAntiAliasing(std::string mode) {
+  auto& properties = GetOrAddSection("render").properties;
+  properties.Set("anti_aliasing", std::move(mode));
+  // The legacy `fxaa` bool is superseded; leaving it would be stale data.
+  properties.Remove("fxaa");
+}
+
+bool Project::GetRenderFsr() const {
+  auto section = document_.Find("render");
+  return section && section->properties.GetBool("fsr", false);
+}
+
+void Project::SetRenderFsr(bool enabled) {
+  GetOrAddSection("render").properties.Set("fsr", enabled);
+}
+
+std::string Project::GetRenderFsrQuality() const {
+  auto section = document_.Find("render");
+  if (!section) return "ultra";
+  std::string quality = section->properties.GetString("fsr_quality");
+  std::transform(
+      quality.begin(), quality.end(), quality.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return quality == "high" ? "high" : "ultra";
+}
+
+void Project::SetRenderFsrQuality(std::string quality) {
+  GetOrAddSection("render").properties.Set("fsr_quality", std::move(quality));
+}
+
+float Project::GetRenderScale() const {
+  auto section = document_.Find("render");
+  const double scale =
+      section ? section->properties.GetFloat("render_scale", 0.75) : 0.75;
+  return std::clamp(static_cast<float>(scale), 0.5f, 1.0f);
+}
+
+void Project::SetRenderScale(float scale) {
+  GetOrAddSection("render").properties.Set("render_scale",
+                                           std::clamp(scale, 0.5f, 1.0f));
+}
+
+float Project::GetRenderFsrSharpness() const {
+  auto section = document_.Find("render");
+  const double sharpness =
+      section ? section->properties.GetFloat("fsr_sharpness", 0.9) : 0.9;
+  return std::clamp(static_cast<float>(sharpness), 0.0f, 1.0f);
+}
+
+void Project::SetRenderFsrSharpness(float sharpness) {
+  GetOrAddSection("render").properties.Set("fsr_sharpness",
+                                           std::clamp(sharpness, 0.0f, 1.0f));
 }
 
 glm::vec3 Project::GetGravity() const {
@@ -200,13 +325,27 @@ std::vector<std::string> Project::GetTags() const {
 }
 
 fs::path Project::Resolve(std::string_view path) const {
+  if (path.empty()) return {};
+  fs::path candidate;
   if (IsResPath(path)) {
     path.remove_prefix(kResPrefix.size());
-    return (root_ / fs::path(path)).lexically_normal();
+    candidate = fs::path(path);
+  } else {
+    candidate = fs::path(path);
   }
-  fs::path p(path);
-  if (p.is_absolute()) return p;
-  return (root_ / p).lexically_normal();
+  if (!candidate.is_absolute()) candidate = root_ / candidate;
+  candidate = candidate.lexically_normal();
+
+  // Compare real locations so a symlink inside the project cannot lead out of
+  // it. The target may not exist yet (a file about to be saved).
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(root_, ec);
+  if (ec) return {};
+  const fs::path real = fs::weakly_canonical(candidate, ec);
+  if (ec) return {};
+  const fs::path relative = real.lexically_relative(real_root);
+  if (relative.empty() || *relative.begin() == "..") return {};
+  return candidate;
 }
 
 std::string Project::ToResPath(const fs::path& path) const {

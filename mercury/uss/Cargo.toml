@@ -1,0 +1,13 @@
+[package]
+name = "mercury_uss"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "mercury_uss"
+path = "uss.rs"
+
+[dependencies]
+cxx = "=1.0.205"
+cssparser = "=0.38.0"

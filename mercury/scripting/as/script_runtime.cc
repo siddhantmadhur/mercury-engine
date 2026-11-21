@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <format>
+#include <limits>
 
 #include "debugger/debugger.h"
 #include "math/time.h"
@@ -227,9 +228,12 @@ bool ScriptRuntime::Initialize() {
 void ScriptRuntime::Shutdown() {
   if (!engine_) return;
   data_assets_.clear();
+  replaced_data_assets_.clear();
   behaviours_.clear();
+  events_.clear();  // their owners are gone with the engine
   timers_.clear();
   classes_.clear();
+  retired_classes_.clear();
   DiscardModule();
   engine_->ShutDownAndRelease();
   engine_ = nullptr;
@@ -283,28 +287,48 @@ bool ScriptRuntime::BuildFromSections(
   if (!engine_) return false;
   compile_failed_ = false;
 
+  // A module that will replace the current one is built under a name of its
+  // own. StartNewModule would otherwise discard the module that behaviours are
+  // using the moment it is called, so a build that then failed would have
+  // taken the working scripts with it.
+  const std::string build_name =
+      register_types ? module_name + "#" + std::to_string(++build_generation_)
+                     : module_name;
   CScriptBuilder builder;
-  if (builder.StartNewModule(engine_, module_name.c_str()) < 0) {
-    PDebug::error("Could not start the script module {}", module_name);
+  if (builder.StartNewModule(engine_, build_name.c_str()) < 0) {
+    PDebug::error("Could not start the script module {}", build_name);
     return false;
   }
+  const auto abandon = [&] {
+    if (register_types) engine_->DiscardModule(build_name.c_str());
+    return false;
+  };
   builder.AddSectionFromMemory("<engine>", ApiPreludeSource());
   for (const auto& [name, text] : sections) {
     const int result = builder.AddSectionFromMemory(name.c_str(), text.c_str());
     if (result < 0) {
       PDebug::error("Could not add script section {}", name);
-      return false;
+      return abandon();
     }
   }
-  if (builder.BuildModule() < 0 || compile_failed_) return false;
+  if (builder.BuildModule() < 0 || compile_failed_) return abandon();
 
   asIScriptModule* module = builder.GetModule();
   if (register_types) {
+    // Data-asset instances belong to classes of the module being discarded, and
+    // releasing them needs the module and the class table still in place.
+    data_assets_.clear();
+    replaced_data_assets_.clear();
     DiscardModule();
+    // Live behaviours point at their ScriptClass; keep the old table around
+    // (until Shutdown) rather than freeing it from under them.
+    if (!behaviours_.empty()) {
+      for (auto& old : classes_) retired_classes_.push_back(std::move(old));
+    }
     classes_.clear();
     TypeRegistry::Instance().ClearGameTypes();
     module_ = module;
-    module_name_ = module_name;
+    module_name_ = build_name;
     RegisterClasses(module, builder, true);
   }
   return true;
@@ -676,7 +700,7 @@ bool ScriptRuntime::RunString(std::string_view source, std::string_view name,
           *result =
               *static_cast<std::string*>(context->GetAddressOfReturnValue());
         } else {
-          *result = std::to_string(context->GetReturnDWord());
+          *result = std::to_string(static_cast<int>(context->GetReturnDWord()));
         }
       }
     } else if (timed_out_) {
@@ -689,6 +713,93 @@ bool ScriptRuntime::RunString(std::string_view source, std::string_view name,
   engine_->DiscardModule(module_name.c_str());
   return ok;
 }
+
+namespace {
+
+// ScriptArg integers are 32-bit; a bigger script value saturates rather than
+// wrapping around into a different number.
+int SaturateToInt(int64_t value) {
+  return static_cast<int>(std::clamp<int64_t>(
+      value, std::numeric_limits<int>::min(), std::numeric_limits<int>::max()));
+}
+int SaturateToInt(uint64_t value) {
+  return static_cast<int>(std::min<uint64_t>(
+      value, static_cast<uint64_t>(std::numeric_limits<int>::max())));
+}
+
+// Reads a finished call's return value. For a function that returns a
+// reference the context holds the address of the value, not the value, so it
+// is read through that address; the plain accessors would give 0 or garbage.
+// Object handles and value types are not returned (the handle belongs to the
+// context, which is released right after, and nothing consumes them).
+ScriptArg DecodeReturn(asIScriptEngine* engine, asIScriptContext* context,
+                       int type_id, bool is_reference) {
+  const void* ref = nullptr;
+  if (is_reference) {
+    ref = *static_cast<void* const*>(context->GetAddressOfReturnValue());
+    if (!ref) return ScriptArg{};
+  }
+  switch (type_id) {
+    case asTYPEID_VOID:
+      return ScriptArg{};
+    case asTYPEID_BOOL:
+      return ScriptArg::Bool(ref ? *static_cast<const bool*>(ref)
+                                 : context->GetReturnByte() != 0);
+    case asTYPEID_INT8:
+      return ScriptArg::Int(
+          ref ? *static_cast<const int8_t*>(ref)
+              : static_cast<int8_t>(context->GetReturnByte()));
+    case asTYPEID_UINT8:
+      return ScriptArg::Int(ref ? *static_cast<const uint8_t*>(ref)
+                                : context->GetReturnByte());
+    case asTYPEID_INT16:
+      return ScriptArg::Int(
+          ref ? *static_cast<const int16_t*>(ref)
+              : static_cast<int16_t>(context->GetReturnWord()));
+    case asTYPEID_UINT16:
+      return ScriptArg::Int(ref ? *static_cast<const uint16_t*>(ref)
+                                : context->GetReturnWord());
+    case asTYPEID_INT32:
+      return ScriptArg::Int(
+          ref ? *static_cast<const int32_t*>(ref)
+              : static_cast<int32_t>(context->GetReturnDWord()));
+    case asTYPEID_UINT32:
+      return ScriptArg::Int(SaturateToInt(
+          static_cast<uint64_t>(ref ? *static_cast<const uint32_t*>(ref)
+                                    : context->GetReturnDWord())));
+    case asTYPEID_INT64:
+      return ScriptArg::Int(
+          SaturateToInt(ref ? *static_cast<const int64_t*>(ref)
+                            : static_cast<int64_t>(context->GetReturnQWord())));
+    case asTYPEID_UINT64:
+      return ScriptArg::Int(SaturateToInt(
+          ref ? *static_cast<const uint64_t*>(ref)
+              : static_cast<uint64_t>(context->GetReturnQWord())));
+    case asTYPEID_FLOAT:
+      return ScriptArg::Float(ref ? *static_cast<const float*>(ref)
+                                  : context->GetReturnFloat());
+    case asTYPEID_DOUBLE:
+      return ScriptArg::Double(ref ? *static_cast<const double*>(ref)
+                                   : context->GetReturnDouble());
+    default:
+      break;
+  }
+  if (type_id & asTYPEID_OBJHANDLE) return ScriptArg{};
+  asITypeInfo* type = engine->GetTypeInfoById(type_id);
+  if (type && std::string(type->GetName()) == "string") {
+    const void* text = ref ? ref : context->GetAddressOfReturnValue();
+    return ScriptArg::String(*static_cast<const std::string*>(text));
+  }
+  if (type_id & asTYPEID_MASK_OBJECT) return ScriptArg{};
+  // An enum: read it as its underlying integer type (32-bit unless declared).
+  const int underlying = type ? type->GetUnderlyingTypeId() : asTYPEID_INT32;
+  return DecodeReturn(
+      engine, context,
+      underlying > 0 && underlying != type_id ? underlying : asTYPEID_INT32,
+      is_reference);
+}
+
+}  // namespace
 
 bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
                          std::span<const ScriptArg> args,
@@ -790,28 +901,10 @@ bool ScriptRuntime::Call(asIScriptFunction* function, asIScriptObject* object,
   if (r == asEXECUTION_FINISHED) {
     ok = true;
     if (result) {
-      const int type_id = function->GetReturnTypeId();
-      if (type_id == asTYPEID_BOOL) {
-        *result = ScriptArg::Bool(context->GetReturnByte() != 0);
-      } else if (type_id == asTYPEID_FLOAT) {
-        *result = ScriptArg::Float(context->GetReturnFloat());
-      } else if (type_id == asTYPEID_DOUBLE) {
-        *result = ScriptArg::Double(context->GetReturnDouble());
-      } else if (type_id & asTYPEID_OBJHANDLE) {
-        *result = ScriptArg::Object(context->GetReturnObject(), type_id);
-      } else if (type_id == asTYPEID_INT64 || type_id == asTYPEID_UINT64) {
-        *result = ScriptArg::Int(static_cast<int>(context->GetReturnQWord()));
-      } else if (type_id == asTYPEID_VOID) {
-        *result = ScriptArg{};
-      } else {
-        asITypeInfo* type = engine_->GetTypeInfoById(type_id);
-        if (type && std::string(type->GetName()) == "string") {
-          *result = ScriptArg::String(
-              *static_cast<std::string*>(context->GetAddressOfReturnValue()));
-        } else {
-          *result = ScriptArg::Int(static_cast<int>(context->GetReturnDWord()));
-        }
-      }
+      asDWORD flags = 0;
+      const int type_id = function->GetReturnTypeId(&flags);
+      *result =
+          DecodeReturn(engine_, context, type_id, (flags & asTM_INOUTREF) != 0);
     }
   } else if (timed_out_) {
     PDebug::error("{}: script took too long (infinite loop?)", label);
@@ -913,6 +1006,19 @@ MapScene* ScriptRuntime::FindScene(uint32_t serial) const {
   return it == scenes_.end() ? nullptr : it->second;
 }
 
+uint32_t ScriptRuntime::RegisterEvent(Event* event) {
+  const uint32_t id = next_event_id_++;
+  events_[id] = event;
+  return id;
+}
+
+void ScriptRuntime::UnregisterEvent(uint32_t id) { events_.erase(id); }
+
+Event* ScriptRuntime::FindEvent(uint32_t id) const {
+  auto it = events_.find(id);
+  return it == events_.end() ? nullptr : it->second;
+}
+
 int ScriptRuntime::RegisterBehaviour(ScriptBehaviour* behaviour) {
   const int id = next_behaviour_id_++;
   behaviours_[id] = behaviour;
@@ -924,8 +1030,25 @@ ScriptBehaviour* ScriptRuntime::FindBehaviour(int id) const {
   return it == behaviours_.end() ? nullptr : it->second;
 }
 
-void ScriptRuntime::OwnDataAsset(std::unique_ptr<ScriptBehaviour> asset) {
-  data_assets_.push_back(std::move(asset));
+asIScriptObject* ScriptRuntime::FindDataAsset(const std::string& key,
+                                              const void* version) const {
+  auto it = data_assets_.find(key);
+  if (it == data_assets_.end() || it->second.version.get() != version ||
+      !it->second.behaviour) {
+    return nullptr;
+  }
+  return it->second.behaviour->Instance();
+}
+
+void ScriptRuntime::OwnDataAsset(std::string key,
+                                 std::shared_ptr<const void> version,
+                                 std::unique_ptr<ScriptBehaviour> asset) {
+  auto& entry = data_assets_[std::move(key)];
+  if (entry.behaviour) {
+    replaced_data_assets_.push_back(std::move(entry.behaviour));
+  }
+  entry.version = std::move(version);
+  entry.behaviour = std::move(asset);
 }
 
 int ScriptRuntime::AddTimer(int behaviour, std::string method, double seconds,

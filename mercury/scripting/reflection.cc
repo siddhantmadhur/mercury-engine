@@ -118,8 +118,14 @@ Reflector& Reflector::Visit(const char* name, FieldType type, T& member,
     case Mode::kSet:
       if (!found_ && lookup_ == name) {
         found_ = true;
-        if (std::optional<T> converted = from_variant(*in_))
+        if (std::optional<T> converted = from_variant(*in_)) {
           member = std::move(*converted);
+          applied_ = true;
+        } else {
+          warnings_.push_back(std::format("\"{}\" should be a {}, not {}", name,
+                                          FieldTypeName(type),
+                                          mtext::TypeName(in_->GetType())));
+        }
       }
       break;
     case Mode::kRead:
@@ -349,11 +355,35 @@ void Reflector::EnumImpl(const char* name, int& index,
       if (!found_ && lookup_ == name) {
         found_ = true;
         if (auto text = in_->ToString()) {
+          bool matched = false;
           for (size_t i = 0; i < values.size(); i++) {
-            if (values[i] == *text) index = static_cast<int>(i);
+            if (values[i] == *text) {
+              index = static_cast<int>(i);
+              matched = true;
+              break;
+            }
+          }
+          if (matched) {
+            applied_ = true;
+          } else {
+            warnings_.push_back(
+                std::format("\"{}\": \"{}\" is not one of the {} choices", name,
+                            *text, values.size()));
           }
         } else if (auto i = in_->ToInt()) {
-          index = static_cast<int>(*i);
+          // The index is used to look names up and to cast back to the enum:
+          // only a position in the list is a value.
+          if (*i >= 0 && *i < static_cast<int64_t>(values.size())) {
+            index = static_cast<int>(*i);
+            applied_ = true;
+          } else {
+            warnings_.push_back(
+                std::format("\"{}\": {} is not one of the {} choices", name, *i,
+                            values.size()));
+          }
+        } else {
+          warnings_.push_back(
+              std::format("\"{}\" should be an enum name", name));
         }
       }
       break;

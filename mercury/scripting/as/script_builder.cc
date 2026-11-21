@@ -42,7 +42,13 @@ std::vector<fs::path> ScriptBuilder::ScriptFiles(const fs::path& project_dir) {
 }
 
 fs::path ScriptBuilder::StampPath(const fs::path& project_dir) {
-  return project_dir / ".mercury" / "scripts" / ".as.stamp";
+  std::string error;
+  const fs::path cache = os::EnsureProjectCacheDir(project_dir, &error);
+  if (cache.empty()) return {};
+  const fs::path scripts =
+      os::EnsureProjectCacheSubdir(cache, "scripts", &error);
+  if (scripts.empty()) return {};
+  return scripts / ".as.stamp";
 }
 
 bool ScriptBuilder::Build(const fs::path& project_dir,
@@ -59,6 +65,9 @@ bool ScriptBuilder::Build(const fs::path& project_dir,
   }
   Emit(options, log,
        "Compiling " + std::to_string(files.size()) + " AngelScript file(s)");
+  // A build must compile the files as they are now, not reuse the module
+  // from an earlier build of the same project.
+  runtime.ForgetLoadedProject();
   if (!runtime.LoadScripts(project_dir)) {
     Emit(options, log, "Script compilation failed");
     return false;
@@ -66,7 +75,13 @@ bool ScriptBuilder::Build(const fs::path& project_dir,
   // A shipped game reads its scripts from a mounted .mpack; the project root
   // is then inside the (signed, read-only) app bundle, so leave it untouched.
   if (!os::HasMounts()) {
-    os::WriteFileAtomic(StampPath(project_dir), "1\n");
+    const fs::path stamp = StampPath(project_dir);
+    if (stamp.empty()) {
+      Emit(options, log,
+           "Could not use the project cache (.mercury); nothing was written");
+      return false;
+    }
+    os::WriteFileAtomic(stamp, "1\n");
   }
   Emit(options, log, "Scripts compiled");
   return true;
@@ -76,6 +91,7 @@ bool ScriptBuilder::IsUpToDate(const fs::path& project_dir) {
   if (os::HasMounts()) return false;
   std::error_code ec;
   const fs::path stamp = StampPath(project_dir);
+  if (stamp.empty()) return false;
   if (!fs::exists(stamp, ec)) return false;
   const auto built = fs::last_write_time(stamp, ec);
   if (ec) return false;

@@ -16,8 +16,10 @@
 #ifndef MERCURY_SCRIPTING_TYPE_REGISTRY_H
 #define MERCURY_SCRIPTING_TYPE_REGISTRY_H
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -68,6 +70,9 @@ struct ComponentInfo {
   // ScriptRuntime::Shutdown (which drops AngelScript classes); the script
   // runtime must not remove code that was linked into the game.
   bool native_script = false;
+  // Declared by game code (MERCURY_SCRIPT, or a data component registered by
+  // the game itself), so SaveSchema exports it for the editor.
+  bool from_game = false;
 
   const FieldInfo* FindField(std::string_view field) const;
 };
@@ -83,6 +88,19 @@ struct AssetTypeInfo {
   bool native_asset = false;
 
   const FieldInfo* FindField(std::string_view field) const;
+};
+
+/**
+ * @brief Options for applying a component snapshot
+ */
+struct ComponentDeserializeOptions {
+  // Reject NaN/infinite floats and vectors (network-facing byte snapshots use
+  // this by default).
+  bool reject_non_finite = true;
+  // Only apply fields marked runtime_writable, like the script API. Pass false
+  // for a trusted local snapshot (save games, undo) that restores every
+  // reflected field.
+  bool require_runtime_writable = true;
 };
 
 class TypeRegistry {
@@ -107,15 +125,64 @@ class TypeRegistry {
   // code linked into this executable, not data to reload.
   void ClearGameTypes();
 
+  // --- component snapshots (replication, save games, undo) ----------------
+  //
+  // Serializing writes every field the component's Reflect method describes,
+  // through the ComponentInfo's get/set functions. It works for components
+  // whose data lives in the entity's registry (the built-ins, and game
+  // components registered with get_field/set_field); scripts are Behaviour
+  // objects and have no field access here.
+  //
+  // Deserializing sets the fields present in `in`/`bytes` and leaves the rest
+  // alone, so a delta snapshot only needs the fields it changes.
+
+  // Fills `out` with the component's current values. False if the type is
+  // unknown or cannot read its fields.
+  bool SerializeComponent(MapScene& scene, kEntityId entity,
+                          std::string_view type,
+                          mtext::PropertyList& out) const;
+  // The same in the engine's text format, as a UTF-8 byte buffer.
+  bool SerializeComponent(MapScene& scene, kEntityId entity,
+                          std::string_view type,
+                          std::vector<uint8_t>& out) const;
+  // Applies values from `in`, skipping fields that are unknown, read-only at
+  // run time (unless `options.require_runtime_writable` is false), or
+  // non-finite (when `options.reject_non_finite` is true). Returns false when
+  // no field was applied, including an unknown/unsettable type.
+  bool DeserializeComponent(MapScene& scene, kEntityId entity,
+                            std::string_view type,
+                            const mtext::PropertyList& in,
+                            const ComponentDeserializeOptions& options =
+                                ComponentDeserializeOptions{}) const;
+  // The same in the engine's text format, as a UTF-8 byte buffer. This is the
+  // network-facing form, so it uses the safe defaults above.
+  bool DeserializeComponent(MapScene& scene, kEntityId entity,
+                            std::string_view type,
+                            std::span<const uint8_t> in) const;
+
   /**
-   * @brief Write every script component and its fields
+   * @brief Write every component (scripts and data types) and its fields
    *
-   *   [mschema format=1]
+   * Every field is one [[field]] entry carrying its name, default value and
+   * details; file order is declaration order (the inspector's order).
    *
-   *   [script name="Ball"]
-   *   speed = 60.0
+   *   [mschema]
+   *   format = 2
    *
-   *   [field script="Goal" name="scorer"]
+   *   [[script]]
+   *   name = "Ball"
+   *
+   *   [[field]]
+   *   script = "Ball"
+   *   name = "speed"
+   *   [field.props]
+   *   default = 60.0
+   *
+   *   [[field]]
+   *   script = "Goal"
+   *   name = "scorer"
+   *   [field.props]
+   *   default = { nil = true }
    *   enum = ["player", "enemy"]
    *   tooltip = "Who gets the point"
    */

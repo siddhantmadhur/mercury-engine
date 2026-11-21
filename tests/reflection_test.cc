@@ -99,6 +99,24 @@ TEST(Reflection, KeepsDefaultsForMissingOrMistypedProperties) {
   EXPECT_EQ(reader.GetWarnings().size(), 2u);
 }
 
+// A script or a file can set an enum by number; a number that is not one of
+// the choices must not become the value (it would index tables out of range).
+TEST(Reflection, SettingAnEnumByNumberChecksTheRange) {
+  Everything instance;
+  for (int64_t bad : {int64_t{-1}, int64_t{2}, int64_t{1} << 40}) {
+    mtext::Variant value(bad);
+    auto setter = Reflector::Set("mode", value);
+    instance.Reflect(setter);
+    EXPECT_TRUE(setter.Found());
+    EXPECT_EQ(instance.mode, Mode::kB) << bad;
+    EXPECT_EQ(setter.GetWarnings().size(), 1u) << bad;
+  }
+  mtext::Variant zero(int64_t{0});
+  auto setter = Reflector::Set("mode", zero);
+  instance.Reflect(setter);
+  EXPECT_EQ(instance.mode, Mode::kA);
+}
+
 TEST(TypeRegistry, BuiltinsAndSchemaRoundTrip) {
   RegisterBuiltinTypes();
   auto& registry = TypeRegistry::Instance();
@@ -130,6 +148,43 @@ TEST(TypeRegistry, BuiltinsAndSchemaRoundTrip) {
   EXPECT_EQ(loaded->fields[9].type, FieldType::kEnum);
   EXPECT_EQ(loaded->fields[8].asset_type, "Material");
   EXPECT_EQ(loaded->fields[2].tooltip, "fast");
+  std::filesystem::remove(file);
+  registry.ClearSchemaScripts();
+}
+
+// The schema's [[field]] entries are the single representation of a field:
+// save -> load keeps declaration order (the inspector's order) and details.
+TEST(TypeRegistry, SchemaFieldsKeepDeclarationOrderAndDetails) {
+  RegisterBuiltinTypes();
+  auto& registry = TypeRegistry::Instance();
+  ComponentInfo script;
+  script.name = "OrderScript";
+  script.is_script = true;
+  script.fields = DescribeFields<Everything>();
+  script.attach = nullptr;
+  registry.RegisterComponent(script);
+  const auto file =
+      std::filesystem::temp_directory_path() / "mercury_order.mschema";
+  ASSERT_TRUE(registry.SaveSchema(file));
+  registry.ClearSchemaScripts();
+  ASSERT_TRUE(registry.LoadSchema(file));
+  auto loaded = registry.FindComponent("OrderScript");
+  ASSERT_NE(loaded, nullptr);
+  ASSERT_EQ(loaded->fields.size(), 10u);
+  // Declaration order, not the alphabetical order the TOML reader would
+  // give [script.props].
+  int index = 0;
+  for (const char* name : {"flag", "count", "speed", "label", "v2", "v3",
+                           "color", "target", "material", "mode"}) {
+    EXPECT_EQ(loaded->fields[index].name, name) << index;
+    index++;
+  }
+  EXPECT_EQ(loaded->fields[0].default_value.ToBool(), true);
+  EXPECT_EQ(loaded->fields[2].tooltip, "fast");
+  EXPECT_EQ(loaded->fields[8].asset_type, "Material");
+  EXPECT_EQ(loaded->fields[9].type, FieldType::kEnum);
+  EXPECT_EQ(loaded->fields[9].enum_values,
+            (std::vector<std::string>{"a", "b"}));
   std::filesystem::remove(file);
   registry.ClearSchemaScripts();
 }

@@ -29,17 +29,31 @@ TEST(Hierarchy, ChildFollowsParentTranslation) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Player"
+type = "Transform"
+[component.props]
+position = { vec3 = [10.0, 0.0, 0.0] }
 
-[node name="Player" parent="."]
-[component type="Transform" node="Player"]
-position = Vector3(10, 0, 0)
+[[component]]
+node = "Player/Weapon"
+type = "Transform"
+[component.props]
+position = { vec3 = [2.0, 3.0, 4.0] }
 
-[node name="Weapon" parent="Player"]
-[component type="Transform" node="Player/Weapon"]
-position = Vector3(2, 3, 4)
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Player"
+parent = "."
+
+[[node]]
+name = "Weapon"
+parent = "Player"
 )",
                                  &error))
       << error;
@@ -77,21 +91,41 @@ TEST(Hierarchy, SubchildRecursion) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Parent"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.0, 0.0] }
 
-[node name="Parent" parent="."]
-[component type="Transform" node="Parent"]
-position = Vector3(0, 0, 0)
+[[component]]
+node = "Parent/Child"
+type = "Transform"
+[component.props]
+position = { vec3 = [1.0, 0.0, 0.0] }
 
-[node name="Child" parent="Parent"]
-[component type="Transform" node="Parent/Child"]
-position = Vector3(1, 0, 0)
+[[component]]
+node = "Parent/Child/Grandchild"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 5.0, 0.0] }
 
-[node name="Grandchild" parent="Parent/Child"]
-[component type="Transform" node="Parent/Child/Grandchild"]
-position = Vector3(0, 5, 0)
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Parent"
+parent = "."
+
+[[node]]
+name = "Child"
+parent = "Parent"
+
+[[node]]
+name = "Grandchild"
+parent = "Parent/Child"
 )",
                                  &error))
       << error;
@@ -129,17 +163,31 @@ TEST(Hierarchy, ChildOrbitsOnParentRotation) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Player"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.0, 0.0] }
 
-[node name="Player" parent="."]
-[component type="Transform" node="Player"]
-position = Vector3(0, 0, 0)
+[[component]]
+node = "Player/Eye"
+type = "Transform"
+[component.props]
+position = { vec3 = [5.0, 0.0, 0.0] }
 
-[node name="Eye" parent="Player"]
-[component type="Transform" node="Player/Eye"]
-position = Vector3(5, 0, 0)
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Player"
+parent = "."
+
+[[node]]
+name = "Eye"
+parent = "Player"
 )",
                                  &error))
       << error;
@@ -174,17 +222,31 @@ TEST(Hierarchy, LocalTransformIndependence) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Body"
+type = "Transform"
+[component.props]
+position = { vec3 = [10.0, 10.0, 10.0] }
 
-[node name="Body" parent="."]
-[component type="Transform" node="Body"]
-position = Vector3(10, 10, 10)
+[[component]]
+node = "Body/Arm"
+type = "Transform"
+[component.props]
+position = { vec3 = [1.0, 0.0, 0.0] }
 
-[node name="Arm" parent="Body"]
-[component type="Transform" node="Body/Arm"]
-position = Vector3(1, 0, 0)
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Body"
+parent = "."
+
+[[node]]
+name = "Arm"
+parent = "Body"
 )",
                                  &error))
       << error;
@@ -213,14 +275,23 @@ TEST(Hierarchy, GameObjectGetParentAndChildren) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[node]]
+name = "Root"
 
-[node name="Car" parent="."]
+[[node]]
+name = "Car"
+parent = "."
 
-[node name="WheelFront" parent="Car"]
-[node name="WheelBack" parent="Car"]
+[[node]]
+name = "WheelFront"
+parent = "Car"
+
+[[node]]
+name = "WheelBack"
+parent = "Car"
 )",
                                  &error))
       << error;
@@ -252,6 +323,64 @@ TEST(Hierarchy, GameObjectGetParentAndChildren) {
   EXPECT_EQ(front.GetChildren()[0], back);
 }
 
+// Parenting an object to itself or to something below it would make the
+// hierarchy loop; it must be refused and leave everything as it was.
+TEST(Hierarchy, RefusesParentingThatWouldLoop) {
+  std::string error;
+  auto project = Project::Load(kPong / "pong.mproj", &error);
+  ASSERT_TRUE(project) << error;
+
+  Map map;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
+
+[[node]]
+name = "B"
+parent = "A"
+
+[[node]]
+name = "C"
+parent = "A/B"
+)",
+                                 &error))
+      << error;
+
+  MapScene scene(project, MapScene::Mode::kPlay);
+  scene.Instantiate(map);
+  auto a = scene.Find("A");
+  auto b = scene.Find("A/B");
+  auto c = scene.Find("A/B/C");
+  ASSERT_TRUE(a.IsValid() && b.IsValid() && c.IsValid());
+  auto root = a.GetParent();
+
+  a.SetParent(a, false);  // itself
+  EXPECT_EQ(a.GetParent(), root);
+  a.SetParent(c, true);  // a grandchild
+  EXPECT_EQ(a.GetParent(), root);
+  b.SetParent(c, false);  // a child
+  EXPECT_EQ(b.GetParent(), a);
+  EXPECT_EQ(c.GetParent(), b);
+  EXPECT_EQ(a.GetChildren().size(), 1u);
+  EXPECT_EQ(c.GetPath(), "A/B/C");  // still walks without recursing forever
+
+  root.SetParent(c, true);  // the root under its own descendant
+  EXPECT_NE(root.GetParent(), c);
+  EXPECT_EQ(a.GetParent(), root);
+  a.SetParent(a, true);  // itself, keeping the world transform
+  EXPECT_EQ(a.GetParent(), root);
+
+  // Moving to a non-descendant still works.
+  c.SetParent(a, false);
+  EXPECT_EQ(c.GetParent(), a);
+}
+
 TEST(Hierarchy, AddForceModes) {
   std::string error;
   auto project = Project::Load(std::filesystem::path(MERCURY_SOURCE_DIR) /
@@ -260,21 +389,35 @@ TEST(Hierarchy, AddForceModes) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Ball"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 5.0, 0.0] }
 
-[node name="Ball" parent="."]
-[component type="Transform" node="Ball"]
-position = Vector3(0, 5, 0)
-
-[component type="SphereCollider" node="Ball"]
+[[component]]
+node = "Ball"
+type = "SphereCollider"
+[component.props]
 radius = 0.5
 
-[component type="Rigidbody" node="Ball"]
-motion_type = "dynamic"
-mass = 2.0
+[[component]]
+node = "Ball"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+mass = 2.0
+motion_type = "dynamic"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Ball"
+parent = "."
 )",
                                  &error))
       << error;
@@ -304,25 +447,45 @@ TEST(Hierarchy, PhysicsMovementCascadesToChildren) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Ball"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 5.0, 0.0] }
 
-[node name="Ball" parent="."]
-[component type="Transform" node="Ball"]
-position = Vector3(0, 5, 0)
-
-[component type="SphereCollider" node="Ball"]
+[[component]]
+node = "Ball"
+type = "SphereCollider"
+[component.props]
 radius = 0.5
 
-[component type="Rigidbody" node="Ball"]
-motion_type = "dynamic"
-mass = 1.0
+[[component]]
+node = "Ball"
+type = "Rigidbody"
+[component.props]
 gravity_factor = 0.0
+mass = 1.0
+motion_type = "dynamic"
 
-[node name="Antenna" parent="Ball"]
-[component type="Transform" node="Ball/Antenna"]
-position = Vector3(0, 1, 0)
+[[component]]
+node = "Ball/Antenna"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 1.0, 0.0] }
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Ball"
+parent = "."
+
+[[node]]
+name = "Antenna"
+parent = "Ball"
 )",
                                  &error))
       << error;
@@ -360,17 +523,31 @@ TEST(Hierarchy, InterpolatedHierarchy) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Parent"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 0.0, 0.0] }
 
-[node name="Parent" parent="."]
-[component type="Transform" node="Parent"]
-position = Vector3(0, 0, 0)
+[[component]]
+node = "Parent/Child"
+type = "Transform"
+[component.props]
+position = { vec3 = [0.0, 10.0, 0.0] }
 
-[node name="Child" parent="Parent"]
-[component type="Transform" node="Parent/Child"]
-position = Vector3(0, 10, 0)
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Parent"
+parent = "."
+
+[[node]]
+name = "Child"
+parent = "Parent"
 )",
                                  &error))
       << error;
@@ -410,17 +587,31 @@ TEST(Hierarchy, SyncNodeTransformMatchesRebuild) {
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[node name="Root"]
+[[component]]
+node = "Player"
+type = "Transform"
+[component.props]
+position = { vec3 = [10.0, 0.0, 0.0] }
 
-[node name="Player" parent="."]
-[component type="Transform" node="Player"]
-position = Vector3(10, 0, 0)
+[[component]]
+node = "Player/Weapon"
+type = "Transform"
+[component.props]
+position = { vec3 = [2.0, 3.0, 4.0] }
 
-[node name="Weapon" parent="Player"]
-[component type="Transform" node="Player/Weapon"]
-position = Vector3(2, 3, 4)
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Player"
+parent = "."
+
+[[node]]
+name = "Weapon"
+parent = "Player"
 )",
                                  &error))
       << error;

@@ -5,6 +5,7 @@
 #include "filament_application.h"
 
 #include <backend/PixelBufferDescriptor.h>
+#include <filament/Color.h>
 #include <filament/Options.h>
 #include <filament/ToneMapper.h>
 #include <filament/Viewport.h>
@@ -20,6 +21,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb/stb_image_write.h>
 
+#include "application/render_hooks.h"
 #include "components/components.h"
 #include "debugger/debugger.h"
 #include "filament/metal_layer.h"
@@ -31,12 +33,10 @@ namespace Mercury {
 
 namespace {
 
-float SrgbToLinear(float c) {
-  return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
 glm::vec3 SrgbToLinear(const glm::vec3& c) {
-  return {SrgbToLinear(c.r), SrgbToLinear(c.g), SrgbToLinear(c.b)};
+  const filament::LinearColor linear =
+      filament::Color::toLinear(filament::sRGBColor{c.r, c.g, c.b});
+  return {linear.r, linear.g, linear.b};
 }
 
 filament::math::float4 ToFilament(const glm::vec4& v) {
@@ -151,7 +151,6 @@ bool FilamentApplication::OnLoad() {
                    .color({0.1f, 0.1f, 0.1f, 1.0f})
                    .build(*engine_);
   scene_renderer_.SetFallbackSkybox(scene_sky_);
-  scene_view_->setAntiAliasing(filament::View::AntiAliasing::FXAA);
 
   // The game's UI drawn over the scene.
   ui_camera_entity_ = utils::EntityManager::get().create();
@@ -220,10 +219,40 @@ void FilamentApplication::SetupCamera(filament::Camera* camera,
 
 void FilamentApplication::ApplyPostProcess(filament::View* view,
                                            const RenderSettings& settings,
-                                           const RenderCamera& camera) {
+                                           const RenderCamera& camera,
+                                           bool main_view) {
   if (!view) return;
-  view->setAntiAliasing(settings.fxaa ? filament::View::AntiAliasing::FXAA
-                                      : filament::View::AntiAliasing::NONE);
+  // Anti-aliasing is a project option. TAA needs the motion vectors pass and
+  // keeps per-view history, so only the main scene views run it; every other
+  // view (render textures, previews) falls back to FXAA when the project chose
+  // TAA.
+  using AA = RenderSettings::AntiAliasing;
+  const bool taa = main_view && settings.anti_aliasing == AA::kTaa;
+  const bool fxaa = settings.anti_aliasing == AA::kFxaa ||
+                    (!main_view && settings.anti_aliasing == AA::kTaa);
+  view->setAntiAliasing(fxaa ? filament::View::AntiAliasing::FXAA
+                             : filament::View::AntiAliasing::NONE);
+  filament::TemporalAntiAliasingOptions taa_options;
+  taa_options.enabled = taa;
+  view->setTemporalAntiAliasingOptions(taa_options);
+  filament::MotionVectorsOptions motion_vectors;
+  motion_vectors.enabled = taa;
+  view->setMotionVectorsOptions(motion_vectors);
+
+  // FSR 1 draws the scene at a fixed fraction of the viewport (min == max, so
+  // the dynamic resolution controller never moves it) and upscales it. Only
+  // the main scene views; render textures, previews and the UI stay native.
+  filament::DynamicResolutionOptions resolution;
+  resolution.enabled = main_view && settings.fsr;
+  const float scale = std::clamp(settings.render_scale, 0.5f, 1.0f);
+  resolution.minScale = {scale, scale};
+  resolution.maxScale = {scale, scale};
+  resolution.homogeneousScaling = true;
+  resolution.sharpness = std::clamp(settings.fsr_sharpness, 0.0f, 1.0f);
+  resolution.quality = settings.fsr_quality == RenderSettings::FsrQuality::kHigh
+                           ? filament::QualityLevel::HIGH
+                           : filament::QualityLevel::ULTRA;
+  view->setDynamicResolutionOptions(resolution);
 
   filament::AmbientOcclusionOptions ao;
   ao.aoType = filament::AmbientOcclusionOptions::AmbientOcclusionType::GTAO;
@@ -279,7 +308,13 @@ void FilamentApplication::ApplyPostProcess(filament::View* view,
   filament::BloomOptions bloom;
   bloom.enabled = settings.bloom_intensity > 0.0f;
   bloom.strength = std::clamp(settings.bloom_intensity, 0.0f, 1.0f);
+  // BloomOptions::threshold is a flag, not a cutoff: Filament always
+  // subtracts 1.0 from the HDR color. A positive authored threshold only
+  // enables it; the number itself has no further effect.
   bloom.threshold = settings.bloom_threshold > 0.0f;
+  // The real numeric control is BloomOptions::highlight, the brightest value
+  // fed to bloom. Expose it 1:1; the View clamps it to >= 10.
+  bloom.highlight = std::max(10.0f, settings.bloom_highlight);
   bloom.levels = static_cast<uint8_t>(std::clamp(
       static_cast<int>(std::lround(3.0f + settings.bloom_scatter * 6.0f)), 3,
       11));
@@ -344,7 +379,6 @@ void FilamentApplication::EnsureOffscreen(Offscreen& target, uint32_t width,
   target.view->setCamera(target.camera);
   target.view->setRenderTarget(target.target);
   target.view->setViewport(filament::Viewport(0, 0, width, height));
-  target.view->setAntiAliasing(filament::View::AntiAliasing::FXAA);
   if (is_ui) {
     target.view->setBlendMode(filament::View::BlendMode::OPAQUE);
     target.view->setPostProcessingEnabled(false);
@@ -473,6 +507,10 @@ void FilamentApplication::Render() {
 
   if (!renderer_->beginFrame(frame_swap)) return;
 
+  // The view the frame's render hooks see: the window's scene view, or the
+  // editor's offscreen view in a headless application.
+  filament::View* hook_view = nullptr;
+
   for (const RenderCamera& camera : cameras) {
     if (camera.target_texture.empty()) continue;
     auto it = render_texture_targets_.find(camera.target_texture);
@@ -497,6 +535,8 @@ void FilamentApplication::Render() {
     }
   }
 
+  if (main) scene_renderer_.SetProbeBackground(main->background);
+
   // The window (when there is one) shows the main camera, with the game's
   // UI over it.
   if (!IsHeadless() && main) {
@@ -504,12 +544,14 @@ void FilamentApplication::Render() {
     scene_sky_->setColor(
         ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
     SetupCamera(scene_camera_, *main);
-    ApplyPostProcess(scene_view_, render_settings, *main);
+    ApplyPostProcess(scene_view_, render_settings, *main, true);
     scene_view_->setViewport(
         filament::Viewport(0, 0, window_width, window_height));
     scene_renderer_.SetSkyboxForClear(main->clear ==
                                       static_cast<int>(CameraClear::kSkybox));
     scene_view_->setVisibleLayers(0xff, main->culling_mask & 0xff);
+    RenderHooks::Instance().InvokePreRender(*engine_, *scene_view_);
+    hook_view = scene_view_;
     renderer_->render(scene_view_);
     if (game_ui) {
       // The UI scene's skybox belongs to the UI Builder canvas; over the
@@ -527,10 +569,14 @@ void FilamentApplication::Render() {
       scene_sky_->setColor(
           ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
       SetupCamera(scene_target_.camera, *main);
-      ApplyPostProcess(scene_target_.view, render_settings, *main);
+      ApplyPostProcess(scene_target_.view, render_settings, *main, true);
       scene_renderer_.SetSkyboxForClear(main->clear ==
                                         static_cast<int>(CameraClear::kSkybox));
       scene_target_.view->setVisibleLayers(0xff, main->culling_mask & 0xff);
+      if (!hook_view) {
+        RenderHooks::Instance().InvokePreRender(*engine_, *scene_target_.view);
+        hook_view = scene_target_.view;
+      }
       renderer_->render(scene_target_.view);
       ReadOffscreen(scene_target_);
     }
@@ -610,6 +656,10 @@ void FilamentApplication::Render() {
 
   renderer_->endFrame();
 
+  if (hook_view) {
+    RenderHooks::Instance().InvokePostRender(*engine_, *hook_view);
+  }
+
   if (capturing) {
     engine_->flushAndWait();
     if (capture_ready_) {
@@ -648,6 +698,12 @@ void FilamentApplication::SetSceneViewportSize(int width, int height) {
     game_scene_->SetWidth(static_cast<float>(w));
     game_scene_->SetHeight(static_cast<float>(h));
   }
+}
+
+filament::math::float2
+FilamentApplication::SceneViewDynamicResolutionScaleForTest() const {
+  if (!scene_target_.view) return {1.0f, 1.0f};
+  return scene_target_.view->getLastDynamicResolutionScale();
 }
 
 bool FilamentApplication::CopyScenePixels(int& width, int& height,

@@ -56,12 +56,21 @@ TEST(InputActions, SerializeThenParseGivesTheSameActions) {
 }
 
 TEST(InputActions, ParsesFilesWithoutMapSections) {
-  constexpr const char* kSource = R"([minput format=1]
+  constexpr const char* kSource = R"([minput]
+format = 2
+editor_version = "1.0.0"
 
-[action name="Player/Jump" type="button"]
+[[action]]
+name = "Player/Jump"
+type = "button"
+[action.props]
 bindings = ["<Keyboard>/space"]
 
-[action name="Look" type="passthrough" control="vector2"]
+[[action]]
+control = "vector2"
+name = "Look"
+type = "passthrough"
+[action.props]
 bindings = "<Mouse>/delta"
 )";
   InputActionsDesc desc;

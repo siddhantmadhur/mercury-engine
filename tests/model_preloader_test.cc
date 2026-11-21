@@ -34,21 +34,27 @@ class PreloadProject {
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "maps");
     std::filesystem::create_directories(dir / "models");
-    std::ofstream(dir / "test.mproj") << "[project]\nname = \"Test\"\n";
-    std::string map = "[mmap format=1]\n[node name=\"Root\"]\n";
+    std::ofstream(dir / "test.mproj")
+        << "[project]\nformat = 2\n\n[project.props]\nname = \"Test\"\n";
+    std::string map = "[mmap]\nformat = 2\n\n";
     for (int i = 0; i < count; i++) {
       const std::string id = std::to_string(i);
       std::ofstream(dir / ("models/m" + id + ".obj")) << kTriangle;
-      map += "[node name=\"N" + id + "\" parent=\".\"]\n";
-      map += "[component type=\"MeshRenderer\" node=\"N" + id + "\"]\n";
-      map += "mesh = \"model\"\nmodel = Resource(\"res://models/m" + id +
-             ".obj\")\n";
+      map += "[[component]]\nnode = \"N" + id + "\"\ntype = \"MeshRenderer\"\n";
+      map +=
+          "[component.props]\nmesh = \"model\"\nmodel = { res = "
+          "\"res://models/m" +
+          id + ".obj\" }\n\n";
     }
     // Shapes and a model on the same node are not model loads.
-    map +=
-        "[node name=\"Cube\" parent=\".\"]\n[component type=\"MeshRenderer\" "
-        "node=\"Cube\"]\n";
-    map += "model = Resource(\"res://models/m0.obj\")\n";
+    map += "[[component]]\nnode = \"Cube\"\ntype = \"MeshRenderer\"\n";
+    map += "[component.props]\nmodel = { res = \"res://models/m0.obj\" }\n\n";
+    map += "[[node]]\nname = \"Root\"\n\n";
+    for (int i = 0; i < count; i++) {
+      const std::string id = std::to_string(i);
+      map += "[[node]]\nname = \"N" + id + "\"\nparent = \".\"\n\n";
+    }
+    map += "[[node]]\nname = \"Cube\"\nparent = \".\"\n";
     std::ofstream(dir / "maps/a.mmap") << map;
     std::string error;
     project = Project::Load(dir / "test.mproj", &error);

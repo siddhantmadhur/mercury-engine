@@ -41,6 +41,8 @@ class CScriptBuilder;
 
 namespace Mercury {
 
+class Event;
+
 class MapScene;
 class ScriptBehaviour;
 
@@ -184,6 +186,9 @@ class ScriptRuntime {
    * registered script is described and added to the TypeRegistry.
    */
   bool LoadScripts(const std::filesystem::path& project_root);
+  // Makes the next LoadScripts compile again even for the project that is
+  // loaded (for a build, which must check the files as they are now).
+  void ForgetLoadedProject() { loaded_project_.clear(); }
 
   /**
    * @brief Compiles one module from the given files (tests and tools)
@@ -231,12 +236,27 @@ class ScriptRuntime {
   uint32_t CurrentScene() const { return current_scene_; }
   void SetCurrentScene(uint32_t serial) { current_scene_ = serial; }
 
+  // --- events -------------------------------------------------------------
+  // A script's Event field refers to its Event by id (see script_event.h).
+  uint32_t RegisterEvent(Event* event);
+  void UnregisterEvent(uint32_t id);
+  Event* FindEvent(uint32_t id) const;
+
   // --- behaviours ---------------------------------------------------------
   int RegisterBehaviour(ScriptBehaviour* behaviour);
   void UnregisterBehaviour(int id);
   ScriptBehaviour* FindBehaviour(int id) const;
-  // Keeps a data-asset instance alive for the lifetime of the runtime.
-  void OwnDataAsset(std::unique_ptr<ScriptBehaviour> asset);
+  // Data assets are shared: loading the same file as the same class again
+  // returns the instance already made, so a script that loads an asset every
+  // frame does not grow memory. `version` identifies the file contents the
+  // instance was built from (the AssetDatabase snapshot); a different one
+  // means the file changed and a new instance is needed.
+  asIScriptObject* FindDataAsset(const std::string& key,
+                                 const void* version) const;
+  // Keeps a data-asset instance alive for the lifetime of the runtime. An
+  // instance it replaces is kept too, because scripts may still hold it.
+  void OwnDataAsset(std::string key, std::shared_ptr<const void> version,
+                    std::unique_ptr<ScriptBehaviour> asset);
 
   // --- script classes -----------------------------------------------------
   bool AddScriptClass(std::unique_ptr<ScriptClass> script_class,
@@ -288,12 +308,24 @@ class ScriptRuntime {
   std::string module_name_ = "game";
   std::string loaded_project_;
   std::vector<std::unique_ptr<ScriptClass>> classes_;
+  // Tables replaced by a rebuild while behaviours still pointed at them.
+  std::vector<std::unique_ptr<ScriptClass>> retired_classes_;
+  int build_generation_ = 0;
 
   std::unordered_map<uint32_t, MapScene*> scenes_;
   std::unordered_map<int, ScriptBehaviour*> behaviours_;
+  std::unordered_map<uint32_t, Event*> events_;
+  uint32_t next_event_id_ = 1;
   int next_behaviour_id_ = 1;
   uint32_t current_scene_ = 0;
-  std::vector<std::unique_ptr<ScriptBehaviour>> data_assets_;
+  struct DataAssetEntry {
+    // Held, not just compared, so the address cannot be reused by a newer
+    // snapshot while this entry exists.
+    std::shared_ptr<const void> version;
+    std::unique_ptr<ScriptBehaviour> behaviour;
+  };
+  std::unordered_map<std::string, DataAssetEntry> data_assets_;
+  std::vector<std::unique_ptr<ScriptBehaviour>> replaced_data_assets_;
 
   std::unordered_map<int, Timer> timers_;
   int next_timer_id_ = 1;

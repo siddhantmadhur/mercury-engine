@@ -23,8 +23,11 @@
 #include "input/input_manager.h"
 #include "physics_engine/physics_engine.h"
 #include "pobject/manager.h"
+#include "scripting/event_bus.h"
 
 namespace Mercury {
+
+class RenderHooks;
 
 namespace UI {
 struct UIDrawData;
@@ -86,9 +89,9 @@ struct PointLightData {
   glm::vec3 position = glm::vec3(0.0f);
   glm::vec3 color = glm::vec3(1.0f);  // linear color * intensity
   float range = 10.0f;
-  int shadows = 0;  // 0 none, 1 hard, 2 soft
-  float radius = 0.05f;
-  float shadow_bias = 0.02f;
+  int shadows = 0;            // 0 none, 1 hard, 2 soft (PCSS edge)
+  float radius = 0.05f;       // PCSS softness scales with it
+  float shadow_bias = 0.02f;  // PCF only
 };
 
 /**
@@ -101,8 +104,8 @@ struct AreaLightData {
   glm::vec3 color = glm::vec3(1.0f);              // linear radiance
   float range = 10.0f;
   bool two_sided = false;
-  int shadows = 2;
-  float shadow_bias = 0.02f;
+  int shadows = 2;            // 0 none, 1 hard, 2 soft (PCSS edge)
+  float shadow_bias = 0.02f;  // PCF only
   // The way it shines (right x up when single-sided).
   glm::vec3 Normal() const { return glm::normalize(glm::cross(right, up)); }
 };
@@ -112,6 +115,9 @@ struct AreaLightData {
  */
 struct ProbeVolumeData {
   bool enabled = false;
+  // A LightProbeVolume is in the map (the renderer captures a probe only for
+  // these; without one, `enabled` and `automatic` are the defaults).
+  bool placed = false;
   // The renderer fits the grid around the scene's still geometry (min, max
   // and counts are then ignored).
   bool automatic = false;
@@ -119,7 +125,8 @@ struct ProbeVolumeData {
   glm::vec3 max = glm::vec3(0.0f);
   glm::ivec3 counts = glm::ivec3(0);
   float intensity = 1.0f;
-  int bounces = 3;
+  int bounces = 2;
+  int capture_size = 256;
   bool include_emission = true;
   int probes_per_frame = 0;
 };
@@ -136,8 +143,8 @@ struct SceneLighting {
   // Filament IndirectLight intensity for the skybox, in lux.
   float environment_intensity = 30000.0f;
   bool cast_shadows = true;
-  float shadow_bias = 0.0015f;
-  float shadow_normal_bias = 0.035f;
+  float shadow_bias = 0.0015f;        // PCF only
+  float shadow_normal_bias = 0.035f;  // PCF only
   float shadow_distance = 120.0f;
   std::vector<PointLightData> point_lights;  // the renderer uses the first 16
   std::vector<AreaLightData> area_lights;    // the renderer uses the first 4
@@ -155,17 +162,33 @@ struct RenderSettings {
   int tonemap = 1;  // 0 none, 1 neutral, 2 ACES
   float exposure = 1.0f;
   float bloom_intensity = 0.0f;
+  // > 0 enables Filament's threshold, which is fixed at 1.0; the number
+  // itself has no further effect.
   float bloom_threshold = 1.0f;
+  // Filament's BloomOptions::highlight: the brightest value fed to bloom.
+  // The View clamps it to >= 10; lower values compress highlights and
+  // reduce bloom.
+  float bloom_highlight = 1000.0f;
   float bloom_scatter = 0.7f;
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;
   glm::vec2 vignette_center = glm::vec2(0.5f);
-  // Ambient occlusion (on indirect light only) and FXAA run with or without
-  // post_processing.
+  // Ambient occlusion (on indirect light only) and anti-aliasing run with or
+  // without post_processing.
   float ssao_intensity = 0.8f;
   float ssao_radius = 0.5f;
   int ssao_samples = 12;
-  bool fxaa = true;
+  // Chosen per project ([render] anti_aliasing); not part of a post-process
+  // profile.
+  enum class AntiAliasing { kNone, kFxaa, kTaa };
+  AntiAliasing anti_aliasing = AntiAliasing::kTaa;
+  // AMD FSR 1 (Filament's EASU + RCAS): the window's scene is rendered at
+  // render_scale of its size and upscaled. Works best with TAA.
+  enum class FsrQuality { kHigh, kUltra };
+  bool fsr = false;
+  FsrQuality fsr_quality = FsrQuality::kUltra;
+  float render_scale = 0.75f;  // 0.5 to 1
+  float fsr_sharpness = 0.9f;  // RCAS, 0 to 1
   // Filament screen-space reflections for mirrors and glossy surfaces.
   bool screen_space_reflections = false;
   float reflection_distance = 5.0f;
@@ -302,13 +325,23 @@ class GameScene {
     return object_manager_->GetRegistry();
   }
 
+  // Typed publish/subscribe bus shared by this scene's behaviours and
+  // systems (see scripting/event_bus.h).
+  EventBus& GetEventBus() { return event_bus_; }
+  const EventBus& GetEventBus() const { return event_bus_; }
+  // Callbacks around the renderer's main frame, reachable from game code
+  // without the scene depending on the renderer (application/render_hooks.h).
+  RenderHooks& GetRenderHooks();
+
   void SetInputManager(InputManager*);
   void SetRenderHost(RenderHost* host) { render_host_ = host; }
 
   void QuitScene();
   bool ShouldQuit() const;
 
-  void SimulatePhysics(int steps);
+  // Steps the physics world. MapScene overrides it to run kPostPhysics systems
+  // after the step.
+  virtual void SimulatePhysics(int steps);
 
   virtual void ProcessOnFrame(float alpha);
   void OnTickBegin();
@@ -322,6 +355,7 @@ class GameScene {
   SceneLighting lighting_;
   glm::vec4 clear_color_ = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
   std::string skybox_path_;
+  EventBus event_bus_;
 
  private:
   float width_ = 0.0;

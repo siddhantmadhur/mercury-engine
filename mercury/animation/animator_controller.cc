@@ -60,6 +60,22 @@ std::shared_ptr<AnimatorController> AnimatorController::FromString(
     return &controller->layers_[it->second];
   };
 
+  // The TOML format groups sections by tag, so [layer] sections can come
+  // after the states that use them. Create every named layer up front so
+  // its weight and blending always apply.
+  for (const auto& section : document.sections) {
+    if (section.tag != "layer") continue;
+    const auto& a = section.attributes;
+    const std::string name = a.GetString("name");
+    if (!layer_index.contains(name)) {
+      layer_index[name] = static_cast<int>(controller->layers_.size());
+      controller->layers_.push_back(AnimatorLayer{name});
+    }
+    AnimatorLayer* layer = &controller->layers_[layer_index[name]];
+    layer->weight = static_cast<float>(a.GetFloat("weight", 1.0));
+    layer->additive = a.GetString("blending") == "additive";
+  }
+
   for (const auto& section : document.sections) {
     const auto& a = section.attributes;
     const auto& p = section.properties;
@@ -87,15 +103,6 @@ std::shared_ptr<AnimatorController> AnimatorController::FromString(
       if (type == "trigger") parameter.type = AnimatorParameter::Type::kTrigger;
       parameter.default_value = ToFloat(a.Get("default"));
       controller->parameters_.push_back(parameter);
-    } else if (section.tag == "layer") {
-      const std::string name = a.GetString("name");
-      if (!layer_index.contains(name)) {
-        layer_index[name] = static_cast<int>(controller->layers_.size());
-        controller->layers_.push_back(AnimatorLayer{name});
-      }
-      AnimatorLayer* layer = &controller->layers_[layer_index[name]];
-      layer->weight = static_cast<float>(a.GetFloat("weight", 1.0));
-      layer->additive = a.GetString("blending") == "additive";
     } else if (section.tag == "state") {
       AnimatorLayer* layer = layer_of(section);
       AnimatorState state;

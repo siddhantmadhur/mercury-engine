@@ -24,8 +24,9 @@
  * target> released editor (no checkout: the player and engine resources ship in
  * the .app)
  *     -> use Contents/MacOS/mercury_player and
- * Contents/Resources/{ui,materials} then, on a worker thread: compile the
- * scripts, pack the files, copy the player and the runtime libraries it needs
+ * Contents/Resources/{ui,materials} then: compile the scripts (on the editor's
+ * thread), and on a worker thread pack the files, copy the player and the
+ * runtime libraries it needs
  *
  * The .as scripts are packed as sources; the executable finds game.mpack next
  * to itself and runs from it (see RunPlayer). Build and Play are unchanged and
@@ -42,6 +43,7 @@
 #include <vector>
 
 #include "console.h"
+#include "editor_settings.h"
 #include "os/process.h"
 #include "project/project.h"
 
@@ -51,7 +53,8 @@ class ReleaseBuild {
  public:
   enum class State { kIdle, kBuilding, kPacking };
 
-  explicit ReleaseBuild(Console& console) : console_(console) {}
+  explicit ReleaseBuild(Console& console, const EditorSettings& settings)
+      : console_(console), settings_(settings) {}
   ~ReleaseBuild();
 
   // max_archive_bytes: size at which game.mpack rolls over into game_001.mpack
@@ -114,10 +117,15 @@ class ReleaseBuild {
   void Finish(const std::string& message, bool error);
 
   Console& console_;
+  const EditorSettings& settings_;
   std::unique_ptr<os::Process> process_;
   std::future<PackResult> packing_;
   State state_ = State::kIdle;
   bool cancelled_ = false;
+  // The native project build starts with a configure step when its cache is
+  // missing or stale.
+  bool configuring_ = false;
+  bool holds_build_lock_ = false;
 
   std::filesystem::path project_root_;
   std::string project_name_;

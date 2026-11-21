@@ -4,13 +4,11 @@
 
 #include "asset_database.h"
 
-#include <algorithm>
-#include <cctype>
-#include <map>
 #include <system_error>
 
 #include "debugger/debugger.h"
 #include "os/filesystem.h"
+#include "project/asset_importer.h"
 
 namespace Mercury {
 
@@ -24,7 +22,8 @@ bool LoadAssetFile(const std::filesystem::path& file, Asset& out,
   }
   auto header = document.Find("masset");
   if (!header) {
-    if (error) *error = file.string() + ": missing [masset type=...] header";
+    if (error)
+      *error = file.string() + ": missing [masset] header with format = 2";
     return false;
   }
   out.type = header->attributes.GetString("type");
@@ -36,7 +35,7 @@ bool SaveAssetFile(const std::filesystem::path& file, const Asset& asset) {
   mtext::Document document;
   auto& header = document.Add("masset");
   header.attributes.Set("type", asset.type);
-  header.attributes.Set("format", 1);
+  header.attributes.Set("format", 2);
   header.properties = asset.properties;
   return mtext::SaveFile(file, document);
 }
@@ -44,7 +43,7 @@ bool SaveAssetFile(const std::filesystem::path& file, const Asset& asset) {
 AssetDatabase::AssetDatabase(std::shared_ptr<const Project> project)
     : project_(std::move(project)) {}
 
-const Asset* AssetDatabase::Load(std::string_view res_path) {
+std::shared_ptr<const Asset> AssetDatabase::Load(std::string_view res_path) {
   if (res_path.empty() || !project_) return nullptr;
   const auto file = project_->Resolve(res_path);
   // Packed files never change, so they keep the default time.
@@ -60,22 +59,24 @@ const Asset* AssetDatabase::Load(std::string_view res_path) {
 
   auto it = cache_.find(res_path);
   if (it != cache_.end() && it->second.modified == modified) {
-    return &it->second.asset;
+    return it->second.asset;
   }
 
-  Entry entry;
+  auto asset = std::make_shared<Asset>();
   std::string error;
-  if (!LoadAssetFile(file, entry.asset, &error)) {
+  if (!LoadAssetFile(file, *asset, &error)) {
     PDebug::error("Could not load asset: {}", error);
     return nullptr;
   }
-  entry.asset.path = std::string(res_path);
-  entry.modified = modified;
-  if (!TypeRegistry::Instance().FindAssetType(entry.asset.type)) {
-    PDebug::warn("{}: unknown asset type \"{}\"", res_path, entry.asset.type);
+  asset->path = std::string(res_path);
+  if (!TypeRegistry::Instance().FindAssetType(asset->type)) {
+    PDebug::warn("{}: unknown asset type \"{}\"", res_path, asset->type);
   }
-  auto [inserted, _] = cache_.insert_or_assign(std::string(res_path), entry);
-  return &inserted->second.asset;
+  Entry entry;
+  entry.asset = asset;
+  entry.modified = modified;
+  cache_.insert_or_assign(std::string(res_path), std::move(entry));
+  return asset;
 }
 
 bool AssetDatabase::Save(const Asset& asset) {
@@ -89,36 +90,8 @@ bool AssetDatabase::Save(const Asset& asset) {
 }
 
 std::string AssetDatabase::TypeFromExtension(std::string_view res_path) {
-  std::string ext(fs::path(res_path).extension().string());
-  std::transform(ext.begin(), ext.end(), ext.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  static const std::map<std::string, std::string, std::less<>> kTypes = {
-      {std::string(kMapExtension), "Map"},
-      {std::string(kUxmlExtension), "UXML"},
-      {std::string(kUssExtension), "StyleSheet"},
-      {".ttf", "Font"},
-      {".otf", "Font"},
-      {".mprefab", "Prefab"},
-      {".manim", "AnimatorController"},
-      {".minput", "InputActions"},
-      {".wav", "AudioClip"},
-      {".ogg", "AudioClip"},
-      {".mp3", "AudioClip"},
-      {".flac", "AudioClip"},
-      {".fbx", "Model"},
-      {".obj", "Model"},
-      {".gltf", "Model"},
-      {".glb", "Model"},
-      {".dae", "Model"},
-      {".png", "Texture"},
-      {".jpg", "Texture"},
-      {".jpeg", "Texture"},
-      {".bmp", "Texture"},
-      {".tga", "Texture"},
-      {".svg", "Texture"},
-  };
-  auto it = kTypes.find(ext);
-  return it == kTypes.end() ? "" : it->second;
+  // The registry holds the engine's built-ins plus any the game registered.
+  return AssetImporterRegistry::Instance().TypeFromExtension(res_path);
 }
 
 std::string AssetDatabase::TypeOf(std::string_view res_path) {

@@ -99,6 +99,14 @@ class Project {
   const fs::path& GetFile() const { return file_; }
   const fs::path& GetRoot() const { return root_; }
   fs::path GetCacheDir() const { return root_ / kProjectCacheDir; }
+  /**
+   * @brief The project's .mercury folder, created if missing
+   *
+   * Refuses (returns empty with `error`) if .mercury is a symlink or any
+   * non-directory, so generated files can never be redirected outside the
+   * project.
+   */
+  fs::path EnsureCacheDir(std::string* error = nullptr) const;
 
   std::string GetName() const;
   void SetName(std::string name);
@@ -116,7 +124,39 @@ class Project {
   // e.g. "cpp_hello". Empty for AngelScript-only projects, which run the
   // shared mercury_player.
   std::string GetBuildTarget() const;
-  void SetBuildTarget(std::string target);
+  // Rejects a name that could inject CMake syntax (validated with
+  // IsValidTargetName); returns false and leaves the file unchanged.
+  bool SetBuildTarget(std::string target);
+  // [build] systems_target: the CMake target that builds the project's editor
+  // modules. Defaults to "<build target>_systems"; empty when there is no
+  // build target.
+  std::string GetBuildSystemsTarget() const;
+
+  /**
+   * @brief A safe CMake target name: [A-Za-z0-9_.+-]+, not starting with '-'
+   *
+   * Targets end up in generated CMakeLists.txt, so a name with quotes,
+   * parentheses, newlines or a path separator is rejected instead of being
+   * written into a CMake command.
+   */
+  static bool IsValidTargetName(std::string_view name);
+  // [render] anti_aliasing: "none", "fxaa" or "taa" (default). A project that
+  // only has the legacy `fxaa` bool maps it to "fxaa"/"none".
+  std::string GetRenderAntiAliasing() const;
+  void SetRenderAntiAliasing(std::string mode);
+  // [render] fsr: AMD FSR 1 upscaling of the window's scene (default off)
+  bool GetRenderFsr() const;
+  void SetRenderFsr(bool enabled);
+  // [render] fsr_quality: "high" or "ultra" (default)
+  std::string GetRenderFsrQuality() const;
+  void SetRenderFsrQuality(std::string quality);
+  // [render] render_scale: fraction of the window size drawn when FSR is on,
+  // clamped to 0.5-1 (default 0.75)
+  float GetRenderScale() const;
+  void SetRenderScale(float scale);
+  // [render] fsr_sharpness: RCAS sharpening, clamped to 0-1 (default 0.9)
+  float GetRenderFsrSharpness() const;
+  void SetRenderFsrSharpness(float sharpness);
   // [physics] gravity, in units per second squared
   glm::vec3 GetGravity() const;
   // [physics] tick_rate: fixed ticks (OnTick + physics steps) per second
@@ -144,8 +184,11 @@ class Project {
   /**
    * @brief Turn "res://a/b.mmap" into an absolute path inside the project
    *
-   * Absolute paths are returned unchanged and other relative paths are taken
-   * relative to the project root.
+   * Relative paths are taken relative to the project root. The result must
+   * stay inside the project folder, symlinks followed: absolute paths outside
+   * it, `..` escapes and symlinks that lead out all yield an empty path, so
+   * a project file cannot make the engine read or write elsewhere. Check for
+   * an empty result before using it.
    */
   fs::path Resolve(std::string_view path) const;
 

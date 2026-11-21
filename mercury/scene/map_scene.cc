@@ -17,6 +17,7 @@
 #include "properties/primitives.h"
 #include "scripting/as/script_runtime.h"
 #include "scripting/behaviour.h"
+#include "scripting/system.h"
 #include "scripting/type_registry.h"
 #include "ui/ui_document.h"
 
@@ -41,6 +42,20 @@ void CollectModelPaths(const MapNode& node, std::vector<std::string>& paths) {
   }
   for (const auto& child : node.children) CollectModelPaths(*child, paths);
 }
+
+// Marks the subtree being built as a clone of an existing node. Clones keep
+// their source uids, which are not unique per instance, so they must not
+// become entity GUIDs.
+class CloningScope {
+ public:
+  explicit CloningScope(bool& flag) : flag_(flag) { flag_ = true; }
+  ~CloningScope() { flag_ = false; }
+  CloningScope(const CloningScope&) = delete;
+  CloningScope& operator=(const CloningScope&) = delete;
+
+ private:
+  bool& flag_;
+};
 
 }  // namespace
 
@@ -290,9 +305,14 @@ int MapScene::GetTicksPerSecond() const {
 }
 
 void MapScene::SetProject(std::shared_ptr<Project> project) {
+  if (running_callbacks_ > 0) {
+    PDebug::error("SetProject was called from a behaviour callback; ignored");
+    return;
+  }
   // Models loading for the old project must not reach the new one's cache.
   preloader_.Cancel();
   loading_map_.reset();
+  deferred_map_.reset();  // a map of the old project
   ClearMap();
   model_assets_.clear();
   images_.clear();
@@ -318,6 +338,8 @@ MapScene::~MapScene() {
   physics_engine_->SetTriggerCallback({});
   physics_engine_->SetContactCallback({});
   // Behaviours may touch the scene from OnDestroy, so tear them down first.
+  CallbackScope callback_scope(this);
+  StopSystems();
   std::vector<Behaviour*> behaviours;
   behaviours.reserve(behaviours_.size());
   for (const auto& behaviour : behaviours_)
@@ -349,6 +371,14 @@ const UI::UIDrawData* MapScene::GetUIDrawData() const {
 }
 
 void MapScene::Instantiate(const Map& map) {
+  if (running_callbacks_ > 0) {
+    // Not while behaviours are running: it is applied at the next frame.
+    deferred_map_ = map;
+    deferred_fresh_ = false;
+    deferred_async_ = false;
+    return;
+  }
+  deferred_map_.reset();  // this replaces whatever was waiting
   ClearMap();
 
   std::vector<kEntityId> created;
@@ -369,10 +399,21 @@ void MapScene::Instantiate(const Map& map) {
     }
   }
   ApplyEnvironment();
-  if (running_) StartPendingBehaviours();
+  if (running_) {
+    StartPendingBehaviours();
+    StartSystems();
+    NotifyMapLoaded();
+  }
 }
 
 void MapScene::BeginInstantiate(Map map, bool fresh_assets) {
+  if (running_callbacks_ > 0) {
+    deferred_map_ = std::move(map);
+    deferred_fresh_ = fresh_assets;
+    deferred_async_ = true;
+    return;
+  }
+  deferred_map_.reset();
   preloader_.Cancel();
   loading_map_.reset();
   auto jobs = MissingModels(map, fresh_assets);
@@ -556,13 +597,18 @@ void MapScene::GatherPointLights() {
     ProbeVolumeData& data = lighting_.probes;
     const glm::vec3 half = glm::abs(volume.size * transform.GetScale()) * 0.5f;
     data.enabled = volume.intensity > 0.0f;
+    data.placed = true;
     data.automatic = volume.fit_to_scene;
-    data.min = transform.GetPosition() - half;
-    data.max = transform.GetPosition() + half;
+    // World position (Transform's position already folds in the parents),
+    // like the lights around it.
+    const glm::vec3 center = transform.GetInterpolatedPosition();
+    data.min = center - half;
+    data.max = center + half;
     data.counts = glm::clamp(glm::ivec3(glm::round(volume.resolution)),
                              glm::ivec3(2), glm::ivec3(16));
     data.intensity = volume.intensity;
     data.bounces = std::max(volume.bounces, 1);
+    data.capture_size = volume.capture_size;
     data.include_emission = volume.include_emission;
     data.probes_per_frame = volume.probes_per_frame;
     break;
@@ -598,6 +644,13 @@ void MapScene::SetCurrentCamera(GameObject camera) {
 }
 
 void MapScene::ClearMap() {
+  if (running_callbacks_ > 0) {
+    PDebug::error(
+        "ClearMap was called from a behaviour callback; the scene cannot be "
+        "cleared while it is running");
+    return;
+  }
+  if (systems_started_ && root_entity_ != entt::null) NotifyMapUnloading();
   pending_destroy_.clear();
   // OnDestroy may instantiate a prefab, which appends to behaviours_ and can
   // reallocate it; iterate over a snapshot instead.
@@ -605,8 +658,11 @@ void MapScene::ClearMap() {
   behaviours.reserve(behaviours_.size());
   for (const auto& behaviour : behaviours_)
     behaviours.push_back(behaviour.get());
-  for (Behaviour* behaviour : behaviours) {
-    if (behaviour->awoken_) behaviour->OnDestroy();
+  {
+    CallbackScope scope(this);
+    for (Behaviour* behaviour : behaviours) {
+      if (behaviour->awoken_) behaviour->OnDestroy();
+    }
   }
   behaviours_.clear();
   behaviours_by_entity_.clear();
@@ -665,6 +721,18 @@ kEntityId MapScene::CreateNodeEntity(const MapNode& node, kEntityId parent,
                                      const std::string& path) {
   auto& registry = TypeRegistry::Instance();
   kEntityId entity = object_manager_->NewObject();
+  // The map node's uid is the entity's stable id, so it survives reloading the
+  // map and can be used for replication or save games. A cloned prefab node
+  // keeps the uid of its source, which is not unique across instances, so
+  // those entities keep the counter id NewObject assigned.
+  if (!cloning_runtime_node_ && node.uid != 0) {
+    if (!object_manager_->SetGuid(entity, node.uid)) {
+      PDebug::warn(
+          "entity {}: map uid {} is already used by another live entity; "
+          "keeping its temporary guid",
+          path, node.uid);
+    }
+  }
   {
     NodeInfo info;
     info.name = path == "." ? node.name : path.substr(path.rfind('/') + 1);
@@ -922,6 +990,7 @@ void MapScene::AwakeBehaviours() {
   // A map instantiated before the scene starts is awoken by OnStart, once the
   // application has a window and input (Unity's Awake runs on scene load).
   if (mode_ != Mode::kPlay || !running_) return;
+  CallbackScope callback_scope(this);
   // Awake/OnEnable may add more behaviours; index so the loop sees them.
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
@@ -954,6 +1023,7 @@ void MapScene::OnBehaviourEnabledChanged(Behaviour& behaviour) {
 }
 
 void MapScene::StartPendingBehaviours() {
+  CallbackScope callback_scope(this);
   // OnStart may create more behaviours; index so the loop picks them up.
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
@@ -974,10 +1044,14 @@ void MapScene::PlayAudioOnAwake() {
 }
 
 void MapScene::OnStart() {
+  CallbackScope callback_scope(this);
   running_ = true;
   PlayAudioOnAwake();
   AwakeBehaviours();
   StartPendingBehaviours();
+  StartSystems();
+  // A map may already be loaded when the application starts the scene.
+  if (root_entity_ != entt::null) NotifyMapLoaded();
 }
 
 void MapScene::LoadPendingMap() {
@@ -995,8 +1069,21 @@ void MapScene::LoadPendingMap() {
 
 void MapScene::OnFrame(double delta_t) {
   const double seconds = delta_t / 1000.0;
+  if (mode_ == Mode::kPlay && deferred_map_) {
+    // A behaviour asked for a new map during the last frame's callbacks.
+    Map map = std::move(*deferred_map_);
+    deferred_map_.reset();
+    if (deferred_async_) {
+      BeginInstantiate(std::move(map), deferred_fresh_);
+    } else {
+      // A plain Instantiate stays synchronous, so a behaviour that asks for
+      // the same map every frame cannot keep restarting a model preload.
+      Instantiate(map);
+    }
+  }
   if (mode_ == Mode::kPlay) FinishLoadingMap();
   if (mode_ == Mode::kPlay && !pending_map_.empty()) LoadPendingMap();
+  CallbackScope callback_scope(this);
   Profiler::SetLoading(!pending_map_.empty() || loading_map_.has_value());
   if (mode_ == Mode::kPlay) {
     Time::BeginFrame(seconds);
@@ -1009,10 +1096,17 @@ void MapScene::OnFrame(double delta_t) {
   if (ui && input_manager_) ui_.ProcessInput(*input_manager_);
   const float dt =
       mode_ == Mode::kPlay ? Time::GetDeltaTime() : static_cast<float>(seconds);
+  const bool systems = mode_ == Mode::kPlay && systems_started_;
+  if (systems) {
+    for (auto& system : systems_) system->OnPreFrame(*this, dt);
+  }
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnFrame(dt);
+  }
+  if (systems) {
+    for (auto& system : systems_) system->OnFrame(*this, dt);
   }
   for (size_t i = 0; i < behaviours_.size(); i++) {
     Behaviour* behaviour = behaviours_[i].get();
@@ -1021,7 +1115,12 @@ void MapScene::OnFrame(double delta_t) {
     }
   }
   DestroyPending();
-  if (mode_ == Mode::kPlay) UpdateFrameSystems(dt);
+  if (mode_ == Mode::kPlay) {
+    UpdateFrameSystems(dt);
+    // Systems' late frame runs after the engine's own frame systems (animation,
+    // audio), so a renderer system sees the final pose for this frame.
+    for (auto& system : systems_) system->OnLateFrame(*this, dt);
+  }
   // Lights may have moved.
   GatherPointLights();
   // ...and bindings pick up what the scripts changed before drawing.
@@ -1033,8 +1132,19 @@ void MapScene::OnFrame(double delta_t) {
 
 void MapScene::OnTick(double delta_t) {
   if (mode_ != Mode::kPlay) return;
+  CallbackScope callback_scope(this);
   Time::BeginTick();
   StartPendingBehaviours();
+  // Pre-tick systems run before collision callbacks, which may change the
+  // time scale, so they read the tick delta at their own point in the tick.
+  const float pre_tick_dt = Time::GetDeltaTime();
+  if (systems_started_) {
+    for (auto& system : systems_) {
+      if (system->GetPhase() == System::Phase::kPreTick) {
+        system->OnTick(*this, pre_tick_dt);
+      }
+    }
+  }
   DispatchCollisions();
   const float dt = Time::GetDeltaTime();
   for (size_t i = 0; i < behaviours_.size(); i++) {
@@ -1042,13 +1152,35 @@ void MapScene::OnTick(double delta_t) {
     if (behaviour->started_ && behaviour->IsActiveAndEnabled())
       behaviour->OnTick(dt);
   }
+  if (systems_started_) {
+    for (auto& system : systems_) {
+      if (system->GetPhase() == System::Phase::kTick) {
+        system->OnTick(*this, dt);
+      }
+    }
+  }
   ScriptRuntime::Instance().SetCurrentScene(serial_);
   ScriptRuntime::Instance().PumpTimers();
+  if (systems_started_) {
+    for (auto& system : systems_) {
+      if (system->GetPhase() == System::Phase::kPostTick) {
+        system->OnTick(*this, dt);
+      }
+    }
+  }
   DestroyPending();
   Time::EndTick();
 }
 
 void MapScene::OnDestroy() {
+  if (running_callbacks_ > 0) {
+    // A system or behaviour callback asked to destroy the scene it is running
+    // in. Tearing systems down under that loop would free the object whose
+    // callback is executing.
+    PDebug::error("MapScene::OnDestroy was called from a callback; ignored");
+    return;
+  }
+  CallbackScope callback_scope(this);
   // OnDestroy may instantiate a prefab, which appends to behaviours_.
   std::vector<Behaviour*> behaviours;
   behaviours.reserve(behaviours_.size());
@@ -1059,7 +1191,64 @@ void MapScene::OnDestroy() {
   }
   behaviours_.clear();
   behaviours_by_entity_.clear();
+  StopSystems();
   running_ = false;
+}
+
+void MapScene::StartSystems() {
+  if (systems_started_ || mode_ != Mode::kPlay) return;
+  systems_started_ = true;
+  for (const SystemInfo& info : SystemRegistry::Instance().Systems()) {
+    if (!info.create) continue;
+    std::unique_ptr<System> system = info.create();
+    if (!system) continue;
+    system->OnRegister(*this);
+    // OnRegister may have triggered a teardown; do not add to a dead list.
+    if (!systems_started_) return;
+    systems_.push_back(std::move(system));
+  }
+}
+
+void MapScene::StopSystems() {
+  if (!systems_started_) return;
+  // Clear the flag first so a nested StopSystems is a no-op, and move the list
+  // out so a callback cannot invalidate the loop (or the caller's snapshot).
+  systems_started_ = false;
+  std::vector<std::unique_ptr<System>> systems = std::move(systems_);
+  // Reverse registration order, so a system that depends on another is torn
+  // down first.
+  for (auto it = systems.rbegin(); it != systems.rend(); ++it) {
+    (*it)->OnShutdown(*this);
+  }
+}
+
+void MapScene::NotifyMapLoaded() {
+  if (!systems_started_) return;
+  CallbackScope callback_scope(this);
+  for (auto& system : systems_) system->OnMapLoaded(*this);
+}
+
+void MapScene::NotifyMapUnloading() {
+  if (!systems_started_) return;
+  CallbackScope callback_scope(this);
+  for (auto& system : systems_) system->OnMapUnloading(*this);
+}
+
+void MapScene::SimulatePhysics(int steps) {
+  GameScene::SimulatePhysics(steps);
+  if (mode_ != Mode::kPlay || !systems_started_) return;
+  // Post-physics runs outside OnTick, so it needs its own callback scope:
+  // ClearMap/SetProject/Instantiate must defer here too.
+  CallbackScope callback_scope(this);
+  // The tick has ended, so GetDeltaTime is the frame delta again; a
+  // post-physics system wants the fixed tick delta the behaviours saw.
+  const float dt = Time::GetFixedDeltaTime() * Time::GetTimeScale();
+  for (auto& system : systems_) {
+    if (system->GetPhase() == System::Phase::kPostPhysics) {
+      system->OnTick(*this, dt);
+    }
+  }
+  DestroyPending();
 }
 
 void MapScene::SetupAnimator(kEntityId entity) {
@@ -1160,7 +1349,18 @@ RenderSettings MapScene::GetRenderSettings() const {
         static_cast<float>(p.GetFloat("ssao_radius", settings.ssao_radius));
     settings.ssao_samples =
         static_cast<int>(p.GetInt("ssao_samples", settings.ssao_samples));
-    settings.fxaa = p.GetBool("fxaa", settings.fxaa);
+    // Rendering options the project owns (the editor's Build Game dialog).
+    const std::string aa = project_->GetRenderAntiAliasing();
+    settings.anti_aliasing = aa == "none" ? RenderSettings::AntiAliasing::kNone
+                             : aa == "fxaa"
+                                 ? RenderSettings::AntiAliasing::kFxaa
+                                 : RenderSettings::AntiAliasing::kTaa;
+    settings.fsr = project_->GetRenderFsr();
+    settings.fsr_quality = project_->GetRenderFsrQuality() == "high"
+                               ? RenderSettings::FsrQuality::kHigh
+                               : RenderSettings::FsrQuality::kUltra;
+    settings.render_scale = project_->GetRenderScale();
+    settings.fsr_sharpness = project_->GetRenderFsrSharpness();
     settings.screen_space_reflections = p.GetBool(
         "screen_space_reflections", settings.screen_space_reflections);
     settings.reflection_distance = static_cast<float>(
@@ -1196,13 +1396,13 @@ RenderSettings MapScene::GetRenderSettings() const {
     settings.exposure = profile.exposure;
     settings.bloom_intensity = profile.bloom_intensity;
     settings.bloom_threshold = profile.bloom_threshold;
+    settings.bloom_highlight = profile.bloom_highlight;
     settings.bloom_scatter = profile.bloom_scatter;
     settings.vignette_intensity = profile.vignette_intensity;
     settings.vignette_smoothness = profile.vignette_smoothness;
     settings.vignette_center = profile.vignette_center;
     settings.ssao_intensity = profile.ambient_occlusion;
     settings.ssao_radius = profile.ao_radius;
-    settings.fxaa = profile.antialiasing;
     settings.screen_space_reflections = profile.screen_space_reflections;
     settings.reflection_distance = profile.reflection_distance;
     settings.reflection_thickness = profile.reflection_thickness;
@@ -1340,7 +1540,11 @@ GameObject MapScene::InstantiateNode(const MapNode& node, GameObject parent,
   auto copy = Map::CloneTree(node);
   Map::RebaseNodePaths(*copy, path);
   std::vector<kEntityId> created;
-  kEntityId entity = BuildSubtree(*copy, parent_entity, path, created);
+  kEntityId entity = entt::null;
+  {
+    CloningScope cloning(cloning_runtime_node_);
+    entity = BuildSubtree(*copy, parent_entity, path, created);
+  }
   FinishCreated(created);
   return {this, entity};
 }
@@ -1365,7 +1569,11 @@ GameObject MapScene::InstantiatePrefab(std::string_view res_path,
     }
   }
   std::vector<kEntityId> created;
-  kEntityId entity = BuildSubtree(*copy, parent_entity, path, created);
+  kEntityId entity = entt::null;
+  {
+    CloningScope cloning(cloning_runtime_node_);
+    entity = BuildSubtree(*copy, parent_entity, path, created);
+  }
   if (world_space) {
     if (auto transform = object_manager_->GetProperty<Transform>(entity)) {
       transform->SetPosition(position);
@@ -1697,7 +1905,37 @@ void MapScene::SetEntityParent(kEntityId entity, kEntityId new_parent,
   auto transform = object_manager_->GetProperty<Transform>(entity);
   if (!node_info || !transform) return;
 
+  // A parent that no longer exists means "no parent".
+  if (new_parent != entt::null && !GetRegistry().valid(new_parent)) {
+    new_parent = entt::null;
+  }
   if (node_info->parent == new_parent) return;
+
+  // An object cannot become its own parent or a child of its own descendant:
+  // the hierarchy would loop, and every walk over it (paths, transforms)
+  // would recurse until the stack ran out. Walk up from the new parent; it
+  // is a loop if that reaches `entity`. The step limit stops at a loop that
+  // is already there.
+  size_t steps = 0;
+  for (kEntityId up = new_parent;
+       up != entt::null && GetRegistry().valid(up);) {
+    if (up == entity) {
+      PDebug::warn(
+          "Cannot make \"{}\" a child of \"{}\": that would put it inside "
+          "itself",
+          GameObject(this, entity).GetPath(),
+          GameObject(this, new_parent).GetPath());
+      return;
+    }
+    if (++steps > GetRegistry().size()) {
+      PDebug::warn("The hierarchy above \"{}\" loops; not reparenting",
+                   GameObject(this, new_parent).GetPath());
+      return;
+    }
+    auto up_info = object_manager_->GetProperty<NodeInfo>(up);
+    if (!up_info) break;
+    up = up_info->parent;
+  }
 
   // Remove from old parent's children
   if (node_info->parent != entt::null &&
@@ -1986,6 +2224,8 @@ std::shared_ptr<const MeshGeometry> MapScene::GetPrimitive(
     case MeshShape::kModel:
       return nullptr;
   }
+  // A MeshShape read from a file can hold a value no case above knows.
+  if (!mesh) return nullptr;
   std::vector<ModelVertex> vertices;
   vertices.reserve(mesh->vertices_.size());
   for (const auto& v : mesh->vertices_) {
@@ -2046,7 +2286,7 @@ void MapScene::BuildTextMesh(kEntityId entity) {
   settings.rich_text = text->rich_text;
   settings.white_space =
       text->word_wrap ? UI::WhiteSpace::kNormal : UI::WhiteSpace::kNoWrap;
-  const int align = static_cast<int>(text->alignment);
+  const int align = std::clamp(static_cast<int>(text->alignment), 0, 8);
   const int column = align % 3;  // 0 left, 1 center, 2 right
   const int row = align / 3;     // 0 top, 1 middle, 2 bottom
   static constexpr UI::TextAnchor kAnchors[3] = {UI::TextAnchor::kUpperLeft,

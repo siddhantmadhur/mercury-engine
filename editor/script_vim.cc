@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <limits>
 #include <utility>
 
 namespace Mercury::EditorUI {
@@ -1024,7 +1026,15 @@ void ScriptVim::ExecuteEx(const wxString& command) {
   if (line == "noh" || line == "nohlsearch") return;
   if (std::all_of(line.begin(), line.end(),
                   [](unsigned char c) { return std::isdigit(c); })) {
-    MoveToLine(std::max(1, std::stoi(line)) - 1);
+    // A number too big for an int (":99999999999999999999") clamps to the last
+    // line instead of throwing out of stoi.
+    int target = 0;
+    const auto ec =
+        std::from_chars(line.data(), line.data() + line.size(), target).ec;
+    if (ec == std::errc::result_out_of_range) {
+      target = std::numeric_limits<int>::max();
+    }
+    MoveToLine(std::max(1, target) - 1);
     return;
   }
   if (line.starts_with("s/") || line.starts_with("%s/") ||

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 #include "Jolt/Core/Factory.h"
 #include "Jolt/Core/JobSystemSingleThreaded.h"
@@ -33,33 +34,51 @@ namespace Mercury {
 template <>
 auto PhysicsEngine::TriggerCollisionCallback<kCollisionPersisted>(
     kEntityId self, kEntityId other) -> void {
-  if (on_collision_persisted_.contains(self)) {
-    on_collision_persisted_[self](self, other);
+  // Copied first: a callback may register a new one for itself, which would
+  // reassign the function that is running.
+  if (auto it = on_collision_persisted_.find(self);
+      it != on_collision_persisted_.end()) {
+    const auto callback = it->second;
+    callback(self, other);
   }
-  if (on_collision_persisted_.contains(other)) {
-    on_collision_persisted_[other](other, self);
+  if (auto it = on_collision_persisted_.find(other);
+      it != on_collision_persisted_.end()) {
+    const auto callback = it->second;
+    callback(other, self);
   }
 }
 
 template <>
 void PhysicsEngine::TriggerCollisionCallback<kCollisionEnter>(kEntityId self,
                                                               kEntityId other) {
-  if (on_collision_enter_.contains(self)) {
-    on_collision_enter_[self](self, other);
+  // Copied first: a callback may register a new one for itself, which would
+  // reassign the function that is running.
+  if (auto it = on_collision_enter_.find(self);
+      it != on_collision_enter_.end()) {
+    const auto callback = it->second;
+    callback(self, other);
   }
-  if (on_collision_enter_.contains(other)) {
-    on_collision_enter_[other](other, self);
+  if (auto it = on_collision_enter_.find(other);
+      it != on_collision_enter_.end()) {
+    const auto callback = it->second;
+    callback(other, self);
   }
 }
 
 template <>
 void PhysicsEngine::TriggerCollisionCallback<kCollisionLeave>(kEntityId self,
                                                               kEntityId other) {
-  if (on_collision_leave_.contains(self)) {
-    on_collision_leave_[self](self, other);
+  // Copied first: a callback may register a new one for itself, which would
+  // reassign the function that is running.
+  if (auto it = on_collision_leave_.find(self);
+      it != on_collision_leave_.end()) {
+    const auto callback = it->second;
+    callback(self, other);
   }
-  if (on_collision_leave_.contains(other)) {
-    on_collision_leave_[other](other, self);
+  if (auto it = on_collision_leave_.find(other);
+      it != on_collision_leave_.end()) {
+    const auto callback = it->second;
+    callback(other, self);
   }
 }
 
@@ -87,7 +106,7 @@ class PhysicsContactListener : public JPH::ContactListener {
     // Triggers are found by overlap queries instead (PhysicsEngine::
     // UpdateTriggers), which also see characters and static triggers.
     if (inBody1.IsSensor() || inBody2.IsSensor()) return;
-    physics_engine_->TriggerCollisionCallback<kCollisionEnter>(self, other);
+    physics_engine_->QueueCollisionCallback(kCollisionEnter, self, other);
     physics_engine_->RecordContact(self, other, true);
   }
   virtual void OnContactPersisted(const JPH::Body& inBody1,
@@ -98,7 +117,7 @@ class PhysicsContactListener : public JPH::ContactListener {
     auto self = physics_engine_->Get(inBody1.GetID());
     auto other = physics_engine_->Get(inBody2.GetID());
 
-    physics_engine_->TriggerCollisionCallback<kCollisionPersisted>(self, other);
+    physics_engine_->QueueCollisionCallback(kCollisionPersisted, self, other);
   }
   virtual void OnContactRemoved(
       const JPH::SubShapeIDPair& inSubShapePair) override {
@@ -107,7 +126,7 @@ class PhysicsContactListener : public JPH::ContactListener {
     auto self = physics_engine_->Get(bodyID1);
     auto other = physics_engine_->Get(bodyID2);
 
-    physics_engine_->TriggerCollisionCallback<kCollisionLeave>(self, other);
+    physics_engine_->QueueCollisionCallback(kCollisionLeave, self, other);
     physics_engine_->RecordContact(self, other, false);
   }
 
@@ -117,6 +136,13 @@ class PhysicsContactListener : public JPH::ContactListener {
 
 // PhysicsEngine instances share Jolt's process-global type registry: the first
 // one registers, the last one unregisters and frees the factory.
+// Scenes can be created and destroyed from different threads (the editor
+// loads maps on workers), so the count and the registration it guards change
+// together under one lock.
+std::mutex& JoltGlobalsMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
 int& InstanceCount() {
   static int count = 0;
   return count;
@@ -126,10 +152,13 @@ int& InstanceCount() {
 PhysicsEngine::PhysicsEngine(PObjectManager& object_manager)
     : object_manager_(object_manager) {
   PDebug::info("Created physics engine...");
-  if (InstanceCount()++ == 0) {
-    JPH::RegisterDefaultAllocator();
-    JPH::Factory::sInstance = new JPH::Factory();
-    JPH::RegisterTypes();
+  {
+    std::lock_guard lock(JoltGlobalsMutex());
+    if (InstanceCount()++ == 0) {
+      JPH::RegisterDefaultAllocator();
+      JPH::Factory::sInstance = new JPH::Factory();
+      JPH::RegisterTypes();
+    }
   }
   temp_allocator_ = new JPH::TempAllocatorImpl(10 * 1024 * 1024);  // 10MB
 
@@ -153,10 +182,13 @@ PhysicsEngine::~PhysicsEngine() {
     delete contact_listener_;
     contact_listener_ = nullptr;
   }
-  if (--InstanceCount() == 0) {
-    JPH::UnregisterTypes();
-    delete JPH::Factory::sInstance;
-    JPH::Factory::sInstance = nullptr;
+  {
+    std::lock_guard lock(JoltGlobalsMutex());
+    if (--InstanceCount() == 0) {
+      JPH::UnregisterTypes();
+      delete JPH::Factory::sInstance;
+      JPH::Factory::sInstance = nullptr;
+    }
   }
 }
 
@@ -493,7 +525,9 @@ void PhysicsEngine::Compute(int steps) {
   this->SynchronizePObjects();
   const float step = 1.0f / static_cast<float>(tick_rate_);
   for (int i = 0; i < steps; i++) {
+    in_step_ = true;
     physics_system_.Update(step, 1, temp_allocator_, job_system_thread_pool_);
+    in_step_ = false;
   }
 
   auto& body_interface = physics_system_.GetBodyInterface();
@@ -597,6 +631,9 @@ void PhysicsEngine::RemoveBodyNow(kEntityId id) {
     sensor_bodies_.erase(sensor);
   }
   disabled_.erase(id);
+  on_collision_enter_.erase(id);
+  on_collision_persisted_.erase(id);
+  on_collision_leave_.erase(id);
   std::erase_if(trigger_pairs_, [&](const auto& pair) {
     return pair.first == id || pair.second == id;
   });
@@ -1231,7 +1268,44 @@ void PhysicsEngine::RecordContact(kEntityId a, kEntityId b, bool added) {
   if (count <= 0) contact_counts_.erase({a, b});
 }
 
+void PhysicsEngine::QueueCollisionCallback(CollisionType type, kEntityId self,
+                                           kEntityId other) {
+  if (self == entt::null && other == entt::null) return;
+  std::lock_guard lock(contact_mutex_);
+  pending_callbacks_.push_back({type, self, other});
+}
+
 void PhysicsEngine::UpdateContacts() {
+  // The per-entity callbacks were queued from Jolt's threads during the step.
+  // They run here, between steps, where they may touch bodies and the scene.
+  std::vector<PendingCollisionCallback> callbacks;
+  {
+    std::lock_guard lock(contact_mutex_);
+    callbacks.swap(pending_callbacks_);
+  }
+  // An earlier callback (or the deletion queue above) may have removed an
+  // entity that a later event names; a removed one gets no callback.
+  const auto exists = [this](kEntityId id) {
+    return id == entt::null || entity_bodies_ref_.contains(id);
+  };
+  for (const auto& callback : callbacks) {
+    if (!exists(callback.self) || !exists(callback.other)) continue;
+    switch (callback.type) {
+      case kCollisionEnter:
+        TriggerCollisionCallback<kCollisionEnter>(callback.self,
+                                                  callback.other);
+        break;
+      case kCollisionPersisted:
+        TriggerCollisionCallback<kCollisionPersisted>(callback.self,
+                                                      callback.other);
+        break;
+      case kCollisionLeave:
+        TriggerCollisionCallback<kCollisionLeave>(callback.self,
+                                                  callback.other);
+        break;
+    }
+  }
+
   std::set<std::pair<kEntityId, kEntityId>> current;
   {
     std::lock_guard lock(contact_mutex_);

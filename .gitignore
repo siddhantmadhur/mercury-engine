@@ -16,6 +16,7 @@ game
 tmp
 
 .DS_Store
+private/
 
 bench/
 

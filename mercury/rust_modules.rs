@@ -13,3 +13,6 @@ use mercury_kernel as _;
 
 #[allow(unused_imports)]
 use input_actions_codegen_rs as _;
+
+#[allow(unused_imports)]
+use mercury_uss as _;

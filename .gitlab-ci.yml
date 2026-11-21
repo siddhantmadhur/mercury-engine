@@ -75,7 +75,7 @@ clangformat-job:
     GIT_SUBMODULE_STRATEGY: none
   script:
     - echo "Linting code...."
-    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=Google
+    - git ls-files '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' ':!third_party/**' ':!build/**' | xargs -r clang-format -i --style=file:.clang-format
     - git diff --exit-code
 
 verify-license-job:

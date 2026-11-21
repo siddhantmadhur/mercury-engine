@@ -231,15 +231,20 @@ struct DirectionalLight {
         .Tooltip("Ambient light from below; alpha 0 uses 35% of ambient");
     r.Field("cast_shadows", cast_shadows).Tooltip("Enable shadow casting");
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Depth bias against shadow acne");
+        .Tooltip("Depth bias against shadow acne; PCF only (soft shadows off)");
     r.Field("shadow_normal_bias", shadow_normal_bias)
-        .Tooltip("Normal offset bias for sloped geometry");
+        .Tooltip(
+            "Normal offset bias for sloped geometry; PCF only (soft shadows "
+            "off)");
     r.Field("shadow_distance", shadow_distance)
         .Tooltip("Shadow coverage distance");
   }
 };
 
-// How a point or area light casts shadows.
+// How a point or area light casts shadows. With the project's soft shadows
+// on (PCSS), soft gives a penumbra scaled by the light's size and hard gives
+// a sharp PCSS edge; with soft shadows off (PCF) any non-none value casts the
+// same crisp shadow.
 enum class LightShadows { kNone, kHard, kSoft };
 
 /**
@@ -266,7 +271,10 @@ struct PointLight {
     r.Field("radius", radius)
         .Tooltip("Size of the light; soft shadows blur more for larger lights");
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Distance bias against shadow acne");
+        .Tooltip(
+            "Distance bias against shadow acne; PCF only (soft shadows off). "
+            "Under PCSS the radius sets the softness and shadows selects the "
+            "edge");
   }
 };
 
@@ -276,8 +284,11 @@ struct PointLight {
  * The rectangle lies in the node's XY plane, `size` across, and shines along
  * the node's -Z. `color` * `intensity` is the light's radiance, so matching an
  * emissive surface's emission makes it light the scene as brightly as it
- * looks. Lighting is exact for diffuse surfaces; shadows soften with the
- * rectangle's size.
+ * looks. Filament has no rectangular area light, so the renderer approximates
+ * the panel with a wide (hemisphere) spot that carries the panel's Lambertian
+ * flux (pi * L * A) and uses a PCSS bulb radius derived from the rectangle's
+ * half-diagonal. Shadows soften with the rectangle's size, but the emitted
+ * distribution is an approximation, not an exact PolygonFormFactor.
  */
 struct AreaLight {
   glm::vec4 color = glm::vec4(1.0f);
@@ -297,25 +308,38 @@ struct AreaLight {
     r.Field("two_sided", two_sided).Tooltip("Shine from both faces");
     r.Enum("shadows", shadows, {"none", "hard", "soft"});
     r.Field("shadow_bias", shadow_bias)
-        .Tooltip("Distance bias against shadow acne");
+        .Tooltip(
+            "Distance bias against shadow acne; PCF only (soft shadows off). "
+            "Under PCSS the rectangle size sets the softness and shadows "
+            "selects the edge");
   }
 };
 
 /**
- * @brief Legacy light-probe settings (kept for older maps)
+ * @brief A room-capture light probe at the node's position
  *
- * Mercury's Filament renderer does not build a probe grid. Its global
- * illumination is Filament's image-based lighting: give the camera a skybox
- * panorama and set `skybox_intensity`, and use screen-space reflections for
- * mirror-like surfaces. The fields below still parse and round-trip so old
- * maps keep loading.
+ * The renderer draws the scene from the node into a cubemap, filters it
+ * into image-based light (reflections plus irradiance) and lights the whole
+ * scene with it, so mirrors reflect the room and walls bleed their color.
+ * Each bounce captures again with the previous result as the light.
+ * It replaces the camera skybox's light while it is in the scene; the
+ * skybox can still be drawn as the background. `size`, `resolution`,
+ * `fit_to_scene` and `probes_per_frame` come from the old probe grid; they
+ * still parse and round-trip but do not change the capture.
+ * With `include_emission` off the capture leaves out the emissive surfaces'
+ * own glow. The capture sees every layer, whatever the camera's culling mask.
+ * Solid glass in the scene refracts the captured cubemap while a probe is in
+ * the map; thin panes and shells with an index of refraction near 1 keep
+ * screen-space refraction.
  */
 struct LightProbeVolume {
   bool fit_to_scene = false;
   glm::vec3 size = glm::vec3(10.0f);
   glm::vec3 resolution = glm::vec3(8.0f);  // probes along x, y and z
   float intensity = 1.0f;
-  int bounces = 3;
+  int bounces = 2;
+  // Edge of each captured cubemap face, in pixels.
+  int capture_size = 256;
   // Emissive surfaces light the scene through the probes; turn it off when
   // an AreaLight already stands for them, or their light counts twice.
   bool include_emission = true;
@@ -333,7 +357,11 @@ struct LightProbeVolume {
         .Tooltip("Probes along x, y and z (2 to 16 each)");
     r.Field("intensity", intensity).Tooltip("Multiplies the indirect light");
     r.Field("bounces", bounces)
-        .Tooltip("Passes over the probes; each adds a bounce of light");
+        .Tooltip(
+            "Captures of the room; each lights the next, adding a bounce of "
+            "light (1 to 4)");
+    r.Field("capture_size", capture_size)
+        .Tooltip("Resolution of the captured cubemap faces (64 to 1024)");
     r.Field("include_emission", include_emission)
         .Tooltip(
             "Emissive surfaces add light; off when an AreaLight stands for "
@@ -873,6 +901,7 @@ struct PostProcessProfile {
   float exposure = 1.0f;
   float bloom_intensity = 0.0f;
   float bloom_threshold = 1.0f;
+  float bloom_highlight = 1000.0f;
   float bloom_scatter = 0.7f;
   float vignette_intensity = 0.0f;
   float vignette_smoothness = 0.2f;
@@ -880,7 +909,6 @@ struct PostProcessProfile {
   // Screen-space ambient occlusion, darkening only indirect light.
   float ambient_occlusion = 0.8f;
   float ao_radius = 0.5f;
-  bool antialiasing = true;  // FXAA
   // Mirror and glossy surfaces reflect the rendered scene. Filament marches
   // the depth buffer; whatever is off screen comes from the IBL.
   bool screen_space_reflections = false;
@@ -896,7 +924,13 @@ struct PostProcessProfile {
         .Tooltip("Multiplies the scene before tonemapping");
     r.Field("bloom_intensity", bloom_intensity).Tooltip("0 turns bloom off");
     r.Field("bloom_threshold", bloom_threshold)
-        .Tooltip("Brightness (linear) above which pixels glow");
+        .Tooltip(
+            "0 disables the bloom threshold; any positive value enables "
+            "Filament's fixed 1.0 cutoff (the number itself has no effect)");
+    r.Field("bloom_highlight", bloom_highlight)
+        .Tooltip(
+            "Filament's brightest value fed to bloom (clamped to 10 or more); "
+            "lower values compress highlights and reduce bloom");
     r.Field("bloom_scatter", bloom_scatter)
         .Tooltip("How far the glow spreads, 0 to 1");
     r.Field("vignette_intensity", vignette_intensity)
@@ -909,8 +943,6 @@ struct PostProcessProfile {
             "off");
     r.Field("ao_radius", ao_radius)
         .Tooltip("World-space reach of the occlusion");
-    r.Field("antialiasing", antialiasing)
-        .Tooltip("Smooths jagged edges (FXAA)");
     r.Field("screen_space_reflections", screen_space_reflections)
         .Tooltip(
             "Mirror and glossy surfaces reflect the rendered scene; what is "

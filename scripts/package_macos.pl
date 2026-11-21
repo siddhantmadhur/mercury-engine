@@ -60,6 +60,7 @@ my $no_sign = 0;
 my $skip_build = 0;
 my $verbose = 0;
 my $engine_libs = 1;
+my $strip_sdk = 0;
 
 GetOptions(
     'project=s'      => \$opt{project},
@@ -78,6 +79,7 @@ GetOptions(
     'skip-build'     => \$skip_build,
     'build-dir=s'    => \$opt{build_dir},
     'no-engine-libs' => sub { $engine_libs = 0 },
+    'strip-sdk'      => \$strip_sdk,
     'zip'            => \$want_zip,
     'verbose|v'      => \$verbose,
     'help|h'         => sub { usage(0) },
@@ -88,8 +90,15 @@ if ($opt{target} ne 'player' && $opt{target} ne 'editor') {
     die "--target must be player or editor\n";
 }
 
-if (defined $opt{name} && $opt{name} =~ m{[/:]}) {
-    die "--name may not contain '/' or ':'\n";
+if (defined $opt{name} && $opt{name} =~ m{[/\\:\x00-\x1f]}) {
+    die "--name may not contain '/', '\\', ':' or control characters\n";
+}
+if (defined $opt{name} && $opt{name} =~ /^\.+$/) {
+    die "--name may not be '.' or '..'\n";
+}
+# The version ends up in the zip file name and Info.plist.
+if ($opt{version} !~ /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/) {
+    die "--version may only contain letters, digits and . + _ -\n";
 }
 
 # The player needs a project; the editor does not.
@@ -120,6 +129,7 @@ usage: $name --project PATH/TO/game.mproj [options]
   --skip-build          reuse the binaries already in the build directory
   --build-dir DIR       CMake build directory (default: build/release)
   --no-engine-libs      editor only: leave the static libraries out of the bundle
+  --strip-sdk           editor only: strip debug symbols from the SDK archives
   --zip                 also write a .zip for distribution
   --verbose             show every command
   -h, --help            this help
@@ -215,13 +225,30 @@ if ($opt{target} eq 'player') {
     $project_name = $opt{display_name} // 'Mercury Editor';
 }
 
-my $name = $opt{name} // ($opt{target} eq 'editor' ? 'Mercury Editor' : $project_name);
+# The project name comes from the project file, which is not trusted: it must
+# not be able to name a path outside the output folder ("../../Applications/X").
+sub sanitize_bundle_name {
+    my ($raw) = @_;
+    my $clean = $raw;
+    $clean =~ s{[/\\:\x00-\x1f]+}{-}g;
+    $clean =~ s/^[.\s-]+//;
+    $clean =~ s/\s+$//;
+    return length($clean) ? $clean : 'Game';
+}
+
+my $name = $opt{name}
+    // ($opt{target} eq 'editor' ? 'Mercury Editor' : sanitize_bundle_name($project_name));
 my $slug = slugify($name);
 my $bundle_id = $opt{bundle_id} // "dev.smadhur.$slug";
 my $output_dir = File::Spec->rel2abs($opt{output} // File::Spec->catdir($REPO, 'Builds'));
 make_path($output_dir);
 $output_dir = abs_path($output_dir);
 my $app_dir = File::Spec->catdir($output_dir, "$name.app");
+# Whatever the name was, the bundle (and the zip) must sit directly inside the
+# output folder: remove_tree below deletes it.
+if (dirname($app_dir) ne $output_dir) {
+    die "refusing to write outside the output folder: $app_dir\n";
+}
 
 my $build_dir = File::Spec->rel2abs(
     $opt{build_dir} // File::Spec->catdir($REPO, 'build', 'release'));
@@ -279,7 +306,7 @@ if ($opt{target} eq 'editor') {
 # Bundle skeleton
 # --------------------------------------------------------------------------
 
-remove_tree($app_dir) if -e $app_dir;
+remove_tree($app_dir) if -e $app_dir || -l $app_dir;
 my $contents = File::Spec->catdir($app_dir, 'Contents');
 my $macos    = File::Spec->catdir($contents, 'MacOS');
 my $res      = File::Spec->catdir($contents, 'Resources');
@@ -661,6 +688,12 @@ sub collect_game_files {
             next if $depth == 0 && is_skipped_at_root($name);
             my $path = File::Spec->catfile($dir, $name);
             my $entry = length($rel) ? "$rel/$name" : $name;
+            # A symlink can lead anywhere (an SSH key, a folder that loops back
+            # on itself); only what really lives in the project is shipped.
+            if (-l $path) {
+                log_line("  skipped symlink (not packed): $entry");
+                next;
+            }
             if (-d $path) {
                 my $canonical = abs_path($path) // $path;
                 next if $canonical eq $output;
@@ -752,6 +785,13 @@ sub copy_tree {
     for my $name (@names) {
         my $from = File::Spec->catfile($src, $name);
         my $to = File::Spec->catfile($dst, $name);
+        # Never follow a link out of the tree being staged: the SDK and the UI
+        # resources come from a build machine, and a link there must not pull
+        # in (or write through to) something outside it.
+        if (-l $from) {
+            log_line("WARNING: skipping symlink $from");
+            next;
+        }
         if (-d $from) {
             $count += copy_tree($from, $to);
         } elsif (-f $from) {
@@ -786,47 +826,60 @@ sub bundle_engine_resources {
     log_line("Bundled the engine's UI resources ($ui_files files) and "
         . scalar(@filamat) . " materials");
 
-    bundle_static_libraries() if $engine_libs;
+    bundle_sdk() if $engine_libs;
 }
 
-# Static archives for the engine and the components it links that have their
-# own build system (Jolt, Assimp, ...). A game that needs to link a custom
-# player can take them from the editor instead of rebuilding the components.
-sub bundle_static_libraries {
-    # CMake writes the engine and dependency archives to <build>/lib. Filament
-    # builds in its own Ninja tree, so include that folder too.
-    my @library_dirs = (
-        $build_lib,
-        File::Spec->catdir($build_dir, '_deps', 'filament', 'out', 'lib'),
-    );
-    my $dest = File::Spec->catdir($res, 'engine', 'lib');
-    make_path($dest);
-    my $count = 0;
-    my $bytes = 0;
-    for my $dir (@library_dirs) {
-        next unless -d $dir;
-        opendir(my $dh, $dir) or fail("cannot read $dir: $!");
-        my @files = sort grep { /\.a$/ && -f File::Spec->catfile($dir, $_) }
-            readdir $dh;
-        closedir $dh;
-        for my $file (@files) {
-            my $source = File::Spec->catfile($dir, $file);
-            copy($source, File::Spec->catfile($dest, $file))
-                or fail("cannot copy $source: $!");
-            $bytes += -s $source;
-            $count++;
-        }
-    }
-    log_line("Bundled $count static libraries for native builds (" . bytes($bytes) . ")");
+# Editor SDK: headers, static archives and a relocatable CMake package, so a
+# project can build C++ gameplay and editor systems against the packaged app
+# instead of a checkout. Installed by the `sdk` component of CMake's install
+# rules (see the top-level CMakeLists.txt).
+sub bundle_sdk {
+    my $cmake = which('cmake');
+    fail("CMake was not found; install it with ./scripts/setup_project.pl")
+        unless $cmake;
 
-    my $readme = File::Spec->catfile($res, 'engine', 'lib', 'README.txt');
-    open(my $fh, '>', $readme) or fail("cannot write $readme: $!");
-    print $fh <<"README";
-Static libraries for building a native Mercury player or game module without
-rebuilding the engine's third-party dependencies. Headers are not included;
-pair these with the engine's source or development install.
-README
-    close $fh;
+    # A Debug build carries debug symbols in every archive; the SDK is meant
+    # to be shipped, so say so (and offer --strip-sdk).
+    my $build_type = '';
+    if (open(my $cache, '<', File::Spec->catfile($build_dir, 'CMakeCache.txt'))) {
+        while (<$cache>) {
+            if (/^CMAKE_BUILD_TYPE:\w+=(.*)$/) {
+                $build_type = $1;
+                last;
+            }
+        }
+        close $cache;
+    }
+    if ($build_type eq 'Debug' && !$strip_sdk) {
+        log_line("WARNING: packaging the editor SDK from a Debug build "
+            . "(~1.7 GB). Use a Release build, or --strip-sdk to strip the "
+            . "archives.");
+    }
+
+    my $stage = File::Spec->catdir($build_dir, 'sdk-install');
+    remove_tree($stage) if -d $stage;
+    run_or_die($cmake, '--install', $build_dir, '--prefix', $stage,
+        '--component', 'sdk');
+    my $sdk = File::Spec->catdir($stage, 'sdk');
+    fail("the SDK was not staged at $sdk") unless -d $sdk;
+    my $dest = File::Spec->catdir($res, 'sdk');
+    my $count = copy_tree($sdk, $dest);
+    my $behaviour = File::Spec->catfile($dest, 'include', 'mercury',
+        'scripting', 'behaviour.h');
+    fail("the SDK is missing $behaviour") unless -f $behaviour;
+
+    if ($strip_sdk) {
+        my $lib = File::Spec->catdir($dest, 'lib');
+        my @archives = sort glob(File::Spec->catfile($lib, '*.a'));
+        for my $archive (@archives) {
+            run_or_die('strip', '-S', $archive);
+        }
+        log_line("Stripped debug symbols from " . scalar(@archives)
+            . " SDK archives");
+    }
+
+    log_line("Bundled the editor SDK ($count files)");
+    remove_tree($stage);
 }
 
 # --------------------------------------------------------------------------

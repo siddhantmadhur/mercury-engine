@@ -10,6 +10,7 @@
 #include <filament/Engine.h>
 #include <filament/RenderTarget.h>
 #include <filament/Renderer.h>
+#include <filament/Scene.h>
 #include <filament/Skybox.h>
 #include <filament/SwapChain.h>
 #include <filament/Texture.h>
@@ -60,6 +61,20 @@ class FilamentApplication : public Application {
                            uint64_t* frame_id = nullptr) override;
   void SetShowRenderStats(bool show) override { show_stats_ = show; }
 
+  // The live Filament objects behind the renderer. Game code, editor systems
+  // and systems use them to add their own renderables, materials or view
+  // settings without the engine wrapping Filament. Null until the application
+  // has loaded.
+  filament::Engine* GetEngine() const { return engine_; }
+  filament::Renderer* GetRenderer() const { return renderer_; }
+  filament::Scene* GetScene() const { return scene_renderer_.scene(); }
+  filament::View* GetView() const { return scene_view_; }
+  filament::Camera* GetCamera() const { return scene_camera_; }
+
+  // Test only: the dynamic resolution scale Filament applied to the editor
+  // scene viewport on its last frame ({1,1} when FSR is off).
+  filament::math::float2 SceneViewDynamicResolutionScaleForTest() const;
+
  protected:
   bool OnLoad() override;
   void Render() override;
@@ -95,9 +110,12 @@ class FilamentApplication : public Application {
                      std::vector<uint8_t>& rgba_out, uint64_t* frame_id);
   // Points `camera` at what `render` sees, with its sky color.
   void SetupCamera(filament::Camera* camera, const RenderCamera& render);
-  // Applies RenderSettings (tonemap, exposure, bloom, vignette, GTAO, FXAA).
+  // Applies RenderSettings (tonemap, exposure, bloom, vignette, GTAO, FXAA or
+  // TAA). `main_view` is true only for the main scene views, which honour TAA
+  // and the FSR 1 upscaling options; every other view renders at native
+  // resolution and uses FXAA in place of TAA.
   void ApplyPostProcess(filament::View* view, const RenderSettings& settings,
-                        const RenderCamera& camera);
+                        const RenderCamera& camera, bool main_view = false);
   // The cameras this frame, like the Vulkan backend's FrameCameras.
   std::vector<RenderCamera> FrameCameras(float width, float height);
   // Reads `target`'s pixels into its CPU buffer (top-down RGBA).

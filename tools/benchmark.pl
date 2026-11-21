@@ -1,7 +1,12 @@
 #!/usr/bin/env perl
-# Benchmarks model_viewer maps with the profiler's bench mode.
+# Benchmarks the benchmark project's maps with the profiler's bench mode.
 #
 #   tools/benchmark.pl [build-dir] [map...]
+#
+# The project (model_viewer.mproj and its models and maps) is the
+# MERCURY_BENCHMARK_DIR environment variable, default ../benchmark beside this
+# repository. The build dir defaults to build/release; it runs
+# <build-dir>/bin/mercury_player.
 #
 # Each map runs with a fixed 1/60 s time step (the flythrough is at the same
 # place on the same frame every run) and no vsync. It prints one summary per
@@ -27,7 +32,7 @@ my $root = abs_path(File::Spec->catdir($SCRIPT_DIR, '..'));
 die "cannot resolve project root\n" if !defined $root;
 
 my $build_arg = shift @ARGV;
-$build_arg = File::Spec->catdir($root, 'build-release') if !defined $build_arg;
+$build_arg = File::Spec->catdir($root, 'build', 'release') if !defined $build_arg;
 my $build = abs_path($build_arg);
 die "cannot find build directory: $build_arg\n" if !defined $build;
 
@@ -44,10 +49,16 @@ my $out = defined $ENV{BENCH_DIR}
     : File::Spec->catdir($root, 'bench', "$stamp-$commit");
 make_path($out);
 
-my $exe = File::Spec->catfile($build, 'examples', 'model_viewer', 'model_viewer');
+my $bench_arg = defined $ENV{MERCURY_BENCHMARK_DIR}
+    ? $ENV{MERCURY_BENCHMARK_DIR}
+    : File::Spec->catdir($root, '..', 'benchmark');
+my $bench = abs_path($bench_arg);
+die "cannot find benchmark project: $bench_arg\n" if !defined $bench;
+my $project = File::Spec->catfile($bench, 'model_viewer.mproj');
+die "no model_viewer.mproj in $bench\n" if !-e $project;
 
-chdir(File::Spec->catdir($root, 'examples', 'model_viewer'))
-    or die "cannot chdir to examples/model_viewer: $!\n";
+my $exe = File::Spec->catfile($build, 'bin', 'mercury_player');
+die "cannot find $exe\n" if !-x $exe;
 
 for my $map (@maps) {
     print "== $map\n";
@@ -61,7 +72,7 @@ for my $map (@maps) {
         $ENV{MERCURY_BENCH_FRAMES} = $frames;
         $ENV{MERCURY_BENCH_OUT} = File::Spec->catfile($out, "$map.txt");
         $ENV{MERCURY_BENCH_CAPTURE} = File::Spec->catfile($out, "$map.png");
-        run_redirected($log, $exe, '--map', "res://maps/$map.mmap");
+        run_redirected($log, $exe, $project, '--map', "res://maps/$map.mmap");
     }
 
     if (open my $log_fh, '<', $log) {

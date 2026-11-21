@@ -10,6 +10,8 @@
 
 #include <properties/camera.h>
 
+#include "application/render_hooks.h"
+
 namespace Mercury {
 
 GameScene::GameScene() {
@@ -67,6 +69,9 @@ void GameScene::SetInputManager(InputManager* input_manager) {
 }
 void GameScene::QuitScene() { should_close = true; }
 bool GameScene::ShouldQuit() const { return should_close; }
+
+RenderHooks& GameScene::GetRenderHooks() { return RenderHooks::Instance(); }
+
 void GameScene::SimulatePhysics(int steps) {
   if (steps > 0 && steps < 5) physics_engine_->Compute(steps);
 }

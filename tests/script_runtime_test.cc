@@ -8,7 +8,14 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <random>
 #include <string>
+
+#include "scripting/as/script_builder.h"
+#include "scripting/event.h"
 
 using namespace Mercury;
 
@@ -45,6 +52,90 @@ TEST(ScriptRuntime, ReturnsANumber) {
   ASSERT_TRUE(ScriptRuntime::Instance().RunString(
       "int main() { return 40 + 2; }", "test", &result));
   EXPECT_EQ(result, "42");
+}
+
+TEST(ScriptRuntime, ANegativeNumberKeepsItsSign) {
+  std::string result;
+  ASSERT_TRUE(ScriptRuntime::Instance().RunString("int main() { return -1; }",
+                                                  "negative", &result));
+  EXPECT_EQ(result, "-1");
+}
+
+// A rebuild that fails must leave the working scripts alone: the module that
+// behaviours are using used to be discarded as soon as the build started.
+TEST(ScriptRuntime, AFailedRebuildKeepsTheCurrentModule) {
+  auto& runtime = ScriptRuntime::Instance();
+  const auto dir = std::filesystem::temp_directory_path() /
+                   ("rebuild_test_" + std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(dir);
+  const auto good = dir / "good.as";
+  const auto bad = dir / "bad.as";
+  std::ofstream(good) << "class Good { int Value() { return 7; } }";
+  std::ofstream(bad) << "class Broken { void f( }";
+
+  // A working module first, so there is something to lose.
+  ASSERT_TRUE(runtime.LoadFiles({good}, "game", true));
+  asIScriptModule* before = runtime.GetModule();
+  ASSERT_NE(before, nullptr);
+  ASSERT_NE(before->GetTypeInfoByName("Good"), nullptr);
+  const std::string name = before->GetName();
+
+  EXPECT_FALSE(runtime.LoadFiles({bad}, "game", true));
+
+  // Still the current module, still registered with the engine under its own
+  // name (not discarded by the failed build), and its class still there.
+  EXPECT_EQ(runtime.GetModule(), before);
+  EXPECT_EQ(runtime.GetEngine()->GetModule(name.c_str(), asGM_ONLY_IF_EXISTS),
+            before);
+  EXPECT_NE(before->GetTypeInfoByName("Good"), nullptr);
+
+  // And a later good build still works (a fresh module name each time).
+  EXPECT_TRUE(runtime.LoadFiles({good}, "game", true));
+  EXPECT_NE(runtime.GetModule(), nullptr);
+  std::filesystem::remove_all(dir);
+}
+
+// A second build of the same project must look at the files as they are now:
+// it used to reuse the first build's module and report success for scripts
+// that no longer compile.
+TEST(ScriptRuntime, BuildingAgainChecksTheScriptsAgain) {
+  const auto dir =
+      std::filesystem::temp_directory_path() /
+      ("rebuild_project_" + std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(dir / "scripts");
+  const auto script = dir / "scripts" / "game.as";
+  std::ofstream(script) << "class Thing { int Value() { return 1; } }";
+
+  BuildOptions options;
+  std::string log;
+  EXPECT_TRUE(ScriptBuilder::Build(dir, options, &log)) << log;
+
+  std::ofstream(script) << "class Thing { int Value() { return ; } }";
+  log.clear();
+  EXPECT_FALSE(ScriptBuilder::Build(dir, options, &log)) << log;
+  std::filesystem::remove_all(dir);
+}
+
+// A script copies its Event field value and keeps it; once the behaviour that
+// owned the Event is gone the copy must resolve to nothing, never to a
+// dangling pointer, and ids are not handed out twice.
+TEST(ScriptRuntime, EventHandlesStopResolvingWhenTheOwnerIsGone) {
+  auto& runtime = ScriptRuntime::Instance();
+  std::optional<Event> event(std::in_place);
+  const uint32_t id = runtime.RegisterEvent(&*event);
+  ASSERT_NE(id, 0u);
+  EXPECT_EQ(runtime.FindEvent(id), &*event);
+
+  runtime.UnregisterEvent(id);  // what ~ScriptBehaviour does
+  event.reset();
+  EXPECT_EQ(runtime.FindEvent(id), nullptr);
+  EXPECT_EQ(runtime.FindEvent(0), nullptr);
+
+  Event other;
+  const uint32_t next = runtime.RegisterEvent(&other);
+  EXPECT_NE(next, id);
+  EXPECT_EQ(runtime.FindEvent(id), nullptr);
+  runtime.UnregisterEvent(next);
 }
 
 TEST(ScriptRuntime, AThrownErrorIsCaughtNotFatal) {

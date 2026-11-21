@@ -269,6 +269,8 @@ ModelImportSettings ModelImportSettings::ForFile(
     }
     if (p.Has("thickness"))
       entry.thickness = static_cast<float>(p.GetFloat("thickness"));
+    if (p.Has("double_sided"))
+      entry.double_sided = p.GetBool("double_sided", false);
     settings.materials.push_back(std::move(entry));
   }
   return settings;
@@ -730,6 +732,9 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
       source->Get(AI_MATKEY_OPACITY, opacity);
       material.color = glm::vec4(color.r, color.g, color.b, color.a * opacity);
       material.transparent = material.color.a < 0.999f;
+      bool two_sided = false;
+      source->Get(AI_MATKEY_TWOSIDED, two_sided);
+      material.double_sided = two_sided;
       float metallic = 0.0f;
       if (source->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
         material.metallic = metallic;
@@ -738,37 +743,97 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
       if (source->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
         material.smoothness = 1.0f - std::clamp(roughness, 0.0f, 1.0f);
       } else if (is_obj) {
-        // Blinn-Phong exponent (Ns) to GGX roughness; without specular (Ks)
-        // the surface is matte whatever Ns says.
+        // The MTL illumination model decides what kind of surface this is;
+        // Kd/Ks/Ns/Tf/Ni then fill in its parameters.
+        int illum = 2;
+        source->Get(AI_MATKEY_OBJ_ILLUM, illum);
         float shininess = 0.0f;
         source->Get(AI_MATKEY_SHININESS, shininess);
         aiColor3D specular(0, 0, 0);
         source->Get(AI_MATKEY_COLOR_SPECULAR, specular);
         const float ks = std::max({specular.r, specular.g, specular.b});
-        const float smooth =
-            1.0f - std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
-        material.smoothness =
-            std::clamp(smooth * std::min(1.0f, ks * 4.0f), 0.0f, 0.95f);
-        // Illumination models 4, 6 and 7 refract: glass when the file gives
-        // it a transmission filter (Tf), or when it has no diffuse but a
-        // strong specular. Without them, that look is a mirror.
-        const float kd = std::max({color.r, color.g, color.b});
-        const bool bare = kd < 0.05f && ks > 0.25f &&
-                          texture_of(source, aiTextureType_DIFFUSE).empty();
-        int illum = 2;
-        source->Get(AI_MATKEY_OBJ_ILLUM, illum);
+        // Blinn-Phong exponent (Ns) to the GGX alpha the distribution works
+        // in: alpha = sqrt(2 / (Ns + 2)). Filament's
+        // MaterialInputs.roughness is perceptual and its shaders square it
+        // into that alpha (surface_lighting.fs), so every path below passes
+        // the square root of alpha as the roughness. The old renderer also
+        // scaled glossiness by min(1, 4*Ks) (model.ps.hlsl history): with no
+        // specular color (Ks 0, common in OBJ exports next to the default Ns)
+        // the surface came out matte, while Ks >= 0.25 left it unchanged.
+        float alpha = std::sqrt(2.0f / (std::max(shininess, 0.0f) + 2.0f));
+        const float gloss = std::min(1.0f, 4.0f * ks);
+        material.smoothness = (1.0f - std::sqrt(alpha)) * gloss;
+        const bool textured =
+            !texture_of(source, aiTextureType_DIFFUSE).empty();
+        const float kd_max = std::max({color.r, color.g, color.b});
         aiColor3D filter(1, 1, 1);
         source->Get(AI_MATKEY_COLOR_TRANSPARENT, filter);
         const bool tinted = std::min({filter.r, filter.g, filter.b}) < 0.999f;
-        if ((illum == 4 || illum == 6 || illum == 7) && (tinted || bare)) {
+        float ni = 1.0f;
+        source->Get(AI_MATKEY_REFRACTI, ni);
+        // Illumination models 4, 6 and 7 allow refraction, but a file only
+        // asks for it with a transmission filter, an index of refraction or
+        // a dissolve below 1: Blender writes illum 4 with Tf 1 1 1 and Ni 1
+        // on every material, and those are opaque.
+        const bool refracts = tinted || ni > 1.0f || opacity < 1.0f;
+        if ((illum == 4 || illum == 6 || illum == 7) && refracts &&
+            (tinted || !textured)) {
+          // Glass. Filament multiplies what passes through by the base
+          // color, so the base is white and the attenuation is carried by
+          // the transmission color alone. Tf is the transmittance over the
+          // path, not just a hue: its magnitude is what makes Tf 0.1 gray a
+          // dim medium rather than perfectly clear glass, so it must not be
+          // normalized away (the renderer turns that transmittance into an
+          // absorption for the thickness). Without a diffuse texture Kd can
+          // supply the hue instead (an amber shell), but the Tf magnitude
+          // still scales it; with a texture, Kd is the base map's multiplier
+          // and already applied, so only Tf is used.
+          const float kd_min = std::min({color.r, color.g, color.b});
+          const bool chromatic =
+              !textured && kd_max > 0.0f && (kd_max - kd_min) > 0.15f * kd_max;
+          const float tf_max = std::max({filter.r, filter.g, filter.b});
+          glm::vec3 tint(1.0f);
+          if (tinted && !chromatic) {
+            tint =
+                glm::clamp(glm::vec3(filter.r, filter.g, filter.b), 0.0f, 1.0f);
+          } else if (tinted) {
+            tint = glm::vec3(color.r, color.g, color.b) / kd_max * tf_max;
+          } else if (chromatic) {
+            tint = glm::vec3(color.r, color.g, color.b) / kd_max;
+          }
           material.transmission = 1.0f;
-          material.transmission_color = glm::vec3(filter.r, filter.g, filter.b);
-          // Glass is smooth whatever its exponent says.
-          material.smoothness = std::max(material.smoothness, 0.9f);
-        } else if (bare) {
+          material.transmission_color = tint;
+          material.color = glm::vec4(1.0f, 1.0f, 1.0f, material.color.a);
+          // Glass is polished: a clear sphere refracts a sharp image.
+          material.smoothness = 1.0f;
+        } else if ((illum == 3 || illum == 5) && ks > 0.25f) {
+          // Reflective: a metal. Its color is the diffuse plus the specular
+          // (a metal's reflection is what it shows; Kd stands for its
+          // body), saturated at 1, and it is never rougher than a polished
+          // metal: the exponent only widens the highlight of a dielectric,
+          // while a mirror finish keeps the room sharp in it.
+          material.color =
+              glm::vec4(std::min(color.r + specular.r, 1.0f),
+                        std::min(color.g + specular.g, 1.0f),
+                        std::min(color.b + specular.b, 1.0f), material.color.a);
+          material.metallic = 1.0f;
+          // Cap the GGX alpha, not the perceptual roughness, at a polished
+          // 0.1, then hand Filament its perceptual square root (~0.316).
+          alpha = std::min(alpha, 0.1f);
+          material.smoothness = 1.0f - std::sqrt(alpha);
+        } else if (illum >= 2 && !textured && kd_max < 0.05f && ks > 0.25f) {
+          // No diffuse but a strong specular is how exporters write a
+          // mirror or chrome: a metal of that specular color.
           material.color =
               glm::vec4(specular.r, specular.g, specular.b, material.color.a);
           material.metallic = 1.0f;
+        } else if (illum >= 2 && ks > 0.0f) {
+          // A dielectric keeps the 4% F0 the old Vulkan renderer gave every
+          // dielectric (model.ps.hlsl: F0 = lerp(0.04, albedo, metallic)).
+          // There Ks only scaled the glossiness (see above), never the
+          // Fresnel, so it must not become Filament reflectance here.
+          // Filament's default reflectance 0.5 is F0 = 0.16 * 0.5^2 = 0.04.
+          material.reflectance = 0.5f;
         }
       }
       // glTF's KHR_materials_transmission and _volume: the base color tints
@@ -860,6 +925,7 @@ std::shared_ptr<Model> Model::Import(const std::string& path,
           material.transmission_color = *entry.transmission_color;
         if (entry.thickness)
           material.thickness = std::max(*entry.thickness, 0.0f);
+        if (entry.double_sided) material.double_sided = *entry.double_sided;
       }
       model->materials_.push_back(std::move(material));
       if (!collecting) model->material_sources_.push_back(std::move(sources));

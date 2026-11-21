@@ -253,8 +253,11 @@ std::vector<B*> MapScene::FindObjectsOfType() {
  * @endcode
  *
  * The map uses the registered name:
- * @code{.ini}
- * [component type="Spinner" node="Cube"]
+ * @code{.toml}
+ * [[component]]
+ * node = "Cube"
+ * type = "Spinner"
+ * [component.props]
  * speed = 45.0
  * @endcode
  *
@@ -270,6 +273,7 @@ bool RegisterScript(const char* name) {
   info.category = "Scripts";
   info.is_script = true;
   info.native_script = true;
+  info.from_game = true;
   {
     T instance{};
     auto reflector = Reflector::Describe();

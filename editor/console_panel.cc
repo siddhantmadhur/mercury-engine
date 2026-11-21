@@ -107,8 +107,8 @@ ConsolePanel::ConsolePanel(wxWindow* parent, EditorScene& scene)
     if (idx < 0 || static_cast<size_t>(idx) >= visible_lines_.size()) return;
     if (auto script = Console::FindScriptLocation(visible_lines_[idx].text);
         script && scene_.GetProject()) {
-      scene_.OpenScriptFile(scene_.GetProject()->GetRoot() / script->path,
-                            script->line);
+      const auto file = scene_.GetProject()->Resolve(script->path);
+      if (!file.empty()) scene_.OpenScriptFile(file, script->line);
     }
   });
 

@@ -5,25 +5,34 @@
 /*
  * editor_settings.h
  *
- * Per-user editor preferences, stored in the mtext format at
- * ~/.config/mercury/editor.cfg (%APPDATA%\Mercury\editor.cfg on Windows):
+ * Per-user editor preferences, stored in the mtext format (TOML, see
+ * serialization/mtext.h) at ~/.config/mercury/editor.cfg
+ * (%APPDATA%\Mercury\editor.cfg on Windows):
  *
  *   [editor]
+ *   format = 2
+ *   editor_version = "1.0.0"
+ *   [editor.props]
  *   external_editor = "code {project} {file}"
  *   open_scripts_in_editor = true
+ *   open_script_after_create = true
+ *   new_script_kind = "angel_script"
  *   vim_mode = false
  *   show_metal_hud = false
  *   pack_size_mb = 256
  *
- *   [recent]
+ *   [[recent]]
+ *   [recent.props]
  *   projects = ["/home/me/games/pong/pong.mproj"]
  *
- *   [windows]
+ *   [[windows]]
+ *   [windows.props]
  *   ui_builder = true
  *   input_actions = false
  *   lore = true
  *
- *   [lore]
+ *   [[lore]]
+ *   [lore.props]
  *   executable = "lore"
  *   server = "lore://127.0.0.1:41337"
  */
@@ -34,6 +43,8 @@
 #include <string>
 #include <vector>
 
+#include "templates.h"
+
 namespace Mercury {
 
 struct EditorSettings {
@@ -42,6 +53,10 @@ struct EditorSettings {
   std::string external_editor;
   // Open .as files in the built-in script editor instead of an external tool.
   bool open_scripts_in_editor = true;
+  // New Script dialog: open the created .as/.cc when the user clicks Create.
+  bool open_script_after_create = true;
+  // New Script dialog: the kind selected last time (remembered across runs).
+  Templates::ScriptKind new_script_kind = Templates::ScriptKind::kAngelScript;
   // Enable modal Vim keybindings in the built-in script editor.
   bool vim_mode = false;
 #if defined(__APPLE__)
@@ -63,6 +78,20 @@ struct EditorSettings {
   std::string lore_executable;
   // Server new Lore repositories are created on.
   std::string lore_server = "lore://127.0.0.1:41337";
+  // Canonical project roots whose editor systems the user trusted or refused.
+  // A project in neither list has not been asked about yet.
+  std::vector<std::string> trusted_projects;
+  std::vector<std::string> distrusted_projects;
+
+  // Whether the user already answered the trust prompt for this project.
+  bool HasProjectTrustDecision(const std::filesystem::path& root) const;
+  // True only when the user explicitly trusted the project. An unknown
+  // project is not trusted.
+  bool IsProjectTrusted(const std::filesystem::path& root) const;
+  // Records (and replaces) the decision for a project.
+  void SetProjectTrusted(const std::filesystem::path& root, bool trusted);
+  // The path key used in the config: weak canonical form when it exists.
+  static std::string CanonicalProjectPath(const std::filesystem::path& root);
 
   static std::filesystem::path ConfigDir();
   static std::filesystem::path HomeDir();

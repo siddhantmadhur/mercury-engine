@@ -6,11 +6,13 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <climits>
 #include <cstdlib>
 #include <format>
 #include <fstream>
 #include <mutex>
+#include <new>
 #include <random>
 #include <set>
 #include <shared_mutex>
@@ -27,6 +29,7 @@
 #include <windows.h>
 #else
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -100,12 +103,18 @@ std::optional<std::vector<uint8_t>> ReadBytes(const fs::path& path) {
   const auto size = static_cast<std::streamoff>(file.tellg());
   if (size < 0) return std::nullopt;
   if (static_cast<uint64_t>(size) > kMaxWholeFileSize) return std::nullopt;
-  std::vector<uint8_t> data(static_cast<size_t>(size));
-  file.seekg(0);
-  if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
+  // Callers include FFI boundaries that must not see an exception, and a big
+  // file on a small machine is an ordinary failure to read.
+  try {
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    file.seekg(0);
+    if (size > 0 && !file.read(reinterpret_cast<char*>(data.data()), size)) {
+      return std::nullopt;
+    }
+    return data;
+  } catch (const std::bad_alloc&) {
     return std::nullopt;
   }
-  return data;
 }
 
 std::optional<std::string> ReadText(const fs::path& path) {
@@ -170,6 +179,9 @@ bool CloseFile(FileHandle file) { return ::close(file) == 0; }
 }  // namespace
 
 bool WriteFileAtomic(const fs::path& path, std::string_view data) {
+  // An empty path is what Project::Resolve returns for a path that leaves the
+  // project; never turn it into a file in the working directory.
+  if (path.empty() || !path.has_filename()) return false;
   std::error_code ec;
   if (path.has_parent_path()) {
     fs::create_directories(path.parent_path(), ec);
@@ -397,6 +409,113 @@ fs::path EngineMaterialDir() {
   return FirstExistingDir(ResourceCandidates("materials", compiled));
 }
 
+namespace {
+
+bool IsSdkRoot(const fs::path& root) {
+  std::error_code ec;
+  return fs::is_directory(root / "include" / "mercury", ec) &&
+         fs::is_directory(root / "cmake", ec);
+}
+
+// An SDK found outside the .app is used to compile project code, so it must
+// not be something another account can change: accept only a directory owned
+// by this user (or root) with no group/other write permission. The check is
+// on the directory entries themselves, so a symlink planted at either path is
+// refused rather than followed.
+bool IsTrustedSdkPath(const fs::path& path) {
+#if defined(_WIN32)
+  // Windows has no uid/mode in stat; the packaged SDK lives under Program
+  // Files, and checks there need ACL inspection.
+  std::error_code ec;
+  return fs::is_directory(path, ec);
+#else
+  struct stat info{};
+  if (lstat(path.c_str(), &info) != 0) return false;
+  if (!S_ISDIR(info.st_mode)) return false;
+  if (info.st_uid != getuid() && info.st_uid != 0) return false;
+  if ((info.st_mode & (S_IWGRP | S_IWOTH)) != 0) return false;
+  return true;
+#endif
+}
+
+bool IsTrustedSdkRoot(const fs::path& root) {
+  return IsTrustedSdkPath(root) && IsTrustedSdkPath(root / "cmake");
+}
+
+EngineSdkPaths InstalledSdkPaths(const fs::path& root) {
+  EngineSdkPaths paths;
+  paths.root = root;
+  paths.include_dirs = {root / "include" / "mercury",
+                        root / "include" / "editor", root / "include"};
+  paths.cmake_dir = root / "cmake";
+  paths.lib_dir = root / "lib";
+  return paths;
+}
+
+EngineSdkPaths DevelopmentSdkPaths(const fs::path& engine_dir,
+                                   const fs::path& build_dir) {
+  EngineSdkPaths paths;
+  if (engine_dir.empty()) return paths;
+  paths.root = engine_dir;
+  paths.include_dirs = {engine_dir / "mercury", engine_dir / "editor",
+                        engine_dir / "third_party"};
+  if (!build_dir.empty()) {
+    paths.include_dirs.push_back(build_dir / "generated");
+    paths.include_dirs.push_back(build_dir / "generated" / "mercury");
+  }
+  paths.cmake_dir = engine_dir / "cmake";
+  if (!build_dir.empty()) {
+    // A configured development tree writes a package for project builds.
+    std::error_code ec;
+    const fs::path dev_cmake = build_dir / "dev-sdk";
+    if (fs::is_regular_file(dev_cmake / "MercuryConfig.cmake", ec)) {
+      paths.cmake_dir = dev_cmake;
+    }
+  }
+  paths.lib_dir = build_dir.empty() ? fs::path() : build_dir / "lib";
+  paths.build_dir = build_dir;
+  paths.development = true;
+  return paths;
+}
+
+}  // namespace
+
+EngineSdkPaths MakeEngineSdkPaths(const fs::path& exe_dir,
+                                  const fs::path& bundle_resources,
+                                  const fs::path& engine_dir,
+                                  const fs::path& build_dir) {
+  std::vector<fs::path> candidates;
+  if (!bundle_resources.empty()) candidates.push_back(bundle_resources / "sdk");
+  if (!exe_dir.empty()) {
+    candidates.push_back(exe_dir / "sdk");
+    candidates.push_back(exe_dir.parent_path() / "sdk");
+  }
+  for (const fs::path& candidate : candidates) {
+    if (!IsSdkRoot(candidate) || !IsTrustedSdkRoot(candidate)) continue;
+    EngineSdkPaths paths = InstalledSdkPaths(candidate);
+    // An SDK tree staged next to a development editor must not hide the build
+    // tree the editor itself was built in; Play and Build Game still need it.
+    if (!build_dir.empty() && fs::is_directory(build_dir)) {
+      paths.build_dir = build_dir;
+    }
+    return paths;
+  }
+  return DevelopmentSdkPaths(engine_dir, build_dir);
+}
+
+EngineSdkPaths EngineSdkDir() {
+  fs::path engine_dir;
+  fs::path build_dir;
+#ifdef MERCURY_ENGINE_DIR
+  engine_dir = MERCURY_ENGINE_DIR;
+#endif
+#ifdef MERCURY_BUILD_DIR
+  build_dir = MERCURY_BUILD_DIR;
+#endif
+  return MakeEngineSdkPaths(ExecutableDir(), BundleResourcesDir(), engine_dir,
+                            build_dir);
+}
+
 void UseBundledVulkanDriver() {
 #if defined(__APPLE__)
   if (std::getenv("VK_DRIVER_FILES") || std::getenv("VK_ICD_FILENAMES")) return;
@@ -416,6 +535,224 @@ void UseBundledVulkanDriver() {
   setenv("VK_DRIVER_FILES", icd.c_str(), 1);
   setenv("VK_ICD_FILENAMES", icd.c_str(), 1);
 #endif
+}
+
+fs::path CopyFileWithoutOverwriting(const fs::path& source,
+                                    const fs::path& dest_dir,
+                                    std::error_code& ec) {
+  ec.clear();
+  const fs::path name = source.filename();
+  if (name.empty() || name == "." || name == "..") {
+    ec = std::make_error_code(std::errc::invalid_argument);
+    return {};
+  }
+  auto data = ReadBytes(source);
+  if (!data) {
+    ec = std::make_error_code(std::errc::io_error);
+    return {};
+  }
+  const std::string_view bytes(reinterpret_cast<const char*>(data->data()),
+                               data->size());
+  constexpr int kMaxAttempts = 1000;
+  for (int attempt = 0; attempt < kMaxAttempts; attempt++) {
+    // Built with path operations: a name that is not ANSI-representable (CJK on
+    // Windows) would throw if it went through std::string.
+    fs::path candidate = dest_dir / name;
+    if (attempt > 0) {
+      fs::path renamed = name.stem();
+      renamed += " (" + std::to_string(attempt) + ")";
+      renamed += name.extension();
+      candidate = dest_dir / renamed;
+    }
+    // symlink_status looks at the entry itself, so a dangling link counts.
+    std::error_code status_ec;
+    const auto status = fs::symlink_status(candidate, status_ec);
+    if (status.type() == fs::file_type::regular) {
+      // The same file dropped again: keep using the copy that is there.
+      std::error_code size_ec;
+      if (fs::file_size(candidate, size_ec) == bytes.size() && !size_ec) {
+        if (auto existing = ReadBytes(candidate);
+            existing && existing->size() == data->size() &&
+            std::equal(existing->begin(), existing->end(), data->begin())) {
+          return candidate;
+        }
+      }
+      continue;
+    }
+    if (status.type() != fs::file_type::not_found) continue;
+    // O_EXCL | O_NOFOLLOW: fails if anything, including a link that appeared
+    // since the check above, is already there. (copy_file does not promise
+    // that: libc++ opens the destination without O_EXCL.)
+    const FileHandle file = OpenExclusive(candidate);
+    if (file == kInvalidFile) {
+      if (errno == EEXIST || errno == ELOOP) continue;
+      ec = std::error_code(errno, std::generic_category());
+      return {};
+    }
+    const bool written = WriteAll(file, bytes);
+    const bool closed = CloseFile(file);
+    if (!written || !closed) {
+      std::error_code remove_ec;
+      fs::remove(candidate, remove_ec);
+      ec = std::make_error_code(std::errc::io_error);
+      return {};
+    }
+    return candidate;
+  }
+  ec = std::make_error_code(std::errc::file_exists);
+  return {};
+}
+
+namespace {
+
+constexpr std::string_view kEditorBuildMarker = ".mercury-build";
+
+fs::path EnsureRealDirectory(const fs::path& dir, const char* what,
+                             std::string* error) {
+  std::error_code ec;
+  fs::file_status status = fs::symlink_status(dir, ec);
+  if (status.type() == fs::file_type::not_found) {
+    ec.clear();
+    fs::create_directories(dir, ec);
+    if (ec) {
+      if (error) {
+        *error = "could not create " + dir.string() + ": " + ec.message();
+      }
+      return {};
+    }
+    status = fs::symlink_status(dir, ec);
+  }
+  if (ec || fs::is_symlink(status) || !fs::is_directory(status)) {
+    if (error) {
+      *error = dir.string() + " is not a real " + what +
+               " (it is a symlink or not a directory)";
+    }
+    return {};
+  }
+  return dir;
+}
+
+}  // namespace
+
+fs::path EnsureProjectCacheDir(const fs::path& project_root,
+                               std::string* error) {
+  if (project_root.empty()) {
+    if (error) *error = "the project has no root folder";
+    return {};
+  }
+  return EnsureRealDirectory(project_root / ".mercury", "project cache folder",
+                             error);
+}
+
+fs::path EnsureProjectCacheSubdir(const fs::path& cache_dir,
+                                  std::string_view name, std::string* error) {
+  if (name.empty() || name == "." || name == ".." ||
+      name.find('/') != std::string_view::npos ||
+      name.find('\\') != std::string_view::npos) {
+    if (error) *error = "invalid cache folder name";
+    return {};
+  }
+  if (cache_dir.empty()) {
+    if (error) *error = "the project cache folder is unavailable";
+    return {};
+  }
+  return EnsureRealDirectory(cache_dir / std::string(name), "cache folder",
+                             error);
+}
+
+bool IsEditorProjectBuildDir(const fs::path& dir) {
+  std::error_code ec;
+  const fs::file_status status =
+      fs::symlink_status(dir / kEditorBuildMarker, ec);
+  return !ec && fs::is_regular_file(status);
+}
+
+fs::path EnsureProjectContentDir(const fs::path& project_root,
+                                 std::string_view name, std::string* error) {
+  if (name.empty() || name == "." || name == ".." ||
+      name.find('/') != std::string_view::npos ||
+      name.find('\\') != std::string_view::npos) {
+    if (error) *error = "invalid project folder name";
+    return {};
+  }
+  const fs::path dir = EnsureRealDirectory(project_root / std::string(name),
+                                           "content folder", error);
+  if (dir.empty()) return {};
+
+  // The folder itself is not a symlink; also prove the resolved path is
+  // under the project root (a symlinked root is fine, escaping is not).
+  std::error_code ec;
+  const fs::path real_root = fs::weakly_canonical(project_root, ec);
+  if (ec) {
+    if (error) *error = "could not resolve " + project_root.string();
+    return {};
+  }
+  const fs::path real_dir = fs::weakly_canonical(dir, ec);
+  if (ec) {
+    if (error) *error = "could not resolve " + dir.string();
+    return {};
+  }
+  const fs::path relative = real_dir.lexically_relative(real_root);
+  if (relative.empty() || relative == "." ||
+      (!relative.empty() && *relative.begin() == "..")) {
+    if (error) {
+      *error = dir.string() + " resolves outside the project folder";
+    }
+    return {};
+  }
+  return dir;
+}
+
+fs::path EnsureProjectBuildDir(const fs::path& project_root,
+                               std::string_view config, std::string* error) {
+  if (config.empty() || config == "." || config == ".." ||
+      config.find_first_not_of(
+          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") !=
+          std::string_view::npos) {
+    if (error) *error = "invalid build configuration";
+    return {};
+  }
+  const fs::path cache = EnsureProjectCacheDir(project_root, error);
+  if (cache.empty()) return {};
+  const fs::path build = EnsureProjectCacheSubdir(cache, "build", error);
+  if (build.empty()) return {};
+
+  const fs::path dir = build / std::string(config);
+  std::error_code ec;
+  const fs::file_status status = fs::symlink_status(dir, ec);
+  if (status.type() != fs::file_type::not_found) {
+    if (ec || fs::is_symlink(status) || !fs::is_directory(status)) {
+      if (error) {
+        *error = dir.string() + " is a symlink or not a directory; remove it";
+      }
+      return {};
+    }
+    if (!IsEditorProjectBuildDir(dir)) {
+      if (error) {
+        *error = dir.string() +
+                 " contains build output that this editor did not create; "
+                 "remove it before building";
+      }
+      return {};
+    }
+    return dir;
+  }
+
+  fs::create_directories(dir, ec);
+  if (ec) {
+    if (error) {
+      *error = "could not create " + dir.string() + ": " + ec.message();
+    }
+    return {};
+  }
+  const fs::path marker = dir / kEditorBuildMarker;
+  if (!WriteFileAtomic(
+          marker,
+          "Generated by the Mercury Editor. This folder may be deleted.\n")) {
+    if (error) *error = "could not write " + marker.string();
+    return {};
+  }
+  return dir;
 }
 
 }  // namespace Mercury::os

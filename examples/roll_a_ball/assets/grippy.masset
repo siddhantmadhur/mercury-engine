@@ -1,2 +1,6 @@
-[masset type="PhysicsMaterial" format=1]
+[masset]
+format = 2
+editor_version = "1.0.0"
+type = "PhysicsMaterial"
+[masset.props]
 friction = 0.6

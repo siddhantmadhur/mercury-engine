@@ -44,6 +44,7 @@ struct RenderMaterial {
   float ior = 1.5f;
   glm::vec3 transmission_color = glm::vec3(1.0f);  // linear
   float thickness = 0.0f;
+  float reflectance = 0.5f;  // Filament's dielectric F0 = 0.16 * r^2
   bool double_sided = false;
   bool unlit = false;
   // The texture is a signed-distance font atlas (TextMesh).

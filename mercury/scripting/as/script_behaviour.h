@@ -90,6 +90,7 @@ class ScriptBehaviour : public Behaviour {
   uint32_t scene_serial_ = 0;
   asIScriptObject* instance_ = nullptr;
   std::map<std::string, Event> events_;
+  std::vector<uint32_t> event_ids_;  // registered with the runtime
 };
 
 }  // namespace Mercury

@@ -25,7 +25,7 @@ namespace {
 namespace fs = std::filesystem;
 
 // Bump when what is written, or how Model::Import builds a model, changes.
-constexpr uint32_t kVersion = 2;
+constexpr uint32_t kVersion = 8;
 constexpr char kMagic[4] = {'M', 'M', 'C', 'F'};
 
 struct Hash {
@@ -100,6 +100,8 @@ uint64_t CacheKey(const std::string& path,
     hash.Add(entry.transmission_color.has_value());
     if (entry.transmission_color) hash.Add(*entry.transmission_color);
     hash.Add(entry.thickness.value_or(-1.0f));
+    hash.Add(entry.double_sided.has_value());
+    if (entry.double_sided) hash.Add(*entry.double_sided);
   }
   return hash.value;
 }
@@ -180,6 +182,17 @@ class Reader {
     v.resize(count);
     Bytes(v.data(), count * sizeof(T));
   }
+  // An element count for a list of structs. Each element takes at least
+  // `min_bytes` in the file, so a count the rest of the file cannot hold is a
+  // damaged (or hostile) file, and nothing is allocated for it.
+  uint64_t Count(uint64_t min_bytes) {
+    const uint64_t count = Pod<uint64_t>();
+    if (!ok_ || count > left_ / std::max<uint64_t>(min_bytes, 1)) {
+      ok_ = false;
+      return 0;
+    }
+    return count;
+  }
   std::string String() {
     const uint64_t size = Pod<uint64_t>();
     if (!ok_ || size > left_) {
@@ -209,7 +222,12 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   const auto start = std::chrono::steady_clock::now();
   FILE* file = std::fopen(cache.string().c_str(), "rb");
   if (!file) return nullptr;
-  Reader in(file, fs::file_size(cache, ec));
+  const uint64_t cache_size = fs::file_size(cache, ec);
+  if (ec) {
+    std::fclose(file);
+    return nullptr;
+  }
+  Reader in(file, cache_size);
   char magic[4] = {};
   in.Bytes(magic, sizeof(magic));
   const uint64_t key = in.Pod<uint64_t>();
@@ -222,7 +240,9 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   auto model = std::make_shared<Model>();
   model->path_ = path;
   model->root_on_object_ = in.Pod<uint8_t>() != 0;
-  model->nodes_.resize(in.Pod<uint64_t>());
+  // Smallest possible records: a node is 68 bytes, a material 117, a mesh 73,
+  // a clip 20 and an animation channel 52.
+  model->nodes_.resize(in.Count(68));
   for (auto& node : model->nodes_) {
     if (!in.ok()) break;
     node.name = in.String();
@@ -233,7 +253,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     node.rotation = in.Pod<glm::quat>();
     node.scale = in.Pod<glm::vec3>();
   }
-  const uint64_t material_count = in.Pod<uint64_t>();
+  const uint64_t material_count = in.Count(117);
   if (in.ok()) {
     model->materials_.resize(material_count);
     model->material_sources_.resize(material_count);
@@ -247,10 +267,12 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     material.emission = in.Pod<glm::vec3>();
     material.normal_scale = in.Pod<float>();
     material.transparent = in.Pod<uint8_t>() != 0;
+    material.double_sided = in.Pod<uint8_t>() != 0;
     material.transmission = in.Pod<float>();
     material.ior = in.Pod<float>();
     material.transmission_color = in.Pod<glm::vec3>();
     material.thickness = in.Pod<float>();
+    material.reflectance = in.Pod<float>();
     Model::MaterialSources& sources = model->material_sources_[m];
     for (Model::TextureSource* source :
          {&sources.texture, &sources.emission, &sources.normal}) {
@@ -259,7 +281,7 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
       source->bump_scale = in.Pod<float>();
     }
   }
-  const uint64_t mesh_count = in.Pod<uint64_t>();
+  const uint64_t mesh_count = in.Count(73);
   if (in.ok()) model->meshes_.resize(mesh_count);
   for (size_t i = 0; in.ok() && i < mesh_count; i++) {
     ModelMesh& mesh = model->meshes_[i];
@@ -277,13 +299,13 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
     geometry->id = ImageData::NextId();
     mesh.geometry = std::move(geometry);
   }
-  const uint64_t clip_count = in.Pod<uint64_t>();
+  const uint64_t clip_count = in.Count(20);
   if (in.ok()) model->clips_.resize(clip_count);
   for (size_t c = 0; in.ok() && c < clip_count; c++) {
     AnimationClip& clip = model->clips_[c];
     clip.name = in.String();
     clip.duration = in.Pod<float>();
-    clip.channels.resize(in.Pod<uint64_t>());
+    clip.channels.resize(in.Count(52));
     for (auto& channel : clip.channels) {
       if (!in.ok()) break;
       channel.node = in.Pod<int32_t>();
@@ -304,8 +326,19 @@ std::shared_ptr<Model> ModelCache::Read(const std::string& path,
   // Indices into the arrays must be in range, or the renderer reads past
   // them.
   const int node_count = static_cast<int>(model->nodes_.size());
-  for (const auto& node : model->nodes_) {
+  for (int i = 0; i < node_count; i++) {
+    const auto& node = model->nodes_[i];
     if (node.parent >= node_count) return nullptr;
+    // Walking children recurses, so the tree has to be a real one: every
+    // child exists and points back at its parent, and no parent chain loops.
+    for (int child : node.children) {
+      if (child < 0 || child >= node_count || model->nodes_[child].parent != i)
+        return nullptr;
+    }
+    int steps = 0;
+    for (int up = node.parent; up >= 0; up = model->nodes_[up].parent) {
+      if (++steps > node_count) return nullptr;
+    }
     for (int mesh : node.meshes) {
       if (mesh < 0 || mesh >= static_cast<int>(model->meshes_.size()))
         return nullptr;
@@ -406,10 +439,12 @@ void ModelCache::Write(const Model& model, const std::string& path,
     out.Pod(material.emission);
     out.Pod(material.normal_scale);
     out.Pod<uint8_t>(material.transparent ? 1 : 0);
+    out.Pod<uint8_t>(material.double_sided ? 1 : 0);
     out.Pod(material.transmission);
     out.Pod(material.ior);
     out.Pod(material.transmission_color);
     out.Pod(material.thickness);
+    out.Pod(material.reflectance);
     const Model::MaterialSources sources = m < model.material_sources_.size()
                                                ? model.material_sources_[m]
                                                : Model::MaterialSources{};

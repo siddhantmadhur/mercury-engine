@@ -6,10 +6,13 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <sstream>
 
+#include "project/asset_database.h"
 #include "project/project.h"
 #include "scene/map_scene.h"
 
@@ -28,6 +31,31 @@ const std::filesystem::path kPong =
     std::filesystem::path(MERCURY_SOURCE_DIR) / "examples/pong";
 
 }  // namespace
+
+// Every map and prefab in the repo must be a fixed point of load -> save:
+// the files were written by SaveToString, so re-saving them reproduces them
+// byte for byte. Renumber files that fail here (write the engine's own
+// SaveToString output) instead of changing the writer.
+TEST(Map, EveryRepoMapRoundTripsByteForByte) {
+  const std::filesystem::path root = MERCURY_SOURCE_DIR;
+  int checked = 0;
+  for (auto it =
+           std::filesystem::recursive_directory_iterator(root / "examples");
+       it != std::filesystem::recursive_directory_iterator(); ++it) {
+    if (!it->is_regular_file()) continue;
+    const std::string ext = it->path().extension().string();
+    if (ext != ".mmap" && ext != ".mprefab") continue;
+    SCOPED_TRACE(it->path().string());
+    const std::string original = ReadFile(it->path());
+    ASSERT_FALSE(original.empty());
+    Map map;
+    std::string error;
+    ASSERT_TRUE(map.LoadFromString(original, &error)) << error;
+    EXPECT_EQ(map.SaveToString(), original);
+    checked++;
+  }
+  EXPECT_GE(checked, 6) << "expected the six example maps";
+}
 
 TEST(Map, PongMapRoundTripsByteForByte) {
   const auto path = kPong / "maps/main.mmap";
@@ -94,17 +122,20 @@ TEST(Map, PongMapStructure) {
 TEST(Map, RejectsBrokenFiles) {
   Map map;
   std::string error;
-  EXPECT_FALSE(map.LoadFromString("[node name=\"A\"]\n", &error));
+  EXPECT_FALSE(map.LoadFromString("[[node]]\nname = \"A\"\n", &error));
   EXPECT_FALSE(
-      map.LoadFromString("[mmap format=1]\n\n[node name=\"A\"]\n\n[node "
-                         "name=\"B\" parent=\"X\"]\n",
+      map.LoadFromString("[mmap]\nformat = 2\n\n[[node]]\n"
+                         "name = \"A\"\n\n[[node]]\n"
+                         "name = \"B\"\nparent = \"X\"\n",
                          &error));
   EXPECT_NE(error.find("parent"), std::string::npos);
   EXPECT_FALSE(
-      map.LoadFromString("[mmap format=1]\n\n[node name=\"A\"]\n\n[component "
-                         "type=\"T\" node=\".\"]\n"
-                         "m = ExtResource(\"9\")\n",
+      map.LoadFromString("[mmap]\nformat = 2\n\n[[node]]\n"
+                         "name = \"A\"\n\n[[component]]\n"
+                         "node = \".\"\ntype = \"T\"\n\n"
+                         "[component.props]\nm = { ext = \"9\" }\n",
                          &error));
+  EXPECT_NE(error.find("not declared"), std::string::npos);
 }
 
 TEST(Map, EditingKeepsNamesUniqueAndUpdatesNodePaths) {
@@ -165,24 +196,55 @@ TEST(Project, ResolvesResPaths) {
   EXPECT_EQ(project->ToResPath("/definitely/outside"), "");
 }
 
+TEST(Project, ResolveStaysInsideProject) {
+  std::string error;
+  auto project = Project::Load(kPong / "pong.mproj", &error);
+  ASSERT_TRUE(project) << error;
+  EXPECT_FALSE(project->Resolve("res://maps/main.mmap").empty());
+  // New files inside the project are fine, existing or not.
+  EXPECT_FALSE(project->Resolve("res://maps/not_yet_saved.mmap").empty());
+  EXPECT_TRUE(project->Resolve("res://../../../../etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("../../../etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("res:///etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("/etc/passwd").empty());
+  EXPECT_TRUE(project->Resolve("").empty());
+  // An absolute path that points back inside the project is accepted.
+  EXPECT_FALSE(
+      project->Resolve((project->GetRoot() / "maps/main.mmap").string())
+          .empty());
+}
+
 TEST(MapScene, CurrentCameraSetsSkyboxPath) {
   std::string error;
   auto project = Project::Load(kPong / "pong.mproj", &error);
   ASSERT_TRUE(project) << error;
 
   Map map;
-  ASSERT_TRUE(map.LoadFromString(R"([mmap format=1]
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
 
-[ext_resource type="Texture" path="res://assets/sky.png" id="1"]
+[[component]]
+node = "Camera"
+type = "Transform"
 
-[node name="Root"]
+[[component]]
+node = "Camera"
+type = "Camera"
 
-[node name="Camera" parent="."]
+[component.props]
+skybox = { ext = "1" }
 
-[component type="Transform" node="Camera"]
+[[ext_resource]]
+id = "1"
+path = "res://assets/sky.png"
+type = "Texture"
 
-[component type="Camera" node="Camera"]
-skybox = ExtResource("1")
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Camera"
+parent = "."
 )",
                                  &error))
       << error;
@@ -194,4 +256,49 @@ skybox = ExtResource("1")
   // Without a skybox the renderer falls back to the background color.
   scene.Instantiate(Map());
   EXPECT_EQ(scene.GetSkyboxPath(), "");
+}
+
+// Load() hands out a snapshot: reloading a changed file must not rewrite the
+// Asset a caller is still holding.
+TEST(AssetDatabase, ReloadLeavesEarlierSnapshotsUntouched) {
+  namespace fs = std::filesystem;
+  const fs::path dir =
+      fs::temp_directory_path() /
+      ("asset_db_test_" + std::to_string(std::random_device{}()));
+  fs::create_directories(dir / "assets");
+  {
+    std::ofstream(dir / "t.mproj")
+        << "[project]\nformat = 2\n\n[project.props]\nname = \"t\"\n";
+  }
+  const auto write = [&](const char* value) {
+    std::ofstream(dir / "assets/a.masset")
+        << "[masset]\nformat = 2\n\ntype = \"Thing\"\n\n[masset.props]\n"
+           "value = \""
+        << value << "\"\n";
+  };
+  write("first");
+  std::string error;
+  auto project = Project::Load(dir / "t.mproj", &error);
+  ASSERT_TRUE(project) << error;
+  AssetDatabase assets(project);
+
+  auto before = assets.Load("res://assets/a.masset");
+  ASSERT_TRUE(before);
+  EXPECT_EQ(assets.Load("res://assets/a.masset"), before);  // cached
+  EXPECT_EQ(*before->properties.Get("value")->ToString(), "first");
+
+  write("second");
+  fs::last_write_time(
+      dir / "assets/a.masset",
+      fs::last_write_time(dir / "assets/a.masset") + std::chrono::seconds(5));
+  auto after = assets.Load("res://assets/a.masset");
+  ASSERT_TRUE(after);
+  EXPECT_NE(after, before);
+  EXPECT_EQ(*after->properties.Get("value")->ToString(), "second");
+  // The first snapshot is exactly as it was.
+  EXPECT_EQ(*before->properties.Get("value")->ToString(), "first");
+
+  // A path outside the project is refused rather than read.
+  EXPECT_FALSE(assets.Load("res://../../../etc/hosts"));
+  fs::remove_all(dir);
 }

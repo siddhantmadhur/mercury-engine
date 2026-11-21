@@ -39,6 +39,7 @@ namespace Mercury {
 
 class Behaviour;
 class MapScene;
+class System;
 
 /**
  * @brief Lightweight handle to an entity created from a map node
@@ -174,6 +175,10 @@ class MapScene : public GameScene {
    *
    * Behaviours get OnStart once the scene starts (or straight away if it is
    * already running).
+   *
+   * Called from a behaviour callback (OnFrame, OnTick, Awake, OnStart,
+   * OnDestroy, collision or UI handlers) the scene is not replaced under the
+   * running code: the map is kept and applied at the start of the next frame.
    */
   void Instantiate(const Map& map);
 
@@ -183,7 +188,9 @@ class MapScene : public GameScene {
    * Instantiates straight away if every model is already cached. Otherwise
    * the scene keeps what it has (nothing, at startup, so only the clear
    * color is drawn) until OnFrame sees the models are ready. `fresh_assets`
-   * drops the cached models and images first, as LoadMap does.
+   * drops the cached models and images first, as LoadMap does. Like
+   * Instantiate, it is deferred to the next frame when called from a
+   * behaviour callback.
    */
   void BeginInstantiate(Map map, bool fresh_assets = false);
   // True while a map from BeginInstantiate is waiting for its models.
@@ -208,7 +215,8 @@ class MapScene : public GameScene {
   bool PollModelPreload();
   const ModelPreloader& GetModelPreloader() const { return preloader_; }
 
-  // Destroys every entity created from the map.
+  // Destroys every entity created from the map. Refused (with an error) from a
+  // behaviour callback; SetProject likewise.
   void ClearMap();
 
   /**
@@ -243,6 +251,7 @@ class MapScene : public GameScene {
   void OnTick(double delta_t) override;
   void OnDestroy() override;
   void ProcessOnFrame(float alpha) override;
+  void SimulatePhysics(int steps) override;
 
   void UpdateEntityTransformHierarchy(kEntityId entity);
   void UpdateInterpolatedHierarchy();
@@ -337,6 +346,12 @@ class MapScene : public GameScene {
   // True while at least one script is running (started and enabled), so the
   // scene may change on its own every frame.
   bool HasActiveBehaviours() const;
+
+  // The scene's registered systems (see scripting/system.h), in phase/order.
+  // Empty in edit mode and before the scene starts.
+  const std::vector<std::unique_ptr<System>>& GetSystems() const {
+    return systems_;
+  }
 
   // Loads (once) a model with its hierarchy, materials and clips.
   std::shared_ptr<const Model> GetModelAsset(std::string_view res_path);
@@ -444,6 +459,34 @@ class MapScene : public GameScene {
   std::unordered_map<kEntityId, std::vector<Behaviour*>> behaviours_by_entity_;
   size_t awoken_behaviours_ = 0;
   bool running_ = false;
+  // Instances of every registered System, created when the scene starts and
+  // driven from OnFrame/OnTick. Shut down by OnDestroy.
+  std::vector<std::unique_ptr<System>> systems_;
+  bool systems_started_ = false;
+  // True while BuildSubtree creates entities for a prefab or a cloned node.
+  // Those copies keep their source node uids, so they must not become entity
+  // GUIDs (the same prefab may be instantiated more than once).
+  bool cloning_runtime_node_ = false;
+  void StartSystems();
+  void StopSystems();
+  void NotifyMapLoaded();
+  void NotifyMapUnloading();
+  // Nonzero while behaviour callbacks are being run (OnFrame, OnTick, OnStart,
+  // the OnDestroy pass). The scene cannot be replaced under them: a native
+  // behaviour that calls Instantiate/BeginInstantiate then has the new map
+  // applied at the start of the next frame, and ClearMap/SetProject are
+  // refused.
+  int running_callbacks_ = 0;
+  struct CallbackScope {
+    explicit CallbackScope(MapScene* scene) : scene_(scene) {
+      scene_->running_callbacks_++;
+    }
+    ~CallbackScope() { scene_->running_callbacks_--; }
+    MapScene* scene_;
+  };
+  std::optional<Map> deferred_map_;  // asked for during a callback
+  bool deferred_fresh_ = false;
+  bool deferred_async_ = false;  // asked via BeginInstantiate
   PrefabCache prefabs_;
 
   std::string pending_map_;  // LoadMap

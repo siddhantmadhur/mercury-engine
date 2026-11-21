@@ -33,12 +33,18 @@ Games are projects, like in Unity and Godot, rather than hand-written `GameScene
 pong.mproj              project settings (name, main map, window size)
 maps/main.mmap          the map: nodes and their components
 assets/*.masset         materials and physics materials
-scripts/*.as            game logic in AngelScript (optional when scripts are C++)
-scripts/*.cc            game logic in C++ (optional; see C++ scripts)
-.mercury/               generated: scripts.mschema and build caches (not committed)
+scripts/*.as            game logic in AngelScript (optional)
+src/*.cc, src/*.h       C++ gameplay and runtime systems (optional)
+system/*.cc, *.h        editor extension modules (optional, loaded by the editor)
+CMakeLists.txt          generated once by the editor, then owned by the project
+CMakePresets.json       generated once by the editor, then owned by the project
+.clangd                 generated on every project open
+.mercury/               generated: schema, stamp, build trees (not committed)
 ```
 
-There is no per-game build file: every project runs with the same executable, `mercury_player`.
+AngelScript-only projects run with the shared executable, `mercury_player`. A
+project with C++ gameplay names its own CMake target in `[build] target` and
+builds into `.mercury/build/<config>` against the editor's SDK.
 
 Open a project with the editor:
 
@@ -59,42 +65,61 @@ Run a project without the editor with `./build/release/bin/mercury_player exampl
 
 ## File formats
 
-`.mproj`, `.mmap` and `.masset` share one text format modeled on Godot's `.tscn`, so people and LLMs can read, diff and edit it by hand. A file is a list of `[sections]`, each followed by `key = value` lines:
+`.mproj`, `.mmap` and `.masset` share one text format: TOML, so people and LLMs can read, diff and edit it by hand. A file starts with a header table that names the file type and carries `format = 2` and `editor_version`; sections follow as `[[tag]]` array-of-tables, grouped by tag, with section attributes as scalar keys and section properties in a `[tag.props]` sub-table:
 
-```ini
-[mmap format=1]
+```toml
+[mmap]
+format = 2
+editor_version = "1.0.0"
 
-[ext_resource type="Material" path="res://assets/white.masset" id="1"]
+[[component]]
+node = "Ball"
+type = "Transform"
+[component.props]
+scale = { vec3 = [2.0, 2.0, 1.0] }
 
-[node name="Pong"]
+[[component]]
+node = "Ball"
+type = "SpriteRenderer"
+[component.props]
+material = { ext = "1" }
 
-[node name="Ball" parent="."]
-
-[component type="Transform" node="Ball"]
-scale = Vector3(2, 2, 1)
-
-[component type="SpriteRenderer" node="Ball"]
-material = ExtResource("1")
-
-[component type="Ball" node="Ball"]
+[[component]]
+node = "Ball"
+type = "Ball"
+[component.props]
 speed = 60.0
+
+[[ext_resource]]
+id = "1"
+path = "res://assets/white.masset"
+type = "Material"
+
+[[node]]
+name = "Pong"
+
+[[node]]
+name = "Ball"
+parent = "."
 ```
 
-- `parent=` and `node=` are paths from the root node: `.` is the root, `Ball` a child of the root, `Walls/Left` a grandchild. Parents come before their children.
-- Values are `true`, `3`, `1.5`, `"text"`, `Vector2(x, y)`, `Vector3(x, y, z)`, `Color(r, g, b, a)`, `NodePath("Walls/Left")`, `ExtResource("id")`, `Resource("res://...")` or `[arrays]`. Comments start with `;` but are not kept when the editor saves.
+- Sections are grouped by tag (`[[component]]` before `[[ext_resource]]` before `[[node]]`); within a tag the file's original order is kept, so parent nodes still come before their children.
+- `parent` and `node` are paths from the root node: `.` is the root, `Ball` a child of the root, `Walls/Left` a grandchild. Parents come before their children.
+- Values are `true`, `3`, `1.5`, `"text"`, `{ vec2 = [x, y] }`, `{ vec3 = [x, y, z] }`, `{ color = [r, g, b, a] }`, `{ path = "Walls/Left" }`, `{ ext = "1" }`, `{ res = "res://..." }` or plain arrays. Comments start with `#` but are not kept when the editor saves.
+- `format` and `editor_version` are written by the engine; a file whose `format` is newer than the engine's is rejected. The old format 1 layout is not supported (pre-1.0).
 - `res://` paths are relative to the folder holding the `.mproj`.
 - Fields left at their default value are omitted.
 
 Other files:
 
-- `.mprefab`: a node tree in the map format. A map node with `instance="res://gun.mprefab"` copies it; component sections for the instance (or its children) override single values, and `removed=true` drops a component. Scripts copy with `Instantiate(...)`.
-- `.manim`: an animator controller (`[parameter]`, `[layer]`, `[state]` with a clip or a 1D/2D blend tree, `[transition]` with conditions and exit time).
-- `.minput`: input actions (Unity's Input System): `[action name="Player/Jump" type="button"]` with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"`, and 2D vector `composites`. `[map name="Player"]` sections list the action maps, and the `[minput]` header's `class` and `header` name the generated AngelScript namespace and its file. The `.mproj` names it in `[input] actions`. Edit it in **Window > Input Actions**.
-- `.mimport` next to a model: `convention = "unity"` imports it the Unity way (180 degrees about Y, file units); `[import] model_convention` in the `.mproj` sets the default. `scale` resizes it and `max_texture_size` (default 8192) scales larger textures down.
+- `.mprefab`: a node tree in the map format. A map node with `instance = "res://gun.mprefab"` copies it (or `instance = { ext = "1" }` pointing at a `[[ext_resource]]`); component sections for the instance (or its children) override single values, and `removed = true` in `[component.props]` drops a component. Scripts copy with `Instantiate(...)`.
+- `.manim`: an animator controller (`[[parameter]]`, `[[layer]]`, `[[state]]` with a clip or a 1D/2D blend tree, `[[transition]]` with conditions and exit time).
+- `.minput`: input actions (Unity's Input System): `[[action]]` sections (attributes `name`, `type`, `control`) with `bindings` such as `"<Keyboard>/space"` and `"<Gamepad>/buttonSouth"` in `[action.props]`, and 2D vector `composites`. `[[map]]` sections list the action maps, and the `[minput]` header's `class` and `header` name the generated AngelScript namespace and its file. The `.mproj` names it in `[[input]]` (`[input.props]`).
+- `.mimport` next to a model: `convention = "unity"` imports it the Unity way (180 degrees about Y, file units); `[[import]]` (`[import.props]`) `model_convention` in the `.mproj` sets the default. `scale` resizes it and `max_texture_size` (default 8192) scales larger textures down.
 
 Models bring their own materials: base color and texture, opacity, emission (`Ke`, `map_Ke`), normal maps (or `bump` height maps, converted to normal maps on import) and, for OBJ, glossiness from `Ns`/`Ks`. Texture names are matched case-insensitively.
 
-`.mproj` sections: `[physics]` (`gravity = Vector3(0, -9.81, 0)`, `tick_rate = 50`), `[layers] names`, `[tags] names` (set on a node with `layer=` and `tag=`), `[render]` (SSAO and outline settings), `[input]`, `[import]` and `[build]` (game output folder, and `target = "//pkg:game"` when the gameplay is C++).
+`.mproj` sections: `[[physics]]` (`[physics.props]`: `gravity = { vec3 = [0.0, -9.81, 0.0] }`, `tick_rate = 50`), `[[layers]]`, `[[tags]]` (set on a node with `layer =` and `tag =`), `[[render]]` (SSAO and outline settings), `[[input]]`, `[[import]]` and `[[build]]` (`[build.props]`: game output folder, and `target = "my_game"` when the gameplay is C++).
 
 ## Components
 
@@ -109,7 +134,7 @@ A node's position is relative to its parent; maps are flattened to world positio
 | `DirectionalLight` | Sunlight along its -Z: `color`, `intensity`, `ambient`, `ground_ambient`, `cast_shadows` (see [Lighting](#lighting)) |
 | `PointLight` | Light in every direction: `color`, `intensity`, `range` (Unity's falloff; up to 16 per map). Soft shadows that widen with `radius`; `shadows = "hard"` or `"none"` changes that |
 | `AreaLight` | A glowing rectangle of `size` in the node's XY plane, shining along -Z. `color` * `intensity` is its radiance. The Filament renderer approximates it with a spot light; up to 4 per map |
-| `LightProbeVolume` | Legacy global-illumination settings; the Filament renderer uses the skybox IBL instead (see [Lighting](#lighting)) |
+| `LightProbeVolume` | A room-capture light probe at the node: the renderer draws the scene from it into a cubemap and lights everything with it, so mirrors reflect the room and walls bleed color. `bounces` (captures), `intensity`, `capture_size` (see [Lighting](#lighting)) |
 | `Rigidbody` | Static, kinematic or dynamic motion, `mass`, locked axes, damping, gravity |
 | `BoxCollider`, `SphereCollider`, `CapsuleCollider`, `CylinderCollider`, `PlaneCollider`, `MeshCollider` | Collision shapes, scaled by the Transform, with a `center`; a node may have several. `is_trigger` reports overlaps without pushing |
 | `CharacterController` | Unity's: `Move(displacement)`, `IsGrounded()`, slopes and steps, resizable at run time |
@@ -179,18 +204,44 @@ image-based ambient). `SceneLighting` maps onto:
 - **Soft shadows** → Filament's PCSS (`View::setShadowType`); the light's
   physical size (`radius`, or the area light's rectangle) sets the penumbra.
 
-`LightProbeVolume` is a legacy component. Filament's global illumination is
-its distant IBL (the camera's skybox panorama) plus screen-space reflections;
-the renderer does not build a probe grid from the volume. Keep the component
-in old maps for compatibility, but author new lighting with the skybox and
-the Filament light components.
+- **`LightProbeVolume`** → a room-capture probe. The renderer draws the
+  scene from the node's position into the six faces of a cubemap (six
+  Filament `View`s at 90 degrees, rendered with `renderStandaloneView`),
+  filters it with `IBLPrefilterContext` (specular and irradiance) and sets
+  the result as the scene's `IndirectLight`. Each of `bounces` captures is
+  lit by the one before it. While a probe is in the map it replaces the
+  skybox's and the ambient's image-based light (a skybox can still be drawn
+  as the background); the ambient only reaches the final image through the
+  captured bounces, so raise the probe's `intensity` to compensate. It is
+  captured once the scene has been still for a few frames, and again after
+  the scene, its lights or the probe change.
 
 ### Post-processing
 
 `RenderSettings`/`PostProcessProfile` are applied to each Filament `View`:
-tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO, FXAA,
+tonemap and exposure through `ColorGrading`, bloom, vignette, GTAO,
 screen-space reflections (mirrors and glossy surfaces), and PCSS soft
-shadows. Refraction uses Filament's cubemap mode so it also works on
+shadows.
+
+Anti-aliasing and upscaling are project options in the `.mproj`'s `[render]`
+section (the editor's Build Game dialog writes them), not part of a profile:
+`anti_aliasing = "none" | "fxaa" | "taa"` (default `taa`; a legacy `fxaa`
+bool is read only when `anti_aliasing` is absent), and the optional AMD FSR 1
+upscaler, `fsr = true`, with `fsr_quality = "high" | "ultra"`,
+`render_scale` (0.5 to 1, default 0.75) and `fsr_sharpness` (0 to 1, default
+0.9). FSR applies to the window's scene view and the editor's scene viewport
+only; render textures, previews and the UI stay at native resolution. TAA
+adds Filament's motion vectors pass and runs only on the main scene views;
+other views (render textures, previews) use FXAA when the project chose TAA.
+FSR 1 expects a well anti-aliased image, so pair it with TAA.
+
+The default anti-aliasing is now TAA (it used to be FXAA), and a
+`PostProcessProfile`'s `antialiasing` key is no longer read; anti-aliasing
+comes only from the project. Filament's motion vectors do not capture skinned
+meshes, so animated characters rely on TAA's neighbourhood clamping and may
+show slight smearing.
+
+Refraction uses Filament's cubemap mode so it also works on
 MoltenVK, where the screen-space refraction pass currently draws nothing.
 
 ### Material notes
@@ -329,11 +380,15 @@ stamps and should not be committed. The editor never runs game code: after each 
 
 ### C++ scripts
 
-A project can also compile C++ gameplay into its own executable. Derive from `Mercury::Behaviour`,
-describe fields in `Reflect`, and register the class with `MERCURY_SCRIPT` in its `.cc` file:
+A project can also compile C++ gameplay into its own executable. C++ scripts
+live in `src/`; the editor's **New Script** dialog writes a template pair.
+Derive from `Mercury::Behaviour`, describe fields in `Reflect`, and register
+the class with `MERCURY_SCRIPT` in its `.cc` file:
 
 ```cpp
-#include "scripting/behaviour.h"
+// src/spinner.h
+#pragma once
+#include <scripting/behaviour.h>
 
 class Spinner : public Mercury::Behaviour {
  public:
@@ -345,43 +400,106 @@ class Spinner : public Mercury::Behaviour {
   }
   float speed = 90.0f;
 };
+```
 
+```cpp
+// src/spinner.cc
+#include "spinner.h"
 MERCURY_SCRIPT(Spinner);
 ```
 
-The callback names are the C++ ones (`Awake`, `OnStart`, `OnFrame`, `OnLateFrame`, `OnTick`,
-`OnCollisionEnter`, ...). `MERCURY_SCRIPT` runs at static initialization, before the player loads a
-map. A reflected struct can be registered as a `.masset` type with `MERCURY_DATA_ASSET(T)` and loaded
-with `Assets().LoadAs<T>(path)`.
+The callback names are the C++ ones (`Awake`, `OnStart`, `OnFrame`,
+`OnLateFrame`, `OnTick`, `OnCollisionEnter`, ...). `Reflect` replaces
+`[field]` and uses the same field types. `MERCURY_DATA_ASSET(T)` registers a
+reflected struct as a `.masset` type. C++ components and AngelScript classes
+use the same map names and field names, so a node can mix them.
 
-C++ scripts and AngelScript classes use the same map component name and field names, so a node can
-mix them. Unlike AngelScript, C++ code is linked into the executable: the shared `mercury_player`
-cannot load it. Build a game executable with the `mercury_add_game` CMake function:
-
-```cmake
-# my_game/CMakeLists.txt
-mercury_add_game(my_game PROJECT "${CMAKE_CURRENT_SOURCE_DIR}")
-```
-
-`mercury_add_game` compiles every `.cc`/`.cpp` under `scripts/` and generates a `main()` that calls
-`Mercury::RunPlayer`. Name the target in the project file:
+A project with C++ gameplay names its executable target:
 
 ```ini
 [build]
 target = "my_game"
 ```
 
-Projects in the engine checkout add their directory from the top-level `CMakeLists.txt` (as
-`examples/cpp_hello` does); an external project can `add_subdirectory` the engine checkout and call
-the function from its own `CMakeLists.txt`. The editor's **Build Scripts** and **Play** then run
-`cmake --build <build-dir> --target <target>`, ask the executable for its script list with
-`--dump-schema`, and launch it. Projects without `[build] target` keep using the shared player and
-its AngelScript runtime. `examples/cpp_hello` is a complete C++ project; build and run it with
-`cmake --build --preset release` and `./build/release/bin/cpp_hello`.
+The editor generates a `CMakeLists.txt` on first open (only if missing) with
+`mercury_add_game` and `mercury_add_editor_system`, plus a `CMakePresets.json`.
+Play/Build configure and build the project's own tree in
+`.mercury/build/debug` against the editor's SDK (`-DMercury_DIR=...`), and
+configure again only when the cache is missing or the CMake files changed.
+C++ sources must be under `src/`; files left under `scripts/` are not compiled.
+Projects without `[build] target` keep using `mercury_player`.
+
+**New Script.** The Project Browser's **Create > Script...** dialog creates
+one of four kinds, previews the exact files, validates the class name and
+refuses to overwrite; **Create > C++ System...**/**Editor System...** jump
+straight to those kinds, and **Add Component > New Script...** offers the two
+gameplay kinds. "Open after creating" opens the `.cc` (or the `.as` in the
+built-in editor), and the choice plus the last kind are remembered.
+
+| Kind | Files | Registration |
+|---|---|---|
+| AngelScript Behaviour | `scripts/<snake>.as` | `[script]` |
+| C++ Behaviour | `src/<snake>.h`, `src/<snake>.cc` | `MERCURY_SCRIPT` |
+| C++ System | `src/<snake>.h`, `src/<snake>.cc` | `MERCURY_SYSTEM` |
+| C++ Editor System | `system/<snake>.h`, `system/<snake>.cc` | `MERCURY_EDITOR_EXTENSION` |
+
+**Systems and hooks.** A component is one instance per node; a feature such as
+networking is one instance per scene. Derive from `Mercury::System`, register
+with `MERCURY_SYSTEM`, and choose a tick phase: `kPreTick` (receive, before
+gameplay), `kTick`, `kPostTick` (before physics) or `kPostPhysics` (send,
+after physics). `OnRegister`/`OnMapLoaded`/`OnTick`/`OnShutdown` receive the
+`MapScene`. `Mercury::AppHook` (registered with `MERCURY_APP_HOOK`) runs
+process-wide setup and reads custom game options; the player accepts unknown
+`--options` only when a hook exists. `scene.GetEventBus()` is a typed
+publish/subscribe bus with RAII subscriptions. `Mercury::RenderHooks` receives
+Filament's `Engine` and `View` around the main render, and a
+`FilamentApplication` exposes `GetEngine`/`GetRenderer`/`GetScene`/`GetView`/
+`GetCamera`. `AssetImporterRegistry` maps extensions to asset types;
+`TypeRegistry::SerializeComponent`/`DeserializeComponent` snapshot a component
+(for replication or saves), and `scene.Objects().GetGuid(entity)` /
+`FindByGuid(guid)` give stable entity ids. See `docs/cpp_api.dox` for examples,
+including linking a library such as ENet with `target_link_libraries`.
+
+**Editor extensions.** Put an `EditorExtension` (registered with
+`MERCURY_EDITOR_EXTENSION`) in `system/`; the editor builds it as a dynamic
+MODULE and loads it while the project is open. `EditorContext` registers
+panels, menu entries, custom inspectors, Project Browser menu entries, viewport
+tools and asset importers. Always bind wx handlers through
+`context.Bind(...)` (never directly) and call `context.TrackWindow(...)` for
+windows the module creates. `Project > Reload Systems` rebuilds and reloads
+the module; the ABI and engine version (major.minor) are checked at load, and
+exceptions from module callbacks are logged and eventually fault the module.
+
+**Workspace trust.** Configuring/building a project's CMake tree and loading
+its editor modules execute project-supplied code, so both are gated. The first
+native build asks; the answer is stored per canonical path in
+`~/.config/mercury/editor.cfg` (`[trust] trusted` / `distrusted`) and can be
+changed with **Project > Trust Editor Systems**. First trust removes shipped
+`.mercury/build` and `.mercury/systems`; after that a build folder must carry
+the editor's marker. Opening a project, reading data and generating `.clangd`
+do not require trust; the build layer itself also refuses an untrusted project.
+
+**SDK and language server.** A packaged editor ships the SDK in
+`Contents/Resources/sdk` (`include/mercury`, `include/editor`, third-party
+headers, `lib/` archives and `cmake/MercuryConfig.cmake`). The editor writes
+`.clangd` (pointing clangd at `.mercury/build/debug` with fallback include
+flags) on every open, and links `compile_commands.json` at the project root
+only after a configure it ran. For a command-line build:
+
+```sh
+export MERCURY_SDK=/Applications/Mercury.app/Contents/Resources/sdk
+cmake --preset debug -DMercury_DIR="$MERCURY_SDK/cmake"
+cmake --build --preset debug
+```
+
+A Vulkan SDK is required at configure time; the packaged app carries the
+MoltenVK runtime, not the headers. `examples/cpp_hello` is a complete C++
+project: its `src/hello_system.cc` uses the EventBus, `hello_app_hook.cc` reads
+`--greeting`, and `hello_render.cc` toggles Filament bloom with **F2**.
 
 ## UI Toolkit
 
-In-game UI (HUDs, menus, inventories) uses Mercury's UI Toolkit, a copy of Unity's: layouts in **UXML**, styles in **USS**, a tree of `VisualElement`s laid out with flexbox (Yoga) and drawn by the engine's renderer with SDF text. Dear ImGui is for the editor and developer/debug windows only, not for what players see.
+In-game UI (HUDs, menus, inventories) uses Mercury's UI Toolkit, a copy of Unity's: layouts in **UXML**, styles in **USS**, a tree of `VisualElement`s laid out with flexbox (Yoga) and drawn by the engine's renderer with SDF text. The editor itself and its tool windows are wxWidgets, not UI Toolkit and not Dear ImGui; UI Toolkit is what players see.
 
 ```xml
 <!-- ui/hud.uxml -->
