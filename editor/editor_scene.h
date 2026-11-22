@@ -27,6 +27,7 @@
 #include "editor_settings.h"
 #include "input_actions_window.h"
 #include "lore_vcs.h"
+#include "mcp/mcp_host.h"
 #include "overlay_canvas.h"
 #include "play_session.h"
 #include "project/asset_database.h"
@@ -110,6 +111,39 @@ class EditorScene : public MapScene {
     std::string label;
   };
 
+  /**
+   * @brief The whole Scene-viewport camera state, as one value
+   *
+   * Tools that move the camera (the MCP `capture_viewport` tool) take a copy
+   * with GetViewState(), change it with SetViewState(), and restore the copy
+   * afterwards, so a capture never leaves the editor looking somewhere else.
+   */
+  struct ViewState {
+    bool view_2d = true;
+    glm::vec3 target = glm::vec3(0.0f);
+    float distance = 120.0f;
+    float yaw = 35.0f;
+    float pitch = -25.0f;
+    glm::vec2 viewport_size = {1.0f, 1.0f};
+  };
+
+  /**
+   * @brief Oriented bounds of a node plus its world-axis-aligned box
+   *
+   * `model` takes local coordinates into world space; `local_min` / `local_max`
+   * are the box in that space (collider, physics mesh or model bounds).
+   * `world_min` / `world_max` are the eight transformed corners wrapped in an
+   * AABB. Unlike the private picking bounds, model nodes with a RenderMesh are
+   * included here; editor picking and gizmos are unchanged.
+   */
+  struct NodeWorldBounds {
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::vec3 local_min = glm::vec3(0.0f);
+    glm::vec3 local_max = glm::vec3(0.0f);
+    glm::vec3 world_min = glm::vec3(0.0f);
+    glm::vec3 world_max = glm::vec3(0.0f);
+  };
+
   explicit EditorScene(std::filesystem::path initial_project = {},
                        std::string initial_map = {});
   ~EditorScene() override;
@@ -168,6 +202,10 @@ class EditorScene : public MapScene {
   // transform (which bumps MapRevision every drag tick) does not rebuild the
   // whole tree.
   uint64_t HierarchyRevision() const { return hierarchy_revision_; }
+  // For code that adds, removes, renames or reparents nodes in GetMap()
+  // directly (the MCP scene tools) instead of through CreateNode and friends:
+  // tells the hierarchy panel to rebuild.
+  void NotifyHierarchyChanged() { ++hierarchy_revision_; }
   // Bumped whenever the rendered scene/overlay view changes (camera, tools,
   // selection, scene content) so the viewport repaints only when needed.
   uint64_t ViewRevision() const { return view_revision_; }
@@ -236,6 +274,13 @@ class EditorScene : public MapScene {
   UIBuilder& UIBuilderRef() { return ui_builder_; }
   InputActionsWindow& InputActionsRef() { return input_actions_; }
   LoreVcs& LoreRef() { return lore_; }
+  // The opt-in MCP server; see mcp/mcp_host.h.
+  McpHost& Mcp() { return mcp_; }
+  // Expires when the editor starts shutting this scene down (the start of
+  // OnDestroy, before the subsystems stop) or when the scene is destroyed.
+  // Work that outlives one UI-thread callback (an async MCP tool, a timer)
+  // holds the weak_ptr and checks lock() before it touches the scene.
+  std::weak_ptr<const void> LifetimeToken() const { return lifetime_; }
 
   // Scene Viewport & Camera API
   void SetSceneViewportSize(glm::vec2 size);
@@ -257,7 +302,25 @@ class EditorScene : public MapScene {
   void SetView2D(bool view_2d);
   void ToggleView2D() { SetView2D(!view_2d_); }
   const glm::vec3& GetCameraTarget() const { return camera_target_; }
+  // The 3D view's orbit camera, in degrees (pitch about X, yaw about Y, the
+  // Transform rotation convention) and world units from target to camera.
+  float GetCameraYaw() const { return camera_yaw_; }
+  float GetCameraPitch() const { return camera_pitch_; }
+  float GetCameraDistance() const { return camera_distance_; }
   glm::vec3 GetCameraPosition() const { return CameraPosition(); }
+  // Snapshot / restore of the whole Scene-viewport camera in one call. Used by
+  // tools that temporarily change the view; restoring replays it into the
+  // default camera and bumps the view revision so the viewport repaints.
+  ViewState GetViewState() const;
+  void SetViewState(const ViewState& state);
+  // World-space bounds of a node from its collider, physics mesh or model,
+  // including the oriented box used by the spatial MCP queries. False when the
+  // node has no usable bounds. Does not affect picking or gizmo drawing.
+  bool GetNodeWorldBounds(kEntityId entity, NodeWorldBounds& out);
+  bool GetNodeWorldBounds(const MapNode& node, NodeWorldBounds& out);
+  // The Scene viewport's view-projection matrix, for software overlays drawn
+  // onto a captured frame; the same math picking and gizmos use.
+  glm::mat4 GetSceneViewProjection() const { return GetViewProjection(); }
   const char* GetHintText() const;
   void FrameSelected();
   void FrameMap();
@@ -331,6 +394,8 @@ class EditorScene : public MapScene {
   glm::mat4 GetNodeMatrix(kEntityId entity, bool with_scale = true);
   bool MapLooks3D() const;
 
+  // Owned only for its lifetime; see LifetimeToken().
+  std::shared_ptr<const void> lifetime_ = std::make_shared<const char>('\0');
   std::filesystem::path initial_project_;
   std::string initial_map_;
   EditorSettings settings_;
@@ -342,6 +407,8 @@ class EditorScene : public MapScene {
   UIBuilder ui_builder_{console_};
   InputActionsWindow input_actions_{console_};
   LoreVcs lore_{console_, settings_};
+  // The MCP server host; declared after console_ so its reference is valid.
+  McpHost mcp_{*this, console_};
 
   Map map_;
   std::string map_path_;

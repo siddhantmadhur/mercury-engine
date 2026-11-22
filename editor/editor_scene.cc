@@ -66,9 +66,15 @@ void EditorScene::OnStart() {
       !initial_map_.empty()) {
     OpenMap(initial_map_);
   }
+  mcp_.ApplySettings();
 }
 
 void EditorScene::OnDestroy() {
+  // First: anything holding LifetimeToken() must stop using the scene before
+  // the subsystems below go away.
+  lifetime_.reset();
+  // Stop serving MCP tools before the scene underneath them goes away.
+  mcp_.Stop();
   play_.Stop();
   release_.Cancel();
   CancelScriptReconfigure();
@@ -141,6 +147,10 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   play_.Stop();
   release_.Cancel();
   CancelScriptReconfigure();
+  // Before SetProject(), so the previous project's .mcp.json entry is removed
+  // while its root is still the one the host recorded. ApplySettings below
+  // restarts the server and writes the new project's entry.
+  mcp_.Stop();
   SetProject(project);
   // Refresh the generated build/LSP files on every open. This never runs the
   // project's code and is safe before the trust decision.
@@ -148,6 +158,9 @@ bool EditorScene::OpenProject(const fs::path& mproj) {
   ui_builder_.SetProject(project);
   input_actions_.SetProject(project);
   lore_.SetProject(project);
+  // (Re)start the MCP server for the new project root; also writes
+  // .mcp.json when the settings want it.
+  mcp_.ApplySettings();
   settings_.AddRecentProject(project->GetFile());
   settings_.Save();
   game_aspect_ = static_cast<float>(project->GetWindowWidth()) /
@@ -184,6 +197,8 @@ void EditorScene::CloseProject() {
   play_.Stop();
   release_.Cancel();
   CancelScriptReconfigure();
+  // Before SetProject(nullptr), so .mcp.json removal still finds the root.
+  mcp_.Stop();
   SetProject(nullptr);
   ui_builder_.SetProject(nullptr);
   input_actions_.SetProject(nullptr);

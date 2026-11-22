@@ -16,3 +16,11 @@ use input_actions_codegen_rs as _;
 
 #[allow(unused_imports)]
 use mercury_uss as _;
+
+// mercury_mcp carries the MCP HTTP transport (tokio + rmcp). It is a cargo
+// feature on this crate, so the plain archive linked into the player, the
+// tools and SDK games contains none of it; only the editor archive builds
+// with `--features mcp`.
+#[cfg(feature = "mcp")]
+#[allow(unused_imports)]
+use mercury_mcp as _;

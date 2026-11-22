@@ -52,6 +52,95 @@ TEST(PlayerArgs, ParsesHelp) {
   EXPECT_TRUE(Parse({"player", "-h"}, false).help);
 }
 
+TEST(PlayerArgs, ParsesEngineSchemaPath) {
+  EXPECT_EQ(Parse({"player", "--dump-engine-schema", "out.json"}, false)
+                .engine_schema_path,
+            "out.json");
+  // "-" and a missing value both mean stdout.
+  EXPECT_EQ(
+      Parse({"player", "--dump-engine-schema", "-"}, false).engine_schema_path,
+      "-");
+  EXPECT_EQ(Parse({"player", "--dump-engine-schema"}, false).engine_schema_path,
+            "-");
+}
+
+// A following option is not a file name: the schema goes to stdout and the
+// option still applies.
+TEST(PlayerArgs, EngineSchemaDoesNotSwallowOptions) {
+  const PlayerArgs args =
+      Parse({"player", "--dump-engine-schema", "--validate"}, false);
+  EXPECT_EQ(args.engine_schema_path, "-");
+  EXPECT_TRUE(args.validate);
+  const PlayerArgs with_value = Parse(
+      {"player", "--dump-engine-schema", "--validate", "out.json"}, false);
+  EXPECT_EQ(with_value.engine_schema_path, "-");
+  EXPECT_TRUE(with_value.validate);
+  // The token after the option becomes the project path, as usual.
+  EXPECT_TRUE(with_value.project_given);
+}
+
+TEST(PlayerArgs, ParsesValidateAndJson) {
+  const PlayerArgs args = Parse({"player", "--validate", "--json"}, false);
+  EXPECT_TRUE(args.validate);
+  EXPECT_TRUE(args.json);
+  EXPECT_FALSE(Parse({"player", "--validate"}, false).json);
+}
+
+TEST(PlayerArgs, ParsesInspectAsset) {
+  const PlayerArgs args =
+      Parse({"player", "--inspect-asset", "res://assets/player.masset"}, false);
+  EXPECT_EQ(args.inspect_asset, "res://assets/player.masset");
+}
+
+TEST(PlayerArgs, InspectAssetRequiresAValue) {
+  const PlayerArgs args = Parse({"player", "--inspect-asset"}, false);
+  EXPECT_FALSE(args.option_error.empty());
+}
+
+TEST(PlayerArgs, ParsesHeadlessAndFrames) {
+  const PlayerArgs args =
+      Parse({"player", "--headless", "--frames", "30"}, false);
+  EXPECT_TRUE(args.headless);
+  EXPECT_EQ(args.frames, 30);
+}
+
+TEST(PlayerArgs, FramesRejectsANonCount) {
+  EXPECT_FALSE(
+      Parse({"player", "--frames", "abc"}, false).option_error.empty());
+  EXPECT_FALSE(Parse({"player", "--frames", "-5"}, false).option_error.empty());
+  EXPECT_FALSE(Parse({"player", "--frames"}, false).option_error.empty());
+  EXPECT_EQ(Parse({"player", "--frames", "abc"}, false).frames, 0);
+}
+
+TEST(PlayerArgs, FramesIsKnownEvenForGameHooks) {
+  const PlayerArgs args =
+      Parse({"player", "--frames", "12", "--server", "7777"}, true);
+  EXPECT_EQ(args.frames, 12);
+  EXPECT_TRUE(args.unknown_option.empty());
+  EXPECT_FALSE(args.project_given);
+}
+
+// The whole validate path, not just the parsing: load the example, build its
+// scripts and run the introspection pass. The example must validate clean:
+// exit 0 with no errors. Warnings (e.g. unknown types) are allowed and do not
+// change the exit code.
+TEST(PlayerArgs, ValidateRunsTheExampleProjectClean) {
+  std::string program = "player";
+  std::string project = std::string(MERCURY_SOURCE_DIR) +
+                        "/examples/roll_a_ball/roll_a_ball.mproj";
+  std::string validate = "--validate";
+  char* argv[] = {program.data(), project.data(), validate.data()};
+  EXPECT_EQ(RunPlayer(3, argv, nullptr), 0);
+}
+
+// --json without --validate is rejected with exit 2, not silently ignored.
+TEST(PlayerArgs, JsonWithoutValidateIsRejected) {
+  std::string program = "player";
+  std::string json = "--json";
+  char* argv[] = {program.data(), json.data()};
+  EXPECT_EQ(RunPlayer(2, argv, nullptr), 2);
+}
+
 TEST(PlayerArgs, RejectsUnknownOptionsWithoutHooks) {
   const PlayerArgs args = Parse({"player", "--server", "7777"}, false);
   EXPECT_EQ(args.unknown_option, "--server");

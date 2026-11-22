@@ -59,6 +59,7 @@ void PlaySession::Begin(const Project& project, bool run) {
   build_target_ = project.GetBuildTarget();
   native_ = !build_target_.empty();
   built_this_session_ = false;
+  last_build_succeeded_ = false;
   run_after_build_ = run;
   if (native_) {
     // Building the project's CMake tree runs project code at configure time.
@@ -297,6 +298,7 @@ void PlaySession::Update() {
         holds_build_lock_ = false;
       }
       built_this_session_ = true;
+      last_build_succeeded_ = true;
       DumpSchema();
       if (run_after_build_) {
         console_.Info("Build succeeded; starting the game");

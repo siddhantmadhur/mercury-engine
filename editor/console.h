@@ -12,6 +12,7 @@
 #ifndef MERCURY_EDITOR_CONSOLE_H
 #define MERCURY_EDITOR_CONSOLE_H
 
+#include <cstdint>
 #include <deque>
 #include <mutex>
 #include <optional>
@@ -61,11 +62,48 @@ class Console {
   std::vector<Line> Snapshot();
   size_t GetVersion();  // changes whenever a line is added or cleared
 
+  // Sequence numbers, for readers that poll (the MCP read_console tool). Every
+  // line added gets the next number, starting at 0, and a number is never
+  // reused: not after the oldest lines are dropped at kMaxLines, not after
+  // Clear(). A "cursor" is the number of the first line a reader has not seen.
+  struct Entry {
+    uint64_t seq = 0;
+    Line line;
+  };
+  struct Page {
+    std::vector<Entry> entries;
+    // Where to continue: the number the next line added will get, or the one
+    // after the last entry returned when `truncated`.
+    uint64_t next_cursor = 0;
+    // The caller's cursor was older than the oldest line still held: lines
+    // between the cursor and `oldest` were dropped (or cleared) unseen.
+    bool dropped = false;
+    // More matching lines exist than were returned: after the returned ones
+    // when a cursor was given, before them for a tail.
+    bool truncated = false;
+  };
+  // The number the next added line will get; the cursor that reads only lines
+  // added from now on.
+  uint64_t LatestCursor();
+  // The lines with seq >= `cursor` at or above `min_level`, oldest first, at
+  // most `limit` of them. Without a cursor, the newest `limit` matching lines
+  // (a tail). See Page for the other fields.
+  Page ReadFrom(std::optional<uint64_t> cursor, Level min_level, size_t limit);
+  // The lines currently held at each level, and the cursor at the time.
+  struct Counts {
+    size_t errors = 0;
+    size_t warnings = 0;
+    uint64_t latest_cursor = 0;
+  };
+  Counts CountLevels();
+
  private:
   static constexpr size_t kMaxLines = 5000;
   std::mutex mutex_;
   std::deque<Line> lines_;
   size_t version_ = 0;
+  // lines_[i] has sequence number next_seq_ - lines_.size() + i.
+  uint64_t next_seq_ = 0;
 };
 
 }  // namespace Mercury

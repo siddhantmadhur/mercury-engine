@@ -6,12 +6,18 @@
 
 #include <wx/checkbox.h>
 #include <wx/choice.h>
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
 #include <wx/dirdlg.h>
 #include <wx/listctrl.h>
 #include <wx/msgdlg.h>
+#include <wx/notebook.h>
+#include <wx/panel.h>
 #include <wx/slider.h>
+#include <wx/spinctrl.h>
 #include <wx/statbox.h>
 #include <wx/statline.h>
+#include <wx/timer.h>
 
 #include <algorithm>
 #include <cctype>
@@ -470,29 +476,36 @@ bool ShowReleaseBuildDialog(wxWindow* parent, EditorScene& scene) {
 
 bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   wxDialog dlg(parent, wxID_ANY, "Editor Settings", wxDefaultPosition,
-               wxSize(640, -1));
+               wxSize(640, -1), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+  dlg.SetName("preferences_dialog");
   auto* root = new wxBoxSizer(wxVERTICAL);
+  auto* notebook = new wxNotebook(&dlg, wxID_ANY);
+  notebook->SetName("prefs_notebook");
+
+  // ---- General tab: the previous settings page, behaviour unchanged. ----
+  auto* general = new wxPanel(notebook);
+  auto* general_box = new wxBoxSizer(wxVERTICAL);
 
   auto* grid = new wxFlexGridSizer(2, 10, 12);
   grid->AddGrowableCol(1, 1);
 
-  auto* open_lbl = new wxStaticText(&dlg, wxID_ANY, "Open Scripts In:");
-  auto* open_choice = new wxChoice(&dlg, wxID_ANY);
+  auto* open_lbl = new wxStaticText(general, wxID_ANY, "Open Scripts In:");
+  auto* open_choice = new wxChoice(general, wxID_ANY);
   open_choice->Append("Built-in code editor");
   open_choice->Append("External editor");
   open_choice->SetSelection(scene.Settings().open_scripts_in_editor ? 0 : 1);
 
-  auto* ed_lbl = new wxStaticText(&dlg, wxID_ANY, "External Script Editor:");
+  auto* ed_lbl = new wxStaticText(general, wxID_ANY, "External Script Editor:");
   auto* ed_ctrl = new wxTextCtrl(
-      &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().external_editor));
+      general, wxID_ANY, wxString::FromUTF8(scene.Settings().external_editor));
   ed_ctrl->SetToolTip(
       "Command template with {project} and {file} placeholders. Leave empty "
       "for system default app.");
 
-  auto* preset_lbl = new wxStaticText(&dlg, wxID_ANY, "Presets:");
+  auto* preset_lbl = new wxStaticText(general, wxID_ANY, "Presets:");
   auto* preset_row = new wxBoxSizer(wxHORIZONTAL);
   auto add_preset = [&](const char* name, const char* cmd) {
-    auto* btn = new wxButton(&dlg, wxID_ANY, name);
+    auto* btn = new wxButton(general, wxID_ANY, name);
     ApplyButtonPadding(btn, 8);
     btn->Bind(wxEVT_BUTTON,
               [ed_ctrl, cmd](wxCommandEvent&) { ed_ctrl->SetValue(cmd); });
@@ -503,17 +516,17 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   add_preset("Neovim", "nvim {file}");
   add_preset("Sublime", "subl {project} {file}");
 
-  auto* vim_lbl = new wxStaticText(&dlg, wxID_ANY, "Keybindings:");
-  auto* vim_check =
-      new wxCheckBox(&dlg, wxID_ANY, "Enable Vim mode in the built-in editor");
+  auto* vim_lbl = new wxStaticText(general, wxID_ANY, "Keybindings:");
+  auto* vim_check = new wxCheckBox(general, wxID_ANY,
+                                   "Enable Vim mode in the built-in editor");
   vim_check->SetValue(scene.Settings().vim_mode);
 
 #if defined(__APPLE__)
   wxStaticText* hud_lbl = nullptr;
   wxCheckBox* hud_check = nullptr;
   if (cmake_build::IsDebugBuild()) {
-    hud_lbl = new wxStaticText(&dlg, wxID_ANY, "Debug Play FPS:");
-    hud_check = new wxCheckBox(&dlg, wxID_ANY,
+    hud_lbl = new wxStaticText(general, wxID_ANY, "Debug Play FPS:");
+    hud_check = new wxCheckBox(general, wxID_ANY,
                                "Show the Metal performance HUD in the game");
     hud_check->SetValue(scene.Settings().show_metal_hud);
     hud_check->SetToolTip(
@@ -522,13 +535,13 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   }
 #endif
 
-  auto* lore_exe_lbl = new wxStaticText(&dlg, wxID_ANY, "Lore Executable:");
+  auto* lore_exe_lbl = new wxStaticText(general, wxID_ANY, "Lore Executable:");
   auto* lore_exe_ctrl = new wxTextCtrl(
-      &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_executable));
+      general, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_executable));
 
-  auto* lore_srv_lbl = new wxStaticText(&dlg, wxID_ANY, "Lore Server URL:");
+  auto* lore_srv_lbl = new wxStaticText(general, wxID_ANY, "Lore Server URL:");
   auto* lore_srv_ctrl = new wxTextCtrl(
-      &dlg, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_server));
+      general, wxID_ANY, wxString::FromUTF8(scene.Settings().lore_server));
 
   grid->Add(open_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(open_choice, 0, wxEXPAND);
@@ -548,16 +561,210 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   grid->Add(lore_exe_ctrl, 1, wxEXPAND);
   grid->Add(lore_srv_lbl, 0, wxALIGN_CENTER_VERTICAL);
   grid->Add(lore_srv_ctrl, 1, wxEXPAND);
-  root->Add(grid, 0, wxEXPAND | wxALL, 14);
+  general_box->Add(grid, 0, wxEXPAND | wxALL, 14);
 
   auto sync_external_enabled = [&]() {
     const bool external = open_choice->GetSelection() == 1;
     ed_ctrl->Enable(external);
     preset_row->ShowItems(external);
+    general->Layout();
   };
   open_choice->Bind(wxEVT_CHOICE,
                     [&](wxCommandEvent&) { sync_external_enabled(); });
   sync_external_enabled();
+
+  general->SetSizer(general_box);
+  notebook->AddPage(general, "General");
+
+  // ---- MCP tab: the local MCP server for AI tools (Claude Code). ----
+  auto* mcp = new wxPanel(notebook);
+  auto* mcp_box = new wxBoxSizer(wxVERTICAL);
+
+  auto* enable_check = new wxCheckBox(mcp, wxID_ANY, "Enable MCP server");
+  enable_check->SetName("mcp_enable");
+  enable_check->SetValue(scene.Settings().mcp_enabled);
+  enable_check->SetToolTip(
+      "Exposes the open project to AI tools over a local HTTP endpoint "
+      "(127.0.0.1). The server runs while the editor is open.");
+
+  auto* mcp_grid = new wxFlexGridSizer(2, 8, 10);
+  mcp_grid->AddGrowableCol(1, 1);
+
+  auto* port_lbl = new wxStaticText(mcp, wxID_ANY, "Port:");
+  auto* port_row = new wxBoxSizer(wxHORIZONTAL);
+  auto* port_ctrl = new wxSpinCtrl(
+      mcp, wxID_ANY, "49152", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
+      1024, 65535, std::clamp(scene.Settings().mcp_port, 1024, 65535));
+  port_ctrl->SetName("mcp_port");
+  port_ctrl->SetToolTip("Fixed port for the MCP server.");
+  auto* ephemeral_check =
+      new wxCheckBox(mcp, wxID_ANY, "Pick a free port automatically");
+  ephemeral_check->SetName("mcp_ephemeral");
+  ephemeral_check->SetValue(scene.Settings().mcp_ephemeral);
+  ephemeral_check->SetToolTip(
+      "The server picks an unused port each time it starts; the fixed Port "
+      "value is ignored. Ports below 1024 are never used.");
+  port_row->Add(port_ctrl, 0, wxRIGHT, 8);
+  port_row->Add(ephemeral_check, 0, wxALIGN_CENTER_VERTICAL);
+
+  auto* access_lbl = new wxStaticText(mcp, wxID_ANY, "Access Mode:");
+  auto* access_choice = new wxChoice(mcp, wxID_ANY);
+  access_choice->SetName("mcp_access");
+  access_choice->Append("Read-Only");
+  access_choice->Append("Allow Scene Edits");
+  access_choice->SetSelection(scene.Settings().mcp_allow_edits ? 1 : 0);
+  access_choice->SetToolTip(
+      "Allow Scene Edits lets MCP clients create and change scene nodes "
+      "(opt in; the default is read-only).");
+
+  mcp_grid->Add(port_lbl, 0, wxALIGN_CENTER_VERTICAL);
+  mcp_grid->Add(port_row, 1, wxEXPAND);
+  mcp_grid->Add(access_lbl, 0, wxALIGN_CENTER_VERTICAL);
+  mcp_grid->Add(access_choice, 1, wxEXPAND);
+
+  auto* write_config_check =
+      new wxCheckBox(mcp, wxID_ANY, "Auto-write .mcp.json");
+  write_config_check->SetName("mcp_write_config");
+  write_config_check->SetValue(scene.Settings().mcp_write_config);
+  write_config_check->SetToolTip(
+      "While the server runs, adds a 'mercury' entry (URL + bearer token) to "
+      ".mcp.json in the project folder so Claude Code finds it, and removes "
+      "it when the project closes. The file contains a local token: keep it "
+      "out of version control.");
+
+  auto* status = new wxStaticText(mcp, wxID_ANY, wxEmptyString);
+  status->SetName("mcp_status");
+  // Room for the longest state so the layout below does not jump.
+  status->SetMinSize(wxSize(-1, status->GetCharHeight() + 4));
+
+  auto* url_ctrl =
+      new wxTextCtrl(mcp, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                     wxDefaultSize, wxTE_READONLY);
+  url_ctrl->SetName("mcp_url");
+  url_ctrl->SetToolTip(
+      "The MCP endpoint URL. With \"Pick a free port automatically\", the "
+      "port is chosen when the server starts.");
+  auto* url_copy = new wxButton(mcp, wxID_ANY, "Copy");
+  auto* url_row = new wxBoxSizer(wxHORIZONTAL);
+  url_row->Add(url_ctrl, 1, wxEXPAND | wxRIGHT, 6);
+  url_row->Add(url_copy, 0, wxALIGN_CENTER_VERTICAL);
+
+  auto* command_ctrl = new wxTextCtrl(
+      mcp, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+      wxTE_MULTILINE | wxTE_READONLY | wxTE_NO_VSCROLL | wxBORDER_SIMPLE);
+  command_ctrl->SetName("mcp_command");
+  command_ctrl->SetFont(MonospaceFont());
+  command_ctrl->SetMinSize(wxSize(-1, command_ctrl->GetCharHeight() * 3));
+  auto* command_copy = new wxButton(mcp, wxID_ANY, "Copy");
+  auto* command_row = new wxBoxSizer(wxHORIZONTAL);
+  command_row->Add(command_ctrl, 1, wxEXPAND | wxRIGHT, 6);
+  command_row->Add(command_copy, 0, wxALIGN_CENTER_VERTICAL);
+
+  auto* regen_btn = new wxButton(mcp, wxID_ANY, "Regenerate Token");
+  regen_btn->SetName("mcp_regen");
+  regen_btn->SetToolTip(
+      "Takes effect immediately. Generates a new bearer token: the running "
+      "server restarts and .mcp.json is rewritten, so clients registered "
+      "with the old command stop working until you copy the command again.");
+
+  auto copy_text = [](const wxString& text) {
+    if (wxTheClipboard->Open()) {
+      wxTheClipboard->SetData(new wxTextDataObject(text));
+      // Flush keeps the text on the clipboard after this process exits
+      // (X11 loses clipboard content owned by a dead process otherwise).
+      wxTheClipboard->Flush();
+      wxTheClipboard->Close();
+    }
+  };
+  url_copy->Bind(wxEVT_BUTTON, [url_ctrl, copy_text](wxCommandEvent&) {
+    copy_text(url_ctrl->GetValue());
+  });
+  command_copy->Bind(wxEVT_BUTTON, [command_ctrl, copy_text](wxCommandEvent&) {
+    copy_text(command_ctrl->GetValue());
+  });
+
+  // With "Pick a free port automatically" on and nothing running, the port
+  // is not known yet, so there is no real URL to copy.
+  const wxString kEphemeralPlaceholder =
+      "http://127.0.0.1:<chosen when the server starts>/mcp";
+  auto current_url = [&]() -> wxString {
+    if (scene.Mcp().Running()) {
+      const wxString live = wxString::FromUTF8(scene.Mcp().Url());
+      if (!live.empty()) return live;
+    }
+    if (ephemeral_check->GetValue()) return kEphemeralPlaceholder;
+    return "http://127.0.0.1:" + std::to_string(port_ctrl->GetValue()) + "/mcp";
+  };
+  auto has_real_url = [&]() {
+    if (!ephemeral_check->GetValue()) return true;
+    return scene.Mcp().Running() &&
+           !wxString::FromUTF8(scene.Mcp().Url()).empty();
+  };
+  auto command_line = [&]() {
+    std::string token = scene.Settings().mcp_token;
+    if (token.empty()) token = "<generated when the server is enabled>";
+    return wxString::Format(
+        "claude mcp add --transport http mercury %s --header "
+        "\"Authorization: Bearer %s\"",
+        current_url(), token);
+  };
+  auto refresh_mcp = [&]() {
+    port_ctrl->Enable(!ephemeral_check->GetValue());
+    const bool real_url = has_real_url();
+    url_ctrl->SetValue(current_url());
+    command_ctrl->SetValue(command_line());
+    url_copy->Enable(real_url);
+    command_copy->Enable(real_url);
+    // The token exists only once the host generated it (first enable); an
+    // empty token means nothing has been issued to rotate yet.
+    regen_btn->Enable(!scene.Settings().mcp_token.empty());
+    if (scene.Mcp().Running()) {
+      status->SetLabel("Running at " + wxString::FromUTF8(scene.Mcp().Url()));
+      status->SetForegroundColour(
+          wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+    } else {
+      const std::string error = scene.Mcp().LastError();
+      if (error.empty()) {
+        status->SetLabel("Stopped");
+        status->SetForegroundColour(
+            wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+      } else {
+        status->SetLabel("Error: " + wxString::FromUTF8(error));
+        status->SetForegroundColour(Colors::kAxisX);
+      }
+    }
+  };
+  regen_btn->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
+    scene.Mcp().RegenerateToken();
+    refresh_mcp();
+  });
+  ephemeral_check->Bind(wxEVT_CHECKBOX,
+                        [&](wxCommandEvent&) { refresh_mcp(); });
+  port_ctrl->Bind(wxEVT_SPINCTRL, [&](wxSpinEvent&) { refresh_mcp(); });
+  port_ctrl->Bind(wxEVT_TEXT, [&](wxCommandEvent&) { refresh_mcp(); });
+
+  // The server state can change while the dialog is open; follow it.
+  wxTimer status_timer;
+  status_timer.Bind(wxEVT_TIMER, [&](wxTimerEvent&) { refresh_mcp(); });
+  status_timer.Start(1000);
+  refresh_mcp();
+
+  mcp_box->Add(enable_check, 0, wxALL, 14);
+  mcp_box->Add(mcp_grid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 14);
+  mcp_box->Add(write_config_check, 0, wxLEFT | wxRIGHT, 14);
+  mcp_box->Add(status, 0, wxLEFT | wxRIGHT | wxTOP, 14);
+  mcp_box->Add(url_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
+  mcp_box->Add(command_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
+  mcp_box->Add(
+      new wxStaticText(mcp, wxID_ANY,
+                       "Run /mcp in Claude Code to verify the connection."),
+      0, wxLEFT | wxRIGHT | wxTOP, 10);
+  mcp_box->Add(regen_btn, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+  mcp_box->AddSpacer(4);
+  mcp->SetSizer(mcp_box);
+  notebook->AddPage(mcp, "MCP");
+
+  root->Add(notebook, 1, wxEXPAND | wxALL, 14);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* ok = new wxButton(&dlg, wxID_OK, "Save Settings");
@@ -581,7 +788,15 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   scene.Settings().external_editor = ed_ctrl->GetValue().ToStdString();
   scene.Settings().lore_executable = lore_exe_ctrl->GetValue().ToStdString();
   scene.Settings().lore_server = lore_srv_ctrl->GetValue().ToStdString();
+  // The MCP host owns the token (it generates the first one on enable); the
+  // dialog only forwards the user's choices.
+  scene.Settings().mcp_enabled = enable_check->GetValue();
+  scene.Settings().mcp_port = port_ctrl->GetValue();
+  scene.Settings().mcp_ephemeral = ephemeral_check->GetValue();
+  scene.Settings().mcp_allow_edits = access_choice->GetSelection() == 1;
+  scene.Settings().mcp_write_config = write_config_check->GetValue();
   scene.Settings().Save();
+  scene.Mcp().ApplySettings();
   return true;
 }
 
