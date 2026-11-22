@@ -265,7 +265,8 @@ if (MERCURY_BUILD_EDITOR)
     add_library(mercury_editor_lib STATIC ${MERCURY_EDITOR_SOURCES})
     target_include_directories(mercury_editor_lib PUBLIC
             "${CMAKE_CURRENT_SOURCE_DIR}/editor")
-    target_link_libraries(mercury_editor_lib PUBLIC mercury mercury_wx)
+    target_link_libraries(mercury_editor_lib PUBLIC mercury mercury_wx mercury_rust_editor)
+    add_dependencies(mercury_editor_lib mercury_rust_editor_build)
     # lore_vcs.cc parses .lore/config.toml with toml++; the library is internal
     # (not installed), so the PRIVATE link keeps toml++ out of the SDK surface.
     target_link_libraries(mercury_editor_lib PRIVATE mercury_tomlplusplus)
@@ -378,7 +379,6 @@ if (MERCURY_BUILD_TESTS)
     function(mercury_add_test TARGET)
         cmake_parse_arguments(TEST "EDITOR" "" "" ${ARGN})
         add_executable(${TARGET} ${TEST_UNPARSED_ARGUMENTS})
-        target_link_libraries(${TARGET} PRIVATE mercury GTest::gtest_main)
         target_compile_definitions(${TARGET} PRIVATE
                 MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
                 MERCURY_TEST_CACHE_DIR="${MERCURY_TEST_CACHE_DIR}"
@@ -387,11 +387,14 @@ if (MERCURY_BUILD_TESTS)
         set_target_properties(${TARGET} PROPERTIES EXCLUDE_FROM_ALL TRUE)
         gtest_discover_tests(${TARGET} DISCOVERY_MODE PRE_TEST)
         if (TEST_EDITOR)
-            mercury_link_rust(${TARGET} EDITOR)
+            target_link_libraries(${TARGET} PRIVATE mercury_editor_lib)
             mercury_link_mcp_tools(${TARGET})
+            mercury_link_rust(${TARGET} EDITOR)
         else ()
+            target_link_libraries(${TARGET} PRIVATE mercury)
             mercury_link_rust(${TARGET})
         endif ()
+        target_link_libraries(${TARGET} PRIVATE GTest::gtest_main)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} ${TARGET} PARENT_SCOPE)
     endfunction()
 
@@ -450,8 +453,8 @@ if (MERCURY_BUILD_TESTS)
     if (MERCURY_BUILD_EDITOR)
         add_executable(editor_smoke tests/editor_smoke.cc)
         target_link_libraries(editor_smoke PRIVATE mercury_editor_lib)
-        mercury_link_rust(editor_smoke EDITOR)
         mercury_link_mcp_tools(editor_smoke)
+        mercury_link_rust(editor_smoke EDITOR)
         set_target_properties(editor_smoke PROPERTIES EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} editor_smoke)
 
@@ -468,8 +471,8 @@ if (MERCURY_BUILD_TESTS)
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 editor_extension_unload_smoke)
-        mercury_link_rust(editor_extension_unload_smoke EDITOR)
         mercury_link_mcp_tools(editor_extension_unload_smoke)
+        mercury_link_rust(editor_extension_unload_smoke EDITOR)
 
         # The New Script dialog is modal; this smoke drives it with CallAfter
         # and creates all four kinds through EditorScene.
@@ -477,8 +480,8 @@ if (MERCURY_BUILD_TESTS)
                 tests/new_script_dialog_smoke.cc)
         target_link_libraries(new_script_dialog_smoke
                 PRIVATE mercury_editor_lib)
-        mercury_link_rust(new_script_dialog_smoke EDITOR)
         mercury_link_mcp_tools(new_script_dialog_smoke)
+        mercury_link_rust(new_script_dialog_smoke EDITOR)
         set_target_properties(new_script_dialog_smoke PROPERTIES
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
@@ -490,8 +493,8 @@ if (MERCURY_BUILD_TESTS)
                 tests/mcp_prefs_dialog_smoke.cc)
         target_link_libraries(mcp_prefs_dialog_smoke
                 PRIVATE mercury_editor_lib)
-        mercury_link_rust(mcp_prefs_dialog_smoke EDITOR)
         mercury_link_mcp_tools(mcp_prefs_dialog_smoke)
+        mercury_link_rust(mcp_prefs_dialog_smoke EDITOR)
         set_target_properties(mcp_prefs_dialog_smoke PROPERTIES
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
@@ -502,17 +505,14 @@ if (MERCURY_BUILD_TESTS)
                 tests/lore_config_test.cc
                 tests/project_scaffold_test.cc
                 tests/test_paths.h)
-        target_link_libraries(editor_test PRIVATE mercury_editor_lib)
 
         mercury_add_test(project_trust_test EDITOR
                 tests/project_trust_test.cc)
-        target_link_libraries(project_trust_test PRIVATE mercury_editor_lib)
 
         # The MCP host: registry dispatch, mode re-check, .mcp.json handling,
         # and the disabled-means-no-socket rule.
         mercury_add_test(mcp_host_test EDITOR
                 tests/mcp_host_test.cc)
-        target_link_libraries(mcp_host_test PRIVATE mercury_editor_lib)
         # The test includes <nlohmann/json.hpp> directly; mercury_editor_lib
         # links it PRIVATE, so the usage requirement does not propagate.
         target_link_libraries(mcp_host_test PRIVATE nlohmann_json::nlohmann_json)
@@ -526,14 +526,13 @@ if (MERCURY_BUILD_TESTS)
         if (MCP_TOOLS_TESTS)
             mercury_add_test(mcp_tools_test EDITOR ${MCP_TOOLS_TESTS}
                     tests/mcp_tools_fixture.h)
-            target_link_libraries(mcp_tools_test PRIVATE mercury_editor_lib
+            target_link_libraries(mcp_tools_test PRIVATE
                     nlohmann_json::nlohmann_json)
         endif ()
 
         mercury_add_test(script_editor_test EDITOR
                 tests/script_editor_test.cc
                 tests/test_paths.h)
-        target_link_libraries(script_editor_test PRIVATE mercury_editor_lib)
 
         # Tiny modules for editor_extension_test: one valid, one with a
         # deliberately wrong ABI. They call no editor symbols.
@@ -562,7 +561,6 @@ if (MERCURY_BUILD_TESTS)
 
         mercury_add_test(editor_extension_test EDITOR
                 tests/editor_extension_test.cc)
-        target_link_libraries(editor_extension_test PRIVATE mercury_editor_lib)
         target_compile_definitions(editor_extension_test PRIVATE
                 MERCURY_TEST_EXTENSION_PATH="$<TARGET_FILE:editor_test_extension>"
                 MERCURY_TEST_EXTENSION_BAD_ABI_PATH="$<TARGET_FILE:editor_test_extension_bad_abi>")
