@@ -42,6 +42,7 @@ use serde_json::{Map, Value};
 
 pub mod core;
 pub mod scene_read;
+pub mod scene_write;
 
 // Argument types shared by the tool groups: every tool that takes a node
 // reference uses `NodeSelector` so they all advertise the same schema.
@@ -145,6 +146,7 @@ impl ToolSpec {
 pub fn all() -> Vec<ToolSpec> {
     let mut tools = core::tools();
     tools.extend(scene_read::tools());
+    tools.extend(scene_write::tools());
     tools
 }
 

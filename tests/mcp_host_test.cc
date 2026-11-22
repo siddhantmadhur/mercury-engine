@@ -665,17 +665,11 @@ TEST(McpHostTest, E2ePingAndServerInfoAnswerOverHttp) {
   EXPECT_TRUE(ConnectRefused(port)) << "something still listens on " << port;
 }
 
-// The "Write tool rejected in read-only mode" case is NOT covered over HTTP
-// here: the tool catalogue lives in Rust (mercury/mcp/src/tools), the real
-// catalogue has no Write-mode tool until Wave 2 adds one, and the Rust-only
-// Write spec the transport's unit tests use is compiled out of the archive
-// this binary links. The gate itself is tested in mercury_mcp's cargo tests
-// (the read-only test with a test-only Write spec). The HTTP case moves to T3
-// (#535): its apply_scene_operations is the first real Write tool. What this
-// test covers is the read-only server's
-// observable behaviour: it answers Read tools, reports read_only, and a tool
-// that only exists in the C++ registry is not reachable (the Rust catalogue is
-// the source of truth for what a client may call).
+// The read-only server's observable behaviour: it answers Read tools, reports
+// read_only, and a tool that only exists in the C++ registry is not reachable
+// (the Rust catalogue is the source of truth for what a client may call). The
+// rejection of a real Write tool over HTTP is the next test; the gate itself
+// is also covered in mercury_mcp's cargo tests (a test-only Write spec).
 TEST(McpHostTest, E2eReadOnlyServerAnswersReadToolsAndReportsReadOnly) {
   TestScene test(TempDir("mcp_e2e_readonly"));
   InlineDispatcherGuard dispatcher;
@@ -723,6 +717,109 @@ TEST(McpHostTest, E2eReadOnlyServerAnswersReadToolsAndReportsReadOnly) {
 
   test.scene.Mcp().Stop();
   EXPECT_TRUE(ConnectRefused(port)) << "something still listens on " << port;
+}
+
+// Swaps a registered tool for a counting stub for the test's duration and puts
+// the real handler back afterwards, so a test can prove whether the registry
+// was reached at all.
+class CountingToolGuard {
+ public:
+  explicit CountingToolGuard(const std::string& name) : name_(name) {
+    const mcp::ToolEntry* entry = ToolRegistry::Instance().Find(name);
+    if (!entry) return;
+    original_ = *entry;
+    ToolRegistry::Instance().Register(
+        name, original_.mode, [this](EditorScene&, const nlohmann::json&) {
+          calls_++;
+          return ToolResult{true, nlohmann::json{{"stub", true}}, {}};
+        });
+  }
+  ~CountingToolGuard() {
+    if (original_.handler) {
+      ToolRegistry::Instance().Register(name_, original_.mode,
+                                        original_.handler);
+    }
+  }
+  CountingToolGuard(const CountingToolGuard&) = delete;
+  CountingToolGuard& operator=(const CountingToolGuard&) = delete;
+
+  bool Installed() const { return static_cast<bool>(original_.handler); }
+  int Calls() const { return calls_; }
+
+ private:
+  std::string name_;
+  mcp::ToolEntry original_;
+  int calls_ = 0;
+};
+
+// The carry-over of #535: a Write tool of the real catalogue
+// (apply_scene_operations) over real HTTP. A read-only server answers the tool
+// error "read-only mode" and never reaches the registry; with edits allowed the
+// same call is forwarded (which also proves the counting stub is wired in).
+TEST(McpHostTest, E2eReadOnlyServerRejectsRealWriteToolsBeforeTheRegistry) {
+  TestScene test(TempDir("mcp_e2e_readonly_write"));
+  InlineDispatcherGuard dispatcher;
+  const char* const kWriteTools[] = {"apply_scene_operations", "save_map",
+                                     "undo", "redo"};
+  std::vector<std::unique_ptr<CountingToolGuard>> counters;
+  for (const char* name : kWriteTools) {
+    counters.push_back(std::make_unique<CountingToolGuard>(name));
+    ASSERT_TRUE(counters.back()->Installed())
+        << name << " is not registered in the editor's tool registry";
+  }
+  const size_t nodes_before = test.scene.GetMap().NodeCount();
+
+  auto call = [&](std::uint16_t port, const std::string& token, int id,
+                  const std::string& name) {
+    nlohmann::json arguments = nlohmann::json::object();
+    if (name == "apply_scene_operations") {
+      arguments["operations"] = nlohmann::json::array(
+          {nlohmann::json{{"op", "create"}, {"name", "ShouldNotExist"}}});
+    }
+    return ResponseJson(HttpPost(
+        port, token,
+        JsonRpc(id, "tools/call",
+                nlohmann::json{{"name", name},
+                               {"arguments", arguments},
+                               {"_meta", StatelessMeta()}})
+            .dump()));
+  };
+
+  {
+    const std::uint16_t port =
+        StartEphemeralServer(test, /*allow_edits=*/false);
+    ASSERT_NE(port, 0) << "the server did not start";
+    const std::string token = "Bearer " + test.scene.Settings().mcp_token;
+    int id = 1;
+    for (const char* name : kWriteTools) {
+      const nlohmann::json payload = call(port, token, id++, name);
+      ASSERT_TRUE(payload.contains("result")) << name << ": " << payload.dump();
+      EXPECT_EQ(payload["result"]["isError"], true) << name;
+      ASSERT_FALSE(payload["result"]["content"].empty()) << payload.dump();
+      EXPECT_EQ(payload["result"]["content"][0]["text"], "read-only mode")
+          << name;
+    }
+    for (const auto& counter : counters) {
+      EXPECT_EQ(counter->Calls(), 0)
+          << "a read-only server must not reach the registry";
+    }
+    EXPECT_EQ(test.scene.GetMap().NodeCount(), nodes_before);
+    test.scene.Mcp().Stop();
+    EXPECT_TRUE(ConnectRefused(port));
+  }
+
+  {
+    const std::uint16_t port = StartEphemeralServer(test, /*allow_edits=*/true);
+    ASSERT_NE(port, 0) << "the server did not restart";
+    const std::string token = "Bearer " + test.scene.Settings().mcp_token;
+    const nlohmann::json payload =
+        call(port, token, 10, "apply_scene_operations");
+    ASSERT_TRUE(payload.contains("result")) << payload.dump();
+    EXPECT_EQ(payload["result"]["isError"], false) << payload.dump();
+    EXPECT_EQ(counters[0]->Calls(), 1)
+        << "with edits allowed the call is forwarded to the registry";
+    test.scene.Mcp().Stop();
+  }
 }
 
 TEST(McpHostTest, E2eSecurityChecksRejectBadTokenOriginAndHost) {

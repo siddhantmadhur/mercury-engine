@@ -169,6 +169,10 @@ class EditorScene : public MapScene {
   // transform (which bumps MapRevision every drag tick) does not rebuild the
   // whole tree.
   uint64_t HierarchyRevision() const { return hierarchy_revision_; }
+  // For code that adds, removes, renames or reparents nodes in GetMap()
+  // directly (the MCP scene tools) instead of through CreateNode and friends:
+  // tells the hierarchy panel to rebuild.
+  void NotifyHierarchyChanged() { ++hierarchy_revision_; }
   // Bumped whenever the rendered scene/overlay view changes (camera, tools,
   // selection, scene content) so the viewport repaints only when needed.
   uint64_t ViewRevision() const { return view_revision_; }
