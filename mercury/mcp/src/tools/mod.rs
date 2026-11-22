@@ -44,6 +44,7 @@ pub mod assets_build;
 pub mod core;
 pub mod scene_read;
 pub mod scene_write;
+pub mod spatial_capture;
 
 // Argument types shared by the tool groups: every tool that takes a node
 // reference uses `NodeSelector` so they all advertise the same schema.
@@ -149,6 +150,7 @@ pub fn all() -> Vec<ToolSpec> {
     tools.extend(scene_read::tools());
     tools.extend(scene_write::tools());
     tools.extend(assets_build::tools());
+    tools.extend(spatial_capture::tools());
     tools
 }
 

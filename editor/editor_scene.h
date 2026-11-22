@@ -111,6 +111,39 @@ class EditorScene : public MapScene {
     std::string label;
   };
 
+  /**
+   * @brief The whole Scene-viewport camera state, as one value
+   *
+   * Tools that move the camera (the MCP `capture_viewport` tool) take a copy
+   * with GetViewState(), change it with SetViewState(), and restore the copy
+   * afterwards, so a capture never leaves the editor looking somewhere else.
+   */
+  struct ViewState {
+    bool view_2d = true;
+    glm::vec3 target = glm::vec3(0.0f);
+    float distance = 120.0f;
+    float yaw = 35.0f;
+    float pitch = -25.0f;
+    glm::vec2 viewport_size = {1.0f, 1.0f};
+  };
+
+  /**
+   * @brief Oriented bounds of a node plus its world-axis-aligned box
+   *
+   * `model` takes local coordinates into world space; `local_min` / `local_max`
+   * are the box in that space (collider, physics mesh or model bounds).
+   * `world_min` / `world_max` are the eight transformed corners wrapped in an
+   * AABB. Unlike the private picking bounds, model nodes with a RenderMesh are
+   * included here; editor picking and gizmos are unchanged.
+   */
+  struct NodeWorldBounds {
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::vec3 local_min = glm::vec3(0.0f);
+    glm::vec3 local_max = glm::vec3(0.0f);
+    glm::vec3 world_min = glm::vec3(0.0f);
+    glm::vec3 world_max = glm::vec3(0.0f);
+  };
+
   explicit EditorScene(std::filesystem::path initial_project = {},
                        std::string initial_map = {});
   ~EditorScene() override;
@@ -275,6 +308,19 @@ class EditorScene : public MapScene {
   float GetCameraPitch() const { return camera_pitch_; }
   float GetCameraDistance() const { return camera_distance_; }
   glm::vec3 GetCameraPosition() const { return CameraPosition(); }
+  // Snapshot / restore of the whole Scene-viewport camera in one call. Used by
+  // tools that temporarily change the view; restoring replays it into the
+  // default camera and bumps the view revision so the viewport repaints.
+  ViewState GetViewState() const;
+  void SetViewState(const ViewState& state);
+  // World-space bounds of a node from its collider, physics mesh or model,
+  // including the oriented box used by the spatial MCP queries. False when the
+  // node has no usable bounds. Does not affect picking or gizmo drawing.
+  bool GetNodeWorldBounds(kEntityId entity, NodeWorldBounds& out);
+  bool GetNodeWorldBounds(const MapNode& node, NodeWorldBounds& out);
+  // The Scene viewport's view-projection matrix, for software overlays drawn
+  // onto a captured frame; the same math picking and gizmos use.
+  glm::mat4 GetSceneViewProjection() const { return GetViewProjection(); }
   const char* GetHintText() const;
   void FrameSelected();
   void FrameMap();

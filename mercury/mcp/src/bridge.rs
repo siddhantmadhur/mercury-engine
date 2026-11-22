@@ -1409,13 +1409,14 @@ mod tests {
 
     #[test]
     fn specs_default_to_the_default_timeout() {
-        // Every tool uses the default reply timeout except build_scripts,
-        // which legitimately waits longer for a child process.
+        // Every tool uses the default reply timeout except build_scripts (a
+        // child process) and capture_viewport (waits for a rendered frame),
+        // which legitimately wait longer.
         for spec in tools::all() {
-            let expected = if spec.name == "build_scripts" {
-                300
-            } else {
-                tools::DEFAULT_TIMEOUT_SECS
+            let expected = match spec.name {
+                "build_scripts" => 300,
+                "capture_viewport" => 60,
+                _ => tools::DEFAULT_TIMEOUT_SECS,
             };
             assert_eq!(
                 spec.timeout_secs, expected,

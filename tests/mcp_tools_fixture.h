@@ -96,6 +96,9 @@ class McpToolFixture {
       if (entry.path().extension() == ".mproj") mproj = entry.path();
     }
     EXPECT_TRUE(scene_->OpenProject(mproj)) << "opening " << mproj;
+    // The editor calls this every frame; it runs SyncFromMap so the map nodes
+    // have live entities and components for the tools to query.
+    scene_->OnFrame(0.0);
   }
 
   ~McpToolFixture() {
