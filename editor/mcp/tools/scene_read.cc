@@ -50,8 +50,9 @@ std::string Closest(const std::string& word,
 }
 
 std::string DidYouMean(const std::string& suggestion) {
-  return suggestion.empty() ? std::string()
-                            : std::format(" (did you mean \"{}\"?)", suggestion);
+  return suggestion.empty()
+             ? std::string()
+             : std::format(" (did you mean \"{}\"?)", suggestion);
 }
 
 // An optional string argument. False with `error` when present but not a
@@ -90,7 +91,8 @@ bool ReadLimit(const json& args, int fallback, size_t* out,
     *error = "\"limit\" must be an integer from 1 to 1000";
     return false;
   }
-  *out = static_cast<size_t>(std::min<int64_t>(limit.get<int64_t>(), kMaxLimit));
+  *out =
+      static_cast<size_t>(std::min<int64_t>(limit.get<int64_t>(), kMaxLimit));
   return true;
 }
 
@@ -124,7 +126,8 @@ bool GlobMatch(const std::string& pattern, const std::string& text) {
 
 json Vec3Json(const glm::vec3& v) { return json::array({v.x, v.y, v.z}); }
 
-// ------------------------------------------------------------- get_editor_state
+// -------------------------------------------------------------
+// get_editor_state
 
 ToolResult GetEditorState(EditorScene& scene, const json&) {
   json out;
@@ -255,8 +258,7 @@ ToolResult FindNodes(EditorScene& scene, const json& args) {
   // A filter value no node has and nothing in the project defines is almost
   // certainly a typo: say so instead of returning an empty list.
   if (matches == 0) {
-    if (component &&
-        !TypeRegistry::Instance().FindComponent(*component)) {
+    if (component && !TypeRegistry::Instance().FindComponent(*component)) {
       std::vector<std::string> names;
       for (const ComponentInfo* info : TypeRegistry::Instance().Components()) {
         names.push_back(info->name);
@@ -285,8 +287,9 @@ ToolResult FindNodes(EditorScene& scene, const json& args) {
 
 ToolResult GetNode(EditorScene& scene, const json& args) {
   if (!args.contains("node")) {
-    return Fail("missing \"node\": give {\"uid\": <number or string>} or "
-                "{\"path\": \"Root/Child\"}");
+    return Fail(
+        "missing \"node\": give {\"uid\": <number or string>} or "
+        "{\"path\": \"Root/Child\"}");
   }
   std::string error;
   bool include_components = true, include_children = false;
@@ -374,8 +377,9 @@ ToolResult ReadConsole(EditorScene& scene, const json& args) {
   if (args.contains("cursor") && !args.at("cursor").is_null()) {
     const json& value = args.at("cursor");
     if (!value.is_number_integer() || value.get<int64_t>() < 0) {
-      return Fail("\"cursor\" must be a non-negative integer: the "
-                  "next_cursor of a previous read_console call");
+      return Fail(
+          "\"cursor\" must be a non-negative integer: the "
+          "next_cursor of a previous read_console call");
     }
     cursor = value.get<uint64_t>();
     if (*cursor > console.LatestCursor()) {

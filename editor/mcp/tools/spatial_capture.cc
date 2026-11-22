@@ -49,11 +49,11 @@ namespace Mercury {
 
 namespace {
 
-using nlohmann::json;
 using mcp::FullNodePath;
 using mcp::Png;
 using mcp::ToolDone;
 using mcp::ToolResult;
+using nlohmann::json;
 
 constexpr float kFovDegrees = 60.0f;
 constexpr float kDefaultRayDistance = 10000.0f;
@@ -67,9 +67,7 @@ json Error(std::string message, const std::string& suggestion = {}) {
   return out;
 }
 
-json Vec3Json(const glm::vec3& v) {
-  return json::array({v.x, v.y, v.z});
-}
+json Vec3Json(const glm::vec3& v) { return json::array({v.x, v.y, v.z}); }
 
 bool ParseVec3(const json& value, glm::vec3* out, std::string* error,
                const char* name) {
@@ -135,7 +133,8 @@ bool NodeVisible(const NodeInfo* info, uint32_t layer_mask) {
 }
 
 json NodeSummary(const MapNode& node) {
-  return json{{"uid", node.uid}, {"name", node.name}, {"path", FullNodePath(node)}};
+  return json{
+      {"uid", node.uid}, {"name", node.name}, {"path", FullNodePath(node)}};
 }
 
 json BoundsJson(const EditorScene::NodeWorldBounds& bounds) {
@@ -149,7 +148,8 @@ json BoundsJson(const EditorScene::NodeWorldBounds& bounds) {
   // glm::value_ptr so the 16 numbers can be rebuilt directly.
   json matrix = json::array();
   for (int column = 0; column < 4; column++) {
-    for (int row = 0; row < 4; row++) matrix.push_back(bounds.model[column][row]);
+    for (int row = 0; row < 4; row++)
+      matrix.push_back(bounds.model[column][row]);
   }
   out["model"] = matrix;
   return out;
@@ -197,7 +197,8 @@ std::optional<RayBoxHit> RayBox(glm::vec3 origin, glm::vec3 direction,
 
 ToolResult QueryBounds(EditorScene& scene, const json& args) {
   if (!args.contains("node")) {
-    return ToolResult{false, Error("query_scene_spatial mode \"bounds\" requires \"node\"")};
+    return ToolResult{
+        false, Error("query_scene_spatial mode \"bounds\" requires \"node\"")};
   }
   std::string error;
   std::string suggestion;
@@ -205,7 +206,8 @@ ToolResult QueryBounds(EditorScene& scene, const json& args) {
   if (!node) return ToolResult{false, Error(error, suggestion)};
   EditorScene::NodeWorldBounds bounds;
   if (!scene.GetNodeWorldBounds(*node, bounds)) {
-    return ToolResult{false, Error("node has no bounds to query: " + FullNodePath(*node))};
+    return ToolResult{
+        false, Error("node has no bounds to query: " + FullNodePath(*node))};
   }
   json out = BoundsJson(bounds);
   out["node"] = NodeSummary(*node);
@@ -214,11 +216,14 @@ ToolResult QueryBounds(EditorScene& scene, const json& args) {
 
 ToolResult QueryNodesInBox(EditorScene& scene, const json& args) {
   if (!args.contains("box")) {
-    return ToolResult{false, Error("query_scene_spatial mode \"nodes_in_box\" requires \"box\"")};
+    return ToolResult{
+        false,
+        Error("query_scene_spatial mode \"nodes_in_box\" requires \"box\"")};
   }
   const json& box = args["box"];
   if (!box.is_object() || !box.contains("min") || !box.contains("max")) {
-    return ToolResult{false, Error("\"box\" must be {\"min\": [x,y,z], \"max\": [x,y,z]}")};
+    return ToolResult{
+        false, Error("\"box\" must be {\"min\": [x,y,z], \"max\": [x,y,z]}")};
   }
   glm::vec3 min, max;
   std::string error;
@@ -227,7 +232,8 @@ ToolResult QueryNodesInBox(EditorScene& scene, const json& args) {
     return ToolResult{false, Error(error)};
   }
   if (glm::any(glm::lessThan(max, min))) {
-    return ToolResult{false, Error("\"box.max\" must not be less than \"box.min\"")};
+    return ToolResult{false,
+                      Error("\"box.max\" must not be less than \"box.min\"")};
   }
   uint32_t layer_mask = kAllLayers;
   if (!ParseLayerMask(args, &layer_mask, &error)) {
@@ -282,7 +288,8 @@ ToolResult QueryRaycast(EditorScene& scene, const json& args, bool ground) {
   if (args.contains("max_distance")) {
     if (!args["max_distance"].is_number() ||
         !std::isfinite(args["max_distance"].get<float>())) {
-      return ToolResult{false, Error("\"max_distance\" must be a finite number")};
+      return ToolResult{false,
+                        Error("\"max_distance\" must be a finite number")};
     }
     max_distance = args["max_distance"].get<float>();
     if (max_distance < 0.0f) {
@@ -328,8 +335,7 @@ ToolResult QueryRaycast(EditorScene& scene, const json& args, bool ground) {
     // scale and rotation).
     const glm::mat3 normal_matrix =
         glm::transpose(glm::inverse(glm::mat3(bounds.model)));
-    const glm::vec3 world_normal =
-        glm::normalize(normal_matrix * hit->normal);
+    const glm::vec3 world_normal = glm::normalize(normal_matrix * hit->normal);
 
     const glm::vec3 point = origin + direction * hit->t;
     json value = NodeSummary(node);
@@ -340,8 +346,9 @@ ToolResult QueryRaycast(EditorScene& scene, const json& args, bool ground) {
     if (info) value["layer"] = info->layer;
     hits.push_back({hit->t, std::move(value)});
   });
-  std::stable_sort(hits.begin(), hits.end(),
-                   [](const Hit& a, const Hit& b) { return a.distance < b.distance; });
+  std::stable_sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) {
+    return a.distance < b.distance;
+  });
 
   json list = json::array();
   for (Hit& hit : hits) list.push_back(std::move(hit.value));
@@ -360,9 +367,10 @@ ToolResult QuerySceneSpatial(EditorScene& scene, const json& args) {
   if (mode == "nodes_in_box") return QueryNodesInBox(scene, args);
   if (mode == "raycast") return QueryRaycast(scene, args, false);
   if (mode == "raycast_ground") return QueryRaycast(scene, args, true);
-  return ToolResult{false,
-                    Error("unknown query_scene_spatial mode \"" + mode +
-                          "\": expected bounds, nodes_in_box, raycast or raycast_ground")};
+  return ToolResult{
+      false,
+      Error("unknown query_scene_spatial mode \"" + mode +
+            "\": expected bounds, nodes_in_box, raycast or raycast_ground")};
 }
 
 // ----------------------------------------------------------- capture helper -
@@ -413,8 +421,8 @@ void DrawLine(std::vector<uint8_t>& rgba, int width, int height, glm::vec2 a,
               glm::vec2 b, const std::array<uint8_t, 4>& color) {
   if (!ClipLine(a, b, width, height)) return;
   const glm::vec2 delta = b - a;
-  const int steps = std::max(1, static_cast<int>(std::ceil(
-                                    glm::max(std::abs(delta.x), std::abs(delta.y)))));
+  const int steps = std::max(1, static_cast<int>(std::ceil(glm::max(
+                                    std::abs(delta.x), std::abs(delta.y)))));
   for (int i = 0; i <= steps; i++) {
     const float t = static_cast<float>(i) / steps;
     const int x = static_cast<int>(std::lround(a.x + delta.x * t));
@@ -480,7 +488,8 @@ struct CapturePlan {
   }
 
   EditorScene& scene;
-  // Expires when the scene starts shutting down; see EditorScene::LifetimeToken.
+  // Expires when the scene starts shutting down; see
+  // EditorScene::LifetimeToken.
   std::weak_ptr<const void> lifetime;
   EditorScene::ViewState saved;
   EditorScene::ViewState desired;
@@ -499,7 +508,8 @@ struct CapturePlan {
     std::vector<uint8_t> rgba;
     if (!host->CopyScenePixels(width, height, rgba, &frame_id) || width <= 0 ||
         height <= 0 || rgba.size() < static_cast<size_t>(width) * height * 4) {
-      return ToolResult{false, Error("could not copy scene pixels from the render host")};
+      return ToolResult{
+          false, Error("could not copy scene pixels from the render host")};
     }
 
     const glm::mat4 view_projection = scene.GetSceneViewProjection();
@@ -533,7 +543,8 @@ struct CapturePlan {
             },
             &png_bytes, width, height, 4, rgba.data(), width * 4) ||
         png_bytes.empty()) {
-      return ToolResult{false, Error("failed to encode the captured image as PNG")};
+      return ToolResult{false,
+                        Error("failed to encode the captured image as PNG")};
     }
 
     json out{{"width", width},
@@ -543,9 +554,10 @@ struct CapturePlan {
              {"colliders", colliders},
              {"highlight_count", highlights.size()},
              {"format", "png"},
-             {"camera", {{"position", Vec3Json(scene.GetCameraPosition())},
-                         {"target", Vec3Json(scene.GetCameraTarget())},
-                         {"fov", kFovDegrees}}}};
+             {"camera",
+              {{"position", Vec3Json(scene.GetCameraPosition())},
+               {"target", Vec3Json(scene.GetCameraTarget())},
+               {"fov", kFovDegrees}}}};
     return ToolResult{true, out, {Png{std::move(png_bytes), "viewport.png"}}};
   }
 };
@@ -588,7 +600,8 @@ bool ParsePreset(const json& args, CapturePlan* plan, std::string* error,
     plan->scene.GetMap().Visit([&](MapNode& node) {
       if (camera != entt::null || node.IsRoot()) return;
       const kEntityId entity = plan->scene.GetEntityForNode(node.uid);
-      auto* settings = plan->scene.Objects().GetProperty<CameraComponent>(entity);
+      auto* settings =
+          plan->scene.Objects().GetProperty<CameraComponent>(entity);
       if (settings && settings->enabled &&
           plan->scene.Objects().GetProperty<Transform>(entity)) {
         camera = entity;
@@ -646,9 +659,8 @@ bool ParsePreset(const json& args, CapturePlan* plan, std::string* error,
       !ParseDimension(args, "height", 720, &height, error)) {
     return false;
   }
-  desired.viewport_size =
-      glm::vec2(static_cast<float>(std::min(width, 1920)),
-                static_cast<float>(std::min(height, 1080)));
+  desired.viewport_size = glm::vec2(static_cast<float>(std::min(width, 1920)),
+                                    static_cast<float>(std::min(height, 1080)));
 
   plan->colliders = args.contains("colliders") && args["colliders"].is_boolean()
                         ? args["colliders"].get<bool>()
@@ -725,8 +737,8 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
     uint64_t before = 0;
     int tries = 0;
   };
-  auto pending = std::make_shared<Pending>(
-      Pending{plan, std::move(done), host, plan->lifetime, plan->saved_frame, 0});
+  auto pending = std::make_shared<Pending>(Pending{
+      plan, std::move(done), host, plan->lifetime, plan->saved_frame, 0});
   auto poll = std::make_shared<std::function<void()>>();
   *poll = [pending, poll]() {
     if (pending->lifetime.expired()) {

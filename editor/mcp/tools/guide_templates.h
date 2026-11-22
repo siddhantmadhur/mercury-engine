@@ -5,10 +5,10 @@
 /*
  * guide_templates.h
  *
- * The MCP guide templates (the .md files in editor/mcp/guides), embedded at build time:
- * cmake/EmbedMcpGuides.cmake turns them into a generated source that defines
- * these constants, so the editor needs no file lookup at run time. The
- * templates carry {{placeholders}} that tools/guides.cc fills from the open
+ * The MCP guide templates (the .md files in editor/mcp/guides), embedded at
+ * build time: cmake/EmbedMcpGuides.cmake turns them into a generated source
+ * that defines these constants, so the editor needs no file lookup at run time.
+ * The templates carry {{placeholders}} that tools/guides.cc fills from the open
  * project.
  *
  * INTERNAL header, not installed in the SDK (the whole mcp/tools folder is

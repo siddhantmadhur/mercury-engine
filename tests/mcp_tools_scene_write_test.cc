@@ -50,8 +50,7 @@ ToolResult Apply(McpToolFixture& fixture, json operations,
 // The node's JSON with components, by path; null when there is no such node.
 json NodeAt(McpToolFixture& fixture, const std::string& path) {
   std::string error;
-  MapNode* node =
-      ResolveNode(fixture.Scene(), json{{"path", path}}, &error);
+  MapNode* node = ResolveNode(fixture.Scene(), json{{"path", path}}, &error);
   if (!node) return nullptr;
   return NodeToJson(fixture.Scene(), *node, true);
 }
@@ -107,11 +106,11 @@ World WorldOf(McpToolFixture& fixture, const std::string& full_path) {
     const glm::vec3 position(t["position"][0].get<float>(),
                              t["position"][1].get<float>(),
                              t["position"][2].get<float>());
-    const glm::quat rotation(t["rotation"][3].get<float>(),
-                             t["rotation"][0].get<float>(),
-                             t["rotation"][1].get<float>(),
-                             t["rotation"][2].get<float>());
-    const glm::vec3 scale(t["scale"][0].get<float>(), t["scale"][1].get<float>(),
+    const glm::quat rotation(
+        t["rotation"][3].get<float>(), t["rotation"][0].get<float>(),
+        t["rotation"][1].get<float>(), t["rotation"][2].get<float>());
+    const glm::vec3 scale(t["scale"][0].get<float>(),
+                          t["scale"][1].get<float>(),
                           t["scale"][2].get<float>());
     world.position = world.position + world.rotation * (world.scale * position);
     world.rotation = world.rotation * rotation;
@@ -149,13 +148,14 @@ std::vector<FieldCase> EveryFieldCase() {
                    json::array({1.5, -2.0})});
   cases.push_back({MakeField("offset", FieldType::kVector3, glm::vec3(0.0f)),
                    json::array({0.25, 8.0, -1.0})});
+  cases.push_back({MakeField("tint", FieldType::kColor,
+                             mtext::Color{glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)}),
+                   json::array({1.0, 0.5, 0.25, 0.75})});
   cases.push_back(
-      {MakeField("tint", FieldType::kColor,
-                 mtext::Color{glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)}),
-       json::array({1.0, 0.5, 0.25, 0.75})});
-  cases.push_back({MakeField("target", FieldType::kNodeRef, mtext::NodePath{""}),
-                   json{{"path", "Walls/North"}}});
-  FieldInfo asset = MakeField("material", FieldType::kAsset, mtext::Resource{""});
+      {MakeField("target", FieldType::kNodeRef, mtext::NodePath{""}),
+       json{{"path", "Walls/North"}}});
+  FieldInfo asset =
+      MakeField("material", FieldType::kAsset, mtext::Resource{""});
   asset.asset_type = "Material";
   cases.push_back({asset, json{{"res", "res://assets/wall.masset"}}});
   FieldInfo mode = MakeField("mode", FieldType::kEnum, std::string("slow"));
@@ -172,8 +172,8 @@ std::vector<FieldCase> EveryFieldCase() {
   cases.push_back(
       {assets, json::array({json{{"res", "res://assets/wall.masset"}}})});
   cases.push_back({MakeField("on_hit", FieldType::kEvent, mtext::Array{}),
-                   json::array({json::array({json{{"path", "Walls"}}, "Door",
-                                             "Open", true})})});
+                   json::array({json::array(
+                       {json{{"path", "Walls"}}, "Door", "Open", true})})});
   return cases;
 }
 
@@ -230,22 +230,23 @@ TEST(McpToolsSceneWriteTest, CreateAddsANodeWithTransformAndComponents) {
   McpToolFixture fixture;
   const ToolResult result = Apply(
       fixture,
-      json::array({json{
-          {"op", "create"},
-          {"name", "Crate"},
-          {"parent", json{{"path", "RollABall/Walls"}}},
-          {"transform",
-           json{{"position", json::array({1, 2, 3})},
-                {"rotation_euler_degrees", json::array({0, 90, 0})},
-                {"scale", json::array({2, 2, 2})}}},
-          {"components",
-           json::array({json{{"type", "MeshRenderer"},
-                             {"props", json{{"mesh", "sphere"},
-                                            {"material",
-                                             json{{"res",
-                                                   "res://assets/wall.masset"}}}}}},
-                        json{{"type", "BoxCollider"}}})},
-          {"id", "crate"}}}));
+      json::array(
+          {json{{"op", "create"},
+                {"name", "Crate"},
+                {"parent", json{{"path", "RollABall/Walls"}}},
+                {"transform",
+                 json{{"position", json::array({1, 2, 3})},
+                      {"rotation_euler_degrees", json::array({0, 90, 0})},
+                      {"scale", json::array({2, 2, 2})}}},
+                {"components",
+                 json::array(
+                     {json{{"type", "MeshRenderer"},
+                           {"props",
+                            json{{"mesh", "sphere"},
+                                 {"material",
+                                  json{{"res", "res://assets/wall.masset"}}}}}},
+                      json{{"type", "BoxCollider"}}})},
+                {"id", "crate"}}}));
   ASSERT_TRUE(result.ok) << result.result.dump();
   EXPECT_EQ(result.result["applied"], 1);
   ASSERT_EQ(result.result["created"].size(), 1u);
@@ -270,9 +271,9 @@ TEST(McpToolsSceneWriteTest, CreateAddsANodeWithTransformAndComponents) {
 
 TEST(McpToolsSceneWriteTest, CreateDefaultsToTheRootAndRenamesDuplicates) {
   McpToolFixture fixture;
-  const ToolResult result = Apply(
-      fixture, json::array({json{{"op", "create"}, {"name", "Walls"}},
-                            json{{"op", "create"}, {"name", "a/b"}}}));
+  const ToolResult result =
+      Apply(fixture, json::array({json{{"op", "create"}, {"name", "Walls"}},
+                                  json{{"op", "create"}, {"name", "a/b"}}}));
   ASSERT_TRUE(result.ok) << result.result.dump();
   // "Walls" exists under the root: the new one is numbered, and a warning says
   // so; the slash in "a/b" is stripped, also with a warning.
@@ -288,10 +289,12 @@ TEST(McpToolsSceneWriteTest, QuaternionRotationIsStoredAsEulerDegrees) {
   McpToolFixture fixture;
   const float half = std::sqrt(0.5f);
   const ToolResult result = Apply(
-      fixture, json::array({json{{"op", "create"},
-                                 {"name", "Turned"},
-                                 {"transform", json{{"rotation_quat",
-                                                     json::array({0, half, 0, half})}}}}}));
+      fixture,
+      json::array(
+          {json{{"op", "create"},
+                {"name", "Turned"},
+                {"transform",
+                 json{{"rotation_quat", json::array({0, half, 0, half})}}}}}));
   ASSERT_TRUE(result.ok) << result.result.dump();
   const json node = NodeAt(fixture, "RollABall/Turned");
   EXPECT_TRUE(Near(node["transform"]["euler_degrees"], {0, 90, 0}, 1e-2f))
@@ -307,13 +310,14 @@ TEST(McpToolsSceneWriteTest, QuaternionRotationIsStoredAsEulerDegrees) {
                         {"rotation_euler_degrees", json::array({0, 0, 0})}}}));
   EXPECT_FALSE(both.ok);
   EXPECT_NE(ErrorOf(both).find("operations[0]"), std::string::npos);
-  const ToolResult zero = Apply(
-      fixture,
-      json::array({json{{"op", "set_transform"},
-                        {"node", json{{"path", "RollABall/Turned"}}},
-                        {"rotation_quat", json::array({0, 0, 0, 0})}}}));
+  const ToolResult zero =
+      Apply(fixture,
+            json::array({json{{"op", "set_transform"},
+                              {"node", json{{"path", "RollABall/Turned"}}},
+                              {"rotation_quat", json::array({0, 0, 0, 0})}}}));
   EXPECT_FALSE(zero.ok);
-  EXPECT_NE(ErrorOf(zero).find("all zeros"), std::string::npos) << ErrorOf(zero);
+  EXPECT_NE(ErrorOf(zero).find("all zeros"), std::string::npos)
+      << ErrorOf(zero);
 }
 
 // ------------------------------------------------------------ undo & redo ---
@@ -326,16 +330,18 @@ TEST(McpToolsSceneWriteTest, OneUndoRevertsTheWholeBatch) {
 
   const ToolResult result = Apply(
       fixture,
-      json::array(
-          {json{{"op", "create"}, {"name", "A"}, {"id", "a"}},
-           json{{"op", "create"}, {"name", "B"}, {"parent", json{{"alias", "a"}}}},
-           json{{"op", "set_transform"},
-                {"node", json{{"path", "RollABall/Player"}}},
-                {"position", json::array({5, 5, 5})}},
-           json{{"op", "delete"}, {"node", json{{"path", "RollABall/Pickups/Pickup1"}}}},
-           json{{"op", "add_component"},
-                {"node", json{{"path", "RollABall/Walls"}}},
-                {"type", "Rigidbody"}}}));
+      json::array({json{{"op", "create"}, {"name", "A"}, {"id", "a"}},
+                   json{{"op", "create"},
+                        {"name", "B"},
+                        {"parent", json{{"alias", "a"}}}},
+                   json{{"op", "set_transform"},
+                        {"node", json{{"path", "RollABall/Player"}}},
+                        {"position", json::array({5, 5, 5})}},
+                   json{{"op", "delete"},
+                        {"node", json{{"path", "RollABall/Pickups/Pickup1"}}}},
+                   json{{"op", "add_component"},
+                        {"node", json{{"path", "RollABall/Walls"}}},
+                        {"type", "Rigidbody"}}}));
   ASSERT_TRUE(result.ok) << result.result.dump();
   const std::string after = MapText(fixture);
   EXPECT_NE(before, after);
@@ -365,7 +371,8 @@ TEST(McpToolsSceneWriteTest, UndoAndRedoTools) {
   EXPECT_EQ(nothing.result["redone"], false);
 
   ASSERT_TRUE(
-      Apply(fixture, json::array({json{{"op", "create"}, {"name", "Tmp"}}})).ok);
+      Apply(fixture, json::array({json{{"op", "create"}, {"name", "Tmp"}}}))
+          .ok);
   const std::string after = MapText(fixture);
 
   const ToolResult undone = fixture.CallTool("undo");
@@ -414,14 +421,13 @@ TEST(McpToolsSceneWriteTest, AStaticallyBadOperationAppliesNothing) {
   const uint64_t hierarchy_rev = scene.HierarchyRevision();
 
   const ToolResult result = Apply(
-      fixture,
-      json::array({json{{"op", "create"}, {"name", "Fine"}},
-                   json{{"op", "set_transform"},
-                        {"node", json{{"path", "RollABall/Player"}}},
-                        {"position", json::array({1, 1, 1})}},
-                   json{{"op", "add_component"},
-                        {"node", json{{"path", "RollABall/Player"}}},
-                        {"type", "Rigidbdy"}}}));
+      fixture, json::array({json{{"op", "create"}, {"name", "Fine"}},
+                            json{{"op", "set_transform"},
+                                 {"node", json{{"path", "RollABall/Player"}}},
+                                 {"position", json::array({1, 1, 1})}},
+                            json{{"op", "add_component"},
+                                 {"node", json{{"path", "RollABall/Player"}}},
+                                 {"type", "Rigidbdy"}}}));
   ASSERT_FALSE(result.ok);
   EXPECT_NE(ErrorOf(result).find("operations[2]"), std::string::npos)
       << ErrorOf(result);
@@ -481,7 +487,8 @@ TEST(McpToolsSceneWriteTest, ReadOnlyEditorRefusesTheBatch) {
   const std::string before = MapText(fixture);
   const ToolResult result = fixture.CallTool(
       "apply_scene_operations",
-      json{{"operations", json::array({json{{"op", "create"}, {"name", "X"}}})}},
+      json{
+          {"operations", json::array({json{{"op", "create"}, {"name", "X"}}})}},
       /*allow_edits=*/false);
   EXPECT_FALSE(result.ok);
   EXPECT_EQ(MapText(fixture), before);
@@ -503,24 +510,23 @@ TEST(McpToolsSceneWriteTest, AliasesLinkLaterOperationsToEarlierCreations) {
   McpToolFixture fixture;
   const ToolResult result = Apply(
       fixture,
-      json::array(
-          {json{{"op", "create"}, {"name", "Group"}, {"id", "group"}},
-           json{{"op", "create"},
-                {"name", "Child"},
-                {"parent", json{{"alias", "group"}}},
-                {"id", "child"}},
-           json{{"op", "add_component"},
-                {"node", json{{"alias", "child"}}},
-                {"type", "MeshRenderer"},
-                {"props", json{{"mesh", "capsule"}}}},
-           json{{"op", "set_property"},
-                {"node", json{{"alias", "child"}}},
-                {"component", "MeshRenderer"},
-                {"field", "visible"},
-                {"value", false}},
-           json{{"op", "set_transform"},
-                {"node", json{{"alias", "group"}}},
-                {"position", json::array({0, 4, 0})}}}),
+      json::array({json{{"op", "create"}, {"name", "Group"}, {"id", "group"}},
+                   json{{"op", "create"},
+                        {"name", "Child"},
+                        {"parent", json{{"alias", "group"}}},
+                        {"id", "child"}},
+                   json{{"op", "add_component"},
+                        {"node", json{{"alias", "child"}}},
+                        {"type", "MeshRenderer"},
+                        {"props", json{{"mesh", "capsule"}}}},
+                   json{{"op", "set_property"},
+                        {"node", json{{"alias", "child"}}},
+                        {"component", "MeshRenderer"},
+                        {"field", "visible"},
+                        {"value", false}},
+                   json{{"op", "set_transform"},
+                        {"node", json{{"alias", "group"}}},
+                        {"position", json::array({0, 4, 0})}}}),
       json{{"alias", "child"}});
   ASSERT_TRUE(result.ok) << result.result.dump();
   EXPECT_EQ(result.result["created"][0]["alias"], "group");
@@ -541,8 +547,9 @@ TEST(McpToolsSceneWriteTest, AliasMistakesAreRejectedUpFront) {
   const std::string before = MapText(fixture);
   // Used before it is defined.
   ToolResult result = Apply(
-      fixture, json::array({json{{"op", "delete"}, {"node", json{{"alias", "late"}}}},
-                            json{{"op", "create"}, {"name", "X"}, {"id", "late"}}}));
+      fixture,
+      json::array({json{{"op", "delete"}, {"node", json{{"alias", "late"}}}},
+                   json{{"op", "create"}, {"name", "X"}, {"id", "late"}}}));
   EXPECT_FALSE(result.ok);
   EXPECT_NE(ErrorOf(result).find("operations[0]"), std::string::npos);
   EXPECT_NE(ErrorOf(result).find("alias \"late\""), std::string::npos);
@@ -564,13 +571,13 @@ TEST(McpToolsSceneWriteTest, AliasMistakesAreRejectedUpFront) {
   EXPECT_NE(ErrorOf(result).find("operations[1]"), std::string::npos);
 
   // An alias whose node an earlier operation deleted.
-  result = Apply(
-      fixture,
-      json::array({json{{"op", "create"}, {"name", "X"}, {"id", "x"}},
-                   json{{"op", "delete"}, {"node", json{{"alias", "x"}}}},
-                   json{{"op", "set_transform"},
-                        {"node", json{{"alias", "x"}}},
-                        {"position", json::array({1, 1, 1})}}}));
+  result =
+      Apply(fixture,
+            json::array({json{{"op", "create"}, {"name", "X"}, {"id", "x"}},
+                         json{{"op", "delete"}, {"node", json{{"alias", "x"}}}},
+                         json{{"op", "set_transform"},
+                              {"node", json{{"alias", "x"}}},
+                              {"position", json::array({1, 1, 1})}}}));
   EXPECT_FALSE(result.ok);
   EXPECT_NE(ErrorOf(result).find("operations[2]"), std::string::npos)
       << ErrorOf(result);
@@ -609,7 +616,8 @@ TEST(McpToolsSceneWriteTest, SetPropertyTakesEveryFieldType) {
   const ToolResult result = Apply(fixture, operations);
   ASSERT_TRUE(result.ok) << result.result.dump();
 
-  const json props = PropsOf(NodeAt(fixture, "RollABall/Walls"), "McpEveryField");
+  const json props =
+      PropsOf(NodeAt(fixture, "RollABall/Walls"), "McpEveryField");
   ASSERT_TRUE(props.is_object());
   for (const FieldCase& entry : EveryFieldCase()) {
     ASSERT_TRUE(props.contains(entry.field.name)) << entry.field.name;
@@ -619,21 +627,20 @@ TEST(McpToolsSceneWriteTest, SetPropertyTakesEveryFieldType) {
 
   // The batch was one undo step: it keeps the add_component of the first call.
   fixture.Scene().Undo();
-  EXPECT_TRUE(PropsOf(NodeAt(fixture, "RollABall/Walls"), "McpEveryField")
-                  .empty());
+  EXPECT_TRUE(
+      PropsOf(NodeAt(fixture, "RollABall/Walls"), "McpEveryField").empty());
 
   // A value equal to the field's default removes the stored property.
-  ASSERT_TRUE(Apply(fixture,
-                    json::array({json{{"op", "set_property"},
-                                      {"node", target},
-                                      {"component", "McpEveryField"},
-                                      {"field", "count"},
-                                      {"value", 4}},
-                                 json{{"op", "set_property"},
-                                      {"node", target},
-                                      {"component", "McpEveryField"},
-                                      {"field", "count"},
-                                      {"value", 0}}}))
+  ASSERT_TRUE(Apply(fixture, json::array({json{{"op", "set_property"},
+                                               {"node", target},
+                                               {"component", "McpEveryField"},
+                                               {"field", "count"},
+                                               {"value", 4}},
+                                          json{{"op", "set_property"},
+                                               {"node", target},
+                                               {"component", "McpEveryField"},
+                                               {"field", "count"},
+                                               {"value", 0}}}))
                   .ok);
   EXPECT_FALSE(PropsOf(NodeAt(fixture, "RollABall/Walls"), "McpEveryField")
                    .contains("count"));
@@ -660,15 +667,15 @@ TEST(McpToolsSceneWriteTest, BadValuesNameTheOperationAndTheField) {
       {"Transform", "position", json::array({1, 2}), "[x, y, z]"},
   };
   for (const Bad& bad : cases) {
-    const ToolResult result = Apply(
-        fixture, json::array({json{{"op", "set_transform"},
-                                   {"node", player},
-                                   {"position", json::array({1, 1, 1})}},
-                              json{{"op", "set_property"},
-                                   {"node", player},
-                                   {"component", bad.component},
-                                   {"field", bad.field},
-                                   {"value", bad.value}}}));
+    const ToolResult result =
+        Apply(fixture, json::array({json{{"op", "set_transform"},
+                                         {"node", player},
+                                         {"position", json::array({1, 1, 1})}},
+                                    json{{"op", "set_property"},
+                                         {"node", player},
+                                         {"component", bad.component},
+                                         {"field", bad.field},
+                                         {"value", bad.value}}}));
     ASSERT_FALSE(result.ok) << bad.field;
     const std::string error = ErrorOf(result);
     EXPECT_NE(error.find("operations[1] (set_property)"), std::string::npos)
@@ -696,23 +703,32 @@ TEST(McpToolsSceneWriteTest, UnknownNamesCarrySuggestionsAndTheOperationIndex) {
       // component type
       {json{{"op", "add_component"}, {"node", player}, {"type", "Rigidbdy"}},
        "Rigidbody", "type"},
-      {json{{"op", "create"}, {"name", "N"},
+      {json{{"op", "create"},
+            {"name", "N"},
             {"components", json::array({json{{"type", "MeshRendrer"}}})}},
        "MeshRenderer", "create type"},
       // field
-      {json{{"op", "set_property"}, {"node", player}, {"component", "Rigidbody"},
-            {"field", "mas"}, {"value", 2}},
+      {json{{"op", "set_property"},
+            {"node", player},
+            {"component", "Rigidbody"},
+            {"field", "mas"},
+            {"value", 2}},
        "mass", "field"},
-      {json{{"op", "add_component"}, {"node", player}, {"type", "Rigidbody"},
+      {json{{"op", "add_component"},
+            {"node", player},
+            {"type", "Rigidbody"},
             {"props", json{{"gravity_facto", 2}}}},
        "gravity_factor", "props"},
       // node by path and by uid
-      {json{{"op", "delete"}, {"node", json{{"path", "RollABall/Pickups/Pickup"}}}},
+      {json{{"op", "delete"},
+            {"node", json{{"path", "RollABall/Pickups/Pickup"}}}},
        "RollABall/Pickups/Pickup1", "node path"},
-      {json{{"op", "set_transform"}, {"node", json{{"path", "RollABall/Plyer"}}},
+      {json{{"op", "set_transform"},
+            {"node", json{{"path", "RollABall/Plyer"}}},
             {"position", json::array({0, 0, 0})}},
        "RollABall/Player", "set_transform node"},
-      {json{{"op", "reparent"}, {"node", player},
+      {json{{"op", "reparent"},
+            {"node", player},
             {"new_parent", json{{"path", "RollABall/Wals"}}}},
        "RollABall/Walls", "new_parent"},
       // operation names and fields
@@ -720,19 +736,22 @@ TEST(McpToolsSceneWriteTest, UnknownNamesCarrySuggestionsAndTheOperationIndex) {
       {json{{"op", "create"}, {"name", "N"}, {"paret", player}}, "parent",
        "field"},
       // component the node lacks
-      {json{{"op", "set_property"}, {"node", player}, {"component", "Rigidbdy"},
-            {"field", "mass"}, {"value", 2}},
+      {json{{"op", "set_property"},
+            {"node", player},
+            {"component", "Rigidbdy"},
+            {"field", "mass"},
+            {"value", 2}},
        "Rigidbody", "set_property component"},
       {json{{"op", "remove_component"}, {"node", player}, {"type", "Rigidbdy"}},
        "Rigidbody", "remove_component"},
   };
   for (const Case& entry : cases) {
-    const ToolResult result =
-        Apply(fixture, json::array({ok_op, entry.op}));
+    const ToolResult result = Apply(fixture, json::array({ok_op, entry.op}));
     ASSERT_FALSE(result.ok) << entry.what;
     EXPECT_NE(ErrorOf(result).find("operations[1]"), std::string::npos)
         << entry.what << ": " << ErrorOf(result);
-    EXPECT_EQ(result.result.value("suggestion", std::string()), entry.suggestion)
+    EXPECT_EQ(result.result.value("suggestion", std::string()),
+              entry.suggestion)
         << entry.what << ": " << result.result.dump();
     EXPECT_EQ(MapText(fixture), before) << entry.what;
   }
@@ -741,14 +760,13 @@ TEST(McpToolsSceneWriteTest, UnknownNamesCarrySuggestionsAndTheOperationIndex) {
 TEST(McpToolsSceneWriteTest, MalformedBatchesAreRefused) {
   McpToolFixture fixture;
   EXPECT_FALSE(fixture.CallTool("apply_scene_operations", json::object()).ok);
-  EXPECT_FALSE(
-      fixture
-          .CallTool("apply_scene_operations", json{{"operations", json::array()}})
-          .ok);
   EXPECT_FALSE(fixture
                    .CallTool("apply_scene_operations",
-                             json{{"operations", "create"}})
+                             json{{"operations", json::array()}})
                    .ok);
+  EXPECT_FALSE(
+      fixture.CallTool("apply_scene_operations", json{{"operations", "create"}})
+          .ok);
   ToolResult result = fixture.CallTool(
       "apply_scene_operations",
       json{{"operations", json::array({json{{"op", "create"}, {"name", "A"}}})},
@@ -757,7 +775,8 @@ TEST(McpToolsSceneWriteTest, MalformedBatchesAreRefused) {
   EXPECT_EQ(result.result["suggestion"], "select");
 
   json many = json::array();
-  for (int i = 0; i < 1001; i++) many.push_back(json{{"op", "create"}, {"name", "N"}});
+  for (int i = 0; i < 1001; i++)
+    many.push_back(json{{"op", "create"}, {"name", "N"}});
   result = Apply(fixture, many);
   EXPECT_FALSE(result.ok);
   EXPECT_NE(ErrorOf(result).find("1000"), std::string::npos) << ErrorOf(result);
@@ -770,7 +789,8 @@ TEST(McpToolsSceneWriteTest, MalformedBatchesAreRefused) {
            json::array({json{{"op", "create"}, {"name", ""}}}),
            json::array({json{{"op", "delete"}, {"node", "RollABall"}}}),
            json::array({json{{"op", "delete"}, {"node", json::object()}}}),
-           json::array({json{{"op", "delete"}, {"node", json{{"uid", 1}, {"path", "x"}}}}}),
+           json::array({json{{"op", "delete"},
+                             {"node", json{{"uid", 1}, {"path", "x"}}}}}),
            json::array({json{{"op", "set_transform"},
                              {"node", json{{"path", "RollABall"}}}}}),
            json::array({json{{"op", "set_property"},
@@ -781,11 +801,15 @@ TEST(McpToolsSceneWriteTest, MalformedBatchesAreRefused) {
                              {"node", json{{"path", "RollABall/Player"}}},
                              {"new_parent", json{{"path", "RollABall"}}},
                              {"keep_world_transform", "yes"}}}),
-           json::array({json{{"op", "create"}, {"name", "A"},
-                             {"components", json::array({json{{"type", "Transform"}}})}}}),
-           json::array({json{{"op", "create"}, {"name", "A"},
-                             {"components", json::array({json{{"type", "BoxCollider"}},
-                                                         json{{"type", "BoxCollider"}}})}}}),
+           json::array({json{
+               {"op", "create"},
+               {"name", "A"},
+               {"components", json::array({json{{"type", "Transform"}}})}}}),
+           json::array({json{
+               {"op", "create"},
+               {"name", "A"},
+               {"components", json::array({json{{"type", "BoxCollider"}},
+                                           json{{"type", "BoxCollider"}}})}}}),
        }) {
     result = Apply(fixture, bad);
     EXPECT_FALSE(result.ok) << bad.dump();
@@ -804,17 +828,18 @@ TEST(McpToolsSceneWriteTest, DeleteRemovesTheSubtreeAndFixesTheSelection) {
   scene.Select(north);
   ASSERT_EQ(scene.GetSelectedUid(), north->uid);
 
-  const ToolResult result = Apply(
-      fixture,
-      json::array({json{{"op", "delete"}, {"node", json{{"path", "RollABall/Walls"}}}}}));
+  const ToolResult result =
+      Apply(fixture,
+            json::array({json{{"op", "delete"},
+                              {"node", json{{"path", "RollABall/Walls"}}}}}));
   ASSERT_TRUE(result.ok) << result.result.dump();
   EXPECT_TRUE(NodeAt(fixture, "RollABall/Walls").is_null());
   EXPECT_TRUE(NodeAt(fixture, "RollABall/Walls/North").is_null());
   EXPECT_EQ(scene.GetSelectedUid(), 0u) << "the selected node was deleted";
 
   const ToolResult root = Apply(
-      fixture,
-      json::array({json{{"op", "delete"}, {"node", json{{"path", "RollABall"}}}}}));
+      fixture, json::array({json{{"op", "delete"},
+                                 {"node", json{{"path", "RollABall"}}}}}));
   EXPECT_FALSE(root.ok);
   EXPECT_NE(ErrorOf(root).find("root"), std::string::npos);
 }
@@ -822,12 +847,14 @@ TEST(McpToolsSceneWriteTest, DeleteRemovesTheSubtreeAndFixesTheSelection) {
 TEST(McpToolsSceneWriteTest, AddAndRemoveComponents) {
   McpToolFixture fixture;
   const json walls = json{{"path", "RollABall/Walls"}};
-  ASSERT_TRUE(Apply(fixture, json::array({json{{"op", "add_component"},
-                                               {"node", walls},
-                                               {"type", "Rigidbody"},
-                                               {"props", json{{"mass", 5.0},
-                                                              {"use_gravity", false}}}}}))
-                  .ok);
+  ASSERT_TRUE(
+      Apply(fixture,
+            json::array(
+                {json{{"op", "add_component"},
+                      {"node", walls},
+                      {"type", "Rigidbody"},
+                      {"props", json{{"mass", 5.0}, {"use_gravity", false}}}}}))
+          .ok);
   const json props = PropsOf(NodeAt(fixture, "RollABall/Walls"), "Rigidbody");
   ASSERT_TRUE(props.is_object());
   EXPECT_EQ(props["mass"], 5.0);
@@ -847,10 +874,10 @@ TEST(McpToolsSceneWriteTest, AddAndRemoveComponents) {
   EXPECT_FALSE(HasComponent(NodeAt(fixture, "RollABall/Walls"), "Rigidbody"));
 
   // The Transform stays.
-  const ToolResult transform = Apply(
-      fixture, json::array({json{{"op", "remove_component"},
-                                 {"node", walls},
-                                 {"type", "Transform"}}}));
+  const ToolResult transform =
+      Apply(fixture, json::array({json{{"op", "remove_component"},
+                                       {"node", walls},
+                                       {"type", "Transform"}}}));
   EXPECT_FALSE(transform.ok);
   EXPECT_NE(ErrorOf(transform).find("cannot be removed"), std::string::npos);
   EXPECT_TRUE(HasComponent(NodeAt(fixture, "RollABall/Walls"), "Transform"));
@@ -865,10 +892,10 @@ TEST(McpToolsSceneWriteTest, ReparentKeepsTheWorldTransformByDefault) {
             json::array(
                 {json{{"op", "create"},
                       {"name", "Pivot"},
-                      {"transform", json{{"position", json::array({10, 0, 0})},
-                                         {"rotation_euler_degrees",
-                                          json::array({0, 90, 0})},
-                                         {"scale", json::array({2, 2, 2})}}}},
+                      {"transform",
+                       json{{"position", json::array({10, 0, 0})},
+                            {"rotation_euler_degrees", json::array({0, 90, 0})},
+                            {"scale", json::array({2, 2, 2})}}}},
                  json{{"op", "create"},
                       {"name", "Thing"},
                       {"transform",
@@ -879,9 +906,10 @@ TEST(McpToolsSceneWriteTest, ReparentKeepsTheWorldTransformByDefault) {
   const World before = WorldOf(fixture, "RollABall/Thing");
 
   const ToolResult moved = Apply(
-      fixture, json::array({json{{"op", "reparent"},
-                                 {"node", json{{"path", "RollABall/Thing"}}},
-                                 {"new_parent", json{{"path", "RollABall/Pivot"}}}}}));
+      fixture,
+      json::array({json{{"op", "reparent"},
+                        {"node", json{{"path", "RollABall/Thing"}}},
+                        {"new_parent", json{{"path", "RollABall/Pivot"}}}}}));
   ASSERT_TRUE(moved.ok) << moved.result.dump();
   const World after = WorldOf(fixture, "RollABall/Pivot/Thing");
   EXPECT_LT(glm::length(after.position - before.position), 1e-3f)
@@ -900,13 +928,14 @@ TEST(McpToolsSceneWriteTest, ReparentCanKeepTheLocalTransformInstead) {
   McpToolFixture fixture;
   ASSERT_TRUE(
       Apply(fixture,
-            json::array(
-                {json{{"op", "create"},
-                      {"name", "Pivot"},
-                      {"transform", json{{"position", json::array({10, 0, 0})}}}},
-                 json{{"op", "create"},
-                      {"name", "Thing"},
-                      {"transform", json{{"position", json::array({1, 2, 3})}}}}}))
+            json::array({json{{"op", "create"},
+                              {"name", "Pivot"},
+                              {"transform",
+                               json{{"position", json::array({10, 0, 0})}}}},
+                         json{{"op", "create"},
+                              {"name", "Thing"},
+                              {"transform",
+                               json{{"position", json::array({1, 2, 3})}}}}}))
           .ok);
   ASSERT_TRUE(
       Apply(fixture,
@@ -928,24 +957,27 @@ TEST(McpToolsSceneWriteTest, ReparentRenamesOnCollisionAndRefusesCycles) {
       Apply(fixture, json::array({json{{"op", "create"}, {"name", "North"}}}))
           .ok);
   const ToolResult moved = Apply(
-      fixture, json::array({json{{"op", "reparent"},
-                                 {"node", json{{"path", "RollABall/North"}}},
-                                 {"new_parent", json{{"path", "RollABall/Walls"}}}}}));
+      fixture,
+      json::array({json{{"op", "reparent"},
+                        {"node", json{{"path", "RollABall/North"}}},
+                        {"new_parent", json{{"path", "RollABall/Walls"}}}}}));
   ASSERT_TRUE(moved.ok) << moved.result.dump();
   EXPECT_FALSE(NodeAt(fixture, "RollABall/Walls/North2").is_null());
   EXPECT_EQ(moved.result["warnings"].size(), 1u) << moved.result.dump();
 
   const std::string before = MapText(fixture);
-  EXPECT_FALSE(Apply(fixture,
-                     json::array({json{{"op", "reparent"},
-                                       {"node", json{{"path", "RollABall/Walls"}}},
-                                       {"new_parent", json{{"path", "RollABall/Walls"}}}}}))
-                   .ok);
-  EXPECT_FALSE(Apply(fixture,
-                     json::array({json{{"op", "reparent"},
-                                       {"node", json{{"path", "RollABall"}}},
-                                       {"new_parent", json{{"path", "RollABall/Walls"}}}}}))
-                   .ok);
+  EXPECT_FALSE(
+      Apply(fixture, json::array({json{
+                         {"op", "reparent"},
+                         {"node", json{{"path", "RollABall/Walls"}}},
+                         {"new_parent", json{{"path", "RollABall/Walls"}}}}}))
+          .ok);
+  EXPECT_FALSE(
+      Apply(fixture, json::array({json{
+                         {"op", "reparent"},
+                         {"node", json{{"path", "RollABall"}}},
+                         {"new_parent", json{{"path", "RollABall/Walls"}}}}}))
+          .ok);
   EXPECT_EQ(MapText(fixture), before);
 }
 
@@ -955,20 +987,20 @@ TEST(McpToolsSceneWriteTest, InstantiatePrefab) {
   McpToolFixture fixture;
   WritePrefab(fixture, "crate.mprefab", kCratePrefab);
 
-  const ToolResult result = Apply(
-      fixture,
-      json::array(
-          {json{{"op", "instantiate_prefab"},
-                {"prefab", "res://prefabs/crate.mprefab"},
-                {"parent", json{{"path", "RollABall/Walls"}}},
-                {"transform", json{{"position", json::array({4, 0, 4})}}},
-                {"id", "first"}},
-           json{{"op", "instantiate_prefab"},
-                {"prefab", "res://prefabs/crate.mprefab"},
-                {"name", "Second"}},
-           json{{"op", "set_transform"},
-                {"node", json{{"alias", "first"}}},
-                {"scale", json::array({2, 2, 2})}}}));
+  const ToolResult result =
+      Apply(fixture,
+            json::array(
+                {json{{"op", "instantiate_prefab"},
+                      {"prefab", "res://prefabs/crate.mprefab"},
+                      {"parent", json{{"path", "RollABall/Walls"}}},
+                      {"transform", json{{"position", json::array({4, 0, 4})}}},
+                      {"id", "first"}},
+                 json{{"op", "instantiate_prefab"},
+                      {"prefab", "res://prefabs/crate.mprefab"},
+                      {"name", "Second"}},
+                 json{{"op", "set_transform"},
+                      {"node", json{{"alias", "first"}}},
+                      {"scale", json::array({2, 2, 2})}}}));
   ASSERT_TRUE(result.ok) << result.result.dump();
   EXPECT_EQ(result.result["created"][0]["path"], "RollABall/Walls/crate");
   EXPECT_EQ(result.result["created"][0]["alias"], "first");
@@ -1007,8 +1039,9 @@ TEST(McpToolsSceneWriteTest, InstantiatePrefabChecksTheFile) {
 
   // A typo in the file name: a did-you-mean from the project's prefabs.
   ToolResult result = Apply(
-      fixture, json::array({ok_op, json{{"op", "instantiate_prefab"},
-                                        {"prefab", "res://prefabs/crat.mprefab"}}}));
+      fixture,
+      json::array({ok_op, json{{"op", "instantiate_prefab"},
+                               {"prefab", "res://prefabs/crat.mprefab"}}}));
   ASSERT_FALSE(result.ok);
   EXPECT_NE(ErrorOf(result).find("operations[1]"), std::string::npos);
   EXPECT_NE(ErrorOf(result).find("does not exist"), std::string::npos);
@@ -1017,15 +1050,18 @@ TEST(McpToolsSceneWriteTest, InstantiatePrefabChecksTheFile) {
   // Not a prefab path.
   for (const char* path : {"prefabs/crate.mprefab", "res://maps/main.mmap",
                            "res://../crate.mprefab"}) {
-    result = Apply(fixture, json::array({json{{"op", "instantiate_prefab"},
-                                              {"prefab", path}}}));
+    result = Apply(
+        fixture,
+        json::array({json{{"op", "instantiate_prefab"}, {"prefab", path}}}));
     EXPECT_FALSE(result.ok) << path;
   }
 
   // A prefab that exists but is not valid.
   WritePrefab(fixture, "broken.mprefab", "this is [not valid");
-  result = Apply(fixture, json::array({ok_op, json{{"op", "instantiate_prefab"},
-                                                   {"prefab", "res://prefabs/broken.mprefab"}}}));
+  result = Apply(
+      fixture,
+      json::array({ok_op, json{{"op", "instantiate_prefab"},
+                               {"prefab", "res://prefabs/broken.mprefab"}}}));
   ASSERT_FALSE(result.ok);
   EXPECT_NE(ErrorOf(result).find("could not be loaded"), std::string::npos)
       << ErrorOf(result);
@@ -1044,7 +1080,8 @@ TEST(McpToolsSceneWriteTest, SelectNodeTool) {
             result.result["selected"]["uid"].get<uint64_t>());
 
   const ToolResult by_uid = fixture.CallTool(
-      "select_node", json{{"node", json{{"uid", result.result["selected"]["uid"]}}}});
+      "select_node",
+      json{{"node", json{{"uid", result.result["selected"]["uid"]}}}});
   EXPECT_TRUE(by_uid.ok);
 
   const ToolResult unknown = fixture.CallTool(
@@ -1060,9 +1097,9 @@ TEST(McpToolsSceneWriteTest, SelectNodeTool) {
 TEST(McpToolsSceneWriteTest, SelectInTheBatchIsRefusedForAnUnknownNode) {
   McpToolFixture fixture;
   const std::string before = MapText(fixture);
-  const ToolResult result = Apply(
-      fixture, json::array({json{{"op", "create"}, {"name", "A"}}}),
-      json{{"path", "RollABall/Nope"}});
+  const ToolResult result =
+      Apply(fixture, json::array({json{{"op", "create"}, {"name", "A"}}}),
+            json{{"path", "RollABall/Nope"}});
   ASSERT_FALSE(result.ok);
   EXPECT_NE(ErrorOf(result).find("select"), std::string::npos);
   EXPECT_EQ(MapText(fixture), before) << "the batch is not applied either";

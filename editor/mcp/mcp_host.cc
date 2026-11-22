@@ -79,8 +79,7 @@ class ToolHostImpl final : public ToolHost,
     // sits in a shared_ptr because the queued work must stay copyable for
     // wxWidgets' CallAfter while the reply itself is move-only.
     auto self = shared_from_this();
-    auto pending =
-        std::make_shared<rust::Box<PendingReply>>(std::move(reply));
+    auto pending = std::make_shared<rust::Box<PendingReply>>(std::move(reply));
     const std::string name(tool);
     const std::string args(args_json);
 
@@ -108,15 +107,14 @@ class ToolHostImpl final : public ToolHost,
       // its own call state and the reply, so it is safe after the host is
       // gone; the alive check also keeps a result computed against a dying
       // scene from being sent.
-      ToolDone done = self->tracker_->Track(
-          [self, pending](ToolResult result) {
-            if (!*self->alive_) {
-              CompleteError(std::move(*pending), "editor shutting down");
-              return;
-            }
-            CompleteReply(std::move(*pending), result.ok,
-                          result.result.dump(), ToRustImages(result.images));
-          });
+      ToolDone done = self->tracker_->Track([self, pending](ToolResult result) {
+        if (!*self->alive_) {
+          CompleteError(std::move(*pending), "editor shutting down");
+          return;
+        }
+        CompleteReply(std::move(*pending), result.ok, result.result.dump(),
+                      ToRustImages(result.images));
+      });
       ToolRegistry::Instance().InvokeAsync(self->scene_, name, parsed,
                                            std::move(done));
     };

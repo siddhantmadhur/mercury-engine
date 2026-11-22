@@ -60,9 +60,8 @@ TEST(PlayerArgs, ParsesEngineSchemaPath) {
   EXPECT_EQ(
       Parse({"player", "--dump-engine-schema", "-"}, false).engine_schema_path,
       "-");
-  EXPECT_EQ(
-      Parse({"player", "--dump-engine-schema"}, false).engine_schema_path,
-      "-");
+  EXPECT_EQ(Parse({"player", "--dump-engine-schema"}, false).engine_schema_path,
+            "-");
 }
 
 // A following option is not a file name: the schema goes to stdout and the
@@ -72,9 +71,8 @@ TEST(PlayerArgs, EngineSchemaDoesNotSwallowOptions) {
       Parse({"player", "--dump-engine-schema", "--validate"}, false);
   EXPECT_EQ(args.engine_schema_path, "-");
   EXPECT_TRUE(args.validate);
-  const PlayerArgs with_value =
-      Parse({"player", "--dump-engine-schema", "--validate", "out.json"},
-            false);
+  const PlayerArgs with_value = Parse(
+      {"player", "--dump-engine-schema", "--validate", "out.json"}, false);
   EXPECT_EQ(with_value.engine_schema_path, "-");
   EXPECT_TRUE(with_value.validate);
   // The token after the option becomes the project path, as usual.
@@ -90,8 +88,7 @@ TEST(PlayerArgs, ParsesValidateAndJson) {
 
 TEST(PlayerArgs, ParsesInspectAsset) {
   const PlayerArgs args =
-      Parse({"player", "--inspect-asset", "res://assets/player.masset"},
-            false);
+      Parse({"player", "--inspect-asset", "res://assets/player.masset"}, false);
   EXPECT_EQ(args.inspect_asset, "res://assets/player.masset");
 }
 
@@ -108,7 +105,8 @@ TEST(PlayerArgs, ParsesHeadlessAndFrames) {
 }
 
 TEST(PlayerArgs, FramesRejectsANonCount) {
-  EXPECT_FALSE(Parse({"player", "--frames", "abc"}, false).option_error.empty());
+  EXPECT_FALSE(
+      Parse({"player", "--frames", "abc"}, false).option_error.empty());
   EXPECT_FALSE(Parse({"player", "--frames", "-5"}, false).option_error.empty());
   EXPECT_FALSE(Parse({"player", "--frames"}, false).option_error.empty());
   EXPECT_EQ(Parse({"player", "--frames", "abc"}, false).frames, 0);

@@ -55,8 +55,8 @@ std::string ReadText(McpToolFixture& fixture, const std::string& uri,
 }
 
 std::string GuideContent(McpToolFixture& fixture, const std::string& name) {
-  const ToolResult result =
-      fixture.CallTool("get_agent_guides", json{{"files", json::array({name})}});
+  const ToolResult result = fixture.CallTool(
+      "get_agent_guides", json{{"files", json::array({name})}});
   EXPECT_TRUE(result.ok) << result.result.dump();
   if (!result.ok) return {};
   EXPECT_EQ(result.result["files"].size(), 1u);
@@ -83,17 +83,16 @@ TEST(McpToolsGuidesTest, ListsEveryResourceAndTheAssetTemplate) {
     EXPECT_TRUE(resource["description"].is_string());
     uris.push_back(resource["uri"]);
   }
-  EXPECT_EQ(uris, (std::vector<std::string>{
-                      "mercury://guides/AGENTS.md",
-                      "mercury://guides/CLAUDE.md",
-                      "mercury://guides/GEMINI.md",
-                      "mercury://project/structure",
-                      "mercury://project/schema"}));
+  EXPECT_EQ(uris,
+            (std::vector<std::string>{
+                "mercury://guides/AGENTS.md", "mercury://guides/CLAUDE.md",
+                "mercury://guides/GEMINI.md", "mercury://project/structure",
+                "mercury://project/schema"}));
   for (const json& resource : result.result["resources"]) {
     const std::string uri = resource["uri"];
-    EXPECT_EQ(resource["mimeType"],
-              uri.starts_with("mercury://guides/") ? "text/markdown"
-                                                   : "application/json")
+    EXPECT_EQ(resource["mimeType"], uri.starts_with("mercury://guides/")
+                                        ? "text/markdown"
+                                        : "application/json")
         << uri;
   }
 
@@ -112,8 +111,7 @@ TEST(McpToolsGuidesTest, EveryListedResourceReads) {
     std::string mime;
     const std::string text = ReadText(fixture, resource["uri"], &mime);
     EXPECT_FALSE(text.empty()) << resource["uri"];
-    EXPECT_EQ(mime, resource["mimeType"].get<std::string>())
-        << resource["uri"];
+    EXPECT_EQ(mime, resource["mimeType"].get<std::string>()) << resource["uri"];
   }
 }
 
@@ -130,7 +128,7 @@ TEST(McpToolsGuidesTest, GuideResourcesCarryTheProjectsFacts) {
     EXPECT_TRUE(Contains(text, "`Player/Move` (value, vector2)"));
     EXPECT_TRUE(Contains(text, "`Player/Jump` (button)"));
     EXPECT_TRUE(Contains(text, "Action maps: `Player`"));
-    EXPECT_TRUE(Contains(text, "`Default`"));  // a layer
+    EXPECT_TRUE(Contains(text, "`Default`"));     // a layer
     EXPECT_TRUE(Contains(text, "`MainCamera`"));  // a tag
     EXPECT_TRUE(Contains(text, "1280 x 720"));
     // The shared body.
@@ -193,13 +191,15 @@ TEST(McpToolsGuidesTest, GuideReportsTheAccessMode) {
   const ToolResult read_only = fixture.CallTool(
       "get_agent_guides", json{{"files", json::array({"AGENTS.md"})}}, false);
   ASSERT_TRUE(read_only.ok);
-  EXPECT_TRUE(Contains(read_only.result["files"][0]["content"].get<std::string>(),
-                       "Access Mode: Read-Only"));
+  EXPECT_TRUE(
+      Contains(read_only.result["files"][0]["content"].get<std::string>(),
+               "Access Mode: Read-Only"));
   const ToolResult editable = fixture.CallTool(
       "get_agent_guides", json{{"files", json::array({"AGENTS.md"})}}, true);
   ASSERT_TRUE(editable.ok);
-  EXPECT_TRUE(Contains(editable.result["files"][0]["content"].get<std::string>(),
-                       "Access Mode: Allow Scene Edits"));
+  EXPECT_TRUE(
+      Contains(editable.result["files"][0]["content"].get<std::string>(),
+               "Access Mode: Allow Scene Edits"));
 }
 
 TEST(McpToolsGuidesTest, GuideListsTheRegisteredTools) {
@@ -229,8 +229,7 @@ TEST(McpToolsGuidesTest, GuideSamplesAtMostTwentyFilesPerKind) {
 
 TEST(McpToolsGuidesTest, ProjectTextCannotBreakOutOfTheGuide) {
   McpToolFixture fixture;
-  fixture.Scene().GetProject()->SetName(
-      "Evil`\n# Injected heading\n{{tools}}");
+  fixture.Scene().GetProject()->SetName("Evil`\n# Injected heading\n{{tools}}");
   const std::string text = GuideContent(fixture, "AGENTS.md");
   EXPECT_FALSE(Contains(text, "\n# Injected heading"));
   EXPECT_TRUE(Contains(text, "Evil' # Injected heading {{tools}}"));
@@ -270,7 +269,8 @@ TEST(McpToolsGuidesTest, StructureGroupsTheProjectByKind) {
   }
   EXPECT_TRUE(ListContains(kinds["project"], "res://roll_a_ball.mproj"));
   EXPECT_TRUE(ListContains(kinds["maps"], "res://maps/main.mmap"));
-  EXPECT_TRUE(ListContains(kinds["scripts"], "res://scripts/player_controller.as"));
+  EXPECT_TRUE(
+      ListContains(kinds["scripts"], "res://scripts/player_controller.as"));
   EXPECT_TRUE(ListContains(kinds["ui"], "res://ui/score.uxml"));
   EXPECT_TRUE(ListContains(kinds["ui"], "res://ui/score.uss"));
   EXPECT_TRUE(ListContains(kinds["input"], "res://input/actions.minput"));
@@ -297,17 +297,21 @@ TEST(McpToolsGuidesTest, StructureSeesCppScriptsUnderSrcOnly) {
   std::ofstream(fixture.Root() / "src" / "spinner.cc") << "x";
   std::ofstream(fixture.Root() / "src" / "notes.txt") << "x";
   std::ofstream(fixture.Root() / "stray.cc") << "x";
-  const json structure = json::parse(ReadText(fixture, "mercury://project/structure"));
-  EXPECT_TRUE(ListContains(structure["kinds"]["scripts"], "res://src/spinner.h"));
-  EXPECT_TRUE(ListContains(structure["kinds"]["scripts"], "res://src/spinner.cc"));
+  const json structure =
+      json::parse(ReadText(fixture, "mercury://project/structure"));
+  EXPECT_TRUE(
+      ListContains(structure["kinds"]["scripts"], "res://src/spinner.h"));
+  EXPECT_TRUE(
+      ListContains(structure["kinds"]["scripts"], "res://src/spinner.cc"));
   EXPECT_FALSE(ListContains(structure["kinds"]["scripts"], "res://stray.cc"));
-  EXPECT_FALSE(ListContains(structure["kinds"]["scripts"], "res://src/notes.txt"));
+  EXPECT_FALSE(
+      ListContains(structure["kinds"]["scripts"], "res://src/notes.txt"));
 }
 
 TEST(McpToolsGuidesTest, StructureCapKeepsEarlierKindsAndSaysTruncated) {
-  std::vector<std::string> paths = {"res://p.mproj", "res://maps/a.mmap",
+  std::vector<std::string> paths = {"res://p.mproj",     "res://maps/a.mmap",
                                     "res://maps/b.mmap", "res://scripts/s.as",
-                                    "res://src/x.h", "res://other/x.h",
+                                    "res://src/x.h",     "res://other/x.h",
                                     "res://readme.txt"};
   for (int i = 0; i < 5000; i++) {
     paths.push_back("res://tex/t" + std::to_string(i) + ".png");
@@ -374,7 +378,8 @@ TEST(McpToolsGuidesTest, SchemaResourceIsTheEngineSchema) {
   EXPECT_TRUE(Contains(text, "\"Transform\""));
 }
 
-// ---------------------------------------------------------- asset template ----
+// ---------------------------------------------------------- asset template
+// ----
 
 TEST(McpToolsGuidesTest, AssetTemplateInspectsAFile) {
   McpToolFixture fixture;
@@ -387,9 +392,11 @@ TEST(McpToolsGuidesTest, AssetTemplateInspectsAFile) {
   EXPECT_FALSE(inspected.empty());
 
   // Percent-encoding and the res:// form name the same file.
-  EXPECT_EQ(json::parse(ReadText(fixture, "mercury://asset/assets%2Fplayer.masset")),
-            inspected);
-  EXPECT_EQ(json::parse(ReadText(fixture, "mercury://asset/res://assets/player.masset")),
+  EXPECT_EQ(
+      json::parse(ReadText(fixture, "mercury://asset/assets%2Fplayer.masset")),
+      inspected);
+  EXPECT_EQ(json::parse(ReadText(fixture,
+                                 "mercury://asset/res://assets/player.masset")),
             inspected);
 }
 
@@ -405,7 +412,8 @@ TEST(McpToolsGuidesTest, AssetTemplateErrorsAndSuggests) {
   for (const char* uri :
        {"mercury://asset/", "mercury://asset/../../etc/passwd",
         "mercury://asset/%zz", "mercury://asset/%2e%2e/%2e%2e/x"}) {
-    const ToolResult bad = fixture.CallTool("__resources/read", json{{"uri", uri}});
+    const ToolResult bad =
+        fixture.CallTool("__resources/read", json{{"uri", uri}});
     EXPECT_FALSE(bad.ok) << uri;
     EXPECT_TRUE(bad.result["error"].is_string()) << uri;
   }
@@ -430,19 +438,20 @@ TEST(McpToolsGuidesTest, UnknownResourceErrors) {
   EXPECT_EQ(typo2.result["suggestion"], "mercury://project/structure");
 
   // A guide URI with an unknown name is the same error.
-  EXPECT_FALSE(fixture.CallTool("__resources/read",
-                                json{{"uri", "mercury://guides/OTHER.md"}})
+  EXPECT_FALSE(fixture
+                   .CallTool("__resources/read",
+                             json{{"uri", "mercury://guides/OTHER.md"}})
                    .ok);
   EXPECT_FALSE(fixture.CallTool("__resources/read", json{{"uri", ""}}).ok);
   EXPECT_FALSE(fixture.CallTool("__resources/read", json::object()).ok);
-  EXPECT_FALSE(
-      fixture.CallTool("__resources/read", json{{"uri", 42}}).ok);
+  EXPECT_FALSE(fixture.CallTool("__resources/read", json{{"uri", 42}}).ok);
 }
 
 TEST(McpToolsGuidesTest, ResourcesAreReadOnlyTools) {
   McpToolFixture fixture;
   // Read mode: allowed when the server is read-only.
-  const ToolResult list = fixture.CallTool("__resources/list", json::object(), false);
+  const ToolResult list =
+      fixture.CallTool("__resources/list", json::object(), false);
   EXPECT_TRUE(list.ok);
   const ToolResult read = fixture.CallTool(
       "__resources/read", json{{"uri", "mercury://guides/AGENTS.md"}}, false);
@@ -469,18 +478,20 @@ TEST(McpToolsGuidesTest, GetAgentGuidesReturnsAllByDefault) {
 
   // null and [] mean "all" too.
   EXPECT_EQ(fixture.CallTool("get_agent_guides", json{{"files", nullptr}})
-                .result["files"].size(),
+                .result["files"]
+                .size(),
             3u);
   EXPECT_EQ(fixture.CallTool("get_agent_guides", json{{"files", json::array()}})
-                .result["files"].size(),
+                .result["files"]
+                .size(),
             3u);
 }
 
 TEST(McpToolsGuidesTest, GetAgentGuidesFilters) {
   McpToolFixture fixture;
   const ToolResult result = fixture.CallTool(
-      "get_agent_guides", json{{"files", json::array({"GEMINI.md", "AGENTS.md",
-                                                     "GEMINI.md"})}});
+      "get_agent_guides",
+      json{{"files", json::array({"GEMINI.md", "AGENTS.md", "GEMINI.md"})}});
   ASSERT_TRUE(result.ok) << result.result.dump();
   const json& files = result.result["files"];
   ASSERT_EQ(files.size(), 2u);  // in the order asked for, without repeats
@@ -498,10 +509,9 @@ TEST(McpToolsGuidesTest, GetAgentGuidesRejectsBadArguments) {
 
   EXPECT_FALSE(
       fixture.CallTool("get_agent_guides", json{{"files", "AGENTS.md"}}).ok);
-  EXPECT_FALSE(fixture
-                   .CallTool("get_agent_guides",
-                             json{{"files", json::array({1})}})
-                   .ok);
+  EXPECT_FALSE(
+      fixture.CallTool("get_agent_guides", json{{"files", json::array({1})}})
+          .ok);
   // One bad name fails the whole call: nothing is returned half-way.
   EXPECT_FALSE(fixture
                    .CallTool("get_agent_guides",
@@ -545,7 +555,8 @@ TEST(McpToolsGuidesTest, WorkflowNamesRegisteredTools) {
   const size_t end = text.find("\n## ", begin + 1);
   const std::string section = text.substr(begin, end - begin);
 
-  // Numbered steps: "1. `get_editor_state`: ..." / "2. `find_nodes` / `get_node`: ...".
+  // Numbered steps: "1. `get_editor_state`: ..." / "2. `find_nodes` /
+  // `get_node`: ...".
   std::vector<std::string> names;
   size_t line_start = 0;
   while (line_start < section.size()) {
@@ -579,6 +590,7 @@ TEST(McpToolsGuidesTest, WorkflowNamesRegisteredTools) {
     std::string list;
     for (const std::string& name : missing) list += " " + name;
     GTEST_SKIP() << "workflow tools not registered yet (their groups are not "
-                    "merged):" << list;
+                    "merged):"
+                 << list;
   }
 }

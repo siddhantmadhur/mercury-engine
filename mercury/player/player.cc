@@ -133,8 +133,8 @@ PlayerArgs ParsePlayerArgs(int argc, char** argv, bool allow_unknown) {
             std::from_chars(text.data(), text.data() + text.size(), frames);
         if (ec != std::errc{} || end != text.data() + text.size() ||
             frames < 0) {
-          args.option_error = "--frames needs a frame count (got " +
-                              std::string(text) + ")";
+          args.option_error =
+              "--frames needs a frame count (got " + std::string(text) + ")";
         } else {
           args.frames = frames;
         }
@@ -211,8 +211,7 @@ int RunPlayer(int argc, char** argv, const char* default_project) {
     if (engine_schema_path == "-") {
       std::cout << schema << "\n";
     } else if (!os::WriteFileAtomic(engine_schema_path, schema)) {
-      PDebug::error("Could not write engine schema to {}",
-                    engine_schema_path);
+      PDebug::error("Could not write engine schema to {}", engine_schema_path);
       return 1;
     }
     return 0;

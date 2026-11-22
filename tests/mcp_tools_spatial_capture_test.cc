@@ -94,8 +94,9 @@ TEST(McpToolsSpatialCaptureTest, BoundsOfColliderAndModelNodes) {
 
   // A collider node: the transform's scale is baked into the world AABB and
   // the local box keeps the unscaled collider extent.
-  ToolResult ground = fixture.CallTool(
-      "query_scene_spatial", {{"mode", "bounds"}, {"node", {{"path", "Ground"}}}});
+  ToolResult ground =
+      fixture.CallTool("query_scene_spatial",
+                       {{"mode", "bounds"}, {"node", {{"path", "Ground"}}}});
   ASSERT_TRUE(ground.ok) << ground.result.dump();
   EXPECT_EQ(ground.result["node"]["name"], "Ground");
   const auto gmin = ground.result["world_min"];
@@ -108,12 +109,13 @@ TEST(McpToolsSpatialCaptureTest, BoundsOfColliderAndModelNodes) {
 
   // A MeshRenderer-only node: no collider, so this exercises the RenderMesh
   // bounds_min/bounds_max fallback in GetNodeWorldBounds.
-  MapNode* quad = scene.CreatePreset(scene.GetMap().GetRoot(),
-                                     EditorScene::Preset::kQuad);
+  MapNode* quad =
+      scene.CreatePreset(scene.GetMap().GetRoot(), EditorScene::Preset::kQuad);
   ASSERT_NE(quad, nullptr);
   scene.OnFrame(0.0);
-  ToolResult model = fixture.CallTool(
-      "query_scene_spatial", {{"mode", "bounds"}, {"node", {{"uid", quad->uid}}}});
+  ToolResult model =
+      fixture.CallTool("query_scene_spatial",
+                       {{"mode", "bounds"}, {"node", {{"uid", quad->uid}}}});
   ASSERT_TRUE(model.ok) << model.result.dump();
   EXPECT_LT(model.result["world_min"][0].get<float>(),
             model.result["world_max"][0].get<float>());
@@ -169,9 +171,8 @@ TEST(McpToolsSpatialCaptureTest, NodesInBoxHonoursLayerMask) {
 TEST(McpToolsSpatialCaptureTest, RaycastNearestLayerMaskAndInactive) {
   McpToolFixture fixture;
   EditorScene& scene = fixture.Scene();
-  const nlohmann::json down = {{"mode", "raycast"},
-                               {"origin", {0, 100, 0}},
-                               {"direction", {0, -1, 0}}};
+  const nlohmann::json down = {
+      {"mode", "raycast"}, {"origin", {0, 100, 0}}, {"direction", {0, -1, 0}}};
   ToolResult ray = fixture.CallTool("query_scene_spatial", down);
   ASSERT_TRUE(ray.ok) << ray.result.dump();
   const auto& hits = ray.result["hits"];
@@ -190,7 +191,8 @@ TEST(McpToolsSpatialCaptureTest, RaycastNearestLayerMaskAndInactive) {
   scene.SetLayer(entity, 3);
   nlohmann::json layer_zero = down;
   layer_zero["layer_mask"] = 1;
-  ToolResult without_player = fixture.CallTool("query_scene_spatial", layer_zero);
+  ToolResult without_player =
+      fixture.CallTool("query_scene_spatial", layer_zero);
   ASSERT_TRUE(without_player.ok) << without_player.result.dump();
   EXPECT_FALSE(HasHit(without_player, "Player"));
   EXPECT_TRUE(HasHit(without_player, "Ground"));
@@ -213,8 +215,9 @@ TEST(McpToolsSpatialCaptureTest, RaycastNearestLayerMaskAndInactive) {
 
 TEST(McpToolsSpatialCaptureTest, RaycastGroundDefaultsToStraightDown) {
   McpToolFixture fixture;
-  ToolResult ground = fixture.CallTool(
-      "query_scene_spatial", {{"mode", "raycast_ground"}, {"origin", {0, 100, 0}}});
+  ToolResult ground =
+      fixture.CallTool("query_scene_spatial",
+                       {{"mode", "raycast_ground"}, {"origin", {0, 100, 0}}});
   ASSERT_TRUE(ground.ok) << ground.result.dump();
   ASSERT_GT(ground.result["hits"].size(), 0u);
   EXPECT_EQ(ground.result["hits"][0]["name"], "Player");
@@ -249,7 +252,8 @@ TEST(McpToolsSpatialCaptureTest, ViewStateSaveRestoreOnErrorAndNoHost) {
   host.fail = true;
   scene.SetRenderHost(&host);
   ToolResult failed = fixture.CallTool(
-      "capture_viewport", {{"preset", "isometric"}, {"width", 64}, {"height", 64}});
+      "capture_viewport",
+      {{"preset", "isometric"}, {"width", 64}, {"height", 64}});
   EXPECT_FALSE(failed.ok);
   EXPECT_NE(ErrorText(failed).find("copy scene pixels"), std::string::npos);
 
@@ -302,15 +306,15 @@ TEST(McpToolsSpatialCaptureTest, CapturesPngWithSoftwareOverlays) {
   int width = 0;
   int height = 0;
   int channels = 0;
-  stbi_uc* pixels = stbi_load_from_memory(png.data(),
-                                          static_cast<int>(png.size()), &width,
-                                          &height, &channels, 4);
+  stbi_uc* pixels = stbi_load_from_memory(
+      png.data(), static_cast<int>(png.size()), &width, &height, &channels, 4);
   ASSERT_NE(pixels, nullptr) << "the returned PNG must decode";
   EXPECT_EQ(width, 64);
   EXPECT_EQ(height, 64);
   int changed = 0;
   for (size_t i = 0; i < static_cast<size_t>(width) * height * 4; i += 4) {
-    if (pixels[i] != 10 || pixels[i + 1] != 20 || pixels[i + 2] != 30) changed++;
+    if (pixels[i] != 10 || pixels[i + 1] != 20 || pixels[i + 2] != 30)
+      changed++;
   }
   stbi_image_free(pixels);
   EXPECT_GT(changed, 0) << "collider/highlight overlays must draw into the PNG";
@@ -327,10 +331,10 @@ TEST(McpToolsSpatialCaptureTest, CapturesPngWithSoftwareOverlays) {
 
 TEST(McpToolsSpatialCaptureTest, RaycastReportsWorldFaceNormals) {
   McpToolFixture fixture;
-  ToolResult down = fixture.CallTool("query_scene_spatial",
-                                     {{"mode", "raycast"},
-                                      {"origin", {0, 100, 0}},
-                                      {"direction", {0, -1, 0}}});
+  ToolResult down =
+      fixture.CallTool("query_scene_spatial", {{"mode", "raycast"},
+                                               {"origin", {0, 100, 0}},
+                                               {"direction", {0, -1, 0}}});
   ASSERT_TRUE(down.ok) << down.result.dump();
   ASSERT_GT(down.result["hits"].size(), 0u);
   const auto& top = down.result["hits"][0]["normal"];
@@ -340,10 +344,10 @@ TEST(McpToolsSpatialCaptureTest, RaycastReportsWorldFaceNormals) {
   EXPECT_NEAR(top[2].get<float>(), 0.0f, 1e-3f);
 
   // A sideways ray into the Ground box should report an X-facing normal.
-  ToolResult side = fixture.CallTool("query_scene_spatial",
-                                     {{"mode", "raycast"},
-                                      {"origin", {30, -0.5f, 0}},
-                                      {"direction", {-1, 0, 0}}});
+  ToolResult side =
+      fixture.CallTool("query_scene_spatial", {{"mode", "raycast"},
+                                               {"origin", {30, -0.5f, 0}},
+                                               {"direction", {-1, 0, 0}}});
   ASSERT_TRUE(side.ok) << side.result.dump();
   ASSERT_GT(side.result["hits"].size(), 0u);
   const auto& face = side.result["hits"][0]["normal"];
@@ -361,14 +365,12 @@ TEST(McpToolsSpatialCaptureTest, CaptureSuggestsNearMissNodes) {
   const nlohmann::json bad_ref = {{"path", "RollABall/Plyer"}};
   ToolResult highlight = fixture.CallTool(
       "capture_viewport",
-      {{"preset", "current"},
-       {"highlight", nlohmann::json::array({bad_ref})}});
+      {{"preset", "current"}, {"highlight", nlohmann::json::array({bad_ref})}});
   EXPECT_FALSE(highlight.ok);
   EXPECT_EQ(highlight.result["suggestion"], "RollABall/Player");
 
-  ToolResult frame =
-      fixture.CallTool("capture_viewport", {{"preset", "current"},
-                                            {"frame", bad_ref}});
+  ToolResult frame = fixture.CallTool(
+      "capture_viewport", {{"preset", "current"}, {"frame", bad_ref}});
   EXPECT_FALSE(frame.ok);
   EXPECT_EQ(frame.result["suggestion"], "RollABall/Player");
   fixture.Scene().SetRenderHost(nullptr);
@@ -385,8 +387,9 @@ TEST(McpToolsSpatialCaptureTest, TopDownPresetLooksDownAndKeepsTarget) {
   view.distance = 40.0f;
   scene.SetViewState(view);
 
-  ToolResult result = fixture.CallTool(
-      "capture_viewport", {{"preset", "top_down"}, {"width", 64}, {"height", 64}});
+  ToolResult result =
+      fixture.CallTool("capture_viewport",
+                       {{"preset", "top_down"}, {"width", 64}, {"height", 64}});
   ASSERT_TRUE(result.ok) << result.result.dump();
   const auto& camera = result.result["camera"];
   ASSERT_TRUE(result.result.contains("camera"));
@@ -473,9 +476,10 @@ TEST(McpToolsSpatialCaptureTest, OverlayUsesNodeWorldTransform) {
   int width = 0;
   int height = 0;
   int channels = 0;
-  stbi_uc* pixels = stbi_load_from_memory(result.images[0].data.data(),
-                                          static_cast<int>(result.images[0].data.size()),
-                                          &width, &height, &channels, 4);
+  stbi_uc* pixels =
+      stbi_load_from_memory(result.images[0].data.data(),
+                            static_cast<int>(result.images[0].data.size()),
+                            &width, &height, &channels, 4);
   ASSERT_NE(pixels, nullptr);
   double sx = 0.0;
   double sy = 0.0;
@@ -513,7 +517,8 @@ TEST(McpToolsSpatialCaptureTest, LifetimeTokenExpiresOnDestroyScene) {
 TEST(McpToolsSpatialCaptureTest, HeadlessFilamentCapture) {
   McpToolFixture fixture;
   std::filesystem::path mproj;
-  for (const auto& entry : std::filesystem::directory_iterator(fixture.Root())) {
+  for (const auto& entry :
+       std::filesystem::directory_iterator(fixture.Root())) {
     if (entry.path().extension() == ".mproj") mproj = entry.path();
   }
   ASSERT_FALSE(mproj.empty());
@@ -532,11 +537,13 @@ TEST(McpToolsSpatialCaptureTest, HeadlessFilamentCapture) {
   int height = 0;
   uint64_t frame_id = 0;
   std::vector<uint8_t> pixels;
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(30);
   bool ready = false;
   while (std::chrono::steady_clock::now() < deadline) {
     app->StepFrame();
-    if (app->CopyScenePixels(width, height, pixels, &frame_id) && frame_id > 0) {
+    if (app->CopyScenePixels(width, height, pixels, &frame_id) &&
+        frame_id > 0) {
       ready = true;
       break;
     }
@@ -550,7 +557,8 @@ TEST(McpToolsSpatialCaptureTest, HeadlessFilamentCapture) {
   // camera preset is `current`, so no resize is needed for this frame.
   fixture.Scene().SetRenderHost(app.get());
   ToolResult result = fixture.CallTool(
-      "capture_viewport", {{"preset", "current"}, {"width", 128}, {"height", 128}});
+      "capture_viewport",
+      {{"preset", "current"}, {"width", 128}, {"height", 128}});
   EXPECT_TRUE(result.ok) << result.result.dump();
   if (result.ok) {
     ASSERT_EQ(result.images.size(), 1u);

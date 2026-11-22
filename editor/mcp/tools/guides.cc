@@ -58,8 +58,8 @@ std::string LowerExtension(std::string_view path) {
 // whatever the importer registry maps to a model, texture or audio clip.
 std::vector<std::string> StructureExtensions() {
   std::vector<std::string> extensions = {
-      ".mproj", ".mmap", ".mprefab", ".as",     ".h",      ".cc",
-      ".uxml",  ".uss",  ".minput",  ".manim",  ".masset",
+      ".mproj", ".mmap", ".mprefab", ".as",    ".h",      ".cc",
+      ".uxml",  ".uss",  ".minput",  ".manim", ".masset",
   };
   for (const AssetImporterInfo& info :
        AssetImporterRegistry::Instance().Importers()) {
@@ -103,8 +103,8 @@ std::string Inline(std::string_view text, size_t max = 200) {
   }
   if (cut) {
     // Do not leave half a UTF-8 character at the cut.
-    while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) ==
-                               0x80) {
+    while (!out.empty() &&
+           (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80) {
       out.pop_back();
     }
     if (!out.empty() && static_cast<unsigned char>(out.back()) >= 0xC0) {
@@ -210,7 +210,8 @@ std::string InputActionTypeName(InputAction::Type type) {
 void AppendInputActions(const Project& project, std::string& out) {
   const std::string path = project.GetInputActionsPath();
   if (path.empty()) {
-    out += "- Input actions: none (no `[input] actions` in the project file).\n";
+    out +=
+        "- Input actions: none (no `[input] actions` in the project file).\n";
     return;
   }
   out += "- Input actions asset: " + Inline(path) + "\n";
@@ -232,8 +233,8 @@ void AppendInputActions(const Project& project, std::string& out) {
     out += "  - The file could not be parsed: " + Inline(error) + "\n";
     return;
   }
-  out += "  - Action maps: " + (desc.maps.empty() ? std::string("none")
-                                                  : JoinInline(desc.maps)) +
+  out += "  - Action maps: " +
+         (desc.maps.empty() ? std::string("none") : JoinInline(desc.maps)) +
          "\n";
   if (desc.actions.empty()) {
     out += "  - Actions: none\n";
@@ -379,8 +380,8 @@ ToolResult GetAgentGuidesTool(EditorScene& scene, const nlohmann::json& args) {
 
 const std::vector<std::string_view>& StructureKinds() {
   static const std::vector<std::string_view> kinds = {
-      kProjectKind, "maps",   "prefabs", "scripts", "ui",    "input",
-      "animators",  "data_assets", "models", "textures", "audio"};
+      kProjectKind, "maps",        "prefabs", "scripts",  "ui",   "input",
+      "animators",  "data_assets", "models",  "textures", "audio"};
   return kinds;
 }
 
@@ -440,13 +441,13 @@ nlohmann::json ClassifyProjectFiles(const std::vector<std::string>& res_paths,
     kinds[kind] = std::move(list);
     counts[kind] = count;
   }
-  return nlohmann::json{{"kinds", std::move(kinds)},
-                        {"counts", std::move(counts)},
-                        {"total", total},
-                        {"returned", returned},
-                        {"truncated", returned < total},
-                        {"cap", cap == SIZE_MAX ? nlohmann::json(nullptr)
-                                                : nlohmann::json(cap)}};
+  return nlohmann::json{
+      {"kinds", std::move(kinds)},
+      {"counts", std::move(counts)},
+      {"total", total},
+      {"returned", returned},
+      {"truncated", returned < total},
+      {"cap", cap == SIZE_MAX ? nlohmann::json(nullptr) : nlohmann::json(cap)}};
 }
 
 std::vector<std::string> ListStructureFiles(const EditorScene& scene) {

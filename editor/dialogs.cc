@@ -593,9 +593,8 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   auto* port_lbl = new wxStaticText(mcp, wxID_ANY, "Port:");
   auto* port_row = new wxBoxSizer(wxHORIZONTAL);
   auto* port_ctrl = new wxSpinCtrl(
-      mcp, wxID_ANY, "49152", wxDefaultPosition, wxDefaultSize,
-      wxSP_ARROW_KEYS, 1024, 65535,
-      std::clamp(scene.Settings().mcp_port, 1024, 65535));
+      mcp, wxID_ANY, "49152", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
+      1024, 65535, std::clamp(scene.Settings().mcp_port, 1024, 65535));
   port_ctrl->SetName("mcp_port");
   port_ctrl->SetToolTip("Fixed port for the MCP server.");
   auto* ephemeral_check =
@@ -638,9 +637,9 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   // Room for the longest state so the layout below does not jump.
   status->SetMinSize(wxSize(-1, status->GetCharHeight() + 4));
 
-  auto* url_ctrl = new wxTextCtrl(mcp, wxID_ANY, wxEmptyString,
-                                  wxDefaultPosition, wxDefaultSize,
-                                  wxTE_READONLY);
+  auto* url_ctrl =
+      new wxTextCtrl(mcp, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                     wxDefaultSize, wxTE_READONLY);
   url_ctrl->SetName("mcp_url");
   url_ctrl->SetToolTip(
       "The MCP endpoint URL. With \"Pick a free port automatically\", the "
@@ -650,10 +649,9 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   url_row->Add(url_ctrl, 1, wxEXPAND | wxRIGHT, 6);
   url_row->Add(url_copy, 0, wxALIGN_CENTER_VERTICAL);
 
-  auto* command_ctrl = new wxTextCtrl(mcp, wxID_ANY, wxEmptyString,
-                                      wxDefaultPosition, wxDefaultSize,
-                                      wxTE_MULTILINE | wxTE_READONLY |
-                                          wxTE_NO_VSCROLL | wxBORDER_SIMPLE);
+  auto* command_ctrl = new wxTextCtrl(
+      mcp, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+      wxTE_MULTILINE | wxTE_READONLY | wxTE_NO_VSCROLL | wxBORDER_SIMPLE);
   command_ctrl->SetName("mcp_command");
   command_ctrl->SetFont(MonospaceFont());
   command_ctrl->SetMinSize(wxSize(-1, command_ctrl->GetCharHeight() * 3));
@@ -678,9 +676,9 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
       wxTheClipboard->Close();
     }
   };
-  url_copy->Bind(
-      wxEVT_BUTTON,
-      [url_ctrl, copy_text](wxCommandEvent&) { copy_text(url_ctrl->GetValue()); });
+  url_copy->Bind(wxEVT_BUTTON, [url_ctrl, copy_text](wxCommandEvent&) {
+    copy_text(url_ctrl->GetValue());
+  });
   command_copy->Bind(wxEVT_BUTTON, [command_ctrl, copy_text](wxCommandEvent&) {
     copy_text(command_ctrl->GetValue());
   });
@@ -695,8 +693,7 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
       if (!live.empty()) return live;
     }
     if (ephemeral_check->GetValue()) return kEphemeralPlaceholder;
-    return "http://127.0.0.1:" + std::to_string(port_ctrl->GetValue()) +
-           "/mcp";
+    return "http://127.0.0.1:" + std::to_string(port_ctrl->GetValue()) + "/mcp";
   };
   auto has_real_url = [&]() {
     if (!ephemeral_check->GetValue()) return true;
@@ -722,8 +719,7 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
     // empty token means nothing has been issued to rotate yet.
     regen_btn->Enable(!scene.Settings().mcp_token.empty());
     if (scene.Mcp().Running()) {
-      status->SetLabel("Running at " +
-                       wxString::FromUTF8(scene.Mcp().Url()));
+      status->SetLabel("Running at " + wxString::FromUTF8(scene.Mcp().Url()));
       status->SetForegroundColour(
           wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
     } else {
@@ -759,10 +755,10 @@ bool ShowPreferencesDialog(wxWindow* parent, EditorScene& scene) {
   mcp_box->Add(status, 0, wxLEFT | wxRIGHT | wxTOP, 14);
   mcp_box->Add(url_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
   mcp_box->Add(command_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 14);
-  mcp_box->Add(new wxStaticText(
-                   mcp, wxID_ANY,
-                   "Run /mcp in Claude Code to verify the connection."),
-               0, wxLEFT | wxRIGHT | wxTOP, 10);
+  mcp_box->Add(
+      new wxStaticText(mcp, wxID_ANY,
+                       "Run /mcp in Claude Code to verify the connection."),
+      0, wxLEFT | wxRIGHT | wxTOP, 10);
   mcp_box->Add(regen_btn, 0, wxLEFT | wxRIGHT | wxTOP, 10);
   mcp_box->AddSpacer(4);
   mcp->SetSizer(mcp_box);

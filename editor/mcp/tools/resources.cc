@@ -77,9 +77,8 @@ std::optional<std::string> PercentDecode(std::string_view text) {
 nlohmann::json Content(std::string_view uri, std::string_view mime,
                        std::string text) {
   return nlohmann::json{
-      {"contents",
-       nlohmann::json::array(
-           {nlohmann::json{{"uri", uri}, {"mimeType", mime}, {"text", text}}})}};
+      {"contents", nlohmann::json::array({nlohmann::json{
+                       {"uri", uri}, {"mimeType", mime}, {"text", text}}})}};
 }
 
 std::vector<std::string> FixedUris() {
@@ -161,8 +160,8 @@ ToolResult ReadAsset(EditorScene& scene, std::string_view encoded_path,
     }
     return Error(error, suggestion);
   }
-  return ToolResult{true, Content(uri, "application/json", std::move(json)),
-                    {}};
+  return ToolResult{
+      true, Content(uri, "application/json", std::move(json)), {}};
 }
 
 ToolResult ReadResourceTool(EditorScene& scene, const nlohmann::json& args) {
@@ -173,9 +172,8 @@ ToolResult ReadResourceTool(EditorScene& scene, const nlohmann::json& args) {
 
   if (uri.starts_with(kGuidePrefix)) {
     if (auto guide = BuildGuide(scene, uri.substr(kGuidePrefix.size()))) {
-      return ToolResult{true,
-                        Content(uri, "text/markdown", std::move(*guide)),
-                        {}};
+      return ToolResult{
+          true, Content(uri, "text/markdown", std::move(*guide)), {}};
     }
   } else if (uri == kStructureUri) {
     if (!scene.GetProject()) return Error("no project is open in the editor");
@@ -185,7 +183,8 @@ ToolResult ReadResourceTool(EditorScene& scene, const nlohmann::json& args) {
         {}};
   } else if (uri == kSchemaUri) {
     return ToolResult{
-        true, Content(uri, "application/json", introspection::EngineSchemaJson()),
+        true,
+        Content(uri, "application/json", introspection::EngineSchemaJson()),
         {}};
   } else if (uri.starts_with(kAssetPrefix)) {
     return ReadAsset(scene, std::string_view(uri).substr(kAssetPrefix.size()),

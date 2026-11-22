@@ -133,8 +133,8 @@ std::vector<FieldInfo> EveryField() {
   fields.push_back(MakeField("size", FieldType::kVector2, glm::vec2(1.5f, -2)));
   fields.push_back(
       MakeField("offset", FieldType::kVector3, glm::vec3(0.25f, 8, -1)));
-  fields.push_back(MakeField(
-      "tint", FieldType::kColor, mtext::Color{glm::vec4(1, 0.5f, 0.25f, 0.75f)}));
+  fields.push_back(MakeField("tint", FieldType::kColor,
+                             mtext::Color{glm::vec4(1, 0.5f, 0.25f, 0.75f)}));
   fields.push_back(MakeField("target", FieldType::kNodeRef,
                              mtext::NodePath{"Child/Grandchild"}));
   FieldInfo asset = MakeField("material", FieldType::kAsset,
@@ -149,10 +149,9 @@ std::vector<FieldInfo> EveryField() {
       mtext::Array{mtext::Variant(int64_t{1}), mtext::Variant(int64_t{2})});
   ints.element_type = FieldType::kInt;
   fields.push_back(ints);
-  FieldInfo names = MakeField(
-      "names", FieldType::kList,
-      mtext::Array{mtext::Variant(std::string("a")),
-                   mtext::Variant(std::string("b"))});
+  FieldInfo names = MakeField("names", FieldType::kList,
+                              mtext::Array{mtext::Variant(std::string("a")),
+                                           mtext::Variant(std::string("b"))});
   names.element_type = FieldType::kString;
   fields.push_back(names);
   FieldInfo assets = MakeField(
@@ -162,8 +161,7 @@ std::vector<FieldInfo> EveryField() {
   fields.push_back(assets);
   mtext::Array call{mtext::Variant(mtext::NodePath{"Other"}),
                     mtext::Variant(std::string("Door")),
-                    mtext::Variant(std::string("Open")),
-                    mtext::Variant(true)};
+                    mtext::Variant(std::string("Open")), mtext::Variant(true)};
   fields.push_back(MakeField("on_hit", FieldType::kEvent,
                              mtext::Array{mtext::Variant(std::move(call))}));
   return fields;
@@ -232,8 +230,10 @@ TEST(McpSceneJsonTest, NodeToJsonDescribesTheNode) {
   EXPECT_EQ(plain["transform"]["scale"], json::array({2, 2, 2}));
   // 90 degrees about Y: (0, sin 45, 0, cos 45).
   ASSERT_EQ(plain["transform"]["rotation"].size(), 4u);
-  EXPECT_NEAR(plain["transform"]["rotation"][1].get<double>(), 0.70710678, 1e-6);
-  EXPECT_NEAR(plain["transform"]["rotation"][3].get<double>(), 0.70710678, 1e-6);
+  EXPECT_NEAR(plain["transform"]["rotation"][1].get<double>(), 0.70710678,
+              1e-6);
+  EXPECT_NEAR(plain["transform"]["rotation"][3].get<double>(), 0.70710678,
+              1e-6);
 
   const json full = NodeToJson(test.scene, *test.child, true);
   ASSERT_EQ(full["components"].size(), 1u);
@@ -266,15 +266,16 @@ TEST(McpSceneJsonTest, ResolveByUidNumberAndString) {
   EXPECT_EQ(ResolveNode(test.scene, json{{"uid", test.child->uid}}, &error),
             test.child)
       << error;
-  EXPECT_EQ(ResolveNode(test.scene,
-                        json{{"uid", std::to_string(test.grandchild->uid)}},
-                        &error),
-            test.grandchild)
+  EXPECT_EQ(
+      ResolveNode(test.scene,
+                  json{{"uid", std::to_string(test.grandchild->uid)}}, &error),
+      test.grandchild)
       << error;
   // A plain int literal is a signed JSON number; it must work as well.
-  EXPECT_EQ(ResolveNode(test.scene,
-                        json{{"uid", static_cast<int>(test.other->uid)}}, &error),
-            test.other)
+  EXPECT_EQ(
+      ResolveNode(test.scene, json{{"uid", static_cast<int>(test.other->uid)}},
+                  &error),
+      test.other)
       << error;
 }
 
@@ -322,8 +323,9 @@ TEST(McpSceneJsonTest, UnknownUidSaysWhichFormFailedAndSuggests) {
   std::string suggestion;
   // Far from every uid: an error naming the form and the uid, no suggestion.
   const uint64_t far_away = 987654321;
-  EXPECT_EQ(ResolveNode(test.scene, json{{"uid", far_away}}, &error, &suggestion),
-            nullptr);
+  EXPECT_EQ(
+      ResolveNode(test.scene, json{{"uid", far_away}}, &error, &suggestion),
+      nullptr);
   EXPECT_NE(error.find("\"uid\""), std::string::npos) << error;
   EXPECT_NE(error.find(std::to_string(far_away)), std::string::npos) << error;
   EXPECT_TRUE(suggestion.empty()) << suggestion;
@@ -349,22 +351,20 @@ TEST(McpSceneJsonTest, UnknownUidSaysWhichFormFailedAndSuggests) {
     }
   }
   ASSERT_FALSE(near_miss.empty()) << "no unambiguous near miss of " << base;
-  EXPECT_EQ(ResolveNode(test.scene, json{{"uid", near_miss}}, &error,
-                        &suggestion),
-            nullptr);
+  EXPECT_EQ(
+      ResolveNode(test.scene, json{{"uid", near_miss}}, &error, &suggestion),
+      nullptr);
   EXPECT_EQ(suggestion, base) << "near miss " << near_miss << ": " << error;
-  EXPECT_NE(error.find("did you mean uid " + base), std::string::npos)
-      << error;
+  EXPECT_NE(error.find("did you mean uid " + base), std::string::npos) << error;
 }
 
 TEST(McpSceneJsonTest, MalformedRefsAreRejectedWithTheValidForms) {
   TestScene test;
   std::string error;
-  for (const json& ref :
-       {json("Root/Child"), json(42), json::object(),
-        json{{"uid", 1}, {"path", "Root"}}, json{{"uid", -1}},
-        json{{"uid", "12x"}}, json{{"uid", 1.5}}, json{{"path", ""}},
-        json{{"path", 7}}}) {
+  for (const json& ref : {json("Root/Child"), json(42), json::object(),
+                          json{{"uid", 1}, {"path", "Root"}}, json{{"uid", -1}},
+                          json{{"uid", "12x"}}, json{{"uid", 1.5}},
+                          json{{"path", ""}}, json{{"path", 7}}}) {
     EXPECT_EQ(ResolveNode(test.scene, ref, &error), nullptr) << ref.dump();
     EXPECT_NE(error.find(ref.dump()), std::string::npos) << error;
   }
@@ -432,7 +432,8 @@ TEST(McpSceneJsonTest, JsonToPropertyValueAcceptsTheLenientForms) {
   EXPECT_EQ(convert(2, json(3)), mtext::Variant(3.0));
   EXPECT_EQ(convert(5, json{{"vec3", json::array({1, 2, 3})}}),
             mtext::Variant(glm::vec3(1, 2, 3)));
-  EXPECT_EQ(convert(7, json("Child")), mtext::Variant(mtext::NodePath{"Child"}));
+  EXPECT_EQ(convert(7, json("Child")),
+            mtext::Variant(mtext::NodePath{"Child"}));
   EXPECT_EQ(convert(7, json(nullptr)), mtext::Variant(mtext::NodePath{}));
   EXPECT_EQ(convert(8, json("")), mtext::Variant(mtext::Resource{}));
 }
@@ -447,22 +448,22 @@ TEST(McpSceneJsonTest, ResourceFieldsMustExistInTheProject) {
   FieldInfo field = MakeField("material", FieldType::kAsset, mtext::Resource{});
   mtext::Variant out;
   std::string error;
-  EXPECT_TRUE(JsonToPropertyValue(
-      field, json{{"res", "res://assets/white.masset"}}, out, &error,
-      project.get()))
+  EXPECT_TRUE(JsonToPropertyValue(field,
+                                  json{{"res", "res://assets/white.masset"}},
+                                  out, &error, project.get()))
       << error;
   EXPECT_EQ(out, mtext::Variant(mtext::Resource{"res://assets/white.masset"}));
 
-  EXPECT_FALSE(JsonToPropertyValue(
-      field, json{{"res", "res://assets/nope.masset"}}, out, &error,
-      project.get()));
+  EXPECT_FALSE(JsonToPropertyValue(field,
+                                   json{{"res", "res://assets/nope.masset"}},
+                                   out, &error, project.get()));
   EXPECT_NE(error.find("does not exist"), std::string::npos) << error;
-  EXPECT_FALSE(JsonToPropertyValue(
-      field, json{{"res", "res://../outside.masset"}}, out, &error,
-      project.get()));
+  EXPECT_FALSE(JsonToPropertyValue(field,
+                                   json{{"res", "res://../outside.masset"}},
+                                   out, &error, project.get()));
   // Unset always passes; without a project the check is skipped.
-  EXPECT_TRUE(
-      JsonToPropertyValue(field, json{{"res", ""}}, out, &error, project.get()));
+  EXPECT_TRUE(JsonToPropertyValue(field, json{{"res", ""}}, out, &error,
+                                  project.get()));
   EXPECT_TRUE(
       JsonToPropertyValue(field, json{{"res", "res://anything"}}, out, &error));
   fs::remove_all(root);
@@ -480,8 +481,9 @@ TEST(McpSceneJsonTest, RealProjectNodesRoundTripThroughTheRegistry) {
   MapNode* player =
       ResolveNode(scene, json{{"path", "RollABall/Player"}}, &error);
   ASSERT_NE(player, nullptr) << error;
-  EXPECT_EQ(ResolveNode(scene, json{{"uid", std::to_string(player->uid)}}, &error),
-            player);
+  EXPECT_EQ(
+      ResolveNode(scene, json{{"uid", std::to_string(player->uid)}}, &error),
+      player);
   EXPECT_EQ(ResolveNode(scene, json{{"path", "Player"}}, &error), player);
 
   const json node = json::parse(NodeToJson(scene, *player, true).dump());

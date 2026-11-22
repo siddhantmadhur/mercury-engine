@@ -99,8 +99,7 @@ class ToolRegistry {
   // initialization. Sync and async tools share one table (one name, one
   // entry; registering a name again replaces it).
   void Register(std::string name, ToolMode mode, ToolHandler handler);
-  void RegisterAsync(std::string name, ToolMode mode,
-                     AsyncToolHandler handler);
+  void RegisterAsync(std::string name, ToolMode mode, AsyncToolHandler handler);
 
   // nullptr when no tool is registered under this name.
   const ToolEntry* Find(const std::string& name) const;
@@ -180,24 +179,24 @@ class CallTracker {
 // included. Put tools in editor/mcp/tools/<group>.cc: that folder is built as
 // the mercury_mcp_tools object library, whose objects are linked directly into
 // the editor and every editor-linked test, so they are never dropped.
-#define MERCURY_MCP_TOOL(name, mode, handler)                                    \
-  namespace {                                                                    \
-  const bool MERCURY_MCP_TOOL_CAT(k_mcp_tool_registered_, __LINE__) = [] {        \
-    ::Mercury::mcp::ToolRegistry::Instance().Register(                            \
-        name, ::Mercury::mcp::ToolMode::mode, handler);                           \
-    return true;                                                                  \
-  }();                                                                            \
+#define MERCURY_MCP_TOOL(name, mode, handler)                              \
+  namespace {                                                              \
+  const bool MERCURY_MCP_TOOL_CAT(k_mcp_tool_registered_, __LINE__) = [] { \
+    ::Mercury::mcp::ToolRegistry::Instance().Register(                     \
+        name, ::Mercury::mcp::ToolMode::mode, handler);                    \
+    return true;                                                           \
+  }();                                                                     \
   }
 
 // The same for an AsyncToolHandler (see its contract above): `handler` is
 // callable as handler(EditorScene&, const nlohmann::json&, ToolDone).
-#define MERCURY_MCP_TOOL_ASYNC(name, mode, handler)                              \
-  namespace {                                                                    \
-  const bool MERCURY_MCP_TOOL_CAT(k_mcp_tool_registered_, __LINE__) = [] {        \
-    ::Mercury::mcp::ToolRegistry::Instance().RegisterAsync(                       \
-        name, ::Mercury::mcp::ToolMode::mode, handler);                           \
-    return true;                                                                  \
-  }();                                                                            \
+#define MERCURY_MCP_TOOL_ASYNC(name, mode, handler)                        \
+  namespace {                                                              \
+  const bool MERCURY_MCP_TOOL_CAT(k_mcp_tool_registered_, __LINE__) = [] { \
+    ::Mercury::mcp::ToolRegistry::Instance().RegisterAsync(                \
+        name, ::Mercury::mcp::ToolMode::mode, handler);                    \
+    return true;                                                           \
+  }();                                                                     \
   }
 
 #define MERCURY_MCP_TOOL_CAT(a, b) MERCURY_MCP_TOOL_CAT_INNER(a, b)

@@ -5,8 +5,9 @@
 /*
  * mcp_tools_fixture.h
  *
- * Header-only test fixture for the MCP tool groups (tests/mcp_tools_<group>_test.cc,
- * all built into the mcp_tools_test executable by a CMake glob).
+ * Header-only test fixture for the MCP tool groups
+ * (tests/mcp_tools_<group>_test.cc, all built into the mcp_tools_test
+ * executable by a CMake glob).
  *
  *   #include "mcp_tools_fixture.h"
  *   using Mercury::mcp::ToolResult;
@@ -75,9 +76,9 @@ class McpToolFixture {
  public:
   explicit McpToolFixture(const std::string& example = "roll_a_ball") {
     namespace fs = std::filesystem;
-    root_ = fs::temp_directory_path() /
-            ("mcp_tools_" + example + "_" +
-             std::to_string(std::random_device{}()));
+    root_ =
+        fs::temp_directory_path() /
+        ("mcp_tools_" + example + "_" + std::to_string(std::random_device{}()));
     fs::create_directories(root_ / "config");
     const char* previous = std::getenv("XDG_CONFIG_HOME");
     had_config_home_ = previous != nullptr;
@@ -139,8 +140,7 @@ class McpToolFixture {
     };
     auto completion = std::make_shared<Completion>();
     ToolRegistry::Instance().InvokeAsync(
-        *scene_, std::string(name), args,
-        [completion](ToolResult result) {
+        *scene_, std::string(name), args, [completion](ToolResult result) {
           // A second done() is the tool's bug; the first answer stands.
           if (!completion->result) completion->result = std::move(result);
         });
@@ -148,10 +148,10 @@ class McpToolFixture {
     const auto deadline = std::chrono::steady_clock::now() + pump_timeout_;
     while (!completion->result) {
       if (std::chrono::steady_clock::now() >= deadline) {
-        const std::string message =
-            "async tool '" + std::string(name) +
-            "' did not call done() within " +
-            std::to_string(pump_timeout_.count()) + " ms";
+        const std::string message = "async tool '" + std::string(name) +
+                                    "' did not call done() within " +
+                                    std::to_string(pump_timeout_.count()) +
+                                    " ms";
         ADD_FAILURE() << message;
         return ToolResult{false, nlohmann::json{{"error", message}}, {}};
       }

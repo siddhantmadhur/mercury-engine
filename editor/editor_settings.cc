@@ -77,9 +77,8 @@ void EditorSettings::Load() {
     pack_size_mb = static_cast<int>(
         std::max<int64_t>(0, editor->properties.GetInt("pack_size_mb", 256)));
     mcp_enabled = editor->properties.GetBool("mcp_enabled", false);
-    mcp_port = static_cast<int>(
-        std::clamp<int64_t>(editor->properties.GetInt("mcp_port", 49152), 0,
-                            65535));
+    mcp_port = static_cast<int>(std::clamp<int64_t>(
+        editor->properties.GetInt("mcp_port", 49152), 0, 65535));
     mcp_ephemeral = editor->properties.GetBool("mcp_ephemeral", false);
     mcp_allow_edits = editor->properties.GetBool("mcp_allow_edits", false);
     mcp_write_config = editor->properties.GetBool("mcp_write_config", true);

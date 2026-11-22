@@ -67,7 +67,8 @@ MERCURY_MCP_TOOL_ASYNC("mcp_test_async_write", kWrite, &AsyncWrite);
 MERCURY_MCP_TOOL("mcp_test_sync_echo", kRead, &SyncEcho);
 
 TEST(McpToolsAsyncTest, SyncAndAsyncToolsShareOneTable) {
-  const mcp::ToolEntry* sync = ToolRegistry::Instance().Find("mcp_test_sync_echo");
+  const mcp::ToolEntry* sync =
+      ToolRegistry::Instance().Find("mcp_test_sync_echo");
   const mcp::ToolEntry* async =
       ToolRegistry::Instance().Find("mcp_test_async_later");
   ASSERT_NE(sync, nullptr);
@@ -82,8 +83,7 @@ TEST(McpToolsAsyncTest, SyncAndAsyncToolsShareOneTable) {
 
 TEST(McpToolsAsyncTest, FixtureCallsSyncToolsAtOnce) {
   McpToolFixture fixture;
-  const ToolResult result =
-      fixture.CallTool("mcp_test_sync_echo", {{"a", 1}});
+  const ToolResult result = fixture.CallTool("mcp_test_sync_echo", {{"a", 1}});
   EXPECT_TRUE(result.ok);
   EXPECT_EQ(result.result["echo"]["a"], 1);
 
@@ -118,12 +118,12 @@ TEST(McpToolsAsyncTest, FixtureFailsClearlyWhenDoneNeverComes) {
   McpToolFixture fixture;
   fixture.PumpTimeout(std::chrono::milliseconds(50));
   ToolResult result;
-  EXPECT_NONFATAL_FAILURE(
-      result = fixture.CallTool("mcp_test_async_never"),
-      "did not call done() within 50 ms");
+  EXPECT_NONFATAL_FAILURE(result = fixture.CallTool("mcp_test_async_never"),
+                          "did not call done() within 50 ms");
   EXPECT_FALSE(result.ok);
-  EXPECT_NE(result.result["error"].get<std::string>().find("mcp_test_async_never"),
-            std::string::npos);
+  EXPECT_NE(
+      result.result["error"].get<std::string>().find("mcp_test_async_never"),
+      std::string::npos);
 }
 
 TEST(McpToolsAsyncTest, TheModeCheckAppliesToAsyncToolsToo) {
@@ -132,8 +132,9 @@ TEST(McpToolsAsyncTest, TheModeCheckAppliesToAsyncToolsToo) {
   const ToolResult rejected =
       fixture.CallTool("mcp_test_async_write", {}, /*allow_edits=*/false);
   EXPECT_FALSE(rejected.ok);
-  EXPECT_NE(rejected.result["error"].get<std::string>().find("edits are not allowed"),
-            std::string::npos);
+  EXPECT_NE(
+      rejected.result["error"].get<std::string>().find("edits are not allowed"),
+      std::string::npos);
   EXPECT_EQ(g_write_handler_runs, 0) << "a rejected tool must not run";
 
   const ToolResult allowed = fixture.CallTool("mcp_test_async_write");

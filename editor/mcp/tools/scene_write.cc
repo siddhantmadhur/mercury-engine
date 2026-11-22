@@ -4,8 +4,9 @@
 
 // The scene write tool group: apply_scene_operations (a batch of edits as one
 // undo step), select_node, save_map, undo and redo. The Rust side (the specs
-// and the argument schemas agents read) is mercury/mcp/src/tools/scene_write.rs;
-// the field names parsed here are the ones declared there.
+// and the argument schemas agents read) is
+// mercury/mcp/src/tools/scene_write.rs; the field names parsed here are the
+// ones declared there.
 //
 // How a batch is applied (apply_scene_operations)
 //
@@ -53,8 +54,8 @@ namespace Mercury {
 
 namespace {
 
-using nlohmann::json;
 using mcp::ToolResult;
+using nlohmann::json;
 
 constexpr size_t kMaxOperations = 1000;
 // Recomputed transforms (reparent keeping the world transform) are rounded to
@@ -71,8 +72,9 @@ struct Failure {
 };
 
 std::string DidYouMean(const std::string& suggestion) {
-  return suggestion.empty() ? std::string()
-                            : std::format(" (did you mean \"{}\"?)", suggestion);
+  return suggestion.empty()
+             ? std::string()
+             : std::format(" (did you mean \"{}\"?)", suggestion);
 }
 
 // The best match for `word` among `candidates`, or "".
@@ -187,8 +189,8 @@ struct Operation {
   const Map* prefab_map = nullptr;  // owned by the scene's PrefabCache
   TransformSpec transform;
   std::vector<ComponentSpec> components;  // create
-  std::string type;                       // component type for the component ops
-  PropValue property;                     // set_property
+  std::string type;    // component type for the component ops
+  PropValue property;  // set_property
   bool keep_world_transform = true;
 };
 
@@ -238,10 +240,9 @@ bool CheckRef(const json& ref, const char* field,
   if (ref.is_object() && ref.contains("alias")) {
     if (ref.size() != 1 || !ref.at("alias").is_string() ||
         ref.at("alias").get_ref<const std::string&>().empty()) {
-      return Fail(failure,
-                  std::format("\"{}\": an alias reference is exactly "
-                              "{{\"alias\": \"<id>\"}}, got {}",
-                              field, ref.dump()));
+      return Fail(failure, std::format("\"{}\": an alias reference is exactly "
+                                       "{{\"alias\": \"<id>\"}}, got {}",
+                                       field, ref.dump()));
     }
     const std::string id = ref.at("alias").get<std::string>();
     if (!aliases.contains(id)) {
@@ -281,13 +282,15 @@ bool ParseVec3(const json& value, const char* key, glm::vec3* out,
 // is stored as Euler degrees, the way the Transform component holds rotation.
 bool ParseTransform(const json& object, TransformSpec* out, Failure* failure) {
   if (!object.is_object()) {
-    return Fail(failure, "a transform must be an object like {\"position\": "
-                         "[x, y, z], \"rotation_euler_degrees\": [x, y, z], "
-                         "\"scale\": [x, y, z]}");
+    return Fail(failure,
+                "a transform must be an object like {\"position\": "
+                "[x, y, z], \"rotation_euler_degrees\": [x, y, z], "
+                "\"scale\": [x, y, z]}");
   }
-  if (!CheckKeys(object, {"position", "rotation_euler_degrees", "rotation_quat",
-                          "scale"},
-                 "a transform", failure)) {
+  if (!CheckKeys(
+          object,
+          {"position", "rotation_euler_degrees", "rotation_quat", "scale"},
+          "a transform", failure)) {
     return false;
   }
   TransformSpec spec;
@@ -324,8 +327,8 @@ bool ParseTransform(const json& object, TransformSpec* out, Failure* failure) {
       good = quat[i].is_number() && std::isfinite(quat[i].get<double>());
       if (good) v[i] = quat[i].get<double>();
     }
-    const double length = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] +
-                                    v[3] * v[3]);
+    const double length =
+        std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
     if (!good) {
       return Fail(failure,
                   "\"rotation_quat\" must be [x, y, z, w] with finite numbers");
@@ -375,13 +378,13 @@ bool FindField(const ComponentInfo& info, const std::string& name,
   for (const std::string& field : names) {
     list += (list.empty() ? "" : ", ") + field;
   }
-  return Fail(failure,
-              std::format("component \"{}\" has no field \"{}\"{}{}", info.name,
-                          name, DidYouMean(best),
-                          list.empty() ? std::string()
-                                       : std::format("; its fields are: {}",
-                                                     list)),
-              best);
+  return Fail(
+      failure,
+      std::format("component \"{}\" has no field \"{}\"{}{}", info.name, name,
+                  DidYouMean(best),
+                  list.empty() ? std::string()
+                               : std::format("; its fields are: {}", list)),
+      best);
 }
 
 bool ParseProps(const ComponentInfo& info, const json& props,
@@ -399,7 +402,8 @@ bool ParseProps(const ComponentInfo& info, const json& props,
     mtext::Variant parsed;
     std::string error;
     if (!mcp::JsonToPropertyValue(*field, value, parsed, &error, project)) {
-      return Fail(failure, std::format("component \"{}\": {}", info.name, error));
+      return Fail(failure,
+                  std::format("component \"{}\": {}", info.name, error));
     }
     out->push_back(PropValue{*field, std::move(parsed)});
   }
@@ -419,17 +423,17 @@ bool CheckPrefab(EditorScene& scene, const std::string& path, const Map** out,
   const std::shared_ptr<Project> project = scene.GetProject();
   if (!project) return Fail(failure, "no project is open");
   if (!IsResPath(path) || !path.ends_with(kPrefabExtension)) {
-    return Fail(failure,
-                std::format("\"{}\" is not a prefab path like "
-                            "\"res://prefabs/crate.mprefab\"",
-                            path));
+    return Fail(failure, std::format("\"{}\" is not a prefab path like "
+                                     "\"res://prefabs/crate.mprefab\"",
+                                     path));
   }
   if (!ResExists(*project, path)) {
-    const std::string best = Closest(path, scene.ListProjectFiles({".mprefab"}));
-    return Fail(failure,
-                std::format("prefab {} does not exist{}", path,
-                            DidYouMean(best)),
-                best);
+    const std::string best =
+        Closest(path, scene.ListProjectFiles({".mprefab"}));
+    return Fail(
+        failure,
+        std::format("prefab {} does not exist{}", path, DidYouMean(best)),
+        best);
   }
   const Map* prefab = scene.GetPrefabCache().Get(path);
   if (!prefab) {
@@ -444,8 +448,9 @@ bool CheckPrefab(EditorScene& scene, const std::string& path, const Map** out,
 bool ParseComponents(const json& list, const Project* project,
                      std::vector<ComponentSpec>* out, Failure* failure) {
   if (!list.is_array()) {
-    return Fail(failure, "\"components\" must be an array of {\"type\": ..., "
-                         "\"props\": {...}}");
+    return Fail(failure,
+                "\"components\" must be an array of {\"type\": ..., "
+                "\"props\": {...}}");
   }
   std::set<std::string> seen;
   for (size_t i = 0; i < list.size(); i++) {
@@ -461,9 +466,9 @@ bool ParseComponents(const json& list, const Project* project,
       return false;
     }
     if (spec.type == "Transform") {
-      return Fail(failure,
-                  where + ": a node always has its Transform; set it with "
-                          "\"transform\" instead");
+      return Fail(failure, where +
+                               ": a node always has its Transform; set it with "
+                               "\"transform\" instead");
     }
     if (!seen.insert(spec.type).second) {
       return Fail(failure,
@@ -494,13 +499,15 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
   const Project* project = scene.GetProject().get();
   op->index = index;
   if (!json_op.is_object()) {
-    return Fail(failure, "an operation must be an object like {\"op\": "
-                         "\"create\", ...}");
+    return Fail(failure,
+                "an operation must be an object like {\"op\": "
+                "\"create\", ...}");
   }
   if (!json_op.contains("op") || !json_op.at("op").is_string()) {
-    return Fail(failure, "missing \"op\" (one of create, instantiate_prefab, "
-                         "delete, reparent, set_transform, set_property, "
-                         "add_component, remove_component)");
+    return Fail(failure,
+                "missing \"op\" (one of create, instantiate_prefab, "
+                "delete, reparent, set_transform, set_property, "
+                "add_component, remove_component)");
   }
   const std::string kind_name = json_op.at("op").get<std::string>();
   op->kind_name = kind_name;
@@ -521,7 +528,8 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
   if (!CheckKeys(json_op, allowed, "this operation", failure)) return false;
 
   auto require_ref = [&](const char* key, json* out) {
-    if (IsAbsent(json_op, key)) return Fail(failure, std::format("missing \"{}\"", key));
+    if (IsAbsent(json_op, key))
+      return Fail(failure, std::format("missing \"{}\"", key));
     if (!CheckRef(json_op.at(key), key, *aliases, failure)) return false;
     *out = json_op.at(key);
     return true;
@@ -575,7 +583,8 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
           !optional_ref("parent", &op->parent) || !define_alias()) {
         return false;
       }
-      if (!CheckPrefab(scene, op->prefab, &op->prefab_map, failure)) return false;
+      if (!CheckPrefab(scene, op->prefab, &op->prefab_map, failure))
+        return false;
       if (op->name.empty()) {
         op->name = std::filesystem::path(op->prefab).stem().string();
       }
@@ -597,7 +606,8 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
       if (!IsAbsent(json_op, "keep_world_transform")) {
         const json& keep = json_op.at("keep_world_transform");
         if (!keep.is_boolean()) {
-          return Fail(failure, "\"keep_world_transform\" must be true or false");
+          return Fail(failure,
+                      "\"keep_world_transform\" must be true or false");
         }
         op->keep_world_transform = keep.get<bool>();
       }
@@ -636,8 +646,8 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
       std::string error;
       if (!mcp::JsonToPropertyValue(*field, json_op.at("value"), parsed, &error,
                                     project)) {
-        return Fail(failure, std::format("component \"{}\": {}", info->name,
-                                         error));
+        return Fail(failure,
+                    std::format("component \"{}\": {}", info->name, error));
       }
       op->property = PropValue{*field, std::move(parsed)};
       return true;
@@ -695,16 +705,17 @@ Trs WorldTrs(const MapNode& node) {
   const Trs local = LocalTrs(node);
   if (!node.parent) return local;
   const Trs parent = WorldTrs(*node.parent);
-  return Trs{parent.position +
-                 parent.rotation * (parent.scale * local.position),
-             parent.rotation * local.rotation, parent.scale * local.scale};
+  return Trs{
+      parent.position + parent.rotation * (parent.scale * local.position),
+      parent.rotation * local.rotation, parent.scale * local.scale};
 }
 
 ComponentData& EnsureTransform(MapNode& node) {
   if (ComponentData* existing = node.FindComponent("Transform")) {
     return *existing;
   }
-  node.components.insert(node.components.begin(), ComponentData{"Transform", {}});
+  node.components.insert(node.components.begin(),
+                         ComponentData{"Transform", {}});
   return node.components.front();
 }
 
@@ -766,14 +777,22 @@ class Batch {
 
   bool Apply(const Operation& op, Failure* failure) {
     switch (op.kind) {
-      case OpKind::kCreate: return Create(op, failure);
-      case OpKind::kInstantiatePrefab: return Instantiate(op, failure);
-      case OpKind::kDelete: return Delete(op, failure);
-      case OpKind::kReparent: return Reparent(op, failure);
-      case OpKind::kSetTransform: return SetTransform(op, failure);
-      case OpKind::kSetProperty: return SetProperty(op, failure);
-      case OpKind::kAddComponent: return AddComponent(op, failure);
-      case OpKind::kRemoveComponent: return RemoveComponent(op, failure);
+      case OpKind::kCreate:
+        return Create(op, failure);
+      case OpKind::kInstantiatePrefab:
+        return Instantiate(op, failure);
+      case OpKind::kDelete:
+        return Delete(op, failure);
+      case OpKind::kReparent:
+        return Reparent(op, failure);
+      case OpKind::kSetTransform:
+        return SetTransform(op, failure);
+      case OpKind::kSetProperty:
+        return SetProperty(op, failure);
+      case OpKind::kAddComponent:
+        return AddComponent(op, failure);
+      case OpKind::kRemoveComponent:
+        return RemoveComponent(op, failure);
     }
     return true;
   }
@@ -785,8 +804,8 @@ class Batch {
     if (ref.is_object() && ref.contains("alias")) {
       const std::string id = ref.at("alias").get<std::string>();
       const auto found = aliases_.find(id);
-      MapNode* node = found == aliases_.end() ? nullptr
-                                              : map_.FindByUid(found->second);
+      MapNode* node =
+          found == aliases_.end() ? nullptr : map_.FindByUid(found->second);
       if (!node) {
         Fail(failure, std::format("alias \"{}\" names a node that an earlier "
                                   "operation deleted",
@@ -813,22 +832,23 @@ class Batch {
   void Warn(std::string message) { warnings_.push_back(std::move(message)); }
 
   void NoteCreated(const Operation& op, const MapNode& node) {
-    json entry{{"op", op.index},
-               {"uid", node.uid},
-               {"path", mcp::FullNodePath(node)}};
+    json entry{
+        {"op", op.index}, {"uid", node.uid}, {"path", mcp::FullNodePath(node)}};
     if (!op.id.empty()) {
       entry["alias"] = op.id;
       aliases_[op.id] = node.uid;
     }
     created_.push_back(std::move(entry));
     if (node.name != SanitizeNodeName(op.name)) {
-      Warn(std::format("operations[{}]: the name \"{}\" was already taken "
-                       "under that parent; the node is \"{}\"",
-                       op.index, SanitizeNodeName(op.name), node.name));
+      Warn(
+          std::format("operations[{}]: the name \"{}\" was already taken "
+                      "under that parent; the node is \"{}\"",
+                      op.index, SanitizeNodeName(op.name), node.name));
     } else if (SanitizeNodeName(op.name) != op.name) {
-      Warn(std::format("operations[{}]: the name \"{}\" was changed to \"{}\" "
-                       "(slashes, quotes and backslashes are removed)",
-                       op.index, op.name, node.name));
+      Warn(
+          std::format("operations[{}]: the name \"{}\" was changed to \"{}\" "
+                      "(slashes, quotes and backslashes are removed)",
+                      op.index, op.name, node.name));
     }
   }
 
@@ -865,8 +885,8 @@ class Batch {
   bool Instantiate(const Operation& op, Failure* failure) {
     MapNode* parent = ResolveParent(op.parent, failure);
     if (!parent) return false;
-    MapNode* node = map_.AddPrefabInstance(parent, op.name, op.prefab,
-                                           *op.prefab_map);
+    MapNode* node =
+        map_.AddPrefabInstance(parent, op.name, op.prefab, *op.prefab_map);
     ApplyTransform(*node, op.transform);
     NoteCreated(op, *node);
     return true;
@@ -897,10 +917,10 @@ class Batch {
                               mcp::FullNodePath(*new_parent)));
     }
     if (node->parent == new_parent) {
-      Warn(std::format("operations[{}]: \"{}\" is already a child of \"{}\"; "
-                       "nothing changed",
-                       op.index, mcp::FullNodePath(*node),
-                       mcp::FullNodePath(*new_parent)));
+      Warn(std::format(
+          "operations[{}]: \"{}\" is already a child of \"{}\"; "
+          "nothing changed",
+          op.index, mcp::FullNodePath(*node), mcp::FullNodePath(*new_parent)));
       return true;
     }
     WarnIfFromPrefab(op, *node, "the move");
@@ -910,10 +930,10 @@ class Batch {
       return Fail(failure, "the node could not be moved");
     }
     if (node->name != old_name) {
-      Warn(std::format("operations[{}]: \"{}\" already had a child named "
-                       "\"{}\"; the moved node is now \"{}\"",
-                       op.index, mcp::FullNodePath(*new_parent), old_name,
-                       node->name));
+      Warn(std::format(
+          "operations[{}]: \"{}\" already had a child named "
+          "\"{}\"; the moved node is now \"{}\"",
+          op.index, mcp::FullNodePath(*new_parent), old_name, node->name));
     }
     if (op.keep_world_transform) KeepWorldTransform(*node, world);
     return true;
@@ -924,9 +944,10 @@ class Batch {
   // MapScene::OnWorldTransformChanged).
   void KeepWorldTransform(MapNode& node, const Trs& world) {
     const Trs parent = WorldTrs(*node.parent);
-    const glm::vec3 safe(std::abs(parent.scale.x) < 1e-6f ? 1.0f : parent.scale.x,
-                         std::abs(parent.scale.y) < 1e-6f ? 1.0f : parent.scale.y,
-                         std::abs(parent.scale.z) < 1e-6f ? 1.0f : parent.scale.z);
+    const glm::vec3 safe(
+        std::abs(parent.scale.x) < 1e-6f ? 1.0f : parent.scale.x,
+        std::abs(parent.scale.y) < 1e-6f ? 1.0f : parent.scale.y,
+        std::abs(parent.scale.z) < 1e-6f ? 1.0f : parent.scale.z);
     const glm::quat inverse = glm::inverse(parent.rotation);
     const glm::vec3 position =
         Round((inverse * (world.position - parent.position)) / safe);
@@ -973,8 +994,7 @@ class Batch {
     if (!node) return false;
     ComponentData* component = FindOnNode(*node, op.type, failure);
     if (!component) {
-      failure->message +=
-          "; add it first with an add_component operation";
+      failure->message += "; add it first with an add_component operation";
       return false;
     }
     StoreProperty(*component, op.property.field.name, op.property.value,
@@ -1008,8 +1028,8 @@ class Batch {
     if (!component) return false;
     const ComponentInfo* info = TypeRegistry::Instance().FindComponent(op.type);
     if (op.type == "Transform" || (info && !info->removable)) {
-      return Fail(failure,
-                  std::format("the \"{}\" component cannot be removed", op.type));
+      return Fail(failure, std::format("the \"{}\" component cannot be removed",
+                                       op.type));
     }
     node->components.erase(node->components.begin() +
                            (component - node->components.data()));
@@ -1028,9 +1048,8 @@ ToolResult OperationError(const Operation* op, size_t index,
   const std::string where =
       op ? std::format("operations[{}] ({})", index, op->kind_name)
          : std::format("operations[{}]", index);
-  ToolResult result =
-      ErrorResult(std::format("{}: {}", where, failure.message),
-                  failure.suggestion);
+  ToolResult result = ErrorResult(std::format("{}: {}", where, failure.message),
+                                  failure.suggestion);
   result.result["operation"] = index;
   result.result["applied"] = 0;
   return result;
@@ -1047,11 +1066,13 @@ ToolResult ApplySceneOperations(EditorScene& scene, const json& args) {
     return ErrorResult("\"operations\" must be an array of operations");
   }
   const json& list = args.at("operations");
-  if (list.empty()) return ErrorResult("\"operations\" is empty: nothing to do");
+  if (list.empty())
+    return ErrorResult("\"operations\" is empty: nothing to do");
   if (list.size() > kMaxOperations) {
-    return ErrorResult(std::format("too many operations ({}); send at most {} "
-                                   "per batch",
-                                   list.size(), kMaxOperations));
+    return ErrorResult(
+        std::format("too many operations ({}); send at most {} "
+                    "per batch",
+                    list.size(), kMaxOperations));
   }
 
   // 1. Check every operation, without touching the map.
@@ -1132,8 +1153,9 @@ ToolResult ApplySceneOperations(EditorScene& scene, const json& args) {
 
 ToolResult SelectNode(EditorScene& scene, const json& args) {
   if (!args.is_object() || !args.contains("node")) {
-    return ErrorResult("missing \"node\": {\"uid\": n} or {\"path\": "
-                       "\"Root/Child\"}");
+    return ErrorResult(
+        "missing \"node\": {\"uid\": n} or {\"path\": "
+        "\"Root/Child\"}");
   }
   Failure unknown;
   if (!CheckKeys(args, {"node"}, "the arguments", &unknown)) {
@@ -1151,8 +1173,9 @@ ToolResult SelectNode(EditorScene& scene, const json& args) {
 ToolResult SaveMap(EditorScene& scene, const json&) {
   if (!scene.GetProject()) return ErrorResult("no project is open");
   if (scene.GetMapPath().empty()) {
-    return ErrorResult("the open map has no file yet; it cannot be saved "
-                       "from here");
+    return ErrorResult(
+        "the open map has no file yet; it cannot be saved "
+        "from here");
   }
   if (!scene.SaveMap()) {
     return ErrorResult("could not save " + scene.GetMapPath() +

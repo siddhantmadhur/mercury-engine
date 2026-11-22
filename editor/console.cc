@@ -115,10 +115,10 @@ Console::Page Console::ReadFrom(std::optional<uint64_t> cursor, Level min_level,
   }
 
   page.dropped = *cursor < oldest;
-  const size_t start =
-      *cursor > oldest ? static_cast<size_t>(std::min<uint64_t>(
-                             *cursor - oldest, lines_.size()))
-                       : 0;
+  const size_t start = *cursor > oldest
+                           ? static_cast<size_t>(std::min<uint64_t>(
+                                 *cursor - oldest, lines_.size()))
+                           : 0;
   for (size_t i = start; i < lines_.size(); i++) {
     if (!wanted(lines_[i])) continue;
     if (page.entries.size() >= limit) {

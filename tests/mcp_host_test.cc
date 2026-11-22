@@ -263,8 +263,7 @@ nlohmann::json ResponseJson(const std::string& response) {
 nlohmann::json StatelessMeta() {
   return nlohmann::json{
       {"io.modelcontextprotocol/protocolVersion", "2026-07-28"},
-      {"io.modelcontextprotocol/clientCapabilities",
-       nlohmann::json::object()}};
+      {"io.modelcontextprotocol/clientCapabilities", nlohmann::json::object()}};
 }
 
 nlohmann::json JsonRpc(int id, const std::string& method,
@@ -278,8 +277,7 @@ nlohmann::json JsonRpc(int id, const std::string& method,
 class InlineDispatcherGuard {
  public:
   InlineDispatcherGuard() {
-    McpHost::SetDispatcherForTest(
-        [](std::function<void()> work) { work(); });
+    McpHost::SetDispatcherForTest([](std::function<void()> work) { work(); });
   }
   ~InlineDispatcherGuard() { McpHost::SetDispatcherForTest({}); }
 };
@@ -317,11 +315,10 @@ ToolResult WriteTool(EditorScene&, const nlohmann::json&) {
 }
 
 ToolResult EchoTool(EditorScene& scene, const nlohmann::json& args) {
-  return ToolResult{
-      true,
-      nlohmann::json{{"echo", args.value("text", std::string())},
-                     {"project", scene.GetProject() != nullptr}},
-      {}};
+  return ToolResult{true,
+                    nlohmann::json{{"echo", args.value("text", std::string())},
+                                   {"project", scene.GetProject() != nullptr}},
+                    {}};
 }
 
 }  // namespace
@@ -334,8 +331,8 @@ TEST(McpHostTest, RegistryDispatchRunsTheHandler) {
   GTEST_SKIP() << "the test changes XDG_CONFIG_HOME";
 #endif
   TestScene test(TempDir("mcp_dispatch"));
-  auto result = ToolRegistry::Instance().Invoke(
-      test.scene, "mcp_test_echo", nlohmann::json{{"text", "hi"}});
+  auto result = ToolRegistry::Instance().Invoke(test.scene, "mcp_test_echo",
+                                                nlohmann::json{{"text", "hi"}});
   EXPECT_TRUE(result.ok);
   EXPECT_EQ(result.result["echo"], "hi");
   EXPECT_EQ(result.result["project"], false);
@@ -359,14 +356,14 @@ TEST(McpHostTest, WriteToolsAreRejectedUntilEditsAreAllowed) {
   TestScene test(TempDir("mcp_mode"));
   EditorSettings& settings = test.scene.Settings();
   settings.mcp_allow_edits = false;
-  auto denied = ToolRegistry::Instance().Invoke(
-      test.scene, "mcp_test_write", nlohmann::json::object());
+  auto denied = ToolRegistry::Instance().Invoke(test.scene, "mcp_test_write",
+                                                nlohmann::json::object());
   EXPECT_FALSE(denied.ok);
   EXPECT_TRUE(denied.result["error"].is_string());
 
   settings.mcp_allow_edits = true;
-  auto allowed = ToolRegistry::Instance().Invoke(
-      test.scene, "mcp_test_write", nlohmann::json::object());
+  auto allowed = ToolRegistry::Instance().Invoke(test.scene, "mcp_test_write",
+                                                 nlohmann::json::object());
   EXPECT_TRUE(allowed.ok);
   EXPECT_EQ(allowed.result["did"], true);
 }
@@ -389,8 +386,8 @@ TEST(McpHostTest, BuiltinToolsAnswer) {
   EXPECT_TRUE(list.result["resources"].is_array());
   EXPECT_TRUE(list.result["templates"].is_array());
 
-  auto read = ToolRegistry::Instance().Invoke(
-      test.scene, "__resources/read", nlohmann::json{{"uri", "x"}});
+  auto read = ToolRegistry::Instance().Invoke(test.scene, "__resources/read",
+                                              nlohmann::json{{"uri", "x"}});
   EXPECT_FALSE(read.ok);
 }
 
@@ -404,8 +401,8 @@ TEST(McpHostTest, McpJsonMergeSetsOnlyOurEntry) {
 })");
 
   std::string error;
-  ASSERT_TRUE(McpHost::WriteProjectMcpJson(
-      root, "http://127.0.0.1:49152/mcp", "secret", &error))
+  ASSERT_TRUE(McpHost::WriteProjectMcpJson(root, "http://127.0.0.1:49152/mcp",
+                                           "secret", &error))
       << error;
 
   nlohmann::json document;
@@ -456,8 +453,8 @@ TEST(McpHostTest, McpJsonMergeNeverOverwritesUnparseableContent) {
   const fs::path root = TempDir("mcp_json_broken");
   Write(root / ".mcp.json", "{not json");
   std::string error;
-  EXPECT_FALSE(McpHost::WriteProjectMcpJson(
-      root, "http://127.0.0.1:49152/mcp", "secret", &error));
+  EXPECT_FALSE(McpHost::WriteProjectMcpJson(root, "http://127.0.0.1:49152/mcp",
+                                            "secret", &error));
   EXPECT_EQ(Read(root / ".mcp.json"), "{not json");
 }
 
@@ -601,22 +598,21 @@ TEST(McpHostTest, E2ePingAndServerInfoAnswerOverHttp) {
   const std::string init = HttpPost(
       port, token,
       JsonRpc(1, "initialize",
-              nlohmann::json{{"protocolVersion", "2026-07-28"},
-                             {"capabilities", nlohmann::json::object()},
-                             {"clientInfo", nlohmann::json{
-                                 {"name", "mcp_host_test"}, {"version", "0"}}}})
+              nlohmann::json{
+                  {"protocolVersion", "2026-07-28"},
+                  {"capabilities", nlohmann::json::object()},
+                  {"clientInfo", nlohmann::json{{"name", "mcp_host_test"},
+                                                {"version", "0"}}}})
           .dump());
   ASSERT_FALSE(init.empty()) << "initialize did not answer";
   nlohmann::json payload = ResponseJson(init);
   ASSERT_TRUE(payload.contains("result")) << payload.dump();
-  EXPECT_EQ(payload["result"]["serverInfo"]["version"],
-            MERCURY_VERSION_STRING);
+  EXPECT_EQ(payload["result"]["serverInfo"]["version"], MERCURY_VERSION_STRING);
 
   // tools/list includes ping
   const std::string list = HttpPost(
       port, token,
-      JsonRpc(2, "tools/list",
-              nlohmann::json{{"_meta", StatelessMeta()}})
+      JsonRpc(2, "tools/list", nlohmann::json{{"_meta", StatelessMeta()}})
           .dump());
   payload = ResponseJson(list);
   ASSERT_TRUE(payload.contains("result")) << payload.dump();
@@ -630,13 +626,13 @@ TEST(McpHostTest, E2ePingAndServerInfoAnswerOverHttp) {
   EXPECT_TRUE(has_server_info) << payload.dump();
 
   // tools/call ping: the built-in answers through the registry.
-  const std::string ping = HttpPost(
-      port, token,
-      JsonRpc(3, "tools/call",
-              nlohmann::json{{"name", "ping"},
-                             {"arguments", nlohmann::json::object()},
-                             {"_meta", StatelessMeta()}})
-          .dump());
+  const std::string ping =
+      HttpPost(port, token,
+               JsonRpc(3, "tools/call",
+                       nlohmann::json{{"name", "ping"},
+                                      {"arguments", nlohmann::json::object()},
+                                      {"_meta", StatelessMeta()}})
+                   .dump());
   payload = ResponseJson(ping);
   ASSERT_TRUE(payload.contains("result")) << payload.dump();
   EXPECT_EQ(payload["result"]["isError"], false);
@@ -648,13 +644,13 @@ TEST(McpHostTest, E2ePingAndServerInfoAnswerOverHttp) {
 
   // tools/call get_server_info: answered by the Rust transport with the
   // editor's version.
-  const std::string info = HttpPost(
-      port, token,
-      JsonRpc(4, "tools/call",
-              nlohmann::json{{"name", "get_server_info"},
-                             {"arguments", nlohmann::json::object()},
-                             {"_meta", StatelessMeta()}})
-          .dump());
+  const std::string info =
+      HttpPost(port, token,
+               JsonRpc(4, "tools/call",
+                       nlohmann::json{{"name", "get_server_info"},
+                                      {"arguments", nlohmann::json::object()},
+                                      {"_meta", StatelessMeta()}})
+                   .dump());
   payload = ResponseJson(info);
   ASSERT_TRUE(payload.contains("result")) << payload.dump();
   EXPECT_EQ(payload["result"]["structuredContent"]["version"],
@@ -678,25 +674,25 @@ TEST(McpHostTest, E2eReadOnlyServerAnswersReadToolsAndReportsReadOnly) {
   const std::string token = "Bearer " + test.scene.Settings().mcp_token;
 
   // A Read-mode tool works on a read-only server.
-  nlohmann::json payload = ResponseJson(HttpPost(
-      port, token,
-      JsonRpc(1, "tools/call",
-              nlohmann::json{{"name", "ping"},
-                             {"arguments", nlohmann::json::object()},
-                             {"_meta", StatelessMeta()}})
-          .dump()));
+  nlohmann::json payload = ResponseJson(
+      HttpPost(port, token,
+               JsonRpc(1, "tools/call",
+                       nlohmann::json{{"name", "ping"},
+                                      {"arguments", nlohmann::json::object()},
+                                      {"_meta", StatelessMeta()}})
+                   .dump()));
   ASSERT_TRUE(payload.contains("result")) << payload.dump();
   EXPECT_EQ(payload["result"]["isError"], false);
   EXPECT_EQ(payload["result"]["structuredContent"]["pong"], true);
 
   // get_server_info reports the read-only mode and the editor's version.
-  payload = ResponseJson(HttpPost(
-      port, token,
-      JsonRpc(2, "tools/call",
-              nlohmann::json{{"name", "get_server_info"},
-                             {"arguments", nlohmann::json::object()},
-                             {"_meta", StatelessMeta()}})
-          .dump()));
+  payload = ResponseJson(
+      HttpPost(port, token,
+               JsonRpc(2, "tools/call",
+                       nlohmann::json{{"name", "get_server_info"},
+                                      {"arguments", nlohmann::json::object()},
+                                      {"_meta", StatelessMeta()}})
+                   .dump()));
   ASSERT_TRUE(payload.contains("result")) << payload.dump();
   EXPECT_EQ(payload["result"]["structuredContent"]["read_only"], true);
   EXPECT_EQ(payload["result"]["structuredContent"]["version"],
@@ -704,13 +700,13 @@ TEST(McpHostTest, E2eReadOnlyServerAnswersReadToolsAndReportsReadOnly) {
 
   // A tool registered only in the C++ registry is not in the Rust catalogue,
   // so a client cannot call it: an MCP error (-32602), not a tool result.
-  payload = ResponseJson(HttpPost(
-      port, token,
-      JsonRpc(3, "tools/call",
-              nlohmann::json{{"name", "mcp_test_write"},
-                             {"arguments", nlohmann::json::object()},
-                             {"_meta", StatelessMeta()}})
-          .dump()));
+  payload = ResponseJson(
+      HttpPost(port, token,
+               JsonRpc(3, "tools/call",
+                       nlohmann::json{{"name", "mcp_test_write"},
+                                      {"arguments", nlohmann::json::object()},
+                                      {"_meta", StatelessMeta()}})
+                   .dump()));
   ASSERT_TRUE(payload.contains("error")) << payload.dump();
   EXPECT_EQ(payload["error"]["code"], -32602);
   EXPECT_FALSE(payload.contains("result"));
@@ -776,13 +772,13 @@ TEST(McpHostTest, E2eReadOnlyServerRejectsRealWriteToolsBeforeTheRegistry) {
       arguments["operations"] = nlohmann::json::array(
           {nlohmann::json{{"op", "create"}, {"name", "ShouldNotExist"}}});
     }
-    return ResponseJson(HttpPost(
-        port, token,
-        JsonRpc(id, "tools/call",
-                nlohmann::json{{"name", name},
-                               {"arguments", arguments},
-                               {"_meta", StatelessMeta()}})
-            .dump()));
+    return ResponseJson(
+        HttpPost(port, token,
+                 JsonRpc(id, "tools/call",
+                         nlohmann::json{{"name", name},
+                                        {"arguments", arguments},
+                                        {"_meta", StatelessMeta()}})
+                     .dump()));
   };
 
   {
@@ -838,8 +834,7 @@ TEST(McpHostTest, E2eSecurityChecksRejectBadTokenOriginAndHost) {
   // A foreign Origin is refused with 403 even with the right token, so a web
   // page cannot drive the editor through the user's browser.
   EXPECT_EQ(HttpPostStatus(port, good, host, "https://evil.example"), 403);
-  EXPECT_EQ(HttpPostStatus(port, good, host, "http://127.0.0.1.evil.com"),
-            403);
+  EXPECT_EQ(HttpPostStatus(port, good, host, "http://127.0.0.1.evil.com"), 403);
   // A loopback Origin, on any port, is allowed through.
   EXPECT_NE(HttpPostStatus(port, good, host, "http://127.0.0.1:3000"), 403);
   EXPECT_NE(HttpPostStatus(port, good, host, "http://localhost"), 403);
@@ -965,8 +960,7 @@ TEST(McpHostTest, E2eAsyncToolCompletesLaterOnTheUiThread) {
   auto test = std::make_unique<TestScene>(TempDir("mcp_e2e_async"));
   UiQueue ui;
   AsyncPingGuard ping;
-  const std::uint16_t port =
-      StartEphemeralServer(*test, /*allow_edits=*/true);
+  const std::uint16_t port = StartEphemeralServer(*test, /*allow_edits=*/true);
   ASSERT_NE(port, 0) << "the server did not start";
   const std::string token = "Bearer " + test->scene.Settings().mcp_token;
 
@@ -998,8 +992,7 @@ TEST(McpHostTest, E2eAsyncToolThatNeverCompletesIsAnsweredWhenTheHostDies) {
   auto test = std::make_unique<TestScene>(TempDir("mcp_e2e_async_dies"));
   UiQueue ui;
   AsyncPingGuard ping;
-  const std::uint16_t port =
-      StartEphemeralServer(*test, /*allow_edits=*/true);
+  const std::uint16_t port = StartEphemeralServer(*test, /*allow_edits=*/true);
   ASSERT_NE(port, 0) << "the server did not start";
   const std::string token = "Bearer " + test->scene.Settings().mcp_token;
 

@@ -43,7 +43,8 @@ uint64_t UidOf(McpToolFixture& fixture, const char* path) {
   return node ? node->uid : 0;
 }
 
-// ---------------------------------------------------------- get_editor_state --
+// ---------------------------------------------------------- get_editor_state
+// --
 
 TEST(McpToolsSceneReadTest, EditorStateDescribesTheOpenProject) {
   McpToolFixture fixture;
@@ -140,7 +141,8 @@ TEST(McpToolsSceneReadTest, EditorStateConsoleCountsAndCursor) {
   EXPECT_EQ(after["latest_cursor"].get<uint64_t>(), console.LatestCursor());
 }
 
-// ------------------------------------------------------ get_component_schema --
+// ------------------------------------------------------ get_component_schema
+// --
 
 TEST(McpToolsSceneReadTest, ComponentSchemaListsEverything) {
   McpToolFixture fixture;
@@ -171,9 +173,9 @@ TEST(McpToolsSceneReadTest, ComponentSchemaForOneComponent) {
   EXPECT_EQ(r.result["kind"], "component");
   EXPECT_EQ(r.result["name"], "Rigidbody");
   const json& fields = r.result["fields"];
-  const auto motion = std::find_if(
-      fields.begin(), fields.end(),
-      [](const json& f) { return f["name"] == "motion_type"; });
+  const auto motion =
+      std::find_if(fields.begin(), fields.end(),
+                   [](const json& f) { return f["name"] == "motion_type"; });
   ASSERT_NE(motion, fields.end());
   EXPECT_EQ((*motion)["type"], "enum");
   EXPECT_EQ((*motion)["enum_values"],
@@ -206,7 +208,8 @@ TEST(McpToolsSceneReadTest, ComponentSchemaSuggestsForATypo) {
   EXPECT_FALSE(fixture.CallTool("get_component_schema", {{"type", 3}}).ok);
 }
 
-// ----------------------------------------------------------------- find_nodes --
+// ----------------------------------------------------------------- find_nodes
+// --
 
 TEST(McpToolsSceneReadTest, FindNodesWithoutFiltersListsTheMapInOrder) {
   McpToolFixture fixture;
@@ -240,8 +243,7 @@ TEST(McpToolsSceneReadTest, FindNodesByNameGlob) {
   r = fixture.CallTool("find_nodes", {{"name_glob", "Pickup8"}}).result;
   EXPECT_EQ(Names(r["nodes"]), (std::vector<std::string>{"Pickup8"}));
   r = fixture.CallTool("find_nodes", {{"name_glob", "*s"}}).result;
-  EXPECT_EQ(Names(r["nodes"]),
-            (std::vector<std::string>{"Walls", "Pickups"}));
+  EXPECT_EQ(Names(r["nodes"]), (std::vector<std::string>{"Walls", "Pickups"}));
   r = fixture.CallTool("find_nodes", {{"name_glob", "Player"}}).result;
   ASSERT_EQ(r["nodes"].size(), 1u);
   r = fixture.CallTool("find_nodes", {{"name_glob", "Nope*"}}).result;
@@ -286,8 +288,7 @@ TEST(McpToolsSceneReadTest, FindNodesByTag) {
   fixture.Scene().GetMap().FindNode("Player")->tag = "Player";
 
   json r = fixture.CallTool("find_nodes", {{"tag", "Collectible"}}).result;
-  EXPECT_EQ(Names(r["nodes"]),
-            (std::vector<std::string>{"Pickup1", "Pickup2"}))
+  EXPECT_EQ(Names(r["nodes"]), (std::vector<std::string>{"Pickup1", "Pickup2"}))
       << "a tag the project does not define is fine when a node carries it";
   r = fixture.CallTool("find_nodes", {{"tag", "Player"}}).result;
   EXPECT_EQ(Names(r["nodes"]), (std::vector<std::string>{"Player"}));
@@ -317,13 +318,13 @@ TEST(McpToolsSceneReadTest, FindNodesByPathPrefix) {
 
 TEST(McpToolsSceneReadTest, FindNodesCombinesFilters) {
   McpToolFixture fixture;
-  const json r = fixture
-                     .CallTool("find_nodes", {{"name_glob", "*o*"},
-                                              {"component", "BoxCollider"},
-                                              {"path_prefix", "RollABall/Walls"}})
-                     .result;
-  EXPECT_EQ(Names(r["nodes"]),
-            (std::vector<std::string>{"North", "South"}));
+  const json r =
+      fixture
+          .CallTool("find_nodes", {{"name_glob", "*o*"},
+                                   {"component", "BoxCollider"},
+                                   {"path_prefix", "RollABall/Walls"}})
+          .result;
+  EXPECT_EQ(Names(r["nodes"]), (std::vector<std::string>{"North", "South"}));
 }
 
 TEST(McpToolsSceneReadTest, FindNodesLimitTruncates) {
@@ -355,7 +356,8 @@ TEST(McpToolsSceneReadTest, FindNodesRejectsBadArguments) {
   EXPECT_FALSE(fixture.CallTool("find_nodes", {{"tag", json::array()}}).ok);
 }
 
-// -------------------------------------------------------------------- get_node --
+// -------------------------------------------------------------------- get_node
+// --
 
 TEST(McpToolsSceneReadTest, GetNodeByPathWithComponents) {
   McpToolFixture fixture;
@@ -385,8 +387,8 @@ TEST(McpToolsSceneReadTest, GetNodeByUidNumberAndString) {
   ASSERT_TRUE(by_number.ok) << by_number.result.dump();
   EXPECT_EQ(by_number.result["name"], "North");
   EXPECT_EQ(by_number.result["path"], "RollABall/Walls/North");
-  const ToolResult by_string = fixture.CallTool(
-      "get_node", {{"node", {{"uid", std::to_string(uid)}}}});
+  const ToolResult by_string =
+      fixture.CallTool("get_node", {{"node", {{"uid", std::to_string(uid)}}}});
   ASSERT_TRUE(by_string.ok) << by_string.result.dump();
   EXPECT_EQ(by_string.result, by_number.result);
 }
@@ -404,10 +406,10 @@ TEST(McpToolsSceneReadTest, GetNodeWithoutComponents) {
 
 TEST(McpToolsSceneReadTest, GetNodeWithChildren) {
   McpToolFixture fixture;
-  const ToolResult r = fixture.CallTool(
-      "get_node", {{"node", {{"path", "RollABall/Walls"}}},
-                   {"include_children", true},
-                   {"include_components", false}});
+  const ToolResult r =
+      fixture.CallTool("get_node", {{"node", {{"path", "RollABall/Walls"}}},
+                                    {"include_children", true},
+                                    {"include_components", false}});
   ASSERT_TRUE(r.ok) << r.result.dump();
   EXPECT_EQ(r.result["child_count"], 4);
   const json& children = r.result["children"];
@@ -429,8 +431,8 @@ TEST(McpToolsSceneReadTest, GetNodeMatchesTheSceneJsonHelper) {
   McpToolFixture fixture;
   const MapNode* player = fixture.Scene().GetMap().FindNode("Player");
   ASSERT_NE(player, nullptr);
-  const ToolResult r = fixture.CallTool(
-      "get_node", {{"node", {{"uid", player->uid}}}});
+  const ToolResult r =
+      fixture.CallTool("get_node", {{"node", {{"uid", player->uid}}}});
   EXPECT_EQ(r.result, mcp::NodeToJson(fixture.Scene(), *player, true));
 }
 
@@ -455,7 +457,8 @@ TEST(McpToolsSceneReadTest, GetNodeErrorsSuggest) {
   ASSERT_FALSE(r.ok);
 }
 
-// ---------------------------------------------------------------- read_console --
+// ---------------------------------------------------------------- read_console
+// --
 
 // The console of a fixture may already hold lines from opening the project:
 // every test reads relative to a cursor taken after those.
@@ -519,8 +522,7 @@ TEST(McpToolsSceneReadTest, ReadConsoleWithoutACursorIsTheTail) {
   ConsoleCase c;
   for (int i = 0; i < 10; i++) c.console.Info("line " + std::to_string(i));
   json r = c.Read({{"limit", 3}});
-  EXPECT_EQ(Texts(r),
-            (std::vector<std::string>{"line 7", "line 8", "line 9"}));
+  EXPECT_EQ(Texts(r), (std::vector<std::string>{"line 7", "line 8", "line 9"}));
   EXPECT_EQ(r["truncated"], true) << "older entries exist";
   EXPECT_EQ(r["next_cursor"], c.console.LatestCursor());
   EXPECT_EQ(r["dropped"], false);
@@ -671,11 +673,10 @@ TEST(McpToolsSceneReadTest, ReadConsoleRejectsBadArguments) {
 TEST(McpToolsSceneReadTest, EditorStateCursorFeedsReadConsole) {
   McpToolFixture fixture;
   Console& console = fixture.Scene().ConsoleRef();
-  const uint64_t cursor = fixture.CallTool("get_editor_state")
-                              .result["console"]["latest_cursor"];
+  const uint64_t cursor =
+      fixture.CallTool("get_editor_state").result["console"]["latest_cursor"];
   console.Warn("after the snapshot");
-  const json r =
-      fixture.CallTool("read_console", {{"cursor", cursor}}).result;
+  const json r = fixture.CallTool("read_console", {{"cursor", cursor}}).result;
   EXPECT_EQ(Texts(r), (std::vector<std::string>{"after the snapshot"}));
   EXPECT_EQ(r["dropped"], false);
 }
@@ -687,9 +688,8 @@ TEST(McpToolsSceneReadTest, AllToolsWorkOnAReadOnlyServer) {
                            "find_nodes", "read_console"}) {
     EXPECT_TRUE(fixture.CallTool(name, json::object(), false).ok) << name;
   }
-  EXPECT_TRUE(fixture
-                  .CallTool("get_node", {{"node", {{"path", "Player"}}}}, false)
-                  .ok);
+  EXPECT_TRUE(
+      fixture.CallTool("get_node", {{"node", {{"path", "Player"}}}}, false).ok);
 }
 
 }  // namespace

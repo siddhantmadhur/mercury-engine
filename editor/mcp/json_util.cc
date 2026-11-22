@@ -48,9 +48,9 @@ bool ReadJsonFile(const fs::path& path, nlohmann::json& out,
 bool WriteJsonFile(const fs::path& path, const nlohmann::json& value,
                    std::string* error) {
   // Write next to the target so the rename stays on the same filesystem.
-  const fs::path temp = path.parent_path() /
-                        (path.filename().string() + ".tmp" +
-                         std::to_string(std::random_device{}()));
+  const fs::path temp =
+      path.parent_path() / (path.filename().string() + ".tmp" +
+                            std::to_string(std::random_device{}()));
   {
     std::error_code ec;
     fs::create_directories(path.parent_path(), ec);
@@ -77,7 +77,8 @@ bool WriteJsonFile(const fs::path& path, const nlohmann::json& value,
   }
 #endif
   if (ec) {
-    if (error) *error = "could not replace " + path.string() + ": " + ec.message();
+    if (error)
+      *error = "could not replace " + path.string() + ": " + ec.message();
     fs::remove(temp, ec);
     return false;
   }

@@ -62,8 +62,9 @@ bool ParseUid(const nlohmann::json& value, uint64_t* out) {
 }
 
 std::string DidYouMean(const std::string& suggestion) {
-  return suggestion.empty() ? std::string()
-                            : std::format(" (did you mean \"{}\"?)", suggestion);
+  return suggestion.empty()
+             ? std::string()
+             : std::format(" (did you mean \"{}\"?)", suggestion);
 }
 
 std::vector<std::string> AllNodePaths(const Map& map) {
@@ -173,10 +174,10 @@ bool ParseEventCall(const nlohmann::json& json, mtext::Variant* out) {
 // ------------------------------------------------------------ NodeSelector ---
 
 bool NodeSelector::Parse(const nlohmann::json& ref, NodeSelector* out,
-                    std::string* error) {
+                         std::string* error) {
   if (!ref.is_object()) {
-    SetError(error, std::format("invalid node ref {}: {}", Describe(ref),
-                                kRefForms));
+    SetError(error,
+             std::format("invalid node ref {}: {}", Describe(ref), kRefForms));
     return false;
   }
   const bool has_uid = ref.contains("uid");
@@ -191,10 +192,9 @@ bool NodeSelector::Parse(const nlohmann::json& ref, NodeSelector* out,
   if (has_uid) {
     uint64_t uid = 0;
     if (!ParseUid(ref.at("uid"), &uid)) {
-      SetError(error,
-               std::format("invalid node ref {}: \"uid\" must be a "
-                           "non-negative integer or a decimal string",
-                           Describe(ref)));
+      SetError(error, std::format("invalid node ref {}: \"uid\" must be a "
+                                  "non-negative integer or a decimal string",
+                                  Describe(ref)));
       return false;
     }
     parsed.uid = uid;
@@ -227,7 +227,8 @@ MapNode* ResolveNode(EditorScene& scene, const nlohmann::json& ref,
   if (parsed.uid) {
     if (MapNode* node = map.FindByUid(*parsed.uid)) return node;
     std::vector<std::string> uids;
-    map.Visit([&](const MapNode& node) { uids.push_back(std::to_string(node.uid)); });
+    map.Visit(
+        [&](const MapNode& node) { uids.push_back(std::to_string(node.uid)); });
     const auto close = introspection::Suggest(std::to_string(*parsed.uid), uids,
                                               kMaxSuggestions);
     const std::string best = close.empty() ? std::string() : close.front();
@@ -235,8 +236,9 @@ MapNode* ResolveNode(EditorScene& scene, const nlohmann::json& ref,
     SetError(error,
              std::format("node ref {} not found: no node has uid {}{}",
                          Describe(ref), *parsed.uid,
-                         best.empty() ? std::string()
-                                      : std::format(" (did you mean uid {}?)", best)));
+                         best.empty()
+                             ? std::string()
+                             : std::format(" (did you mean uid {}?)", best)));
     return nullptr;
   }
 
@@ -265,7 +267,8 @@ MapNode* ResolveNode(EditorScene& scene, const nlohmann::json& ref,
   return nullptr;
 }
 
-// ---------------------------------------------------------------- NodeToJson --
+// ---------------------------------------------------------------- NodeToJson
+// --
 
 nlohmann::json NodeToJson(EditorScene& scene, const MapNode& node,
                           bool include_components) {
@@ -275,8 +278,8 @@ nlohmann::json NodeToJson(EditorScene& scene, const MapNode& node,
   out["uid"] = node.uid;
   out["path"] = FullNodePath(node);
   out["node_path"] = node.GetPath();
-  out["parent_uid"] = node.parent ? nlohmann::json(node.parent->uid)
-                                  : nlohmann::json(nullptr);
+  out["parent_uid"] =
+      node.parent ? nlohmann::json(node.parent->uid) : nlohmann::json(nullptr);
   out["child_count"] = node.children.size();
 
   TransformComponent transform;
@@ -294,8 +297,8 @@ nlohmann::json NodeToJson(EditorScene& scene, const MapNode& node,
       {"euler_degrees",
        nlohmann::json::array(
            {transform.rotation.x, transform.rotation.y, transform.rotation.z})},
-      {"scale", nlohmann::json::array({transform.scale.x, transform.scale.y,
-                                       transform.scale.z})},
+      {"scale", nlohmann::json::array(
+                    {transform.scale.x, transform.scale.y, transform.scale.z})},
   };
 
   if (include_components) {
@@ -312,7 +315,8 @@ nlohmann::json NodeToJson(EditorScene& scene, const MapNode& node,
   return out;
 }
 
-// --------------------------------------------------------- JsonToPropertyValue --
+// --------------------------------------------------------- JsonToPropertyValue
+// --
 
 bool JsonToPropertyValue(const FieldInfo& field, const nlohmann::json& json,
                          mtext::Variant& out, std::string* error,
@@ -320,7 +324,8 @@ bool JsonToPropertyValue(const FieldInfo& field, const nlohmann::json& json,
   mtext::Variant value;
   switch (field.type) {
     case FieldType::kBool:
-      if (!json.is_boolean()) return Fail(field, error, "expected true or false");
+      if (!json.is_boolean())
+        return Fail(field, error, "expected true or false");
       value = json.get<bool>();
       break;
     case FieldType::kInt: {
@@ -368,9 +373,10 @@ bool JsonToPropertyValue(const FieldInfo& field, const nlohmann::json& json,
         }
         const auto close =
             introspection::Suggest(text, field.enum_values, kMaxSuggestions);
-        return Fail(field, error,
-                    std::format("\"{}\" is not one of {}{}", text, allowed,
-                                DidYouMean(close.empty() ? "" : close.front())));
+        return Fail(
+            field, error,
+            std::format("\"{}\" is not one of {}{}", text, allowed,
+                        DidYouMean(close.empty() ? "" : close.front())));
       }
       value = text;
       break;
@@ -439,10 +445,12 @@ bool JsonToPropertyValue(const FieldInfo& field, const nlohmann::json& json,
       for (size_t i = 0; i < json.size(); i++) {
         mtext::Variant item;
         std::string item_error;
-        if (!JsonToPropertyValue(element, json[i], item, &item_error, project)) {
+        if (!JsonToPropertyValue(element, json[i], item, &item_error,
+                                 project)) {
           // item_error already starts with the field name; add the index.
-          SetError(error, std::format("field \"{}\"[{}]:{}", field.name, i,
-                                      item_error.substr(item_error.find(':') + 1)));
+          SetError(error,
+                   std::format("field \"{}\"[{}]:{}", field.name, i,
+                               item_error.substr(item_error.find(':') + 1)));
           return false;
         }
         items.push_back(std::move(item));
@@ -451,7 +459,8 @@ bool JsonToPropertyValue(const FieldInfo& field, const nlohmann::json& json,
       break;
     }
     case FieldType::kEvent: {
-      if (!json.is_array()) return Fail(field, error, "expected an array of calls");
+      if (!json.is_array())
+        return Fail(field, error, "expected an array of calls");
       mtext::Array calls;
       for (size_t i = 0; i < json.size(); i++) {
         mtext::Variant call;

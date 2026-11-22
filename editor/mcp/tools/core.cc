@@ -41,7 +41,8 @@ namespace {
 mcp::ToolResult PingTool(EditorScene&, const nlohmann::json&) {
   return mcp::ToolResult{
       true,
-      nlohmann::json{{"pong", true}, {"editor_version", MERCURY_VERSION_STRING}},
+      nlohmann::json{{"pong", true},
+                     {"editor_version", MERCURY_VERSION_STRING}},
       {}};
 }
 

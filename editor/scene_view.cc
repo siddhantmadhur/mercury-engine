@@ -513,7 +513,8 @@ bool EditorScene::GetNodeWorldBounds(kEntityId entity, NodeWorldBounds& out) {
   return true;
 }
 
-bool EditorScene::GetNodeWorldBounds(const MapNode& node, NodeWorldBounds& out) {
+bool EditorScene::GetNodeWorldBounds(const MapNode& node,
+                                     NodeWorldBounds& out) {
   return GetNodeWorldBounds(GetEntityForNode(node.uid), out);
 }
 
