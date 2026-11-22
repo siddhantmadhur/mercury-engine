@@ -444,34 +444,4 @@ bool McpHost::RemoveProjectMcpJson(const std::filesystem::path& root,
   return mcp::WriteJsonFile(path, document, error);
 }
 
-// ----------------------------------------------------------------- Tools ---
-//
-// The reserved __resources/* tools. They register here because editor_scene.cc
-// references this translation unit in every binary that hosts MCP tools. The
-// tool groups live in editor/mcp/tools/ (ping is in core.cc) and are linked in
-// by the mercury_mcp_tools object library.
-
-namespace {
-
-// P2 has no resources yet: the reserved list stays empty and every read is
-// "not found". Later packages fill these in.
-mcp::ToolResult ListResourcesTool(EditorScene&, const nlohmann::json&) {
-  return mcp::ToolResult{
-      true,
-      nlohmann::json{{"resources", nlohmann::json::array()},
-                     {"templates", nlohmann::json::array()}},
-      {}};
-}
-
-mcp::ToolResult ReadResourceTool(EditorScene&, const nlohmann::json& args) {
-  const std::string uri = args.value("uri", std::string());
-  return mcp::ToolResult{
-      false, nlohmann::json{{"error", "resource not found: " + uri}}, {}};
-}
-
-}  // namespace
-
-MERCURY_MCP_TOOL("__resources/list", kRead, &ListResourcesTool);
-MERCURY_MCP_TOOL("__resources/read", kRead, &ReadResourceTool);
-
 }  // namespace Mercury

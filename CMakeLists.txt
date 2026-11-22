@@ -296,6 +296,25 @@ if (MERCURY_BUILD_EDITOR)
     target_link_libraries(mercury_mcp_tools PRIVATE
             mercury mercury_wx nlohmann_json::nlohmann_json)
 
+    # The agent guide templates (editor/mcp/guides/*.md) are embedded into a
+    # generated source at build time, so there is no run-time file lookup. The
+    # command re-runs when a template or the script changes.
+    file(GLOB MERCURY_MCP_GUIDE_TEMPLATES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/guides/*.md")
+    set(MERCURY_MCP_GUIDES_CC
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/mcp_guide_templates.cc")
+    add_custom_command(
+            OUTPUT "${MERCURY_MCP_GUIDES_CC}"
+            COMMAND "${CMAKE_COMMAND}"
+                    "-DGUIDES_DIR=${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/guides"
+                    "-DOUTPUT=${MERCURY_MCP_GUIDES_CC}"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedMcpGuides.cmake"
+            DEPENDS ${MERCURY_MCP_GUIDE_TEMPLATES}
+                    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedMcpGuides.cmake"
+            COMMENT "Embedding the MCP guide templates"
+            VERBATIM)
+    target_sources(mercury_mcp_tools PRIVATE "${MERCURY_MCP_GUIDES_CC}")
+
     # mercury_link_mcp_tools(<target>): add the tool objects to an executable
     # that links mercury_editor_lib. List them before the archives so the
     # symbols they use from mercury_editor_lib are still pulled in.
@@ -625,7 +644,10 @@ endif ()
 install(DIRECTORY "${MERCURY_GENERATED_DIR}/"
         DESTINATION sdk/include
         COMPONENT sdk
-        FILES_MATCHING PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.h"
+        # The cxx bridge for the MCP transport is internal: it pulls in
+        # mcp/tool_host.h, which the SDK does not install.
+        PATTERN "mercury/mcp/bridge.rs.h" EXCLUDE)
 if (MERCURY_CXX_INCLUDE_DIR)
     install(FILES "${MERCURY_CXX_INCLUDE_DIR}/cxx.h"
             DESTINATION sdk/include COMPONENT sdk)

@@ -105,6 +105,10 @@ class ToolRegistry {
   // nullptr when no tool is registered under this name.
   const ToolEntry* Find(const std::string& name) const;
 
+  // Every registered tool, ordered by name. For catalogue-style listings (the
+  // agent guides); the pointers stay valid until a tool is registered again.
+  std::vector<const ToolEntry*> Entries() const;
+
   // Registry lookup, the mode re-check against the editor settings, and the
   // handler itself, for a synchronous tool. An async tool answers with an
   // error here: call InvokeAsync. On the UI thread.

@@ -50,6 +50,13 @@ const ToolEntry* ToolRegistry::Find(const std::string& name) const {
   return it == tools_.end() ? nullptr : &it->second;
 }
 
+std::vector<const ToolEntry*> ToolRegistry::Entries() const {
+  std::vector<const ToolEntry*> entries;
+  entries.reserve(tools_.size());
+  for (const auto& [name, entry] : tools_) entries.push_back(&entry);
+  return entries;
+}
+
 std::optional<ToolResult> ToolRegistry::Reject(const EditorScene& scene,
                                                const ToolEntry* entry,
                                                const std::string& name) const {
