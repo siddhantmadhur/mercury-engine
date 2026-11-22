@@ -260,6 +260,11 @@ class EditorScene : public MapScene {
   void SetView2D(bool view_2d);
   void ToggleView2D() { SetView2D(!view_2d_); }
   const glm::vec3& GetCameraTarget() const { return camera_target_; }
+  // The 3D view's orbit camera, in degrees (pitch about X, yaw about Y, the
+  // Transform rotation convention) and world units from target to camera.
+  float GetCameraYaw() const { return camera_yaw_; }
+  float GetCameraPitch() const { return camera_pitch_; }
+  float GetCameraDistance() const { return camera_distance_; }
   glm::vec3 GetCameraPosition() const { return CameraPosition(); }
   const char* GetHintText() const;
   void FrameSelected();

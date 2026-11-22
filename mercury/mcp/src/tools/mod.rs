@@ -41,6 +41,36 @@
 use serde_json::{Map, Value};
 
 pub mod core;
+pub mod scene_read;
+
+// Argument types shared by the tool groups: every tool that takes a node
+// reference uses `NodeSelector` so they all advertise the same schema.
+
+/// A uid as either a JSON number or a decimal string.
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+#[allow(dead_code)]
+#[serde(untagged)]
+pub enum Uid {
+    Number(u64),
+    Text(String),
+}
+
+/// A reference to one node of the open map: give exactly one of `uid` and
+/// `path`.
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+#[allow(dead_code)]
+pub struct NodeSelector {
+    /// The node's uid, from any tool result (`uid`). Stable while the editor
+    /// is running and the node exists; not saved in the map file. A number or
+    /// a decimal string.
+    #[serde(default)]
+    pub uid: Option<Uid>,
+    /// The node's full path starting at the root's name, such as
+    /// "Root/Player/Camera". The engine's own form without the root
+    /// ("Player/Camera", and "." for the root) is accepted too.
+    #[serde(default)]
+    pub path: Option<String>,
+}
 
 /// How long a tool call may wait on the editor before the transport answers
 /// "editor did not respond", unless the tool's spec says otherwise. Tool calls
@@ -113,7 +143,9 @@ impl ToolSpec {
 
 /// The whole catalogue: every group's tools, concatenated.
 pub fn all() -> Vec<ToolSpec> {
-    core::tools()
+    let mut tools = core::tools();
+    tools.extend(scene_read::tools());
+    tools
 }
 
 /// The JSON Schema of a schemars type, as the `inputSchema` object rmcp wants.

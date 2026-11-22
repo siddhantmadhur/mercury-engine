@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -71,6 +72,47 @@ struct TestScene {
   MapNode* grandchild = nullptr;
   MapNode* other = nullptr;
 };
+
+// True when `a` and `b` differ by one insertion, deletion, substitution or
+// swap of two adjacent characters (or are equal).
+bool WithinOneEdit(const std::string& a, const std::string& b) {
+  if (a == b) return true;
+  if (a.size() == b.size()) {
+    size_t first = 0;
+    while (a[first] == b[first]) first++;
+    if (a.compare(first + 1, std::string::npos, b, first + 1,
+                  std::string::npos) == 0) {
+      return true;  // one substitution
+    }
+    return first + 1 < a.size() && a[first] == b[first + 1] &&
+           a[first + 1] == b[first] &&
+           a.compare(first + 2, std::string::npos, b, first + 2,
+                     std::string::npos) == 0;  // one adjacent swap
+  }
+  const std::string& shorter = a.size() < b.size() ? a : b;
+  const std::string& longer = a.size() < b.size() ? b : a;
+  if (longer.size() - shorter.size() != 1) return false;
+  size_t i = 0;
+  while (i < shorter.size() && shorter[i] == longer[i]) i++;
+  return shorter.compare(i, std::string::npos, longer, i + 1,
+                         std::string::npos) == 0;
+}
+
+// Strings one edit from `uid`: a digit appended, then each digit replaced
+// (never giving a leading zero).
+std::vector<std::string> NearMissCandidates(const std::string& uid) {
+  std::vector<std::string> out;
+  for (char digit = '0'; digit <= '9'; digit++) out.push_back(uid + digit);
+  for (size_t i = 0; i < uid.size(); i++) {
+    for (char digit = '0'; digit <= '9'; digit++) {
+      if (digit == uid[i] || (i == 0 && digit == '0')) continue;
+      std::string changed = uid;
+      changed[i] = digit;
+      out.push_back(changed);
+    }
+  }
+  return out;
+}
 
 FieldInfo MakeField(const char* name, FieldType type, mtext::Variant value) {
   FieldInfo field;
@@ -286,14 +328,32 @@ TEST(McpSceneJsonTest, UnknownUidSaysWhichFormFailedAndSuggests) {
   EXPECT_NE(error.find(std::to_string(far_away)), std::string::npos) << error;
   EXPECT_TRUE(suggestion.empty()) << suggestion;
 
-  // One digit longer than a real uid (as a string): the suggestion is that uid.
-  const std::string near_miss = std::to_string(test.other->uid) + "0";
+  // A near miss of a real uid: one edit away from it and at least two edits
+  // from every other uid, so the suggestion cannot tie. The uid counter is
+  // process-global, so which uids exist depends on the tests that ran before:
+  // the near miss is computed from the uids that exist now.
+  std::vector<std::string> uids;
+  test.scene.GetMap().Visit(
+      [&](const MapNode& node) { uids.push_back(std::to_string(node.uid)); });
+  const std::string base = std::to_string(test.other->uid);
+  std::string near_miss;
+  for (const std::string& candidate : NearMissCandidates(base)) {
+    if (std::find(uids.begin(), uids.end(), candidate) != uids.end()) continue;
+    const bool unique =
+        std::none_of(uids.begin(), uids.end(), [&](const std::string& uid) {
+          return uid != base && WithinOneEdit(candidate, uid);
+        });
+    if (unique) {
+      near_miss = candidate;
+      break;
+    }
+  }
+  ASSERT_FALSE(near_miss.empty()) << "no unambiguous near miss of " << base;
   EXPECT_EQ(ResolveNode(test.scene, json{{"uid", near_miss}}, &error,
                         &suggestion),
             nullptr);
-  EXPECT_EQ(suggestion, std::to_string(test.other->uid)) << error;
-  EXPECT_NE(error.find("did you mean uid " + std::to_string(test.other->uid)),
-            std::string::npos)
+  EXPECT_EQ(suggestion, base) << "near miss " << near_miss << ": " << error;
+  EXPECT_NE(error.find("did you mean uid " + base), std::string::npos)
       << error;
 }
 

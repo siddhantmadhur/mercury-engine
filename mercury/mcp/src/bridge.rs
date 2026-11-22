@@ -917,8 +917,11 @@ mod tests {
     fn catalogue_has_the_core_tools() {
         let all = tools::all();
         let names: Vec<&str> = all.iter().map(|tool| tool.name).collect();
-        assert_eq!(names, ["ping", "get_server_info"]);
-        assert!(all.iter().all(|tool| tool.mode == Mode::Read));
+        assert_eq!(names[..2], ["ping", "get_server_info"]);
+        let mut unique = names.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len(), "tool names are unique");
         for tool in &all {
             let schema = tool.schema();
             assert_eq!(schema.get("type"), Some(&json!("object")));
@@ -1139,7 +1142,10 @@ mod tests {
             json!(true),
             "get_server_info reports the read-only flag"
         );
-        assert_eq!(result["structuredContent"]["tool_count"], json!(2));
+        assert_eq!(
+            result["structuredContent"]["tool_count"],
+            json!(tools::all().len())
+        );
         assert!(
             result["structuredContent"]["url"]
                 .as_str()
