@@ -40,6 +40,7 @@
 
 use serde_json::{Map, Value};
 
+pub mod assets_build;
 pub mod core;
 pub mod scene_read;
 pub mod scene_write;
@@ -147,6 +148,7 @@ pub fn all() -> Vec<ToolSpec> {
     let mut tools = core::tools();
     tools.extend(scene_read::tools());
     tools.extend(scene_write::tools());
+    tools.extend(assets_build::tools());
     tools
 }
 

@@ -70,6 +70,9 @@ void EditorScene::OnStart() {
 }
 
 void EditorScene::OnDestroy() {
+  // First: anything holding LifetimeToken() must stop using the scene before
+  // the subsystems below go away.
+  lifetime_.reset();
   // Stop serving MCP tools before the scene underneath them goes away.
   mcp_.Stop();
   play_.Stop();

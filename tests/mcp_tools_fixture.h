@@ -113,6 +113,9 @@ class McpToolFixture {
   McpToolFixture& operator=(const McpToolFixture&) = delete;
 
   EditorScene& Scene() { return *scene_; }
+  // Destroys the scene now (expiring its LifetimeToken), e.g. to test that an
+  // in-flight async tool does not touch a scene that is going away.
+  void DestroyScene() { scene_.reset(); }
   // The project's folder: a private copy, safe to write to.
   const std::filesystem::path& Root() const { return project_; }
 

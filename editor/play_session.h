@@ -54,6 +54,12 @@ class PlaySession {
   bool IsBusy() const { return state_ != State::kIdle; }
   bool IsRunning() const { return state_ == State::kRunning; }
 
+  // Whether the most recent Build/Play's build step (the player's
+  // --build-scripts, or the CMake configure and build) exited 0. False until
+  // that build finishes, and after a failure, a refusal or a Stop. It says
+  // nothing about the schema dump that follows (see TakeSchemaUpdated).
+  bool LastBuildSucceeded() const { return last_build_succeeded_; }
+
   // True once after a build refreshed .mercury/scripts.mschema.
   bool TakeSchemaUpdated();
 
@@ -79,6 +85,7 @@ class PlaySession {
   State state_ = State::kIdle;
   bool run_after_build_ = false;
   bool schema_updated_ = false;
+  bool last_build_succeeded_ = false;
 
   std::filesystem::path project_root_;
   std::filesystem::path project_file_;

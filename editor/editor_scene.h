@@ -243,6 +243,11 @@ class EditorScene : public MapScene {
   LoreVcs& LoreRef() { return lore_; }
   // The opt-in MCP server; see mcp/mcp_host.h.
   McpHost& Mcp() { return mcp_; }
+  // Expires when the editor starts shutting this scene down (the start of
+  // OnDestroy, before the subsystems stop) or when the scene is destroyed.
+  // Work that outlives one UI-thread callback (an async MCP tool, a timer)
+  // holds the weak_ptr and checks lock() before it touches the scene.
+  std::weak_ptr<const void> LifetimeToken() const { return lifetime_; }
 
   // Scene Viewport & Camera API
   void SetSceneViewportSize(glm::vec2 size);
@@ -343,6 +348,8 @@ class EditorScene : public MapScene {
   glm::mat4 GetNodeMatrix(kEntityId entity, bool with_scale = true);
   bool MapLooks3D() const;
 
+  // Owned only for its lifetime; see LifetimeToken().
+  std::shared_ptr<const void> lifetime_ = std::make_shared<const char>('\0');
   std::filesystem::path initial_project_;
   std::string initial_map_;
   EditorSettings settings_;
