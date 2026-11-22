@@ -133,7 +133,7 @@ Models bring their own materials: base color and texture, opacity, emission (`Ke
 
 ## Components
 
-A node's position is relative to its parent; maps are flattened to world positions when loaded, and rotation and scale are not inherited. Shapes have unit size at scale 1 (1x1x1 cube, sphere 1 across, capsule 1 across and 2 tall), like Unity's. Asset types are `Material`, `PhysicsMaterial`, `PanelSettings`, `RenderTexture`, `PostProcessProfile` and any data assets scripts declare.
+A node's `position`, `rotation` and `scale` are local: relative to its parent. The node tree is kept when a map loads, and each node's Transform holds both the local values and the world values composed from the parent chain: world position = parent position + parent rotation applied to (parent scale times local position), world rotation = parent rotation times local rotation, and world scale = parent scale times local scale, so rotation and scale are inherited by children. Changing a node moves its children with it. Scripts see the world `position`, `rotation` and `eulerAngles` of a `GameObject`, and its `localScale`. Shapes have unit size at scale 1 (1x1x1 cube, sphere 1 across, capsule 1 across and 2 tall), like Unity's. Asset types are `Material`, `PhysicsMaterial`, `PanelSettings`, `RenderTexture`, `PostProcessProfile` and any data assets scripts declare.
 
 | Component | What it does |
 |---|---|
