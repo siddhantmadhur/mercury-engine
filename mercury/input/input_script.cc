@@ -126,9 +126,9 @@ void InputScript::Apply(uint64_t frame, InputManager& input, GLFWwindow* window,
           size_t start = file_end;
           while (start < rest.size()) {
             const size_t end = rest.find(';', start);
-            std::string entry = rest.substr(
-                start, end == std::string::npos ? std::string::npos
-                                                : end - start);
+            std::string entry =
+                rest.substr(start, end == std::string::npos ? std::string::npos
+                                                            : end - start);
             const auto first = entry.find_first_not_of(" \t");
             const auto last = entry.find_last_not_of(" \t");
             entry = first == std::string::npos

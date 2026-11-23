@@ -168,7 +168,8 @@ TEST(McpToolsPlayTest, ReadOnlyServerCanPollButCannotStartOrStop) {
   EXPECT_TRUE(fixture.CallTool("play_logs", json::object(), false).ok);
 }
 
-// ------------------------------------------------------- inspect_runtime_entity
+// -------------------------------------------------------
+// inspect_runtime_entity
 
 TEST(McpToolsPlayTest, InspectRejectsFramesOutsideTheRange) {
   McpToolFixture fixture;
@@ -182,13 +183,14 @@ TEST(McpToolsPlayTest, InspectRejectsFramesOutsideTheRange) {
 
 TEST(McpToolsPlayTest, InspectRejectsDumpFramesOutsideTheRange) {
   McpToolFixture fixture;
-  for (const json& dump_at : {json::array({0}), json::array({11}),
-                              json::array({10, 11})}) {
+  for (const json& dump_at :
+       {json::array({0}), json::array({11}), json::array({10, 11})}) {
     const ToolResult result = fixture.CallTool(
         "inspect_runtime_entity", {{"frames", 10}, {"dump_at", dump_at}});
     EXPECT_FALSE(result.ok) << dump_at.dump() << ": " << result.result.dump();
-    EXPECT_NE(result.result["error"].get<std::string>().find("between 1 and 10"),
-              std::string::npos)
+    EXPECT_NE(
+        result.result["error"].get<std::string>().find("between 1 and 10"),
+        std::string::npos)
         << result.result.dump();
   }
 }
@@ -203,9 +205,8 @@ TEST(McpToolsPlayTest, InspectRejectsNonInputCommands) {
                                       {"command", command},
                                       {"args", json::array({"x"})}}})}});
     EXPECT_FALSE(result.ok) << command << ": " << result.result.dump();
-    EXPECT_NE(
-        result.result["error"].get<std::string>().find("is not allowed"),
-        std::string::npos)
+    EXPECT_NE(result.result["error"].get<std::string>().find("is not allowed"),
+              std::string::npos)
         << command << ": " << result.result.dump();
   }
 }
@@ -225,7 +226,8 @@ TEST(McpToolsPlayTest, InspectRejectsBadInputFramesAndArgs) {
   const ToolResult no_args = fixture.CallTool(
       "inspect_runtime_entity",
       {{"frames", 10},
-       {"inputs", json::array({json{
+       {"inputs",
+        json::array({json{
             {"frame", 1}, {"command", "press"}, {"args", json::array()}}})}});
   EXPECT_FALSE(no_args.ok) << no_args.result.dump();
   EXPECT_NE(no_args.result["error"].get<std::string>().find("argument"),
@@ -262,12 +264,11 @@ TEST(McpToolsPlayTest, InspectRefusesADirtyMapUnlessSaveIsTrue) {
     fixture.SetPump([] { Mercury::mcp::TickRuntimeInspect(); });
   }
   const ToolResult saved = fixture.CallTool(
-      "inspect_runtime_entity",
-      {{"map", "res://maps/main.mmap"},
-       {"save", true},
-       {"frames", 1},
-       {"dump_at", json::array({1})},
-       {"nodes", json::array({"Dirty Inspect"})}});
+      "inspect_runtime_entity", {{"map", "res://maps/main.mmap"},
+                                 {"save", true},
+                                 {"frames", 1},
+                                 {"dump_at", json::array({1})},
+                                 {"nodes", json::array({"Dirty Inspect"})}});
   EXPECT_FALSE(fixture.Scene().IsDirty()) << "save:true must save the map";
   if (has_player) {
     ASSERT_TRUE(saved.ok) << saved.result.dump(2);
@@ -315,11 +316,10 @@ TEST(McpToolsPlayTest, InspectFailsWhenARequestedDumpIsNotWritten) {
   fixture.SetPump([] { Mercury::mcp::TickRuntimeInspect(); });
 
   const ToolResult result = fixture.CallTool(
-      "inspect_runtime_entity",
-      {{"map", "res://maps/main.mmap"},
-       {"frames", 1},
-       {"dump_at", json::array({1})},
-       {"nodes", json::array({"Player"})}});
+      "inspect_runtime_entity", {{"map", "res://maps/main.mmap"},
+                                 {"frames", 1},
+                                 {"dump_at", json::array({1})},
+                                 {"nodes", json::array({"Player"})}});
   EXPECT_FALSE(result.ok) << result.result.dump(2);
   EXPECT_TRUE(result.result["dumps"].empty()) << result.result.dump(2);
   EXPECT_NE(result.result["error"].get<std::string>().find("dump"),
@@ -365,16 +365,15 @@ TEST(McpToolsPlayTest, RelativeDumpPathResolvesAgainstTheProjectRoot) {
   // write would land in the wrong place.
   Mercury::os::Process process;
   std::string error;
-  ASSERT_TRUE(process.Start(
-      {PlaySession::PlayerPath().string(),
-       (project / "roll_a_ball.mproj").string(), "--map",
-       "res://maps/main.mmap", "--headless", "--frames", "6"},
-      base, &error, {"MERCURY_INPUT_SCRIPT=" + script.string()}))
+  ASSERT_TRUE(
+      process.Start({PlaySession::PlayerPath().string(),
+                     (project / "roll_a_ball.mproj").string(), "--map",
+                     "res://maps/main.mmap", "--headless", "--frames", "6"},
+                    base, &error, {"MERCURY_INPUT_SCRIPT=" + script.string()}))
       << error;
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(120);
-  while (process.IsRunning() &&
-         std::chrono::steady_clock::now() < deadline) {
+  while (process.IsRunning() && std::chrono::steady_clock::now() < deadline) {
     process.TakeOutput();
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
