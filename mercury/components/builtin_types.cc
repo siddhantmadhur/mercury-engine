@@ -73,8 +73,22 @@ AttachFn StoreAsProperty(const char* name) {
   };
 }
 
+// Filament uses only the low 15 bits of a blend order. Bias Unity's signed
+// sorting order into that range, keeping the neutral order in the middle so
+// default sprites and meshes share one level and fall back to depth sorting.
+constexpr int kBlendOrderNeutral = 16384;
+constexpr int kSortingOrderMin = -kBlendOrderNeutral;
+constexpr int kSortingOrderMax = kBlendOrderNeutral - 1;
+
+uint16_t BlendOrderFor(int sorting_order) {
+  return static_cast<uint16_t>(
+      std::clamp(sorting_order, kSortingOrderMin, kSortingOrderMax) +
+      kBlendOrderNeutral);
+}
+
 // A sprite's quad as RenderMesh geometry, so every renderer draws sprites
 // through the same path as MeshRenderer.
+
 std::shared_ptr<const MeshGeometry> MakeSpriteQuad(glm::vec4 color) {
   std::vector<ModelVertex> vertices(4);
   vertices[0].position = glm::vec3(0.5f, 0.5f, 0.0f);
@@ -184,6 +198,8 @@ void SyncRendererField(MapScene& scene, kEntityId entity,
           scene.Assets().LoadAs<MaterialAsset>(sprite->material.path);
       for (RenderMaterial& surface : mesh->materials)
         surface.color = sprite->color * material.color;
+    } else if (field == "sorting_order") {
+      mesh->blend_order = BlendOrderFor(sprite->sorting_order);
     } else {
       return;
     }
@@ -214,6 +230,7 @@ void AttachSprite(MapScene& scene, kEntityId entity,
 
   RenderMesh mesh;
   mesh.visible = sprite.visible;
+  mesh.blend_order = BlendOrderFor(sprite.sorting_order);
   mesh.cast_shadows = false;  // sprites never cast shadows
   RenderMaterial surface;
   surface.unlit = true;  // sprites are never lit

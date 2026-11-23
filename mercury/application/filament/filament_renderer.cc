@@ -771,7 +771,9 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         .material(0, instance)
         .culling(true)
         .castShadows(mesh.cast_shadows)
-        .layerMask(0xff, 1u << (layer & 7));
+        .layerMask(0xff, 1u << (layer & 7))
+        .blendOrder(0, mesh.blend_order)
+        .globalBlendOrderEnabled(0, true);
     if (skinned) build.skinning(bones.size());
     if (build.build(*engine, renderable) !=
         filament::RenderableManager::Builder::Success) {
@@ -873,9 +875,9 @@ void FilamentRenderer::SyncScene(GameScene& game) {
       record.visible = visible;
     }
 
-    // A script can recolor a renderer without replacing its RenderMesh.
-    // Refresh the existing material instances instead of rebuilding the
-    // renderables, which would also reset their transforms and bones.
+    // A script can recolor a renderer or change its draw order without
+    // replacing its RenderMesh. Refresh the existing draws instead of
+    // rebuilding the renderables, which would also reset bones/transforms.
     if (!record.draws.empty() &&
         record.draws.front().revision != mesh.revision) {
       scene_revision_++;
@@ -884,6 +886,9 @@ void FilamentRenderer::SyncScene(GameScene& game) {
           SetBaseColor(draw.material,
                        DrawMaterial(mesh, mesh.draws[draw.draw_index]));
         }
+        const auto instance = renderables.getInstance(draw.renderable);
+        renderables.setBlendOrderAt(instance, 0, mesh.blend_order);
+        renderables.setGlobalBlendOrderEnabledAt(instance, 0, true);
         draw.revision = mesh.revision;
       }
     }

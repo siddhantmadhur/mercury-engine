@@ -88,6 +88,12 @@ TEST(Reflection, RuntimeWritableMarksOnlyTheChosenField) {
   for (const auto* info : {sprite, mesh}) {
     EXPECT_TRUE(info->FindField("color")->runtime_writable);
     EXPECT_TRUE(info->FindField("visible")->runtime_writable);
+    if (info == sprite) {
+      EXPECT_TRUE(info->FindField("sorting_order")->runtime_writable);
+      EXPECT_EQ(
+          info->FindField("sorting_order")->tooltip,
+          "Draw order among sprites (-16384..16383); higher draws on top");
+    }
   }
 }
 
@@ -109,6 +115,17 @@ TEST(Reflection, SettingSpriteColorReachesRenderMeshAndBumpsRevision) {
   ASSERT_NE(render, nullptr);
   ASSERT_EQ(render->materials.size(), 1u);
   EXPECT_EQ(render->revision, 0u);
+  EXPECT_EQ(render->blend_order, 16384u);  // neutral, same as a default mesh
+
+  // A default MeshRenderer sits at the neutral level too, so an unsorted
+  // sprite and a transparent mesh still interleave by depth.
+  const kEntityId mesh_entity = scene.Objects().NewObject();
+  ASSERT_TRUE(
+      scene.AddComponent(scene.GetGameObject(mesh_entity), "MeshRenderer"));
+  const RenderMesh* mesh_render =
+      scene.Objects().GetProperty<RenderMesh>(mesh_entity);
+  ASSERT_NE(mesh_render, nullptr);
+  EXPECT_EQ(mesh_render->blend_order, render->blend_order);
 
   const auto* info = TypeRegistry::Instance().FindComponent("SpriteRenderer");
   ASSERT_NE(info, nullptr);
@@ -123,10 +140,24 @@ TEST(Reflection, SettingSpriteColorReachesRenderMeshAndBumpsRevision) {
   EXPECT_FALSE(render->visible);
   EXPECT_EQ(render->revision, 2u);
 
+  ASSERT_TRUE(
+      info->set_field(scene, entity, "sorting_order", mtext::Variant(5)));
+  EXPECT_EQ(sprite->sorting_order, 5);
+  EXPECT_EQ(render->blend_order, static_cast<uint16_t>(16384 + 5));
+  EXPECT_EQ(render->revision, 3u);
+
   // A field without an after-set hook must not touch the renderer.
   EXPECT_TRUE(info->set_field(scene, entity, "material",
                               mtext::Resource{"res://ignored.masset"}));
-  EXPECT_EQ(render->revision, 2u);
+  EXPECT_EQ(render->revision, 3u);
+
+  // Out-of-range orders clamp into Filament's 15-bit range.
+  ASSERT_TRUE(
+      info->set_field(scene, entity, "sorting_order", mtext::Variant(-99999)));
+  EXPECT_EQ(render->blend_order, 0u);
+  ASSERT_TRUE(
+      info->set_field(scene, entity, "sorting_order", mtext::Variant(99999)));
+  EXPECT_EQ(render->blend_order, 32767u);
   std::filesystem::remove_all(dir);
 }
 

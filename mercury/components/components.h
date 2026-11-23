@@ -73,6 +73,8 @@ struct SpriteRenderer {
   glm::vec4 color = glm::vec4(1.0f);
   AssetRef material;
   bool visible = true;
+  // Unity's SortingOrder: sprites with the same depth draw in this order.
+  int sorting_order = 0;
 
   void Reflect(Reflector& r) {
     r.Field("color", color)
@@ -80,6 +82,10 @@ struct SpriteRenderer {
         .RuntimeWritable();
     r.Field("material", material, "Material");
     r.Field("visible", visible).RuntimeWritable();
+    r.Field("sorting_order", sorting_order)
+        .Tooltip(
+            "Draw order among sprites (-16384..16383); higher draws on top")
+        .RuntimeWritable();
   }
 };
 
