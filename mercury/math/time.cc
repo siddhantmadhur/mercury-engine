@@ -64,6 +64,11 @@ uint64_t Time::GetFrameCount() {
   return State().frame_count;
 }
 
+bool Time::InTick() {
+  std::lock_guard lock(StateMutex());
+  return State().in_tick;
+}
+
 float Time::GetTimeScale() {
   std::lock_guard lock(StateMutex());
   return State().time_scale;

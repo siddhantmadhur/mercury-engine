@@ -32,6 +32,9 @@ class Time {
   static double GetRealtimeSinceStartup();
   // Frames rendered since the scene started.
   static uint64_t GetFrameCount();
+  // True while a fixed tick is running; input code uses this to pick the
+  // tick-scoped just-pressed state instead of the frame-scoped one.
+  static bool InTick();
   // Multiplies how fast game time passes (0 pauses ticks), like
   // Time.timeScale.
   static float GetTimeScale();

@@ -177,6 +177,9 @@ void Application::StepFrame() {
   const double kTickMs = 1000.0 / tick_rate;
   time_since_last_tick_ += delta_time_;
 
+  // Each frame consumes its own just-pressed state, even in headless mode
+  // where BeginFrame() (and glfwPollEvents()) is skipped.
+  input_manager_.BeginFrameFreshPresses();
   if (!headless_) {
     input_manager_.BeginFrame();
     glfwPollEvents();
