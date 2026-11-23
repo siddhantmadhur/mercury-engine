@@ -483,7 +483,7 @@ float ActionReadFloat(const ScriptInputAction& action) {
   InputAction* item = ActionAt(action);
   return item ? item->ReadValue<float>() : 0.0f;
 }
-glm::vec2 ActionReadVector2(ScriptInputAction action) {
+glm::vec2 ActionReadVector2(const ScriptInputAction& action) {
   InputAction* item = ActionAt(action);
   return item ? item->ReadValue<glm::vec2>() : glm::vec2(0.0f);
 }

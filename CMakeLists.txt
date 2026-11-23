@@ -403,6 +403,7 @@ if (MERCURY_BUILD_TESTS)
             tests/hierarchy_test.cc
             tests/image_load_test.cc
             tests/input_actions_test.cc
+            tests/input_action_binding_test.cc
             tests/input_manager_test.cc
             tests/introspection_test.cc
             tests/map_test.cc
