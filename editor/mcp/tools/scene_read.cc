@@ -19,6 +19,7 @@
 #include "editor_scene.h"
 #include "introspection/introspection.h"
 #include "mcp/tool_registry.h"
+#include "mcp/tools/console_json.h"
 #include "mcp/tools/scene_json.h"
 #include "project/project.h"
 #include "scripting/type_registry.h"
@@ -317,36 +318,11 @@ ToolResult GetNode(EditorScene& scene, const json& args) {
 
 // ---------------------------------------------------------------- read_console
 
-const char* LevelName(Console::Level level) {
-  switch (level) {
-    case Console::Level::kInfo:
-      return "info";
-    case Console::Level::kWarning:
-      return "warning";
-    case Console::Level::kError:
-      return "error";
-  }
-  return "info";
-}
-
-const char* SourceName(Console::Source source) {
-  switch (source) {
-    case Console::Source::kEditor:
-      return "editor";
-    case Console::Source::kBuild:
-      return "build";
-    case Console::Source::kGame:
-      return "game";
-    case Console::Source::kLore:
-      return "lore";
-  }
-  return "editor";
-}
-
 ToolResult ReadConsole(EditorScene& scene, const json& args) {
   std::string error;
   size_t limit = 0;
-  if (!ReadLimit(args, kDefaultConsoleLimit, &limit, &error)) {
+  if (!mcp::ParseConsoleLimit(args, kDefaultConsoleLimit, kMaxLimit, &limit,
+                              &error)) {
     return Fail(error);
   }
 
@@ -374,35 +350,11 @@ ToolResult ReadConsole(EditorScene& scene, const json& args) {
 
   Console& console = scene.ConsoleRef();
   std::optional<uint64_t> cursor;
-  if (args.contains("cursor") && !args.at("cursor").is_null()) {
-    const json& value = args.at("cursor");
-    if (!value.is_number_integer() || value.get<int64_t>() < 0) {
-      return Fail(
-          "\"cursor\" must be a non-negative integer: the "
-          "next_cursor of a previous read_console call");
-    }
-    cursor = value.get<uint64_t>();
-    if (*cursor > console.LatestCursor()) {
-      return Fail(std::format(
-          "cursor {} is ahead of the console (its latest cursor is {}); it "
-          "probably came from an earlier editor session. Omit \"cursor\" to "
-          "read the most recent entries",
-          *cursor, console.LatestCursor()));
-    }
+  if (!mcp::ParseConsoleCursor(args, console, &cursor, &error)) {
+    return Fail(error);
   }
 
-  const Console::Page page = console.ReadFrom(cursor, min_level, limit);
-  json entries = json::array();
-  for (const Console::Entry& entry : page.entries) {
-    entries.push_back({{"seq", entry.seq},
-                       {"level", LevelName(entry.line.level)},
-                       {"source", SourceName(entry.line.source)},
-                       {"text", entry.line.text}});
-  }
-  return Ok({{"entries", std::move(entries)},
-             {"next_cursor", page.next_cursor},
-             {"truncated", page.truncated},
-             {"dropped", page.dropped}});
+  return Ok(mcp::ConsolePageToJson(console.ReadFrom(cursor, min_level, limit)));
 }
 
 }  // namespace
