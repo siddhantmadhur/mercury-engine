@@ -6,6 +6,7 @@
 
 #include "GLFW/glfw3.h"
 #include "input/input_manager.h"
+#include "input/input_script.h"
 #include "math/time.h"
 
 namespace Mercury {
@@ -139,6 +140,55 @@ TEST_F(InputManagerTest, HeldKeyDoesNotRetriggerOnRepeat) {
 
   input.InjectKeyEvent(GLFW_KEY_A, GLFW_RELEASE);
   EXPECT_FALSE(input.IsPressed(GLFW_KEY_A));
+}
+
+TEST(InputScriptTest, DumpAcceptsNoNodesAWildcardAndSemicolonPaths) {
+  InputScript script;
+  std::string error;
+  ASSERT_TRUE(script.LoadFromString(R"(1 dump out.json
+2 dump every.json *
+3 dump some.json Root/Player; Ball
+4 dump spaces.json Main Camera ;  Player/Camera
+5 dump trailing.json Extra;
+6 dump star.json Root; *; Other
+)",
+                                    &error))
+      << error;
+
+  struct Call {
+    std::string file;
+    std::vector<std::string> nodes;
+  };
+  std::vector<Call> calls;
+  InputScript::Hooks hooks;
+  hooks.dump = [&](const std::string& file,
+                   const std::vector<std::string>& nodes) {
+    calls.push_back({file, nodes});
+  };
+  InputManager input;
+  script.Apply(6, input, nullptr, hooks);
+
+  ASSERT_EQ(calls.size(), 6u);
+  EXPECT_EQ(calls[0].file, "out.json");
+  EXPECT_TRUE(calls[0].nodes.empty());
+  EXPECT_EQ(calls[1].file, "every.json");
+  EXPECT_TRUE(calls[1].nodes.empty());  // `*` was normalized to all nodes
+  EXPECT_EQ(calls[2].file, "some.json");
+  EXPECT_EQ(calls[2].nodes, (std::vector<std::string>{"Root/Player", "Ball"}));
+  EXPECT_EQ(calls[3].file, "spaces.json");
+  EXPECT_EQ(calls[3].nodes,
+            (std::vector<std::string>{"Main Camera", "Player/Camera"}));
+  EXPECT_EQ(calls[4].file, "trailing.json");
+  EXPECT_EQ(calls[4].nodes, (std::vector<std::string>{"Extra"}));
+  EXPECT_EQ(calls[5].file, "star.json");
+  EXPECT_TRUE(calls[5].nodes.empty());  // a `*` entry means every node
+}
+
+TEST(InputScriptTest, DumpNeedsAFileArgument) {
+  InputScript script;
+  std::string error;
+  EXPECT_FALSE(script.LoadFromString("1 dump\n", &error));
+  EXPECT_NE(error.find("dump needs a file"), std::string::npos) << error;
 }
 
 }  // namespace

@@ -3,13 +3,16 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The play-in-editor tool group: build and run the project's map in the
-//! editor's own PlaySession (the one the Play / Stop button uses).
+//! editor's own PlaySession (the one the Play / Stop button uses), plus
+//! `inspect_runtime_entity`, which runs a separate short headless player.
 //!
 //! The workflow is always `play_start` -> poll `play_status` and
 //! `play_logs` with the returned `console_cursor` (then with each
 //! `next_cursor`) until the state is `running` or `idle` -> `play_stop` when
 //! finished. `play_start` only starts the build; it does not wait for the
-//! game. The C++ handlers are in `editor/mcp/tools/play.cc`.
+//! game. `inspect_runtime_entity` instead replays scripted input in its own
+//! player and reads back the dumps it wrote. The C++ handlers are in
+//! `editor/mcp/tools/play.cc`.
 
 use super::{Mode, ToolSpec, schema};
 
@@ -77,8 +80,76 @@ pub enum ConsoleLevel {
     Error,
 }
 
+fn default_frames() -> u32 {
+    60
+}
+
+/// A scripted input line for `inspect_runtime_entity`. Only input commands
+/// are allowed: `capture`, `quit`, `dump` and `log` are the tool's job.
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+#[allow(dead_code)]
+#[serde(rename_all = "lowercase")]
+pub enum RuntimeInputCommand {
+    Press,
+    Release,
+    Tap,
+    Mouse,
+    Look,
+}
+
+/// One line of the temporary input script the inspection run replays.
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+#[allow(dead_code)]
+pub struct RuntimeInputStep {
+    /// The frame to apply the input on, from 1 to `frames`.
+    #[schemars(range(min = 1, max = 3600))]
+    pub frame: u32,
+    /// `press`, `release`, `tap`, `mouse` or `look`. Control commands such as
+    /// `capture`, `quit`, `dump` and `log` are rejected.
+    pub command: RuntimeInputCommand,
+    /// The command's arguments, e.g. ["w"] for press or ["10", "0"] for look.
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// `inspect_runtime_entity`'s arguments.
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+#[allow(dead_code)]
+pub struct InspectRuntimeEntityArgs {
+    /// A res:// path to a .mmap to run. Defaults to the map open in the
+    /// editor, or the project's main map when no map is open. Only files
+    /// already on disk are used.
+    #[serde(default)]
+    pub map: Option<String>,
+    /// How many frames to simulate, from 1 to 3600. Defaults to 60.
+    #[serde(default = "default_frames")]
+    #[schemars(range(min = 1, max = 3600))]
+    pub frames: u32,
+    /// Scripted inputs to replay, e.g. {"frame": 5, "command": "press",
+    /// "args": ["w"]}. Only press/release/tap/mouse/look are accepted.
+    #[serde(default)]
+    pub inputs: Option<Vec<RuntimeInputStep>>,
+    /// Frames at which to write a runtime dump. Defaults to [frames].
+    #[serde(default)]
+    pub dump_at: Option<Vec<u32>>,
+    /// Node paths to dump at each frame. Omit or leave empty for every node;
+    /// "*" also means every node.
+    #[serde(default)]
+    pub nodes: Option<Vec<String>>,
+    /// Save the open map before running if it has unsaved changes. Defaults
+    /// to false: without it, a dirty map is an error.
+    #[serde(default)]
+    pub save: bool,
+}
+
 pub(crate) fn tools() -> Vec<ToolSpec> {
-    vec![play_start(), play_stop(), play_status(), play_logs()]
+    vec![
+        play_start(),
+        play_stop(),
+        play_status(),
+        play_logs(),
+        inspect_runtime_entity(),
+    ]
 }
 
 fn play_start() -> ToolSpec {
@@ -147,18 +218,50 @@ fn play_logs() -> ToolSpec {
     )
 }
 
+fn inspect_runtime_entity() -> ToolSpec {
+    ToolSpec::new(
+        "inspect_runtime_entity",
+        "Runs the map headlessly with scripted input and reports runtime node \
+         state. Refuses when a Play session is building/running, when the map \
+         is missing, or when the open map is dirty unless `save` is true. \
+         Replays `inputs` (only press/release/tap/mouse/look) over `frames` \
+         frames (1 to 3600, default 60), writes a JSON dump at each `dump_at` \
+         frame (default [frames]) for `nodes` (default every node), then \
+         exits. Returns {ok, frames_run, dumps: [{frame, nodes: [...]}], \
+         errors, log_tail}. The dumps contain world transforms, rigidbody \
+         velocities and live component/script fields, so a caller can check \
+         what a simulated player actually did. Unlike play_start this runs a \
+         separate headless player and does not use play_status or play_logs.",
+        Mode::Exec,
+        || schema::<InspectRuntimeEntityArgs>(),
+    )
+    .with_timeout_secs(150)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::{Value, json};
 
     #[test]
-    fn the_group_has_four_tools_with_the_right_modes_and_schemas() {
+    fn the_group_has_five_tools_with_the_right_modes_and_schemas() {
         let tools = tools();
         let names: Vec<&str> = tools.iter().map(|tool| tool.name).collect();
-        assert_eq!(names, ["play_start", "play_stop", "play_status", "play_logs"]);
+        assert_eq!(
+            names,
+            [
+                "play_start",
+                "play_stop",
+                "play_status",
+                "play_logs",
+                "inspect_runtime_entity"
+            ]
+        );
         let modes: Vec<Mode> = tools.iter().map(|tool| tool.mode).collect();
-        assert_eq!(modes, [Mode::Exec, Mode::Exec, Mode::Read, Mode::Read]);
+        assert_eq!(
+            modes,
+            [Mode::Exec, Mode::Exec, Mode::Read, Mode::Read, Mode::Exec]
+        );
         for tool in &tools {
             assert_eq!(tool.schema().get("type"), Some(&json!("object")), "{}", tool.name);
             assert!(!tool.description.is_empty());
@@ -167,7 +270,7 @@ mod tests {
 
     #[test]
     fn descriptions_state_the_tool_workflow() {
-        for tool in tools() {
+        for tool in tools().into_iter().filter(|tool| tool.name.starts_with("play_")) {
             let description = tool.description.to_lowercase();
             assert!(description.contains("play_start"), "{}", tool.name);
             assert!(description.contains("play_status"), "{}", tool.name);
@@ -176,6 +279,9 @@ mod tests {
         }
         assert!(play_start().description.contains("console_cursor"));
         assert!(play_logs().description.contains("next_cursor"));
+        let inspect = inspect_runtime_entity().description.to_lowercase();
+        assert!(inspect.contains("dump"));
+        assert!(inspect.contains("frames"));
     }
 
     #[test]
@@ -218,5 +324,50 @@ mod tests {
         assert_eq!(args.cursor, Some(7));
         assert_eq!(args.limit, 200);
         assert_eq!(args.levels.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn inspect_runtime_entity_schema_is_bounded() {
+        let spec = inspect_runtime_entity();
+        assert_eq!(spec.mode, Mode::Exec);
+        assert_eq!(spec.timeout_secs, 150);
+        let schema = spec.schema();
+        assert_eq!(schema["properties"]["frames"]["default"], json!(60));
+        assert_eq!(schema["properties"]["frames"]["minimum"], json!(1));
+        assert_eq!(schema["properties"]["frames"]["maximum"], json!(3600));
+        let commands = schema["$defs"]["RuntimeInputCommand"]["enum"]
+            .as_array()
+            .expect("RuntimeInputCommand must be an enum in $defs");
+        let commands: Vec<&str> = commands.iter().map(|c| c.as_str().unwrap()).collect();
+        assert_eq!(commands, ["press", "release", "tap", "mouse", "look"]);
+    }
+
+    #[test]
+    fn inspect_runtime_entity_args_default_and_validate_commands() {
+        let args: InspectRuntimeEntityArgs = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(args.frames, 60);
+        assert_eq!(args.map, None);
+        assert!(args.inputs.is_none());
+        assert!(args.dump_at.is_none());
+        assert!(args.nodes.is_none());
+        assert!(!args.save);
+        let args: InspectRuntimeEntityArgs = serde_json::from_value(json!({
+            "frames": 10,
+            "dump_at": [5, 10],
+            "nodes": ["Root/Player"],
+            "inputs": [{"frame": 5, "command": "press", "args": ["w"]}]
+        }))
+        .unwrap();
+        assert_eq!(args.frames, 10);
+        assert_eq!(args.dump_at, Some(vec![5, 10]));
+        assert_eq!(args.nodes, Some(vec!["Root/Player".to_string()]));
+        assert_eq!(args.inputs.unwrap().len(), 1);
+        for command in ["capture", "quit", "dump", "log"] {
+            let bad = json!({"inputs": [{"frame": 1, "command": command}]});
+            assert!(
+                serde_json::from_value::<InspectRuntimeEntityArgs>(bad).is_err(),
+                "{command} must be rejected"
+            );
+        }
     }
 }

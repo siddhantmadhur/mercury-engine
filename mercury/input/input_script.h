@@ -15,6 +15,11 @@
  *   <frame> mouse <left|right|middle> <down|up>
  *   <frame> look <dx> <dy>     (mouse movement in window pixels)
  *   <frame> capture <file.png> (save this frame)
+ *   <frame> dump <file.json> [path; path; ...]
+ *                             (write a runtime state snapshot; paths may
+ *                              contain spaces and are separated by ';';
+ *                              no paths or "*" means every node; a relative
+ *                              file path is relative to the project root)
  *   <frame> log <text...>
  *   <frame> quit
  *   # comments and blank lines are ignored
@@ -53,6 +58,11 @@ class InputScript {
 
   struct Hooks {
     std::function<void(const std::string& file)> capture;
+    // The host decides when the snapshot is written so it sees the state
+    // after this frame's simulation. Empty `nodes` means every node.
+    std::function<void(const std::string& file,
+                       const std::vector<std::string>& nodes)>
+        dump;
     std::function<void()> quit;
   };
 

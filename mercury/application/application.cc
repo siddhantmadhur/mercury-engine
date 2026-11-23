@@ -22,7 +22,10 @@
 
 #include "debugger/debugger.h"
 #include "debugger/profiler.h"
+#include "introspection/runtime_dump.h"
+#include "os/filesystem.h"
 #include "properties/texture2d.h"
+#include "scene/map_scene.h"
 
 namespace Mercury {
 
@@ -198,6 +201,10 @@ void Application::StepFrame() {
   if (!input_script_.IsEmpty()) {
     InputScript::Hooks hooks;
     hooks.capture = [this](const std::string& file) { RequestCapture(file); };
+    hooks.dump = [this](const std::string& file,
+                        const std::vector<std::string>& nodes) {
+      pending_dump_ = PendingDump{file, nodes};
+    };
     hooks.quit = [this] { quit_after_frame_ = true; };
     input_script_.Apply(script_frame_++, input_manager_, window_, hooks);
   }
@@ -226,6 +233,10 @@ void Application::StepFrame() {
     MERCURY_PROFILE_SCOPE("process_on_frame");
     game_scene_->ProcessOnFrame(alpha);
   }
+  // After all scene work for this frame (including ticks and physics). A
+  // `quit` on the same script frame only takes effect at the end of
+  // StepFrame, so it cannot suppress the dump.
+  WritePendingDump();
 
   // A minimized window has a 0x0 framebuffer, which most backends cannot create
   // swapchains or targets for.
@@ -260,6 +271,41 @@ void Application::StepFrame() {
 
 void Application::RequestCapture(const std::string& file) {
   PDebug::warn("This renderer cannot save captures ({})", file);
+}
+
+void Application::WritePendingDump() {
+  if (!pending_dump_) return;
+  const PendingDump dump = std::move(*pending_dump_);
+  pending_dump_.reset();
+  auto* scene = dynamic_cast<MapScene*>(game_scene_.get());
+  if (!scene) {
+    PDebug::error("Dump skipped: the active scene is not a map scene");
+    return;
+  }
+  // A relative dump path is relative to the project root, not to the
+  // process's working directory (an input script may be run from anywhere).
+  fs::path file = dump.file;
+  if (file.is_relative()) {
+    const auto project = scene->GetProject();
+    if (!project) {
+      PDebug::error("Dump skipped: no project to resolve {} against",
+                    dump.file);
+      return;
+    }
+    file = project->GetRoot() / file;
+  }
+  std::string error;
+  const std::string json =
+      introspection::DumpSceneJson(*scene, dump.nodes, &error);
+  if (!error.empty()) {
+    PDebug::error("Dump to {}: {}", file.string(), error);
+    return;
+  }
+  if (!os::WriteFileAtomic(file, json)) {
+    PDebug::error("Could not write dump to {}", file.string());
+    return;
+  }
+  PDebug::info("Saved runtime dump to {}", file.string());
 }
 
 bool Application::StartHosted() {

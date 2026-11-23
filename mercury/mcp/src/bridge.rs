@@ -1411,12 +1411,14 @@ mod tests {
     fn specs_default_to_the_default_timeout() {
         // Every tool uses the default reply timeout except build_scripts (a
         // child process), scaffold_script with "build": true (the same build),
-        // and capture_viewport (waits for a rendered frame), which legitimately
+        // capture_viewport (waits for a rendered frame), and
+        // inspect_runtime_entity (runs a headless player), which legitimately
         // wait longer.
         for spec in tools::all() {
             let expected = match spec.name {
                 "build_scripts" | "scaffold_script" => 300,
                 "capture_viewport" => 60,
+                "inspect_runtime_entity" => 150,
                 _ => tools::DEFAULT_TIMEOUT_SECS,
             };
             assert_eq!(

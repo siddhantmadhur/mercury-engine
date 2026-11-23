@@ -15,14 +15,29 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include "components/components.h"
 #include "introspection/introspection.h"
+#include "introspection/runtime_dump.h"
+#include "project/map.h"
 #include "project/project.h"
+#include "properties/transform.h"
+#include "scene/map_scene.h"
 #include "scripting/type_registry.h"
 #include "test_paths.h"
+#include "test_scripts.h"
 
 namespace fs = std::filesystem;
 
 namespace {
+
+// A native script (MERCURY_SCRIPT) with a reflected field, so the runtime
+// dump has to read a script component through TypeRegistry accessors.
+class DumpProbe : public Mercury::Behaviour {
+ public:
+  void Reflect(Mercury::Reflector& r) override { r.Field("speed", speed); }
+  float speed = 0.0f;
+};
+MERCURY_TEST_BEHAVIOUR(DumpProbe);
 
 // A throwaway project: a .mproj in a per-test temp folder, so fixtures can
 // be written beside it and found through res:// paths.
@@ -442,4 +457,87 @@ TEST_F(InspectAssetTest, ReportsErrorsForMissingAndBadPaths) {
   EXPECT_FALSE(Mercury::introspection::InspectAsset(*project_, "../outside.png",
                                                     &json, &error));
   EXPECT_NE(error.find("res://"), std::string::npos);
+}
+
+TEST(RuntimeDumpTest, DumpsWorldTransformRigidbodyAndScriptFields) {
+  auto project = MakeProject(Mercury::test::CacheDir() / "runtime_dump");
+  Mercury::RegisterBuiltinTypes();
+  Mercury::Map map;
+  std::string error;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[component]]
+node = "Ball"
+type = "Rigidbody"
+[component.props]
+mass = 2.0
+
+[[component]]
+node = "Ball"
+type = "DumpProbe"
+[component.props]
+speed = 12.5
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Ball"
+parent = "."
+tag = "ball"
+layer = 3
+)",
+                                 &error))
+      << error;
+  Mercury::MapScene scene(project, Mercury::MapScene::Mode::kPlay);
+  scene.Instantiate(map);
+  Mercury::GameObject ball = scene.Find("Ball");
+  ASSERT_TRUE(ball);
+  ball.GetTransform()->SetPosition({1.0f, 2.0f, -3.0f});
+  ball.GetTransform()->SetRotate({0.0f, 90.0f, 0.0f});
+  ball.GetTransform()->SetScale({2.0f, 2.0f, 2.0f});
+
+  const std::string dumped =
+      Mercury::introspection::DumpSceneJson(scene, {"Ball", "Missing"}, &error);
+  ASSERT_TRUE(error.empty()) << error;
+  const auto document = nlohmann::json::parse(dumped);
+  ASSERT_EQ(document["nodes"].size(), 1u);
+  const auto& node = document["nodes"][0];
+  EXPECT_EQ(node["path"], "Ball");
+  EXPECT_EQ(node["tag"], "ball");
+  EXPECT_EQ(node["layer"], 3);
+  EXPECT_EQ(node["active"], true);
+  EXPECT_EQ(node["transform"]["position"][2], -3.0);
+  EXPECT_EQ(node["transform"]["rotation"][1], 90.0);
+  EXPECT_NEAR(node["transform"]["scale"][0].get<double>(), 2.0, 0.0001);
+  EXPECT_EQ(node["components"]["Rigidbody"]["mass"], 2.0);
+  EXPECT_EQ(node["components"]["DumpProbe"]["speed"], 12.5);
+  ASSERT_EQ(document["errors"].size(), 1u);
+  EXPECT_EQ(document["errors"][0], "node not found: Missing");
+}
+
+TEST(RuntimeDumpTest, NoNodesMeansEveryNode) {
+  auto project = MakeProject(Mercury::test::CacheDir() / "runtime_dump_all");
+  Mercury::RegisterBuiltinTypes();
+  Mercury::Map map;
+  std::string error;
+  ASSERT_TRUE(map.LoadFromString(R"([mmap]
+format = 2
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "Child"
+parent = "."
+)",
+                                 &error))
+      << error;
+  Mercury::MapScene scene(project, Mercury::MapScene::Mode::kPlay);
+  scene.Instantiate(map);
+  const auto document = nlohmann::json::parse(
+      Mercury::introspection::DumpSceneJson(scene, {}, &error));
+  ASSERT_TRUE(error.empty()) << error;
+  EXPECT_EQ(document["nodes"].size(), 2u);
 }
