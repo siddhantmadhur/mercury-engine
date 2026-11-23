@@ -23,6 +23,7 @@
 #include "scripting/as/script_runtime.h"
 #include "scripting/type_registry.h"
 #include "test_paths.h"
+#include "test_scripts.h"
 
 using namespace Mercury;
 namespace fs = std::filesystem;
@@ -30,6 +31,15 @@ namespace fs = std::filesystem;
 namespace {
 
 std::shared_ptr<Project> g_project;
+
+// A native (MERCURY_SCRIPT) script, to check the C++ registration path gets
+// the same field accessors as AngelScript classes.
+class NativeAccessorProbe : public Behaviour {
+ public:
+  void Reflect(Reflector& r) override { r.Field("amount", amount); }
+  float amount = 0.0f;
+};
+MERCURY_TEST_BEHAVIOUR(NativeAccessorProbe);
 
 class ScriptBehaviourTest : public ::testing::Test {
  protected:
@@ -266,4 +276,71 @@ parent = "."
 TEST_F(ScriptBehaviourTest, TheScriptClassesAreRegistered) {
   EXPECT_NE(ScriptRuntime::Instance().FindScriptClass("Probe"), nullptr);
   EXPECT_NE(ScriptRuntime::Instance().FindScriptClass("Thrower"), nullptr);
+}
+
+TEST_F(ScriptBehaviourTest, ScriptAPIReadsAnotherScriptsFields) {
+  MapScene scene(g_project, MapScene::Mode::kPlay);
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "Probe"
+[component.props]
+speed = 8.5
+lives = 7
+label = "from map"
+
+[[component]]
+node = "A"
+type = "Reader"
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
+)");
+  ScriptBehaviour* reader = Script(scene, "A", "Reader");
+  ASSERT_NE(reader, nullptr);
+  const auto fields = Fields(reader);
+  EXPECT_EQ(fields.at("has_probe").ToBool().value_or(false), true);
+  EXPECT_FLOAT_EQ(fields.at("read_speed").ToFloat().value_or(0.0), 8.5);
+  EXPECT_EQ(fields.at("read_lives").ToInt().value_or(0), 7);
+  EXPECT_EQ(fields.at("read_label").ToString().value_or(""), "from map");
+}
+
+TEST_F(ScriptBehaviourTest, NativeScriptComponentsHaveFieldAccessors) {
+  MapScene scene(g_project, MapScene::Mode::kPlay);
+  Load(scene, R"([mmap]
+format = 2
+
+[[component]]
+node = "A"
+type = "NativeAccessorProbe"
+[component.props]
+amount = 4.5
+
+[[node]]
+name = "Root"
+
+[[node]]
+name = "A"
+parent = "."
+)");
+  const ComponentInfo* info =
+      TypeRegistry::Instance().FindComponent("NativeAccessorProbe");
+  ASSERT_NE(info, nullptr);
+  ASSERT_TRUE(info->has);
+  ASSERT_TRUE(info->get_field);
+  ASSERT_TRUE(info->set_field);
+  const kEntityId entity = scene.Find("A").GetEntity();
+  EXPECT_TRUE(info->has(scene, entity));
+  mtext::Variant value;
+  ASSERT_TRUE(info->get_field(scene, entity, "amount", &value));
+  EXPECT_FLOAT_EQ(value.ToFloat().value_or(0.0), 4.5);
+  ASSERT_TRUE(info->set_field(scene, entity, "amount", mtext::Variant(7.5f)));
+  ASSERT_TRUE(info->get_field(scene, entity, "amount", &value));
+  EXPECT_FLOAT_EQ(value.ToFloat().value_or(0.0), 7.5);
 }

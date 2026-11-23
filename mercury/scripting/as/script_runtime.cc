@@ -612,6 +612,7 @@ void ScriptRuntime::RegisterClasses(asIScriptModule* module,
       }
       scene.AddBehaviour(entity, std::move(behaviour), name);
     };
+    AttachBehaviourAccessors(info);
     TypeRegistry::Instance().RegisterComponent(std::move(info));
   }
 }
