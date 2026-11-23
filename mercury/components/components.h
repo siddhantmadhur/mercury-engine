@@ -75,9 +75,11 @@ struct SpriteRenderer {
   bool visible = true;
 
   void Reflect(Reflector& r) {
-    r.Field("color", color).Tooltip("Multiplied with the material color");
+    r.Field("color", color)
+        .Tooltip("Multiplied with the material color")
+        .RuntimeWritable();
     r.Field("material", material, "Material");
-    r.Field("visible", visible);
+    r.Field("visible", visible).RuntimeWritable();
   }
 };
 
@@ -123,11 +125,13 @@ struct MeshRenderer {
         .Tooltip("Draw only this node of the model (empty: the whole model)");
     r.Field("mesh_scale", mesh_scale)
         .Tooltip("Scales the shape itself, not the node or its children");
-    r.Field("color", color).Tooltip("Multiplied with the material color");
+    r.Field("color", color)
+        .Tooltip("Multiplied with the material color")
+        .RuntimeWritable();
     r.Field("material", material, "Material");
     r.Field("materials", materials, "Material")
         .Tooltip("One material per mesh of the model");
-    r.Field("visible", visible);
+    r.Field("visible", visible).RuntimeWritable();
     r.Field("cast_shadows", cast_shadows);
     r.Field("rendering_layers", rendering_layers)
         .Tooltip("Bit mask; bit 8 (256) draws the outline");

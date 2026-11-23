@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <utility>
 
 #include "animation/animator.h"
 #include "audio/audio_system.h"
@@ -25,12 +26,13 @@ namespace {
 
 template <typename T>
 ComponentInfo MakeInfo(const char* name, const char* category,
-                       const char* description) {
+                       const char* description, AfterSetFn after_set = {}) {
   ComponentInfo info;
   info.name = name;
   info.category = category;
   info.description = description;
   info.fields = DescribeFields<T>();
+  info.after_set = after_set;
   info.has = [](MapScene& scene, kEntityId entity) {
     return scene.Objects().GetProperty<T>(entity) != nullptr;
   };
@@ -42,8 +44,9 @@ ComponentInfo MakeInfo(const char* name, const char* category,
     value->Reflect(reflector);
     return reflector.Found();
   };
-  info.set_field = [](MapScene& scene, kEntityId entity, std::string_view field,
-                      const mtext::Variant& in) {
+  info.set_field = [after_set](MapScene& scene, kEntityId entity,
+                               std::string_view field,
+                               const mtext::Variant& in) {
     T* value = scene.Objects().GetProperty<T>(entity);
     if (!value) return false;
     auto reflector = Reflector::Set(field, in);
@@ -51,7 +54,9 @@ ComponentInfo MakeInfo(const char* name, const char* category,
     for (const auto& warning : reflector.GetWarnings()) {
       PDebug::warn("{}", warning);
     }
-    return reflector.Applied();
+    if (!reflector.Applied()) return false;
+    if (after_set) after_set(scene, entity, field);
+    return true;
   };
   return info;
 }
@@ -84,6 +89,118 @@ std::shared_ptr<const MeshGeometry> MakeSpriteQuad(glm::vec4 color) {
   // Counter-clockwise seen from +Z, so the quad faces a camera looking
   // down -Z (the same convention as the primitives).
   return MeshGeometry::Create(std::move(vertices), {0, 3, 1, 1, 3, 2});
+}
+
+// Materials for a MeshRenderer, in draw-slot order. When given, `mesh_indices`
+// receives the model meshes in that order and `base_node` the node the draws
+// are placed relative to; rebuilding them from the renderer also refreshes a
+// runtime color change.
+std::vector<RenderMaterial> MakeMeshMaterials(
+    MapScene& scene, const MeshRenderer& renderer, const std::string& path,
+    std::vector<int>* mesh_indices = nullptr, int* base_node = nullptr) {
+  const bool has_material = renderer.material.IsSet();
+  const auto material =
+      scene.Assets().LoadAs<MaterialAsset>(renderer.material.path);
+
+  // Unity's rule: the renderer's material list (one per submesh) wins, then
+  // a single material, then the model's own materials.
+  auto material_for = [&](size_t index, const ModelMaterial* own) {
+    if (index < renderer.materials.size() &&
+        renderer.materials[index].IsSet()) {
+      return scene.MakeRenderMaterial(
+          scene.Assets().LoadAs<MaterialAsset>(renderer.materials[index].path),
+          renderer.color);
+    }
+    if (has_material || !own)
+      return scene.MakeRenderMaterial(material, renderer.color);
+    RenderMaterial result;
+    result.color = own->color * renderer.color;
+    result.texture = own->texture;
+    result.metallic = own->metallic;
+    result.smoothness = own->smoothness;
+    result.emission = own->emission;
+    result.emission_texture = own->emission_texture;
+    result.normal_texture = own->normal_texture;
+    result.normal_scale = own->normal_scale;
+    result.transparent = own->transparent;
+    result.double_sided = own->double_sided;
+    result.transmission = own->transmission;
+    result.ior = own->ior;
+    result.transmission_color = own->transmission_color;
+    result.thickness = own->thickness;
+    result.reflectance = own->reflectance;
+    return result;
+  };
+
+  std::vector<RenderMaterial> materials;
+  if (renderer.mesh != MeshShape::kModel) {
+    materials.push_back(material_for(0, nullptr));
+    return materials;
+  }
+  if (!renderer.model.IsSet()) return materials;
+  auto model = scene.GetModelAsset(renderer.model.path);
+  if (!model) return materials;
+
+  std::vector<int> indices;
+  if (renderer.node.empty()) {
+    for (size_t i = 0; i < model->Meshes().size(); i++) {
+      indices.push_back(static_cast<int>(i));
+    }
+  } else {
+    const int node = model->FindNode(renderer.node);
+    if (base_node) *base_node = node;
+    if (node < 0) {
+      PDebug::warn("{}: {} has no node \"{}\"", path, renderer.model.path,
+                   renderer.node);
+      return materials;
+    }
+    indices = model->Nodes()[node].meshes;
+  }
+  // Unity numbers a node's submeshes in material-slot order.
+  std::stable_sort(indices.begin(), indices.end(), [&](int a, int b) {
+    const auto& ma = model->Meshes()[a];
+    const auto& mb = model->Meshes()[b];
+    return std::pair(ma.node, ma.material) < std::pair(mb.node, mb.material);
+  });
+
+  if (mesh_indices) *mesh_indices = indices;
+  for (int index : indices) {
+    materials.push_back(
+        material_for(materials.size(),
+                     &model->Materials()[model->Meshes()[index].material]));
+  }
+  return materials;
+}
+
+void SyncRendererField(MapScene& scene, kEntityId entity,
+                       std::string_view field) {
+  RenderMesh* mesh = scene.Objects().GetProperty<RenderMesh>(entity);
+  if (!mesh) return;
+  if (auto* sprite = scene.Objects().GetProperty<SpriteRenderer>(entity)) {
+    if (field == "visible") {
+      mesh->visible = sprite->visible;
+    } else if (field == "color") {
+      const auto material =
+          scene.Assets().LoadAs<MaterialAsset>(sprite->material.path);
+      for (RenderMaterial& surface : mesh->materials)
+        surface.color = sprite->color * material.color;
+    } else {
+      return;
+    }
+  } else if (auto* renderer =
+                 scene.Objects().GetProperty<MeshRenderer>(entity)) {
+    if (field == "visible") {
+      mesh->visible = renderer->visible;
+    } else if (field == "color") {
+      mesh->materials = MakeMeshMaterials(
+          scene, *renderer, scene.GetGameObject(entity).GetPath());
+    } else {
+      return;
+    }
+  } else {
+    return;
+  }
+  mesh->revision++;
 }
 
 void AttachSprite(MapScene& scene, kEntityId entity,
@@ -124,85 +241,31 @@ void AttachMeshRenderer(MapScene& scene, kEntityId entity,
   mesh.visible = renderer.visible;
   mesh.cast_shadows = renderer.cast_shadows;
   mesh.rendering_layers = static_cast<uint32_t>(renderer.rendering_layers);
-  const bool has_material = renderer.material.IsSet();
-  const auto material =
-      scene.Assets().LoadAs<MaterialAsset>(renderer.material.path);
-
-  // Unity's rule: the renderer's material list (one per submesh) wins, then
-  // a single material, then the model's own materials.
-  auto material_for = [&](size_t index, const ModelMaterial* own) {
-    if (index < renderer.materials.size() &&
-        renderer.materials[index].IsSet()) {
-      return scene.MakeRenderMaterial(
-          scene.Assets().LoadAs<MaterialAsset>(renderer.materials[index].path),
-          renderer.color);
-    }
-    if (has_material || !own)
-      return scene.MakeRenderMaterial(material, renderer.color);
-    RenderMaterial result;
-    result.color = own->color * renderer.color;
-    result.texture = own->texture;
-    result.metallic = own->metallic;
-    result.smoothness = own->smoothness;
-    result.emission = own->emission;
-    result.emission_texture = own->emission_texture;
-    result.normal_texture = own->normal_texture;
-    result.normal_scale = own->normal_scale;
-    result.transparent = own->transparent;
-    result.double_sided = own->double_sided;
-    result.transmission = own->transmission;
-    result.ior = own->ior;
-    result.transmission_color = own->transmission_color;
-    result.thickness = own->thickness;
-    result.reflectance = own->reflectance;
-    return result;
-  };
+  std::vector<int> mesh_indices;
+  mesh.materials =
+      MakeMeshMaterials(scene, renderer, path, &mesh_indices, &mesh.base_node);
 
   if (renderer.mesh != MeshShape::kModel) {
     RenderDraw draw;
     draw.geometry = scene.GetPrimitive(renderer.mesh, renderer.mesh_scale);
     draw.material = 0;
     mesh.draws.push_back(draw);
-    mesh.materials.push_back(material_for(0, nullptr));
   } else {
     if (!renderer.model.IsSet()) return;
     auto model = scene.GetModelAsset(renderer.model.path);
     if (!model) return;
+    if (!renderer.node.empty() && mesh.base_node < 0) return;
     mesh.model = model;
-    std::vector<int> mesh_indices;
-    if (renderer.node.empty()) {
-      for (size_t i = 0; i < model->Meshes().size(); i++) {
-        mesh_indices.push_back(static_cast<int>(i));
-      }
-    } else {
-      mesh.base_node = model->FindNode(renderer.node);
-      if (mesh.base_node < 0) {
-        PDebug::warn("{}: {} has no node \"{}\"", path, renderer.model.path,
-                     renderer.node);
-        return;
-      }
-      mesh_indices = model->Nodes()[mesh.base_node].meshes;
-    }
-    // Unity numbers a node's submeshes in material-slot order.
-    std::stable_sort(mesh_indices.begin(), mesh_indices.end(),
-                     [&](int a, int b) {
-                       const auto& ma = model->Meshes()[a];
-                       const auto& mb = model->Meshes()[b];
-                       return std::pair(ma.node, ma.material) <
-                              std::pair(mb.node, mb.material);
-                     });
-    for (int index : mesh_indices) {
-      const ModelMesh& source = model->Meshes()[index];
+    for (size_t slot = 0; slot < mesh_indices.size(); slot++) {
+      const ModelMesh& source = model->Meshes()[mesh_indices[slot]];
       RenderDraw draw;
       draw.geometry = source.geometry;
       draw.node = source.node;
-      draw.material = static_cast<int>(mesh.materials.size());
+      draw.material = static_cast<int>(slot);
       if (!source.bones.empty()) {
         draw.skin = static_cast<int>(mesh.skins.size());
         mesh.skins.push_back(RenderSkin{source.bones});
       }
-      mesh.materials.push_back(material_for(
-          mesh.materials.size(), &model->Materials()[source.material]));
       mesh.draws.push_back(std::move(draw));
     }
   }
@@ -552,14 +615,16 @@ void RegisterBuiltinTypes() {
   {
     auto info = MakeInfo<SpriteRenderer>(
         "SpriteRenderer", "Rendering",
-        "Draws a colored or textured quad sized by the Transform's scale");
+        "Draws a colored or textured quad sized by the Transform's scale",
+        SyncRendererField);
     info.attach = AttachSprite;
     registry.RegisterComponent(std::move(info));
   }
   {
     auto info = MakeInfo<MeshRenderer>(
         "MeshRenderer", "Rendering",
-        "Draws a lit 3D shape or model sized by the Transform's scale");
+        "Draws a lit 3D shape or model sized by the Transform's scale",
+        SyncRendererField);
     info.attach = AttachMeshRenderer;
     registry.RegisterComponent(std::move(info));
   }

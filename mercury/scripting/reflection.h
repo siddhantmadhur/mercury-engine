@@ -176,6 +176,8 @@ class Reflector {
 
   // Adds a tooltip to the field described just before.
   Reflector& Tooltip(const char* text);
+  // Marks the field described just before as writable from a running script.
+  Reflector& RuntimeWritable();
 
   /**
    * @brief A computed value that UI bindings can read (and optionally write),

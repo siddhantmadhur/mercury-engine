@@ -4,16 +4,21 @@
 
 #include <gtest/gtest.h>
 
+#include <filament/Color.h>
+#include <filament/RenderableManager.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
 
 #include "application/default_application.h"
+#include "application/filament_application.h"
 #include "properties/camera.h"
 #include "properties/model.h"
 #include "properties/render_mesh.h"
@@ -28,6 +33,8 @@ class SmokeScene : public GameScene {
  public:
   RenderSettings GetRenderSettings() const override { return settings_; }
   RenderSettings settings_;
+
+  kEntityId quad_ = entt::null;
 
   void OnStart() override {
     SetClearColor(glm::vec4(0.05f, 0.1f, 0.25f, 1.0f));
@@ -72,7 +79,8 @@ class SmokeScene : public GameScene {
     mesh.materials.push_back(std::move(material));
     mesh.ComputeBounds();
 
-    const kEntityId quad = object_manager_->NewObject();
+    quad_ = object_manager_->NewObject();
+    const kEntityId quad = quad_;
     Transform xform(glm::vec3(0.0f));
     xform.CaptureTickSnapshot();
     object_manager_->AddProperty(quad, std::move(xform));
@@ -350,7 +358,67 @@ class ProbeRoomScene : public GameScene {
   }
 };
 
+// Reads the uploaded baseColor of the scene's first renderable.
+std::optional<filament::math::float4> FirstBaseColor(filament::Engine* engine,
+                                                     filament::Scene* scene) {
+  if (!engine || !scene) return std::nullopt;
+  auto& manager = engine->getRenderableManager();
+  std::optional<filament::math::float4> found;
+  scene->forEach([&](utils::Entity entity) {
+    if (found || !manager.hasComponent(entity)) return;
+    if (auto* material =
+            manager.getMaterialInstanceAt(manager.getInstance(entity), 0)) {
+      found = material->getParameter<filament::math::float4>("baseColor");
+    }
+  });
+  return found;
+}
+
+bool Near(const filament::math::float4& a, const filament::math::float4& b) {
+  return glm::length(glm::vec4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w)) <
+         1e-4f;
+}
+
 }  // namespace
+
+TEST(FilamentSmokeTest, RevisionUpdatesBaseColorWithoutRebuilding) {
+  constexpr int kSize = 128;
+  DefaultApplication app("Filament Revision", kSize, kSize);
+  app.EnableHeadlessMode(true);
+  auto game = std::make_unique<SmokeScene>();
+  SmokeScene* game_ptr = game.get();
+  app.SetGameScene(std::move(game));
+  ASSERT_TRUE(app.StartHosted());
+  app.EnableSceneTexture(true);
+  app.SetSceneViewportSize(kSize, kSize);
+
+  filament::Engine* engine = app.GetEngine();
+  filament::Scene* scene = app.GetScene();
+  ASSERT_TRUE(StepUntil(app, std::chrono::seconds(60), [&] {
+    return FirstBaseColor(engine, scene).has_value();
+  }));
+  const auto original = *FirstBaseColor(engine, scene);
+
+  ASSERT_TRUE(game_ptr->GetRegistry().valid(game_ptr->quad_));
+  RenderMesh* mesh =
+      game_ptr->GetRegistry().try_get<RenderMesh>(game_ptr->quad_);
+  ASSERT_NE(mesh, nullptr);
+  ASSERT_EQ(mesh->revision, 0u);
+  const glm::vec4 changed(0.1f, 0.2f, 0.3f, 0.5f);
+  mesh->materials[0].color = changed;
+  mesh->revision++;
+  // Nothing reaches Filament until SyncScene sees the new revision.
+  EXPECT_TRUE(Near(*FirstBaseColor(engine, scene), original));
+
+  const filament::LinearColor linear = filament::Color::toLinear(
+      filament::sRGBColor{changed.r, changed.g, changed.b});
+  const filament::math::float4 expected{linear.r, linear.g, linear.b,
+                                        changed.a};
+  ASSERT_TRUE(StepUntil(app, std::chrono::seconds(60), [&] {
+    const auto current = FirstBaseColor(engine, scene);
+    return current && Near(*current, expected);
+  }));
+}
 
 TEST(FilamentSmokeTest, ProbeCaptureLightsAndReflectsTheRoom) {
   constexpr int kSize = 128;
