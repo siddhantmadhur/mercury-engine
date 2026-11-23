@@ -41,6 +41,7 @@
 use serde_json::{Map, Value};
 
 pub mod assets_build;
+pub mod authoring_assets;
 pub mod core;
 pub mod scene_read;
 pub mod scene_write;
@@ -151,6 +152,7 @@ pub fn all() -> Vec<ToolSpec> {
     tools.extend(scene_read::tools());
     tools.extend(scene_write::tools());
     tools.extend(assets_build::tools());
+    tools.extend(authoring_assets::tools());
     tools.extend(spatial_capture::tools());
     tools.extend(guides::tools());
     tools
