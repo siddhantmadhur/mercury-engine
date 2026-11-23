@@ -221,6 +221,19 @@ pub struct ApplySceneOperationsArgs {
     /// A node to select in the editor once the batch succeeded (a uid, path
     /// or alias).
     pub select: Option<OpNodeSelector>,
+    /// Check the whole batch and report what it would do, without changing the
+    /// map, the selection or the undo history. Returns a normal (non-error)
+    /// result with `"dry_run": true`, `"valid": <bool>`, `"applied": 0`,
+    /// `"would_apply": <operation count>`, `"created"` (one entry per create
+    /// or instantiate operation that validated, with "<pending>" in place of
+    /// the uid and path), `"warnings"` and `"errors"` (empty when valid).
+    /// uid/path references are checked against the map as it is BEFORE the
+    /// batch ONLY for a dry run: a path an earlier operation would create,
+    /// rename or reparent can be reported as not found. uids stay the same
+    /// across renames and reparents, so prefer {"uid": n} references in a
+    /// dry run.
+    #[serde(default)]
+    pub dry_run: bool,
 }
 
 /// `select_node`'s arguments.
@@ -255,7 +268,20 @@ fn apply_scene_operations() -> ToolSpec {
          component types and fields, values, prefab files), and if any fails \
          nothing is changed and the error names the failing operation by its \
          index in `operations` (0-based), with a did-you-mean `suggestion` for \
-         an unknown name. A successful batch is ONE undo step in the editor \
+         an unknown name. Every validation error is also listed in `errors` \
+         ({\"op\": <0-based index>, \"index\": <same>, \"error\": <message>}); \
+         the top-level `error` is the first one. With `\"dry_run\": true` \
+         nothing is changed: the result is normal even when validation fails, \
+         and reports {\"dry_run\": true, \"valid\": <bool>, \"applied\": 0, \
+         \"would_apply\": <operation count>, \"created\": [...], \
+         \"warnings\": [...], \"errors\": [...]}; each created entry has \
+         \"<pending>\" in place of a uid and path. Only a dry run checks that \
+         uid/path references name a node in the map BEFORE the batch, so a \
+         path an earlier operation would create, rename or reparent can be \
+         reported as not found; a real apply resolves it afterwards. uids stay \
+         the same across renames and reparents, so prefer {\"uid\": n} in a \
+         dry run. A successful batch \
+         is ONE undo step in the editor \
          (the `undo` tool or Ctrl+Z reverts it whole). The map is changed in \
          the editor but not saved to disk: call `save_map` for that. \
          To refer to a node created earlier in the same batch, give the \
@@ -411,6 +437,36 @@ mod tests {
         }
         assert!(text.contains("keep_world_transform"));
         assert!(text.contains("alias"));
+    }
+
+    #[test]
+    fn dry_run_is_optional_and_exposed_in_the_schema() {
+        let args = serde_json::from_value::<ApplySceneOperationsArgs>(json!({
+            "operations": [{"op": "create", "name": "Crate"}]
+        }))
+        .expect("a batch without dry_run parses");
+        assert!(!args.dry_run, "dry_run defaults to false");
+
+        let args = serde_json::from_value::<ApplySceneOperationsArgs>(json!({
+            "operations": [{"op": "create", "name": "Crate"}],
+            "dry_run": true
+        }))
+        .expect("an explicit dry_run parses");
+        assert!(args.dry_run);
+
+        let bad = serde_json::from_value::<ApplySceneOperationsArgs>(json!({
+            "operations": [], "dry_run": "yes"
+        }));
+        assert!(bad.is_err(), "dry_run must be a bool");
+        let unknown = serde_json::from_value::<ApplySceneOperationsArgs>(json!({
+            "operations": [], "dry_run": true, "dont_run": true
+        }));
+        assert!(unknown.is_err(), "unknown fields are still rejected");
+
+        let schema = serde_json::Value::Object(spec("apply_scene_operations").schema());
+        let dry_run = &schema["properties"]["dry_run"];
+        assert_eq!(dry_run["type"], "boolean");
+        assert!(dry_run["description"].as_str().unwrap().contains("dry"));
     }
 
     #[test]

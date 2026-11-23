@@ -12,6 +12,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -41,9 +42,10 @@ std::string MapText(McpToolFixture& fixture) {
 }
 
 ToolResult Apply(McpToolFixture& fixture, json operations,
-                 json select = nullptr) {
+                 json select = nullptr, bool dry_run = false) {
   json args{{"operations", std::move(operations)}};
   if (!select.is_null()) args["select"] = std::move(select);
+  if (dry_run) args["dry_run"] = true;
   return fixture.CallTool("apply_scene_operations", args);
 }
 
@@ -584,6 +586,227 @@ TEST(McpToolsSceneWriteTest, AliasMistakesAreRejectedUpFront) {
   EXPECT_EQ(MapText(fixture), before);
 }
 
+// --------------------------------------------------------- error reporting --
+
+TEST(McpToolsSceneWriteTest, AllValidationErrorsAreReportedTogether) {
+  McpToolFixture fixture;
+  const std::string before = MapText(fixture);
+  const json player = json{{"path", "RollABall/Player"}};
+  const ToolResult result = Apply(
+      fixture,
+      json::array(
+          {json{{"op", "create"}, {"name", "Fine"}},
+           json{
+               {"op", "add_component"}, {"node", player}, {"type", "Rigidbdy"}},
+           json{{"op", "set_property"},
+                {"node", player},
+                {"component", "Transform"},
+                {"field", "nope"},
+                {"value", 1}},
+           json{
+               {"op", "create"},
+               {"name", "Bad"},
+               {"components", json::array({json{{"type", "MeshRendrer"}}})}}}));
+  ASSERT_FALSE(result.ok);
+  // The old top-level error is kept for compatibility; it names the first
+  // one.
+  EXPECT_NE(ErrorOf(result).find("operations[1] (add_component)"),
+            std::string::npos)
+      << ErrorOf(result);
+  EXPECT_EQ(result.result["suggestion"], "Rigidbody");
+  ASSERT_TRUE(result.result.contains("errors"));
+  ASSERT_TRUE(result.result["errors"].is_array());
+  ASSERT_EQ(result.result["errors"].size(), 3u) << result.result.dump(2);
+  for (size_t i = 0; i < 3; i++) {
+    EXPECT_EQ(result.result["errors"][i]["op"], i + 1);
+    EXPECT_EQ(result.result["errors"][i]["index"], i + 1);
+    EXPECT_FALSE(
+        result.result["errors"][i]["error"].get<std::string>().empty());
+  }
+  EXPECT_EQ(MapText(fixture), before);
+  EXPECT_FALSE(fixture.Scene().CanUndo());
+}
+
+TEST(McpToolsSceneWriteTest, ABrokenOpStillDefinesItsAliasForLaterOps) {
+  McpToolFixture fixture;
+  const ToolResult result = Apply(
+      fixture,
+      json::array({json{{"op", "create"},
+                        {"name", "Crate"},
+                        {"id", "crate"},
+                        {"components",
+                         json::array({json{{"type", "NoSuchComponent"}}})}},
+                   json{{"op", "set_transform"},
+                        {"node", json{{"alias", "crate"}}},
+                        {"position", json::array({1, 1, 1})}}}));
+  ASSERT_FALSE(result.ok);
+  ASSERT_EQ(result.result["errors"].size(), 1u) << result.result.dump(2);
+  EXPECT_EQ(result.result["errors"][0]["op"], 0);
+  const std::string error =
+      result.result["errors"][0]["error"].get<std::string>();
+  EXPECT_NE(error.find("NoSuchComponent"), std::string::npos) << error;
+  EXPECT_EQ(error.find("is not defined"), std::string::npos)
+      << "the later reference must not cascade: " << error;
+}
+
+// ---------------------------------------------------------------- dry run ---
+
+TEST(McpToolsSceneWriteTest, DryRunChangesNothingAndHasTheDeclaredShape) {
+  McpToolFixture fixture;
+  EditorScene& scene = fixture.Scene();
+  const std::string before = MapText(fixture);
+  const bool could_undo = scene.CanUndo();
+  const uint64_t map_rev = scene.MapRevision();
+  const uint64_t hierarchy_rev = scene.HierarchyRevision();
+  const json operations =
+      json::array({json{{"op", "create"}, {"name", "Group"}, {"id", "group"}},
+                   json{{"op", "create"},
+                        {"name", "Child"},
+                        {"parent", json{{"alias", "group"}}},
+                        {"id", "child"}},
+                   json{{"op", "set_transform"},
+                        {"node", json{{"path", "RollABall/Player"}}},
+                        {"position", json::array({5, 5, 5})}}});
+
+  const ToolResult dry = Apply(fixture, operations, nullptr, /*dry_run=*/true);
+  ASSERT_TRUE(dry.ok) << dry.result.dump(2);
+  std::set<std::string> keys;
+  for (auto it = dry.result.begin(); it != dry.result.end(); ++it) {
+    keys.insert(it.key());
+  }
+  EXPECT_EQ(keys,
+            (std::set<std::string>{"dry_run", "valid", "applied", "would_apply",
+                                   "created", "warnings", "errors"}));
+  EXPECT_EQ(dry.result["dry_run"], true);
+  EXPECT_EQ(dry.result["valid"], true);
+  EXPECT_EQ(dry.result["applied"], 0);
+  EXPECT_EQ(dry.result["would_apply"], 3);
+  ASSERT_EQ(dry.result["created"].size(), 2u);
+  EXPECT_EQ(dry.result["created"][0]["op"], 0);
+  EXPECT_EQ(dry.result["created"][0]["alias"], "group");
+  EXPECT_EQ(dry.result["created"][0]["uid"], "<pending>");
+  EXPECT_EQ(dry.result["created"][0]["path"], "<pending>");
+  EXPECT_EQ(dry.result["created"][1]["alias"], "child");
+  EXPECT_TRUE(dry.result["warnings"].empty());
+  EXPECT_TRUE(dry.result["errors"].empty());
+  EXPECT_FALSE(dry.result.contains("selected"));
+
+  EXPECT_EQ(MapText(fixture), before);
+  EXPECT_EQ(scene.CanUndo(), could_undo);
+  EXPECT_FALSE(scene.IsDirty());
+  EXPECT_EQ(scene.MapRevision(), map_rev);
+  EXPECT_EQ(scene.HierarchyRevision(), hierarchy_rev);
+}
+
+TEST(McpToolsSceneWriteTest, DryRunReportsTheSameOperationCountAsAnApply) {
+  McpToolFixture fixture;
+  const json operations =
+      json::array({json{{"op", "create"}, {"name", "Dry"}, {"id", "dry"}},
+                   json{{"op", "create"},
+                        {"name", "Kid"},
+                        {"parent", json{{"alias", "dry"}}}},
+                   json{{"op", "set_transform"},
+                        {"node", json{{"alias", "dry"}}},
+                        {"position", json::array({2, 0, 0})}}});
+  const ToolResult dry = Apply(fixture, operations, nullptr, /*dry_run=*/true);
+  const ToolResult real = Apply(fixture, operations);
+  ASSERT_TRUE(dry.ok) << dry.result.dump(2);
+  ASSERT_TRUE(real.ok) << real.result.dump(2);
+  EXPECT_EQ(dry.result["would_apply"], real.result["applied"]);
+  EXPECT_EQ(dry.result["created"].size(), real.result["created"].size());
+  EXPECT_TRUE(NodeAt(fixture, "RollABall/Dry").is_object())
+      << "only the real apply created the node";
+}
+
+TEST(McpToolsSceneWriteTest, DryRunCatchesAnUnknownUidWithoutTouchingTheMap) {
+  McpToolFixture fixture;
+  const std::string before = MapText(fixture);
+  const ToolResult dry =
+      Apply(fixture,
+            json::array({json{{"op", "create"}, {"name", "Fine"}},
+                         json{{"op", "set_transform"},
+                              {"node", json{{"uid", 999999999}}},
+                              {"position", json::array({0, 0, 0})}}}),
+            nullptr, /*dry_run=*/true);
+  ASSERT_TRUE(dry.ok) << dry.result.dump(2);
+  EXPECT_EQ(dry.result["valid"], false);
+  ASSERT_EQ(dry.result["errors"].size(), 1u);
+  EXPECT_EQ(dry.result["errors"][0]["op"], 1);
+  const std::string error = dry.result["errors"][0]["error"].get<std::string>();
+  EXPECT_NE(error.find("no node has uid 999999999"), std::string::npos)
+      << error;
+  EXPECT_EQ(dry.result["applied"], 0);
+  EXPECT_EQ(MapText(fixture), before);
+  EXPECT_FALSE(fixture.Scene().CanUndo());
+}
+
+// A real apply resolves references in pass 2, after earlier operations have
+// changed the map. A dry run only sees the map as it was before the batch.
+TEST(McpToolsSceneWriteTest,
+     RealApplyResolvesAPathCreatedByAnEarlierOperation) {
+  const json operations =
+      json::array({json{{"op", "create"}, {"name", "B"}},
+                   json{{"op", "set_property"},
+                        {"node", json{{"path", "RollABall/B"}}},
+                        {"component", "Transform"},
+                        {"field", "position"},
+                        {"value", json::array({1, 2, 3})}}});
+  {
+    McpToolFixture fixture;
+    const ToolResult real = Apply(fixture, operations);
+    ASSERT_TRUE(real.ok) << real.result.dump(2);
+    EXPECT_TRUE(Near(NodeAt(fixture, "RollABall/B")["transform"]["position"],
+                     {1, 2, 3}));
+  }
+  {
+    McpToolFixture fixture;
+    const ToolResult dry =
+        Apply(fixture, operations, nullptr, /*dry_run=*/true);
+    ASSERT_TRUE(dry.ok) << dry.result.dump(2);
+    EXPECT_EQ(dry.result["valid"], false);
+    ASSERT_EQ(dry.result["errors"].size(), 1u) << dry.result.dump(2);
+    EXPECT_EQ(dry.result["errors"][0]["op"], 1);
+    const std::string error =
+        dry.result["errors"][0]["error"].get<std::string>();
+    EXPECT_NE(error.find("RollABall/B"), std::string::npos) << error;
+    EXPECT_NE(error.find("not found"), std::string::npos) << error;
+  }
+}
+
+TEST(McpToolsSceneWriteTest, RealApplyResolvesAPathMovedByAnEarlierReparent) {
+  const json operations =
+      json::array({json{{"op", "create"}, {"name", "Y"}, {"id", "y"}},
+                   json{{"op", "reparent"},
+                        {"node", json{{"path", "RollABall/Player"}}},
+                        {"new_parent", json{{"alias", "y"}}}},
+                   json{{"op", "set_property"},
+                        {"node", json{{"path", "RollABall/Y/Player"}}},
+                        {"component", "Transform"},
+                        {"field", "position"},
+                        {"value", json::array({1, 2, 3})}}});
+  {
+    McpToolFixture fixture;
+    const ToolResult real = Apply(fixture, operations);
+    ASSERT_TRUE(real.ok) << real.result.dump(2);
+    EXPECT_TRUE(
+        Near(NodeAt(fixture, "RollABall/Y/Player")["transform"]["position"],
+             {1, 2, 3}));
+  }
+  {
+    McpToolFixture fixture;
+    const ToolResult dry =
+        Apply(fixture, operations, nullptr, /*dry_run=*/true);
+    ASSERT_TRUE(dry.ok) << dry.result.dump(2);
+    EXPECT_EQ(dry.result["valid"], false);
+    ASSERT_EQ(dry.result["errors"].size(), 1u) << dry.result.dump(2);
+    EXPECT_EQ(dry.result["errors"][0]["op"], 2);
+    const std::string error =
+        dry.result["errors"][0]["error"].get<std::string>();
+    EXPECT_NE(error.find("RollABall/Y/Player"), std::string::npos) << error;
+    EXPECT_NE(error.find("not found"), std::string::npos) << error;
+  }
+}
+
 // -------------------------------------------------------- every field type --
 
 TEST(McpToolsSceneWriteTest, EveryFieldTypeGuard) {
@@ -625,7 +848,8 @@ TEST(McpToolsSceneWriteTest, SetPropertyTakesEveryFieldType) {
         << entry.field.name << ": " << props[entry.field.name].dump();
   }
 
-  // The batch was one undo step: it keeps the add_component of the first call.
+  // The batch was one undo step: it keeps the add_component of the first
+  // call.
   fixture.Scene().Undo();
   EXPECT_TRUE(
       PropsOf(NodeAt(fixture, "RollABall/Walls"), "McpEveryField").empty());
@@ -952,7 +1176,8 @@ TEST(McpToolsSceneWriteTest, ReparentCanKeepTheLocalTransformInstead) {
 
 TEST(McpToolsSceneWriteTest, ReparentRenamesOnCollisionAndRefusesCycles) {
   McpToolFixture fixture;
-  // "North" exists under Walls; a new "North" under the root moves into Walls.
+  // "North" exists under Walls; a new "North" under the root moves into
+  // Walls.
   ASSERT_TRUE(
       Apply(fixture, json::array({json{{"op", "create"}, {"name", "North"}}}))
           .ok);
