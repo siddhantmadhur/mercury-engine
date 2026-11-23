@@ -158,7 +158,25 @@ Vector3 cross = a.Cross(b);
 
 `Mathf`, `Random` and `Time` follow Unity's names: `Mathf::Clamp`,
 `Mathf::Lerp`, `Mathf::Deg2Rad`, `Mathf::Sqrt`, `Random::Range`,
-`Random::Value`, `Time::DeltaTime`, `Time::FixedDeltaTime`.
+`Random::RangeInt`, `Random::Value`, `Time::DeltaTime`,
+`Time::FixedDeltaTime`.
+
+@section scripting_random Random numbers
+
+@code{.cpp}
+float f = Random::Range(0.0f, 1.0f);   // [min, max): max is never returned
+int roll = Random::RangeInt(1, 7);     // [min, max]: 1 to 7 inclusive
+float chance = Random::Value();        // [0, 1)
+Vector2 offset = Random::InsideUnitCircle();
+Random::Seed(1234);                    // reproducible sequence
+@endcode
+
+`Random::RangeInt(min, max)` includes **both** ends: `RangeInt(1, 6)` rolls 1
+to 6. Unlike Unity's `Random.Range(int, int)`, which excludes its upper end,
+`RangeInt` includes it. The float `Random::Range(min, max)` excludes its
+upper end. C++ differs in one case: `Mercury::Random::Range(int, int)`
+excludes `max`, so the C++ `Range(1, 6)` rolls 1 to 5;
+`Mercury::Random::Range(float, float)` is inclusive of `max`.
 
 @section scripting_components Components
 
@@ -178,6 +196,27 @@ The generic accessors are `GetFloat`/`SetFloat`, `GetBool`/`SetBool`,
 `GetVector3`/`SetVector3` and `GetColor`/`SetColor`. Typed helpers cover
 common components: `AnimatorSetFloat`, `AnimatorPlay`, `AudioPlay`,
 `AudioPlayOneShot`, `AudioSetFloat`, `CharacterMove` and `CharacterGrounded`.
+
+A field can be written at run time only when its type marks it
+runtime-writable; writing any other field throws `cannot be changed at run
+time`. `SpriteRenderer` and `MeshRenderer` mark `color` and `visible`
+runtime-writable, and `SpriteRenderer` also marks `sorting_order`:
+
+@code{.cpp}
+Component sprite = Components::Get(GetGameObject(), "SpriteRenderer");
+sprite.SetColor("color", Color(1.0f, 0.2f, 0.2f, 1.0f));
+sprite.SetBool("visible", false);
+sprite.SetInt("sorting_order", 10);   // -16384..16383, higher draws on top
+@endcode
+
+Sprites at the same depth draw in `sorting_order` order, and equal orders
+fall back to depth; use it to layer sprites instead of moving them in Z.
+`get_component_schema` reports `runtime_writable` for every field, so check
+it before writing.
+
+A runtime `color` write updates the material's base colour only: lowering a
+`MeshRenderer`'s alpha does not make an opaque material blend. Sprites are
+always transparent and are unaffected.
 
 Other scripts are found by type:
 
@@ -214,7 +253,7 @@ Keyboard and mouse:
 
 @code{.cpp}
 if (Input::IsKeyPressed(Key::W))       { /* held */ }
-if (Input::IsKeyJustPressed(Key::Space)) { /* pressed this frame */ }
+if (Input::IsKeyJustPressed(Key::Space)) { /* once per onFrame and onTick */ }
 if (Input::IsMouseButtonPressed(MouseButton::Left)) { /* ... */ }
 
 Vector2 delta = Input::CursorDelta();
@@ -254,8 +293,18 @@ void onTick(double dt)
 }
 @endcode
 
-Actions update once per frame, but a frame may run zero or several fixed
-ticks. Read a press in `onFrame` and remember it for `onTick`, as above.
+`Input::IsKeyJustPressed` is true for exactly one `onFrame` **and** one
+`onTick` per press, whatever the frame and tick rates: the frame and tick
+phases keep separate just-pressed state, and only the phase that reads it
+clears it. A tap that goes down and up within one frame still counts once in
+both phases, and key repeat or release does not consume it. Mouse buttons
+follow the same rule in C++ (`InputManager::IsJustPressed(MouseButton)`); the
+script API exposes the held `Input::IsMouseButtonPressed` but has no mouse
+just-pressed call.
+
+Input actions are different: they update once per frame, before `onFrame`,
+and a frame may run zero or several fixed ticks. Read `wasPressedThisFrame`
+in `onFrame` and remember it for `onTick`, as above.
 `Input::RequireAction` fails the script at `onStart` if the action does not
 exist, which is why the generated constants are recommended.
 
