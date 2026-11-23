@@ -40,6 +40,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <nlohmann/json.hpp>
+#include <stb/stb_image_resize2.h>
 #include <stb/stb_image_write.h>
 
 #include "components/components.h"
@@ -71,6 +72,24 @@ constexpr auto kOffscreenFallbackDelay = std::chrono::milliseconds(250);
 // One-shot polls, paced like build_scripts' wxTimer instead of a CallAfter
 // busy loop.
 constexpr int kPollIntervalMs = 5;
+
+// Claude bills an image in 28x28 visual-token patches: ceil(width / 28) *
+// ceil(height / 28) tokens, regardless of PNG format or color depth. The
+// detail levels therefore pin the output's long edge to a multiple of 28; a
+// 16:9 short edge then leaves no partial patch row.
+constexpr int kTokenPatch = 28;
+constexpr int kMinCaptureDimension = 64;
+constexpr int kMaxCaptureLongEdge = 2576;
+constexpr int kDefaultAspectWidth = 16;
+constexpr int kDefaultAspectHeight = 9;
+// 672x378 = 24x14 patches = 336 visual tokens.
+constexpr int kDetailLowLongEdge = 672;
+// 1008x567 = 36x21 = 756 tokens.
+constexpr int kDetailMediumLongEdge = 1008;
+// 1568x882 = 56x32 = 1792 tokens.
+constexpr int kDetailHighLongEdge = 1568;
+// 2576x1449 = 92x52 = 4784 tokens (the high-resolution tier's long-edge max).
+constexpr int kDetailMaxLongEdge = 2576;
 
 json Error(std::string message, const std::string& suggestion = {}) {
   json out{{"error", std::move(message)}};
@@ -134,18 +153,142 @@ bool ParseVec3(const json& value, glm::vec3* out, std::string* error,
   return true;
 }
 
-bool ParseDimension(const json& args, const char* key, int fallback, int* out,
+int VisualTokens(int width, int height) {
+  const int patches_x = (width + kTokenPatch - 1) / kTokenPatch;
+  const int patches_y = (height + kTokenPatch - 1) / kTokenPatch;
+  return patches_x * patches_y;
+}
+
+// An explicit dimension must be a positive integer in
+// [kMinCaptureDimension, kMaxCaptureLongEdge]. Out-of-range values are
+// rejected rather than silently clamped, so the caller can see the real cost.
+bool ParseDimension(const json& args, const char* key, int* out,
                     std::string* error) {
-  if (!args.contains(key) || args[key].is_null()) {
-    *out = fallback;
-    return true;
-  }
   const json& value = args[key];
   if (!value.is_number_integer() || value.get<int64_t>() <= 0) {
     *error = std::string("\"") + key + "\" must be a positive integer";
     return false;
   }
-  *out = static_cast<int>(std::min<int64_t>(value.get<int64_t>(), 100000));
+  const int64_t dimension = value.get<int64_t>();
+  if (dimension < kMinCaptureDimension) {
+    *error = std::string("\"") + key + "\" must be at least " +
+             std::to_string(kMinCaptureDimension) + " pixels";
+    return false;
+  }
+  if (dimension > kMaxCaptureLongEdge) {
+    *error = std::string("\"") + key + "\" is " + std::to_string(dimension) +
+             "; the long edge must be at most " +
+             std::to_string(kMaxCaptureLongEdge) + " pixels";
+    return false;
+  }
+  *out = static_cast<int>(dimension);
+  return true;
+}
+
+// The output image size and the size the scene is rendered at. The render is
+// 2x the output for a clean downscale (capped at the long-edge limit and never
+// below the output); "max" renders at the output size directly.
+struct CaptureSize {
+  int width = 0;
+  int height = 0;
+  int render_width = 0;
+  int render_height = 0;
+  std::string detail = "low";
+};
+
+bool ResolveDetail(const json& args, int* long_edge, std::string* name,
+                   std::string* error) {
+  *name = "low";
+  *long_edge = kDetailLowLongEdge;
+  if (!args.contains("detail") || args["detail"].is_null()) return true;
+  if (!args["detail"].is_string()) {
+    *error =
+        "\"detail\" must be one of \"low\", \"medium\", \"high\" or \"max\"";
+    return false;
+  }
+  const std::string level = args["detail"].get<std::string>();
+  if (level == "low") {
+    *long_edge = kDetailLowLongEdge;
+  } else if (level == "medium") {
+    *long_edge = kDetailMediumLongEdge;
+  } else if (level == "high") {
+    *long_edge = kDetailHighLongEdge;
+  } else if (level == "max") {
+    *long_edge = kDetailMaxLongEdge;
+  } else {
+    *error =
+        "unknown detail \"" + level + "\": expected low, medium, high or max";
+    return false;
+  }
+  *name = level;
+  return true;
+}
+
+bool ResolveCaptureSize(const json& args, CaptureSize* size,
+                        std::string* error) {
+  const bool has_width = args.contains("width") && !args["width"].is_null();
+  const bool has_height = args.contains("height") && !args["height"].is_null();
+  if (has_width || has_height) {
+    // Explicit width/height win over `detail`. When only one is given, the
+    // other comes from 16:9.
+    int width = 0;
+    int height = 0;
+    if (has_width && !ParseDimension(args, "width", &width, error))
+      return false;
+    if (has_height && !ParseDimension(args, "height", &height, error)) {
+      return false;
+    }
+    if (has_width && !has_height) {
+      height = std::max(kMinCaptureDimension,
+                        static_cast<int>(std::lround(
+                            width * static_cast<double>(kDefaultAspectHeight) /
+                            kDefaultAspectWidth)));
+    } else if (has_height && !has_width) {
+      width = std::max(kMinCaptureDimension,
+                       static_cast<int>(std::lround(
+                           height * static_cast<double>(kDefaultAspectWidth) /
+                           kDefaultAspectHeight)));
+    }
+    const int long_edge = std::max(width, height);
+    if (long_edge > kMaxCaptureLongEdge) {
+      *error = "the requested aspect gives a long edge of " +
+               std::to_string(long_edge) +
+               " pixels; the long edge must be at most " +
+               std::to_string(kMaxCaptureLongEdge) + " pixels";
+      return false;
+    }
+    size->width = width;
+    size->height = height;
+    size->detail = "custom";
+  } else {
+    int long_edge = 0;
+    std::string name;
+    if (!ResolveDetail(args, &long_edge, &name, error)) return false;
+    size->width = long_edge;
+    size->height = std::max(
+        kMinCaptureDimension,
+        static_cast<int>(
+            std::lround(long_edge * static_cast<double>(kDefaultAspectHeight) /
+                        kDefaultAspectWidth)));
+    size->detail = name;
+  }
+
+  // Render at 2x the output so the downscale has real detail to work with.
+  int render_width = size->width;
+  int render_height = size->height;
+  if (size->detail != "max") {
+    const int long_edge = std::max(size->width, size->height);
+    const double scale =
+        std::min(2.0, static_cast<double>(kMaxCaptureLongEdge) / long_edge);
+    if (scale > 1.0) {
+      render_width = std::max(
+          size->width, static_cast<int>(std::lround(size->width * scale)));
+      render_height = std::max(
+          size->height, static_cast<int>(std::lround(size->height * scale)));
+    }
+  }
+  size->render_width = render_width;
+  size->render_height = render_height;
   return true;
 }
 
@@ -541,6 +684,13 @@ struct CapturePlan {
   bool colliders = false;
   bool camera_changed = false;
   bool offscreen_only = false;
+  // Output image size, the size the scene is rendered at, and the detail level
+  // that produced them (or "custom" for explicit width/height).
+  int output_width = 0;
+  int output_height = 0;
+  int render_width = 0;
+  int render_height = 0;
+  std::string detail = "low";
   uint64_t saved_frame = 0;
   std::string source = "presented";
   std::vector<uint8_t> offscreen_rgba;
@@ -608,7 +758,48 @@ struct CapturePlan {
       }
     }
 
-    const glm::mat4 view_projection = scene.GetSceneViewProjection();
+    // Downscale to the output size AFTER rendering so a 2x (or capped) render
+    // keeps small detail that a tiny render would alias away. The render and
+    // output sizes share their aspect ratio, so in the normal case this scale
+    // is uniform. A presented frame can arrive at the scene viewport's actual
+    // size instead of the requested render size; the resize then stretches it,
+    // and the projection correction below keeps the overlay coordinates
+    // aligned with the stretched content.
+    const int frame_width = width;
+    const int frame_height = height;
+    if (width != output_width || height != output_height) {
+      std::vector<uint8_t> resized(static_cast<size_t>(output_width) *
+                                   output_height * 4);
+      if (!stbir_resize_uint8_srgb(rgba.data(), width, height, width * 4,
+                                   resized.data(), output_width, output_height,
+                                   output_width * 4, STBIR_RGBA)) {
+        return ToolResult{false, Error("failed to resize the captured image")};
+      }
+      rgba = std::move(resized);
+    }
+    width = output_width;
+    height = output_height;
+
+    // Overlays are drawn after the downscale, at the output size, so their
+    // 2-pixel lines stay crisp rather than being blurred by the resize.
+    //
+    // The scene projection uses the render size we requested. If a presented
+    // frame arrived at the viewport's previous size instead (the host may not
+    // resize instantly), the resize above stretched it to the output, so scale
+    // the projection's horizontal axis by render aspect / arrived aspect to
+    // keep the boxes on the same stretched content.
+    glm::mat4 view_projection = scene.GetSceneViewProjection();
+    if (frame_width > 0 && frame_height > 0 &&
+        frame_width * render_height != frame_height * render_width) {
+      const double render_aspect =
+          static_cast<double>(render_width) / render_height;
+      const double arrived_aspect =
+          static_cast<double>(frame_width) / frame_height;
+      const float ratio = static_cast<float>(render_aspect / arrived_aspect);
+      view_projection =
+          glm::scale(glm::mat4(1.0f), glm::vec3(ratio, 1.0f, 1.0f)) *
+          view_projection;
+    }
     constexpr std::array<uint8_t, 4> kColliderColor = {60, 220, 120, 255};
     constexpr std::array<uint8_t, 4> kHighlightColor = {255, 215, 50, 255};
     if (colliders) {
@@ -645,6 +836,8 @@ struct CapturePlan {
 
     json out{{"width", width},
              {"height", height},
+             {"detail", detail},
+             {"visual_tokens", VisualTokens(width, height)},
              {"preset", preset},
              {"source", source},
              {"frame_id", frame_id},
@@ -750,14 +943,17 @@ bool ParsePreset(const json& args, CapturePlan* plan, std::string* error,
     }
   }
 
-  int width = 1280;
-  int height = 720;
-  if (!ParseDimension(args, "width", 1280, &width, error) ||
-      !ParseDimension(args, "height", 720, &height, error)) {
+  CaptureSize size;
+  if (!ResolveCaptureSize(args, &size, error)) {
     return false;
   }
-  desired.viewport_size = glm::vec2(static_cast<float>(std::min(width, 1920)),
-                                    static_cast<float>(std::min(height, 1080)));
+  plan->output_width = size.width;
+  plan->output_height = size.height;
+  plan->render_width = size.render_width;
+  plan->render_height = size.render_height;
+  plan->detail = size.detail;
+  desired.viewport_size = glm::vec2(static_cast<float>(size.render_width),
+                                    static_cast<float>(size.render_height));
 
   plan->colliders = args.contains("colliders") && args["colliders"].is_boolean()
                         ? args["colliders"].get<bool>()

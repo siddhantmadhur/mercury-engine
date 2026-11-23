@@ -86,11 +86,28 @@ pub enum CapturePreset {
 fn default_preset() -> CapturePreset {
     CapturePreset::Current
 }
-fn default_width() -> u32 {
-    1280
+
+/// Output resolution for `capture_viewport`.
+///
+/// An image costs `ceil(width / 28) * ceil(height / 28)` visual tokens
+/// regardless of its format or color depth, so the resolution is the only
+/// lever on cost. Each level sets the output's long edge; the image keeps the
+/// aspect ratio of `width`/`height`, or 16:9 when neither is given.
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureDetail {
+    /// 672 px long edge: 672x378 (336 visual tokens) at 16:9.
+    Low,
+    /// 1008 px long edge: 1008x567 (756 visual tokens) at 16:9.
+    Medium,
+    /// 1568 px long edge: 1568x882 (1792 visual tokens) at 16:9.
+    High,
+    /// 2576 px long edge: 2576x1449 (4784 visual tokens) at 16:9.
+    Max,
 }
-fn default_height() -> u32 {
-    720
+
+fn default_detail() -> CaptureDetail {
+    CaptureDetail::Low
 }
 
 /// Arguments of `capture_viewport`.
@@ -103,12 +120,19 @@ pub struct CaptureViewportArgs {
     /// Frame this node instead of using the preset's framing.
     #[serde(default)]
     pub frame: Option<NodeSelector>,
-    /// PNG width in pixels (max 1920). Default 1280.
-    #[serde(default = "default_width")]
-    pub width: u32,
-    /// PNG height in pixels (max 1080). Default 720.
-    #[serde(default = "default_height")]
-    pub height: u32,
+    /// Override `detail` with an explicit PNG width in pixels (64 to 2576).
+    /// When only one of `width`/`height` is given, the other comes from 16:9.
+    #[serde(default)]
+    pub width: Option<u32>,
+    /// Override `detail` with an explicit PNG height in pixels (64 to 2576).
+    /// When only one of `width`/`height` is given, the other comes from 16:9.
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// Output resolution. Default `low` (672 px long edge, about 336 visual
+    /// tokens at 16:9). `medium` is 1008 px, `high` 1568 px, `max` 2576 px.
+    /// Explicit `width`/`height` override this.
+    #[serde(default = "default_detail")]
+    pub detail: CaptureDetail,
     /// Overlay a box around every collider node. Default false.
     #[serde(default)]
     pub colliders: bool,
@@ -146,12 +170,18 @@ fn query_scene_spatial() -> ToolSpec {
 fn capture_viewport() -> ToolSpec {
     ToolSpec::new(
         "capture_viewport",
-        "Captures the 3D scene viewport as a PNG image. `preset` is one of \
-         `current`, `top_down`, `isometric`, `front` or `player_pov` \
-         (default `current`); `frame` frames a node; `width`/`height` default \
-         to 1280x720 (max 1920x1080). `colliders` overlays collider boxes and \
-         `highlight` overlays boxes around the given nodes. No editor gizmos \
-         are drawn. The result includes the capture camera's `position`, \
+        "Captures the 3D scene viewport as a PNG image. Returns a \
+         low-resolution image by default (~336 visual tokens). Ask for \
+         `detail: medium/high/max` only when you need to read small text or \
+         fine detail; cost grows with pixel count (about width/28 times \
+         height/28 tokens). `preset` is one of `current`, `top_down`, \
+         `isometric`, `front` or `player_pov` (default `current`); `frame` \
+         frames a node; explicit `width`/`height` (64 to 2576 px, long edge at \
+         most 2576) override `detail`, deriving the other side from 16:9 when \
+         only one is given. `colliders` overlays collider boxes and `highlight` \
+         overlays boxes around the given nodes. No editor gizmos are drawn. \
+         The result includes the output `width`/`height`, the `detail` used \
+         (or `custom`), `visual_tokens`, the capture camera's `position`, \
          `target` and `fov`, and a `source` of `presented` (a freshly rendered \
          viewport frame) or `offscreen` (rendered on demand, e.g. while the \
          editor window is minimized). Set `offscreen: true` to skip the wait \
@@ -164,4 +194,71 @@ fn capture_viewport() -> ToolSpec {
         || schema::<CaptureViewportArgs>(),
     )
     .with_timeout_secs(60)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Value, json};
+
+    fn parse_args(value: Value) -> CaptureViewportArgs {
+        serde_json::from_value(value).expect("capture_viewport args should parse")
+    }
+
+    #[test]
+    fn detail_and_dimensions_default_to_low_resolution() {
+        let args = parse_args(json!({}));
+        assert!(matches!(args.detail, CaptureDetail::Low));
+        assert!(args.width.is_none());
+        assert!(args.height.is_none());
+    }
+
+    #[test]
+    fn detail_accepts_every_level_and_rejects_unknown_ones() {
+        let levels = [("low", 0), ("medium", 1), ("high", 2), ("max", 3)];
+        for (name, expected) in levels {
+            let args = parse_args(json!({ "detail": name }));
+            let actual = match args.detail {
+                CaptureDetail::Low => 0,
+                CaptureDetail::Medium => 1,
+                CaptureDetail::High => 2,
+                CaptureDetail::Max => 3,
+            };
+            assert_eq!(actual, expected, "{name}");
+        }
+        assert!(
+            serde_json::from_value::<CaptureViewportArgs>(json!({ "detail": "ultra" })).is_err()
+        );
+    }
+
+    #[test]
+    fn explicit_dimensions_parse_as_optional_overrides() {
+        let args = parse_args(json!({ "width": 640, "height": 480 }));
+        assert_eq!(args.width, Some(640));
+        assert_eq!(args.height, Some(480));
+
+        let schema = Value::Object(capture_viewport().schema());
+        let width = &schema["properties"]["width"];
+        assert!(width.get("description").is_some());
+        assert!(!schema["properties"]["detail"]["description"].is_null());
+
+        let detail_schema = serde_json::to_value(schemars::schema_for!(CaptureDetail))
+            .expect("the detail schema should serialize");
+        let rendered = detail_schema.to_string();
+        for level in ["low", "medium", "high", "max"] {
+            assert!(
+                rendered.contains(&format!("\"{level}\"")),
+                "{level} is missing from the schema: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_description_states_the_token_cost_and_the_override() {
+        let description = capture_viewport().description;
+        assert!(description.contains("~336 visual tokens"), "{description}");
+        assert!(description.contains("detail"), "{description}");
+        assert!(description.contains("visual_tokens"), "{description}");
+        assert!(description.contains("2576"), "{description}");
+    }
 }

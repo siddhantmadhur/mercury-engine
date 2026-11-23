@@ -686,3 +686,168 @@ TEST(McpToolsSpatialCaptureTest, HeadlessFilamentCapture) {
   }
   fixture.Scene().SetRenderHost(nullptr);
 }
+
+TEST(McpToolsSpatialCaptureTest, CaptureDefaultsToLowResolution) {
+  McpToolFixture fixture;
+  FakeRenderHost host;
+  fixture.Scene().SetRenderHost(&host);
+
+  ToolResult result = fixture.CallTool("capture_viewport");
+  ASSERT_TRUE(result.ok) << result.result.dump();
+  EXPECT_EQ(result.result["width"], 672);
+  EXPECT_EQ(result.result["height"], 378);
+  EXPECT_EQ(result.result["detail"], "low");
+  // 24 x 14 visual-token patches.
+  EXPECT_EQ(result.result["visual_tokens"], 336);
+
+  ASSERT_EQ(result.images.size(), 1u);
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  stbi_uc* pixels =
+      stbi_load_from_memory(result.images[0].data.data(),
+                            static_cast<int>(result.images[0].data.size()),
+                            &width, &height, &channels, 4);
+  ASSERT_NE(pixels, nullptr);
+  EXPECT_EQ(width, 672);
+  EXPECT_EQ(height, 378);
+  stbi_image_free(pixels);
+  fixture.Scene().SetRenderHost(nullptr);
+}
+
+TEST(McpToolsSpatialCaptureTest, DetailLevelsSetTheOutputLongEdge) {
+  struct Level {
+    const char* name;
+    int width;
+    int height;
+    int tokens;
+  };
+  const Level levels[] = {
+      {"medium", 1008, 567, 756},
+      {"high", 1568, 882, 1792},
+      {"max", 2576, 1449, 4784},
+  };
+  McpToolFixture fixture;
+  FakeRenderHost host;
+  fixture.Scene().SetRenderHost(&host);
+  for (const Level& level : levels) {
+    ToolResult result =
+        fixture.CallTool("capture_viewport", {{"detail", level.name}});
+    ASSERT_TRUE(result.ok) << level.name << ": " << result.result.dump();
+    EXPECT_EQ(result.result["width"], level.width) << level.name;
+    EXPECT_EQ(result.result["height"], level.height) << level.name;
+    EXPECT_EQ(result.result["detail"], level.name);
+    EXPECT_EQ(result.result["visual_tokens"], level.tokens) << level.name;
+  }
+  fixture.Scene().SetRenderHost(nullptr);
+}
+
+TEST(McpToolsSpatialCaptureTest, ExplicitWidthHeightOverrideDetail) {
+  McpToolFixture fixture;
+  FakeRenderHost host;
+  fixture.Scene().SetRenderHost(&host);
+
+  ToolResult both =
+      fixture.CallTool("capture_viewport",
+                       {{"width", 640}, {"height", 480}, {"detail", "high"}});
+  ASSERT_TRUE(both.ok) << both.result.dump();
+  EXPECT_EQ(both.result["width"], 640);
+  EXPECT_EQ(both.result["height"], 480);
+  EXPECT_EQ(both.result["detail"], "custom");
+  // 23 x 18 visual-token patches.
+  EXPECT_EQ(both.result["visual_tokens"], 23 * 18);
+
+  // One explicit dimension derives the other from 16:9.
+  ToolResult width_only =
+      fixture.CallTool("capture_viewport", {{"width", 800}});
+  ASSERT_TRUE(width_only.ok) << width_only.result.dump();
+  EXPECT_EQ(width_only.result["width"], 800);
+  EXPECT_EQ(width_only.result["height"], 450);
+  EXPECT_EQ(width_only.result["detail"], "custom");
+  fixture.Scene().SetRenderHost(nullptr);
+}
+
+TEST(McpToolsSpatialCaptureTest, RejectsOutOfRangeCaptureSizes) {
+  McpToolFixture fixture;
+  FakeRenderHost host;
+  fixture.Scene().SetRenderHost(&host);
+
+  ToolResult over = fixture.CallTool("capture_viewport", {{"width", 2577}});
+  EXPECT_FALSE(over.ok);
+  EXPECT_NE(ErrorText(over).find("2576"), std::string::npos) << ErrorText(over);
+
+  // A tall explicit edge derives a width past the long-edge cap.
+  ToolResult derived = fixture.CallTool("capture_viewport", {{"height", 2000}});
+  EXPECT_FALSE(derived.ok);
+  EXPECT_NE(ErrorText(derived).find("2576"), std::string::npos)
+      << ErrorText(derived);
+
+  ToolResult small = fixture.CallTool("capture_viewport", {{"width", 32}});
+  EXPECT_FALSE(small.ok);
+  EXPECT_NE(ErrorText(small).find("64"), std::string::npos) << ErrorText(small);
+
+  ToolResult unknown =
+      fixture.CallTool("capture_viewport", {{"detail", "ultra"}});
+  EXPECT_FALSE(unknown.ok);
+  EXPECT_NE(ErrorText(unknown).find("low"), std::string::npos)
+      << ErrorText(unknown);
+  fixture.Scene().SetRenderHost(nullptr);
+}
+
+TEST(McpToolsSpatialCaptureTest, DownscalesThenDrawsOverlaysAtOutputSize) {
+  McpToolFixture fixture;
+  FakeRenderHost host;
+  fixture.Scene().SetRenderHost(&host);
+
+  ToolResult result = fixture.CallTool(
+      "capture_viewport",
+      {{"preset", "top_down"},
+       {"colliders", true},
+       {"highlight", nlohmann::json::array({{{"path", "Player"}}})}});
+  ASSERT_TRUE(result.ok) << result.result.dump();
+  EXPECT_EQ(result.result["width"], 672);
+  EXPECT_EQ(result.result["height"], 378);
+  ASSERT_EQ(result.images.size(), 1u);
+
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  stbi_uc* pixels =
+      stbi_load_from_memory(result.images[0].data.data(),
+                            static_cast<int>(result.images[0].data.size()),
+                            &width, &height, &channels, 4);
+  ASSERT_NE(pixels, nullptr);
+  EXPECT_EQ(width, 672);
+  EXPECT_EQ(height, 378);
+  int overlay_pixels = 0;
+  for (size_t i = 0; i < static_cast<size_t>(width) * height * 4; i += 4) {
+    const bool collider =
+        pixels[i] == 60 && pixels[i + 1] == 220 && pixels[i + 2] == 120;
+    const bool highlight =
+        pixels[i] == 255 && pixels[i + 1] == 215 && pixels[i + 2] == 50;
+    if (collider || highlight) overlay_pixels++;
+  }
+  stbi_image_free(pixels);
+  EXPECT_GT(overlay_pixels, 0)
+      << "overlays must be drawn on the downscaled output buffer";
+  fixture.Scene().SetRenderHost(nullptr);
+}
+
+TEST(McpToolsSpatialCaptureTest, OffscreenPathHonoursDetail) {
+  McpToolFixture fixture;
+  FakeRenderHost host;
+  host.advance_frame = false;
+  host.offscreen_ok = true;
+  fixture.Scene().SetRenderHost(&host);
+
+  ToolResult result =
+      fixture.CallTool("capture_viewport", {{"detail", "medium"}});
+  ASSERT_TRUE(result.ok) << result.result.dump();
+  EXPECT_EQ(result.result["source"], "offscreen");
+  EXPECT_EQ(result.result["width"], 1008);
+  EXPECT_EQ(result.result["height"], 567);
+  EXPECT_EQ(result.result["detail"], "medium");
+  EXPECT_EQ(result.result["visual_tokens"], 756);
+  EXPECT_EQ(host.offscreen_calls, 1);
+  fixture.Scene().SetRenderHost(nullptr);
+}
