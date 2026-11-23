@@ -115,6 +115,11 @@ pub struct CaptureViewportArgs {
     /// Overlay a box around each of these nodes.
     #[serde(default)]
     pub highlight: Vec<NodeSelector>,
+    /// Render the scene view offscreen immediately instead of waiting for a
+    /// presented frame. Useful while the editor window is minimized or hidden;
+    /// default false. The result's `source` says which path produced the PNG.
+    #[serde(default)]
+    pub offscreen: bool,
 }
 
 pub(crate) fn tools() -> Vec<ToolSpec> {
@@ -147,10 +152,14 @@ fn capture_viewport() -> ToolSpec {
          to 1280x720 (max 1920x1080). `colliders` overlays collider boxes and \
          `highlight` overlays boxes around the given nodes. No editor gizmos \
          are drawn. The result includes the capture camera's `position`, \
-         `target` and `fov`. The editor camera is always restored after the \
-         capture, including on error. `player_pov` requires an enabled Camera \
-         component. Fails with `no render host available` when no render host \
-         is attached (e.g. a headless session without a renderer).",
+         `target` and `fov`, and a `source` of `presented` (a freshly rendered \
+         viewport frame) or `offscreen` (rendered on demand, e.g. while the \
+         editor window is minimized). Set `offscreen: true` to skip the wait \
+         for a presented frame entirely. The editor camera is always restored \
+         after the capture, including on error. `player_pov` requires an \
+         enabled Camera component. Fails with `no render host available` when \
+         no render host is attached (e.g. a headless session without a \
+         renderer).",
         Mode::Read,
         || schema::<CaptureViewportArgs>(),
     )

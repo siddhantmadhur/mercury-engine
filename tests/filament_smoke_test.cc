@@ -14,6 +14,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -243,6 +244,29 @@ TEST(FilamentSmokeTest, HeadlessOffscreenRenderIsNonUniform) {
   RenderResult result;
   RenderSmokeScene(RenderSettings{}, result);
   ExpectNonUniform(result.pixels);
+}
+
+// The on-demand capture path must work without a single StepFrame/presented
+// frame, the way capture_viewport needs it to when the editor is minimized.
+TEST(FilamentSmokeTest, RenderScenePixelsNowWithoutAPresentedFrame) {
+  DefaultApplication app("Filament Offscreen Capture", kWidth, kHeight);
+  app.EnableHeadlessMode(true);
+  auto scene = std::make_unique<SmokeScene>();
+  app.SetGameScene(std::move(scene));
+  ASSERT_TRUE(app.StartHosted());
+
+  app.EnableSceneTexture(true);
+  app.SetSceneViewportSize(kWidth, kHeight);
+
+  std::vector<uint8_t> pixels;
+  int width = 0;
+  int height = 0;
+  std::string why;
+  ASSERT_TRUE(app.RenderScenePixelsNow(&pixels, &width, &height, &why)) << why;
+  EXPECT_EQ(width, kWidth);
+  EXPECT_EQ(height, kHeight);
+  ASSERT_EQ(pixels.size(), static_cast<size_t>(kWidth) * kHeight * 4);
+  ExpectNonUniform(pixels);
 }
 
 TEST(FilamentSmokeTest, FxaaRendersFullSizeFrame) {

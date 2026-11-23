@@ -16,13 +16,17 @@
  * The capture borrows the editor camera: it snapshots EditorScene::ViewState,
  * sets up the requested view, copies the offscreen RGBA frame, draws software
  * overlays, encodes a PNG and restores the snapshot through an RAII guard on
- * every exit path, including errors.
+ * every exit path, including errors. When the editor window is hidden and no
+ * presented frame arrives, the same view can be rendered offscreen on demand
+ * (implicitly after a short poll, or immediately with `offscreen: true`).
  */
 
 #include <wx/app.h>
+#include <wx/timer.h>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -58,13 +62,52 @@ using nlohmann::json;
 constexpr float kFovDegrees = 60.0f;
 constexpr float kDefaultRayDistance = 10000.0f;
 constexpr uint32_t kAllLayers = ~0u;
-// Upper bound on UI turns spent waiting for a frame with the new camera.
+// Safety cap on UI turns spent waiting for a frame with the new camera.
 constexpr int kMaxCaptureFrames = 600;
+// A CallAfter loop can spin far faster than the editor's frame rate, so the
+// fallback is wall-clock based: hidden/iconized editors never StepFrame, but a
+// visible one gets this long to present the requested view first.
+constexpr auto kOffscreenFallbackDelay = std::chrono::milliseconds(250);
+// One-shot polls, paced like build_scripts' wxTimer instead of a CallAfter
+// busy loop.
+constexpr int kPollIntervalMs = 5;
 
 json Error(std::string message, const std::string& suggestion = {}) {
   json out{{"error", std::move(message)}};
   if (!suggestion.empty()) out["suggestion"] = suggestion;
   return out;
+}
+
+json OffscreenError(const std::string& why) {
+  return Error(
+      "no rendered frame was available and offscreen rendering "
+      "failed: " +
+      (why.empty() ? std::string("unknown reason") : why));
+}
+
+class CapturePollTimer : public wxTimer {
+ public:
+  std::function<void()> tick;
+  void Notify() override {
+    if (tick) tick();
+  }
+};
+
+// Called from `complete`, which runs inside this timer's own Notify. Neither
+// clearing `tick` nor dropping the last reference to the timer is safe there:
+// `tick` owns the poll closure that owns the executing `complete` (and its
+// `pending` state), so clearing it would destroy the callable out from under
+// its own stack frame, and a wxTimer must not be deleted from its own Notify.
+// Hand the timer to the next event-loop turn: the queued event keeps it alive
+// until Notify has returned, then clearing tick breaks the
+// timer -> tick -> poll -> pending ownership cycle.
+void FinishCaptureTimer(std::shared_ptr<CapturePollTimer> timer) {
+  if (!timer) return;
+  timer->Stop();
+  if (wxTheApp) {
+    wxTheApp->CallAfter(
+        [timer = std::move(timer)]() mutable { timer->tick = nullptr; });
+  }
 }
 
 json Vec3Json(const glm::vec3& v) { return json::array({v.x, v.y, v.z}); }
@@ -497,7 +540,33 @@ struct CapturePlan {
   std::vector<kEntityId> highlights;
   bool colliders = false;
   bool camera_changed = false;
+  bool offscreen_only = false;
   uint64_t saved_frame = 0;
+  std::string source = "presented";
+  std::vector<uint8_t> offscreen_rgba;
+  int offscreen_width = 0;
+  int offscreen_height = 0;
+
+  // Renders the current scene view without waiting for the window's frame loop
+  // and keeps the RGBA8 pixels for Capture(). The camera guard in the caller
+  // still owns the ViewState, so the offscreen path restores it just the same.
+  bool RenderOffscreen(std::string* why) {
+    RenderHost* host = scene.GetRenderHost();
+    if (!host || !host->RenderScenePixelsNow(&offscreen_rgba, &offscreen_width,
+                                             &offscreen_height, why)) {
+      if (why->empty()) *why = "render host has no offscreen renderer";
+      return false;
+    }
+    if (offscreen_width <= 0 || offscreen_height <= 0 ||
+        offscreen_rgba.size() <
+            static_cast<size_t>(offscreen_width) * offscreen_height * 4) {
+      *why = "offscreen pixels were incomplete";
+      offscreen_rgba.clear();
+      return false;
+    }
+    source = "offscreen";
+    return true;
+  }
 
   ToolResult Capture() {
     RenderHost* host = scene.GetRenderHost();
@@ -506,10 +575,37 @@ struct CapturePlan {
     int height = 0;
     uint64_t frame_id = 0;
     std::vector<uint8_t> rgba;
-    if (!host->CopyScenePixels(width, height, rgba, &frame_id) || width <= 0 ||
-        height <= 0 || rgba.size() < static_cast<size_t>(width) * height * 4) {
-      return ToolResult{
-          false, Error("could not copy scene pixels from the render host")};
+    if (source == "offscreen") {
+      width = offscreen_width;
+      height = offscreen_height;
+      rgba = std::move(offscreen_rgba);
+    } else if (offscreen_only) {
+      std::string why;
+      if (!RenderOffscreen(&why)) {
+        return ToolResult{false, OffscreenError(why)};
+      }
+      width = offscreen_width;
+      height = offscreen_height;
+      rgba = std::move(offscreen_rgba);
+      frame_id = 0;  // no presented frame belongs to this image
+    } else {
+      const bool copied =
+          host->CopyScenePixels(width, height, rgba, &frame_id) && width > 0 &&
+          height > 0 && rgba.size() >= static_cast<size_t>(width) * height * 4;
+      const bool stale = copied && saved_frame != 0 && frame_id == saved_frame;
+      if (!copied || stale) {
+        // No new presented frame (or no frame at all): the window may be
+        // minimized. Try the same view offscreen before giving up.
+        std::string why;
+        if (RenderOffscreen(&why)) {
+          width = offscreen_width;
+          height = offscreen_height;
+          rgba = std::move(offscreen_rgba);
+          frame_id = 0;
+        } else if (!copied) {
+          return ToolResult{false, OffscreenError(why)};
+        }
+      }
     }
 
     const glm::mat4 view_projection = scene.GetSceneViewProjection();
@@ -550,6 +646,7 @@ struct CapturePlan {
     json out{{"width", width},
              {"height", height},
              {"preset", preset},
+             {"source", source},
              {"frame_id", frame_id},
              {"colliders", colliders},
              {"highlight_count", highlights.size()},
@@ -665,6 +762,9 @@ bool ParsePreset(const json& args, CapturePlan* plan, std::string* error,
   plan->colliders = args.contains("colliders") && args["colliders"].is_boolean()
                         ? args["colliders"].get<bool>()
                         : false;
+  plan->offscreen_only = args.contains("offscreen") &&
+                         args["offscreen"].is_boolean() &&
+                         args["offscreen"].get<bool>();
   if (args.contains("highlight") && args["highlight"].is_array()) {
     for (const json& ref : args["highlight"]) {
       std::string node_error;
@@ -698,9 +798,10 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
   }
 
   RenderHost* host = scene.GetRenderHost();
-  if (host) {
+  if (host && !plan->offscreen_only) {
     // Remember the frame that was current before the camera change so the
-    // real editor can wait for one rendered with the new view.
+    // real editor can wait for one rendered with the new view. An explicit
+    // offscreen capture does not need a presented frame to compare against.
     int width = 0;
     int height = 0;
     std::vector<uint8_t> scratch;
@@ -719,16 +820,16 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
     };
   };
 
-  if (!host || !wxTheApp) {
-    // Headless tests and tools called without a wx event loop: the caller has
-    // already stepped the renderer to the frame it wants captured.
+  if (plan->offscreen_only || !host || !wxTheApp) {
+    // Explicit offscreen captures, headless tests and tools called without a
+    // wx event loop capture now; there is no frame loop to wait on.
     finish(std::move(done))();
     return;
   }
 
-  // In the editor, defer by one UI turn so a frame rendered with the new
-  // camera is available, then copy it. The plan (and its RAII guard) lives in
-  // the closure until the call completes.
+  // In the editor, poll on a short one-shot wxTimer so a visible window gets
+  // time to present the new view. The plan (and its RAII guard) lives in the
+  // poll closure until the call completes.
   struct Pending {
     std::shared_ptr<CapturePlan> plan;
     ToolDone done;
@@ -736,15 +837,31 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
     std::weak_ptr<const void> lifetime;
     uint64_t before = 0;
     int tries = 0;
+    std::chrono::steady_clock::time_point started =
+        std::chrono::steady_clock::now();
+    std::shared_ptr<CapturePollTimer> timer;
   };
-  auto pending = std::make_shared<Pending>(Pending{
-      plan, std::move(done), host, plan->lifetime, plan->saved_frame, 0});
+  auto pending = std::make_shared<Pending>();
+  pending->plan = plan;
+  pending->done = std::move(done);
+  pending->host = host;
+  pending->lifetime = plan->lifetime;
+  pending->before = plan->saved_frame;
   auto poll = std::make_shared<std::function<void()>>();
-  *poll = [pending, poll]() {
+  auto complete = [pending](ToolResult result) {
+    // Keep our own reference for the whole call. Releasing the timer (and, on
+    // the deferred tick clear, the poll closure that owns this closure) may
+    // drop every other reference to `pending` before we return.
+    auto self = pending;
+    auto timer = std::move(self->timer);
+    FinishCaptureTimer(std::move(timer));
+    self->done(std::move(result));
+  };
+  *poll = [pending, complete]() {
     if (pending->lifetime.expired()) {
       // The editor is shutting down: answer the call and let the plan die
       // without touching the scene (its own guard sees the same token).
-      pending->done(ToolResult{false, Error("editor shutting down")});
+      complete(ToolResult{false, Error("editor shutting down")});
       return;
     }
     int width = 0;
@@ -755,13 +872,29 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
         pending->host->CopyScenePixels(width, height, scratch, &frame_id);
     if ((copied && frame_id != pending->before) ||
         ++pending->tries >= kMaxCaptureFrames) {
-      ToolResult result = pending->plan->Capture();
-      pending->done(std::move(result));
+      complete(pending->plan->Capture());
       return;
     }
-    wxTheApp->CallAfter(*poll);
+    if (std::chrono::steady_clock::now() - pending->started >=
+        kOffscreenFallbackDelay) {
+      // Hidden or iconized editors skip StepFrame, so no new frame will ever
+      // arrive. Render this same view directly; Capture() then only encodes
+      // the pixels and the plan's guard restores the camera.
+      std::string why;
+      if (!pending->plan->RenderOffscreen(&why)) {
+        complete(ToolResult{false, OffscreenError(why)});
+        return;
+      }
+      complete(pending->plan->Capture());
+      return;
+    }
+    pending->timer->Start(kPollIntervalMs, true);
   };
-  wxTheApp->CallAfter(*poll);
+  if (wxTheApp) {
+    pending->timer = std::make_shared<CapturePollTimer>();
+    pending->timer->tick = [poll] { (*poll)(); };
+    pending->timer->Start(kPollIntervalMs, true);
+  }
 }
 
 }  // namespace

@@ -712,6 +712,91 @@ bool FilamentApplication::CopyScenePixels(int& width, int& height,
   return CopyOffscreen(scene_target_, width, height, rgba_out, frame_id);
 }
 
+bool FilamentApplication::RenderScenePixelsNow(std::vector<uint8_t>* rgba,
+                                               int* width, int* height,
+                                               std::string* why) {
+  if (why) why->clear();
+  const auto fail = [why](const char* reason) {
+    if (why) *why = reason;
+    return false;
+  };
+  if (!rgba || !width || !height) return fail("invalid capture arguments");
+  if (!engine_ || !renderer_ || !game_scene_ || !scene_renderer_.scene()) {
+    return fail("renderer not ready");
+  }
+
+  // The capture tool has already set the editor camera's transform. The target
+  // normally exists because SetViewState() calls SetSceneViewportSize(), but a
+  // direct caller may not have created it yet.
+  if (!scene_target_.target) {
+    const uint32_t w = *width > 0 ? static_cast<uint32_t>(*width)
+                                  : static_cast<uint32_t>(GetWidth());
+    const uint32_t h = *height > 0 ? static_cast<uint32_t>(*height)
+                                   : static_cast<uint32_t>(GetHeight());
+    EnsureOffscreen(scene_target_, std::clamp(w, 1u, 8192u),
+                    std::clamp(h, 1u, 8192u), scene_renderer_.scene(), false);
+  }
+  if (!scene_target_.target || !scene_target_.view || !scene_target_.camera) {
+    return fail("offscreen scene target unavailable");
+  }
+
+  // Do the scene-side part of a frame (cameras and mirrored entities), but no
+  // game logic, input, UI or swapchain work: a minimized window has no usable
+  // framebuffer, and none of that is needed for this one offscreen image.
+  scene_renderer_.SyncScene(*game_scene_);
+  const uint32_t w = scene_target_.width;
+  const uint32_t h = scene_target_.height;
+  const std::vector<RenderCamera> cameras =
+      FrameCameras(static_cast<float>(w), static_cast<float>(h));
+  const RenderCamera* main = nullptr;
+  for (const RenderCamera& camera : cameras) {
+    if (camera.target_texture.empty() && !camera.overlay) {
+      main = &camera;
+      break;
+    }
+  }
+  if (!main) return fail("no scene camera available");
+
+  const RenderSettings settings = game_scene_->GetRenderSettings();
+  const glm::vec4 bg = glm::clamp(main->background, 0.0f, 1.0f);
+  scene_sky_->setColor(
+      ToFilament(glm::vec4(SrgbToLinear(glm::vec3(bg)), 1.0f)));
+  scene_renderer_.SetProbeBackground(main->background);
+  scene_renderer_.SetSkyboxForClear(main->clear ==
+                                    static_cast<int>(CameraClear::kSkybox));
+  SetupCamera(scene_target_.camera, *main);
+  ApplyPostProcess(scene_target_.view, settings, *main, true);
+  scene_target_.view->setViewport(filament::Viewport(0, 0, w, h));
+  scene_target_.view->setVisibleLayers(0xff, main->culling_mask & 0xff);
+
+  // renderStandaloneView() requires a RenderTarget and must run outside
+  // beginFrame()/endFrame(). EnsureOffscreen normally set one; restore any
+  // temporary assignment so other views keep their state.
+  filament::RenderTarget* previous_target =
+      scene_target_.view->getRenderTarget();
+  if (!previous_target) {
+    scene_target_.view->setRenderTarget(scene_target_.target);
+  }
+  frame_counter_++;
+  RenderHooks::Instance().InvokePreRender(*engine_, *scene_target_.view);
+  renderer_->renderStandaloneView(scene_target_.view);
+  RenderHooks::Instance().InvokePostRender(*engine_, *scene_target_.view);
+  if (!previous_target) scene_target_.view->setRenderTarget(nullptr);
+
+  // readPixels completes asynchronously; flushAndWait both submits the
+  // standalone render's readback and runs its callback, so the pixels are
+  // ready when we return to the tool.
+  if (scene_target_.readback_pending) engine_->flushAndWait();
+  ReadOffscreen(scene_target_);
+  engine_->flushAndWait();
+  if (!scene_target_.has_pixels)
+    return fail("offscreen readback produced no pixels");
+  *width = static_cast<int>(scene_target_.width);
+  *height = static_cast<int>(scene_target_.height);
+  *rgba = scene_target_.pixels;
+  return true;
+}
+
 void FilamentApplication::SetPreviewCamera(kEntityId camera, int width,
                                            int height) {
   preview_camera_ = camera;
