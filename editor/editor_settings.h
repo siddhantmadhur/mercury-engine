@@ -118,7 +118,10 @@ struct EditorSettings {
   static std::filesystem::path ConfigDir();
   static std::filesystem::path HomeDir();
   void Load();
-  void Save() const;
+  // Writes the settings file. Returns false when it could not be written (for
+  // example because the config folder is read-only); the in-memory settings
+  // are unchanged in that case.
+  bool Save() const;
   void AddRecentProject(const std::filesystem::path& mproj);
 };
 

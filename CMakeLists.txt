@@ -489,6 +489,20 @@ if (MERCURY_BUILD_TESTS)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 new_script_dialog_smoke)
 
+        # The systems trust dialog is modal; this smoke clicks Trust, Don't
+        # Trust and Cancel and checks the returned decision. A watchdog fails
+        # the run if a click leaves the dialog open.
+        add_executable(trust_systems_dialog_smoke
+                tests/trust_systems_dialog_smoke.cc)
+        target_link_libraries(trust_systems_dialog_smoke
+                PRIVATE mercury_editor_lib)
+        mercury_link_mcp_tools(trust_systems_dialog_smoke)
+        mercury_link_rust(trust_systems_dialog_smoke EDITOR)
+        set_target_properties(trust_systems_dialog_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                trust_systems_dialog_smoke)
+
         # The preferences dialog is modal; this smoke flips to its MCP tab,
         # applies and cancels through EditorScene's MCP host.
         add_executable(mcp_prefs_dialog_smoke

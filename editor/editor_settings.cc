@@ -118,7 +118,7 @@ void EditorSettings::Load() {
   }
 }
 
-void EditorSettings::Save() const {
+bool EditorSettings::Save() const {
   mtext::Document document;
   auto& editor = document.Add("editor").properties;
   editor.Set("external_editor", external_editor);
@@ -155,7 +155,7 @@ void EditorSettings::Save() const {
   auto& lore = document.Add("lore").properties;
   lore.Set("executable", lore_executable);
   lore.Set("server", lore_server);
-  mtext::SaveFile(ConfigDir() / "editor.cfg", document);
+  return mtext::SaveFile(ConfigDir() / "editor.cfg", document);
 }
 
 void EditorSettings::AddRecentProject(const fs::path& mproj) {
