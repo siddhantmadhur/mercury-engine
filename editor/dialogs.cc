@@ -807,6 +807,7 @@ std::optional<bool> ShowTrustSystemsDialog(
   wxDialog dlg(parent, wxID_ANY,
                first_time ? "Trust Editor Systems?" : "Editor System Trust",
                wxDefaultPosition, wxSize(600, -1));
+  dlg.SetName("trust_systems_dialog");
   auto* sizer = new wxBoxSizer(wxVERTICAL);
 
   wxString message =
@@ -842,7 +843,17 @@ std::optional<bool> ShowTrustSystemsDialog(
   auto* trust = new wxButton(&dlg, wxID_YES, "Trust");
   auto* distrust = new wxButton(&dlg, wxID_NO, "Don't Trust");
   auto* cancel = new wxButton(&dlg, wxID_CANCEL, "Cancel");
+  trust->SetName("trust_systems_trust");
+  distrust->SetName("trust_systems_distrust");
+  cancel->SetName("trust_systems_cancel");
   cancel->SetDefault();
+  // wxDialog only ends itself for the affirmative id (wxID_OK) and the escape
+  // id (wxID_CANCEL); wxID_YES and wxID_NO need explicit handlers or a click
+  // leaves the dialog open and ShowModal never returns.
+  trust->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { dlg.EndModal(wxID_YES); });
+  distrust->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) { dlg.EndModal(wxID_NO); });
+  cancel->Bind(wxEVT_BUTTON,
+               [&](wxCommandEvent&) { dlg.EndModal(wxID_CANCEL); });
   buttons->AddStretchSpacer();
   buttons->Add(cancel, 0, wxRIGHT, 8);
   buttons->Add(distrust, 0, wxRIGHT, 8);

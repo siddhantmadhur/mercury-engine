@@ -11,11 +11,14 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <random>
 #include <string>
+#include <thread>
 
 #include "console.h"
 #include "editor_settings.h"
@@ -39,6 +42,11 @@ fs::path TempDir(const char* name) {
   return dir;
 }
 
+std::string ReadFile(const fs::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(in), {});
+}
+
 class XdgConfigScope {
  public:
   explicit XdgConfigScope(const fs::path& dir) {
@@ -59,6 +67,19 @@ class XdgConfigScope {
   std::string previous_;
   bool had_previous_ = false;
 };
+
+// The failure-path tests below make a folder read-only to force a write or a
+// delete to fail. Root (the CI container) and anything else with
+// CAP_DAC_OVERRIDE ignores those bits, so check that they actually hold.
+bool ReadOnlyFoldersAreEnforced() {
+  const fs::path dir = TempDir("mercury_trust_perm_probe");
+  fs::permissions(dir, fs::perms::owner_read | fs::perms::owner_exec,
+                  fs::perm_options::replace);
+  const bool wrote = static_cast<bool>(std::ofstream(dir / "probe"));
+  fs::permissions(dir, fs::perms::owner_all, fs::perm_options::replace);
+  fs::remove_all(dir);
+  return !wrote;
+}
 
 }  // namespace
 
@@ -225,6 +246,8 @@ TEST(ProjectTrust, FailedWipeDoesNotPersistTrust) {
 #if defined(_WIN32)
   GTEST_SKIP() << "the test changes POSIX permissions";
 #else
+  if (!ReadOnlyFoldersAreEnforced())
+    GTEST_SKIP() << "read-only folders are writable here (running as root?)";
   const fs::path config = TempDir("mercury_trust_fail_config");
   const fs::path root = TempDir("mercury_trust_fail_project");
   XdgConfigScope scope(config);
@@ -244,4 +267,119 @@ TEST(ProjectTrust, FailedWipeDoesNotPersistTrust) {
   fs::remove_all(root);
   fs::remove_all(config);
 #endif
+}
+
+// The native "Trust Project?" prompt writes the decision with
+// SetProjectTrust. A project shaped like DungeonMasters (a [build] target and
+// only .mercury/scripts + scripts.mschema shipped) must persist that decision
+// without touching the script output.
+TEST(ProjectTrust, FirstGrantPersistsForAProjectWithOnlyScriptOutput) {
+  const fs::path config = TempDir("mercury_trust_dm_config");
+  const fs::path root = TempDir("mercury_trust_dm_project");
+  XdgConfigScope scope(config);
+
+  fs::create_directories(root / ".mercury" / "scripts");
+  std::ofstream(root / ".mercury" / "scripts.mschema") << "[mschema]\n";
+  auto project = Project::Create(root / "game.mproj", "DungeonMasters");
+  ASSERT_TRUE(project);
+  ASSERT_TRUE(project->SetBuildTarget("dungeonmasters"));
+  ASSERT_TRUE(project->Save());
+
+  Console console;
+  EditorSettings settings;
+  EditorUI::SetProjectTrust(settings, root, true, console);
+  EXPECT_TRUE(settings.IsProjectTrusted(root));
+
+  // The first grant must not delete the script output it did not create.
+  EXPECT_TRUE(fs::is_regular_file(root / ".mercury" / "scripts.mschema"));
+  EXPECT_TRUE(fs::is_directory(root / ".mercury" / "scripts"));
+
+  // The decision is on disk, keyed by the canonical project path, and a fresh
+  // settings object reads it back.
+  const std::string text = ReadFile(EditorSettings::ConfigDir() / "editor.cfg");
+  EXPECT_NE(text.find(EditorSettings::CanonicalProjectPath(root)),
+            std::string::npos)
+      << text;
+  EditorSettings loaded;
+  loaded.Load();
+  EXPECT_TRUE(loaded.IsProjectTrusted(root));
+  EXPECT_TRUE(loaded.HasProjectTrustDecision(root));
+
+  fs::remove_all(root);
+  fs::remove_all(config);
+}
+
+// A failed write must not be silent: the decision stays in memory for this
+// session but the user has to know the next launch will ask again.
+TEST(ProjectTrust, FailedSaveIsReported) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "the test changes POSIX permissions";
+#else
+  if (!ReadOnlyFoldersAreEnforced())
+    GTEST_SKIP() << "read-only folders are writable here (running as root?)";
+  const fs::path config = TempDir("mercury_trust_savefail_config");
+  const fs::path root = TempDir("mercury_trust_savefail_project");
+  XdgConfigScope scope(config);
+
+  const fs::path config_dir = EditorSettings::ConfigDir();
+  fs::create_directories(config_dir);
+  fs::permissions(config_dir, fs::perms::owner_read | fs::perms::owner_exec,
+                  fs::perm_options::replace);
+
+  Console console;
+  EditorSettings settings;
+  EditorUI::SetProjectTrust(settings, root, true, console);
+  EXPECT_TRUE(settings.IsProjectTrusted(root));
+  EditorSettings loaded;
+  loaded.Load();
+  EXPECT_FALSE(loaded.IsProjectTrusted(root));
+
+  bool reported = false;
+  for (const Console::Line& line : console.Snapshot()) {
+    if (line.level == Console::Level::kError &&
+        line.text.find("trust decision") != std::string::npos) {
+      reported = true;
+    }
+  }
+  EXPECT_TRUE(reported) << "the failed save was reported to the Console";
+
+  fs::permissions(config_dir, fs::perms::owner_all, fs::perm_options::replace);
+  fs::remove_all(root);
+  fs::remove_all(config);
+#endif
+}
+
+// A project with no [build] target runs its scripts through mercury_player;
+// that path never needs a trust decision.
+TEST(ProjectTrust, ScriptOnlyProjectBuildsWithoutADecision) {
+  const fs::path config = TempDir("mercury_trust_script_config");
+  const fs::path root = TempDir("mercury_trust_script_project");
+  XdgConfigScope scope(config);
+
+  auto project = Project::Create(root / "game.mproj", "ScriptOnly");
+  ASSERT_TRUE(project);
+  ASSERT_TRUE(project->Save());
+  fs::create_directories(root / "scripts");
+  std::ofstream(root / "scripts" / "hello.as")
+      << "class Hello {\n  void OnStart() {}\n}\n";
+
+  EditorSettings settings;  // no decision for this project
+  ASSERT_FALSE(settings.HasProjectTrustDecision(root));
+  Console console;
+  PlaySession session(console, settings);
+  session.Build(*project);
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(60);
+  while (session.IsBusy() && std::chrono::steady_clock::now() < deadline) {
+    session.Update();
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  if (session.IsBusy()) session.Stop();
+  EXPECT_FALSE(session.IsBusy());
+  EXPECT_TRUE(session.LastBuildSucceeded());
+  EXPECT_TRUE(fs::is_regular_file(root / ".mercury" / "scripts.mschema"));
+
+  fs::remove_all(root);
+  fs::remove_all(config);
 }

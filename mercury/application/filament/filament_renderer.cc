@@ -909,10 +909,16 @@ void FilamentRenderer::SyncScene(GameScene& game) {
     }
 
     // What moved: rigid draws shift with the entity (their node matrix is
-    // folded into the transform), skinned ones carry their own bones.
+    // folded into the transform). Skinned draws carry their own bones in
+    // entity space, so they take the entity's world matrix as their transform
+    // (as BuildProxy sets it) and the new bones.
     for (DrawRecord& draw : record.draws) {
       const RenderDraw& render = mesh.draws[draw.draw_index];
       if (draw.skinned) {
+        if (moved) {
+          transforms.setTransform(transforms.getInstance(draw.renderable),
+                                  ToFilament(world));
+        }
         mesh.SkinMatrices(render, pose, skin);
         std::vector<filament::math::mat4f> bones(skin.size());
         for (size_t i = 0; i < skin.size(); i++) bones[i] = ToFilament(skin[i]);
