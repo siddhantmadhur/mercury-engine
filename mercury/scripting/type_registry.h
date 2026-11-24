@@ -44,6 +44,10 @@ using GetFieldFn =
 using SetFieldFn =
     std::function<bool(MapScene& scene, kEntityId entity,
                        std::string_view field, const mtext::Variant& value)>;
+// Called after a field was set, so a component can copy the new value into
+// engine properties owned by another system (e.g. a renderer's RenderMesh).
+using AfterSetFn = std::function<void(MapScene& scene, kEntityId entity,
+                                      std::string_view field)>;
 
 // A method an Event can call (Behaviour::ReflectMethods).
 struct MethodDesc {
@@ -66,6 +70,7 @@ struct ComponentInfo {
   HasComponentFn has;
   GetFieldFn get_field;
   SetFieldFn set_field;
+  AfterSetFn after_set;
   // Registered by MERCURY_SCRIPT in this executable. Native scripts survive
   // ScriptRuntime::Shutdown (which drops AngelScript classes); the script
   // runtime must not remove code that was linked into the game.

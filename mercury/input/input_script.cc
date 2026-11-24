@@ -55,12 +55,17 @@ bool InputScript::LoadFromString(const std::string& text, std::string* error) {
     }
     std::istringstream args(step.rest);
     for (std::string arg; args >> arg;) step.args.push_back(arg);
-    static const char* kCommands[] = {"press", "release", "tap", "mouse",
-                                      "look",  "capture", "log", "quit"};
+    static const char* kCommands[] = {"press", "release", "tap",
+                                      "mouse", "look",    "capture",
+                                      "dump",  "log",     "quit"};
     if (std::find(std::begin(kCommands), std::end(kCommands), step.command) ==
         std::end(kCommands)) {
       if (error)
         *error = std::format("{}: unknown command {}", number, step.command);
+      return false;
+    }
+    if (step.command == "dump" && step.args.empty()) {
+      if (error) *error = std::format("{}: dump needs a file path", number);
       return false;
     }
     if ((step.command == "press" || step.command == "release" ||
@@ -108,6 +113,38 @@ void InputScript::Apply(uint64_t frame, InputManager& input, GLFWwindow* window,
                     std::strtof(args[1].c_str(), nullptr)));
     } else if (step.command == "capture") {
       if (hooks.capture) hooks.capture(step.rest);
+    } else if (step.command == "dump") {
+      if (hooks.dump) {
+        // <file.json> [path; path; ...]. The file is the first whitespace
+        // token; everything after it is one argument per ';', so node paths
+        // may contain spaces. No paths, or "*", means every node.
+        const std::string& rest = step.rest;
+        const size_t file_end = rest.find_first_of(" \t");
+        const std::string file = rest.substr(0, file_end);
+        std::vector<std::string> dump_nodes;
+        if (file_end != std::string::npos) {
+          size_t start = file_end;
+          while (start < rest.size()) {
+            const size_t end = rest.find(';', start);
+            std::string entry =
+                rest.substr(start, end == std::string::npos ? std::string::npos
+                                                            : end - start);
+            const auto first = entry.find_first_not_of(" \t");
+            const auto last = entry.find_last_not_of(" \t");
+            entry = first == std::string::npos
+                        ? std::string()
+                        : entry.substr(first, last - first + 1);
+            if (entry == "*") {
+              dump_nodes.clear();  // wildcard: every node
+              break;
+            }
+            if (!entry.empty()) dump_nodes.push_back(std::move(entry));
+            if (end == std::string::npos) break;
+            start = end + 1;
+          }
+        }
+        hooks.dump(file, dump_nodes);
+      }
     } else if (step.command == "log") {
       PDebug::info("[input script {}] {}", frame, step.rest);
     } else if (step.command == "quit") {

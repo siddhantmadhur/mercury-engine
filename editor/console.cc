@@ -12,6 +12,7 @@ namespace Mercury {
 void Console::Add(Level level, Source source, std::string text) {
   std::lock_guard lock(mutex_);
   lines_.push_back({level, source, std::move(text)});
+  next_seq_++;
   while (lines_.size() > kMaxLines) lines_.pop_front();
   version_++;
 }
@@ -79,6 +80,66 @@ void Console::Clear() {
 std::vector<Console::Line> Console::Snapshot() {
   std::lock_guard lock(mutex_);
   return {lines_.begin(), lines_.end()};
+}
+
+uint64_t Console::LatestCursor() {
+  std::lock_guard lock(mutex_);
+  return next_seq_;
+}
+
+Console::Page Console::ReadFrom(std::optional<uint64_t> cursor, Level min_level,
+                                size_t limit) {
+  std::lock_guard lock(mutex_);
+  Page page;
+  const uint64_t oldest = next_seq_ - lines_.size();
+  const auto seq_of = [&](size_t index) { return oldest + index; };
+  const auto wanted = [&](const Line& line) {
+    return static_cast<int>(line.level) >= static_cast<int>(min_level);
+  };
+  page.next_cursor = next_seq_;
+
+  if (!cursor) {
+    // The tail: walk back from the newest line.
+    size_t from = lines_.size();
+    size_t found = 0;
+    while (from > 0 && found < limit) {
+      if (wanted(lines_[--from])) found++;
+    }
+    for (size_t i = from; i < lines_.size(); i++) {
+      if (wanted(lines_[i])) page.entries.push_back({seq_of(i), lines_[i]});
+    }
+    for (size_t i = from; i > 0 && !page.truncated; i--) {
+      page.truncated = wanted(lines_[i - 1]);
+    }
+    return page;
+  }
+
+  page.dropped = *cursor < oldest;
+  const size_t start = *cursor > oldest
+                           ? static_cast<size_t>(std::min<uint64_t>(
+                                 *cursor - oldest, lines_.size()))
+                           : 0;
+  for (size_t i = start; i < lines_.size(); i++) {
+    if (!wanted(lines_[i])) continue;
+    if (page.entries.size() >= limit) {
+      page.truncated = true;
+      page.next_cursor = seq_of(i);
+      break;
+    }
+    page.entries.push_back({seq_of(i), lines_[i]});
+  }
+  return page;
+}
+
+Console::Counts Console::CountLevels() {
+  std::lock_guard lock(mutex_);
+  Counts counts;
+  for (const Line& line : lines_) {
+    if (line.level == Level::kError) counts.errors++;
+    if (line.level == Level::kWarning) counts.warnings++;
+  }
+  counts.latest_cursor = next_seq_;
+  return counts;
 }
 
 size_t Console::GetVersion() {

@@ -92,6 +92,7 @@ class FilamentRenderer {
     filament::MaterialInstance* material = nullptr;
     uint32_t layer = 0;
     uint32_t draw_index = 0;  // index into RenderMesh::draws
+    uint32_t revision = 0;    // RenderMesh revision this draw was built from
     bool skinned = false;
     bool transmissive = false;
     // Emissive radiance in nits (as uploaded to Filament); zero when the

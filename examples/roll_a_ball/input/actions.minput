@@ -2,7 +2,7 @@
 format = 2
 editor_version = "1.0.0"
 class = "GameInput"
-header = "res://scripts/generated/game_input.ts"
+header = "res://scripts/generated/game_input.as"
 
 [[action]]
 control = "vector2"

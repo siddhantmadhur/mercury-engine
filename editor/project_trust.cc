@@ -21,12 +21,18 @@ enum class WipeResult { kNothing, kRemoved, kFailed };
 WipeResult RemoveEntry(const fs::path& path, std::string* error) {
   std::error_code ec;
   const fs::file_status status = fs::symlink_status(path, ec);
+  // symlink_status() reports a missing path through a "not found" error code
+  // as well as the not_found type. That is nothing to wipe, not a failure:
+  // every first-time project lacks .mercury/build and .mercury/systems.
+  if (ec == std::errc::no_such_file_or_directory ||
+      (!ec && status.type() == fs::file_type::not_found)) {
+    return WipeResult::kNothing;
+  }
   if (ec) {
     if (error)
       *error = "could not inspect " + path.string() + ": " + ec.message();
     return WipeResult::kFailed;
   }
-  if (status.type() == fs::file_type::not_found) return WipeResult::kNothing;
   if (fs::is_symlink(status)) {
     // Remove the link itself, never what it points at.
     fs::remove(path, ec);
@@ -44,6 +50,17 @@ WipeResult RemoveEntry(const fs::path& path, std::string* error) {
   return WipeResult::kRemoved;
 }
 
+// Saving can fail (a read-only config folder, for example) while the decision
+// stays in memory; without this the user would be asked again on the next
+// launch with no explanation.
+void SaveDecision(EditorSettings& settings, Console& console) {
+  if (settings.Save()) return;
+  console.Error(
+      "Could not save the trust decision to " +
+      (EditorSettings::ConfigDir() / "editor.cfg").string() +
+      "; the editor will ask again next time. Check the folder's permissions.");
+}
+
 }  // namespace
 
 void SetProjectTrust(EditorSettings& settings, const fs::path& root,
@@ -51,7 +68,7 @@ void SetProjectTrust(EditorSettings& settings, const fs::path& root,
   const bool was_trusted = settings.IsProjectTrusted(root);
   if (!trusted || was_trusted) {
     settings.SetProjectTrusted(root, trusted);
-    settings.Save();
+    SaveDecision(settings, console);
     return;
   }
 
@@ -89,7 +106,7 @@ void SetProjectTrust(EditorSettings& settings, const fs::path& root,
   }
 
   settings.SetProjectTrusted(root, true);
-  settings.Save();
+  SaveDecision(settings, console);
 }
 
 }  // namespace Mercury::EditorUI

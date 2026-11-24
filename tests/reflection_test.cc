@@ -6,7 +6,13 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <random>
+
 #include "components/components.h"
+#include "project/project.h"
+#include "properties/render_mesh.h"
+#include "scene/map_scene.h"
 #include "scripting/type_registry.h"
 
 using namespace Mercury;
@@ -14,6 +20,16 @@ using namespace Mercury;
 namespace {
 
 enum class Mode { kA, kB };
+
+struct WritableFields {
+  int count = 1;
+  float speed = 2.0f;
+
+  void Reflect(Reflector& r) {
+    r.Field("count", count);
+    r.Field("speed", speed).Tooltip("run time").RuntimeWritable();
+  }
+};
 
 struct Everything {
   bool flag = true;
@@ -55,6 +71,94 @@ TEST(Reflection, DescribesEveryFieldType) {
   EXPECT_EQ(fields[9].type, FieldType::kEnum);
   EXPECT_EQ(fields[9].enum_values, (std::vector<std::string>{"a", "b"}));
   EXPECT_EQ(*fields[9].default_value.Get<std::string>(), "b");
+}
+
+TEST(Reflection, RuntimeWritableMarksOnlyTheChosenField) {
+  auto fields = DescribeFields<WritableFields>();
+  ASSERT_EQ(fields.size(), 2u);
+  EXPECT_FALSE(fields[0].runtime_writable);
+  EXPECT_TRUE(fields[1].runtime_writable);
+  EXPECT_EQ(fields[1].tooltip, "run time");
+
+  RegisterBuiltinTypes();
+  const auto* sprite = TypeRegistry::Instance().FindComponent("SpriteRenderer");
+  ASSERT_NE(sprite, nullptr);
+  const auto* mesh = TypeRegistry::Instance().FindComponent("MeshRenderer");
+  ASSERT_NE(mesh, nullptr);
+  for (const auto* info : {sprite, mesh}) {
+    EXPECT_TRUE(info->FindField("color")->runtime_writable);
+    EXPECT_TRUE(info->FindField("visible")->runtime_writable);
+    if (info == sprite) {
+      EXPECT_TRUE(info->FindField("sorting_order")->runtime_writable);
+      EXPECT_EQ(
+          info->FindField("sorting_order")->tooltip,
+          "Draw order among sprites (-16384..16383); higher draws on top");
+    }
+  }
+}
+
+TEST(Reflection, SettingSpriteColorReachesRenderMeshAndBumpsRevision) {
+  RegisterBuiltinTypes();
+  const auto dir = std::filesystem::temp_directory_path() /
+                   ("mercury_renderer_fields_test_" +
+                    std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(dir);
+  auto project = Project::Create(dir / "test.mproj", "RendererFieldsTest");
+  MapScene scene(project, MapScene::Mode::kEdit);
+  const kEntityId entity = scene.Objects().NewObject();
+  ASSERT_TRUE(
+      scene.AddComponent(scene.GetGameObject(entity), "SpriteRenderer"));
+
+  auto* sprite = scene.Objects().GetProperty<SpriteRenderer>(entity);
+  auto* render = scene.Objects().GetProperty<RenderMesh>(entity);
+  ASSERT_NE(sprite, nullptr);
+  ASSERT_NE(render, nullptr);
+  ASSERT_EQ(render->materials.size(), 1u);
+  EXPECT_EQ(render->revision, 0u);
+  EXPECT_EQ(render->blend_order, 16384u);  // neutral, same as a default mesh
+
+  // A default MeshRenderer sits at the neutral level too, so an unsorted
+  // sprite and a transparent mesh still interleave by depth.
+  const kEntityId mesh_entity = scene.Objects().NewObject();
+  ASSERT_TRUE(
+      scene.AddComponent(scene.GetGameObject(mesh_entity), "MeshRenderer"));
+  const RenderMesh* mesh_render =
+      scene.Objects().GetProperty<RenderMesh>(mesh_entity);
+  ASSERT_NE(mesh_render, nullptr);
+  EXPECT_EQ(mesh_render->blend_order, render->blend_order);
+
+  const auto* info = TypeRegistry::Instance().FindComponent("SpriteRenderer");
+  ASSERT_NE(info, nullptr);
+  const glm::vec4 color(0.25f, 0.5f, 0.75f, 0.4f);
+  ASSERT_TRUE(info->set_field(scene, entity, "color", mtext::Color{color}));
+  EXPECT_EQ(sprite->color, color);
+  EXPECT_EQ(render->materials[0].color, color);  // no material asset: white
+  EXPECT_EQ(render->revision, 1u);
+
+  ASSERT_TRUE(info->set_field(scene, entity, "visible", mtext::Variant(false)));
+  EXPECT_FALSE(sprite->visible);
+  EXPECT_FALSE(render->visible);
+  EXPECT_EQ(render->revision, 2u);
+
+  ASSERT_TRUE(
+      info->set_field(scene, entity, "sorting_order", mtext::Variant(5)));
+  EXPECT_EQ(sprite->sorting_order, 5);
+  EXPECT_EQ(render->blend_order, static_cast<uint16_t>(16384 + 5));
+  EXPECT_EQ(render->revision, 3u);
+
+  // A field without an after-set hook must not touch the renderer.
+  EXPECT_TRUE(info->set_field(scene, entity, "material",
+                              mtext::Resource{"res://ignored.masset"}));
+  EXPECT_EQ(render->revision, 3u);
+
+  // Out-of-range orders clamp into Filament's 15-bit range.
+  ASSERT_TRUE(
+      info->set_field(scene, entity, "sorting_order", mtext::Variant(-99999)));
+  EXPECT_EQ(render->blend_order, 0u);
+  ASSERT_TRUE(
+      info->set_field(scene, entity, "sorting_order", mtext::Variant(99999)));
+  EXPECT_EQ(render->blend_order, 32767u);
+  std::filesystem::remove_all(dir);
 }
 
 TEST(Reflection, WriteThenReadRestoresValues) {

@@ -37,6 +37,23 @@ target_include_directories(mercury_tomlplusplus INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/tomlplusplus/include")
 target_compile_definitions(mercury_tomlplusplus INTERFACE TOML_EXCEPTIONS=0)
 
+# JSON support for tooling (the introspection API and MCP infrastructure).
+# nlohmann/json is header-only and is linked only PRIVATE into the engine
+# target — no public engine header includes it. Its own CMake
+# project provides the nlohmann_json::nlohmann_json target; keep that same
+# target available when the submodule is not checked out (CI sets
+# GIT_SUBMODULE_STRATEGY: none for jobs that do not need dependencies).
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nlohmann_json/CMakeLists.txt")
+    set(JSON_BuildTests OFF CACHE INTERNAL "")
+    set(JSON_Install OFF CACHE INTERNAL "")
+    add_subdirectory(nlohmann_json EXCLUDE_FROM_ALL)
+else ()
+    add_library(nlohmann_json INTERFACE)
+    add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
+    target_include_directories(nlohmann_json INTERFACE
+            "${CMAKE_CURRENT_SOURCE_DIR}/nlohmann_json/include")
+endif ()
+
 # --------------------------------------------------------------------------
 # AngelScript
 # --------------------------------------------------------------------------

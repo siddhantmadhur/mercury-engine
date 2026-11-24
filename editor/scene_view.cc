@@ -18,6 +18,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/quaternion.hpp"
 #include "properties/mesh.h"
+#include "properties/render_mesh.h"
 
 namespace Mercury {
 
@@ -200,6 +201,31 @@ glm::vec3 EditorScene::CameraForward() const {
 
 glm::vec3 EditorScene::CameraPosition() const {
   return camera_target_ - CameraForward() * camera_distance_;
+}
+
+EditorScene::ViewState EditorScene::GetViewState() const {
+  ViewState state;
+  state.view_2d = view_2d_;
+  state.target = camera_target_;
+  state.distance = camera_distance_;
+  state.yaw = camera_yaw_;
+  state.pitch = camera_pitch_;
+  state.viewport_size = scene_size_;
+  return state;
+}
+
+void EditorScene::SetViewState(const ViewState& state) {
+  view_2d_ = state.view_2d;
+  camera_target_ = state.target;
+  camera_distance_ = std::max(state.distance, 0.01f);
+  camera_yaw_ = state.yaw;
+  camera_pitch_ = state.pitch;
+  // SetSceneViewportSize also tells the render host, so a capture at a new
+  // size gets a matching offscreen target; it bumps the view revision.
+  SetSceneViewportSize(state.viewport_size);
+  editor_camera_dirty_ = true;
+  UpdateEditorCamera();
+  RequestViewRedraw();
 }
 
 void EditorScene::UpdateEditorCamera() {
@@ -450,6 +476,46 @@ bool EditorScene::GetNodeBounds(kEntityId entity, glm::mat4& model,
   min = -half;
   max = half;
   return true;
+}
+
+bool EditorScene::GetNodeWorldBounds(kEntityId entity, NodeWorldBounds& out) {
+  glm::mat4 model;
+  glm::vec3 min, max;
+  if (!GetNodeBounds(entity, model, min, max)) {
+    // Model nodes (MeshRenderer without a collider or a physics Mesh) still
+    // have oriented bounds from the RenderMesh. This is the only difference
+    // from the picking bounds above, which must stay unchanged for gizmos.
+    auto* render = Objects().GetProperty<RenderMesh>(entity);
+    if (!render) return false;
+    if (glm::any(glm::lessThan(render->bounds_max, render->bounds_min))) {
+      render->ComputeBounds();
+    }
+    min = render->bounds_min;
+    max = render->bounds_max;
+    model = GetNodeMatrix(entity, true);
+  }
+  if (glm::any(glm::lessThan(max, min))) return false;
+
+  NodeWorldBounds result;
+  result.model = model;
+  result.local_min = min;
+  result.local_max = max;
+  result.world_min = glm::vec3(std::numeric_limits<float>::max());
+  result.world_max = glm::vec3(std::numeric_limits<float>::lowest());
+  for (int i = 0; i < 8; i++) {
+    const glm::vec3 corner(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y,
+                           i & 4 ? max.z : min.z);
+    const glm::vec3 world(model * glm::vec4(corner, 1.0f));
+    result.world_min = glm::min(result.world_min, world);
+    result.world_max = glm::max(result.world_max, world);
+  }
+  out = result;
+  return true;
+}
+
+bool EditorScene::GetNodeWorldBounds(const MapNode& node,
+                                     NodeWorldBounds& out) {
+  return GetNodeWorldBounds(GetEntityForNode(node.uid), out);
 }
 
 // ---------------------------------------------------------------- Picking ---

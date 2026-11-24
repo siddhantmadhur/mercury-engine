@@ -20,6 +20,12 @@
  *   vim_mode = false
  *   show_metal_hud = false
  *   pack_size_mb = 256
+ *   mcp_enabled = false
+ *   mcp_port = 49152
+ *   mcp_ephemeral = false
+ *   mcp_allow_edits = false
+ *   mcp_write_config = true
+ *   mcp_token = "64 hex chars"
  *
  *   [[recent]]
  *   [recent.props]
@@ -78,6 +84,22 @@ struct EditorSettings {
   std::string lore_executable;
   // Server new Lore repositories are created on.
   std::string lore_server = "lore://127.0.0.1:41337";
+  // The opt-in MCP server (editor/mcp). Off by default: nothing listens
+  // until the user turns it on.
+  bool mcp_enabled = false;
+  // The TCP port the server binds on 127.0.0.1. Ignored when mcp_ephemeral.
+  int mcp_port = 49152;
+  // Bind an OS-assigned ephemeral port instead of mcp_port.
+  bool mcp_ephemeral = false;
+  // Whether MCP tools may change the project, the map or the editor. Off,
+  // every Write/Exec tool call is refused.
+  bool mcp_allow_edits = false;
+  // Keep the project's .mcp.json in step with the running server.
+  bool mcp_write_config = true;
+  // The server's bearer token: 32 random bytes as hex, generated on first
+  // enable and kept across runs.
+  std::string mcp_token;
+
   // Canonical project roots whose editor systems the user trusted or refused.
   // A project in neither list has not been asked about yet.
   std::vector<std::string> trusted_projects;
@@ -96,7 +118,10 @@ struct EditorSettings {
   static std::filesystem::path ConfigDir();
   static std::filesystem::path HomeDir();
   void Load();
-  void Save() const;
+  // Writes the settings file. Returns false when it could not be written (for
+  // example because the config folder is read-only); the in-memory settings
+  // are unchanged in that case.
+  bool Save() const;
   void AddRecentProject(const std::filesystem::path& mproj);
 };
 

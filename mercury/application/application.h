@@ -17,6 +17,7 @@
 
 #include <chrono>
 #include <functional>
+#include <optional>
 #include <queue>
 #include <string>
 #include <string_view>
@@ -164,6 +165,10 @@ class Application : public RenderHost {
   // (MERCURY_INPUT_SCRIPT). Backends without readback log a warning.
   virtual void RequestCapture(const std::string& file);
 
+  // A dump requested by the input script is written after this frame's
+  // simulation, so it sees the results of OnFrame, ticks and physics.
+  void WritePendingDump();
+
   static void HandleResize(GLFWwindow* window, int32_t width, int32_t height);
   static void HandleKeyCallback(GLFWwindow* window, int key, int scancode,
                                 int action, int mods);
@@ -193,6 +198,11 @@ class Application : public RenderHost {
   InputScript input_script_;
   uint64_t script_frame_ = 0;
   bool quit_after_frame_ = false;
+  struct PendingDump {
+    std::string file;
+    std::vector<std::string> nodes;
+  };
+  std::optional<PendingDump> pending_dump_;
 
   GLFWimage* current_cursor = nullptr;
   GLFWcursor* cursor_ = nullptr;

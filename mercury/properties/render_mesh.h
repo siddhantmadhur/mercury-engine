@@ -83,10 +83,16 @@ struct RenderMesh {
   std::vector<RenderSkin> skins;
   bool visible = true;
   bool cast_shadows = true;
+  // Filament's global blend order for this mesh's draws. Only the low 15 bits
+  // are used; the neutral default keeps unsorted meshes and sprites together.
+  uint16_t blend_order = 16384;
   // Unity's renderingLayerMask; bit 8 ("Outline") draws an outline.
   uint32_t rendering_layers = 1;
   // Entity whose ModelPose animates this mesh (the Animator's), or null.
   kEntityId pose_entity = entt::null;
+  // Bumped when material colors or draw settings change without replacing
+  // this mesh, so the renderer can update existing material instances.
+  uint32_t revision = 0;
   glm::vec3 bounds_min = glm::vec3(0.0f);  // entity space
   glm::vec3 bounds_max = glm::vec3(0.0f);
 

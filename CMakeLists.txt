@@ -157,6 +157,11 @@ target_link_libraries(mercury PUBLIC
 # and consumers never see it.
 target_link_libraries(mercury PRIVATE mercury_tomlplusplus)
 
+# JSON for the introspection API (mercury/introspection): same arrangement —
+# built only inside the engine's implementation files, so the SDK surface
+# keeps plain std::string results.
+target_link_libraries(mercury PRIVATE nlohmann_json::nlohmann_json)
+
 if (APPLE)
     target_compile_options(mercury PRIVATE -Wno-deprecated-declarations)
     target_link_libraries(mercury PUBLIC
@@ -219,9 +224,11 @@ add_dependencies(mercury mercury_materials)
 
 add_executable(mercury_player mercury/player/main.cc)
 target_link_libraries(mercury_player PRIVATE mercury)
+mercury_link_rust(mercury_player)
 
 add_executable(mercury_model_info tools/model_info.cc)
 target_link_libraries(mercury_model_info PRIVATE mercury)
+mercury_link_rust(mercury_model_info)
 
 # --------------------------------------------------------------------------
 # Editor
@@ -258,13 +265,69 @@ if (MERCURY_BUILD_EDITOR)
     add_library(mercury_editor_lib STATIC ${MERCURY_EDITOR_SOURCES})
     target_include_directories(mercury_editor_lib PUBLIC
             "${CMAKE_CURRENT_SOURCE_DIR}/editor")
-    target_link_libraries(mercury_editor_lib PUBLIC mercury mercury_wx)
+    target_link_libraries(mercury_editor_lib PUBLIC mercury mercury_wx mercury_rust_editor)
+    add_dependencies(mercury_editor_lib mercury_rust_editor_build)
     # lore_vcs.cc parses .lore/config.toml with toml++; the library is internal
     # (not installed), so the PRIVATE link keeps toml++ out of the SDK surface.
     target_link_libraries(mercury_editor_lib PRIVATE mercury_tomlplusplus)
+    # The MCP transport bridge's generated C++ side; its Rust counterpart is
+    # in the editor Rust archive (mercury_rust_editor).
+    target_sources(mercury_editor_lib PRIVATE ${MERCURY_MCP_BRIDGE_SOURCES})
+    # The MCP host: tool registry, settings plumbing and the .mcp.json writer.
+    file(GLOB MERCURY_MCP_HOST_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/*.cc")
+    target_sources(mercury_editor_lib PRIVATE ${MERCURY_MCP_HOST_SOURCES})
+    # Tool handlers pass nlohmann::json values around; the library is internal
+    # to the editor (not installed as a link dependency), like toml++ above.
+    target_link_libraries(mercury_editor_lib PRIVATE nlohmann_json::nlohmann_json)
+
+    # The MCP tool groups (editor/mcp/tools/<group>.cc). Each file registers its
+    # tools with a static initializer (MERCURY_MCP_TOOL), which a static
+    # archive drops when nothing references the file. So these are an OBJECT
+    # library whose objects are linked straight into the editor and into every
+    # editor-linked executable (mercury_link_mcp_tools), never through an
+    # archive; the glob means a new tool file needs no CMake or registration
+    # edit. Same include dirs and definitions as mercury_editor_lib, nlohmann
+    # PRIVATE (the tool headers are not installed in the SDK).
+    file(GLOB MERCURY_MCP_TOOL_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/tools/*.cc")
+    add_library(mercury_mcp_tools OBJECT ${MERCURY_MCP_TOOL_SOURCES})
+    target_include_directories(mercury_mcp_tools PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor")
+    target_link_libraries(mercury_mcp_tools PRIVATE
+            mercury mercury_wx nlohmann_json::nlohmann_json)
+
+    # The agent guide templates (editor/mcp/guides/*.md) are embedded into a
+    # generated source at build time, so there is no run-time file lookup. The
+    # command re-runs when a template or the script changes.
+    file(GLOB MERCURY_MCP_GUIDE_TEMPLATES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/guides/*.md")
+    set(MERCURY_MCP_GUIDES_CC
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/mcp_guide_templates.cc")
+    add_custom_command(
+            OUTPUT "${MERCURY_MCP_GUIDES_CC}"
+            COMMAND "${CMAKE_COMMAND}"
+                    "-DGUIDES_DIR=${CMAKE_CURRENT_SOURCE_DIR}/editor/mcp/guides"
+                    "-DOUTPUT=${MERCURY_MCP_GUIDES_CC}"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedMcpGuides.cmake"
+            DEPENDS ${MERCURY_MCP_GUIDE_TEMPLATES}
+                    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedMcpGuides.cmake"
+            COMMENT "Embedding the MCP guide templates"
+            VERBATIM)
+    target_sources(mercury_mcp_tools PRIVATE "${MERCURY_MCP_GUIDES_CC}")
+
+    # mercury_link_mcp_tools(<target>): add the tool objects to an executable
+    # that links mercury_editor_lib. List them before the archives so the
+    # symbols they use from mercury_editor_lib are still pulled in.
+    function(mercury_link_mcp_tools TARGET)
+        target_sources(${TARGET} PRIVATE $<TARGET_OBJECTS:mercury_mcp_tools>)
+    endfunction()
 
     add_executable(mercury_editor editor/main.cc)
     target_link_libraries(mercury_editor PRIVATE mercury_editor_lib)
+    mercury_link_mcp_tools(mercury_editor)
+    # The editor is the only binary with the MCP transport (tokio + rmcp).
+    mercury_link_rust(mercury_editor EDITOR)
     # Editor systems are modules loaded at run time; their engine, editor and
     # wx symbols resolve against this executable, so it exports them. Forcing
     # the archives in also exports symbols the editor itself does not call.
@@ -309,9 +372,13 @@ if (MERCURY_BUILD_TESTS)
             "Folder of the benchmark project (models and maps) used by tests")
     set(MERCURY_TEST_TARGETS "")
 
+    # mercury_add_test(<target> [EDITOR] <sources...>)
+    #
+    # EDITOR marks tests that link mercury_editor_lib and therefore need the
+    # editor Rust archive (with the MCP transport) instead of the plain one.
     function(mercury_add_test TARGET)
-        add_executable(${TARGET} ${ARGN})
-        target_link_libraries(${TARGET} PRIVATE mercury GTest::gtest_main)
+        cmake_parse_arguments(TEST "EDITOR" "" "" ${ARGN})
+        add_executable(${TARGET} ${TEST_UNPARSED_ARGUMENTS})
         target_compile_definitions(${TARGET} PRIVATE
                 MERCURY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
                 MERCURY_TEST_CACHE_DIR="${MERCURY_TEST_CACHE_DIR}"
@@ -319,6 +386,15 @@ if (MERCURY_BUILD_TESTS)
         # Keep the plain build fast: tests are built by the `check` target.
         set_target_properties(${TARGET} PROPERTIES EXCLUDE_FROM_ALL TRUE)
         gtest_discover_tests(${TARGET} DISCOVERY_MODE PRE_TEST)
+        if (TEST_EDITOR)
+            target_link_libraries(${TARGET} PRIVATE mercury_editor_lib)
+            mercury_link_mcp_tools(${TARGET})
+            mercury_link_rust(${TARGET} EDITOR)
+        else ()
+            target_link_libraries(${TARGET} PRIVATE mercury)
+            mercury_link_rust(${TARGET})
+        endif ()
+        target_link_libraries(${TARGET} PRIVATE GTest::gtest_main)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} ${TARGET} PARENT_SCOPE)
     endfunction()
 
@@ -327,6 +403,9 @@ if (MERCURY_BUILD_TESTS)
             tests/hierarchy_test.cc
             tests/image_load_test.cc
             tests/input_actions_test.cc
+            tests/input_action_binding_test.cc
+            tests/input_manager_test.cc
+            tests/introspection_test.cc
             tests/map_test.cc
             tests/model_cache_test.cc
             tests/model_preloader_test.cc
@@ -354,6 +433,8 @@ if (MERCURY_BUILD_TESTS)
             tests/engine_sdk_dir_test.cc
             tests/event_bus_test.cc
             tests/system_registry_test.cc)
+    # The introspection tests read the schema JSON back with nlohmann/json.
+    target_link_libraries(mercury_test PRIVATE nlohmann_json::nlohmann_json)
 
     mercury_add_test(example_projects_test
             tests/example_projects_test.cc
@@ -363,9 +444,19 @@ if (MERCURY_BUILD_TESTS)
             tests/filament_smoke_test.cc
             tests/test_paths.h)
 
+    # The player running a whole example headlessly, the way the MCP server
+    # drives games: load the project, compile its scripts, step 30 frames and
+    # exit 0 (--headless --frames in mercury/player/player.cc).
+    add_test(NAME mercury_player_headless_frames
+            COMMAND mercury_player
+            ${CMAKE_CURRENT_SOURCE_DIR}/examples/roll_a_ball/roll_a_ball.mproj
+            --headless --frames 30)
+
     if (MERCURY_BUILD_EDITOR)
         add_executable(editor_smoke tests/editor_smoke.cc)
         target_link_libraries(editor_smoke PRIVATE mercury_editor_lib)
+        mercury_link_mcp_tools(editor_smoke)
+        mercury_link_rust(editor_smoke EDITOR)
         set_target_properties(editor_smoke PROPERTIES EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS} editor_smoke)
 
@@ -382,6 +473,8 @@ if (MERCURY_BUILD_TESTS)
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 editor_extension_unload_smoke)
+        mercury_link_mcp_tools(editor_extension_unload_smoke)
+        mercury_link_rust(editor_extension_unload_smoke EDITOR)
 
         # The New Script dialog is modal; this smoke drives it with CallAfter
         # and creates all four kinds through EditorScene.
@@ -389,26 +482,73 @@ if (MERCURY_BUILD_TESTS)
                 tests/new_script_dialog_smoke.cc)
         target_link_libraries(new_script_dialog_smoke
                 PRIVATE mercury_editor_lib)
+        mercury_link_mcp_tools(new_script_dialog_smoke)
+        mercury_link_rust(new_script_dialog_smoke EDITOR)
         set_target_properties(new_script_dialog_smoke PROPERTIES
                 EXCLUDE_FROM_ALL TRUE)
         set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
                 new_script_dialog_smoke)
 
-        mercury_add_test(editor_test
+        # The systems trust dialog is modal; this smoke clicks Trust, Don't
+        # Trust and Cancel and checks the returned decision. A watchdog fails
+        # the run if a click leaves the dialog open.
+        add_executable(trust_systems_dialog_smoke
+                tests/trust_systems_dialog_smoke.cc)
+        target_link_libraries(trust_systems_dialog_smoke
+                PRIVATE mercury_editor_lib)
+        mercury_link_mcp_tools(trust_systems_dialog_smoke)
+        mercury_link_rust(trust_systems_dialog_smoke EDITOR)
+        set_target_properties(trust_systems_dialog_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                trust_systems_dialog_smoke)
+
+        # The preferences dialog is modal; this smoke flips to its MCP tab,
+        # applies and cancels through EditorScene's MCP host.
+        add_executable(mcp_prefs_dialog_smoke
+                tests/mcp_prefs_dialog_smoke.cc)
+        target_link_libraries(mcp_prefs_dialog_smoke
+                PRIVATE mercury_editor_lib)
+        mercury_link_mcp_tools(mcp_prefs_dialog_smoke)
+        mercury_link_rust(mcp_prefs_dialog_smoke EDITOR)
+        set_target_properties(mcp_prefs_dialog_smoke PROPERTIES
+                EXCLUDE_FROM_ALL TRUE)
+        set(MERCURY_TEST_TARGETS ${MERCURY_TEST_TARGETS}
+                mcp_prefs_dialog_smoke)
+
+        mercury_add_test(editor_test EDITOR
                 tests/editor_templates_test.cc
                 tests/lore_config_test.cc
                 tests/project_scaffold_test.cc
                 tests/test_paths.h)
-        target_link_libraries(editor_test PRIVATE mercury_editor_lib)
 
-        mercury_add_test(project_trust_test
+        mercury_add_test(project_trust_test EDITOR
                 tests/project_trust_test.cc)
-        target_link_libraries(project_trust_test PRIVATE mercury_editor_lib)
 
-        mercury_add_test(script_editor_test
+        # The MCP host: registry dispatch, mode re-check, .mcp.json handling,
+        # and the disabled-means-no-socket rule.
+        mercury_add_test(mcp_host_test EDITOR
+                tests/mcp_host_test.cc)
+        # The test includes <nlohmann/json.hpp> directly; mercury_editor_lib
+        # links it PRIVATE, so the usage requirement does not propagate.
+        target_link_libraries(mcp_host_test PRIVATE nlohmann_json::nlohmann_json)
+
+        # The MCP tool groups' tests: every tests/mcp_tools_*_test.cc joins one
+        # executable, so a new tool group needs no CMake edit. The glob is
+        # re-run on every build (CONFIGURE_DEPENDS); with no matching file no
+        # target is made (gtest discovery of an empty executable would fail).
+        file(GLOB MCP_TOOLS_TESTS CONFIGURE_DEPENDS
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/mcp_tools_*_test.cc")
+        if (MCP_TOOLS_TESTS)
+            mercury_add_test(mcp_tools_test EDITOR ${MCP_TOOLS_TESTS}
+                    tests/mcp_tools_fixture.h)
+            target_link_libraries(mcp_tools_test PRIVATE
+                    nlohmann_json::nlohmann_json)
+        endif ()
+
+        mercury_add_test(script_editor_test EDITOR
                 tests/script_editor_test.cc
                 tests/test_paths.h)
-        target_link_libraries(script_editor_test PRIVATE mercury_editor_lib)
 
         # Tiny modules for editor_extension_test: one valid, one with a
         # deliberately wrong ABI. They call no editor symbols.
@@ -435,9 +575,8 @@ if (MERCURY_BUILD_TESTS)
         target_compile_definitions(editor_test_extension_bad_abi PRIVATE
                 MERCURY_TEST_EXTENSION_ABI=999)
 
-        mercury_add_test(editor_extension_test
+        mercury_add_test(editor_extension_test EDITOR
                 tests/editor_extension_test.cc)
-        target_link_libraries(editor_extension_test PRIVATE mercury_editor_lib)
         target_compile_definitions(editor_extension_test PRIVATE
                 MERCURY_TEST_EXTENSION_PATH="$<TARGET_FILE:editor_test_extension>"
                 MERCURY_TEST_EXTENSION_BAD_ABI_PATH="$<TARGET_FILE:editor_test_extension_bad_abi>")
@@ -451,6 +590,19 @@ if (MERCURY_BUILD_TESTS)
             COMMENT "Running the Mercury tests"
             USES_TERMINAL)
     add_dependencies(check mercury_materials)
+    # The headless player CTest runs the whole mercury_player executable.
+    add_dependencies(check mercury_player)
+
+    # The mercury_mcp crate's Rust unit tests (transport start/stop, reply
+    # plumbing). Same env handling as the CMake-driven cargo builds: a
+    # dedicated target dir and no MACOSX_DEPLOYMENT_TARGET, which would break
+    # proc-macro compilation (see cmake/Rust.cmake).
+    add_test(NAME mercury_mcp_cargo_test
+            COMMAND "${CMAKE_COMMAND}" -E env
+                    "CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo-test"
+                    "--unset=MACOSX_DEPLOYMENT_TARGET"
+                    "${CARGO_EXECUTABLE}" test -p mercury_mcp --locked
+                    --manifest-path "${MERCURY_ENGINE_SOURCE_DIR}/Cargo.toml")
 endif ()
 
 # --------------------------------------------------------------------------
@@ -465,11 +617,21 @@ endif ()
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/mercury/"
         DESTINATION sdk/include/mercury
         COMPONENT sdk
-        FILES_MATCHING PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.h"
+        # Internal: includes nlohmann/json (see the header's comment).
+        PATTERN "introspection/variant_json.h" EXCLUDE)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/editor/"
         DESTINATION sdk/include/editor
         COMPONENT sdk
-        FILES_MATCHING PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.h"
+        # The MCP registry's headers pass nlohmann::json values around and
+        # tool_host.h is cxx-bridge-only; the SDK installs mcp/mcp_host.h,
+        # which stays plain C++ (the pimpl keeps the Rust side in mcp_host.cc).
+        PATTERN "mcp/tool_registry.h" EXCLUDE
+        PATTERN "mcp/json_util.h" EXCLUDE
+        PATTERN "mcp/tool_host.h" EXCLUDE
+        # The tool groups' headers (scene_json.h includes nlohmann/json).
+        PATTERN "mcp/tools" EXCLUDE)
 # wxWidgets headers, so editor systems build without a wx development install.
 # (The module still resolves wx symbols against the running editor.)
 # wxWidgets_INCLUDE_DIRS only has the setup.h directory on macOS; the headers
@@ -496,7 +658,10 @@ endif ()
 install(DIRECTORY "${MERCURY_GENERATED_DIR}/"
         DESTINATION sdk/include
         COMPONENT sdk
-        FILES_MATCHING PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.h"
+        # The cxx bridge for the MCP transport is internal: it pulls in
+        # mcp/tool_host.h, which the SDK does not install.
+        PATTERN "mercury/mcp/bridge.rs.h" EXCLUDE)
 if (MERCURY_CXX_INCLUDE_DIR)
     install(FILES "${MERCURY_CXX_INCLUDE_DIR}/cxx.h"
             DESTINATION sdk/include COMPONENT sdk)
@@ -537,11 +702,13 @@ foreach (INCLUDE_DIR
             DESTINATION sdk/include COMPONENT sdk)
 endforeach ()
 
-# Static archives. Filament builds in its own tree.
+# Static archives. Filament builds in its own tree. The editor Rust archive
+# (with the MCP transport) is never installed: SDK games link the plain one.
 install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/"
         DESTINATION sdk/lib COMPONENT sdk
         FILES_MATCHING PATTERN "*.a"
         PATTERN "libmercury_editor_lib.a" EXCLUDE
+        PATTERN "libmercury_rust_editor.a" EXCLUDE
         PATTERN "libgtest.a" EXCLUDE
         PATTERN "libgtest_main.a" EXCLUDE
         PATTERN "libgmock.a" EXCLUDE

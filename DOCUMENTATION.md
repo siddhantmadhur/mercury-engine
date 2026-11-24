@@ -63,6 +63,16 @@ The editor has a Hierarchy, Inspector, Scene view, Project browser, Console and 
 
 Run a project without the editor with `./build/release/bin/mercury_player examples/pong/pong.mproj [--map res://maps/x.mmap]`. It compiles the scripts first if they changed. `--build-scripts` only compiles and `--dump-schema file` writes the scripts' fields.
 
+The player also has options the MCP server and other automation use; every one of them that prints does so on stdout, so the output can be parsed:
+
+- `--dump-engine-schema [file|-]` writes the engine's own component types as JSON and exits. `-` or no value means stdout. Unlike `--dump-schema` it needs no project.
+- `--validate [--json]` reports the project's problems as text (or JSON) and exits 1 when there are errors, 0 otherwise.
+- `--inspect-asset res://assets/x.masset` prints one asset of the project as JSON and exits 1 if the asset does not exist.
+- `--headless` renders offscreen without a window (same mechanism as the editor's hosted mode); Vulkan still needs a working driver, so CI images without one fail at start.
+- `--frames N` steps exactly N frames and exits 0. With `--headless` this plays a game with no display: `mercury_player examples/roll_a_ball/roll_a_ball.mproj --headless --frames 30`. CTest covers it as `mercury_player_headless_frames`.
+
+A game's app hooks cannot reuse these option names (`--dump-engine-schema`, `--validate`, `--json`, `--inspect-asset`, `--headless`, `--frames`): the player recognizes them itself, so they never reach the hooks' `argv`.
+
 ## File formats
 
 `.mproj`, `.mmap` and `.masset` share one text format: TOML, so people and LLMs can read, diff and edit it by hand. A file starts with a header table that names the file type and carries `format = 2` and `editor_version`; sections follow as `[[tag]]` array-of-tables, grouped by tag, with section attributes as scalar keys and section properties in a `[tag.props]` sub-table:
@@ -123,7 +133,7 @@ Models bring their own materials: base color and texture, opacity, emission (`Ke
 
 ## Components
 
-A node's position is relative to its parent; maps are flattened to world positions when loaded, and rotation and scale are not inherited. Shapes have unit size at scale 1 (1x1x1 cube, sphere 1 across, capsule 1 across and 2 tall), like Unity's. Asset types are `Material`, `PhysicsMaterial`, `PanelSettings`, `RenderTexture`, `PostProcessProfile` and any data assets scripts declare.
+A node's `position`, `rotation` and `scale` are local: relative to its parent. The node tree is kept when a map loads, and each node's Transform holds both the local values and the world values composed from the parent chain: world position = parent position + parent rotation applied to (parent scale times local position), world rotation = parent rotation times local rotation, and world scale = parent scale times local scale, so rotation and scale are inherited by children. Changing a node moves its children with it. Scripts see the world `position`, `rotation` and `eulerAngles` of a `GameObject`, and its `localScale`. Shapes have unit size at scale 1 (1x1x1 cube, sphere 1 across, capsule 1 across and 2 tall), like Unity's. Asset types are `Material`, `PhysicsMaterial`, `PanelSettings`, `RenderTexture`, `PostProcessProfile` and any data assets scripts declare.
 
 | Component | What it does |
 |---|---|

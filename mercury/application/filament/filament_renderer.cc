@@ -107,6 +107,22 @@ filament::math::float3 ToFilament(const glm::vec3& v) {
 filament::math::float4 ToFilament(const glm::vec4& v) {
   return {v.x, v.y, v.z, v.w};
 }
+
+const RenderMaterial& DrawMaterial(const RenderMesh& mesh,
+                                   const RenderDraw& draw) {
+  static const RenderMaterial kDefault;
+  return mesh.materials.empty()
+             ? kDefault
+             : mesh.materials[std::min<size_t>(draw.material,
+                                               mesh.materials.size() - 1)];
+}
+
+void SetBaseColor(filament::MaterialInstance* instance,
+                  const RenderMaterial& material) {
+  instance->setParameter(
+      "baseColor", ToFilament(glm::vec4(SrgbToLinear(glm::vec3(material.color)),
+                                        material.color.a)));
+}
 filament::math::mat4f ToFilament(const glm::mat4& m) {
   return filament::math::mat4f(
       m[0][0], m[0][1], m[0][2], m[0][3], m[1][0], m[1][1], m[1][2], m[1][3],
@@ -567,7 +583,6 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       transform.GetRotationMatrix() *
       glm::scale(glm::mat4(1.0f), transform.GetInterpolatedScale());
 
-  static const RenderMaterial kDefault;
   std::vector<glm::mat4> skin;
   for (size_t draw_index = 0; draw_index < mesh.draws.size(); draw_index++) {
     const RenderDraw& draw = mesh.draws[draw_index];
@@ -589,10 +604,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       it->second.source = draw.geometry;
     }
 
-    const RenderMaterial& material =
-        mesh.materials.empty() ? kDefault
-                               : mesh.materials[std::min<size_t>(
-                                     draw.material, mesh.materials.size() - 1)];
+    const RenderMaterial& material = DrawMaterial(mesh, draw);
 
     const bool is_unlit = material.sdf_text || material.unlit;
     const bool is_transmissive = !is_unlit && material.transmission > 0.0f;
@@ -651,10 +663,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         filament::TextureSampler::WrapMode::REPEAT);
 
     filament::MaterialInstance* instance = base->createInstance();
-    instance->setParameter(
-        "baseColor",
-        ToFilament(glm::vec4(SrgbToLinear(glm::vec3(material.color)),
-                             material.color.a)));
+    SetBaseColor(instance, material);
     instance->setParameter("tiling", ToFilament(material.tiling));
     instance->setParameter("offset", ToFilament(material.offset));
     if (!is_unlit) {
@@ -762,7 +771,9 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
         .material(0, instance)
         .culling(true)
         .castShadows(mesh.cast_shadows)
-        .layerMask(0xff, 1u << (layer & 7));
+        .layerMask(0xff, 1u << (layer & 7))
+        .blendOrder(0, mesh.blend_order)
+        .globalBlendOrderEnabled(0, true);
     if (skinned) build.skinning(bones.size());
     if (build.build(*engine, renderable) !=
         filament::RenderableManager::Builder::Success) {
@@ -788,6 +799,7 @@ void FilamentRenderer::BuildProxy(filament::Engine* engine, GameScene& game,
       record_draw.emission =
           material.emission * kLuminancePerIntensity;  // nits, as set above
     record_draw.draw_index = static_cast<uint32_t>(draw_index);
+    record_draw.revision = mesh.revision;
     record_draw.in_scene = true;
     record_draw.render_texture = material.render_texture;
     record.draws.push_back(record_draw);
@@ -863,6 +875,24 @@ void FilamentRenderer::SyncScene(GameScene& game) {
       record.visible = visible;
     }
 
+    // A script can recolor a renderer or change its draw order without
+    // replacing its RenderMesh. Refresh the existing draws instead of
+    // rebuilding the renderables, which would also reset bones/transforms.
+    if (!record.draws.empty() &&
+        record.draws.front().revision != mesh.revision) {
+      scene_revision_++;
+      for (DrawRecord& draw : record.draws) {
+        if (draw.draw_index < mesh.draws.size()) {
+          SetBaseColor(draw.material,
+                       DrawMaterial(mesh, mesh.draws[draw.draw_index]));
+        }
+        const auto instance = renderables.getInstance(draw.renderable);
+        renderables.setBlendOrderAt(instance, 0, mesh.blend_order);
+        renderables.setGlobalBlendOrderEnabledAt(instance, 0, true);
+        draw.revision = mesh.revision;
+      }
+    }
+
     if (!moved && !pose) continue;
     record.world = world;
     // Only still scenery is worth a new capture: bodies under physics,
@@ -879,10 +909,16 @@ void FilamentRenderer::SyncScene(GameScene& game) {
     }
 
     // What moved: rigid draws shift with the entity (their node matrix is
-    // folded into the transform), skinned ones carry their own bones.
+    // folded into the transform). Skinned draws carry their own bones in
+    // entity space, so they take the entity's world matrix as their transform
+    // (as BuildProxy sets it) and the new bones.
     for (DrawRecord& draw : record.draws) {
       const RenderDraw& render = mesh.draws[draw.draw_index];
       if (draw.skinned) {
+        if (moved) {
+          transforms.setTransform(transforms.getInstance(draw.renderable),
+                                  ToFilament(world));
+        }
         mesh.SkinMatrices(render, pose, skin);
         std::vector<filament::math::mat4f> bones(skin.size());
         for (size_t i = 0; i < skin.size(); i++) bones[i] = ToFilament(skin[i]);

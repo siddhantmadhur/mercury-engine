@@ -1,0 +1,1101 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+/*
+ * spatial_capture.cc
+ *
+ * The spatial-query and viewport-capture MCP tools. Both are Read mode.
+ *
+ * There is no Jolt physics world in edit mode, so bounds and rays come from
+ * the map's node components. A ray is tested against each node's ORIENTED
+ * bounding box with a slab test in the node's local space - the same box and
+ * the same math editor picking uses. It never tests triangles or colliders
+ * simulated by physics.
+ *
+ * The capture borrows the editor camera: it snapshots EditorScene::ViewState,
+ * sets up the requested view, copies the offscreen RGBA frame, draws software
+ * overlays, encodes a PNG and restores the snapshot through an RAII guard on
+ * every exit path, including errors. When the editor window is hidden and no
+ * presented frame arrives, the same view can be rendered offscreen on demand
+ * (implicitly after a short poll, or immediately with `offscreen: true`).
+ */
+
+#include <wx/app.h>
+#include <wx/timer.h>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <nlohmann/json.hpp>
+#include <stb/stb_image_resize2.h>
+#include <stb/stb_image_write.h>
+
+#include "components/components.h"
+#include "editor_scene.h"
+#include "mcp/tool_registry.h"
+#include "mcp/tools/scene_json.h"
+#include "properties/render_mesh.h"
+#include "properties/transform.h"
+
+namespace Mercury {
+
+namespace {
+
+using mcp::FullNodePath;
+using mcp::Png;
+using mcp::ToolDone;
+using mcp::ToolResult;
+using nlohmann::json;
+
+constexpr float kFovDegrees = 60.0f;
+constexpr float kDefaultRayDistance = 10000.0f;
+constexpr uint32_t kAllLayers = ~0u;
+// Safety cap on UI turns spent waiting for a frame with the new camera.
+constexpr int kMaxCaptureFrames = 600;
+// A CallAfter loop can spin far faster than the editor's frame rate, so the
+// fallback is wall-clock based: hidden/iconized editors never StepFrame, but a
+// visible one gets this long to present the requested view first.
+constexpr auto kOffscreenFallbackDelay = std::chrono::milliseconds(250);
+// One-shot polls, paced like build_scripts' wxTimer instead of a CallAfter
+// busy loop.
+constexpr int kPollIntervalMs = 5;
+
+// Claude bills an image in 28x28 visual-token patches: ceil(width / 28) *
+// ceil(height / 28) tokens, regardless of PNG format or color depth. The
+// detail levels therefore pin the output's long edge to a multiple of 28; a
+// 16:9 short edge then leaves no partial patch row.
+constexpr int kTokenPatch = 28;
+constexpr int kMinCaptureDimension = 64;
+constexpr int kMaxCaptureLongEdge = 2576;
+constexpr int kDefaultAspectWidth = 16;
+constexpr int kDefaultAspectHeight = 9;
+// 672x378 = 24x14 patches = 336 visual tokens.
+constexpr int kDetailLowLongEdge = 672;
+// 1008x567 = 36x21 = 756 tokens.
+constexpr int kDetailMediumLongEdge = 1008;
+// 1568x882 = 56x32 = 1792 tokens.
+constexpr int kDetailHighLongEdge = 1568;
+// 2576x1449 = 92x52 = 4784 tokens (the high-resolution tier's long-edge max).
+constexpr int kDetailMaxLongEdge = 2576;
+
+json Error(std::string message, const std::string& suggestion = {}) {
+  json out{{"error", std::move(message)}};
+  if (!suggestion.empty()) out["suggestion"] = suggestion;
+  return out;
+}
+
+json OffscreenError(const std::string& why) {
+  return Error(
+      "no rendered frame was available and offscreen rendering "
+      "failed: " +
+      (why.empty() ? std::string("unknown reason") : why));
+}
+
+class CapturePollTimer : public wxTimer {
+ public:
+  std::function<void()> tick;
+  void Notify() override {
+    if (tick) tick();
+  }
+};
+
+// Called from `complete`, which runs inside this timer's own Notify. Neither
+// clearing `tick` nor dropping the last reference to the timer is safe there:
+// `tick` owns the poll closure that owns the executing `complete` (and its
+// `pending` state), so clearing it would destroy the callable out from under
+// its own stack frame, and a wxTimer must not be deleted from its own Notify.
+// Hand the timer to the next event-loop turn: the queued event keeps it alive
+// until Notify has returned, then clearing tick breaks the
+// timer -> tick -> poll -> pending ownership cycle.
+void FinishCaptureTimer(std::shared_ptr<CapturePollTimer> timer) {
+  if (!timer) return;
+  timer->Stop();
+  if (wxTheApp) {
+    wxTheApp->CallAfter(
+        [timer = std::move(timer)]() mutable { timer->tick = nullptr; });
+  }
+}
+
+json Vec3Json(const glm::vec3& v) { return json::array({v.x, v.y, v.z}); }
+
+bool ParseVec3(const json& value, glm::vec3* out, std::string* error,
+               const char* name) {
+  if (!value.is_array() || value.size() != 3) {
+    *error = std::string("\"") + name + "\" must be [x, y, z]";
+    return false;
+  }
+  glm::vec3 result;
+  for (int i = 0; i < 3; i++) {
+    if (!value[i].is_number()) {
+      *error = std::string("\"") + name + "\" must contain numbers";
+      return false;
+    }
+    result[i] = value[i].get<float>();
+    if (!std::isfinite(result[i])) {
+      *error = std::string("\"") + name + "\" must contain finite numbers";
+      return false;
+    }
+  }
+  *out = result;
+  return true;
+}
+
+int VisualTokens(int width, int height) {
+  const int patches_x = (width + kTokenPatch - 1) / kTokenPatch;
+  const int patches_y = (height + kTokenPatch - 1) / kTokenPatch;
+  return patches_x * patches_y;
+}
+
+// An explicit dimension must be a positive integer in
+// [kMinCaptureDimension, kMaxCaptureLongEdge]. Out-of-range values are
+// rejected rather than silently clamped, so the caller can see the real cost.
+bool ParseDimension(const json& args, const char* key, int* out,
+                    std::string* error) {
+  const json& value = args[key];
+  if (!value.is_number_integer() || value.get<int64_t>() <= 0) {
+    *error = std::string("\"") + key + "\" must be a positive integer";
+    return false;
+  }
+  const int64_t dimension = value.get<int64_t>();
+  if (dimension < kMinCaptureDimension) {
+    *error = std::string("\"") + key + "\" must be at least " +
+             std::to_string(kMinCaptureDimension) + " pixels";
+    return false;
+  }
+  if (dimension > kMaxCaptureLongEdge) {
+    *error = std::string("\"") + key + "\" is " + std::to_string(dimension) +
+             "; the long edge must be at most " +
+             std::to_string(kMaxCaptureLongEdge) + " pixels";
+    return false;
+  }
+  *out = static_cast<int>(dimension);
+  return true;
+}
+
+// The output image size and the size the scene is rendered at. The render is
+// 2x the output for a clean downscale (capped at the long-edge limit and never
+// below the output); "max" renders at the output size directly.
+struct CaptureSize {
+  int width = 0;
+  int height = 0;
+  int render_width = 0;
+  int render_height = 0;
+  std::string detail = "low";
+};
+
+bool ResolveDetail(const json& args, int* long_edge, std::string* name,
+                   std::string* error) {
+  *name = "low";
+  *long_edge = kDetailLowLongEdge;
+  if (!args.contains("detail") || args["detail"].is_null()) return true;
+  if (!args["detail"].is_string()) {
+    *error =
+        "\"detail\" must be one of \"low\", \"medium\", \"high\" or \"max\"";
+    return false;
+  }
+  const std::string level = args["detail"].get<std::string>();
+  if (level == "low") {
+    *long_edge = kDetailLowLongEdge;
+  } else if (level == "medium") {
+    *long_edge = kDetailMediumLongEdge;
+  } else if (level == "high") {
+    *long_edge = kDetailHighLongEdge;
+  } else if (level == "max") {
+    *long_edge = kDetailMaxLongEdge;
+  } else {
+    *error =
+        "unknown detail \"" + level + "\": expected low, medium, high or max";
+    return false;
+  }
+  *name = level;
+  return true;
+}
+
+bool ResolveCaptureSize(const json& args, CaptureSize* size,
+                        std::string* error) {
+  const bool has_width = args.contains("width") && !args["width"].is_null();
+  const bool has_height = args.contains("height") && !args["height"].is_null();
+  if (has_width || has_height) {
+    // Explicit width/height win over `detail`. When only one is given, the
+    // other comes from 16:9.
+    int width = 0;
+    int height = 0;
+    if (has_width && !ParseDimension(args, "width", &width, error))
+      return false;
+    if (has_height && !ParseDimension(args, "height", &height, error)) {
+      return false;
+    }
+    if (has_width && !has_height) {
+      height = std::max(kMinCaptureDimension,
+                        static_cast<int>(std::lround(
+                            width * static_cast<double>(kDefaultAspectHeight) /
+                            kDefaultAspectWidth)));
+    } else if (has_height && !has_width) {
+      width = std::max(kMinCaptureDimension,
+                       static_cast<int>(std::lround(
+                           height * static_cast<double>(kDefaultAspectWidth) /
+                           kDefaultAspectHeight)));
+    }
+    const int long_edge = std::max(width, height);
+    if (long_edge > kMaxCaptureLongEdge) {
+      *error = "the requested aspect gives a long edge of " +
+               std::to_string(long_edge) +
+               " pixels; the long edge must be at most " +
+               std::to_string(kMaxCaptureLongEdge) + " pixels";
+      return false;
+    }
+    size->width = width;
+    size->height = height;
+    size->detail = "custom";
+  } else {
+    int long_edge = 0;
+    std::string name;
+    if (!ResolveDetail(args, &long_edge, &name, error)) return false;
+    size->width = long_edge;
+    size->height = std::max(
+        kMinCaptureDimension,
+        static_cast<int>(
+            std::lround(long_edge * static_cast<double>(kDefaultAspectHeight) /
+                        kDefaultAspectWidth)));
+    size->detail = name;
+  }
+
+  // Render at 2x the output so the downscale has real detail to work with.
+  int render_width = size->width;
+  int render_height = size->height;
+  if (size->detail != "max") {
+    const int long_edge = std::max(size->width, size->height);
+    const double scale =
+        std::min(2.0, static_cast<double>(kMaxCaptureLongEdge) / long_edge);
+    if (scale > 1.0) {
+      render_width = std::max(
+          size->width, static_cast<int>(std::lround(size->width * scale)));
+      render_height = std::max(
+          size->height, static_cast<int>(std::lround(size->height * scale)));
+    }
+  }
+  size->render_width = render_width;
+  size->render_height = render_height;
+  return true;
+}
+
+bool ParseLayerMask(const json& args, uint32_t* out, std::string* error) {
+  if (!args.contains("layer_mask") || args["layer_mask"].is_null()) {
+    *out = kAllLayers;
+    return true;
+  }
+  const json& value = args["layer_mask"];
+  if (!value.is_number_integer()) {
+    *error = "\"layer_mask\" must be a non-negative integer";
+    return false;
+  }
+  const int64_t mask = value.get<int64_t>();
+  if (mask < 0) {
+    *error = "\"layer_mask\" must be a non-negative integer";
+    return false;
+  }
+  *out = static_cast<uint32_t>(mask);
+  return true;
+}
+
+// A node is raycastable only when it is active and on a selected layer.
+bool NodeVisible(const NodeInfo* info, uint32_t layer_mask) {
+  if (info && (!info->active || !info->active_in_hierarchy)) return false;
+  const int layer = info ? info->layer : 0;
+  return (layer_mask & (1u << (layer & 31))) != 0;
+}
+
+json NodeSummary(const MapNode& node) {
+  return json{
+      {"uid", node.uid}, {"name", node.name}, {"path", FullNodePath(node)}};
+}
+
+json BoundsJson(const EditorScene::NodeWorldBounds& bounds) {
+  json out{
+      {"world_min", Vec3Json(bounds.world_min)},
+      {"world_max", Vec3Json(bounds.world_max)},
+      {"local_min", Vec3Json(bounds.local_min)},
+      {"local_max", Vec3Json(bounds.local_max)},
+  };
+  // glm matrices are column-major; flatten them the same way clients read
+  // glm::value_ptr so the 16 numbers can be rebuilt directly.
+  json matrix = json::array();
+  for (int column = 0; column < 4; column++) {
+    for (int row = 0; row < 4; row++)
+      matrix.push_back(bounds.model[column][row]);
+  }
+  out["model"] = matrix;
+  return out;
+}
+
+struct RayBoxHit {
+  float t = 0.0f;
+  // Local outward face normal at the entry point: one axis set to +/-1.
+  glm::vec3 normal = glm::vec3(0.0f);
+};
+
+std::optional<RayBoxHit> RayBox(glm::vec3 origin, glm::vec3 direction,
+                                glm::vec3 min, glm::vec3 max) {
+  float t_min = -std::numeric_limits<float>::max();
+  float t_max = std::numeric_limits<float>::max();
+  glm::vec3 normal(0.0f);
+  for (int i = 0; i < 3; i++) {
+    if (std::abs(direction[i]) < 1e-9f) {
+      if (origin[i] < min[i] || origin[i] > max[i]) return std::nullopt;
+      continue;
+    }
+    float t_near = (min[i] - origin[i]) / direction[i];
+    float t_far = (max[i] - origin[i]) / direction[i];
+    // A positive direction enters through min (outward normal -axis); a
+    // negative one enters through max (+axis).
+    float face = -1.0f;
+    if (t_near > t_far) {
+      std::swap(t_near, t_far);
+      face = 1.0f;
+    }
+    if (t_near > t_min) {
+      t_min = t_near;
+      normal = glm::vec3(0.0f);
+      normal[i] = face;
+    }
+    t_max = std::min(t_max, t_far);
+    if (t_min > t_max) return std::nullopt;
+  }
+  // An origin inside the box enters at t = 0; report the last crossed face
+  // as the normal rather than a zero vector.
+  return RayBoxHit{std::max(t_min, 0.0f), normal};
+}
+
+// ------------------------------------------------------- query_scene_spatial -
+
+ToolResult QueryBounds(EditorScene& scene, const json& args) {
+  if (!args.contains("node")) {
+    return ToolResult{
+        false, Error("query_scene_spatial mode \"bounds\" requires \"node\"")};
+  }
+  std::string error;
+  std::string suggestion;
+  MapNode* node = mcp::ResolveNode(scene, args["node"], &error, &suggestion);
+  if (!node) return ToolResult{false, Error(error, suggestion)};
+  EditorScene::NodeWorldBounds bounds;
+  if (!scene.GetNodeWorldBounds(*node, bounds)) {
+    return ToolResult{
+        false, Error("node has no bounds to query: " + FullNodePath(*node))};
+  }
+  json out = BoundsJson(bounds);
+  out["node"] = NodeSummary(*node);
+  return ToolResult{true, out, {}};
+}
+
+ToolResult QueryNodesInBox(EditorScene& scene, const json& args) {
+  if (!args.contains("box")) {
+    return ToolResult{
+        false,
+        Error("query_scene_spatial mode \"nodes_in_box\" requires \"box\"")};
+  }
+  const json& box = args["box"];
+  if (!box.is_object() || !box.contains("min") || !box.contains("max")) {
+    return ToolResult{
+        false, Error("\"box\" must be {\"min\": [x,y,z], \"max\": [x,y,z]}")};
+  }
+  glm::vec3 min, max;
+  std::string error;
+  if (!ParseVec3(box["min"], &min, &error, "box.min") ||
+      !ParseVec3(box["max"], &max, &error, "box.max")) {
+    return ToolResult{false, Error(error)};
+  }
+  if (glm::any(glm::lessThan(max, min))) {
+    return ToolResult{false,
+                      Error("\"box.max\" must not be less than \"box.min\"")};
+  }
+  uint32_t layer_mask = kAllLayers;
+  if (!ParseLayerMask(args, &layer_mask, &error)) {
+    return ToolResult{false, Error(error)};
+  }
+
+  json nodes = json::array();
+  scene.GetMap().Visit([&](MapNode& node) {
+    if (node.IsRoot()) return;
+    const kEntityId entity = scene.GetEntityForNode(node.uid);
+    const NodeInfo* info = scene.Objects().GetProperty<NodeInfo>(entity);
+    if (!NodeVisible(info, layer_mask)) return;
+    EditorScene::NodeWorldBounds bounds;
+    if (!scene.GetNodeWorldBounds(entity, bounds)) return;
+    if (glm::any(glm::lessThan(bounds.world_max, min)) ||
+        glm::any(glm::lessThan(max, bounds.world_min))) {
+      return;
+    }
+    json item = NodeSummary(node);
+    item["world_min"] = Vec3Json(bounds.world_min);
+    item["world_max"] = Vec3Json(bounds.world_max);
+    nodes.push_back(std::move(item));
+  });
+  return ToolResult{true, json{{"nodes", nodes}, {"count", nodes.size()}}, {}};
+}
+
+ToolResult QueryRaycast(EditorScene& scene, const json& args, bool ground) {
+  std::string error;
+  glm::vec3 origin(0.0f);
+  if (args.contains("origin")) {
+    if (!ParseVec3(args["origin"], &origin, &error, "origin")) {
+      return ToolResult{false, Error(error)};
+    }
+  } else if (ground) {
+    origin = glm::vec3(0.0f, 1000.0f, 0.0f);
+  } else {
+    return ToolResult{false, Error("raycast requires \"origin\": [x, y, z]")};
+  }
+
+  glm::vec3 direction(0.0f, -1.0f, 0.0f);
+  if (args.contains("direction")) {
+    if (!ParseVec3(args["direction"], &direction, &error, "direction")) {
+      return ToolResult{false, Error(error)};
+    }
+  }
+  if (glm::length(direction) < 1e-6f) {
+    return ToolResult{false, Error("\"direction\" must not be zero")};
+  }
+  direction = glm::normalize(direction);
+
+  float max_distance = kDefaultRayDistance;
+  if (args.contains("max_distance")) {
+    if (!args["max_distance"].is_number() ||
+        !std::isfinite(args["max_distance"].get<float>())) {
+      return ToolResult{false,
+                        Error("\"max_distance\" must be a finite number")};
+    }
+    max_distance = args["max_distance"].get<float>();
+    if (max_distance < 0.0f) {
+      return ToolResult{false, Error("\"max_distance\" must not be negative")};
+    }
+  }
+  uint32_t layer_mask = kAllLayers;
+  if (!ParseLayerMask(args, &layer_mask, &error)) {
+    return ToolResult{false, Error(error)};
+  }
+
+  struct Hit {
+    float distance = 0.0f;
+    json value;
+  };
+  std::vector<Hit> hits;
+  scene.GetMap().Visit([&](MapNode& node) {
+    if (node.IsRoot()) return;
+    const kEntityId entity = scene.GetEntityForNode(node.uid);
+    const NodeInfo* info = scene.Objects().GetProperty<NodeInfo>(entity);
+    if (!NodeVisible(info, layer_mask)) return;
+    EditorScene::NodeWorldBounds bounds;
+    if (!scene.GetNodeWorldBounds(entity, bounds)) return;
+
+    glm::vec3 min = bounds.local_min;
+    glm::vec3 max = bounds.local_max;
+    // Match PickNode: give flat bounds a hair of thickness so grid-like nodes
+    // can still be hit.
+    for (int i = 0; i < 3; i++) {
+      if (max[i] - min[i] < 1e-4f) {
+        min[i] -= 1e-3f;
+        max[i] += 1e-3f;
+      }
+    }
+    const glm::mat4 inverse = glm::inverse(bounds.model);
+    const glm::vec3 local_origin(inverse * glm::vec4(origin, 1.0f));
+    const glm::vec3 local_direction(inverse * glm::vec4(direction, 0.0f));
+    const auto hit = RayBox(local_origin, local_direction, min, max);
+    if (!hit || hit->t < 0.0f || hit->t > max_distance) return;
+
+    // The slab test's local face normal becomes a world normal with the
+    // inverse-transpose of the node's model matrix (correct under non-uniform
+    // scale and rotation).
+    const glm::mat3 normal_matrix =
+        glm::transpose(glm::inverse(glm::mat3(bounds.model)));
+    const glm::vec3 world_normal = glm::normalize(normal_matrix * hit->normal);
+
+    const glm::vec3 point = origin + direction * hit->t;
+    json value = NodeSummary(node);
+    value["distance"] = hit->t;
+    value["point"] = Vec3Json(point);
+    value["normal"] = Vec3Json(world_normal);
+    value["shape"] = "bounds";
+    if (info) value["layer"] = info->layer;
+    hits.push_back({hit->t, std::move(value)});
+  });
+  std::stable_sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) {
+    return a.distance < b.distance;
+  });
+
+  json list = json::array();
+  for (Hit& hit : hits) list.push_back(std::move(hit.value));
+  json out{{"hits", list},
+           {"count", list.size()},
+           {"hit", list.empty() ? json(nullptr) : list.front()},
+           {"shape", "bounds"}};
+  return ToolResult{true, out, {}};
+}
+
+ToolResult QuerySceneSpatial(EditorScene& scene, const json& args) {
+  const std::string mode = args.contains("mode") && args["mode"].is_string()
+                               ? args["mode"].get<std::string>()
+                               : std::string();
+  if (mode == "bounds") return QueryBounds(scene, args);
+  if (mode == "nodes_in_box") return QueryNodesInBox(scene, args);
+  if (mode == "raycast") return QueryRaycast(scene, args, false);
+  if (mode == "raycast_ground") return QueryRaycast(scene, args, true);
+  return ToolResult{
+      false,
+      Error("unknown query_scene_spatial mode \"" + mode +
+            "\": expected bounds, nodes_in_box, raycast or raycast_ground")};
+}
+
+// ----------------------------------------------------------- capture helper -
+
+void SetPixel(std::vector<uint8_t>& rgba, int width, int height, int x, int y,
+              const std::array<uint8_t, 4>& color) {
+  if (x < 0 || y < 0 || x >= width || y >= height) return;
+  const size_t index = (static_cast<size_t>(y) * width + x) * 4;
+  rgba[index + 0] = color[0];
+  rgba[index + 1] = color[1];
+  rgba[index + 2] = color[2];
+  rgba[index + 3] = color[3];
+}
+
+// Liang-Barsky clip in pixel space, so an edge that crosses the viewport is
+// drawn up to its border instead of being dropped because an endpoint is
+// outside it.
+bool ClipLine(glm::vec2& a, glm::vec2& b, int width, int height) {
+  const float x_max = static_cast<float>(width - 1);
+  const float y_max = static_cast<float>(height - 1);
+  const glm::vec2 delta = b - a;
+  const float p[4] = {-delta.x, delta.x, -delta.y, delta.y};
+  const float q[4] = {a.x, x_max - a.x, a.y, y_max - a.y};
+  float t0 = 0.0f;
+  float t1 = 1.0f;
+  for (int i = 0; i < 4; i++) {
+    if (std::abs(p[i]) < 1e-9f) {
+      if (q[i] < 0.0f) return false;  // parallel to and outside the border
+      continue;
+    }
+    const float r = q[i] / p[i];
+    if (p[i] < 0.0f) {
+      t0 = std::max(t0, r);
+    } else {
+      t1 = std::min(t1, r);
+    }
+    if (t0 > t1) return false;
+  }
+  const glm::vec2 from = a;
+  a = from + delta * t0;
+  b = from + delta * t1;
+  return true;
+}
+
+// Small software line drawing (DDA with a 2x2 pen) for the overlay boxes. The
+// captured image is RGBA8, so no wx/Filament drawing state is involved.
+void DrawLine(std::vector<uint8_t>& rgba, int width, int height, glm::vec2 a,
+              glm::vec2 b, const std::array<uint8_t, 4>& color) {
+  if (!ClipLine(a, b, width, height)) return;
+  const glm::vec2 delta = b - a;
+  const int steps = std::max(1, static_cast<int>(std::ceil(glm::max(
+                                    std::abs(delta.x), std::abs(delta.y)))));
+  for (int i = 0; i <= steps; i++) {
+    const float t = static_cast<float>(i) / steps;
+    const int x = static_cast<int>(std::lround(a.x + delta.x * t));
+    const int y = static_cast<int>(std::lround(a.y + delta.y * t));
+    SetPixel(rgba, width, height, x, y, color);
+    SetPixel(rgba, width, height, x + 1, y, color);
+    SetPixel(rgba, width, height, x, y + 1, color);
+    SetPixel(rgba, width, height, x + 1, y + 1, color);
+  }
+}
+
+constexpr int kBoxEdges[12][2] = {
+    {0, 1}, {1, 3}, {3, 2}, {2, 0}, {4, 5}, {5, 7},
+    {7, 6}, {6, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7},
+};
+
+void DrawBox(std::vector<uint8_t>& rgba, int width, int height,
+             const glm::mat4& view_projection,
+             const EditorScene::NodeWorldBounds& bounds,
+             const std::array<uint8_t, 4>& color) {
+  glm::vec2 pixel[8];
+  bool visible[8] = {};
+  for (int i = 0; i < 8; i++) {
+    const glm::vec3 corner(i & 1 ? bounds.local_max.x : bounds.local_min.x,
+                           i & 2 ? bounds.local_max.y : bounds.local_min.y,
+                           i & 4 ? bounds.local_max.z : bounds.local_min.z);
+    // The box is in the node's local space; the model matrix places it in
+    // the world before the camera projection (as it is for picking).
+    const glm::vec4 world = bounds.model * glm::vec4(corner, 1.0f);
+    const glm::vec4 clip = view_projection * world;
+    if (clip.w <= 1e-5f) continue;  // behind the camera
+    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    pixel[i] = glm::vec2((ndc.x + 1.0f) * 0.5f * width,
+                         (1.0f - ndc.y) * 0.5f * height);
+    visible[i] = true;
+  }
+  for (const auto& edge : kBoxEdges) {
+    if (visible[edge[0]] && visible[edge[1]]) {
+      DrawLine(rgba, width, height, pixel[edge[0]], pixel[edge[1]], color);
+    }
+  }
+}
+
+bool HasCollider(PObjectManager& objects, kEntityId entity) {
+  return objects.GetProperty<BoxCollider>(entity) ||
+         objects.GetProperty<SphereCollider>(entity) ||
+         objects.GetProperty<CapsuleCollider>(entity) ||
+         objects.GetProperty<CylinderCollider>(entity) ||
+         objects.GetProperty<MeshCollider>(entity);
+}
+
+// The capture plan owns the camera snapshot. Its destructor restores the view
+// on EVERY exit path: an error, a missing render host, a failed PNG encode or
+// a successful capture.
+struct CapturePlan {
+  explicit CapturePlan(EditorScene& scene) : scene(scene) {}
+  CapturePlan(const CapturePlan&) = delete;
+  CapturePlan& operator=(const CapturePlan&) = delete;
+  ~CapturePlan() {
+    // A deferred capture may outlive the editor scene. Never touch a dead
+    // scene, not even to restore the camera.
+    if (camera_changed && !lifetime.expired()) scene.SetViewState(saved);
+  }
+
+  EditorScene& scene;
+  // Expires when the scene starts shutting down; see
+  // EditorScene::LifetimeToken.
+  std::weak_ptr<const void> lifetime;
+  EditorScene::ViewState saved;
+  EditorScene::ViewState desired;
+  std::string preset = "current";
+  std::vector<kEntityId> highlights;
+  bool colliders = false;
+  bool camera_changed = false;
+  bool offscreen_only = false;
+  // Output image size, the size the scene is rendered at, and the detail level
+  // that produced them (or "custom" for explicit width/height).
+  int output_width = 0;
+  int output_height = 0;
+  int render_width = 0;
+  int render_height = 0;
+  std::string detail = "low";
+  uint64_t saved_frame = 0;
+  std::string source = "presented";
+  std::vector<uint8_t> offscreen_rgba;
+  int offscreen_width = 0;
+  int offscreen_height = 0;
+
+  // Renders the current scene view without waiting for the window's frame loop
+  // and keeps the RGBA8 pixels for Capture(). The camera guard in the caller
+  // still owns the ViewState, so the offscreen path restores it just the same.
+  bool RenderOffscreen(std::string* why) {
+    RenderHost* host = scene.GetRenderHost();
+    if (!host || !host->RenderScenePixelsNow(&offscreen_rgba, &offscreen_width,
+                                             &offscreen_height, why)) {
+      if (why->empty()) *why = "render host has no offscreen renderer";
+      return false;
+    }
+    if (offscreen_width <= 0 || offscreen_height <= 0 ||
+        offscreen_rgba.size() <
+            static_cast<size_t>(offscreen_width) * offscreen_height * 4) {
+      *why = "offscreen pixels were incomplete";
+      offscreen_rgba.clear();
+      return false;
+    }
+    source = "offscreen";
+    return true;
+  }
+
+  ToolResult Capture() {
+    RenderHost* host = scene.GetRenderHost();
+    if (!host) return ToolResult{false, Error("no render host available")};
+    int width = 0;
+    int height = 0;
+    uint64_t frame_id = 0;
+    std::vector<uint8_t> rgba;
+    if (source == "offscreen") {
+      width = offscreen_width;
+      height = offscreen_height;
+      rgba = std::move(offscreen_rgba);
+    } else if (offscreen_only) {
+      std::string why;
+      if (!RenderOffscreen(&why)) {
+        return ToolResult{false, OffscreenError(why)};
+      }
+      width = offscreen_width;
+      height = offscreen_height;
+      rgba = std::move(offscreen_rgba);
+      frame_id = 0;  // no presented frame belongs to this image
+    } else {
+      const bool copied =
+          host->CopyScenePixels(width, height, rgba, &frame_id) && width > 0 &&
+          height > 0 && rgba.size() >= static_cast<size_t>(width) * height * 4;
+      const bool stale = copied && saved_frame != 0 && frame_id == saved_frame;
+      if (!copied || stale) {
+        // No new presented frame (or no frame at all): the window may be
+        // minimized. Try the same view offscreen before giving up.
+        std::string why;
+        if (RenderOffscreen(&why)) {
+          width = offscreen_width;
+          height = offscreen_height;
+          rgba = std::move(offscreen_rgba);
+          frame_id = 0;
+        } else if (!copied) {
+          return ToolResult{false, OffscreenError(why)};
+        }
+      }
+    }
+
+    // Downscale to the output size AFTER rendering so a 2x (or capped) render
+    // keeps small detail that a tiny render would alias away. The render and
+    // output sizes share their aspect ratio, so in the normal case this scale
+    // is uniform. A presented frame can arrive at the scene viewport's actual
+    // size instead of the requested render size; the resize then stretches it,
+    // and the projection correction below keeps the overlay coordinates
+    // aligned with the stretched content.
+    const int frame_width = width;
+    const int frame_height = height;
+    if (width != output_width || height != output_height) {
+      std::vector<uint8_t> resized(static_cast<size_t>(output_width) *
+                                   output_height * 4);
+      if (!stbir_resize_uint8_srgb(rgba.data(), width, height, width * 4,
+                                   resized.data(), output_width, output_height,
+                                   output_width * 4, STBIR_RGBA)) {
+        return ToolResult{false, Error("failed to resize the captured image")};
+      }
+      rgba = std::move(resized);
+    }
+    width = output_width;
+    height = output_height;
+
+    // Overlays are drawn after the downscale, at the output size, so their
+    // 2-pixel lines stay crisp rather than being blurred by the resize.
+    //
+    // The scene projection uses the render size we requested. If a presented
+    // frame arrived at the viewport's previous size instead (the host may not
+    // resize instantly), the resize above stretched it to the output, so scale
+    // the projection's horizontal axis by render aspect / arrived aspect to
+    // keep the boxes on the same stretched content.
+    glm::mat4 view_projection = scene.GetSceneViewProjection();
+    if (frame_width > 0 && frame_height > 0 &&
+        frame_width * render_height != frame_height * render_width) {
+      const double render_aspect =
+          static_cast<double>(render_width) / render_height;
+      const double arrived_aspect =
+          static_cast<double>(frame_width) / frame_height;
+      const float ratio = static_cast<float>(render_aspect / arrived_aspect);
+      view_projection =
+          glm::scale(glm::mat4(1.0f), glm::vec3(ratio, 1.0f, 1.0f)) *
+          view_projection;
+    }
+    constexpr std::array<uint8_t, 4> kColliderColor = {60, 220, 120, 255};
+    constexpr std::array<uint8_t, 4> kHighlightColor = {255, 215, 50, 255};
+    if (colliders) {
+      scene.GetMap().Visit([&](MapNode& node) {
+        if (node.IsRoot()) return;
+        const kEntityId entity = scene.GetEntityForNode(node.uid);
+        if (!HasCollider(scene.Objects(), entity)) return;
+        EditorScene::NodeWorldBounds bounds;
+        if (scene.GetNodeWorldBounds(entity, bounds)) {
+          DrawBox(rgba, width, height, view_projection, bounds, kColliderColor);
+        }
+      });
+    }
+    for (kEntityId entity : highlights) {
+      EditorScene::NodeWorldBounds bounds;
+      if (scene.GetNodeWorldBounds(entity, bounds)) {
+        DrawBox(rgba, width, height, view_projection, bounds, kHighlightColor);
+      }
+    }
+
+    std::vector<uint8_t> png_bytes;
+    png_bytes.reserve(static_cast<size_t>(width) * height);
+    if (!stbi_write_png_to_func(
+            [](void* context, void* data, int size) {
+              auto* bytes = static_cast<std::vector<uint8_t>*>(context);
+              const auto* chunk = static_cast<const uint8_t*>(data);
+              bytes->insert(bytes->end(), chunk, chunk + size);
+            },
+            &png_bytes, width, height, 4, rgba.data(), width * 4) ||
+        png_bytes.empty()) {
+      return ToolResult{false,
+                        Error("failed to encode the captured image as PNG")};
+    }
+
+    json out{{"width", width},
+             {"height", height},
+             {"detail", detail},
+             {"visual_tokens", VisualTokens(width, height)},
+             {"preset", preset},
+             {"source", source},
+             {"frame_id", frame_id},
+             {"colliders", colliders},
+             {"highlight_count", highlights.size()},
+             {"format", "png"},
+             {"camera",
+              {{"position", Vec3Json(scene.GetCameraPosition())},
+               {"target", Vec3Json(scene.GetCameraTarget())},
+               {"fov", kFovDegrees}}}};
+    return ToolResult{true, out, {Png{std::move(png_bytes), "viewport.png"}}};
+  }
+};
+
+bool ParsePreset(const json& args, CapturePlan* plan, std::string* error,
+                 std::string* suggestion) {
+  if (suggestion) suggestion->clear();
+  const std::string preset =
+      args.contains("preset") && args["preset"].is_string()
+          ? args["preset"].get<std::string>()
+          : std::string("current");
+  if (preset != "current" && preset != "top_down" && preset != "isometric" &&
+      preset != "front" && preset != "player_pov") {
+    *error = "unknown capture_viewport preset \"" + preset +
+             "\": expected current, top_down, isometric, front or player_pov";
+    return false;
+  }
+  plan->preset = preset;
+  EditorScene::ViewState desired = plan->saved;
+
+  if (preset == "top_down") {
+    // view_2d looks along -Z (an XY side view), not down. A near-vertical 3D
+    // camera pitch is the real top-down view.
+    desired.view_2d = false;
+    desired.yaw = 0.0f;
+    desired.pitch = -89.9f;
+  } else if (preset == "isometric") {
+    desired.view_2d = false;
+    desired.yaw = 35.0f;
+    desired.pitch = -25.0f;
+  } else if (preset == "front") {
+    desired.view_2d = false;
+    desired.yaw = 0.0f;
+    desired.pitch = 0.0f;
+  } else if (preset == "player_pov") {
+    desired.view_2d = false;
+    // The map's Camera component is mirrored into a CameraComponent property;
+    // `enabled` (not the editor's active-camera id) decides whether it draws.
+    kEntityId camera = entt::null;
+    plan->scene.GetMap().Visit([&](MapNode& node) {
+      if (camera != entt::null || node.IsRoot()) return;
+      const kEntityId entity = plan->scene.GetEntityForNode(node.uid);
+      auto* settings =
+          plan->scene.Objects().GetProperty<CameraComponent>(entity);
+      if (settings && settings->enabled &&
+          plan->scene.Objects().GetProperty<Transform>(entity)) {
+        camera = entity;
+      }
+    });
+    if (camera == entt::null) {
+      *error = "no enabled Camera component in the scene";
+      return false;
+    }
+    auto* transform = plan->scene.Objects().GetProperty<Transform>(camera);
+    const glm::vec3 position = transform->GetPosition();
+    const glm::vec3 rotation = transform->GetRotate();  // pitch, yaw, roll
+    const glm::vec3 forward =
+        Transform::EulerToQuat(rotation) * glm::vec3(0.0f, 0.0f, -1.0f);
+    desired.yaw = rotation.y;
+    desired.pitch = rotation.x;
+    const float distance = std::max(desired.distance, 0.1f);
+    desired.target = position + forward * distance;
+  }
+
+  // `frame` overrides the preset's framing but keeps its orientation.
+  if (args.contains("frame") && !args["frame"].is_null()) {
+    std::string node_error;
+    std::string node_suggestion;
+    MapNode* node = mcp::ResolveNode(plan->scene, args["frame"], &node_error,
+                                     &node_suggestion);
+    if (!node) {
+      *error = node_error;
+      if (suggestion) *suggestion = node_suggestion;
+      if (!node_suggestion.empty()) {
+        *error += " (did you mean \"" + node_suggestion + "\"?)";
+      }
+      return false;
+    }
+    EditorScene::NodeWorldBounds bounds;
+    if (!plan->scene.GetNodeWorldBounds(*node, bounds)) {
+      *error = "cannot frame node without bounds: " + FullNodePath(*node);
+      return false;
+    }
+    const glm::vec3 center = (bounds.world_min + bounds.world_max) * 0.5f;
+    const float radius = std::max(
+        glm::length(bounds.world_max - bounds.world_min) * 0.5f, 0.05f);
+    if (desired.view_2d) {
+      desired.target = glm::vec3(center.x, center.y, 0.0f);
+    } else {
+      desired.target = center;
+      desired.distance =
+          radius / std::sin(glm::radians(kFovDegrees) / 2.0f) * 1.3f;
+    }
+  }
+
+  CaptureSize size;
+  if (!ResolveCaptureSize(args, &size, error)) {
+    return false;
+  }
+  plan->output_width = size.width;
+  plan->output_height = size.height;
+  plan->render_width = size.render_width;
+  plan->render_height = size.render_height;
+  plan->detail = size.detail;
+  desired.viewport_size = glm::vec2(static_cast<float>(size.render_width),
+                                    static_cast<float>(size.render_height));
+
+  plan->colliders = args.contains("colliders") && args["colliders"].is_boolean()
+                        ? args["colliders"].get<bool>()
+                        : false;
+  plan->offscreen_only = args.contains("offscreen") &&
+                         args["offscreen"].is_boolean() &&
+                         args["offscreen"].get<bool>();
+  if (args.contains("highlight") && args["highlight"].is_array()) {
+    for (const json& ref : args["highlight"]) {
+      std::string node_error;
+      std::string node_suggestion;
+      MapNode* node =
+          mcp::ResolveNode(plan->scene, ref, &node_error, &node_suggestion);
+      if (!node) {
+        *error = node_error;
+        if (suggestion) *suggestion = node_suggestion;
+        if (!node_suggestion.empty()) {
+          *error += " (did you mean \"" + node_suggestion + "\"?)";
+        }
+        return false;
+      }
+      plan->highlights.push_back(plan->scene.GetEntityForNode(node->uid));
+    }
+  }
+  plan->desired = desired;
+  return true;
+}
+
+void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
+  auto plan = std::make_shared<CapturePlan>(scene);
+  plan->lifetime = scene.LifetimeToken();
+  plan->saved = scene.GetViewState();
+  std::string error;
+  std::string suggestion;
+  if (!ParsePreset(args, plan.get(), &error, &suggestion)) {
+    done(ToolResult{false, Error(error, suggestion)});
+    return;  // no camera change: the guard has nothing to restore
+  }
+
+  RenderHost* host = scene.GetRenderHost();
+  if (host && !plan->offscreen_only) {
+    // Remember the frame that was current before the camera change so the
+    // real editor can wait for one rendered with the new view. An explicit
+    // offscreen capture does not need a presented frame to compare against.
+    int width = 0;
+    int height = 0;
+    std::vector<uint8_t> scratch;
+    host->CopyScenePixels(width, height, scratch, &plan->saved_frame);
+  }
+
+  plan->camera_changed = true;
+  scene.SetViewState(plan->desired);
+
+  auto finish = [plan](ToolDone done) {
+    return [plan, done = std::move(done)]() mutable {
+      ToolResult result = plan->Capture();
+      done(std::move(result));
+      // plan's destructor runs here (or later, in the CallAfter case) and
+      // restores the ViewState.
+    };
+  };
+
+  if (plan->offscreen_only || !host || !wxTheApp) {
+    // Explicit offscreen captures, headless tests and tools called without a
+    // wx event loop capture now; there is no frame loop to wait on.
+    finish(std::move(done))();
+    return;
+  }
+
+  // In the editor, poll on a short one-shot wxTimer so a visible window gets
+  // time to present the new view. The plan (and its RAII guard) lives in the
+  // poll closure until the call completes.
+  struct Pending {
+    std::shared_ptr<CapturePlan> plan;
+    ToolDone done;
+    RenderHost* host;
+    std::weak_ptr<const void> lifetime;
+    uint64_t before = 0;
+    int tries = 0;
+    std::chrono::steady_clock::time_point started =
+        std::chrono::steady_clock::now();
+    std::shared_ptr<CapturePollTimer> timer;
+  };
+  auto pending = std::make_shared<Pending>();
+  pending->plan = plan;
+  pending->done = std::move(done);
+  pending->host = host;
+  pending->lifetime = plan->lifetime;
+  pending->before = plan->saved_frame;
+  auto poll = std::make_shared<std::function<void()>>();
+  auto complete = [pending](ToolResult result) {
+    // Keep our own reference for the whole call. Releasing the timer (and, on
+    // the deferred tick clear, the poll closure that owns this closure) may
+    // drop every other reference to `pending` before we return.
+    auto self = pending;
+    auto timer = std::move(self->timer);
+    FinishCaptureTimer(std::move(timer));
+    self->done(std::move(result));
+  };
+  *poll = [pending, complete]() {
+    if (pending->lifetime.expired()) {
+      // The editor is shutting down: answer the call and let the plan die
+      // without touching the scene (its own guard sees the same token).
+      complete(ToolResult{false, Error("editor shutting down")});
+      return;
+    }
+    int width = 0;
+    int height = 0;
+    uint64_t frame_id = 0;
+    std::vector<uint8_t> scratch;
+    const bool copied =
+        pending->host->CopyScenePixels(width, height, scratch, &frame_id);
+    if ((copied && frame_id != pending->before) ||
+        ++pending->tries >= kMaxCaptureFrames) {
+      complete(pending->plan->Capture());
+      return;
+    }
+    if (std::chrono::steady_clock::now() - pending->started >=
+        kOffscreenFallbackDelay) {
+      // Hidden or iconized editors skip StepFrame, so no new frame will ever
+      // arrive. Render this same view directly; Capture() then only encodes
+      // the pixels and the plan's guard restores the camera.
+      std::string why;
+      if (!pending->plan->RenderOffscreen(&why)) {
+        complete(ToolResult{false, OffscreenError(why)});
+        return;
+      }
+      complete(pending->plan->Capture());
+      return;
+    }
+    pending->timer->Start(kPollIntervalMs, true);
+  };
+  if (wxTheApp) {
+    pending->timer = std::make_shared<CapturePollTimer>();
+    pending->timer->tick = [poll] { (*poll)(); };
+    pending->timer->Start(kPollIntervalMs, true);
+  }
+}
+
+}  // namespace
+
+MERCURY_MCP_TOOL("query_scene_spatial", kRead, &QuerySceneSpatial);
+MERCURY_MCP_TOOL_ASYNC("capture_viewport", kRead, &CaptureViewport);
+
+}  // namespace Mercury

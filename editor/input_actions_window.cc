@@ -5,16 +5,14 @@
 #include "input_actions_window.h"
 
 #include <algorithm>
-#include <filesystem>
 #include <format>
 
 #include "input/input_actions_codegen.rs.h"
+#include "input_actions_codegen_util.h"
 #include "os/filesystem.h"
 #include "templates.h"
 
 namespace Mercury {
-
-namespace fs = std::filesystem;
 
 namespace {
 
@@ -34,14 +32,6 @@ std::vector<std::string>* PartVector(InputActionDesc::Composite2D& composite,
     default:
       return nullptr;
   }
-}
-
-// Writes `text` unless the file already holds it, so a save that changes
-// nothing in the generated file does not rebuild every script that imports it.
-bool WriteIfChanged(const fs::path& file, const std::string& text) {
-  if (auto current = os::ReadText(file); current && *current == text)
-    return true;
-  return os::WriteFileAtomic(file, text);
 }
 
 }  // namespace
@@ -112,14 +102,8 @@ bool InputActionsWindow::Save() {
 
 bool InputActionsWindow::WriteHeader() {
   if (!project_ || desc_.header.empty()) return false;
-  const std::string class_name =
-      desc_.class_name.empty() ? "GameInput" : desc_.class_name;
-  auto header = GenerateInputActionsAngelScript(desc_, class_name, path_);
-  header_errors_.clear();
-  header_errors_.reserve(header.errors.size());
-  for (const auto& e : header.errors) {
-    header_errors_.push_back(std::string(e));
-  }
+  const auto written = WriteInputActionsHeader(*project_, desc_, path_);
+  header_errors_ = written.errors;
   state_revision_++;
   if (!header_errors_.empty()) {
     for (const auto& e : header_errors_) console_.Error("Input Actions: " + e);
@@ -127,8 +111,7 @@ bool InputActionsWindow::WriteHeader() {
                    " was not written; rename the actions");
     return false;
   }
-  if (!WriteIfChanged(project_->Resolve(desc_.header),
-                      std::string(header.source))) {
+  if (!written.written) {
     console_.Error("Input Actions: could not write " + desc_.header);
     return false;
   }

@@ -188,9 +188,17 @@ void MercuryEditorApp::OnTimer(wxTimerEvent& /*evt*/) {
   wxWindow* active_win = editor_frame_
                              ? static_cast<wxWindow*>(editor_frame_)
                              : static_cast<wxWindow*>(launcher_frame_);
-  if (!active_win || !active_win->IsShown()) return;
+  // No rendered frames while the window is hidden or minimized, but the
+  // Play / release child processes still need their pipes drained: otherwise
+  // a build can block on a full pipe until the window is restored. This is
+  // the same pump OnFrame runs, without the frame-only work.
+  if (!active_win || !active_win->IsShown()) {
+    scene_->UpdateBackgroundTasks();
+    return;
+  }
   if (auto* top = dynamic_cast<wxTopLevelWindow*>(active_win);
       top && top->IsIconized()) {
+    scene_->UpdateBackgroundTasks();
     return;
   }
 

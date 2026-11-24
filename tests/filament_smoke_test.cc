@@ -4,16 +4,22 @@
 
 #include <gtest/gtest.h>
 
+#include <filament/Color.h>
+#include <filament/RenderableManager.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <string>
 #include <thread>
 #include <vector>
 
 #include "application/default_application.h"
+#include "application/filament_application.h"
 #include "properties/camera.h"
 #include "properties/model.h"
 #include "properties/render_mesh.h"
@@ -28,6 +34,8 @@ class SmokeScene : public GameScene {
  public:
   RenderSettings GetRenderSettings() const override { return settings_; }
   RenderSettings settings_;
+
+  kEntityId quad_ = entt::null;
 
   void OnStart() override {
     SetClearColor(glm::vec4(0.05f, 0.1f, 0.25f, 1.0f));
@@ -72,7 +80,8 @@ class SmokeScene : public GameScene {
     mesh.materials.push_back(std::move(material));
     mesh.ComputeBounds();
 
-    const kEntityId quad = object_manager_->NewObject();
+    quad_ = object_manager_->NewObject();
+    const kEntityId quad = quad_;
     Transform xform(glm::vec3(0.0f));
     xform.CaptureTickSnapshot();
     object_manager_->AddProperty(quad, std::move(xform));
@@ -81,6 +90,61 @@ class SmokeScene : public GameScene {
   void OnFrame(double) override {}
   void OnTick(double) override {}
   void OnDestroy() override {}
+};
+
+// Transparent sprites at the same depth, differing only in sorting order.
+class SortedSpritesScene : public GameScene {
+ public:
+  RenderSettings GetRenderSettings() const override { return settings_; }
+  RenderSettings settings_;
+  std::vector<kEntityId> sprites;
+
+  void OnStart() override {
+    if (auto* cam = object_manager_->GetProperty<Camera>(GetPlayerCamera())) {
+      cam->SetUseObjectRotation(true);
+    }
+    if (auto* xform =
+            object_manager_->GetProperty<Transform>(GetPlayerCamera())) {
+      xform->SetPosition(glm::vec3(0.0f, 0.0f, 3.0f));
+      xform->CaptureTickSnapshot();
+    }
+    AddSprite(-1);
+    AddSprite(0);
+    AddSprite(5);
+  }
+  void OnFrame(double) override {}
+  void OnTick(double) override {}
+  void OnDestroy() override {}
+
+ private:
+  void AddSprite(int sorting_order) {
+    std::vector<ModelVertex> vertices(4);
+    const glm::vec2 corners[4] = {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}};
+    for (int i = 0; i < 4; i++) {
+      vertices[i].position = glm::vec3(corners[i] * 0.5f, 0.0f);
+      vertices[i].uv = (corners[i] + glm::vec2(1.0f)) * 0.5f;
+    }
+    RenderMaterial material;
+    material.color = glm::vec4(0.8f, 0.5f, 0.2f, 0.8f);
+    material.unlit = true;
+    material.transparent = true;
+
+    RenderDraw draw;
+    draw.geometry =
+        MeshGeometry::Create(std::move(vertices), {0, 3, 1, 1, 3, 2});
+    RenderMesh mesh;
+    mesh.blend_order = static_cast<uint16_t>(sorting_order + 16384);
+    mesh.draws.push_back(std::move(draw));
+    mesh.materials.push_back(std::move(material));
+    mesh.ComputeBounds();
+
+    const kEntityId entity = object_manager_->NewObject();
+    Transform xform(glm::vec3(0.0f));
+    xform.CaptureTickSnapshot();
+    object_manager_->AddProperty(entity, std::move(xform));
+    object_manager_->AddProperty(entity, std::move(mesh));
+    sprites.push_back(entity);
+  }
 };
 
 constexpr int kWidth = 128;
@@ -180,6 +244,29 @@ TEST(FilamentSmokeTest, HeadlessOffscreenRenderIsNonUniform) {
   RenderResult result;
   RenderSmokeScene(RenderSettings{}, result);
   ExpectNonUniform(result.pixels);
+}
+
+// The on-demand capture path must work without a single StepFrame/presented
+// frame, the way capture_viewport needs it to when the editor is minimized.
+TEST(FilamentSmokeTest, RenderScenePixelsNowWithoutAPresentedFrame) {
+  DefaultApplication app("Filament Offscreen Capture", kWidth, kHeight);
+  app.EnableHeadlessMode(true);
+  auto scene = std::make_unique<SmokeScene>();
+  app.SetGameScene(std::move(scene));
+  ASSERT_TRUE(app.StartHosted());
+
+  app.EnableSceneTexture(true);
+  app.SetSceneViewportSize(kWidth, kHeight);
+
+  std::vector<uint8_t> pixels;
+  int width = 0;
+  int height = 0;
+  std::string why;
+  ASSERT_TRUE(app.RenderScenePixelsNow(&pixels, &width, &height, &why)) << why;
+  EXPECT_EQ(width, kWidth);
+  EXPECT_EQ(height, kHeight);
+  ASSERT_EQ(pixels.size(), static_cast<size_t>(kWidth) * kHeight * 4);
+  ExpectNonUniform(pixels);
 }
 
 TEST(FilamentSmokeTest, FxaaRendersFullSizeFrame) {
@@ -350,7 +437,120 @@ class ProbeRoomScene : public GameScene {
   }
 };
 
+// Reads the uploaded baseColor of the scene's first renderable.
+std::optional<filament::math::float4> FirstBaseColor(filament::Engine* engine,
+                                                     filament::Scene* scene) {
+  if (!engine || !scene) return std::nullopt;
+  auto& manager = engine->getRenderableManager();
+  std::optional<filament::math::float4> found;
+  scene->forEach([&](utils::Entity entity) {
+    if (found || !manager.hasComponent(entity)) return;
+    if (auto* material =
+            manager.getMaterialInstanceAt(manager.getInstance(entity), 0)) {
+      found = material->getParameter<filament::math::float4>("baseColor");
+    }
+  });
+  return found;
+}
+
+bool Near(const filament::math::float4& a, const filament::math::float4& b) {
+  return glm::length(glm::vec4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w)) <
+         1e-4f;
+}
+
 }  // namespace
+
+TEST(FilamentSmokeTest, RevisionUpdatesBaseColorWithoutRebuilding) {
+  constexpr int kSize = 128;
+  DefaultApplication app("Filament Revision", kSize, kSize);
+  app.EnableHeadlessMode(true);
+  auto game = std::make_unique<SmokeScene>();
+  SmokeScene* game_ptr = game.get();
+  app.SetGameScene(std::move(game));
+  ASSERT_TRUE(app.StartHosted());
+  app.EnableSceneTexture(true);
+  app.SetSceneViewportSize(kSize, kSize);
+
+  filament::Engine* engine = app.GetEngine();
+  filament::Scene* scene = app.GetScene();
+  ASSERT_TRUE(StepUntil(app, std::chrono::seconds(60), [&] {
+    return FirstBaseColor(engine, scene).has_value();
+  }));
+  const auto original = *FirstBaseColor(engine, scene);
+
+  ASSERT_TRUE(game_ptr->GetRegistry().valid(game_ptr->quad_));
+  RenderMesh* mesh =
+      game_ptr->GetRegistry().try_get<RenderMesh>(game_ptr->quad_);
+  ASSERT_NE(mesh, nullptr);
+  ASSERT_EQ(mesh->revision, 0u);
+  const glm::vec4 changed(0.1f, 0.2f, 0.3f, 0.5f);
+  mesh->materials[0].color = changed;
+  mesh->revision++;
+  // Nothing reaches Filament until SyncScene sees the new revision.
+  EXPECT_TRUE(Near(*FirstBaseColor(engine, scene), original));
+
+  const filament::LinearColor linear = filament::Color::toLinear(
+      filament::sRGBColor{changed.r, changed.g, changed.b});
+  const filament::math::float4 expected{linear.r, linear.g, linear.b,
+                                        changed.a};
+  ASSERT_TRUE(StepUntil(app, std::chrono::seconds(60), [&] {
+    const auto current = FirstBaseColor(engine, scene);
+    return current && Near(*current, expected);
+  }));
+}
+
+TEST(FilamentSmokeTest, EqualDepthSpritesUseGlobalBlendOrder) {
+  constexpr int kSize = 128;
+  DefaultApplication app("Filament Sorting", kSize, kSize);
+  app.EnableHeadlessMode(true);
+  auto game = std::make_unique<SortedSpritesScene>();
+  SortedSpritesScene* game_ptr = game.get();
+  app.SetGameScene(std::move(game));
+  ASSERT_TRUE(app.StartHosted());
+  app.EnableSceneTexture(true);
+  app.SetSceneViewportSize(kSize, kSize);
+
+  filament::Scene* scene = app.GetScene();
+  auto& manager = app.GetEngine()->getRenderableManager();
+  auto collect = [&]() {
+    std::vector<uint16_t> orders;
+    scene->forEach([&](utils::Entity entity) {
+      if (!manager.hasComponent(entity)) return;
+      const auto instance = manager.getInstance(entity);
+      if (!manager.isGlobalBlendOrderEnabledAt(instance, 0)) return;
+      orders.push_back(manager.getBlendOrderAt(instance, 0));
+    });
+    return orders;
+  };
+
+  ASSERT_TRUE(StepUntil(app, std::chrono::seconds(60),
+                        [&] { return collect().size() == 3; }));
+  // Only the low 15 bits affect drawing. -1, 0 and 5 map to 16383, 16384
+  // and 16389, so higher sorting orders really draw later.
+  auto effective = [&]() {
+    std::vector<int> values;
+    for (uint16_t order : collect()) values.push_back(order & 0x7fff);
+    std::sort(values.begin(), values.end());
+    return values;
+  };
+  const auto orders = effective();
+  ASSERT_EQ(orders.size(), 3u);
+  EXPECT_LT(orders[0], orders[1]);
+  EXPECT_LT(orders[1], orders[2]);
+  EXPECT_EQ(orders, (std::vector<int>{16383, 16384, 16389}));
+
+  // A runtime sorting-order change reaches the existing renderable.
+  ASSERT_EQ(game_ptr->sprites.size(), 3u);
+  RenderMesh* mesh =
+      game_ptr->GetRegistry().try_get<RenderMesh>(game_ptr->sprites[2]);
+  ASSERT_NE(mesh, nullptr);
+  mesh->blend_order = static_cast<uint16_t>(16384 + 9);
+  mesh->revision++;
+  ASSERT_TRUE(StepUntil(app, std::chrono::seconds(60), [&] {
+    const auto changed = effective();
+    return changed == std::vector<int>{16383, 16384, 16393};
+  }));
+}
 
 TEST(FilamentSmokeTest, ProbeCaptureLightsAndReflectsTheRoom) {
   constexpr int kSize = 128;
