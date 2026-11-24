@@ -16,13 +16,17 @@
  * The capture borrows the editor camera: it snapshots EditorScene::ViewState,
  * sets up the requested view, copies the offscreen RGBA frame, draws software
  * overlays, encodes a PNG and restores the snapshot through an RAII guard on
- * every exit path, including errors.
+ * every exit path, including errors. When the editor window is hidden and no
+ * presented frame arrives, the same view can be rendered offscreen on demand
+ * (implicitly after a short poll, or immediately with `offscreen: true`).
  */
 
 #include <wx/app.h>
+#include <wx/timer.h>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -36,6 +40,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <nlohmann/json.hpp>
+#include <stb/stb_image_resize2.h>
 #include <stb/stb_image_write.h>
 
 #include "components/components.h"
@@ -58,13 +63,70 @@ using nlohmann::json;
 constexpr float kFovDegrees = 60.0f;
 constexpr float kDefaultRayDistance = 10000.0f;
 constexpr uint32_t kAllLayers = ~0u;
-// Upper bound on UI turns spent waiting for a frame with the new camera.
+// Safety cap on UI turns spent waiting for a frame with the new camera.
 constexpr int kMaxCaptureFrames = 600;
+// A CallAfter loop can spin far faster than the editor's frame rate, so the
+// fallback is wall-clock based: hidden/iconized editors never StepFrame, but a
+// visible one gets this long to present the requested view first.
+constexpr auto kOffscreenFallbackDelay = std::chrono::milliseconds(250);
+// One-shot polls, paced like build_scripts' wxTimer instead of a CallAfter
+// busy loop.
+constexpr int kPollIntervalMs = 5;
+
+// Claude bills an image in 28x28 visual-token patches: ceil(width / 28) *
+// ceil(height / 28) tokens, regardless of PNG format or color depth. The
+// detail levels therefore pin the output's long edge to a multiple of 28; a
+// 16:9 short edge then leaves no partial patch row.
+constexpr int kTokenPatch = 28;
+constexpr int kMinCaptureDimension = 64;
+constexpr int kMaxCaptureLongEdge = 2576;
+constexpr int kDefaultAspectWidth = 16;
+constexpr int kDefaultAspectHeight = 9;
+// 672x378 = 24x14 patches = 336 visual tokens.
+constexpr int kDetailLowLongEdge = 672;
+// 1008x567 = 36x21 = 756 tokens.
+constexpr int kDetailMediumLongEdge = 1008;
+// 1568x882 = 56x32 = 1792 tokens.
+constexpr int kDetailHighLongEdge = 1568;
+// 2576x1449 = 92x52 = 4784 tokens (the high-resolution tier's long-edge max).
+constexpr int kDetailMaxLongEdge = 2576;
 
 json Error(std::string message, const std::string& suggestion = {}) {
   json out{{"error", std::move(message)}};
   if (!suggestion.empty()) out["suggestion"] = suggestion;
   return out;
+}
+
+json OffscreenError(const std::string& why) {
+  return Error(
+      "no rendered frame was available and offscreen rendering "
+      "failed: " +
+      (why.empty() ? std::string("unknown reason") : why));
+}
+
+class CapturePollTimer : public wxTimer {
+ public:
+  std::function<void()> tick;
+  void Notify() override {
+    if (tick) tick();
+  }
+};
+
+// Called from `complete`, which runs inside this timer's own Notify. Neither
+// clearing `tick` nor dropping the last reference to the timer is safe there:
+// `tick` owns the poll closure that owns the executing `complete` (and its
+// `pending` state), so clearing it would destroy the callable out from under
+// its own stack frame, and a wxTimer must not be deleted from its own Notify.
+// Hand the timer to the next event-loop turn: the queued event keeps it alive
+// until Notify has returned, then clearing tick breaks the
+// timer -> tick -> poll -> pending ownership cycle.
+void FinishCaptureTimer(std::shared_ptr<CapturePollTimer> timer) {
+  if (!timer) return;
+  timer->Stop();
+  if (wxTheApp) {
+    wxTheApp->CallAfter(
+        [timer = std::move(timer)]() mutable { timer->tick = nullptr; });
+  }
 }
 
 json Vec3Json(const glm::vec3& v) { return json::array({v.x, v.y, v.z}); }
@@ -91,18 +153,142 @@ bool ParseVec3(const json& value, glm::vec3* out, std::string* error,
   return true;
 }
 
-bool ParseDimension(const json& args, const char* key, int fallback, int* out,
+int VisualTokens(int width, int height) {
+  const int patches_x = (width + kTokenPatch - 1) / kTokenPatch;
+  const int patches_y = (height + kTokenPatch - 1) / kTokenPatch;
+  return patches_x * patches_y;
+}
+
+// An explicit dimension must be a positive integer in
+// [kMinCaptureDimension, kMaxCaptureLongEdge]. Out-of-range values are
+// rejected rather than silently clamped, so the caller can see the real cost.
+bool ParseDimension(const json& args, const char* key, int* out,
                     std::string* error) {
-  if (!args.contains(key) || args[key].is_null()) {
-    *out = fallback;
-    return true;
-  }
   const json& value = args[key];
   if (!value.is_number_integer() || value.get<int64_t>() <= 0) {
     *error = std::string("\"") + key + "\" must be a positive integer";
     return false;
   }
-  *out = static_cast<int>(std::min<int64_t>(value.get<int64_t>(), 100000));
+  const int64_t dimension = value.get<int64_t>();
+  if (dimension < kMinCaptureDimension) {
+    *error = std::string("\"") + key + "\" must be at least " +
+             std::to_string(kMinCaptureDimension) + " pixels";
+    return false;
+  }
+  if (dimension > kMaxCaptureLongEdge) {
+    *error = std::string("\"") + key + "\" is " + std::to_string(dimension) +
+             "; the long edge must be at most " +
+             std::to_string(kMaxCaptureLongEdge) + " pixels";
+    return false;
+  }
+  *out = static_cast<int>(dimension);
+  return true;
+}
+
+// The output image size and the size the scene is rendered at. The render is
+// 2x the output for a clean downscale (capped at the long-edge limit and never
+// below the output); "max" renders at the output size directly.
+struct CaptureSize {
+  int width = 0;
+  int height = 0;
+  int render_width = 0;
+  int render_height = 0;
+  std::string detail = "low";
+};
+
+bool ResolveDetail(const json& args, int* long_edge, std::string* name,
+                   std::string* error) {
+  *name = "low";
+  *long_edge = kDetailLowLongEdge;
+  if (!args.contains("detail") || args["detail"].is_null()) return true;
+  if (!args["detail"].is_string()) {
+    *error =
+        "\"detail\" must be one of \"low\", \"medium\", \"high\" or \"max\"";
+    return false;
+  }
+  const std::string level = args["detail"].get<std::string>();
+  if (level == "low") {
+    *long_edge = kDetailLowLongEdge;
+  } else if (level == "medium") {
+    *long_edge = kDetailMediumLongEdge;
+  } else if (level == "high") {
+    *long_edge = kDetailHighLongEdge;
+  } else if (level == "max") {
+    *long_edge = kDetailMaxLongEdge;
+  } else {
+    *error =
+        "unknown detail \"" + level + "\": expected low, medium, high or max";
+    return false;
+  }
+  *name = level;
+  return true;
+}
+
+bool ResolveCaptureSize(const json& args, CaptureSize* size,
+                        std::string* error) {
+  const bool has_width = args.contains("width") && !args["width"].is_null();
+  const bool has_height = args.contains("height") && !args["height"].is_null();
+  if (has_width || has_height) {
+    // Explicit width/height win over `detail`. When only one is given, the
+    // other comes from 16:9.
+    int width = 0;
+    int height = 0;
+    if (has_width && !ParseDimension(args, "width", &width, error))
+      return false;
+    if (has_height && !ParseDimension(args, "height", &height, error)) {
+      return false;
+    }
+    if (has_width && !has_height) {
+      height = std::max(kMinCaptureDimension,
+                        static_cast<int>(std::lround(
+                            width * static_cast<double>(kDefaultAspectHeight) /
+                            kDefaultAspectWidth)));
+    } else if (has_height && !has_width) {
+      width = std::max(kMinCaptureDimension,
+                       static_cast<int>(std::lround(
+                           height * static_cast<double>(kDefaultAspectWidth) /
+                           kDefaultAspectHeight)));
+    }
+    const int long_edge = std::max(width, height);
+    if (long_edge > kMaxCaptureLongEdge) {
+      *error = "the requested aspect gives a long edge of " +
+               std::to_string(long_edge) +
+               " pixels; the long edge must be at most " +
+               std::to_string(kMaxCaptureLongEdge) + " pixels";
+      return false;
+    }
+    size->width = width;
+    size->height = height;
+    size->detail = "custom";
+  } else {
+    int long_edge = 0;
+    std::string name;
+    if (!ResolveDetail(args, &long_edge, &name, error)) return false;
+    size->width = long_edge;
+    size->height = std::max(
+        kMinCaptureDimension,
+        static_cast<int>(
+            std::lround(long_edge * static_cast<double>(kDefaultAspectHeight) /
+                        kDefaultAspectWidth)));
+    size->detail = name;
+  }
+
+  // Render at 2x the output so the downscale has real detail to work with.
+  int render_width = size->width;
+  int render_height = size->height;
+  if (size->detail != "max") {
+    const int long_edge = std::max(size->width, size->height);
+    const double scale =
+        std::min(2.0, static_cast<double>(kMaxCaptureLongEdge) / long_edge);
+    if (scale > 1.0) {
+      render_width = std::max(
+          size->width, static_cast<int>(std::lround(size->width * scale)));
+      render_height = std::max(
+          size->height, static_cast<int>(std::lround(size->height * scale)));
+    }
+  }
+  size->render_width = render_width;
+  size->render_height = render_height;
   return true;
 }
 
@@ -497,7 +683,40 @@ struct CapturePlan {
   std::vector<kEntityId> highlights;
   bool colliders = false;
   bool camera_changed = false;
+  bool offscreen_only = false;
+  // Output image size, the size the scene is rendered at, and the detail level
+  // that produced them (or "custom" for explicit width/height).
+  int output_width = 0;
+  int output_height = 0;
+  int render_width = 0;
+  int render_height = 0;
+  std::string detail = "low";
   uint64_t saved_frame = 0;
+  std::string source = "presented";
+  std::vector<uint8_t> offscreen_rgba;
+  int offscreen_width = 0;
+  int offscreen_height = 0;
+
+  // Renders the current scene view without waiting for the window's frame loop
+  // and keeps the RGBA8 pixels for Capture(). The camera guard in the caller
+  // still owns the ViewState, so the offscreen path restores it just the same.
+  bool RenderOffscreen(std::string* why) {
+    RenderHost* host = scene.GetRenderHost();
+    if (!host || !host->RenderScenePixelsNow(&offscreen_rgba, &offscreen_width,
+                                             &offscreen_height, why)) {
+      if (why->empty()) *why = "render host has no offscreen renderer";
+      return false;
+    }
+    if (offscreen_width <= 0 || offscreen_height <= 0 ||
+        offscreen_rgba.size() <
+            static_cast<size_t>(offscreen_width) * offscreen_height * 4) {
+      *why = "offscreen pixels were incomplete";
+      offscreen_rgba.clear();
+      return false;
+    }
+    source = "offscreen";
+    return true;
+  }
 
   ToolResult Capture() {
     RenderHost* host = scene.GetRenderHost();
@@ -506,13 +725,81 @@ struct CapturePlan {
     int height = 0;
     uint64_t frame_id = 0;
     std::vector<uint8_t> rgba;
-    if (!host->CopyScenePixels(width, height, rgba, &frame_id) || width <= 0 ||
-        height <= 0 || rgba.size() < static_cast<size_t>(width) * height * 4) {
-      return ToolResult{
-          false, Error("could not copy scene pixels from the render host")};
+    if (source == "offscreen") {
+      width = offscreen_width;
+      height = offscreen_height;
+      rgba = std::move(offscreen_rgba);
+    } else if (offscreen_only) {
+      std::string why;
+      if (!RenderOffscreen(&why)) {
+        return ToolResult{false, OffscreenError(why)};
+      }
+      width = offscreen_width;
+      height = offscreen_height;
+      rgba = std::move(offscreen_rgba);
+      frame_id = 0;  // no presented frame belongs to this image
+    } else {
+      const bool copied =
+          host->CopyScenePixels(width, height, rgba, &frame_id) && width > 0 &&
+          height > 0 && rgba.size() >= static_cast<size_t>(width) * height * 4;
+      const bool stale = copied && saved_frame != 0 && frame_id == saved_frame;
+      if (!copied || stale) {
+        // No new presented frame (or no frame at all): the window may be
+        // minimized. Try the same view offscreen before giving up.
+        std::string why;
+        if (RenderOffscreen(&why)) {
+          width = offscreen_width;
+          height = offscreen_height;
+          rgba = std::move(offscreen_rgba);
+          frame_id = 0;
+        } else if (!copied) {
+          return ToolResult{false, OffscreenError(why)};
+        }
+      }
     }
 
-    const glm::mat4 view_projection = scene.GetSceneViewProjection();
+    // Downscale to the output size AFTER rendering so a 2x (or capped) render
+    // keeps small detail that a tiny render would alias away. The render and
+    // output sizes share their aspect ratio, so in the normal case this scale
+    // is uniform. A presented frame can arrive at the scene viewport's actual
+    // size instead of the requested render size; the resize then stretches it,
+    // and the projection correction below keeps the overlay coordinates
+    // aligned with the stretched content.
+    const int frame_width = width;
+    const int frame_height = height;
+    if (width != output_width || height != output_height) {
+      std::vector<uint8_t> resized(static_cast<size_t>(output_width) *
+                                   output_height * 4);
+      if (!stbir_resize_uint8_srgb(rgba.data(), width, height, width * 4,
+                                   resized.data(), output_width, output_height,
+                                   output_width * 4, STBIR_RGBA)) {
+        return ToolResult{false, Error("failed to resize the captured image")};
+      }
+      rgba = std::move(resized);
+    }
+    width = output_width;
+    height = output_height;
+
+    // Overlays are drawn after the downscale, at the output size, so their
+    // 2-pixel lines stay crisp rather than being blurred by the resize.
+    //
+    // The scene projection uses the render size we requested. If a presented
+    // frame arrived at the viewport's previous size instead (the host may not
+    // resize instantly), the resize above stretched it to the output, so scale
+    // the projection's horizontal axis by render aspect / arrived aspect to
+    // keep the boxes on the same stretched content.
+    glm::mat4 view_projection = scene.GetSceneViewProjection();
+    if (frame_width > 0 && frame_height > 0 &&
+        frame_width * render_height != frame_height * render_width) {
+      const double render_aspect =
+          static_cast<double>(render_width) / render_height;
+      const double arrived_aspect =
+          static_cast<double>(frame_width) / frame_height;
+      const float ratio = static_cast<float>(render_aspect / arrived_aspect);
+      view_projection =
+          glm::scale(glm::mat4(1.0f), glm::vec3(ratio, 1.0f, 1.0f)) *
+          view_projection;
+    }
     constexpr std::array<uint8_t, 4> kColliderColor = {60, 220, 120, 255};
     constexpr std::array<uint8_t, 4> kHighlightColor = {255, 215, 50, 255};
     if (colliders) {
@@ -549,7 +836,10 @@ struct CapturePlan {
 
     json out{{"width", width},
              {"height", height},
+             {"detail", detail},
+             {"visual_tokens", VisualTokens(width, height)},
              {"preset", preset},
+             {"source", source},
              {"frame_id", frame_id},
              {"colliders", colliders},
              {"highlight_count", highlights.size()},
@@ -653,18 +943,24 @@ bool ParsePreset(const json& args, CapturePlan* plan, std::string* error,
     }
   }
 
-  int width = 1280;
-  int height = 720;
-  if (!ParseDimension(args, "width", 1280, &width, error) ||
-      !ParseDimension(args, "height", 720, &height, error)) {
+  CaptureSize size;
+  if (!ResolveCaptureSize(args, &size, error)) {
     return false;
   }
-  desired.viewport_size = glm::vec2(static_cast<float>(std::min(width, 1920)),
-                                    static_cast<float>(std::min(height, 1080)));
+  plan->output_width = size.width;
+  plan->output_height = size.height;
+  plan->render_width = size.render_width;
+  plan->render_height = size.render_height;
+  plan->detail = size.detail;
+  desired.viewport_size = glm::vec2(static_cast<float>(size.render_width),
+                                    static_cast<float>(size.render_height));
 
   plan->colliders = args.contains("colliders") && args["colliders"].is_boolean()
                         ? args["colliders"].get<bool>()
                         : false;
+  plan->offscreen_only = args.contains("offscreen") &&
+                         args["offscreen"].is_boolean() &&
+                         args["offscreen"].get<bool>();
   if (args.contains("highlight") && args["highlight"].is_array()) {
     for (const json& ref : args["highlight"]) {
       std::string node_error;
@@ -698,9 +994,10 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
   }
 
   RenderHost* host = scene.GetRenderHost();
-  if (host) {
+  if (host && !plan->offscreen_only) {
     // Remember the frame that was current before the camera change so the
-    // real editor can wait for one rendered with the new view.
+    // real editor can wait for one rendered with the new view. An explicit
+    // offscreen capture does not need a presented frame to compare against.
     int width = 0;
     int height = 0;
     std::vector<uint8_t> scratch;
@@ -719,16 +1016,16 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
     };
   };
 
-  if (!host || !wxTheApp) {
-    // Headless tests and tools called without a wx event loop: the caller has
-    // already stepped the renderer to the frame it wants captured.
+  if (plan->offscreen_only || !host || !wxTheApp) {
+    // Explicit offscreen captures, headless tests and tools called without a
+    // wx event loop capture now; there is no frame loop to wait on.
     finish(std::move(done))();
     return;
   }
 
-  // In the editor, defer by one UI turn so a frame rendered with the new
-  // camera is available, then copy it. The plan (and its RAII guard) lives in
-  // the closure until the call completes.
+  // In the editor, poll on a short one-shot wxTimer so a visible window gets
+  // time to present the new view. The plan (and its RAII guard) lives in the
+  // poll closure until the call completes.
   struct Pending {
     std::shared_ptr<CapturePlan> plan;
     ToolDone done;
@@ -736,15 +1033,31 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
     std::weak_ptr<const void> lifetime;
     uint64_t before = 0;
     int tries = 0;
+    std::chrono::steady_clock::time_point started =
+        std::chrono::steady_clock::now();
+    std::shared_ptr<CapturePollTimer> timer;
   };
-  auto pending = std::make_shared<Pending>(Pending{
-      plan, std::move(done), host, plan->lifetime, plan->saved_frame, 0});
+  auto pending = std::make_shared<Pending>();
+  pending->plan = plan;
+  pending->done = std::move(done);
+  pending->host = host;
+  pending->lifetime = plan->lifetime;
+  pending->before = plan->saved_frame;
   auto poll = std::make_shared<std::function<void()>>();
-  *poll = [pending, poll]() {
+  auto complete = [pending](ToolResult result) {
+    // Keep our own reference for the whole call. Releasing the timer (and, on
+    // the deferred tick clear, the poll closure that owns this closure) may
+    // drop every other reference to `pending` before we return.
+    auto self = pending;
+    auto timer = std::move(self->timer);
+    FinishCaptureTimer(std::move(timer));
+    self->done(std::move(result));
+  };
+  *poll = [pending, complete]() {
     if (pending->lifetime.expired()) {
       // The editor is shutting down: answer the call and let the plan die
       // without touching the scene (its own guard sees the same token).
-      pending->done(ToolResult{false, Error("editor shutting down")});
+      complete(ToolResult{false, Error("editor shutting down")});
       return;
     }
     int width = 0;
@@ -755,13 +1068,29 @@ void CaptureViewport(EditorScene& scene, const json& args, ToolDone done) {
         pending->host->CopyScenePixels(width, height, scratch, &frame_id);
     if ((copied && frame_id != pending->before) ||
         ++pending->tries >= kMaxCaptureFrames) {
-      ToolResult result = pending->plan->Capture();
-      pending->done(std::move(result));
+      complete(pending->plan->Capture());
       return;
     }
-    wxTheApp->CallAfter(*poll);
+    if (std::chrono::steady_clock::now() - pending->started >=
+        kOffscreenFallbackDelay) {
+      // Hidden or iconized editors skip StepFrame, so no new frame will ever
+      // arrive. Render this same view directly; Capture() then only encodes
+      // the pixels and the plan's guard restores the camera.
+      std::string why;
+      if (!pending->plan->RenderOffscreen(&why)) {
+        complete(ToolResult{false, OffscreenError(why)});
+        return;
+      }
+      complete(pending->plan->Capture());
+      return;
+    }
+    pending->timer->Start(kPollIntervalMs, true);
   };
-  wxTheApp->CallAfter(*poll);
+  if (wxTheApp) {
+    pending->timer = std::make_shared<CapturePollTimer>();
+    pending->timer->tick = [poll] { (*poll)(); };
+    pending->timer->Start(kPollIntervalMs, true);
+  }
 }
 
 }  // namespace

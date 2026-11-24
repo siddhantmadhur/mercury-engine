@@ -151,6 +151,10 @@ class EditorScene : public MapScene {
   // MapScene lifecycle
   void OnStart() override;
   void OnFrame(double delta_t) override;
+  // The two child-process pumps of OnFrame, split out so the editor can keep
+  // draining their pipes while its window is hidden or iconized (and the
+  // frame timer therefore does not call OnFrame).
+  void UpdateBackgroundTasks();
   void OnTick(double delta_t) override;
   void OnDestroy() override;
   bool OnCloseRequested() override;

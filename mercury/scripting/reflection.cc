@@ -433,4 +433,11 @@ Reflector& Reflector::Tooltip(const char* text) {
   return *this;
 }
 
+Reflector& Reflector::RuntimeWritable() {
+  if (mode_ == Mode::kDescribe && !fields_.empty()) {
+    fields_.back().runtime_writable = true;
+  }
+  return *this;
+}
+
 }  // namespace Mercury

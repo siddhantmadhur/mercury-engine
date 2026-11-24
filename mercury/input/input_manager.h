@@ -100,6 +100,12 @@ class InputManager {
     frame_mouse_delta_ = glm::vec2(0.0f);
     frame_scroll_ = glm::vec2(0.0f);
   }
+  // Clears the frame-scoped just-pressed state. The application calls this
+  // once per frame, even in headless mode, before polling for new input.
+  void BeginFrameFreshPresses() {
+    frame_fresh_presses_.clear();
+    frame_mouse_btn_fresh_status_.clear();
+  }
   // Adds mouse movement as if the cursor moved (scripted input).
   void AddFrameCursorDelta(glm::vec2 delta) { frame_mouse_delta_ += delta; }
   void ClearFrameCursorDelta() { frame_mouse_delta_ = glm::vec2(0.0f); }
@@ -156,9 +162,14 @@ class InputManager {
   void SetKeyUp(Key k);
   std::map<int, bool> key_status_ = {};
   std::map<MouseButton, KeyStatus> mouse_btn_status_ = {};
+  // Just-pressed state is split by phase: a press set during a frame is read
+  // by frame code, while a press set since the last tick is read by tick code.
+  // Only the owner phase clears its own set.
   std::map<MouseButton, KeyStatus> mouse_btn_fresh_status_ = {};
+  std::map<MouseButton, KeyStatus> frame_mouse_btn_fresh_status_ = {};
   std::map<int, bool> repeated_keys_ = {};
   std::map<int, bool> fresh_presses_ = {};
+  std::map<int, bool> frame_fresh_presses_ = {};
   glm::vec2 mouse_position_ = glm::vec2(0.0);
   glm::vec2 scroll_offset_ = glm::vec2(0.0);
   bool is_hovering_on_ui_ = false;

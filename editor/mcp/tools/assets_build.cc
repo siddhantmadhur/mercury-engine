@@ -647,17 +647,16 @@ void FinishJob(std::unique_ptr<BuildJob> job,
   done(ToolResult{ok, std::move(result), {}});
 }
 
-void BuildScriptsTool(EditorScene& scene, const json&, ToolDone done) {
+}  // namespace
+
+std::optional<ToolResult> TryStartScriptBuild(EditorScene& scene,
+                                              ToolDone done) {
   auto project = scene.GetProject();
-  if (!project) {
-    done(Error("no project is open"));
-    return;
-  }
+  if (!project) return Error("no project is open");
   if (ActiveJob() || scene.PlayRef().IsBusy()) {
-    done(Error(
+    return Error(
         "a script build or Play session is already running; wait for it to "
-        "finish (or stop it in the editor) and call build_scripts again"));
-    return;
+        "finish (or stop it in the editor) and call build_scripts again");
   }
 
   auto job = std::make_unique<BuildJob>();
@@ -682,7 +681,7 @@ void BuildScriptsTool(EditorScene& scene, const json&, ToolDone done) {
     // It refused or could not start (untrusted C++ project, no
     // mercury_player, ...): the reason is already in the Console.
     FinishJob(std::move(job), {});
-    return;
+    return std::nullopt;
   }
 
   if (wxTheApp) {
@@ -690,6 +689,15 @@ void BuildScriptsTool(EditorScene& scene, const json&, ToolDone done) {
     job->timer->Start(static_cast<int>(kPollInterval.count()));
   }
   ActiveJob() = std::move(job);
+  return std::nullopt;
+}
+
+namespace {
+
+void BuildScriptsTool(EditorScene& scene, const json&, ToolDone done) {
+  if (auto error = mcp::TryStartScriptBuild(scene, done)) {
+    done(std::move(*error));
+  }
 }
 
 }  // namespace

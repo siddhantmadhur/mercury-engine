@@ -50,6 +50,8 @@ class FilamentApplication : public Application {
   void SetSceneViewportSize(int width, int height) override;
   bool CopyScenePixels(int& width, int& height, std::vector<uint8_t>& rgba_out,
                        uint64_t* frame_id = nullptr) override;
+  bool RenderScenePixelsNow(std::vector<uint8_t>* rgba, int* width, int* height,
+                            std::string* why) override;
   void SetPreviewCamera(kEntityId camera, int width, int height) override;
   bool CopyPreviewPixels(int& width, int& height,
                          std::vector<uint8_t>& rgba_out,

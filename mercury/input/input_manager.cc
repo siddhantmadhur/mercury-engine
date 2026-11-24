@@ -12,6 +12,8 @@
 #include <cctype>
 #include <string>
 
+#include "math/time.h"
+
 namespace Mercury {
 namespace {
 std::function<std::string()>& ClipboardGetter() {
@@ -76,11 +78,11 @@ bool InputManager::IsPressed(Key k) {
   }
 }
 bool InputManager::IsJustPressed(Key k) {
-  if (fresh_presses_.contains(k)) {
-    return fresh_presses_[k];
-  } else {
-    return false;
+  const auto& fresh = Time::InTick() ? fresh_presses_ : frame_fresh_presses_;
+  if (fresh.contains(k)) {
+    return fresh.at(k);
   }
+  return false;
 }
 
 bool InputManager::IsPressed(MouseButton btn) {
@@ -91,8 +93,10 @@ bool InputManager::IsPressed(MouseButton btn) {
   return false;
 }
 bool InputManager::IsJustPressed(MouseButton btn) {
-  if (mouse_btn_fresh_status_.contains(btn)) {
-    return mouse_btn_fresh_status_[btn] == kJustPressed;
+  const auto& fresh =
+      Time::InTick() ? mouse_btn_fresh_status_ : frame_mouse_btn_fresh_status_;
+  if (fresh.contains(btn)) {
+    return fresh.at(btn) == kJustPressed;
   }
   return false;
 }
@@ -104,11 +108,13 @@ glm::vec2 InputManager::GetCursorPos() { return this->mouse_position_; }
 void InputManager::SetKeyDown(Key k) {
   key_status_[k] = true;
   fresh_presses_[k] = true;
+  frame_fresh_presses_[k] = true;
 }
 void InputManager::SetKeyUp(Key k) {
+  // A tap that was pressed and released within one frame still counts as a
+  // press; each phase clears its own fresh state when it is done reading it.
   key_status_[k] = false;
   repeated_keys_[k] = false;
-  fresh_presses_[k] = false;
 }
 void InputManager::ResetFreshPresses() {
   fresh_presses_.clear();
@@ -267,21 +273,26 @@ void InputManager::HandleMouseButtonCallback(GLFWwindow* window, int button,
     event.mods = mods;
     frame_events_.push_back(event);
   }
+  MouseButton id;
   switch (button) {
     case GLFW_MOUSE_BUTTON_LEFT:
-      mouse_btn_status_[MouseButton::kLeft] = GET_ACTION(action);
-      mouse_btn_fresh_status_[MouseButton::kLeft] = GET_ACTION(action);
+      id = MouseButton::kLeft;
       break;
     case GLFW_MOUSE_BUTTON_RIGHT:
-      mouse_btn_status_[MouseButton::kRight] = GET_ACTION(action);
-      mouse_btn_fresh_status_[MouseButton::kRight] = GET_ACTION(action);
+      id = MouseButton::kRight;
       break;
     case GLFW_MOUSE_BUTTON_MIDDLE:
-      mouse_btn_status_[MouseButton::kMiddle] = GET_ACTION(action);
-      mouse_btn_fresh_status_[MouseButton::kMiddle] = GET_ACTION(action);
+      id = MouseButton::kMiddle;
       break;
     default:
-      break;
+      return;
+  }
+  mouse_btn_status_[id] = GET_ACTION(action);
+  // Only a new press starts a just-pressed state; releases and repeats leave
+  // any pending press intact until each phase has had a chance to read it.
+  if (action == GLFW_PRESS) {
+    mouse_btn_fresh_status_[id] = kJustPressed;
+    frame_mouse_btn_fresh_status_[id] = kJustPressed;
   }
 }
 

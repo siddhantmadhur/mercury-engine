@@ -203,6 +203,47 @@ class Behaviour {
   std::shared_ptr<char> lifetime_ = std::make_shared<char>(0);
 };
 
+/**
+ * @brief Give a registered script type the same field access built-ins have
+ *
+ * Script components live in MapScene's behaviour list, not as reflected
+ * structs on the entity. Without these callbacks TypeRegistry can describe a
+ * script and attach it to a node, but the script API's Component.GetField /
+ * HasComponent and runtime snapshots cannot read or write its fields.
+ *
+ * The name is captured by value: the ComponentInfo these closures belong to
+ * is moved into the registry after this call.
+ */
+inline void AttachBehaviourAccessors(ComponentInfo& info) {
+  const std::string name = info.name;
+  info.has = [name](MapScene& scene, kEntityId entity) {
+    for (Behaviour* behaviour : scene.GetBehaviours(entity)) {
+      if (behaviour->GetTypeName() == name) return true;
+    }
+    return false;
+  };
+  info.get_field = [name](MapScene& scene, kEntityId entity,
+                          std::string_view field, mtext::Variant* out) {
+    for (Behaviour* behaviour : scene.GetBehaviours(entity)) {
+      if (behaviour->GetTypeName() != name) continue;
+      auto reflector = Reflector::Get(field, out);
+      behaviour->Reflect(reflector);
+      return reflector.Found();
+    }
+    return false;
+  };
+  info.set_field = [name](MapScene& scene, kEntityId entity,
+                          std::string_view field, const mtext::Variant& in) {
+    for (Behaviour* behaviour : scene.GetBehaviours(entity)) {
+      if (behaviour->GetTypeName() != name) continue;
+      auto reflector = Reflector::Set(field, in);
+      behaviour->Reflect(reflector);
+      return reflector.Applied();
+    }
+    return false;
+  };
+}
+
 template <typename B>
 B* GameObject::GetBehaviour() const {
   if (!IsValid()) return nullptr;
@@ -295,6 +336,7 @@ bool RegisterScript(const char* name) {
                           scene.GetGameObject(entity).GetPath() + "." + name);
     scene.AddBehaviour(entity, std::move(behaviour), name);
   };
+  AttachBehaviourAccessors(info);
   TypeRegistry::Instance().RegisterComponent(std::move(info));
   return true;
 }

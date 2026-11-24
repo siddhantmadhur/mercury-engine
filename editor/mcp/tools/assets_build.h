@@ -14,9 +14,16 @@
 #ifndef MERCURY_EDITOR_MCP_TOOLS_ASSETS_BUILD_H
 #define MERCURY_EDITOR_MCP_TOOLS_ASSETS_BUILD_H
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "mcp/tool_registry.h"
+
+namespace Mercury {
+class EditorScene;
+}
 
 namespace Mercury::mcp {
 
@@ -85,6 +92,20 @@ bool GlobMatch(std::string_view pattern, std::string_view path);
  * thread.
  */
 void TickScriptBuild();
+
+/**
+ * @brief Starts the same build `build_scripts` runs, without waiting for it
+ *
+ * Used by other tools that must build (for example scaffold_script with
+ * "build": true) so they share the build_scripts job, diagnostics and editor
+ * integration instead of starting a second kind of build. On success the
+ * build runs in the background and `done` is called once when it finishes;
+ * return value is then nullopt. When the call cannot be started (no project,
+ * another build/Play running) the error result is returned and `done` is NOT
+ * called, so the caller can fold it into its own answer. On the UI thread.
+ */
+std::optional<ToolResult> TryStartScriptBuild(EditorScene& scene,
+                                              ToolDone done);
 
 }  // namespace Mercury::mcp
 

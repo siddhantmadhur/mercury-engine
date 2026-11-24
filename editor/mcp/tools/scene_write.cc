@@ -14,7 +14,11 @@
 //      and unknown fields, component types and fields against the
 //      TypeRegistry, values with JsonToPropertyValue (res:// files must
 //      exist), prefab files, aliases (an alias must be defined by an earlier
-//      operation's "id"), node reference syntax.
+//      operation's "id") and node reference syntax. All errors are collected;
+//      with "dry_run" a uid/path is also required to name a node in the map
+//      as it is BEFORE the batch, and the response reports the errors without
+//      starting an edit. Real applies leave path existence to step 2, which
+//      sees the nodes earlier operations created, renamed and reparented.
 //   2. Apply the operations in order to the open map, inside one editor edit
 //      (BeginEdit .. MarkChanged .. CommitEdit), after taking a copy of the
 //      map. What only the live map can answer (does that path name a node?
@@ -264,6 +268,22 @@ bool CheckRef(const json& ref, const char* field,
   return true;
 }
 
+// Syntax was checked by CheckRef; this asks the map whether a uid/path names a
+// node. Aliases and absent parents are resolved later, against the live map.
+// Used only by a dry run, against the map as it is BEFORE the batch: a path an
+// earlier operation would create, rename or reparent is reported as missing
+// even though a real apply would resolve it in pass 2.
+bool CheckRefExists(EditorScene& scene, const json& ref, const char* field,
+                    Failure* failure) {
+  if (ref.is_null() || (ref.is_object() && ref.contains("alias"))) return true;
+  std::string error;
+  std::string suggestion;
+  if (!mcp::ResolveNode(scene, ref, &error, &suggestion)) {
+    return Fail(failure, std::format("\"{}\": {}", field, error), suggestion);
+  }
+  return true;
+}
+
 bool ParseVec3(const json& value, const char* key, glm::vec3* out,
                Failure* failure) {
   FieldInfo field;
@@ -491,6 +511,25 @@ bool ParseComponents(const json& list, const Project* project,
   return true;
 }
 
+// Validates and publishes an operation's `id` alias. Published as soon as the
+// id is known to be usable, so a later operation can still refer to it when
+// something else in this operation turns out to be wrong.
+bool DefineAlias(const json& json_op, size_t index, std::string* id,
+                 std::set<std::string>* aliases,
+                 std::map<std::string, size_t>* alias_owner, Failure* failure) {
+  if (!GetString(json_op, "id", false, id, failure)) return false;
+  if (id->empty()) return true;
+  const auto taken = alias_owner->find(*id);
+  if (taken != alias_owner->end()) {
+    return Fail(failure, std::format("\"id\" \"{}\" is already used by "
+                                     "operations[{}]; an alias names one node",
+                                     *id, taken->second));
+  }
+  aliases->insert(*id);
+  (*alias_owner)[*id] = index;
+  return true;
+}
+
 // Fills `op` from `json_op` (everything that does not need the live map).
 bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
                     std::set<std::string>* aliases,
@@ -541,21 +580,7 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
     return true;
   };
   auto define_alias = [&]() {
-    if (!GetString(json_op, "id", false, &op->id, failure)) return false;
-    if (op->id.empty()) return true;
-    const auto taken = alias_owner->find(op->id);
-    if (taken != alias_owner->end()) {
-      return Fail(failure,
-                  std::format("\"id\" \"{}\" is already used by "
-                              "operations[{}]; an alias names one node",
-                              op->id, taken->second));
-    }
-    return true;
-  };
-  auto publish_alias = [&]() {
-    if (op->id.empty()) return;
-    aliases->insert(op->id);
-    (*alias_owner)[op->id] = index;
+    return DefineAlias(json_op, index, &op->id, aliases, alias_owner, failure);
   };
 
   switch (op->kind) {
@@ -574,7 +599,6 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
                            failure)) {
         return false;
       }
-      publish_alias();
       return true;
     }
     case OpKind::kInstantiatePrefab: {
@@ -593,7 +617,6 @@ bool ParseOperation(EditorScene& scene, const json& json_op, size_t index,
         failure->message = "transform: " + failure->message;
         return false;
       }
-      publish_alias();
       return true;
     }
     case OpKind::kDelete:
@@ -1058,7 +1081,8 @@ ToolResult OperationError(const Operation* op, size_t index,
 ToolResult ApplySceneOperations(EditorScene& scene, const json& args) {
   if (!args.is_object()) return ErrorResult("arguments must be an object");
   Failure top;
-  if (!CheckKeys(args, {"operations", "select"}, "the arguments", &top)) {
+  if (!CheckKeys(args, {"operations", "select", "dry_run"}, "the arguments",
+                 &top)) {
     return ErrorResult(top.message, top.suggestion);
   }
   if (!scene.GetProject()) return ErrorResult("no project is open");
@@ -1074,26 +1098,112 @@ ToolResult ApplySceneOperations(EditorScene& scene, const json& args) {
                     "per batch",
                     list.size(), kMaxOperations));
   }
+  bool dry_run = false;
+  if (!IsAbsent(args, "dry_run")) {
+    if (!args.at("dry_run").is_boolean()) {
+      return ErrorResult("\"dry_run\" must be true or false");
+    }
+    dry_run = args.at("dry_run").get<bool>();
+  }
 
-  // 1. Check every operation, without touching the map.
+  // 1. Check every operation, collecting ALL errors, without touching the map.
+  //    The live map is read as it is before the batch: a uid/path that an
+  //    earlier operation would delete or reparent is reported as missing.
   std::vector<Operation> operations(list.size());
+  std::vector<bool> validated(list.size(), false);
   std::set<std::string> aliases;
   std::map<std::string, size_t> alias_owner;
+  json errors = json::array();
+  std::optional<ToolResult> first_error;
   for (size_t i = 0; i < list.size(); i++) {
     Failure failure;
-    if (!ParseOperation(scene, list[i], i, &aliases, &alias_owner,
-                        &operations[i], &failure)) {
-      const bool has_kind = !operations[i].kind_name.empty();
-      return OperationError(has_kind ? &operations[i] : nullptr, i, failure);
+    bool ok = ParseOperation(scene, list[i], i, &aliases, &alias_owner,
+                             &operations[i], &failure);
+    if (ok && dry_run) {
+      // Only a dry run needs the pre-batch answer: a real apply resolves each
+      // reference in pass 2, after earlier operations changed the map.
+      ok = CheckRefExists(scene, operations[i].node, "node", &failure) &&
+           CheckRefExists(scene, operations[i].parent, "parent", &failure) &&
+           CheckRefExists(scene, operations[i].new_parent, "new_parent",
+                          &failure);
     }
+    if (!ok) {
+      // A failed operation may still have declared a usable id. Keep its alias
+      // so references in later operations do not cascade into "not defined".
+      const json& op_json = list[i];
+      if (op_json.is_object() && op_json.contains("op") &&
+          op_json.at("op").is_string()) {
+        const std::string kind = op_json.at("op").get<std::string>();
+        if (kind == "create" || kind == "instantiate_prefab") {
+          std::string id;
+          Failure ignored;
+          DefineAlias(op_json, i, &id, &aliases, &alias_owner, &ignored);
+        }
+      }
+      ToolResult result = OperationError(
+          !operations[i].kind_name.empty() ? &operations[i] : nullptr, i,
+          failure);
+      json entry = result.result;
+      entry["op"] = i;
+      entry["index"] = i;
+      errors.push_back(std::move(entry));
+      if (!first_error) first_error = std::move(result);
+      continue;
+    }
+    validated[i] = true;
   }
   json select;
+  Failure select_failure;
+  bool select_invalid = false;
   if (!IsAbsent(args, "select")) {
-    Failure failure;
-    if (!CheckRef(args.at("select"), "select", aliases, &failure)) {
-      return ErrorResult(failure.message, failure.suggestion);
+    if (!CheckRef(args.at("select"), "select", aliases, &select_failure)) {
+      select_invalid = true;
+    } else if (dry_run && !CheckRefExists(scene, args.at("select"), "select",
+                                          &select_failure)) {
+      select_invalid = true;
+    } else {
+      select = args.at("select");
     }
-    select = args.at("select");
+  }
+  if (select_invalid) {
+    ToolResult result = ErrorResult("select: " + select_failure.message,
+                                    select_failure.suggestion);
+    json entry = result.result;
+    entry["op"] = -1;
+    entry["index"] = -1;
+    errors.push_back(std::move(entry));
+  }
+
+  // A dry run ends here: no edit, no map change, no undo history, no selection.
+  if (dry_run) {
+    json created = json::array();
+    for (size_t i = 0; i < operations.size(); i++) {
+      if (!validated[i]) continue;
+      const Operation& op = operations[i];
+      if (op.kind != OpKind::kCreate && op.kind != OpKind::kInstantiatePrefab) {
+        continue;
+      }
+      json entry{{"op", i}, {"uid", "<pending>"}, {"path", "<pending>"}};
+      if (!op.id.empty()) entry["alias"] = op.id;
+      created.push_back(std::move(entry));
+    }
+    json result{{"dry_run", true},
+                {"valid", errors.empty()},
+                {"applied", 0},
+                {"would_apply", operations.size()},
+                {"created", std::move(created)},
+                {"warnings", json::array()},
+                {"errors", std::move(errors)}};
+    return ToolResult{true, std::move(result), {}};
+  }
+
+  if (first_error || select_invalid) {
+    ToolResult result = first_error
+                            ? std::move(*first_error)
+                            : ErrorResult("select: " + select_failure.message,
+                                          select_failure.suggestion);
+    result.result["errors"] = std::move(errors);
+    return result;
   }
 
   // 2. Apply, as one edit. The copy restores the map if the live state makes

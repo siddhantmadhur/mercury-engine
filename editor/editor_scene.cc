@@ -87,9 +87,13 @@ bool EditorScene::OnCloseRequested() { return !HasUnsavedChanges(); }
 
 // ------------------------------------------------------------------ Frame ---
 
-void EditorScene::OnFrame(double /*delta_t*/) {
+void EditorScene::UpdateBackgroundTasks() {
   play_.Update();
   release_.Update();
+}
+
+void EditorScene::OnFrame(double /*delta_t*/) {
+  UpdateBackgroundTasks();
   PollScriptReconfigure();
   lore_.Update();
   if (play_.TakeSchemaUpdated()) LoadScriptSchema();

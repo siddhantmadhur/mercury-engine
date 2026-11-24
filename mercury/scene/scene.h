@@ -55,6 +55,15 @@ class RenderHost {
                                uint64_t* frame_id = nullptr) {
     return false;
   }
+  // Render the current scene view into the offscreen target right now and copy
+  // its top-down RGBA8 pixels, without waiting for a presented frame (e.g.
+  // while the editor window is minimized). Hosts that cannot do this leave
+  // `why` with the reason and return false.
+  virtual bool RenderScenePixelsNow(std::vector<uint8_t>* rgba, int* width,
+                                    int* height, std::string* why) {
+    if (why) *why = "offscreen rendering not supported";
+    return false;
+  }
   // Also render this frame from `camera` (an entity with a Camera and a
   // Transform) into a separate width x height target; entt::null skips it.
   // Call every frame the preview is shown.
